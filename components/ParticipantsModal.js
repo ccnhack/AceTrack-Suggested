@@ -246,7 +246,10 @@ const ParticipantsModal = ({
                             style={styles.avatar} 
                           />
                           <View style={styles.flex}>
-                              <Text style={styles.playerName}>{p.name}</Text>
+                              <Text style={[
+                                styles.playerName,
+                                (status === 'Denied' || status === 'Opted-Out') && styles.strikeText
+                              ]}>{p.name}</Text>
                               <View style={styles.verdictRow}>
                                   <View style={[styles.verdictTag, { backgroundColor: verdict.bg }]}>
                                       <Text style={[styles.verdictText, { color: verdict.color }]}>{verdict.label}</Text>
@@ -461,6 +464,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: '#0F172A',
+  },
+  strikeText: {
+    textDecorationLine: 'line-through',
+    color: '#94A3B8',
   },
   roleTag: {
     fontSize: 9,
