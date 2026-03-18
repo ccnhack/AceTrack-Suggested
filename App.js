@@ -12,6 +12,7 @@ import {
 } from './mockData';
 import storage from './utils/storage';
 import AppNavigator from './navigation/AppNavigator';
+import ChatBot from './components/ChatBot';
 import logger from './utils/logger';
 import config from './config';
 
