@@ -15,11 +15,20 @@ const ChatBot = ({ user, evaluations, chatbotMessages, onSendChatMessage }) => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollViewRef = useRef(null);
+  const prevMessagesCountRef = useRef(messages.length);
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
 
   useEffect(() => {
-    if (scrollViewRef.current) {
-      scrollViewRef.current.scrollToEnd({ animated: true });
+    const opened = isOpen && !prevIsOpen;
+    const newMsg = messages.length > prevMessagesCountRef.current;
+    
+    if (scrollViewRef.current && (opened || newMsg)) {
+       setTimeout(() => {
+         scrollViewRef.current?.scrollToEnd({ animated: true });
+       }, 100);
     }
+    setPrevIsOpen(isOpen);
+    prevMessagesCountRef.current = messages.length;
   }, [messages, isOpen]);
 
   const handleSend = async () => {

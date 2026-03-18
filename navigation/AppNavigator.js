@@ -32,7 +32,7 @@ const MainTabs = ({
   onRequestDeletion, onUnlockVideo, onPurchaseAiHighlights, onVideoPlay,
   onSaveCoachComment, onRegister, onReschedule, onCancelReschedule,
   onOptOut, onLogFailedOtp, onLogTrace, setPlayers, onToggleFavourite,
-  onManualSync, isCloudOnline, lastSyncTime, onBatchUpdate
+  onManualSync, isCloudOnline, lastSyncTime, onBatchUpdate, onUploadLogs, isUploadingLogs
 }) => {
   const params = { 
     user, role, players, tournaments, matchVideos, matches, supportTickets, evaluations, 
@@ -47,7 +47,7 @@ const MainTabs = ({
     onRequestDeletion, onUnlockVideo, onPurchaseAiHighlights, onVideoPlay,
     onSaveCoachComment, onRegister, onReschedule, onCancelReschedule,
     onOptOut, onLogFailedOtp, onLogTrace, setPlayers, onToggleFavourite,
-    onManualSync, isCloudOnline, lastSyncTime, onBatchUpdate
+    onManualSync, isCloudOnline, lastSyncTime, onBatchUpdate, onUploadLogs, isUploadingLogs
   };
   
   const typeProps = { Sport, SkillLevel, TournamentStructure, TournamentFormat };
