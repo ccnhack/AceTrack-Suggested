@@ -1184,6 +1184,7 @@ export default function App() {
                 const updatedUser = {
                   ...currentUser,
                   credits: (currentUser.credits || 0) + (t.entryFee || 0),
+                  registeredTournamentIds: (currentUser.registeredTournamentIds || []).filter(id => id !== t.id),
                   cancelledTournamentIds: [...(currentUser.cancelledTournamentIds || []), t.id],
                   walletHistory: [
                     {

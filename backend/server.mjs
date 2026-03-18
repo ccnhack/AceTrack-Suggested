@@ -117,18 +117,38 @@ app.post('/api/save', apiKeyGuard, async (req, res) => {
       return res.status(400).json({ error: 'Invalid payload: No syncable context found' });
     }
 
-    // 4. ATOMIC UPDATE: Use $set with dot notation to update only the provided keys.
-    // This prevents a "full overwrite" race condition where concurrent updates from 
-    // different users/devices could lose data.
+    // 4. ATOMIC MERGE: Move to item-level merging for arrays (tournaments, players)
+    // This prevents one user's registration from overwriting another user's status update.
+    const currentState = await AppState.findOne({});
     let updateOps = { lastUpdated: Date.now() };
+    
     Object.keys(req.body).forEach(key => {
-      if (syncableKeys.includes(key)) {
-        updateOps[`data.${key}`] = req.body[key];
+      if (!syncableKeys.includes(key)) return;
+      
+      const incomingValue = req.body[key];
+      const existingValue = (currentState && currentState.data) ? currentState.data.get(key) : null;
+
+      if (Array.isArray(incomingValue) && Array.isArray(existingValue)) {
+        // Merge Array items by ID
+        const mergedArray = [...existingValue];
+        incomingValue.forEach(incomingItem => {
+          if (!incomingItem || !incomingItem.id) return;
+          const idx = mergedArray.findIndex(item => item && item.id === incomingItem.id);
+          if (idx > -1) {
+            mergedArray[idx] = { ...mergedArray[idx], ...incomingItem };
+          } else {
+            mergedArray.push(incomingItem);
+          }
+        });
+        updateOps[`data.${key}`] = mergedArray;
+      } else {
+        // Standard set for objects/primitives
+        updateOps[`data.${key}`] = incomingValue;
       }
     });
 
     await AppState.findOneAndUpdate(
-      {}, // Global singleton state
+      {}, 
       { $set: updateOps },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
