@@ -208,7 +208,11 @@ const ProfileScreen = ({
           [{ text: "OK" }]
         );
         await Updates.fetchUpdateAsync();
-        await Updates.reloadAsync();
+        Alert.alert(
+          "Update Successful", 
+          "Click OK to restart.",
+          [{ text: "OK", onPress: () => Updates.reloadAsync() }]
+        );
       } else {
         Alert.alert("Up to Date", "Your app is already running the latest version.");
       }

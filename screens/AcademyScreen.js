@@ -571,7 +571,9 @@ export const AcademyScreen = ({
           }
           const updatedTournament = {
             ...viewingPlayersFor,
-            pendingPaymentPlayerIds: [...(viewingPlayersFor.pendingPaymentPlayerIds || []), player.id]
+            pendingPaymentPlayerIds: [...(viewingPlayersFor.pendingPaymentPlayerIds || []), player.id],
+            optedOutPlayerIds: (viewingPlayersFor.optedOutPlayerIds || []).filter(id => id !== player.id),
+            deniedPlayerIds: (viewingPlayersFor.deniedPlayerIds || []).filter(id => id !== player.id)
           };
           
           // Notification logic
