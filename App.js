@@ -1351,10 +1351,20 @@ export default function App() {
       syncAndSaveData({ chatbotMessages: updated });
     },
     onUploadLogs: async () => {
-      if (!currentUserRef.current) return;
+      logger.logAction('Upload Diagnostics Clicked');
+      console.log("📤 Attempting to upload diagnostics...");
+      
+      if (!currentUserRef.current) {
+        console.warn("🛑 No user logged in, cannot upload logs.");
+        Alert.alert("Error", "No user logged in. Please log in again.");
+        return;
+      }
+      
       setIsUploadingLogs(true);
       try {
         const logs = logger.getLogs();
+        console.log(`📋 Sending ${logs.length} log entries...`);
+        
         const response = await fetch(`${config.API_BASE_URL}/api/diagnostics`, {
           method: 'POST',
           headers: {
@@ -1368,11 +1378,16 @@ export default function App() {
         });
 
         if (response.ok) {
+          const result = await response.json();
+          console.log("✅ Diagnostics uploaded successfully:", result.filename);
           Alert.alert("Success", "Diagnostic logs have been sent to the cloud.");
         } else {
+          const errData = await response.text();
+          console.error("❌ Diagnostics upload failed:", errData);
           throw new Error("Failed to upload logs");
         }
       } catch (error) {
+        console.error("❌ uploadLogs Error:", error);
         Alert.alert("Error", "Failed to upload diagnostic logs. Please try again.");
       } finally {
         setIsUploadingLogs(false);
