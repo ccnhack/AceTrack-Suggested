@@ -24,7 +24,7 @@ export const AcademyScreen = ({
   const [tFilter, setTFilter] = useState('upcoming');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingT, setEditingT] = useState(null);
-  const [viewingPlayersFor, setViewingPlayersFor] = useState(null);
+  const [viewingTournamentId, setViewingTournamentId] = useState(null);
 
   // Coach Assignment State
   const [coachAssignmentType, setCoachAssignmentType] = useState(null);
@@ -499,7 +499,7 @@ export const AcademyScreen = ({
 
                 <View style={styles.tCardFooter}>
                   <View style={styles.statsRow}>
-                    <TouchableOpacity onPress={() => setViewingPlayersFor(t)} style={styles.statItem}>
+                    <TouchableOpacity onPress={() => setViewingTournamentId(t.id)} style={styles.statItem}>
                         <Text style={styles.statLabel}>Players</Text>
                         <Text style={styles.statValue}>{(t.registeredPlayerIds || []).filter(Boolean).length}/{t.maxPlayers}</Text>
                     </TouchableOpacity>
@@ -548,13 +548,16 @@ export const AcademyScreen = ({
       </ScrollView>
 
       {/* Forms & Modals */}
-      <ParticipantsModal 
-        tournament={viewingPlayersFor} 
-        players={players} 
-        evaluations={evaluations}
-        onClose={() => setViewingPlayersFor(null)} 
-        onAddPlayer={(name, phone) => {
-          if (!viewingPlayersFor) return;
+      {(() => {
+        const viewingPlayersFor = tournaments.find(t => t.id === viewingTournamentId);
+        return (
+          <ParticipantsModal 
+            tournament={viewingPlayersFor} 
+            players={players} 
+            evaluations={evaluations}
+            onClose={() => setViewingTournamentId(null)} 
+            onAddPlayer={(name, phone) => {
+              if (!viewingPlayersFor) return;
           const player = players.find(p => p.name.toLowerCase() === name.toLowerCase() && p.phone === phone);
           if (!player) {
             Alert.alert("Error", 'Player not found in the app.');
@@ -613,11 +616,11 @@ export const AcademyScreen = ({
             tournaments: updatedTournaments,
             players: updatedPlayers
           });
-
-          setViewingPlayersFor(updatedTournament);
           Alert.alert("Success", `Player ${player.name} added. They must complete payment to confirm registration.`);
         }}
       />
+        );
+      })()}
 
       {/* Tournament Form Modal */}
       <Modal visible={isFormOpen} animationType="slide">
