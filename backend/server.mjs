@@ -22,6 +22,11 @@ if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR);
 }
 
+const DIAGNOSTICS_DIR = path.join(__dirname, 'diagnostics');
+if (!fs.existsSync(DIAGNOSTICS_DIR)) {
+  fs.mkdirSync(DIAGNOSTICS_DIR);
+}
+
 // MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI;
 
@@ -135,6 +140,40 @@ app.post('/api/upload', apiKeyGuard, upload.single('video'), (req, res) => {
   }
   const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
   res.json({ url: fileUrl, filename: req.file.filename });
+});
+
+app.post('/api/diagnostics', apiKeyGuard, async (req, res) => {
+  try {
+    const { username, logs } = req.body;
+    if (!username || !logs) {
+      return res.status(400).json({ error: 'Missing username or logs' });
+    }
+
+    // Format IST timestamp for filename
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istDate = new Date(now.getTime() + istOffset);
+    const timestamp = istDate.toISOString()
+      .replace(/T/, '_')
+      .replace(/\..+/, '')
+      .replace(/:/g, '-');
+
+    const safeUsername = username.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const filename = `${safeUsername}_${timestamp}.json`;
+    const filepath = path.join(DIAGNOSTICS_DIR, filename);
+
+    fs.writeFileSync(filepath, JSON.stringify({
+      username,
+      uploadedAt: istDate.toISOString().replace('Z', '+05:30'),
+      logs
+    }, null, 2));
+
+    console.log(`📝 Diagnostics saved: ${filename}`);
+    res.json({ success: true, filename });
+  } catch (error) {
+    console.error("❌ Diagnostics Error:", error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.listen(PORT, () => {

@@ -12,7 +12,7 @@ import {
 } from './mockData';
 import storage from './utils/storage';
 import AppNavigator from './navigation/AppNavigator';
-import ChatBot from './components/ChatBot';
+import logger from './utils/logger';
 import config from './config';
 
 export default function App() {
@@ -35,6 +35,7 @@ export default function App() {
   const [lastSyncTime, setLastSyncTime] = useState(null);
   const [chatbotMessages, setChatbotMessages] = useState({}); // { [userId]: Array<{role, text}> }
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isUploadingLogs, setIsUploadingLogs] = useState(false);
   const [pendingSync, setPendingSync] = useState([]); // Keys that need to be pushed to cloud
   const isSyncingRef = React.useRef(false);
   const pendingSyncRef = React.useRef([]);
@@ -69,6 +70,7 @@ export default function App() {
 
     // 3. IMMEDIATE HYDRATION FROM STORAGE
     const startup = async () => {
+      await logger.initialize();
       await hydrateFromStorage();
       // Only after local data is visible do we attempt a cloud pull
       loadData();
@@ -1282,7 +1284,6 @@ export default function App() {
       setPlayers(updated);
       syncAndSaveData({ players: updated });
     },
-    chatbotMessages,
     onSendChatMessage: (messages) => {
       if (!currentUser) return;
       const updated = {
@@ -1291,7 +1292,36 @@ export default function App() {
       };
       setChatbotMessages(updated);
       syncAndSaveData({ chatbotMessages: updated });
-    }
+    },
+    onUploadLogs: async () => {
+      if (!currentUserRef.current) return;
+      setIsUploadingLogs(true);
+      try {
+        const logs = logger.getLogs();
+        const response = await fetch(`${config.API_BASE_URL}/api/diagnostics`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-ace-api-key': config.ACE_API_KEY
+          },
+          body: JSON.stringify({
+            username: currentUserRef.current.name,
+            logs: logs
+          })
+        });
+
+        if (response.ok) {
+          Alert.alert("Success", "Diagnostic logs have been sent to the cloud.");
+        } else {
+          throw new Error("Failed to upload logs");
+        }
+      } catch (error) {
+        Alert.alert("Error", "Failed to upload diagnostic logs. Please try again.");
+      } finally {
+        setIsUploadingLogs(false);
+      }
+    },
+    isUploadingLogs
     // ... add other handlers as needed by screens
   };
   if (isLoading) {

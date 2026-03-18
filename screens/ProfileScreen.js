@@ -9,6 +9,7 @@ import * as Updates from 'expo-updates';
 import { PlayerSkillDashboard, PlayerPerformanceAnalytics, PlayerWalletDashboard } from '../components/PlayerProfileFeatures';
 import CoachOnboardingModal from '../components/CoachOnboardingModal';
 import { SupportTicketSystem } from '../components/SupportTicketSystem';
+import DiagnosticsModal from '../components/DiagnosticsModal';
 import config from '../config';
 
 const calculateAcademyTier = (uid, tournaments) => {
@@ -102,7 +103,8 @@ const NotificationsModal = ({ visible, onClose, notifications, onClear, onNotifi
 const ProfileScreen = ({ 
   user, players, tournaments, onUpdateUser, onLogout, 
   supportTickets, onSaveTicket, onUpdateTicketStatus, onReplyTicket,
-  onTopUp, navigation, isCloudOnline, lastSyncTime, onManualSync
+  onTopUp, navigation, isCloudOnline, lastSyncTime, onManualSync,
+  onUploadLogs, isUploadingLogs
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showCoachOnboarding, setShowCoachOnboarding] = useState(false);
@@ -110,6 +112,7 @@ const ProfileScreen = ({
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [isPickingImage, setIsPickingImage] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -314,6 +317,17 @@ const ProfileScreen = ({
             </TouchableOpacity>
 
             <TouchableOpacity 
+                onPress={() => setShowDiagnostics(true)}
+                style={styles.menuItem}
+            >
+                <View style={[styles.menuIcon, { backgroundColor: '#F8FAFC' }]}>
+                    <Ionicons name="bug-outline" size={20} color="#334155" />
+                </View>
+                <Text style={styles.menuLabel}>System Diagnostics</Text>
+                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+            </TouchableOpacity>
+
+            <TouchableOpacity 
                 onPress={() => setShowChangePassword(true)}
                 style={styles.menuItem}
             >
@@ -375,6 +389,13 @@ const ProfileScreen = ({
             <Text style={styles.legalText}>Privacy Policy • Terms of Service</Text>
         </View>
       </ScrollView>
+
+      <DiagnosticsModal 
+        visible={showDiagnostics}
+        onClose={() => setShowDiagnostics(false)}
+        onUpload={onUploadLogs}
+        isUploading={isUploadingLogs}
+      />
 
       {/* Support System Modal */}
       <Modal visible={showSupport} animationType="slide">
