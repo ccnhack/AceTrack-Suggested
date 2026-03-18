@@ -42,9 +42,9 @@ const AppStateSchema = new mongoose.Schema({
 const AppState = mongoose.model('AppState', AppStateSchema);
 
 // Constants and Security
-const ACE_API_KEY = process.env.ACE_API_KEY;
-if (!ACE_API_KEY) {
-  console.error("❌ ACE_API_KEY is not defined in .env! Backend is unsecured.");
+const ACE_API_KEY = process.env.ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=';
+if (!process.env.ACE_API_KEY) {
+  console.warn("⚠️ ACE_API_KEY is using a hardcoded fallback. Set it in .env for production.");
 }
 
 // Middlewares
