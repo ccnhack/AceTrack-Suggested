@@ -324,7 +324,7 @@ export default function App() {
       }
 
       // 2. Identify syncable keys
-      const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser'];
+      const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages'];
       const syncUpdates = {};
       let hasSyncable = false;
 
@@ -1184,7 +1184,6 @@ export default function App() {
                 const updatedUser = {
                   ...currentUser,
                   credits: (currentUser.credits || 0) + (t.entryFee || 0),
-                  registeredTournamentIds: (currentUser.registeredTournamentIds || []).filter(id => id !== t.id),
                   cancelledTournamentIds: [...(currentUser.cancelledTournamentIds || []), t.id],
                   walletHistory: [
                     {

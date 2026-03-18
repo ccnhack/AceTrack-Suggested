@@ -43,9 +43,6 @@ const AppState = mongoose.model('AppState', AppStateSchema);
 
 // Constants and Security
 const ACE_API_KEY = process.env.ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=';
-if (!process.env.ACE_API_KEY) {
-  console.warn("⚠️ ACE_API_KEY is using a hardcoded fallback. Set it in .env for production.");
-}
 
 // Middlewares
 app.use(cors());
@@ -117,40 +114,14 @@ app.post('/api/save', apiKeyGuard, async (req, res) => {
       return res.status(400).json({ error: 'Invalid payload: No syncable context found' });
     }
 
-    // 4. ATOMIC MERGE: Move to item-level merging for arrays (tournaments, players)
-    // This prevents one user's registration from overwriting another user's status update.
-    const currentState = await AppState.findOne({});
-    let updateOps = { lastUpdated: Date.now() };
-    
-    Object.keys(req.body).forEach(key => {
-      if (!syncableKeys.includes(key)) return;
-      
-      const incomingValue = req.body[key];
-      const existingValue = (currentState && currentState.data) ? currentState.data.get(key) : null;
-
-      if (Array.isArray(incomingValue) && Array.isArray(existingValue)) {
-        // Merge Array items by ID
-        const mergedArray = [...existingValue];
-        incomingValue.forEach(incomingItem => {
-          if (!incomingItem || !incomingItem.id) return;
-          const idx = mergedArray.findIndex(item => item && item.id === incomingItem.id);
-          if (idx > -1) {
-            mergedArray[idx] = { ...mergedArray[idx], ...incomingItem };
-          } else {
-            mergedArray.push(incomingItem);
-          }
-        });
-        updateOps[`data.${key}`] = mergedArray;
-      } else {
-        // Standard set for objects/primitives
-        updateOps[`data.${key}`] = incomingValue;
-      }
-    });
+    // We update the existing document or create a new one
+    const currentState = await AppState.findOne().sort({ lastUpdated: -1 });
+    const newData = currentState ? { ...currentState.data, ...req.body } : req.body;
 
     await AppState.findOneAndUpdate(
-      {}, 
-      { $set: updateOps },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      {}, // filter
+      { data: newData, lastUpdated: Date.now() }, // update
+      { upsert: true, new: true } // options
     );
     res.json({ success: true });
   } catch (error) {
