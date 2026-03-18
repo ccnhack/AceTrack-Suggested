@@ -52,6 +52,17 @@ export const AcademyScreen = ({
     });
   }, [academyId, user]);
 
+  // KEEP ROSTER MODAL IN SYNC WITH BACKGROUND UPDATES
+  useEffect(() => {
+    if (viewingPlayersFor) {
+      const updatedT = tournaments.find(t => t.id === viewingPlayersFor.id);
+      if (updatedT && JSON.stringify(updatedT) !== JSON.stringify(viewingPlayersFor)) {
+        console.log("🔄 Roster modal synced with background tournament update");
+        setViewingPlayersFor(updatedT);
+      }
+    }
+  }, [tournaments, viewingPlayersFor?.id]);
+
   // Form Fields State
   const [formTitle, setFormTitle] = useState('');
   const [formSport, setFormSport] = useState(Sport.Tennis);
