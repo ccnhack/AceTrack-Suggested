@@ -233,20 +233,22 @@ const ParticipantsModal = ({
                   }
                   
                   const verdict = getReliabilityVerdict(p);
+                  const isGreyedOut = status === 'Denied' || status === 'Opted-Out';
+                  
                   return (
                     <TouchableOpacity 
                       key={pid} 
                       onPress={() => setExpandedPlayerId(expandedPlayerId === pid ? null : pid)}
-                      style={styles.playerCard}
+                      style={[styles.playerCard, isGreyedOut && styles.greyedOutCard]}
                     >
-                      <View style={styles.playerRow}>
+                      <View style={[styles.playerRow, isGreyedOut && { opacity: 0.5 }]}>
                           <Image 
                             key={`${pid}-${p.avatar}`}
                             source={{ uri: p.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random` }} 
                             style={styles.avatar} 
                           />
                           <View style={styles.flex}>
-                              <Text style={styles.playerName}>{p.name}</Text>
+                              <Text style={[styles.playerName, isGreyedOut && styles.greyedOutText]}>{p.name}</Text>
                               <View style={styles.verdictRow}>
                                   <View style={[styles.verdictTag, { backgroundColor: verdict.bg }]}>
                                       <Text style={[styles.verdictText, { color: verdict.color }]}>{verdict.label}</Text>
@@ -637,6 +639,14 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#94A3B8',
     textTransform: 'uppercase',
+  },
+  greyedOutCard: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+  },
+  greyedOutText: {
+    color: '#94A3B8',
+    textDecorationLine: 'line-through',
   },
 });
 

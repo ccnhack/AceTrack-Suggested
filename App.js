@@ -324,7 +324,7 @@ export default function App() {
       }
 
       // 2. Identify syncable keys
-      const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages'];
+      const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser'];
       const syncUpdates = {};
       let hasSyncable = false;
 

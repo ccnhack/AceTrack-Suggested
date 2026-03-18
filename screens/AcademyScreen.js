@@ -563,8 +563,6 @@ export const AcademyScreen = ({
             ...viewingPlayersFor,
             pendingPaymentPlayerIds: [...(viewingPlayersFor.pendingPaymentPlayerIds || []), player.id]
           };
-          setViewingPlayersFor(updatedTournament);
-          onSaveTournament(updatedTournament);
           
           // Notification logic
           const notification = {
@@ -575,16 +573,19 @@ export const AcademyScreen = ({
             read: false,
             type: 'tournament_invite'
           };
+          
           const updatedPlayer = { 
             ...player, 
-            notifications: [notification, ...(player.notifications || [])] 
+            notifications: [notification, ...(player.notifications || [])],
+            // Redundancy for better player-side visibility
+            pendingTournamentIds: [...(player.pendingTournamentIds || []), viewingPlayersFor.id]
           };
           
-          // Stagger to prevent backend race condition on simultaneous save
-          setTimeout(() => {
-            onUpdateUser(updatedPlayer);
-          }, 800);
+          // Unified update to both entities to ensure atomic-like behavior on backend
+          onSaveTournament(updatedTournament);
+          onUpdateUser(updatedPlayer);
           
+          setViewingPlayersFor(updatedTournament);
           Alert.alert("Success", `Player ${player.name} added. They must complete payment to confirm registration.`);
         }}
       />

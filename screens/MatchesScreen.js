@@ -46,7 +46,8 @@ const MatchesScreen = ({
     ? tournaments.filter(t => String(t.assignedCoachId).toLowerCase() === String(user.id).toLowerCase())
     : tournaments.filter(t => 
         (t.registeredPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase()) || 
-        (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase())
+        (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase()) ||
+        (user.pendingTournamentIds || []).some(tid => String(tid).toLowerCase() === String(t.id).toLowerCase())
       );
 
   const requestTournaments = isCoach

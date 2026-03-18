@@ -14,7 +14,7 @@ const GROQ_API_KEY = (Constants.expoConfig && Constants.expoConfig.extra && Cons
   : (process.env.EXPO_PUBLIC_GROQ_API_KEY || '');
 const ACE_API_KEY = (Constants.expoConfig && Constants.expoConfig.extra && Constants.expoConfig.extra.aceApiKey)
   ? Constants.expoConfig.extra.aceApiKey
-  : (process.env.EXPO_PUBLIC_ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=');
+  : (process.env.EXPO_PUBLIC_ACE_API_KEY || '');
 
 export default {
   API_BASE_URL,

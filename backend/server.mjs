@@ -42,7 +42,10 @@ const AppStateSchema = new mongoose.Schema({
 const AppState = mongoose.model('AppState', AppStateSchema);
 
 // Constants and Security
-const ACE_API_KEY = process.env.ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=';
+const ACE_API_KEY = process.env.ACE_API_KEY;
+if (!ACE_API_KEY) {
+  console.error("❌ ACE_API_KEY is not defined in .env! Backend is unsecured.");
+}
 
 // Middlewares
 app.use(cors());
@@ -114,14 +117,20 @@ app.post('/api/save', apiKeyGuard, async (req, res) => {
       return res.status(400).json({ error: 'Invalid payload: No syncable context found' });
     }
 
-    // We update the existing document or create a new one
-    const currentState = await AppState.findOne().sort({ lastUpdated: -1 });
-    const newData = currentState ? { ...currentState.data, ...req.body } : req.body;
+    // 4. ATOMIC UPDATE: Use $set with dot notation to update only the provided keys.
+    // This prevents a "full overwrite" race condition where concurrent updates from 
+    // different users/devices could lose data.
+    let updateOps = { lastUpdated: Date.now() };
+    Object.keys(req.body).forEach(key => {
+      if (syncableKeys.includes(key)) {
+        updateOps[`data.${key}`] = req.body[key];
+      }
+    });
 
     await AppState.findOneAndUpdate(
-      {}, // filter
-      { data: newData, lastUpdated: Date.now() }, // update
-      { upsert: true, new: true } // options
+      {}, // Global singleton state
+      { $set: updateOps },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
     );
     res.json({ success: true });
   } catch (error) {
