@@ -94,14 +94,8 @@ app.get('/api/data', apiKeyGuard, async (req, res) => {
     const state = await AppState.findOne().sort({ lastUpdated: -1 });
     if (!state || !state.data) return res.json({});
     
-    // 2. DATA SANITIZATION: Remove passwords before sending to client
+    // 2. DATA DUMP: Return state as-is for client-side local validation
     const sanitizedData = JSON.parse(JSON.stringify(state.data)); // Deep clone
-    if (sanitizedData.players && Array.isArray(sanitizedData.players)) {
-      sanitizedData.players = sanitizedData.players.map(p => {
-        const { password, ...safePlayer } = p;
-        return safePlayer;
-      });
-    }
     
     res.json({ ...sanitizedData, lastUpdated: state.lastUpdated });
   } catch (error) {

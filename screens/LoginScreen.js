@@ -73,7 +73,7 @@ const LoginScreen = ({ onLoginSuccess, onBack, players }) => {
     
     const foundUser = players.find(p => 
       p.email.toLowerCase() === username.toLowerCase() ||
-      p.id === username
+      String(p.id).toLowerCase() === username.toLowerCase()
     );
 
     if (foundUser && (foundUser.password || 'password') === password) {

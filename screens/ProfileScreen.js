@@ -115,6 +115,9 @@ const ProfileScreen = ({
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [isPickingImage, setIsPickingImage] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [showVerifyModal, setShowVerifyModal] = useState(null); // 'email' | 'phone'
+  const [verificationCode, setVerificationCode] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
 
   // Edit Profile States
   const [editName, setEditName] = useState(user?.name || '');
@@ -300,6 +303,60 @@ const ProfileScreen = ({
             </View>
         </View>
 
+        {/* Verification Status Card */}
+        {user.role !== 'admin' && (
+          <View style={[styles.section, { marginTop: 16 }]}>
+            <View style={styles.verificationCard}>
+              <View style={styles.verificationHeader}>
+                <Ionicons name="shield-checkmark" size={20} color="#0F172A" />
+                <Text style={styles.verificationTitleText}>Account Verification</Text>
+              </View>
+              
+              <View style={styles.verificationRows}>
+                <View style={styles.verificationRow}>
+                  <View style={styles.verificationInfo}>
+                    <Ionicons name="mail" size={16} color="#64748B" />
+                    <Text style={styles.verificationValue}>{user.email}</Text>
+                  </View>
+                  {user.isEmailVerified ? (
+                    <View style={styles.verifiedBadge}>
+                      <Ionicons name="checkmark-circle" size={14} color="#16A34A" />
+                      <Text style={styles.verifiedText}>Verified</Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity 
+                      style={styles.verifyBtn}
+                      onPress={() => setShowVerifyModal('email')}
+                    >
+                      <Text style={styles.verifyBtnText}>Verify Now</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <View style={styles.verificationRow}>
+                  <View style={styles.verificationInfo}>
+                    <Ionicons name="call" size={16} color="#64748B" />
+                    <Text style={styles.verificationValue}>{user.phone}</Text>
+                  </View>
+                  {user.isPhoneVerified ? (
+                    <View style={styles.verifiedBadge}>
+                      <Ionicons name="checkmark-circle" size={14} color="#16A34A" />
+                      <Text style={styles.verifiedText}>Verified</Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity 
+                      style={styles.verifyBtn}
+                      onPress={() => setShowVerifyModal('phone')}
+                    >
+                      <Text style={styles.verifyBtnText}>Verify Now</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
 
         {user.role !== 'admin' && user.role !== 'academy' && user.role !== 'coach' && (
           <View style={styles.section}>
@@ -420,6 +477,64 @@ const ProfileScreen = ({
               />
             ) : <Text>Support System Unavailable</Text>}
         </SafeAreaView>
+      </Modal>
+
+      {/* Verification OTP Modal */}
+      <Modal visible={!!showVerifyModal} animationType="fade" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.otpModalContent}>
+            <View style={styles.otpIconContainer}>
+              <Ionicons name={showVerifyModal === 'email' ? "mail-unread" : "chatbubble-ellipses"} size={32} color="#EF4444" />
+            </View>
+            <Text style={styles.otpTitle}>Verify {showVerifyModal === 'email' ? 'Email' : 'Phone'}</Text>
+            <Text style={styles.otpDescription}>
+              We've sent a 6-digit verification code to your {showVerifyModal === 'email' ? 'email address' : 'phone number'}.
+            </Text>
+            
+            <TextInput 
+              style={styles.otpInput}
+              placeholder="123456"
+              maxLength={6}
+              keyboardType="number-pad"
+              value={verificationCode}
+              onChangeText={setVerificationCode}
+            />
+            
+            <View style={styles.otpActions}>
+              <TouchableOpacity 
+                style={[styles.otpVerifyBtn, (verificationCode.length !== 6 || isVerifying) && styles.disabledBtn]}
+                disabled={verificationCode.length !== 6 || isVerifying}
+                onPress={() => {
+                  setIsVerifying(true);
+                  // Simulate API call
+                  setTimeout(() => {
+                    const type = showVerifyModal;
+                    onUpdateUser({
+                      ...user,
+                      [type === 'email' ? 'isEmailVerified' : 'isPhoneVerified']: true
+                    });
+                    setShowVerifyModal(null);
+                    setVerificationCode('');
+                    setIsVerifying(false);
+                    Alert.alert("Success", `${type === 'email' ? 'Email' : 'Phone'} verified successfully!`);
+                  }, 1500);
+                }}
+              >
+                <Text style={styles.otpVerifyText}>{isVerifying ? 'Verifying...' : 'Verify'}</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.otpCancelBtn}
+                onPress={() => {
+                  setShowVerifyModal(null);
+                  setVerificationCode('');
+                }}
+              >
+                <Text style={styles.otpCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
 
       {/* Coach Onboarding (Affiliation Edit) */}
@@ -799,6 +914,152 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
     color: '#0F172A',
+  },
+  verificationCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+  },
+  verificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  verificationTitleText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#0F172A',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  verificationRows: {
+    gap: 12,
+  },
+  verificationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  verificationInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  verificationValue: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '500',
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  verifiedText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#16A34A',
+    textTransform: 'uppercase',
+  },
+  verifyBtn: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  verifyBtnText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+  },
+  otpModalContent: {
+    backgroundColor: '#FFFFFF',
+    width: '85%',
+    borderRadius: 32,
+    padding: 32,
+    alignItems: 'center',
+  },
+  otpIconContainer: {
+    width: 64,
+    height: 64,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  otpTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  otpDescription: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 24,
+  },
+  otpInput: {
+    width: '100%',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    borderRadius: 16,
+    padding: 16,
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    letterSpacing: 8,
+    color: '#0F172A',
+    marginBottom: 24,
+  },
+  otpActions: {
+    width: '100%',
+    gap: 12,
+  },
+  otpVerifyBtn: {
+    width: '100%',
+    backgroundColor: '#EF4444',
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  otpVerifyText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  otpCancelBtn: {
+    width: '100%',
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  otpCancelText: {
+    color: '#94A3B8',
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  disabledBtn: {
+    opacity: 0.5,
   },
   statLabel: {
     fontSize: 8,

@@ -32,7 +32,8 @@ const MainTabs = ({
   onRequestDeletion, onUnlockVideo, onPurchaseAiHighlights, onVideoPlay,
   onSaveCoachComment, onRegister, onReschedule, onCancelReschedule,
   onOptOut, onLogFailedOtp, onLogTrace, setPlayers, onToggleFavourite,
-  onManualSync, isCloudOnline, lastSyncTime, onBatchUpdate, onUploadLogs, isUploadingLogs
+  onManualSync, isCloudOnline, lastSyncTime, onBatchUpdate, onUploadLogs, isUploadingLogs,
+  onVerifyAccount
 }) => {
   const params = { 
     user, role, players, tournaments, matchVideos, matches, supportTickets, evaluations, 
@@ -47,7 +48,8 @@ const MainTabs = ({
     onRequestDeletion, onUnlockVideo, onPurchaseAiHighlights, onVideoPlay,
     onSaveCoachComment, onRegister, onReschedule, onCancelReschedule,
     onOptOut, onLogFailedOtp, onLogTrace, setPlayers, onToggleFavourite,
-    onManualSync, isCloudOnline, lastSyncTime, onBatchUpdate, onUploadLogs, isUploadingLogs
+    onManualSync, isCloudOnline, lastSyncTime, onBatchUpdate, onUploadLogs, isUploadingLogs,
+    onVerifyAccount
   };
   
   const typeProps = { Sport, SkillLevel, TournamentStructure, TournamentFormat };
@@ -174,8 +176,9 @@ export default function AppNavigator({ user, role, players, tournaments, matchVi
                 {...props} 
                 players={players} 
                 onSignupSuccess={(newUser) => {
-                  // handleLogin will handle both local storage for currentUser and cloud sync for players list
-                  handlers.onLogin(newUser.role, newUser);
+                  // handleRegisterUser handles cloud sync but NOT auto-login
+                  handlers.onRegisterUser(newUser);
+                  props.navigation.navigate('Login');
                 }}
                 onBack={() => props.navigation.goBack()}
                 Sport={Sport}

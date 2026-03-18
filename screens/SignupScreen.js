@@ -28,6 +28,9 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, Sport }) => {
   const [usernameStatus, setUsernameStatus] = useState('idle');
   const [usernameSuggestions, setUsernameSuggestions] = useState([]);
   const [isSportsDropdownOpen, setIsSportsDropdownOpen] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [newlyCreatedUser, setNewlyCreatedUser] = useState(null);
 
   const checkUsername = () => {
     if (!formData.username) {
@@ -117,7 +120,10 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, Sport }) => {
       })
     };
 
-    onSignupSuccess(newPlayer);
+    setIsRegistering(true);
+    setNewlyCreatedUser(newPlayer);
+    setShowSuccessModal(true);
+    setIsRegistering(false);
   };
 
   if (step === 1) {
@@ -367,10 +373,42 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, Sport }) => {
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-        <TouchableOpacity onPress={handleSignup} style={styles.registerButton}>
-          <Text style={styles.registerButtonText}>Register Now</Text>
+        <TouchableOpacity 
+          onPress={handleSignup} 
+          style={[styles.registerButton, (isRegistering || usernameStatus === 'checking') && styles.disabledButton]}
+          disabled={isRegistering || usernameStatus === 'checking'}
+        >
+          <Text style={styles.registerButtonText}>{isRegistering ? 'Creating Account...' : 'Register Now'}</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Registration Success Modal */}
+      <Modal
+        visible={showSuccessModal}
+        transparent={true}
+        animationType="fade"
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.successModalContent}>
+            <View style={styles.successIconContainer}>
+              <Ionicons name="checkmark-circle" size={50} color="#22C55E" />
+            </View>
+            <Text style={styles.successTitle}>Registration Successful!</Text>
+            <Text style={styles.successDescription}>
+              Welcome to AceTrack! Your account has been created successfully. You can now login to access all features.
+            </Text>
+            <TouchableOpacity 
+              style={styles.goToLoginButton}
+              onPress={() => {
+                setShowSuccessModal(false);
+                if (newlyCreatedUser) onSignupSuccess(newlyCreatedUser);
+              }}
+            >
+              <Text style={styles.goToLoginText}>Go to Login</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -610,6 +648,65 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  successModalContent: {
+    backgroundColor: '#FFFFFF',
+    width: '100%',
+    borderRadius: 32,
+    padding: 32,
+    alignItems: 'center',
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+  },
+  successIconContainer: {
+    width: 80,
+    height: 80,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  successTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0F172A',
+    textTransform: 'uppercase',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  successDescription: {
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  goToLoginButton: {
+    width: '100%',
+    backgroundColor: '#EF4444',
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  goToLoginText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 16,
+    textTransform: 'uppercase',
   },
 });
 

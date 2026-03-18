@@ -10,6 +10,7 @@ import {
   SUPPORT_TICKETS,
   MATCHES
 } from './mockData';
+import { Modal, Text as RNText, TouchableOpacity as RNTouchableOpacity } from 'react-native';
 import storage from './utils/storage';
 import AppNavigator from './navigation/AppNavigator';
 import ChatBot from './components/ChatBot';
@@ -35,6 +36,7 @@ export default function App() {
   const [isCloudOnline, setIsCloudOnline] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState(null);
   const [chatbotMessages, setChatbotMessages] = useState({}); // { [userId]: Array<{role, text}> }
+  const [showVerificationPrompt, setShowVerificationPrompt] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isUploadingLogs, setIsUploadingLogs] = useState(false);
   const [pendingSync, setPendingSync] = useState([]); // Keys that need to be pushed to cloud
@@ -53,13 +55,13 @@ export default function App() {
   }, [pendingSync]);
 
   useEffect(() => {
-    // 1. Polling: Check for updates every 2 seconds for real-time feel
+    // 1. Polling: Check for updates every 5 seconds for real-time feel
     const pollInterval = setInterval(() => {
-      // GUARD: Only check if user is logged in
-      if (!isSyncingRef.current && currentUserRef.current) {
+      // Poll if not syncing. Even if not logged in, we want to see new players/tournaments
+      if (!isSyncingRef.current) {
         checkForUpdates();
       }
-    }, 2000);
+    }, 5000);
 
     // 2. AppState: Refresh when app returns from background to foreground
     const subscription = AppState.addEventListener('change', nextAppState => {
@@ -421,6 +423,11 @@ export default function App() {
     // Use 30s timeout for Render.com cold starts.
     await loadData(true, true);
     console.log('✅ Login sync complete.');
+
+    // STEP 3: Check for verification status
+    if (user && (!user.isEmailVerified || !user.isPhoneVerified)) {
+      setShowVerificationPrompt(true);
+    }
   };
 
   const handleLogout = async () => {
@@ -451,6 +458,30 @@ export default function App() {
     await storage.removeItem('currentUser');
     await storage.removeItem('pendingSync');
     console.log("🧹 Auth state cleared on logout (shared data preserved in storage)");
+  };
+
+  const handleRegisterUser = async (newPlayer) => {
+    // 1. Update local state
+    const updatedPlayers = [newPlayer, ...players];
+    setPlayers(updatedPlayers);
+    
+    // 2. Persist to storage
+    await storage.setItem('players', updatedPlayers);
+    
+    // 3. Sync to cloud IMMEDIATELY and wait for it
+    console.log(`📝 Registering new user: ${newPlayer.id}`);
+    const success = await pushStateToCloud({ players: updatedPlayers });
+    
+    if (!success) {
+      // If sync fails, mark as pending
+      setPendingSync(prev => {
+        const next = [...prev];
+        if (!next.includes('players')) next.push('players');
+        storage.setItem('pendingSync', next);
+        return next;
+      });
+    }
+    return success;
   };
 
   const handleSaveTournament = (t) => {
@@ -580,6 +611,29 @@ export default function App() {
     onManualSync: () => {
       logger.logAction('Manual Sync Clicked');
       loadData(false, true);
+    },
+    onRegisterUser: handleRegisterUser,
+    onVerifyAccount: (type) => {
+      if (!currentUser) return;
+      const updatedUser = {
+        ...currentUser,
+        [type === 'email' ? 'isEmailVerified' : 'isPhoneVerified']: true
+      };
+      
+      const isMe = currentUserRef.current && String(updatedUser.id).toLowerCase() === String(currentUserRef.current.id).toLowerCase();
+      if (isMe) {
+        setCurrentUser(updatedUser);
+        currentUserRef.current = updatedUser;
+      }
+
+      const updatedPlayers = players.map(p => 
+        String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p
+      );
+      setPlayers(updatedPlayers);
+      
+      const updates = { players: updatedPlayers };
+      if (isMe) updates.currentUser = updatedUser;
+      syncAndSaveData(updates);
     },
     onBatchUpdate: (updates) => {
       logger.logAction('Batch Update triggered', Object.keys(updates));
@@ -1431,10 +1485,122 @@ export default function App() {
             onSendChatMessage={handlers.onSendChatMessage}
           />
         )}
+
+        {/* Verification Prompt Modal */}
+        <Modal
+          visible={showVerificationPrompt}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowVerificationPrompt(false)}
+        >
+          <View style={appStyles.modalOverlay}>
+            <View style={appStyles.verificationModalContent}>
+              <View style={appStyles.verificationIconContainer}>
+                <Ionicons name="shield-checkmark" size={40} color="#EF4444" />
+              </View>
+              <Text style={appStyles.verificationTitle}>Complete Verification</Text>
+              <Text style={appStyles.verificationDescription}>
+                Please verify your email and phone number to unlock all features, including tournament registrations.
+              </Text>
+              
+              <TouchableOpacity 
+                style={appStyles.verifyNowButton}
+                onPress={() => {
+                  setShowVerificationPrompt(false);
+                  // Navigation to profile is handled by the tab navigator, 
+                  // but we might need to trigger a specific state or just let the user go there.
+                  // For now, we'll just close and assume they'll go to profile.
+                  // BETTER: If we had a way to force tab change, we'd do it here.
+                  Alert.alert("Profile", "Please head to the Profile tab to complete verification.");
+                }}
+              >
+                <Text style={appStyles.verifyNowText}>Complete Now</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={appStyles.maybeLaterButton}
+                onPress={() => setShowVerificationPrompt(false)}
+              >
+                <Text style={appStyles.maybeLaterText}>Maybe Later</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </NavigationContainer>
     </SafeAreaProvider>
   );
 }
+
+const appStyles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  verificationModalContent: {
+    backgroundColor: '#FFFFFF',
+    width: '100%',
+    borderRadius: 32,
+    padding: 32,
+    alignItems: 'center',
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+  },
+  verificationIconContainer: {
+    width: 80,
+    height: 80,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  verificationTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0F172A',
+    textTransform: 'uppercase',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  verificationDescription: {
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  verifyNowButton: {
+    width: '100%',
+    backgroundColor: '#EF4444',
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  verifyNowText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 16,
+    textTransform: 'uppercase',
+  },
+  maybeLaterButton: {
+    width: '100%',
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  maybeLaterText: {
+    color: '#94A3B8',
+    fontWeight: 'bold',
+    fontSize: 14,
+    textTransform: 'uppercase',
+  },
+});
 
 const styles = StyleSheet.create({
   loadingContainer: {
