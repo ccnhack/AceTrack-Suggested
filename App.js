@@ -40,6 +40,7 @@ export default function App() {
   const [pendingSync, setPendingSync] = useState([]); // Keys that need to be pushed to cloud
   const isSyncingRef = React.useRef(false);
   const pendingSyncRef = React.useRef([]);
+  const lastServerUpdateRef = React.useRef(null);
 
   // Synchronous helper to update isSyncing state AND ref atomically
   const setSyncingState = (val) => {
@@ -52,14 +53,13 @@ export default function App() {
   }, [pendingSync]);
 
   useEffect(() => {
-    // 1. Polling: Refresh every 8 seconds to check for "live" updates from other devices
+    // 1. Polling: Check for updates every 2 seconds for real-time feel
     const pollInterval = setInterval(() => {
-      // GUARD: Only poll if a user is logged in and no sync is in progress
+      // GUARD: Only check if user is logged in
       if (!isSyncingRef.current && currentUserRef.current) {
-        console.log("🔄 Auto-sync: Periodically checking for cloud updates...");
-        loadData(true); // Don't show loading spinner for background poll
+        checkForUpdates();
       }
-    }, 8000);
+    }, 2000);
 
     // 2. AppState: Refresh when app returns from background to foreground
     const subscription = AppState.addEventListener('change', nextAppState => {
@@ -85,6 +85,25 @@ export default function App() {
   }, []); // RUN ONCE ON MOUNT - Guardians inside loadData handle the rest
 
   const syncVersion = React.useRef(0);
+
+  const checkForUpdates = async () => {
+    try {
+      const response = await fetch(`${config.API_BASE_URL}/api/status`, {
+        headers: {
+          'x-ace-api-key': config.ACE_API_KEY
+        }
+      });
+      if (response.ok) {
+        const { lastUpdated } = await response.json();
+        if (lastUpdated && lastUpdated !== lastServerUpdateRef.current) {
+          console.log(`🔄 Real-time Update Detected! [Server: ${lastUpdated}] Fetching fresh data...`);
+          await loadData(true);
+        }
+      }
+    } catch (e) {
+      console.log("📡 Status check failed:", e.message);
+    }
+  };
 
   const hydrateFromStorage = async () => {
     console.log("📦 Hydrating app state from local storage...");
@@ -200,6 +219,10 @@ export default function App() {
       console.log("✅ Cloud data received. Applying updates...");
       setIsCloudOnline(true);
       setLastSyncTime(new Date().toLocaleTimeString());
+      
+      if (cloudData.lastUpdated) {
+        lastServerUpdateRef.current = cloudData.lastUpdated;
+      }
 
       // Update states and storage simultaneously
       if (cloudData.players) {
@@ -294,6 +317,11 @@ export default function App() {
       console.log(`✅ Cloud push successful [v${versionAtStart}]`);
       setIsCloudOnline(true);
       setLastSyncTime(new Date().toLocaleTimeString());
+
+      const result = await response.json();
+      if (result.lastUpdated) {
+        lastServerUpdateRef.current = result.lastUpdated;
+      }
       return true;
     } catch (e) {
       console.error("❌ Cloud push failed:", e.message);

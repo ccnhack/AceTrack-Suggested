@@ -103,7 +103,16 @@ app.get('/api/data', apiKeyGuard, async (req, res) => {
       });
     }
     
-    res.json(sanitizedData);
+    res.json({ ...sanitizedData, lastUpdated: state.lastUpdated });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/status', apiKeyGuard, async (req, res) => {
+  try {
+    const state = await AppState.findOne().sort({ lastUpdated: -1 }).select('lastUpdated');
+    res.json({ lastUpdated: state?.lastUpdated || 0 });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -123,12 +132,12 @@ app.post('/api/save', apiKeyGuard, async (req, res) => {
     const currentState = await AppState.findOne().sort({ lastUpdated: -1 });
     const newData = currentState ? { ...currentState.data, ...req.body } : req.body;
 
-    await AppState.findOneAndUpdate(
+    const updatedState = await AppState.findOneAndUpdate(
       {}, // filter
       { data: newData, lastUpdated: Date.now() }, // update
       { upsert: true, new: true } // options
     );
-    res.json({ success: true });
+    res.json({ success: true, lastUpdated: updatedState.lastUpdated });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
