@@ -118,6 +118,29 @@ app.get('/api/status', apiKeyGuard, async (req, res) => {
   }
 });
 
+app.get('/api/diagnostics', apiKeyGuard, async (req, res) => {
+  try {
+    const files = fs.readdirSync(DIAGNOSTICS_DIR);
+    res.json({ success: true, files });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/diagnostics/:filename', apiKeyGuard, async (req, res) => {
+  try {
+    const { filename } = req.params;
+    const filepath = path.join(DIAGNOSTICS_DIR, filename);
+    if (!fs.existsSync(filepath)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    const content = fs.readFileSync(filepath, 'utf8');
+    res.json(JSON.parse(content));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/save', apiKeyGuard, async (req, res) => {
   try {
     // 3. BASIC VALIDATION: Ensure payload has correct structure and syncable keys
