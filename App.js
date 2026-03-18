@@ -1214,8 +1214,8 @@ export default function App() {
 
               return {
                 ...item,
-                registeredPlayerIds: (item.registeredPlayerIds || []).filter(pid => pid !== currentUser.id),
-                pendingPaymentPlayerIds: (item.pendingPaymentPlayerIds || []).filter(pid => pid !== currentUser.id),
+                registeredPlayerIds: (item.registeredPlayerIds || []).filter(pid => String(pid).toLowerCase() !== String(currentUser.id).toLowerCase()),
+                pendingPaymentPlayerIds: (item.pendingPaymentPlayerIds || []).filter(pid => String(pid).toLowerCase() !== String(currentUser.id).toLowerCase()),
                 playerStatuses: updatedStatuses
               };
             }

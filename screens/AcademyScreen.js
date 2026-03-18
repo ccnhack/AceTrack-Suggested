@@ -560,7 +560,12 @@ export const AcademyScreen = ({
             Alert.alert("Error", 'Player not found in the app.');
             return;
           }
-          if (viewingPlayersFor.registeredPlayerIds.includes(player.id) || viewingPlayersFor.pendingPaymentPlayerIds?.includes(player.id)) {
+          const pid = String(player.id).toLowerCase();
+          const isReg = (viewingPlayersFor.registeredPlayerIds || []).some(id => String(id).toLowerCase() === pid);
+          const isPending = (viewingPlayersFor.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === pid);
+          const currentStatus = viewingPlayersFor.playerStatuses?.[player.id];
+
+          if ((isReg || isPending) && currentStatus !== 'Opted-Out' && currentStatus !== 'Denied') {
             Alert.alert("Info", 'Player is already registered.');
             return;
           }
@@ -569,11 +574,17 @@ export const AcademyScreen = ({
             Alert.alert("Error", 'Tournament is full.');
             return;
           }
+
+          const updatedStatuses = { ...(viewingPlayersFor.playerStatuses || {}) };
+          delete updatedStatuses[player.id]; // Reset status so it shows "Pending" instead of "Opted-Out"
+
           const updatedTournament = {
             ...viewingPlayersFor,
-            pendingPaymentPlayerIds: [...(viewingPlayersFor.pendingPaymentPlayerIds || []), player.id],
-            optedOutPlayerIds: (viewingPlayersFor.optedOutPlayerIds || []).filter(id => id !== player.id),
-            deniedPlayerIds: (viewingPlayersFor.deniedPlayerIds || []).filter(id => id !== player.id)
+            pendingPaymentPlayerIds: [...(viewingPlayersFor.pendingPaymentPlayerIds || []).filter(id => String(id).toLowerCase() !== pid), player.id],
+            registeredPlayerIds: (viewingPlayersFor.registeredPlayerIds || []).filter(id => String(id).toLowerCase() !== pid),
+            optedOutPlayerIds: (viewingPlayersFor.optedOutPlayerIds || []).filter(id => String(id).toLowerCase() !== pid),
+            deniedPlayerIds: (viewingPlayersFor.deniedPlayerIds || []).filter(id => String(id).toLowerCase() !== pid),
+            playerStatuses: updatedStatuses
           };
           
           // Notification logic
