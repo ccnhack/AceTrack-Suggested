@@ -1,0 +1,455 @@
+import React from 'react';
+import {
+  View, Text, TouchableOpacity, Modal, ScrollView,
+  StyleSheet, Alert
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+
+const TournamentDetailModal = ({
+  tournament,
+  visible,
+  onClose,
+  user,
+  role,
+  players = [],
+  onRegister,
+  onCoachOptIn,
+}) => {
+  if (!tournament) return null;
+
+  const isAdminUser = role === 'admin';
+  const isAcademyUser = role === 'academy';
+  const isCoach = role === 'coach';
+  const isRegularUser = role === 'user';
+
+  const isAlreadyRegistered = user && (tournament.registeredPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
+  const isPendingPayment = user && (tournament.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
+  const isAssignedCoach = user && String(tournament.assignedCoachId).toLowerCase() === String(user.id).toLowerCase();
+  const isFull = tournament.registeredPlayerIds?.length >= tournament.maxPlayers;
+  const isClosed = tournament.status !== 'upcoming';
+
+  const creator = players.find(p => p.id === tournament.creatorId);
+
+  const handleRegister = () => {
+    if (!onRegister) {
+      Alert.alert('Register', `Register for ${tournament.title} for ₹${tournament.entryFee}?`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Confirm', onPress: () => Alert.alert('Success', 'Registration request submitted!') },
+      ]);
+      return;
+    }
+    onRegister(tournament);
+    onClose();
+  };
+
+  const handleOptIn = () => {
+    if (!onCoachOptIn) {
+      Alert.alert('Opt-In', 'Submitted coaching opt-in!');
+      return;
+    }
+    onCoachOptIn(tournament);
+    onClose();
+  };
+
+  const getRegisterBtnLabel = () => {
+    if (isPendingPayment) return 'Pay Now';
+    if (isClosed) return 'Registration Closed';
+    if (isFull && !isAlreadyRegistered) return 'Slots Full';
+    return `Register for ₹${tournament.entryFee}`;
+  };
+
+  const isRegisterDisabled = (isAlreadyRegistered && !isPendingPayment) || (isClosed && !isPendingPayment) || (isFull && !isAlreadyRegistered && !isPendingPayment);
+
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={onClose} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={20} color="#64748B" />
+            <Text style={styles.backText}>Back</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+          <View style={styles.card}>
+            {/* Wallet Balance Badge — only for regular users */}
+            {isRegularUser && (
+              <View style={styles.walletBadge}>
+                <Text style={styles.walletLabel}>Wallet Balance</Text>
+                <Text style={styles.walletAmount}>₹{user?.credits || 0}</Text>
+              </View>
+            )}
+
+            {/* Title & Description */}
+            <Text style={styles.title}>{tournament.title}</Text>
+            <Text style={styles.description}>{tournament.description || 'No description provided.'}</Text>
+
+            {/* Info Grid */}
+            <View style={styles.grid}>
+              <View style={styles.gridItem}>
+                <Text style={styles.gridLabel}>Prize Pool</Text>
+                <Text style={[styles.gridValue, { color: '#EF4444' }]}>₹{tournament.prizePool || 'N/A'}</Text>
+              </View>
+              <View style={styles.gridItem}>
+                <Text style={styles.gridLabel}>Format</Text>
+                <Text style={styles.gridValue}>{tournament.format || 'N/A'}</Text>
+              </View>
+              <View style={styles.gridItem}>
+                <Text style={styles.gridLabel}>Date</Text>
+                <Text style={styles.gridValue}>{tournament.date}</Text>
+              </View>
+              <View style={styles.gridItem}>
+                <Text style={styles.gridLabel}>Venue</Text>
+                <Text style={styles.gridValue}>{tournament.location}</Text>
+              </View>
+              <View style={styles.gridItem}>
+                <Text style={styles.gridLabel}>Players</Text>
+                <Text style={styles.gridValue}>{tournament.registeredPlayerIds?.length || 0}/{tournament.maxPlayers}</Text>
+              </View>
+              <View style={styles.gridItem}>
+                <Text style={styles.gridLabel}>Level</Text>
+                <Text style={styles.gridValue}>{tournament.skillLevel}</Text>
+              </View>
+            </View>
+
+            {/* Admin Host Info */}
+            {isAdminUser && creator && (
+              <View style={styles.hostedByCard}>
+                <Text style={styles.hostedByLabel}>Hosted By</Text>
+                <View style={styles.hostedByRow}>
+                  <View>
+                    <Text style={styles.hostedByName}>{creator.name}</Text>
+                    <Text style={styles.hostedByTier}>Academy</Text>
+                  </View>
+                  <Ionicons name="business" size={16} color="#F87171" />
+                </View>
+              </View>
+            )}
+
+            {/* Registration Area — Regular Users */}
+            {isRegularUser && (
+              <View style={styles.actionArea}>
+                {isAlreadyRegistered && !isPendingPayment && (
+                  <Text style={styles.alreadyRegistered}>You are already registered</Text>
+                )}
+                {isClosed && !isAlreadyRegistered && !isPendingPayment && (
+                  <Text style={styles.alreadyRegistered}>Registration Closed</Text>
+                )}
+                {isFull && !isAlreadyRegistered && !isPendingPayment && (
+                  <Text style={styles.alreadyRegistered}>Slots Full</Text>
+                )}
+                <TouchableOpacity
+                  onPress={handleRegister}
+                  disabled={isRegisterDisabled}
+                  style={[
+                    styles.registerBtn,
+                    isPendingPayment && { backgroundColor: '#F97316' },
+                    isRegisterDisabled && styles.registerBtnDisabled,
+                  ]}
+                >
+                  <Text style={styles.registerBtnText}>{getRegisterBtnLabel()}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Coach Actions */}
+            {isCoach && (
+              <View style={styles.actionArea}>
+                {isAssignedCoach ? (
+                  <>
+                    <View style={styles.assignedBox}>
+                      <Text style={styles.assignedLabel}>Assigned</Text>
+                      <Text style={styles.assignedDesc}>You are assigned as a coach for this event.</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => Alert.alert('Cancel', 'Cancel your coaching assignment?', [
+                        { text: 'No', style: 'cancel' },
+                        { text: 'Yes', style: 'destructive', onPress: () => onClose() },
+                      ])}
+                      style={styles.cancelAssignmentBtn}
+                    >
+                      <Text style={styles.cancelAssignmentText}>Cancel Assignment</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : tournament.assignedCoachId ? (
+                  <View style={styles.managementBanner}>
+                    <Text style={styles.managementLabel}>Coach Assigned</Text>
+                    <Text style={styles.managementDesc}>A coach has already been assigned to this event.</Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity onPress={handleOptIn} style={styles.coachOptInBtn}>
+                    <Text style={styles.coachOptInText}>Opt-in as Coach</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
+            {/* Admin / Academy Management Banner */}
+            {(isAdminUser || isAcademyUser) && (
+              <View style={styles.managementBanner}>
+                <Text style={styles.managementLabel}>{isAdminUser ? 'Admin Preview' : 'Academy Mode'}</Text>
+                <Text style={styles.managementDesc}>Management mode enabled. Registration disabled.</Text>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  header: {
+    paddingTop: 60,
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  backText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+  },
+  scroll: {
+    flex: 1,
+    paddingHorizontal: 24,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 40,
+    padding: 32,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 24,
+    elevation: 8,
+    position: 'relative',
+  },
+  walletBadge: {
+    position: 'absolute',
+    top: 24,
+    right: 24,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  walletLabel: {
+    fontSize: 7,
+    fontWeight: '900',
+    color: '#166534',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  walletAmount: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#166534',
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#0F172A',
+    textTransform: 'uppercase',
+    letterSpacing: -0.5,
+    marginTop: 8,
+    marginBottom: 12,
+    paddingRight: 80,
+  },
+  description: {
+    fontSize: 13,
+    color: '#64748B',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 24,
+  },
+  gridItem: {
+    width: '47%',
+    backgroundColor: '#F2F4F7',
+    borderRadius: 24,
+    padding: 20,
+  },
+  gridLabel: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    marginBottom: 6,
+  },
+  gridValue: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  hostedByCard: {
+    backgroundColor: '#111827',
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 24,
+  },
+  hostedByLabel: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+    marginBottom: 8,
+  },
+  hostedByRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  hostedByName: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+  },
+  hostedByTier: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginTop: 2,
+  },
+  actionArea: {
+    marginTop: 8,
+    gap: 12,
+  },
+  alreadyRegistered: {
+    textAlign: 'center',
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#EF4444',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    marginBottom: 8,
+  },
+  registerBtn: {
+    backgroundColor: '#EF4444',
+    paddingVertical: 20,
+    borderRadius: 24,
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+  },
+  registerBtnDisabled: {
+    backgroundColor: '#CBD5E1',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  registerBtnText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+  },
+  coachOptInBtn: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 20,
+    borderRadius: 24,
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+  },
+  coachOptInText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+  },
+  assignedBox: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#BBF7D0',
+  },
+  assignedLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#16A34A',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+  },
+  assignedDesc: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#15803D',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  cancelAssignmentBtn: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+  },
+  cancelAssignmentText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#EF4444',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+  },
+  managementBanner: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#E2E8F0',
+    marginTop: 8,
+  },
+  managementLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+  },
+  managementDesc: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#64748B',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+});
+
+export default TournamentDetailModal;
