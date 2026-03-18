@@ -24,8 +24,7 @@
     "extra": {
       "eas": {
         "projectId": "3c2f128b-90a6-430a-892e-a219f6378063"
-      },
-      "groqApiKey": "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"
+      }
     },
     "owner": "hacker1717"
   }

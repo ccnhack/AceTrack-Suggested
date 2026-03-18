@@ -175,7 +175,10 @@ export default function App() {
 
       console.log(`📡 Fetching Cloud Updates [v${versionAtStart}]...`);
       const response = await fetch(`${config.API_BASE_URL}/api/data`, { 
-        signal: controller.signal 
+        signal: controller.signal,
+        headers: {
+          'x-ace-api-key': config.ACE_API_KEY
+        }
       });
       clearTimeout(timeoutId);
       
@@ -275,7 +278,10 @@ export default function App() {
       console.log(`☁️ Syncing partial state [v${versionAtStart}]: ${Object.keys(updates).join(', ')}`);
       const response = await fetch(`${config.API_BASE_URL}/api/save`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-ace-api-key': config.ACE_API_KEY
+        },
         body: JSON.stringify(updates)
       });
 

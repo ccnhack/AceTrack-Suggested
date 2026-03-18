@@ -41,8 +41,22 @@ const AppStateSchema = new mongoose.Schema({
 
 const AppState = mongoose.model('AppState', AppStateSchema);
 
+// Constants and Security
+const ACE_API_KEY = process.env.ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=';
+
+// Middlewares
 app.use(cors());
 app.use(bodyParser.json({ limit: '500mb' }));
+
+// 1. API Key Guard
+const apiKeyGuard = (req, res, next) => {
+  const providedKey = req.headers['x-ace-api-key'];
+  if (providedKey !== ACE_API_KEY) {
+    console.warn(`🛑 Unauthorized access attempt from ${req.ip}`);
+    return res.status(401).json({ error: 'Unauthorized: Invalid or missing API Key' });
+  }
+  next();
+};
 
 app.use((req, res, next) => {
   res.setHeader('Accept-Ranges', 'bytes');
@@ -58,7 +72,7 @@ app.use('/uploads', express.static(UPLOADS_DIR, {
   }
 }));
 
-const storage = multer.diskStorage({
+const storageConfig = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, UPLOADS_DIR);
   },
@@ -67,20 +81,36 @@ const storage = multer.diskStorage({
     cb(null, uniqueSuffix + '-' + file.originalname);
   }
 });
-const upload = multer({ storage });
+const upload = multer({ storage: storageConfig });
 
 // Routes
-app.get('/api/data', async (req, res) => {
+app.get('/api/data', apiKeyGuard, async (req, res) => {
   try {
     const state = await AppState.findOne().sort({ lastUpdated: -1 });
-    res.json(state ? state.data : {});
+    if (!state || !state.data) return res.json({});
+    
+    // 2. DATA SANITIZATION: Remove passwords before sending to client
+    const sanitizedData = JSON.parse(JSON.stringify(state.data)); // Deep clone
+    if (sanitizedData.players && Array.isArray(sanitizedData.players)) {
+      sanitizedData.players = sanitizedData.players.map(p => {
+        const { password, ...safePlayer } = p;
+        return safePlayer;
+      });
+    }
+    
+    res.json(sanitizedData);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/save', async (req, res) => {
+app.post('/api/save', apiKeyGuard, async (req, res) => {
   try {
+    // 3. BASIC VALIDATION: Ensure payload is not empty and has correct structure
+    if (!req.body || typeof req.body !== 'object' || Object.keys(req.body).length === 0) {
+      return res.status(400).json({ error: 'Invalid payload' });
+    }
+
     // We update the existing document or create a new one
     await AppState.findOneAndUpdate(
       {}, // filter
@@ -93,7 +123,7 @@ app.post('/api/save', async (req, res) => {
   }
 });
 
-app.post('/api/upload', upload.single('video'), (req, res) => {
+app.post('/api/upload', apiKeyGuard, upload.single('video'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
