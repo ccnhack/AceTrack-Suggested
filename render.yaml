@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: acetrack-backend
+
     env: node
     rootDir: backend
     buildCommand: npm install
