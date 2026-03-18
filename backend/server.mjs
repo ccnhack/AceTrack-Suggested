@@ -106,15 +106,21 @@ app.get('/api/data', apiKeyGuard, async (req, res) => {
 
 app.post('/api/save', apiKeyGuard, async (req, res) => {
   try {
-    // 3. BASIC VALIDATION: Ensure payload is not empty and has correct structure
-    if (!req.body || typeof req.body !== 'object' || Object.keys(req.body).length === 0) {
-      return res.status(400).json({ error: 'Invalid payload' });
+    // 3. BASIC VALIDATION: Ensure payload has correct structure and syncable keys
+    const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser'];
+    const hasSyncableKey = Object.keys(req.body).some(key => syncableKeys.includes(key));
+    
+    if (!req.body || typeof req.body !== 'object' || !hasSyncableKey) {
+      return res.status(400).json({ error: 'Invalid payload: No syncable context found' });
     }
 
     // We update the existing document or create a new one
+    const currentState = await AppState.findOne().sort({ lastUpdated: -1 });
+    const newData = currentState ? { ...currentState.data, ...req.body } : req.body;
+
     await AppState.findOneAndUpdate(
       {}, // filter
-      { data: req.body, lastUpdated: Date.now() }, // update
+      { data: newData, lastUpdated: Date.now() }, // update
       { upsert: true, new: true } // options
     );
     res.json({ success: true });
