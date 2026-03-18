@@ -577,7 +577,32 @@ export default function App() {
       syncAndSaveData({ players: updatedPlayers });
     },
     onLogTrace: handleLogTrace,
-    onManualSync: () => loadData(false, true),
+    onManualSync: () => {
+      logger.logAction('Manual Sync Clicked');
+      loadData(false, true);
+    },
+    onBatchUpdate: (updates) => {
+      logger.logAction('Batch Update triggered', Object.keys(updates));
+      const syncObj = {};
+      if (updates.tournaments) {
+        setTournaments(updates.tournaments);
+        syncObj.tournaments = updates.tournaments;
+      }
+      if (updates.players) {
+        setPlayers(updates.players);
+        syncObj.players = updates.players;
+      }
+      if (updates.matches) {
+        setMatches(updates.matches);
+        syncObj.matches = updates.matches;
+      }
+      if (updates.currentUser) {
+        setCurrentUser(updates.currentUser);
+        currentUserRef.current = updates.currentUser;
+        syncObj.currentUser = updates.currentUser;
+      }
+      syncAndSaveData(syncObj);
+    },
     isCloudOnline,
     isSyncing,
     lastSyncTime,

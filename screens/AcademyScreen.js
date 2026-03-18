@@ -10,6 +10,7 @@ import PlayerDashboardView from '../components/PlayerDashboardView';
 import ParticipantsModal from '../components/ParticipantsModal';
 import PureJSDateTimePicker from '../components/PureJSDateTimePicker';
 import { Sport, SkillLevel, TournamentStructure, TournamentFormat } from '../types';
+import logger from '../utils/logger';
 
 const { width, height } = Dimensions.get('window');
 
@@ -17,7 +18,7 @@ export const AcademyScreen = ({
   academyId, user, tournaments, players, matchVideos, matches, evaluations,
   onSaveTournament, onUpdateTournament, onSaveVideo, onCancelVideo, onRequestDeletion,
   onUpdateUser, onReplyTicket, onUpdateTicketStatus, onTopUp, onRegister, onReschedule, onLogTrace,
-  setPlayers, isSyncing
+  setPlayers, isSyncing, onBatchUpdate
 }) => {
   const [subTab, setSubTab] = useState('tournaments');
   const [tFilter, setTFilter] = useState('upcoming');
@@ -33,6 +34,15 @@ export const AcademyScreen = ({
   const [otherCoachPhone, setOtherCoachPhone] = useState('');
   const [visibleOtps, setVisibleOtps] = useState(new Set());
   const [selectedDate, setSelectedDate] = useState('');
+
+  // Diagnostic Logs for Actions
+  useEffect(() => {
+    logger.logAction('Academy Tab Changed', { tab: subTab });
+  }, [subTab]);
+
+  useEffect(() => {
+    logger.logAction('Tournament Filter Changed', { filter: tFilter });
+  }, [tFilter]);
 
   useEffect(() => {
     onLogTrace('Dashboard Access', 'academy', academyId, {
@@ -563,8 +573,6 @@ export const AcademyScreen = ({
             ...viewingPlayersFor,
             pendingPaymentPlayerIds: [...(viewingPlayersFor.pendingPaymentPlayerIds || []), player.id]
           };
-          setViewingPlayersFor(updatedTournament);
-          onSaveTournament(updatedTournament);
           
           // Notification logic
           const notification = {
@@ -573,18 +581,27 @@ export const AcademyScreen = ({
             message: `${user?.name || 'Academy'} has successfully added you to ${viewingPlayersFor.title}. Please Complete the payment to join.`,
             date: new Date().toISOString(),
             read: false,
-            type: 'tournament_invite'
+            type: 'tournament_invite',
+            tournamentId: viewingPlayersFor.id
           };
           const updatedPlayer = { 
             ...player, 
             notifications: [notification, ...(player.notifications || [])] 
           };
+
+          // Use BATCH UPDATE to send both changes in one cloud sync
+          // This prevents race conditions and ensures atomic visibility on server
+          logger.logAction('Adding Player to Tournament (Batch)', { player: player.name, tournament: viewingPlayersFor.title });
           
-          // Stagger to prevent backend race condition on simultaneous save
-          setTimeout(() => {
-            onUpdateUser(updatedPlayer);
-          }, 800);
+          const updatedTournaments = tournaments.map(t => t.id === updatedTournament.id ? updatedTournament : t);
+          const updatedPlayers = players.map(p => String(p.id).toLowerCase() === String(updatedPlayer.id).toLowerCase() ? updatedPlayer : p);
           
+          onBatchUpdate({
+            tournaments: updatedTournaments,
+            players: updatedPlayers
+          });
+
+          setViewingPlayersFor(updatedTournament);
           Alert.alert("Success", `Player ${player.name} added. They must complete payment to confirm registration.`);
         }}
       />

@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import TournamentBracket from '../components/TournamentBracket';
 import Slider from '@react-native-community/slider';
 import { LinearGradient } from 'expo-linear-gradient';
+import logger from '../utils/logger';
 
 // Styles
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -28,6 +29,10 @@ const MatchesScreen = ({
   const [analyzingVideo, setAnalyzingVideo] = useState(null);
   const [regPaymentTarget, setRegPaymentTarget] = useState(null);
   const [rosterTab, setRosterTab] = useState('roster');
+
+  useEffect(() => {
+    logger.logAction('Matches View Mode Changed', { mode: viewMode });
+  }, [viewMode]);
 
   // Coach render log removed
   // console.log('--- MatchesScreen Render ---', { userRole: user?.role, viewMode, tournaments: tournaments?.length });

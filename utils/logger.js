@@ -96,6 +96,9 @@ const logger = {
     return logs.filter(log => log.unix >= cutoff);
   },
   formatIST,
+  logAction: (action, details) => {
+    addLog('info', 'action', `${action}${details ? ': ' + JSON.stringify(details) : ''}`);
+  },
   initialize: async () => {
     addLog('system', 'init', 'Diagnostics Logger Initialized');
   }
