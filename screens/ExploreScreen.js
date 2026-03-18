@@ -39,6 +39,15 @@ const ExploreScreen = ({
     }
     if (userRole === 'coach' && userSports && !userSports.includes(t.sport)) return false;
     if (reschedulingFrom && t.id === reschedulingFrom) return false;
+
+    // Gender-based filtering for Individual/Player users
+    if (userRole === 'user') {
+      const format = t.format || "";
+      const gender = currentUser?.gender;
+      if (format.includes("Men's") && gender !== 'Male') return false;
+      if (format.includes("Women's") && gender !== 'Female') return false;
+    }
+
     return true;
   });
 
