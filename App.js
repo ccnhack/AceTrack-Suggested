@@ -95,12 +95,17 @@ export default function App() {
       });
       if (response.ok) {
         const { lastUpdated } = await response.json();
-        if (lastUpdated && lastUpdated !== lastServerUpdateRef.current) {
-          console.log(`🔄 Real-time Update Detected! [Server: ${lastUpdated}] Fetching fresh data...`);
-          await loadData(true);
+        const serverTime = String(lastUpdated);
+        const localTime = String(lastServerUpdateRef.current);
+        
+        if (serverTime && serverTime !== localTime) {
+          console.log(`🔄 [Sync] Real-time Update! Server: ${serverTime.slice(-5)} vs Local: ${localTime.slice(-5)}`);
+          // Use forceSync=true to bypass the isSyncingRef guard since we KNOW there's an update
+          await loadData(true, true);
         }
       }
     } catch (e) {
+      // Quietly log status errors to avoid console spam
       console.log("📡 Status check failed:", e.message);
     }
   };
@@ -161,11 +166,9 @@ export default function App() {
       setPendingSync([]);
       pendingSyncRef.current = [];
       await storage.setItem('pendingSync', []);
-      console.log("✅ All pending data synced successfully");
-      
-      // CRITICAL: Pull fresh data from server immediately to get the results of the server-side merge
-      // This ensures that if the server merged our data with another device, we see the full combined set now.
-      loadData(true);
+      console.log("✅ [Sync] Pending data synced successfully");
+      // Note: We don't call loadData() here because syncPendingData
+      // is usually called FROM loadData() which will continue its fetch.
     }
     return success;
   };

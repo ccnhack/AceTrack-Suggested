@@ -128,14 +128,18 @@ app.post('/api/save', apiKeyGuard, async (req, res) => {
       return res.status(400).json({ error: 'Invalid payload: No syncable context found' });
     }
 
-    // We update the existing document or create a new one
-    const currentState = await AppState.findOne().sort({ lastUpdated: -1 });
-    const newData = currentState ? { ...currentState.data, ...req.body } : req.body;
-
+    // Atomic update using MongoDB $set with dot notation for individual keys
+    const updateObj = { lastUpdated: Date.now() };
+    for (const key of syncableKeys) {
+      if (req.body[key] !== undefined) {
+        updateObj[`data.${key}`] = req.body[key];
+      }
+    }
+    
     const updatedState = await AppState.findOneAndUpdate(
-      {}, // filter
-      { data: newData, lastUpdated: Date.now() }, // update
-      { upsert: true, new: true } // options
+      {}, // any record (we only have one)
+      { $set: updateObj }, 
+      { upsert: true, new: true }
     );
     res.json({ success: true, lastUpdated: updatedState.lastUpdated });
   } catch (error) {
