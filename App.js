@@ -48,6 +48,7 @@ export default function App() {
   const lastServerUpdateRef = React.useRef(null);
   const syncVersion = React.useRef(0);
   const navigationRef = React.useRef();
+  const isUsingCloudRef = React.useRef(true);
 
   // Synchronous helper to update isSyncing state AND ref atomically
   const setSyncingState = (val) => {
@@ -58,6 +59,10 @@ export default function App() {
   useEffect(() => {
     pendingSyncRef.current = pendingSync;
   }, [pendingSync]);
+
+  useEffect(() => {
+    isUsingCloudRef.current = isUsingCloud;
+  }, [isUsingCloud]);
 
   useEffect(() => {
     // 1. Polling: Check for updates every 5 seconds for real-time feel
@@ -111,7 +116,7 @@ export default function App() {
 
   const checkForUpdates = async () => {
     try {
-      const activeApiUrl = isUsingCloud ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL;
+      const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL;
       const response = await fetch(`${activeApiUrl}/api/status`, {
         headers: {
           'x-ace-api-key': config.ACE_API_KEY
@@ -385,8 +390,14 @@ export default function App() {
       setIsCloudOnline(false);
       return false;
     } finally {
+      // Versioning ensures that only the LATEST push can clear the global syncing state.
+      // However, we add a failsafe: if this was the latest version at start, we clear it.
       if (versionAtStart === syncVersion.current) {
         setSyncingState(false);
+      } else {
+        // If a newer sync started, we don't clear it (as the newer one will), 
+        // but we log it for debugging
+        console.log(`☁️ [v${versionAtStart}] finished, but v${syncVersion.current} is now active.`);
       }
     }
   };

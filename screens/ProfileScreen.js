@@ -266,8 +266,8 @@ const ProfileScreen = ({
             <View style={styles.avatarContainer}>
                 {user.avatar && !imageError ? (
                   <Image 
-                    key={user.avatar}
-                    source={{ uri: user.avatar }} 
+                    key={`${user.avatar}_${Date.now()}`}
+                    source={{ uri: user.avatar.includes('?') ? user.avatar : `${user.avatar}?t=${Date.now()}` }} 
                     style={styles.avatar} 
                     onError={() => {
                         console.log("📸 Avatar load error, switching to initials");
@@ -613,7 +613,7 @@ const ProfileScreen = ({
                       {url.includes('ui-avatars.com') ? (
                          <AvatarPlaceholder name={user.name} size={56} />
                       ) : (
-                         <Image key={url} source={{ uri: url }} style={styles.avatarOptionImage} />
+                         <Image key={`${url}_${idx}`} source={{ uri: url.includes('?') ? url : `${url}?t=${idx}` }} style={styles.avatarOptionImage} />
                       )}
                       {editAvatar === url && (
                         <View style={styles.selectedCheck}>
