@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, Image, 
-  StyleSheet, SafeAreaView, Modal, TextInput, Alert 
+  StyleSheet, SafeAreaView, Modal, TextInput, Alert,
+  KeyboardAvoidingView, Platform 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -120,6 +121,7 @@ const ProfileScreen = ({
   const [showSupport, setShowSupport] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [isPickingImage, setIsPickingImage] = useState(false);
@@ -269,12 +271,12 @@ const ProfileScreen = ({
                   <AvatarPlaceholder name={user.name} size={80} />
                 )}
                 <TouchableOpacity 
-            style={styles.editBtn} 
-            onPress={() => {
-              logger.logAction('MODAL_OPEN', { modal: 'EditProfile' });
-              setShowEditProfile(true);
-            }}
-          >
+                   style={styles.editBtn} 
+                   onPress={() => {
+                     logger.logAction('MODAL_OPEN', { modal: 'AvatarPicker' });
+                     setShowAvatarPicker(true);
+                   }}
+                 >
                     <Ionicons name="camera" size={16} color="#FFFFFF" />
                 </TouchableOpacity>
             </View>
@@ -572,69 +574,105 @@ const ProfileScreen = ({
         </View>
       </Modal>
 
+      {/* Avatar Picker Modal */}
+      <Modal visible={showAvatarPicker} animationType="fade" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.editModalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Change Profile Picture</Text>
+              <TouchableOpacity onPress={() => setShowAvatarPicker(false)} style={styles.closeBtn}>
+                <Ionicons name="close" size={24} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+              <View style={styles.inputGroup}>
+                <View style={styles.labelRow}>
+                  <Text style={styles.inputLabel}>Choose Avatar</Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.avatarGrid}>
+                  <TouchableOpacity onPress={pickImage} style={styles.avatarOption}>
+                    <View style={[styles.avatarOptionImage, { backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }]}>
+                      <Ionicons name="add" size={24} color="#94A3B8" />
+                    </View>
+                  </TouchableOpacity>
+
+                  {allAvatars.map((url, idx) => (
+                    <TouchableOpacity 
+                      key={idx} 
+                      onPress={() => setEditAvatar(url)}
+                      style={[styles.avatarOption, editAvatar === url && styles.avatarOptionSelected]}
+                    >
+                      {url.includes('ui-avatars.com') ? (
+                         <AvatarPlaceholder name={user.name} size={56} />
+                      ) : (
+                         <Image key={url} source={{ uri: url }} style={styles.avatarOptionImage} />
+                      )}
+                      {editAvatar === url && (
+                        <View style={styles.selectedCheck}>
+                          <Ionicons name="checkmark-circle" size={16} color="#3B82F6" />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                
+                <TouchableOpacity style={styles.uploadImageBtn} onPress={pickImage} disabled={isPickingImage}>
+                  <Ionicons name={isPickingImage ? "hourglass-outline" : "image-outline"} size={20} color="#3B82F6" />
+                  <Text style={styles.uploadImageText}>{isPickingImage ? "Opening Gallery..." : "Upload from Gallery"}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity 
+                onPress={async () => {
+                  let finalAvatar = editAvatar;
+                  if (editAvatar && editAvatar.startsWith('file://')) {
+                    setIsUploading(true);
+                    try {
+                      const formData = new FormData();
+                      formData.append('video', { uri: editAvatar, name: 'avatar.jpg', type: 'image/jpeg' });
+                      const response = await fetch(`${config.API_BASE_URL}/api/upload`, {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'Content-Type': 'multipart/form-data' },
+                      });
+                      if (response.ok) {
+                        const data = await response.json();
+                        finalAvatar = data.url;
+                      }
+                    } catch (e) { console.error("Upload error:", e); }
+                    finally { setIsUploading(false); }
+                  }
+                  onUpdateUser({ ...user, avatar: finalAvatar });
+                  setShowAvatarPicker(false);
+                  Alert.alert("Success", "Avatar updated!");
+                }}
+                style={[styles.saveBtn, isUploading && { opacity: 0.5 }]}
+                disabled={isUploading}
+              >
+                <Text style={styles.saveBtnText}>{isUploading ? "Syncing..." : "Update Picture"}</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* Edit Profile Modal */}
       <Modal visible={showEditProfile} animationType="fade" transparent={true}>
         <View style={styles.modalOverlay}>
-          <View style={styles.editModalContent}>
-            <Text style={styles.editModalTitle}>Edit Profile</Text>
-            
-            <View style={styles.inputGroup}>
-              <View style={styles.labelRow}>
-                <Text style={styles.inputLabel}>Choose Avatar</Text>
-              </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.avatarGrid}>
-                <TouchableOpacity 
-                  onPress={pickImage}
-                  style={styles.avatarOption}
-                >
-                  <View style={[styles.avatarOptionImage, { backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }]}>
-                    <Ionicons name="add" size={24} color="#94A3B8" />
-                  </View>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.keyboardView}
+          >
+            <View style={styles.editModalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Edit Profile</Text>
+                <TouchableOpacity onPress={() => setShowEditProfile(false)} style={styles.closeBtn}>
+                  <Ionicons name="close" size={24} color="#0F172A" />
                 </TouchableOpacity>
+              </View>
 
-                {allAvatars.map((url, idx) => (
-                  <TouchableOpacity 
-                    key={idx} 
-                    onPress={() => setEditAvatar(url)}
-                    style={[
-                      styles.avatarOption, 
-                      editAvatar === url && styles.avatarOptionSelected
-                    ]}
-                  >
-                    {url.includes('ui-avatars.com') ? (
-                       <AvatarPlaceholder name={user.name} size={56} />
-                    ) : (
-                       <Image 
-                         key={url}
-                         source={{ uri: url }} 
-                         style={styles.avatarOptionImage} 
-                         onError={(e) => console.log("Avatar option load error", url)}
-                       />
-                    )}
-                    {editAvatar === url && (
-                      <View style={styles.selectedCheck}>
-                        <Ionicons name="checkmark-circle" size={16} color="#3B82F6" />
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-              
-              <TouchableOpacity 
-                style={styles.uploadImageBtn} 
-                onPress={pickImage}
-                disabled={isPickingImage}
-              >
-                <Ionicons 
-                  name={isPickingImage ? "hourglass-outline" : "image-outline"} 
-                  size={20} 
-                  color="#3B82F6" 
-                />
-                <Text style={styles.uploadImageText}>
-                  {isPickingImage ? "Opening Gallery..." : "Upload from Gallery"}
-                </Text>
-              </TouchableOpacity>
-            </View>
+              <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
 
             <View style={styles.inputGroup}>
               <View style={styles.labelRow}>
@@ -769,73 +807,97 @@ const ProfileScreen = ({
             <TouchableOpacity onPress={() => setShowEditProfile(false)} style={styles.cancelBtn}>
               <Text style={styles.cancelBtnText}>Cancel</Text>
             </TouchableOpacity>
-          </View>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
       {/* Change Password Modal */}
+      {/* Change Password Modal */}
       <Modal visible={showChangePassword} animationType="fade" transparent={true}>
         <View style={styles.modalOverlay}>
-          <View style={styles.editModalContent}>
-            <Text style={styles.editModalTitle}>Change Password</Text>
-            
-            <View style={styles.inputGroup}>
-              <View style={styles.labelRow}>
-                <Text style={styles.inputLabel}>Current Password</Text>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.keyboardView}
+          >
+            <View style={styles.editModalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Change Password</Text>
+                <TouchableOpacity onPress={() => setShowChangePassword(false)} style={styles.closeBtn}>
+                  <Ionicons name="close" size={24} color="#0F172A" />
+                </TouchableOpacity>
               </View>
-              <TextInput 
-                style={styles.input}
-                value={oldPassword}
-                onChangeText={setOldPassword}
-                placeholder="••••••••"
-                secureTextEntry
-              />
+
+              <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+                <View style={styles.inputGroup}>
+                  <View style={styles.labelRow}>
+                    <Text style={styles.inputLabel}>Current Password</Text>
+                  </View>
+                  <TextInput 
+                    style={styles.input}
+                    value={oldPassword}
+                    onChangeText={setOldPassword}
+                    placeholder="••••••••"
+                    secureTextEntry
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <View style={styles.labelRow}>
+                    <Text style={styles.inputLabel}>New Password</Text>
+                  </View>
+                  <TextInput 
+                    style={styles.input}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    placeholder="••••••••"
+                    secureTextEntry
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <View style={styles.labelRow}>
+                    <Text style={styles.inputLabel}>Confirm New Password</Text>
+                  </View>
+                  <TextInput 
+                    style={styles.input}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    placeholder="••••••••"
+                    secureTextEntry
+                  />
+                </View>
+
+                <TouchableOpacity 
+                   onPress={() => {
+                     if (!oldPassword || !newPassword || !confirmPassword) {
+                       Alert.alert("Error", "Please fill all fields");
+                       return;
+                     }
+                     if (newPassword !== confirmPassword) {
+                       Alert.alert("Error", "New passwords do not match");
+                       return;
+                     }
+                     
+                     logger.logAction('PASSWORD_CHANGE_ATTEMPT');
+                     Alert.alert("Success", "Password changed successfully!");
+                     setShowChangePassword(false);
+                     setOldPassword('');
+                     setNewPassword('');
+                     setConfirmPassword('');
+                   }}
+                   style={styles.saveBtn}
+                >
+                  <Text style={styles.saveBtnText}>Update Password</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => setShowChangePassword(false)} style={styles.cancelBtn}>
+                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+              </ScrollView>
             </View>
-
-            <View style={styles.inputGroup}>
-              <View style={styles.labelRow}>
-                <Text style={styles.inputLabel}>New Password</Text>
-              </View>
-              <TextInput 
-                style={styles.input}
-                value={newPassword}
-                onChangeText={setNewPassword}
-                placeholder="••••••••"
-                secureTextEntry
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <View style={styles.labelRow}>
-                <Text style={styles.inputLabel}>Confirm New Password</Text>
-              </View>
-              <TextInput 
-                style={styles.input}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                placeholder="••••••••"
-                secureTextEntry
-              />
-            </View>
-
-            <TouchableOpacity 
-              onPress={() => {
-                if (newPassword !== confirmPassword) {
-                  Alert.alert("Error", "Passwords do not match!");
-                  return;
-                }
-                setShowChangePassword(false);
-                Alert.alert("Success", "Password changed successfully!");
-              }}
-              style={styles.saveBtn}
-            >
-              <Text style={styles.saveBtnText}>Update Password</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => setShowChangePassword(false)} style={styles.cancelBtn}>
-              <Text style={styles.cancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
@@ -1242,6 +1304,26 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  keyboardView: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    width: '100%',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0F172A',
+    textTransform: 'uppercase',
+  },
+  closeBtn: {
+    padding: 4,
   },
   walletTrigger: {
     flexDirection: 'row',
