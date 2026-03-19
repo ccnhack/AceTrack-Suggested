@@ -81,7 +81,7 @@ const logger = {
     }
   },
 
-  sendHeartbeat: async function(activeApiUrl, apiKey, label) {
+  sendHeartbeat: async function(activeApiUrl, apiKey, label, metadata) {
     try {
       await originalFetch(activeApiUrl + '/api/diagnostics', {
         method: 'POST',
@@ -95,7 +95,7 @@ const logger = {
             timestamp: formatTime(new Date()),
             level: 'info',
             type: 'heartbeat',
-            message: 'App is alive'
+            message: 'App is alive' + (metadata ? ' [' + JSON.stringify(metadata) + ']' : '')
           }].concat(logs.slice(-5))
         })
       });

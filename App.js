@@ -60,13 +60,13 @@ export default function App() {
   }, [pendingSync]);
 
   useEffect(() => {
-    // 1. Polling: Check for updates every 5 seconds for real-time feel
+    // 1. Polling: Reduced to 30 seconds to prevent UI thread pressure (ANR) on legacy Samsung hardware
     const pollInterval = setInterval(() => {
       // Poll if not syncing. Even if not logged in, we want to see new players/tournaments
       if (!isSyncingRef.current) {
         checkForUpdates();
       }
-    }, 5000);
+    }, 30000); // 30s instead of 5s
 
     // 2. AppState: Refresh when app returns from background to foreground
     const subscription = AppState.addEventListener('change', nextAppState => {
@@ -83,17 +83,22 @@ export default function App() {
         // Only after local data is visible do we attempt a cloud pull
         loadData();
         
-        // HEARTBEAT: Periodically report "alive" status (safe for Samsung debugging)
+        // HEARTBEAT: Periodically report "alive" status with metadata
         const cloudUrl = 'https://acetrack-api-q39m.onrender.com';
         const heartbeatInterval = setInterval(() => {
-          logger.sendHeartbeat(cloudUrl, config.ACE_API_KEY, 'samsung');
-        }, 15000); // Every 15 seconds
+          // Get current screen from navigationRef
+          const currentScreen = navigationRef.current ? navigationRef.current.getCurrentRoute() : { name: 'Unknown' };
+          logger.sendHeartbeat(cloudUrl, config.ACE_API_KEY, 'samsung', {
+            screen: currentScreen && currentScreen.name,
+            v: syncVersion.current
+          });
+        }, 30000); // Every 30 seconds to reduce pressure
 
         // DELAYED DIAGNOSTICS: Enable interception only after app is stable
         setTimeout(() => {
           logger.enableInterception();
           logger.checkAndUploadCrash(cloudUrl, config.ACE_API_KEY);
-        }, 5000);
+        }, 10000); // Wait 10s for full native stability
 
         return () => clearInterval(heartbeatInterval);
       } catch (e) {
