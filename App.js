@@ -215,8 +215,9 @@ export default function App() {
         setIsUsingCloud(iuc === 'true');
       }
       if (saids && Array.isArray(saids)) {
-        setSeenAdminActionIds(new Set(saids));
-        logger.logAction('BADGE_HYDRATION_LOCAL', { key: 'seenAdminActionIds', count: saids.length });
+        const normalized = new Set(saids.map(id => String(id)));
+        setSeenAdminActionIds(normalized);
+        logger.logAction('BADGE_HYDRATION_LOCAL', { key: 'seenAdminActionIds', count: normalized.size });
       }
       if (vats && Array.isArray(vats)) {
         setVisitedAdminSubTabs(new Set(vats));
@@ -350,10 +351,10 @@ export default function App() {
             // CRITICAL FIX: Update independent admin states and their storage keys from the cloud profile
             if (cloudUser.role === 'admin') {
               if (cloudUser.seenAdminActionIds) {
-                const saids = new Set(cloudUser.seenAdminActionIds);
-                setSeenAdminActionIds(saids);
-                storage.setItem('seenAdminActionIds', Array.from(saids));
-                logger.logAction('BADGE_HYDRATION_CLOUD', { count: saids.size });
+                const normalized = new Set(cloudUser.seenAdminActionIds.map(id => String(id)));
+                setSeenAdminActionIds(normalized);
+                storage.setItem('seenAdminActionIds', Array.from(normalized));
+                logger.logAction('BADGE_HYDRATION_CLOUD', { count: normalized.size, sample: Array.from(normalized).slice(0, 3) });
               }
               if (cloudUser.visitedAdminSubTabs) {
                 const vats = new Set(cloudUser.visitedAdminSubTabs);
@@ -777,11 +778,12 @@ export default function App() {
     isUsingCloud,
     seenAdminActionIds,
     setSeenAdminActionIds: (ids) => {
-      setSeenAdminActionIds(ids);
-      storage.setItem('seenAdminActionIds', Array.from(ids));
+      const normalized = new Set(Array.from(ids).map(id => String(id)));
+      setSeenAdminActionIds(normalized);
+      storage.setItem('seenAdminActionIds', Array.from(normalized));
       if (currentUserRef.current?.role === 'admin') {
         handleSyncUpdate({ 
-          currentUser: { ...currentUserRef.current, seenAdminActionIds: Array.from(ids) } 
+          currentUser: { ...currentUserRef.current, seenAdminActionIds: Array.from(normalized) } 
         });
       }
     },

@@ -277,19 +277,23 @@ const AdminHubScreen = ({
                     
                     if (tab.id === 'coaches') {
                       players.filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus)).forEach(p => {
-                        if (!newSeenIds.has(p.id)) { newSeenIds.add(p.id); added = true; }
+                        const pid = String(p.id);
+                        if (!newSeenIds.has(pid)) { newSeenIds.add(pid); added = true; }
                       });
                     } else if (tab.id === 'recordings') {
                       matchVideos.filter(v => v.adminStatus === 'Deletion Requested').forEach(v => {
-                        if (!newSeenIds.has(v.id)) { newSeenIds.add(v.id); added = true; }
+                        const vid = String(v.id);
+                        if (!newSeenIds.has(vid)) { newSeenIds.add(vid); added = true; }
                       });
                     } else if (tab.id === 'coach_assignments') {
                       tournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded).forEach(t => {
-                        if (!newSeenIds.has(t.id)) { newSeenIds.add(t.id); added = true; }
+                        const tid = String(t.id);
+                        if (!newSeenIds.has(tid)) { newSeenIds.add(tid); added = true; }
                       });
                     } else if (tab.id === 'grievances') {
                       supportTickets.filter(t => t.status === 'Open' || t.status === 'Awaiting Response').forEach(t => {
-                        if (!newSeenIds.has(t.id)) { newSeenIds.add(t.id); added = true; }
+                        const sid = String(t.id);
+                        if (!newSeenIds.has(sid)) { newSeenIds.add(sid); added = true; }
                       });
                     }
                     
