@@ -34,8 +34,7 @@ const MainTabs = ({
   onSaveCoachComment, onRegister, onReschedule, onCancelReschedule,
   onOptOut, onLogFailedOtp, onLogTrace, setPlayers, onToggleFavourite,
   onManualSync, isCloudOnline, lastSyncTime, onBatchUpdate, onUploadLogs, isUploadingLogs,
-  onVerifyAccount, isUsingCloud, onToggleCloud, setIsProfileEditActive,
-  visitedAdminSubTabs = new Set(), setVisitedAdminSubTabs
+  onVerifyAccount, isUsingCloud, onToggleCloud, setIsProfileEditActive, appVersion
 }) => {
   const params = { 
     user, role, players, tournaments, matchVideos, matches, supportTickets, evaluations, 
