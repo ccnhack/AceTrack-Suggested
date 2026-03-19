@@ -423,7 +423,7 @@ export default function App() {
       }
 
       // 2. Identify syncable keys
-      const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages'];
+      const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser'];
       const syncUpdates = {};
       let hasSyncable = false;
 
@@ -683,10 +683,16 @@ export default function App() {
     setSeenAdminActionIds: (ids) => {
       setSeenAdminActionIds(ids);
       storage.setItem('seenAdminActionIds', Array.from(ids));
-      // Cross-device sync: save to admin's profile
+      // Cross-device sync: save to admin's profile AND players list
       if (currentUserRef.current?.role === 'admin') {
+        const updatedUser = { ...currentUserRef.current, seenAdminActionIds: Array.from(ids) };
+        const updatedPlayers = players.map(p => 
+          String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p
+        );
+        setPlayers(updatedPlayers);
         handleBatchUpdate({ 
-          currentUser: { ...currentUserRef.current, seenAdminActionIds: Array.from(ids) } 
+          currentUser: updatedUser,
+          players: updatedPlayers
         });
       }
     },
@@ -694,10 +700,16 @@ export default function App() {
     setVisitedAdminSubTabs: (tabs) => {
       setVisitedAdminSubTabs(tabs);
       storage.setItem('visitedAdminSubTabs', Array.from(tabs));
-      // Cross-device sync: save to admin's profile
+      // Cross-device sync: save to admin's profile AND players list
       if (currentUserRef.current?.role === 'admin') {
+        const updatedUser = { ...currentUserRef.current, visitedAdminSubTabs: Array.from(tabs) };
+        const updatedPlayers = players.map(p => 
+          String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p
+        );
+        setPlayers(updatedPlayers);
         handleBatchUpdate({ 
-          currentUser: { ...currentUserRef.current, visitedAdminSubTabs: Array.from(tabs) } 
+          currentUser: updatedUser,
+          players: updatedPlayers
         });
       }
     },
@@ -706,14 +718,7 @@ export default function App() {
     onSaveVideo: handleSaveVideo,
     onUpdateUser: (u) => { 
       // CRITICAL: Only update currentUser if this IS the logged-in user.
-      // Without this check, calling onUpdateUser for an invited player
-      // would hijack the academy's session to show the player's profile!
       const loggedInUser = currentUserRef.current;
-      if (loggedInUser && String(u.id).toLowerCase() === String(loggedInUser.id).toLowerCase()) {
-        setCurrentUser(u); 
-        currentUserRef.current = u;
-        syncAndSaveData({ currentUser: u });
-      }
       
       // Always update the players list regardless of who was updated
       const updatedPlayers = players.map(p => 
@@ -724,7 +729,15 @@ export default function App() {
         updatedPlayers.push(u);
       }
       setPlayers(updatedPlayers);
-      syncAndSaveData({ players: updatedPlayers });
+
+      // CRITICAL: Push BOTH currentUser AND players in a single call to prevent race conditions
+      if (loggedInUser && String(u.id).toLowerCase() === String(loggedInUser.id).toLowerCase()) {
+        setCurrentUser(u); 
+        currentUserRef.current = u;
+        syncAndSaveData({ currentUser: u, players: updatedPlayers });
+      } else {
+        syncAndSaveData({ players: updatedPlayers });
+      }
     },
     onLogTrace: handleLogTrace,
     onManualSync: () => {
