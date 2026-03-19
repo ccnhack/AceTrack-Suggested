@@ -263,6 +263,8 @@ export default function App() {
       if (cloudData.players) {
         // CLEANUP: Filter out ghost players (ID: test) and nulls
         cloudData.players = cloudData.players.filter(p => p && p.id && String(p.id).toLowerCase() !== 'test');
+        console.log(`👥 Cloud Sync: Received ${cloudData.players.length} players. Names: ${cloudData.players.map(p => p.name).join(', ')}`);
+        logger.logAction('CLOUD_PLAYERS_SYNC', { count: cloudData.players.length, names: cloudData.players.map(p => p.name) });
         setPlayers(cloudData.players);
         storage.setItem('players', cloudData.players);
         

@@ -612,9 +612,14 @@ const AdminHubScreen = ({
                     return mocks.some(m => name.includes(m) || id.includes(m) || email.includes(m)) || 
                            name.includes('riya') || name.includes('saumya') || email.includes('riya') || email.includes('saumya');
                   }).length === 0 && (
-                    <Text style={{ color: '#94A3B8', padding: 20, fontStyle: 'italic' }}>
-                      No user matching "{diagUserSearch}" found.
-                    </Text>
+                    <View style={{ padding: 20 }}>
+                      <Text style={{ color: '#94A3B8', fontStyle: 'italic' }}>
+                        No user matching "{diagUserSearch}" found.
+                      </Text>
+                      <Text style={{ color: '#64748B', fontSize: 10, marginTop: 4 }}>
+                        Players in list: {players.length}. (Check "Refresh Cloud Data" if users are missing)
+                      </Text>
+                    </View>
                   )}
               </ScrollView>
             </View>
