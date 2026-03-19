@@ -172,6 +172,15 @@ export default function App() {
       if (u) {
         setCurrentUser(u);
         setUserRole(u.role || 'user');
+        // Cloud-synced seen state for admins
+        if (u.role === 'admin') {
+          if (u.seenAdminActionIds && Array.isArray(u.seenAdminActionIds)) {
+            setSeenAdminActionIds(new Set(u.seenAdminActionIds));
+          }
+          if (u.visitedAdminSubTabs && Array.isArray(u.visitedAdminSubTabs)) {
+            setVisitedAdminSubTabs(new Set(u.visitedAdminSubTabs));
+          }
+        }
       }
       if (saids && Array.isArray(saids)) setSeenAdminActionIds(new Set(saids));
       if (vats && Array.isArray(vats)) setVisitedAdminSubTabs(new Set(vats));
@@ -661,11 +670,23 @@ export default function App() {
     setSeenAdminActionIds: (ids) => {
       setSeenAdminActionIds(ids);
       storage.setItem('seenAdminActionIds', Array.from(ids));
+      // Cross-device sync: save to admin's profile
+      if (currentUserRef.current?.role === 'admin') {
+        handleBatchUpdate({ 
+          currentUser: { ...currentUserRef.current, seenAdminActionIds: Array.from(ids) } 
+        });
+      }
     },
     visitedAdminSubTabs,
     setVisitedAdminSubTabs: (tabs) => {
       setVisitedAdminSubTabs(tabs);
       storage.setItem('visitedAdminSubTabs', Array.from(tabs));
+      // Cross-device sync: save to admin's profile
+      if (currentUserRef.current?.role === 'admin') {
+        handleBatchUpdate({ 
+          currentUser: { ...currentUserRef.current, visitedAdminSubTabs: Array.from(tabs) } 
+        });
+      }
     },
     setIsProfileEditActive, // Pass setter to ProfileScreen
     onSaveTournament: handleSaveTournament,
