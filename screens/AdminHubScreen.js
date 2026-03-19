@@ -561,7 +561,7 @@ const AdminHubScreen = ({
                           const res = await fetch(url, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
                           if (res.ok) {
                             const data = await res.json();
-                            const pName = (p.name || '').toLowerCase();
+                            const pName = (p.name || p.email || '').toLowerCase();
                             const pId = String(p.id || '').toLowerCase();
                             const pEmail = (p.email || '').toLowerCase();
                             const firstName = pName.split(' ')[0];
@@ -580,7 +580,7 @@ const AdminHubScreen = ({
                                      (firstName.length > 3 && low.includes(firstName));
                             });
                             setUserDiagFiles(fs.reverse());
-                            logger.logAction('DIAGNOSTICS_FETCH_SUCCESS', { user: p.name, fileCount: fs.length });
+                            logger.logAction('DIAGNOSTICS_FETCH_SUCCESS', { user: p.name || p.email, fileCount: fs.length });
                           }
                         } catch (e) {
                           setUserDiagFiles([]);
@@ -593,11 +593,11 @@ const AdminHubScreen = ({
                       style={[styles.miniUserCard, selectedDiagUser?.id === p.id && styles.miniUserCardActive]}
                     >
                       <Image 
-                        source={{ uri: p.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random` }} 
+                        source={{ uri: p.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name || p.email || 'User')}&background=random` }} 
                         style={styles.miniAvatar} 
                       />
                       <Text style={[styles.miniUserName, selectedDiagUser?.id === p.id && styles.miniUserNameActive]}>
-                        {p.name.split(' ')[0]}
+                        {(p.name || p.email || 'User').split(' ')[0]}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -626,7 +626,7 @@ const AdminHubScreen = ({
 
             {selectedDiagUser && (
               <View style={styles.diagFileSection}>
-                <Text style={styles.diagLabel}>Reports for {selectedDiagUser.name}:</Text>
+                <Text style={styles.diagLabel}>Reports for {selectedDiagUser.name || selectedDiagUser.email || 'User'}:</Text>
                 {isFetchingDiags ? (
                   <Text style={styles.diagLoading}>Fetching files...</Text>
                 ) : userDiagFiles.length === 0 ? (
