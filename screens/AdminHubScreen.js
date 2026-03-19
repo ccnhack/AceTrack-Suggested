@@ -17,7 +17,7 @@ const AdminHubScreen = ({
   onApproveCoach, onAssignCoach, onRemoveCoach, onUpdateVideoStatus, 
   onBulkUpdateVideoStatus, onForceRefundVideo, onApproveDeleteVideo, 
   onRejectDeleteVideo, onPermanentDeleteVideo, onReplyTicket, 
-  onUpdateTicketStatus, seenAdminActionIds = new Set()
+  onUpdateTicketStatus, onManualSync, seenAdminActionIds = new Set()
 }) => {
   const [subTab, setSubTab] = useState('individuals');
   const [search, setSearch] = useState('');
@@ -38,6 +38,7 @@ const AdminHubScreen = ({
   const [selectedDiagFile, setSelectedDiagFile] = useState(null);
   const [diagContent, setDiagContent] = useState(null);
   const [isFetchingDiags, setIsFetchingDiags] = useState(false);
+  const [visitedSubTabs, setVisitedSubTabs] = useState(new Set());
 
   const filterData = (data, field = 'name') => {
     if (!search) return data;
@@ -199,23 +200,34 @@ const AdminHubScreen = ({
             { id: 'tournaments', label: 'Tournaments' },
             { id: 'coach_assignments', label: 'Coach Assignments', count: tournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && !seenAdminActionIds.has(t.id)).length },
             { id: 'recordings', label: 'Recordings', count: matchVideos.filter(v => v.adminStatus === 'Deletion Requested' && !seenAdminActionIds.has(v.id)).length },
-            { id: 'grievances', label: 'Grievances', count: supportTickets.filter(t => (t.status === 'Open' || t.status === 'Awaiting Response') && !seenAdminActionIds.has(t.id)).length },
+            { id: 'grievances', label: 'Grievances', count: supportTickets.filter(t => t.status === 'Open').length },
             { id: 'audit', label: 'Audit Logs' },
             { id: 'diagnostics', label: 'Diagnostics' }
-          ].map(tab => (
-            <TouchableOpacity 
-              key={tab.id} 
-              onPress={() => { setSubTab(tab.id); setSearch(''); }}
-              style={[styles.tab, subTab === tab.id && styles.tabActive]}
-            >
-              <Text style={[styles.tabText, subTab === tab.id && styles.tabTextActive]}>{tab.label}</Text>
-              {tab.count > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{tab.count}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          ))}
+          ].map(tab => {
+            const isVisited = visitedSubTabs.has(tab.id);
+            const showBadge = tab.count > 0 && (tab.id === 'grievances' ? true : !isVisited);
+
+            return (
+              <TouchableOpacity 
+                key={tab.id} 
+                onPress={() => { 
+                  setSubTab(tab.id); 
+                  setSearch(''); 
+                  if (tab.id !== 'grievances') {
+                    setVisitedSubTabs(prev => new Set([...prev, tab.id]));
+                  }
+                }}
+                style={[styles.tab, subTab === tab.id && styles.tabActive]}
+              >
+                <Text style={[styles.tabText, subTab === tab.id && styles.tabTextActive]}>{tab.label}</Text>
+                {showBadge && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{tab.count}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </View>
 
@@ -490,7 +502,19 @@ const AdminHubScreen = ({
 
         {subTab === 'diagnostics' && (
           <View style={styles.diagnosticsContainer}>
-            <Text style={styles.sectionTitle}>System Diagnostics Management</Text>
+            <View style={styles.diagHeaderRow}>
+               <Text style={styles.sectionTitle}>System Diagnostics Management</Text>
+               <TouchableOpacity 
+                 onPress={() => {
+                   logger.logAction('ADMIN_MANUAL_SYNC_TRIGGER');
+                   onManualSync?.(); // Pass from App.js
+                 }}
+                 style={styles.diagSyncBtn}
+               >
+                 <Ionicons name="refresh-circle" size={16} color="#FFFFFF" />
+                 <Text style={styles.diagSyncBtnText}>Force Sync Cloud</Text>
+               </TouchableOpacity>
+            </View>
             
             {/* User Search & Selection */}
             <View style={styles.diagSearchBox}>
@@ -500,8 +524,6 @@ const AdminHubScreen = ({
                  value={diagUserSearch}
                  onChangeText={(txt) => {
                    setDiagUserSearch(txt);
-                   // If user is searching and previous selection is not in the new filtered list (eventually), 
-                   // we don't necessarily clear it, but we should clear if search is empty? No, keep focus.
                  }}
                  style={styles.diagSearchInput}
               />
@@ -514,11 +536,13 @@ const AdminHubScreen = ({
                   const filtered = players.filter(p => {
                     const name = (p.name || '').toLowerCase();
                     const id = (p.id || '').toLowerCase();
-                    const search = diagUserSearch.toLowerCase();
+                    const search = diagUserSearch.toLowerCase().trim();
                     
                     // If searching, show any match
                     if (search) {
-                      return name.includes(search) || id.includes(search);
+                      const matches = name.includes(search) || id.includes(search);
+                      if (matches) return true;
+                      return false;
                     }
                     
                     // If not searching, show only the curated "Important/Mock" list
@@ -526,7 +550,16 @@ const AdminHubScreen = ({
                            name.includes('riya') || name.includes('saumya');
                   });
 
+                  // DEBUG LOGGING: If search fails for known cloud users, log the current players list
                   if (diagUserSearch && filtered.length === 0) {
+                    const searchLower = diagUserSearch.toLowerCase().trim();
+                    if (searchLower === 'riya' || searchLower === 'saumya' || searchLower === 'shashank') {
+                      logger.logAction('DIAG_SEARCH_MISSING_USER', {
+                        search: diagUserSearch,
+                        totalPlayers: players.length,
+                        sampleNames: players.slice(0, 10).map(p => p.name)
+                      });
+                    }
                     return <Text style={styles.diagEmptyUserText}>No user found matching "{diagUserSearch}"</Text>;
                   }
 
@@ -538,20 +571,30 @@ const AdminHubScreen = ({
                         setSelectedDiagFile(null);
                         setDiagContent(null);
                         setIsFetchingDiags(true);
+                        
+                        const diagUrl = `${config.API_BASE_URL}/api/diagnostics`;
+                        logger.logAction('DIAG_FETCH_FILES_START', { userId: p.id, userName: p.name, url: diagUrl });
+
                         try {
-                          const response = await fetch(`${config.API_BASE_URL}/api/diagnostics`, {
+                          const response = await fetch(diagUrl, {
                             headers: { 'x-ace-api-key': config.ACE_API_KEY }
                           });
+                          
+                          logger.logAction('DIAG_FETCH_FILES_RESPONSE', { status: response.status, ok: response.ok });
+
                           if (response.ok) {
                             const data = await response.json();
                             const safe = p.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
                             const files = data.files.filter(f => f.startsWith(safe + '_'));
+                            
+                            logger.logAction('DIAG_FILES_FILTERED', { count: files.length, safeUsername: safe });
                             setUserDiagFiles(files.reverse()); // latest first
                           }
                         } catch (e) {
-                          // Silent check: if fetch fails, maybe server is down or no files (though server should return 200 [])
+                          logger.logError('DIAG_FETCH_FILES_EXCEPTION', e);
+                          // Silent check: if fetch fails, maybe server is down or no files
                           setUserDiagFiles([]);
-                          if (String(p.id).length < 20) { // Likely a mock user
+                          if (String(p.id).length < 20) { 
                             console.log("Mock user diagnostics fetch skipped/failed.");
                           } else {
                             Alert.alert("Error", "Failed to fetch diagnostics files.");
@@ -1383,8 +1426,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '900',
     color: '#0F172A',
-    marginBottom: 16,
     textTransform: 'uppercase',
+  },
+  diagHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  diagSyncBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 6,
+  },
+  diagSyncBtnText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#FFFFFF',
   },
   diagSearchBox: {
     flexDirection: 'row',
