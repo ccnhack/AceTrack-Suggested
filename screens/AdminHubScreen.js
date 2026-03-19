@@ -561,7 +561,7 @@ const AdminHubScreen = ({
         {subTab === 'diagnostics' && (
           <View style={styles.diagnosticsContainer}>
             <View style={styles.diagHeaderRow}>
-               <Text style={styles.sectionTitle}>System Diagnostics Management</Text>
+               <Text style={[styles.sectionTitle, { flex: 1, marginRight: 12 }]}>System Diagnostics Management</Text>
                <TouchableOpacity 
                  onPress={() => {
                    logger.logAction('ADMIN_MANUAL_SYNC_TRIGGER');
@@ -1464,6 +1464,7 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   diagnosticsContainer: {
+    paddingHorizontal: 24,
     paddingBottom: 40,
   },
   sectionTitle: {
