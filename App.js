@@ -78,9 +78,27 @@ export default function App() {
 
     // 3. IMMEDIATE HYDRATION FROM STORAGE
     const startup = async () => {
-      await hydrateFromStorage();
-      // Only after local data is visible do we attempt a cloud pull
-      loadData();
+      try {
+        await hydrateFromStorage();
+        // Only after local data is visible do we attempt a cloud pull
+        loadData();
+        
+        // HEARTBEAT: Periodically report "alive" status (safe for Samsung debugging)
+        const cloudUrl = 'https://acetrack-api-q39m.onrender.com';
+        const heartbeatInterval = setInterval(() => {
+          logger.sendHeartbeat(cloudUrl, config.ACE_API_KEY, 'samsung');
+        }, 15000); // Every 15 seconds
+
+        // DELAYED DIAGNOSTICS: Enable interception only after app is stable
+        setTimeout(() => {
+          logger.enableInterception();
+          logger.checkAndUploadCrash(cloudUrl, config.ACE_API_KEY);
+        }, 5000);
+
+        return () => clearInterval(heartbeatInterval);
+      } catch (e) {
+        console.error("Critical Startup Error:", e);
+      }
     };
     startup();
 
