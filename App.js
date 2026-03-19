@@ -16,6 +16,7 @@ import ChatBot from './components/ChatBot';
 import logger from './utils/logger';
 import { Ionicons } from '@expo/vector-icons';
 import config from './config';
+import { io } from 'socket.io-client';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -49,6 +50,7 @@ export default function App() {
   const syncVersion = React.useRef(0);
   const navigationRef = React.useRef();
   const isUsingCloudRef = React.useRef(true);
+  const socketRef = React.useRef(null);
 
   // Synchronous helper to update isSyncing state AND ref atomically
   const setSyncingState = (val) => {
@@ -65,13 +67,24 @@ export default function App() {
   }, [isUsingCloud]);
 
   useEffect(() => {
-    // 1. Polling: Check for updates every 5 seconds for real-time feel
-    const pollInterval = setInterval(() => {
-      // Poll if not syncing. Even if not logged in, we want to see new players/tournaments
+    // 1. WebSocket: Connect to real-time events
+    const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL;
+    socketRef.current = io(activeApiUrl, {
+      transports: ['websocket'],
+      reconnection: true
+    });
+
+    socketRef.current.on('connect', () => {
+      console.log("🔌 WebSocket Connected for real-time sync");
+    });
+
+    socketRef.current.on('data_updated', (payload) => {
+      console.log("⚡ Real-time update received via WebSocket!", payload);
+      // If not currently pushing data themselves, pull the updates
       if (!isSyncingRef.current) {
-        checkForUpdates();
+        checkForUpdates(); 
       }
-    }, 5000);
+    });
 
     // 2. AppState: Refresh when app returns from background to foreground
     const subscription = AppState.addEventListener('change', nextAppState => {
@@ -98,7 +111,7 @@ export default function App() {
     startup();
 
     return () => {
-      clearInterval(pollInterval);
+      if (socketRef.current) socketRef.current.disconnect();
       subscription.remove();
     };
   }, []); 

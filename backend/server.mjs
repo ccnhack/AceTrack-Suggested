@@ -7,6 +7,8 @@ import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 
 dotenv.config();
 
@@ -14,6 +16,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
+
 const PORT = process.env.PORT || 3005;
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 
@@ -183,6 +193,13 @@ app.post('/api/save', apiKeyGuard, async (req, res) => {
       { $set: updateObj }, 
       { upsert: true, new: true }
     );
+
+    // 📢 WEBSOCKET EMIT: Notify ALL clients that data has changed instantly
+    io.emit('data_updated', { 
+      lastUpdated: updatedState.lastUpdated,
+      keys: Object.keys(req.body) 
+    });
+
     res.json({ success: true, lastUpdated: updatedState.lastUpdated });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -247,7 +264,8 @@ app.post('/api/diagnostics', apiKeyGuard, async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.log(`🚀 AceTrack Shared Backend running on port ${PORT}`);
+  console.log(`📡 WebSocket: Active`);
   console.log(`🔗 Database: Cloud MongoDB Atlas`);
 });
