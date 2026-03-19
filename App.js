@@ -679,7 +679,7 @@ export default function App() {
     onLogTrace: handleLogTrace,
     onManualSync: () => {
       logger.logAction('Manual Sync Clicked');
-      loadData(false, true);
+      loadData(true, true); // Don't show full-screen loader for force sync
     },
     onRegisterUser: handleRegisterUser,
     onVerifyAccount: (type) => {

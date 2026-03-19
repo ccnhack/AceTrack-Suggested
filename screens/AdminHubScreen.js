@@ -560,19 +560,30 @@ const AdminHubScreen = ({
                           const res = await fetch(url, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
                           if (res.ok) {
                             const data = await res.json();
-                            const safeName = p.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-                            const safeId = String(p.id).replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                            const pName = (p.name || '').toLowerCase();
+                            const pId = String(p.id || '').toLowerCase();
+                            const pEmail = (p.email || '').toLowerCase();
+                            const firstName = pName.split(' ')[0];
+
+                            const safeName = pName.replace(/[^a-z0-9]/gi, '_');
+                            const safeId = pId.replace(/[^a-z0-9]/gi, '_');
+                            const safeEmail = pEmail.replace(/[^a-z0-9]/gi, '_');
                             
-                            // Check for files matching name OR id prefix
-                            const fs = data.files.filter(f => 
-                              f.startsWith(safeName + '_') || 
-                              f.startsWith(safeId + '_') ||
-                              f.toLowerCase().includes(p.name.toLowerCase().split(' ')[0])
-                            );
+                            // Check for files matching name, id, email or even parts
+                            const fs = data.files.filter(f => {
+                              const low = f.toLowerCase();
+                              return low.startsWith(safeName + '_') || 
+                                     low.startsWith(safeId + '_') ||
+                                     low.startsWith(safeEmail + '_') ||
+                                     low.includes(`_${safeName}_`) ||
+                                     (firstName.length > 3 && low.includes(firstName));
+                            });
                             setUserDiagFiles(fs.reverse());
+                            logger.logAction('DIAGNOSTICS_FETCH_SUCCESS', { user: p.name, fileCount: fs.length });
                           }
                         } catch (e) {
                           setUserDiagFiles([]);
+                          logger.logAction('DIAGNOSTICS_FETCH_ERROR', { error: e.message });
                           if (String(p.id).length >= 20) Alert.alert("Error", "Failed to fetch files.");
                         } finally {
                           setIsFetchingDiags(false);
@@ -589,6 +600,19 @@ const AdminHubScreen = ({
                       </Text>
                     </TouchableOpacity>
                   ))}
+                {players.filter(p => {
+                    const name = (p.name || '').toLowerCase();
+                    const id = (p.id || '').toLowerCase();
+                    const s = diagUserSearch.toLowerCase().trim();
+                    if (s) return name.includes(s) || id.includes(s);
+                    const mocks = ['shashank', 'pranshu', 'academy', 'coach'];
+                    return mocks.some(m => name.includes(m) || id.includes(m)) || 
+                           name.includes('riya') || name.includes('saumya');
+                  }).length === 0 && (
+                    <Text style={{ color: '#94A3B8', padding: 20, fontStyle: 'italic' }}>
+                      No user matching "{diagUserSearch}" found.
+                    </Text>
+                  )}
               </ScrollView>
             </View>
 
