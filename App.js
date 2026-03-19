@@ -42,6 +42,7 @@ export default function App() {
   const [isUploadingLogs, setIsUploadingLogs] = useState(false);
   const [isProfileEditActive, setIsProfileEditActive] = useState(false); // New state to track if profile edit is open
   const [pendingSync, setPendingSync] = useState([]); // Keys that need to be pushed to cloud
+  const [visitedAdminSubTabs, setVisitedAdminSubTabs] = useState(new Set());
   const isSyncingRef = React.useRef(false);
   const pendingSyncRef = React.useRef([]);
   const lastServerUpdateRef = React.useRef(null);
@@ -1569,6 +1570,8 @@ export default function App() {
           tickets={supportTickets}
           evaluations={evaluations}
           seenAdminActionIds={seenAdminActionIds}
+          visitedAdminSubTabs={visitedAdminSubTabs}
+          setVisitedAdminSubTabs={setVisitedAdminSubTabs}
           reschedulingFrom={reschedulingFrom}
           auditLogs={auditLogs} 
           onLogout={handleLogout} 

@@ -49,16 +49,17 @@ const MainTabs = ({
     onSaveCoachComment, onRegister, onReschedule, onCancelReschedule,
     onOptOut, onLogFailedOtp, onLogTrace, setPlayers, onToggleFavourite,
     onManualSync, isCloudOnline, lastSyncTime, onBatchUpdate, onUploadLogs, isUploadingLogs,
-    onVerifyAccount, isUsingCloud, onToggleCloud, setIsProfileEditActive
+    onVerifyAccount, isUsingCloud, onToggleCloud, setIsProfileEditActive,
+    visitedAdminSubTabs, setVisitedAdminSubTabs
   };
   
   const typeProps = { Sport, SkillLevel, TournamentStructure, TournamentFormat };
 
   const adminBadgeCount = role === 'admin' ? (
-    players.filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !seenAdminActionIds.has(p.id)).length +
-    matchVideos.filter(v => v.adminStatus === 'Deletion Requested' && !seenAdminActionIds.has(v.id)).length +
+    (visitedAdminSubTabs.has('coaches') ? 0 : players.filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !seenAdminActionIds.has(p.id)).length) +
+    (visitedAdminSubTabs.has('recordings') ? 0 : matchVideos.filter(v => v.adminStatus === 'Deletion Requested' && !seenAdminActionIds.has(v.id)).length) +
     supportTickets.filter(t => (t.status === 'Open' || t.status === 'Awaiting Response') && !seenAdminActionIds.has(t.id)).length +
-    tournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && !seenAdminActionIds.has(t.id)).length
+    (visitedAdminSubTabs.has('coach_assignments') ? 0 : tournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && !seenAdminActionIds.has(t.id)).length)
   ) : 0;
 
   return (

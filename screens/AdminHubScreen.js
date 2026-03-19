@@ -17,7 +17,8 @@ const AdminHubScreen = ({
   onApproveCoach, onAssignCoach, onRemoveCoach, onUpdateVideoStatus, 
   onBulkUpdateVideoStatus, onForceRefundVideo, onApproveDeleteVideo, 
   onRejectDeleteVideo, onPermanentDeleteVideo, onReplyTicket, 
-  onUpdateTicketStatus, onManualSync, seenAdminActionIds = new Set()
+  onUpdateTicketStatus, onManualSync, seenAdminActionIds = new Set(),
+  visitedAdminSubTabs = new Set(), setVisitedAdminSubTabs
 }) => {
   const [subTab, setSubTab] = useState('individuals');
   const [search, setSearch] = useState('');
@@ -33,12 +34,19 @@ const AdminHubScreen = ({
   
   // Diagnostics Dashboard States
   const [diagUserSearch, setDiagUserSearch] = useState('');
+  const handleDiagSearchChange = (txt) => {
+    setDiagUserSearch(txt);
+    if (selectedDiagUser) {
+      setSelectedDiagUser(null);
+      setUserDiagFiles([]);
+      setDiagContent(null);
+    }
+  };
   const [selectedDiagUser, setSelectedDiagUser] = useState(null);
   const [userDiagFiles, setUserDiagFiles] = useState([]);
   const [selectedDiagFile, setSelectedDiagFile] = useState(null);
   const [diagContent, setDiagContent] = useState(null);
   const [isFetchingDiags, setIsFetchingDiags] = useState(false);
-  const [visitedSubTabs, setVisitedSubTabs] = useState(new Set());
 
   const filterData = (data, field = 'name') => {
     if (!search) return data;
@@ -204,7 +212,7 @@ const AdminHubScreen = ({
             { id: 'audit', label: 'Audit Logs' },
             { id: 'diagnostics', label: 'Diagnostics' }
           ].map(tab => {
-            const isVisited = visitedSubTabs.has(tab.id);
+            const isVisited = visitedAdminSubTabs.has(tab.id);
             const showBadge = tab.count > 0 && (tab.id === 'grievances' ? true : !isVisited);
 
             return (
@@ -214,7 +222,7 @@ const AdminHubScreen = ({
                   setSubTab(tab.id); 
                   setSearch(''); 
                   if (tab.id !== 'grievances') {
-                    setVisitedSubTabs(prev => new Set([...prev, tab.id]));
+                    setVisitedAdminSubTabs(prev => new Set(prev).add(tab.id));
                   }
                 }}
                 style={[styles.tab, subTab === tab.id && styles.tabActive]}
@@ -521,7 +529,7 @@ const AdminHubScreen = ({
               <TextInput 
                  placeholder="Search user (shashank, saumya, etc.)..."
                  value={diagUserSearch}
-                 onChangeText={setDiagUserSearch}
+                 onChangeText={handleDiagSearchChange}
                  style={styles.diagSearchInput}
               />
             </View>
@@ -543,6 +551,7 @@ const AdminHubScreen = ({
                       key={p.id} 
                       onPress={async () => {
                         setSelectedDiagUser(p);
+                        setUserDiagFiles([]); // Clear immediately to avoid stale data UI
                         setSelectedDiagFile(null);
                         setDiagContent(null);
                         setIsFetchingDiags(true);
@@ -551,8 +560,15 @@ const AdminHubScreen = ({
                           const res = await fetch(url, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
                           if (res.ok) {
                             const data = await res.json();
-                            const safe = p.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-                            const fs = data.files.filter(f => f.startsWith(safe + '_'));
+                            const safeName = p.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                            const safeId = String(p.id).replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                            
+                            // Check for files matching name OR id prefix
+                            const fs = data.files.filter(f => 
+                              f.startsWith(safeName + '_') || 
+                              f.startsWith(safeId + '_') ||
+                              f.toLowerCase().includes(p.name.toLowerCase().split(' ')[0])
+                            );
                             setUserDiagFiles(fs.reverse());
                           }
                         } catch (e) {
