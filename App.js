@@ -1,5 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { View, ActivityIndicator, StatusBar, StyleSheet, Alert, Platform, AppState, Text, TouchableOpacity, Modal } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, 
+  SafeAreaView, Alert, Platform, Modal, Image, KeyboardAvoidingView, ActivityIndicator, AppState, PanResponder 
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
+import * as FileSystem from 'expo-file-system';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import {
@@ -44,6 +50,8 @@ export default function App() {
   const [showVerificationPrompt, setShowVerificationPrompt] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isUploadingLogs, setIsUploadingLogs] = useState(false);
+  const [appVersion, setAppVersion] = useState(APP_VERSION);
+  const localDeviceIdRef = useRef(null);
   const [isProfileEditActive, setIsProfileEditActive] = useState(false); // New state to track if profile edit is open
   const [pendingSync, setPendingSync] = useState([]); // Keys that need to be pushed to cloud
   const [visitedAdminSubTabs, setVisitedAdminSubTabs] = useState(new Set());
@@ -97,7 +105,12 @@ export default function App() {
 
     socketRef.current.on('force_upload_diagnostics', async (data) => {
       if (data.targetUserId === currentUserRef.current?.id) {
-        logger.logAction('ADMIN_DIAGNOSTICS_PULL_RECEIVED', { adminId: data.adminId });
+        // Only comply if the admin specifically targeted THIS physical hardware 
+        if (data.targetDeviceId && data.targetDeviceId !== localDeviceIdRef.current) {
+          return;
+        }
+
+        logger.logAction('ADMIN_DIAGNOSTICS_PULL_RECEIVED', { adminId: data.adminId, deviceId: localDeviceIdRef.current });
         const logs = logger.getLogs();
         try {
           const cloudUrl = isUsingCloudRef.current ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL;
@@ -110,7 +123,8 @@ export default function App() {
             body: JSON.stringify({ 
               username: currentUserRef.current?.name || 'unknown',
               logs,
-              prefix: 'admin_requested'
+              prefix: 'admin_requested',
+              deviceId: localDeviceIdRef.current
             })
           });
           logger.logAction('ADMIN_DIAGNOSTICS_PULL_SUCCESS', { count: logs.length });
@@ -128,9 +142,19 @@ export default function App() {
       }
     });
 
-    // 3. IMMEDIATE HYDRATION FROM STORAGE
+    // 3. IMMEDIATE HYDRATION FROM STORAGE & DEVICE REGISTRATION
     const startup = async () => {
       await logger.initialize();
+
+      // Ensure stable hardware footprint
+      let hardwareId = await AsyncStorage.getItem('acetrack_device_id');
+      if (!hardwareId) {
+        const randomHex = Math.random().toString(16).substr(2, 4);
+        hardwareId = `${(Constants.deviceName || Platform.OS).replace(/[^a-zA-Z0-9]/g, '_')}-${randomHex}`;
+        await AsyncStorage.setItem('acetrack_device_id', hardwareId);
+      }
+      localDeviceIdRef.current = hardwareId;
+
       const cloudUrl = 'https://acetrack-api-q39m.onrender.com';
       
       // Use "admin" or "samsung" or currentUser.id for label
@@ -493,6 +517,19 @@ export default function App() {
 
 
   const syncAndSaveData = async (updates) => {
+    // 0. Transparently inject this device hardware footprint into the cloud update
+    if (updates.currentUser && localDeviceIdRef.current) {
+      const myTracker = {
+        id: localDeviceIdRef.current,
+        name: Constants.deviceName || Platform.OS,
+        lastActive: Date.now()
+      };
+      updates.currentUser.devices = updates.currentUser.devices || [];
+      const dIndex = updates.currentUser.devices.findIndex(d => d.id === localDeviceIdRef.current);
+      if (dIndex >= 0) updates.currentUser.devices[dIndex] = myTracker;
+      else updates.currentUser.devices.push(myTracker);
+    }
+
     try {
       // 1. Save all keys to local storage for offline support
       for (const key in updates) {
@@ -527,24 +564,26 @@ export default function App() {
 
       // 3. IMMEDIATE SYNC: Always push if there's a synced key. 
       // pushStateToCloud increments versioning to handle stale background pulls.
-      const success = await pushStateToCloud(syncUpdates);
-      if (!success) {
-        // If push failed, mark all syncable keys as "dirty" for later retry
-        setPendingSync(prev => {
-          let next = [...prev];
-          let changed = false;
-          for (const key in syncUpdates) {
-            if (!next.includes(key)) {
-              next.push(key);
-              changed = true;
+      if (isUsingCloudRef.current && isCloudOnline) {
+        const success = await pushStateToCloud(syncUpdates);
+        if (!success) {
+          // If push failed, mark all syncable keys as "dirty" for later retry
+          setPendingSync(prev => {
+            let next = [...prev];
+            let changed = false;
+            for (const key in syncUpdates) {
+              if (!next.includes(key)) {
+                next.push(key);
+                changed = true;
+              }
             }
-          }
-          if (changed) {
-            storage.setItem('pendingSync', next);
-          }
-          return next;
-        });
-        console.log(`⚠️ Updates for ${Object.keys(syncUpdates).join(', ')} marked as pending sync (offline)`);
+            if (changed) {
+              storage.setItem('pendingSync', next);
+            }
+            return next;
+          });
+          console.log(`⚠️ Updates for ${Object.keys(syncUpdates).join(', ')} marked as pending sync (offline)`);
+        }
       }
     } catch (e) {
       console.error(`Failed to sync and save data`, e);

@@ -703,27 +703,61 @@ const AdminHubScreen = ({
 
             {selectedDiagUser && (
               <View style={styles.diagFileSection}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <Text style={[styles.diagLabel, { marginBottom: 0 }]}>Reports for {selectedDiagUser.name}:</Text>
-                  <TouchableOpacity 
-                    onPress={() => {
-                      if (socketRef && socketRef.current) {
-                        socketRef.current.emit('admin_pull_diagnostics', { 
-                          targetUserId: selectedDiagUser.id,
-                          adminId: user?.id 
-                        });
-                        logger.logAction('ADMIN_SENT_PULL_REQUEST', { target: selectedDiagUser.id });
-                        Alert.alert("Pull Requested", "Command dispatched via WebSocket. The target device will silently compile up to 15k log lines currently in its memory and upload them to the Cloud immediately. \n\nGive it ~5 seconds, then tap 'Force Sync Cloud' or click the user again to view the injected file.");
-                      } else {
-                        Alert.alert("Error", "WebSocket not connected. Check cloud connectivity.");
-                      }
-                    }}
-                    style={{ backgroundColor: '#EF4444', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6 }}
-                  >
-                    <Ionicons name="cloud-download-outline" size={16} color="#FFFFFF" />
-                    <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 12 }}>PULL LIVE LOGS</Text>
-                  </TouchableOpacity>
-                </View>
+                {selectedDiagUser.devices && selectedDiagUser.devices.length > 0 ? (
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={{ fontSize: 12, color: '#64748B', fontWeight: 'bold', marginBottom: 8, textTransform: 'uppercase' }}>Active Devices</Text>
+                    {selectedDiagUser.devices.map(d => (
+                      <View key={d.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                        <View style={{ flex: 1, paddingRight: 10 }}>
+                          <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0F172A' }}>{d.name}</Text>
+                          <Text style={{ fontSize: 10, color: '#64748B' }}>ID: {d.id}</Text>
+                          <Text style={{ fontSize: 10, color: '#94A3B8' }}>Last Active: {new Date(d.lastActive).toLocaleString()}</Text>
+                        </View>
+                        <TouchableOpacity 
+                          onPress={() => {
+                            if (socketRef && socketRef.current) {
+                              socketRef.current.emit('admin_pull_diagnostics', { 
+                                targetUserId: selectedDiagUser.id,
+                                targetDeviceId: d.id,
+                                adminId: user?.id 
+                              });
+                              logger.logAction('ADMIN_SENT_PULL_REQUEST', { target: selectedDiagUser.id, device: d.id });
+                              Alert.alert("Pull Requested", `Command dispatched targeting '${d.name}'. Give it ~5 seconds to upload, then tap 'Force Sync Cloud' or click the user again to view the injected file.`);
+                            } else {
+                              Alert.alert("Error", "WebSocket not connected.");
+                            }
+                          }}
+                          style={{ backgroundColor: '#EF4444', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                        >
+                          <Ionicons name="cloud-download-outline" size={14} color="#FFFFFF" />
+                          <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 10 }}>PULL LOGS</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic', flex: 1, marginRight: 10 }}>Legacy Device (v1.0.10 update required for specific targeting).</Text>
+                    <TouchableOpacity 
+                      onPress={() => {
+                        if (socketRef && socketRef.current) {
+                          socketRef.current.emit('admin_pull_diagnostics', { 
+                            targetUserId: selectedDiagUser.id,
+                            adminId: user?.id 
+                          });
+                          logger.logAction('ADMIN_SENT_PULL_REQUEST', { target: selectedDiagUser.id });
+                          Alert.alert("Pull Requested", "Command dispatched to all user devices. Give it ~5 seconds to upload.");
+                        }
+                      }}
+                      style={{ backgroundColor: '#EF4444', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                    >
+                      <Ionicons name="cloud-download-outline" size={14} color="#FFFFFF" />
+                      <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 10 }}>PULL ALL</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                <Text style={styles.diagLabel}>Reports for {selectedDiagUser.name}:</Text>
                 {isFetchingDiags ? (
                   <Text style={styles.diagLoading}>Fetching files...</Text>
                 ) : userDiagFiles.length === 0 ? (
