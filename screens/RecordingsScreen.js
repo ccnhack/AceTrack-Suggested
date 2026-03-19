@@ -76,7 +76,17 @@ const RecordingsScreen = ({
       </View>
 
       <View style={styles.content}>
-        {filteredVideos.length === 0 ? (
+        {(!user?.isEmailVerified || !user?.isPhoneVerified) && role !== 'admin' ? (
+          <View style={styles.lockContainer}>
+            <View style={styles.lockIconCircle}>
+              <Ionicons name="lock-closed" size={48} color="#EF4444" />
+            </View>
+            <Text style={styles.lockTitle}>Verification Required</Text>
+            <Text style={styles.lockSubtitle}>
+              Please complete your email and phone verification in the Profile tab to access your match recordings and AI highlights.
+            </Text>
+          </View>
+        ) : filteredVideos.length === 0 ? (
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIconBox}>
               <Ionicons
@@ -203,6 +213,36 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  lockContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  lockIconCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#FEF2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  lockTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0F172A',
+    textTransform: 'uppercase',
+    letterSpacing: -0.5,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  lockSubtitle: {
+    fontSize: 14,
     color: '#64748B',
     textAlign: 'center',
     lineHeight: 20,

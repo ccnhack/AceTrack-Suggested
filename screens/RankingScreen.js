@@ -1,8 +1,9 @@
 import React from 'react';
 import { 
   View, Text, Image, ScrollView, StyleSheet, 
-  SafeAreaView 
+  SafeAreaView, TouchableOpacity
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 const RankingScreen = ({ user, role, players, tournaments }) => {
   let rankingPlayers = [...players].filter(p => p.id !== 'admin_sys' && p.role !== 'academy' && p.role !== 'coach');
@@ -25,37 +26,51 @@ const RankingScreen = ({ user, role, players, tournaments }) => {
         <Text style={styles.headerTitle}>LEADERBOARD</Text>
       </View>
       <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
-        {rankingPlayers.map((p, idx) => {
-          const isCurrentUser = p.id === user?.id;
-          return (
-            <View 
-              key={p.id} 
-              style={[
-                styles.playerCard, 
-                isCurrentUser ? styles.currentUserCard : styles.defaultCard
-              ]}
-            >
-              <Text style={styles.rankNumber}>{idx + 1}</Text>
-              
-              <Image 
-                source={{ uri: p.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random` }} 
-                style={styles.avatar} 
-              />
-              
-              <View style={styles.infoCol}>
-                <Text style={styles.playerName}>{p.name}</Text>
-                <Text style={styles.skillLevel}>{p.skillLevel}</Text>
-              </View>
-              
-              <View style={styles.ratingCol}>
-                <Text style={styles.ratingValue}>{p.trueSkillRating || p.rating}</Text>
-                <Text style={styles.ratingLabel}>RATING</Text>
-              </View>
+        {(!user?.isEmailVerified || !user?.isPhoneVerified) && role !== 'admin' ? (
+          <View style={styles.lockContainer}>
+            <View style={styles.lockIconCircle}>
+              <Ionicons name="lock-closed" size={48} color="#EF4444" />
             </View>
-          );
-        })}
-        {rankingPlayers.length === 0 && (
-          <Text style={styles.emptyText}>NO RANKINGS AVAILABLE</Text>
+            <Text style={styles.lockTitle}>Verification Required</Text>
+            <Text style={styles.lockSubtitle}>
+              Please complete your email and phone verification in the Profile tab to view the global rankings and leaderboards.
+            </Text>
+          </View>
+        ) : (
+          <>
+            {rankingPlayers.map((p, idx) => {
+              const isCurrentUser = p.id === user?.id;
+              return (
+                <View 
+                  key={p.id} 
+                  style={[
+                    styles.playerCard, 
+                    isCurrentUser ? styles.currentUserCard : styles.defaultCard
+                  ]}
+                >
+                  <Text style={styles.rankNumber}>{idx + 1}</Text>
+                  
+                  <Image 
+                    source={{ uri: p.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random` }} 
+                    style={styles.avatar} 
+                  />
+                  
+                  <View style={styles.infoCol}>
+                    <Text style={styles.playerName}>{p.name}</Text>
+                    <Text style={styles.skillLevel}>{p.skillLevel}</Text>
+                  </View>
+                  
+                  <View style={styles.ratingCol}>
+                    <Text style={styles.ratingValue}>{p.trueSkillRating || p.rating}</Text>
+                    <Text style={styles.ratingLabel}>RATING</Text>
+                  </View>
+                </View>
+              );
+            })}
+            {rankingPlayers.length === 0 && (
+              <Text style={styles.emptyText}>NO RANKINGS AVAILABLE</Text>
+            )}
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -154,7 +169,37 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '900',
     letterSpacing: 1,
-  }
+  },
+  lockContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
+    paddingHorizontal: 32,
+  },
+  lockIconCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#FEF2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  lockTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0F172A',
+    textTransform: 'uppercase',
+    letterSpacing: -0.5,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  lockSubtitle: {
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
 });
 
 export default RankingScreen;

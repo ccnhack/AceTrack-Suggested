@@ -30,6 +30,7 @@ const formatIST = (date) => {
 
 let logs = [];
 const MAX_LOG_AGE_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_LOG_COUNT = 500; // Prevent memory issues
 
 const originalLog = console.log;
 const originalWarn = console.warn;
@@ -49,10 +50,15 @@ const addLog = (level, type, message) => {
   
   logs.push(logEntry);
   
-  // Clean logs older than 5 minutes
+  // 1. Clean logs older than 5 minutes
   const cutoff = Date.now() - MAX_LOG_AGE_MS;
   if (logs.length > 0 && logs[0].unix < cutoff) {
     logs = logs.filter(log => log.unix >= cutoff);
+  }
+
+  // 2. Enforce MAX_LOG_COUNT (keep most recent)
+  if (logs.length > MAX_LOG_COUNT) {
+    logs = logs.slice(logs.length - MAX_LOG_COUNT);
   }
 };
 

@@ -31,6 +31,16 @@ const TournamentDetailModal = ({
   const creator = players.find(p => p.id === tournament.creatorId);
 
   const handleRegister = () => {
+    // LOCK: Prevent registration if not verified
+    if (user && (!user.isEmailVerified || !user.isPhoneVerified)) {
+      Alert.alert(
+        "Verification Required",
+        "Please complete your email and phone verification in the Profile section before registering for tournaments.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
     if (!onRegister) {
       Alert.alert('Register', `Register for ${tournament.title} for ₹${tournament.entryFee}?`, [
         { text: 'Cancel', style: 'cancel' },

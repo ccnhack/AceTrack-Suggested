@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, TextInput, 
-  StyleSheet, SafeAreaView, Dimensions, Alert, Image
+  StyleSheet, SafeAreaView, Dimensions, Alert, Image, Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
+import logger from '../utils/logger';
 
 const { width } = Dimensions.get('window');
 
-const SignupScreen = ({ onSignupSuccess, onBack, players, Sport }) => {
+const SignupScreen = ({ onSignupSuccess, onBack, players, Sport, isUsingCloud, onToggleCloud }) => {
   const [step, setStep] = useState(1);
   const [accountType, setAccountType] = useState('user');
   const [formData, setFormData] = useState({
@@ -54,6 +55,7 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, Sport }) => {
   };
 
   const handlePickDocument = async (field) => {
+    logger.logAction('PICK_DOCUMENT', { field });
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: ['application/pdf', 'image/*'],
@@ -68,6 +70,7 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, Sport }) => {
   };
 
   const handleSignup = () => {
+    logger.logAction('SIGNUP_CLICK', { accountType });
     setError('');
     
     const isAcademy = accountType === 'academy';
@@ -372,6 +375,13 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, Sport }) => {
         )}
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        
+        {__DEV__ && (
+          <View style={styles.cloudBadge}>
+            <Ionicons name="shield-checkmark" size={14} color="#059669" />
+            <Text style={styles.cloudBadgeText}>Production Cloud Protected</Text>
+          </View>
+        )}
 
         <TouchableOpacity 
           onPress={handleSignup} 
@@ -706,6 +716,50 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: 'bold',
     fontSize: 16,
+    textTransform: 'uppercase',
+  },
+  devToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  devToggleActive: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#2563EB',
+  },
+  devToggleText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#64748B',
+    textTransform: 'uppercase',
+  },
+  devToggleTextActive: {
+    color: '#FFFFFF',
+  },
+  cloudBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  cloudBadgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#059669',
     textTransform: 'uppercase',
   },
 });

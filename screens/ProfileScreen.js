@@ -11,6 +11,7 @@ import CoachOnboardingModal from '../components/CoachOnboardingModal';
 import { SupportTicketSystem } from '../components/SupportTicketSystem';
 import DiagnosticsModal from '../components/DiagnosticsModal';
 import config from '../config';
+import logger from '../utils/logger';
 
 const calculateAcademyTier = (uid, tournaments) => {
   const hostedCount = tournaments.filter(t => t.creatorId === uid).length;
@@ -103,9 +104,17 @@ const NotificationsModal = ({ visible, onClose, notifications, onClear, onNotifi
 const ProfileScreen = ({ 
   user, players, tournaments, onUpdateUser, onLogout, 
   supportTickets, onSaveTicket, onUpdateTicketStatus, onReplyTicket,
-  onTopUp, navigation, isCloudOnline, lastSyncTime, onManualSync,
-  onUploadLogs, isUploadingLogs
+  onTopUp, navigation,  isCloudOnline,
+  lastSyncTime,
+  onManualSync,
+  isUsingCloud,
+  onToggleCloud,
+  setIsProfileEditActive,
+  onVerifyAccount,
+  onUploadLogs,
+  isUploadingLogs
 }) => {
+  logger.logAction('SCREEN_VIEW', { screen: 'Profile' });
   const [showNotifications, setShowNotifications] = useState(false);
   const [showCoachOnboarding, setShowCoachOnboarding] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
@@ -131,9 +140,21 @@ const ProfileScreen = ({
     if (user) {
       setEditName(user.name || '');
       setEditAvatar(user.avatar || '');
-      setImageError(false); // Reset error state on sync
+      setImageError(false);
     }
   }, [user?.id, user?.avatar]);
+  
+  // Handle auto-open for Edit Profile (from global verification prompt)
+  useEffect(() => {
+    if (navigation.getState().routes[navigation.getState().index]?.params?.autoEdit) {
+      setShowEditProfile(true);
+      // Clear the param after opening to avoid re-opening on every re-render
+      navigation.setParams({ autoEdit: false });
+    }
+  }, [navigation]);
+  useEffect(() => {
+    setIsProfileEditActive(showEditProfile);
+  }, [showEditProfile]);
 
   const suggestedAvatars = [
     `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=random`,
@@ -235,7 +256,10 @@ const ProfileScreen = ({
         <View style={styles.header}>
             <TouchableOpacity 
               style={styles.notificationBell} 
-              onPress={() => setShowNotifications(true)}
+              onPress={() => {
+                logger.logAction('MODAL_OPEN', { modal: 'Notifications' });
+                setShowNotifications(true);
+              }}
             >
                 <Ionicons name="notifications-outline" size={24} color="#0F172A" />
                 {user.notifications?.some(n => !n.read) && (
@@ -261,9 +285,12 @@ const ProfileScreen = ({
                   <AvatarPlaceholder name={user.name} size={80} />
                 )}
                 <TouchableOpacity 
-                  style={styles.editAvatarBtn}
-                  onPress={() => setShowEditProfile(true)}
-                >
+            style={styles.editBtn} 
+            onPress={() => {
+              logger.logAction('MODAL_OPEN', { modal: 'EditProfile' });
+              setShowEditProfile(true);
+            }}
+          >
                     <Ionicons name="camera" size={16} color="#FFFFFF" />
                 </TouchableOpacity>
             </View>
@@ -285,9 +312,12 @@ const ProfileScreen = ({
                 
                 {/* Cloud Sync Status Badge */}
                 <TouchableOpacity 
-                  onPress={onManualSync} 
-                  style={[styles.syncBadge, isCloudOnline ? styles.syncOnline : styles.syncOffline]}
-                >
+              onPress={() => {
+                logger.logAction('MANUAL_SYNC_CLICK');
+                onManualSync();
+              }}
+              style={[styles.syncBadge, isCloudOnline ? styles.syncOnline : styles.syncOffline]}
+            >
                   <Ionicons 
                     name={isCloudOnline ? "cloud-done" : "cloud-offline"} 
                     size={10} 
@@ -303,59 +333,7 @@ const ProfileScreen = ({
             </View>
         </View>
 
-        {/* Verification Status Card */}
-        {user.role !== 'admin' && (
-          <View style={[styles.section, { marginTop: 16 }]}>
-            <View style={styles.verificationCard}>
-              <View style={styles.verificationHeader}>
-                <Ionicons name="shield-checkmark" size={20} color="#0F172A" />
-                <Text style={styles.verificationTitleText}>Account Verification</Text>
-              </View>
-              
-              <View style={styles.verificationRows}>
-                <View style={styles.verificationRow}>
-                  <View style={styles.verificationInfo}>
-                    <Ionicons name="mail" size={16} color="#64748B" />
-                    <Text style={styles.verificationValue}>{user.email}</Text>
-                  </View>
-                  {user.isEmailVerified ? (
-                    <View style={styles.verifiedBadge}>
-                      <Ionicons name="checkmark-circle" size={14} color="#16A34A" />
-                      <Text style={styles.verifiedText}>Verified</Text>
-                    </View>
-                  ) : (
-                    <TouchableOpacity 
-                      style={styles.verifyBtn}
-                      onPress={() => setShowVerifyModal('email')}
-                    >
-                      <Text style={styles.verifyBtnText}>Verify Now</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                <View style={styles.verificationRow}>
-                  <View style={styles.verificationInfo}>
-                    <Ionicons name="call" size={16} color="#64748B" />
-                    <Text style={styles.verificationValue}>{user.phone}</Text>
-                  </View>
-                  {user.isPhoneVerified ? (
-                    <View style={styles.verifiedBadge}>
-                      <Ionicons name="checkmark-circle" size={14} color="#16A34A" />
-                      <Text style={styles.verifiedText}>Verified</Text>
-                    </View>
-                  ) : (
-                    <TouchableOpacity 
-                      style={styles.verifyBtn}
-                      onPress={() => setShowVerifyModal('phone')}
-                    >
-                      <Text style={styles.verifyBtnText}>Verify Now</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-            </View>
-          </View>
-        )}
+        {/* Skill Dashboard (Optional, based on user roles etc) */}
 
 
         {user.role !== 'admin' && user.role !== 'academy' && user.role !== 'coach' && (
@@ -367,7 +345,10 @@ const ProfileScreen = ({
 
         <View style={styles.menuSection}>
             <TouchableOpacity 
-                onPress={() => setShowEditProfile(true)}
+                onPress={() => {
+                  logger.logAction('MODAL_OPEN', { modal: 'EditProfile' });
+                  setShowEditProfile(true);
+                }}
                 style={styles.menuItem}
             >
                 <View style={[styles.menuIcon, { backgroundColor: '#F8FAFC' }]}>
@@ -378,7 +359,10 @@ const ProfileScreen = ({
             </TouchableOpacity>
 
             <TouchableOpacity 
-                onPress={() => setShowDiagnostics(true)}
+                onPress={() => {
+                  logger.logAction('MODAL_OPEN', { modal: 'Diagnostics' });
+                  setShowDiagnostics(true);
+                }}
                 style={styles.menuItem}
             >
                 <View style={[styles.menuIcon, { backgroundColor: '#F8FAFC' }]}>
@@ -389,7 +373,10 @@ const ProfileScreen = ({
             </TouchableOpacity>
 
             <TouchableOpacity 
-                onPress={() => setShowChangePassword(true)}
+                onPress={() => {
+                  logger.logAction('MODAL_OPEN', { modal: 'ChangePassword' });
+                  setShowChangePassword(true);
+                }}
                 style={styles.menuItem}
             >
                 <View style={[styles.menuIcon, { backgroundColor: '#F8FAFC' }]}>
@@ -400,7 +387,10 @@ const ProfileScreen = ({
             </TouchableOpacity>
 
             <TouchableOpacity 
-                onPress={() => setShowSupport(true)}
+                onPress={() => {
+                  logger.logAction('MODAL_OPEN', { modal: 'Support' });
+                  setShowSupport(true);
+                }}
                 style={styles.menuItem}
             >
                 <View style={[styles.menuIcon, { backgroundColor: '#EFF6FF' }]}>
@@ -424,7 +414,10 @@ const ProfileScreen = ({
             )}
 
             <TouchableOpacity 
-                onPress={onLogout}
+                onPress={() => {
+                  logger.logAction('USER_LOGOUT_CLICK');
+                  onLogout();
+                }}
                 style={[styles.menuItem, styles.logoutItem]}
             >
                 <View style={[styles.menuIcon, { backgroundColor: '#FEF2F2' }]}>
@@ -434,7 +427,10 @@ const ProfileScreen = ({
             </TouchableOpacity>
 
             <TouchableOpacity 
-                onPress={handleManualUpdate}
+                onPress={() => {
+                  logger.logAction('CHECK_UPDATE_CLICK');
+                  handleManualUpdate();
+                }}
                 style={[styles.menuItem, styles.updateItem]}
             >
                 <View style={[styles.menuIcon, { backgroundColor: '#F0FDF4' }]}>
@@ -582,7 +578,9 @@ const ProfileScreen = ({
             <Text style={styles.editModalTitle}>Edit Profile</Text>
             
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Choose Avatar</Text>
+              <View style={styles.labelRow}>
+                <Text style={styles.inputLabel}>Choose Avatar</Text>
+              </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.avatarGrid}>
                 <TouchableOpacity 
                   onPress={pickImage}
@@ -638,7 +636,9 @@ const ProfileScreen = ({
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Full Name</Text>
+              <View style={styles.labelRow}>
+                <Text style={styles.inputLabel}>Full Name</Text>
+              </View>
               <TextInput 
                 style={styles.input}
                 value={editName}
@@ -647,8 +647,26 @@ const ProfileScreen = ({
               />
             </View>
 
+
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Email Address</Text>
+              <View style={styles.labelRow}>
+                <Text style={styles.inputLabel}>Email Address</Text>
+                {user.role !== 'admin' && (
+                  user.isEmailVerified ? (
+                    <View style={styles.inlineVerifiedBadge}>
+                      <Ionicons name="checkmark-circle" size={12} color="#16A34A" />
+                      <Text style={styles.verifiedText}>Verified</Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity 
+                      style={styles.inlineVerifyBtn}
+                      onPress={() => setShowVerifyModal('email')}
+                    >
+                      <Text style={styles.verifyBtnText}>Verify Now</Text>
+                    </TouchableOpacity>
+                  )
+                )}
+              </View>
               <TextInput 
                 style={styles.input}
                 value={editEmail}
@@ -659,7 +677,24 @@ const ProfileScreen = ({
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Phone Number</Text>
+              <View style={styles.labelRow}>
+                <Text style={styles.inputLabel}>Phone Number</Text>
+                {user.role !== 'admin' && (
+                  user.isPhoneVerified ? (
+                    <View style={styles.inlineVerifiedBadge}>
+                      <Ionicons name="checkmark-circle" size={12} color="#16A34A" />
+                      <Text style={styles.verifiedText}>Verified</Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity 
+                      style={styles.inlineVerifyBtn}
+                      onPress={() => setShowVerifyModal('phone')}
+                    >
+                      <Text style={styles.verifyBtnText}>Verify Now</Text>
+                    </TouchableOpacity>
+                  )
+                )}
+              </View>
               <TextInput 
                 style={styles.input}
                 value={editPhone}
@@ -707,6 +742,11 @@ const ProfileScreen = ({
                   }
                 }
 
+                logger.logAction('PROFILE_UPDATE_SAVE', { 
+                  name: editName, 
+                  email: editEmail, 
+                  hasAvatar: !!finalAvatar 
+                });
                 onUpdateUser({ 
                   ...user, 
                   name: editName, 
@@ -739,7 +779,9 @@ const ProfileScreen = ({
             <Text style={styles.editModalTitle}>Change Password</Text>
             
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Current Password</Text>
+              <View style={styles.labelRow}>
+                <Text style={styles.inputLabel}>Current Password</Text>
+              </View>
               <TextInput 
                 style={styles.input}
                 value={oldPassword}
@@ -750,7 +792,9 @@ const ProfileScreen = ({
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>New Password</Text>
+              <View style={styles.labelRow}>
+                <Text style={styles.inputLabel}>New Password</Text>
+              </View>
               <TextInput 
                 style={styles.input}
                 value={newPassword}
@@ -761,7 +805,9 @@ const ProfileScreen = ({
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Confirm New Password</Text>
+              <View style={styles.labelRow}>
+                <Text style={styles.inputLabel}>Confirm New Password</Text>
+              </View>
               <TextInput 
                 style={styles.input}
                 value={confirmPassword}
@@ -1302,7 +1348,6 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    marginBottom: 8,
     marginLeft: 4,
   },
   input: {
@@ -1394,6 +1439,70 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#F1F5F9',
+  },
+  modalVerificationCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  // verificationHeader: { // Duplicate, already defined above
+  //   flexDirection: 'row',
+  //   alignItems: 'center',
+  //   marginBottom: 16,
+  //   gap: 8,
+  // },
+  // verificationValue: { // Duplicate, already defined above
+  //   fontSize: 13,
+  //   color: '#334155',
+  // },
+  // verifiedBadge: { // Duplicate, already defined above
+  //   flexDirection: 'row',
+  //   alignItems: 'center',
+  //   gap: 4,
+  //   backgroundColor: '#F0FDF4',
+  //   paddingHorizontal: 8,
+  //   paddingVertical: 4,
+  //   borderRadius: 8,
+  // },
+  // verifiedText: { // Duplicate, already defined above
+  //   fontSize: 11,
+  //   color: '#16A34A',
+  //   fontWeight: '900',
+  // },
+  // verifyBtn: { // Duplicate, already defined above
+  //   backgroundColor: '#3B82F6',
+  //   paddingHorizontal: 12,
+  //   paddingVertical: 6,
+  //   borderRadius: 8,
+  // },
+  // verifyBtnText: { // Duplicate, already defined above
+  //   color: '#FFFFFF',
+  //   fontSize: 11,
+  //   fontWeight: '900',
+  // },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  inlineVerifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  inlineVerifyBtn: {
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   unreadNotification: {
     backgroundColor: '#F0F9FF',
@@ -1525,6 +1634,37 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '900',
     textTransform: 'uppercase',
+  },
+  statusSection: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 16,
+    marginBottom: 24, // Added space after moved section
+    gap: 12,
+  },
+  devToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  devToggleActive: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#2563EB',
+  },
+  devToggleText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#64748B',
+    textTransform: 'uppercase',
+  },
+  devToggleTextActive: {
+    color: '#FFFFFF',
   },
 });
 

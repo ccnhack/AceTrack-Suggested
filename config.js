@@ -6,9 +6,21 @@ import { Platform } from 'react-native';
  * In production/real device tests, you should use your machine's local IP or a public URL.
  * 'localhost' won't work on Android Emulators or Physical Devices.
  */
-const API_BASE_URL = (Constants.expoConfig && Constants.expoConfig.extra && Constants.expoConfig.extra.apiUrl) 
-  ? Constants.expoConfig.extra.apiUrl 
-  : 'https://acetrack-api-q39m.onrender.com';
+// Automatically detect local IP from Expo's host URI (ideal for physical devices + emulators)
+const hostUri = Constants.expoConfig?.hostUri;
+const hostIp = hostUri ? hostUri.split(':')[0] : null;
+let LOCAL_API_URL = hostIp ? `http://${hostIp}:8081` : 'http://localhost:8081';
+
+// Android Emulators have a special alias for the host's localhost
+if (Platform.OS === 'android' && (!hostIp || hostIp === '127.0.0.1' || hostIp === 'localhost')) {
+  LOCAL_API_URL = 'http://10.0.2.2:8081';
+}
+
+// ENVIRONMENT SWITCH:
+// In development (__DEV__ is true), use the local auto-detected IP.
+// In production (built APK/IPA), always use the stable Render Cloud URL.
+const CLOUD_API_URL = 'https://acetrack-api-q39m.onrender.com';
+const API_BASE_URL = __DEV__ ? LOCAL_API_URL : CLOUD_API_URL;
 const GROQ_API_KEY = (Constants.expoConfig && Constants.expoConfig.extra && Constants.expoConfig.extra.groqApiKey)
   ? Constants.expoConfig.extra.groqApiKey
   : (process.env.EXPO_PUBLIC_GROQ_API_KEY || '');

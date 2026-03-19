@@ -33,7 +33,7 @@ const MainTabs = ({
   onSaveCoachComment, onRegister, onReschedule, onCancelReschedule,
   onOptOut, onLogFailedOtp, onLogTrace, setPlayers, onToggleFavourite,
   onManualSync, isCloudOnline, lastSyncTime, onBatchUpdate, onUploadLogs, isUploadingLogs,
-  onVerifyAccount
+  onVerifyAccount, isUsingCloud, onToggleCloud, setIsProfileEditActive
 }) => {
   const params = { 
     user, role, players, tournaments, matchVideos, matches, supportTickets, evaluations, 
@@ -49,7 +49,7 @@ const MainTabs = ({
     onSaveCoachComment, onRegister, onReschedule, onCancelReschedule,
     onOptOut, onLogFailedOtp, onLogTrace, setPlayers, onToggleFavourite,
     onManualSync, isCloudOnline, lastSyncTime, onBatchUpdate, onUploadLogs, isUploadingLogs,
-    onVerifyAccount
+    onVerifyAccount, isUsingCloud, onToggleCloud, setIsProfileEditActive
   };
   
   const typeProps = { Sport, SkillLevel, TournamentStructure, TournamentFormat };
@@ -135,8 +135,11 @@ const MainTabs = ({
             user={params.user} 
             tournaments={tournaments} 
             isCloudOnline={isCloudOnline}
+            isUsingCloud={isUsingCloud}
             lastSyncTime={lastSyncTime}
             onManualSync={onManualSync}
+            onToggleCloud={onToggleCloud}
+            setIsProfileEditActive={setIsProfileEditActive}
             {...typeProps} 
           />
         )}
@@ -167,6 +170,8 @@ export default function AppNavigator({ user, role, players, tournaments, matchVi
                 players={players} 
                 onLoginSuccess={handlers.onLogin} 
                 onBack={() => props.navigation.goBack()} 
+                isUsingCloud={handlers.isUsingCloud}
+                onToggleCloud={handlers.onToggleCloud}
               />
             )}
           </Stack.Screen>
@@ -182,6 +187,8 @@ export default function AppNavigator({ user, role, players, tournaments, matchVi
                 }}
                 onBack={() => props.navigation.goBack()}
                 Sport={Sport}
+                isUsingCloud={handlers.isUsingCloud}
+                onToggleCloud={handlers.onToggleCloud}
               />
             )}
           </Stack.Screen>

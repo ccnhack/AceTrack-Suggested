@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, ActivityIndicator, StatusBar, StyleSheet, Alert, Platform, AppState } from 'react-native';
+import { View, ActivityIndicator, StatusBar, StyleSheet, Alert, Platform, AppState, Text, TouchableOpacity, Modal } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import {
@@ -10,11 +10,11 @@ import {
   SUPPORT_TICKETS,
   MATCHES
 } from './mockData';
-import { Modal, Text as RNText, TouchableOpacity as RNTouchableOpacity } from 'react-native';
 import storage from './utils/storage';
 import AppNavigator from './navigation/AppNavigator';
 import ChatBot from './components/ChatBot';
 import logger from './utils/logger';
+import { Ionicons } from '@expo/vector-icons';
 import config from './config';
 
 export default function App() {
@@ -34,15 +34,19 @@ export default function App() {
   const [reschedulingFrom, setReschedulingFrom] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
   const [isCloudOnline, setIsCloudOnline] = useState(false);
+  const [isUsingCloud, setIsUsingCloud] = useState(true); // Default to CLOUD for robustness
   const [lastSyncTime, setLastSyncTime] = useState(null);
   const [chatbotMessages, setChatbotMessages] = useState({}); // { [userId]: Array<{role, text}> }
   const [showVerificationPrompt, setShowVerificationPrompt] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isUploadingLogs, setIsUploadingLogs] = useState(false);
+  const [isProfileEditActive, setIsProfileEditActive] = useState(false); // New state to track if profile edit is open
   const [pendingSync, setPendingSync] = useState([]); // Keys that need to be pushed to cloud
   const isSyncingRef = React.useRef(false);
   const pendingSyncRef = React.useRef([]);
   const lastServerUpdateRef = React.useRef(null);
+  const syncVersion = React.useRef(0);
+  const navigationRef = React.useRef();
 
   // Synchronous helper to update isSyncing state AND ref atomically
   const setSyncingState = (val) => {
@@ -84,9 +88,18 @@ export default function App() {
       clearInterval(pollInterval);
       subscription.remove();
     };
-  }, []); // RUN ONCE ON MOUNT - Guardians inside loadData handle the rest
+  }, []); 
 
-  const syncVersion = React.useRef(0);
+  // 4. PERSISTENT VERIFICATION PROMPT: Ensure it shows up if unverified
+  // Fix: Don't show if user is already in the Edit Profile modal
+  useEffect(() => {
+    if (currentUser && (!currentUser.isEmailVerified || !currentUser.isPhoneVerified) && !isProfileEditActive) {
+      setShowVerificationPrompt(true);
+    } else {
+      setShowVerificationPrompt(false);
+    }
+  }, [currentUser?.id, currentUser?.isEmailVerified, currentUser?.isPhoneVerified, isProfileEditActive]);
+
 
   const checkForUpdates = async () => {
     try {
@@ -115,7 +128,7 @@ export default function App() {
   const hydrateFromStorage = async () => {
     console.log("📦 Hydrating app state from local storage...");
     try {
-      const [p, t, v, m, st, ev, al, cm, ps, u] = await Promise.all([
+      const [p, t, v, m, st, ev, al, cm, ps, u, iuc] = await Promise.all([
         storage.getItem('players'),
         storage.getItem('tournaments'),
         storage.getItem('matchVideos'),
@@ -125,7 +138,8 @@ export default function App() {
         storage.getItem('auditLogs'),
         storage.getItem('chatbotMessages'),
         storage.getItem('pendingSync'),
-        storage.getItem('currentUser')
+        storage.getItem('currentUser'),
+        storage.getItem('isUsingCloud')
       ]);
 
       if (p) setPlayers(p);
@@ -139,6 +153,11 @@ export default function App() {
       if (ps && Array.isArray(ps)) {
         setPendingSync(ps);
         pendingSyncRef.current = ps;
+      }
+      if (typeof iuc === 'boolean') {
+        setIsUsingCloud(iuc);
+      } else if (iuc && typeof iuc === 'string') {
+        setIsUsingCloud(iuc === 'true');
       }
       if (u) {
         setCurrentUser(u);
@@ -198,10 +217,12 @@ export default function App() {
     try {
       setSyncingState(true);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout for Render.com cold starts
+      const timeoutId = setTimeout(() => controller.abort(), 30000); 
 
-      console.log(`📡 Fetching Cloud Updates [v${versionAtStart}]...`);
-      const response = await fetch(`${config.API_BASE_URL}/api/data`, { 
+      const activeApiUrl = isUsingCloud ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL;
+      
+      console.log(`📡 Fetching Updates from ${isUsingCloud ? 'CLOUD' : 'LOCAL'} [v${versionAtStart}]...`);
+      const response = await fetch(`${activeApiUrl}/api/data`, { 
         signal: controller.signal,
         headers: {
           'x-ace-api-key': config.ACE_API_KEY
@@ -298,7 +319,7 @@ export default function App() {
     }
   };
 
-  const pushStateToCloud = async (updates = {}, isRetry = false) => {
+  const pushStateToCloud = async (updates = {}, forceCloud = false, isRetry = false) => {
     if (Object.keys(updates).length === 0) return true;
     
     // Increment version so any pending loadData is marked as stale immediately
@@ -306,8 +327,12 @@ export default function App() {
     if (!isRetry) setSyncingState(true);
     
     try {
-      console.log(`☁️ Syncing partial state [v${versionAtStart}]: ${Object.keys(updates).join(', ')}`);
-      const response = await fetch(`${config.API_BASE_URL}/api/save`, {
+      // Force Cloud for critical operations like registration
+      const targetCloudUrl = 'https://acetrack-api-q39m.onrender.com';
+      const activeApiUrl = (forceCloud || isUsingCloud) ? targetCloudUrl : config.API_BASE_URL;
+      
+      console.log(`☁️ Syncing partial state to ${ (forceCloud || isUsingCloud) ? 'CLOUD' : 'LOCAL'} [v${versionAtStart}]: ${Object.keys(updates).join(', ')}`);
+      const response = await fetch(`${activeApiUrl}/api/save`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -425,9 +450,8 @@ export default function App() {
     console.log('✅ Login sync complete.');
 
     // STEP 3: Check for verification status
-    if (user && (!user.isEmailVerified || !user.isPhoneVerified)) {
-      setShowVerificationPrompt(true);
-    }
+    // This is now handled by a useEffect hook to ensure it triggers consistently
+    // after all data is loaded and currentUser is stable.
   };
 
   const handleLogout = async () => {
@@ -469,8 +493,15 @@ export default function App() {
     await storage.setItem('players', updatedPlayers);
     
     // 3. Sync to cloud IMMEDIATELY and wait for it
-    console.log(`📝 Registering new user: ${newPlayer.id}`);
-    const success = await pushStateToCloud({ players: updatedPlayers });
+    console.log(`📝 Registering new user to CLOUD: ${newPlayer.id}`);
+    const success = await pushStateToCloud({ players: updatedPlayers }, true); // FORCE CLOUD for registration
+    
+    logger.logAction('USER_SIGNUP', { 
+      id: newPlayer.id, 
+      name: newPlayer.name, 
+      role: newPlayer.role,
+      cloudSync: success ? 'SUCCESS' : 'PENDING'
+    });
     
     if (!success) {
       // If sync fails, mark as pending
@@ -581,8 +612,27 @@ export default function App() {
   };
 
   const handlers = {
-    onLogin: handleLogin,
-    onLogout: handleLogout,
+    onLogin: (role, user) => {
+      logger.logAction('USER_LOGIN', { id: user.id, email: user.email, role: role });
+      handleLogin(role, user);
+    },
+    onLogout: () => {
+      if (currentUser) logger.logAction('USER_LOGOUT', { id: currentUser.id });
+      handleLogout();
+    },
+    onToggleCloud: () => {
+      const newValue = !isUsingCloud;
+      setIsUsingCloud(newValue);
+      storage.setItem('isUsingCloud', newValue);
+      logger.logAction('ENV_SWITCH', { isUsingCloud: newValue });
+      // Give state a moment to settle then reload
+      setTimeout(() => {
+        setIsLoading(true);
+        loadData(true, true);
+      }, 100);
+    },
+    isUsingCloud,
+    setIsProfileEditActive, // Pass setter to ProfileScreen
     onSaveTournament: handleSaveTournament,
     onSaveVideo: handleSaveVideo,
     onUpdateUser: (u) => { 
@@ -1141,6 +1191,14 @@ export default function App() {
     onRegister: (t, method, totalCost, isRescheduling, reschedulingFrom) => {
       if (!currentUser) return;
 
+      logger.logAction('TOURNAMENT_ENROLL', { 
+        tournamentId: t.id, 
+        name: t.name, 
+        method, 
+        cost: totalCost,
+        isRescheduling 
+      });
+
       // 1. Calculate Updated Tournaments
       const updatedTournaments = tournaments.map(item => {
         if (isRescheduling && item.id === reschedulingFrom) {
@@ -1460,7 +1518,18 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
+      <NavigationContainer 
+        ref={navigationRef}
+        onStateChange={(state) => {
+          if (state) {
+            const route = state.routes[state.index];
+            logger.logAction('NAVIGATION', { 
+              screen: route.name, 
+              params: route.params 
+            });
+          }
+        }}
+      >
         <StatusBar barStyle="dark-content" />
         <AppNavigator
           user={currentUser}
@@ -1507,11 +1576,13 @@ export default function App() {
                 style={appStyles.verifyNowButton}
                 onPress={() => {
                   setShowVerificationPrompt(false);
-                  // Navigation to profile is handled by the tab navigator, 
-                  // but we might need to trigger a specific state or just let the user go there.
-                  // For now, we'll just close and assume they'll go to profile.
-                  // BETTER: If we had a way to force tab change, we'd do it here.
-                  Alert.alert("Profile", "Please head to the Profile tab to complete verification.");
+                  // We need to navigate to Profile tab AND tell it to open the edit modal.
+                  // We'll use the navigation reference if available or just assume it's correctly handled via params.
+                  if (navigationRef.current) {
+                    navigationRef.current.navigate('Profile', { autoEdit: true });
+                  } else {
+                    Alert.alert("Profile", "Please head to the Profile tab to complete verification.");
+                  }
                 }}
               >
                 <Text style={appStyles.verifyNowText}>Complete Now</Text>
