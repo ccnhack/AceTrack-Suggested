@@ -507,7 +507,7 @@ const AdminHubScreen = ({
                <TouchableOpacity 
                  onPress={() => {
                    logger.logAction('ADMIN_MANUAL_SYNC_TRIGGER');
-                   onManualSync?.(); // Pass from App.js
+                   onManualSync?.();
                  }}
                  style={styles.diagSyncBtn}
                >
@@ -516,54 +516,29 @@ const AdminHubScreen = ({
                </TouchableOpacity>
             </View>
             
-            {/* User Search & Selection */}
             <View style={styles.diagSearchBox}>
               <Ionicons name="people-outline" size={16} color="#64748B" />
               <TextInput 
                  placeholder="Search user (shashank, saumya, etc.)..."
                  value={diagUserSearch}
-                 onChangeText={(txt) => {
-                   setDiagUserSearch(txt);
-                 }}
+                 onChangeText={setDiagUserSearch}
                  style={styles.diagSearchInput}
               />
             </View>
 
             <View style={styles.userListScroll}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {(() => {
-                  const allowedMocks = ['shashank', 'pranshu', 'academy', 'coach'];
-                  const filtered = players.filter(p => {
+                {players
+                  .filter(p => {
                     const name = (p.name || '').toLowerCase();
                     const id = (p.id || '').toLowerCase();
-                    const search = diagUserSearch.toLowerCase().trim();
-                    
-                    // If searching, show any match
-                    if (search) {
-                      const matches = name.includes(search) || id.includes(search);
-                      if (matches) return true;
-                      return false;
-                    }
-                    
-                    // If not searching, show only the curated "Important/Mock" list
-                    return allowedMocks.some(m => name.includes(m) || id.includes(m)) || 
+                    const s = diagUserSearch.toLowerCase().trim();
+                    if (s) return name.includes(s) || id.includes(s);
+                    const mocks = ['shashank', 'pranshu', 'academy', 'coach'];
+                    return mocks.some(m => name.includes(m) || id.includes(m)) || 
                            name.includes('riya') || name.includes('saumya');
-                  });
-
-                  // DEBUG LOGGING: If search fails for known cloud users, log the current players list
-                  if (diagUserSearch && filtered.length === 0) {
-                    const searchLower = diagUserSearch.toLowerCase().trim();
-                    if (searchLower === 'riya' || searchLower === 'saumya' || searchLower === 'shashank') {
-                      logger.logAction('DIAG_SEARCH_MISSING_USER', {
-                        search: diagUserSearch,
-                        totalPlayers: players.length,
-                        sampleNames: players.slice(0, 10).map(p => p.name)
-                      });
-                    }
-                    return <Text style={styles.diagEmptyUserText}>No user found matching "{diagUserSearch}"</Text>;
-                  }
-
-                  return filtered.map(p => (
+                  })
+                  .map(p => (
                     <TouchableOpacity 
                       key={p.id} 
                       onPress={async () => {
@@ -571,34 +546,18 @@ const AdminHubScreen = ({
                         setSelectedDiagFile(null);
                         setDiagContent(null);
                         setIsFetchingDiags(true);
-                        
-                        const diagUrl = `${config.API_BASE_URL}/api/diagnostics`;
-                        logger.logAction('DIAG_FETCH_FILES_START', { userId: p.id, userName: p.name, url: diagUrl });
-
+                        const url = `${config.API_BASE_URL}/api/diagnostics`;
                         try {
-                          const response = await fetch(diagUrl, {
-                            headers: { 'x-ace-api-key': config.ACE_API_KEY }
-                          });
-                          
-                          logger.logAction('DIAG_FETCH_FILES_RESPONSE', { status: response.status, ok: response.ok });
-
-                          if (response.ok) {
-                            const data = await response.json();
+                          const res = await fetch(url, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
+                          if (res.ok) {
+                            const data = await res.json();
                             const safe = p.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-                            const files = data.files.filter(f => f.startsWith(safe + '_'));
-                            
-                            logger.logAction('DIAG_FILES_FILTERED', { count: files.length, safeUsername: safe });
-                            setUserDiagFiles(files.reverse()); // latest first
+                            const fs = data.files.filter(f => f.startsWith(safe + '_'));
+                            setUserDiagFiles(fs.reverse());
                           }
                         } catch (e) {
-                          logger.logError('DIAG_FETCH_FILES_EXCEPTION', e);
-                          // Silent check: if fetch fails, maybe server is down or no files
                           setUserDiagFiles([]);
-                          if (String(p.id).length < 20) { 
-                            console.log("Mock user diagnostics fetch skipped/failed.");
-                          } else {
-                            Alert.alert("Error", "Failed to fetch diagnostics files.");
-                          }
+                          if (String(p.id).length >= 20) Alert.alert("Error", "Failed to fetch files.");
                         } finally {
                           setIsFetchingDiags(false);
                         }
@@ -613,12 +572,10 @@ const AdminHubScreen = ({
                         {p.name.split(' ')[0]}
                       </Text>
                     </TouchableOpacity>
-                  ));
-                })()}
+                  ))}
               </ScrollView>
             </View>
 
-            {/* File Selection */}
             {selectedDiagUser && (
               <View style={styles.diagFileSection}>
                 <Text style={styles.diagLabel}>Reports for {selectedDiagUser.name}:</Text>
@@ -635,15 +592,12 @@ const AdminHubScreen = ({
                           setSelectedDiagFile(file);
                           setIsFetchingDiags(true);
                           try {
-                            const response = await fetch(`${config.API_BASE_URL}/api/diagnostics/${file}`, {
+                            const res = await fetch(`${config.API_BASE_URL}/api/diagnostics/${file}`, {
                               headers: { 'x-ace-api-key': config.ACE_API_KEY }
                             });
-                            if (response.ok) {
-                              const content = await response.json();
-                              setDiagContent(content);
-                            }
+                            if (res.ok) setDiagContent(await res.json());
                           } catch (e) {
-                            Alert.alert("Error", "Failed to fetch report content.");
+                            Alert.alert("Error", "Failed to fetch content.");
                           } finally {
                             setIsFetchingDiags(false);
                           }
@@ -661,43 +615,35 @@ const AdminHubScreen = ({
               </View>
             )}
 
-            {/* Report Content */}
             {diagContent && (
               <View style={styles.diagViewPanel}>
-                 <View style={styles.diagViewHeader}>
-                    <Text style={styles.diagViewTitle}>Report Details</Text>
-                    <TouchableOpacity 
-                      onPress={() => {
-                        // Simulated Download
-                        Alert.alert("Download Started", `File ${selectedDiagFile} saved to downloads (Simulated).`);
-                      }}
-                      style={styles.diagDownloadBtn}
-                    >
-                      <Ionicons name="download" size={16} color="#FFFFFF" />
-                      <Text style={styles.diagDownloadText}>Download</Text>
-                    </TouchableOpacity>
-                 </View>
-                 <ScrollView style={styles.diagScrollArea}>
-                    <View style={styles.diagMetaRow}>
-                       <Text style={styles.diagMetaLabel}>User:</Text>
-                       <Text style={styles.diagMetaValue}>{diagContent.username}</Text>
-                    </View>
-                    <View style={styles.diagMetaRow}>
-                       <Text style={styles.diagMetaLabel}>Timestamp:</Text>
-                       <Text style={styles.diagMetaValue}>{diagContent.uploadedAt}</Text>
-                    </View>
-                    <View style={styles.diagLogBox}>
-                       {diagContent.logs.map((log, idx) => (
-                         <View key={idx} style={styles.diagLogLine}>
-                            <Text style={styles.diagLogTime}>[{log.timestamp.split(' ')[1]}]</Text>
-                            <Text style={[styles.diagLogLevel, { color: log.level === 'error' ? '#EF4444' : log.level === 'warn' ? '#EAB308' : '#3B82F6' }]}>
-                              {log.level.toUpperCase()}
-                            </Text>
-                            <Text style={styles.diagLogMsg}>{log.message}</Text>
-                         </View>
-                       ))}
-                    </View>
-                 </ScrollView>
+                <View style={styles.diagViewHeader}>
+                  <Text style={styles.diagViewTitle}>Report Details</Text>
+                  <TouchableOpacity 
+                    onPress={() => Alert.alert("Download Started", "File saved to downloads.")}
+                    style={styles.diagDownloadBtn}
+                  >
+                    <Ionicons name="download" size={16} color="#FFFFFF" />
+                    <Text style={styles.diagDownloadText}>Download</Text>
+                  </TouchableOpacity>
+                </View>
+                <ScrollView style={styles.diagScrollArea}>
+                  <View style={styles.diagMetaRow}>
+                    <Text style={styles.diagMetaLabel}>User: {diagContent.username}</Text>
+                  </View>
+                  <View style={styles.diagMetaRow}>
+                    <Text style={styles.diagMetaLabel}>Date: {diagContent.uploadedAt}</Text>
+                  </View>
+                  <View style={styles.diagLogBox}>
+                    {(diagContent.logs || []).map((log, idx) => (
+                      <View key={idx} style={styles.diagLogLine}>
+                        <Text style={styles.diagLogTime}>[{log.timestamp?.split(' ')[1] || '00:00'}]</Text>
+                        <Text style={[styles.diagLogLevel, { color: log.level === 'error' ? '#EF4444' : log.level === 'warn' ? '#EAB308' : '#3B82F6' }]}>{log.level?.toUpperCase()}</Text>
+                        <Text style={styles.diagLogMsg}>{log.message}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </ScrollView>
               </View>
             )}
           </View>
