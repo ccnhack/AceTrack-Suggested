@@ -27,6 +27,8 @@ const AdminHubScreen = ({
   const [rejectComment, setRejectComment] = useState('');
   const [selectedAcademy, setSelectedAcademy] = useState(null);
   const [selectedCoachId, setSelectedCoachId] = useState(null);
+  const [viewingPlayersFor, setViewingPlayersFor] = useState(null);
+  const [viewingAssignmentFor, setViewingAssignmentFor] = useState(null);
   const [viewingBreakdownFor, setViewingBreakdownFor] = useState(null);
   
   // Diagnostics Dashboard States

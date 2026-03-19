@@ -89,6 +89,17 @@ console.error = (...args) => {
   addLog('error', 'console', args.join(' '));
 };
 
+// Intercept Global Errors (for crashes that don't reach console.error)
+if (global.ErrorUtils) {
+  const originalHandler = global.ErrorUtils.getGlobalHandler();
+  global.ErrorUtils.setGlobalHandler((error, isFatal) => {
+    addLog('error', 'crash', `${isFatal ? 'FATAL: ' : ''}${error.message}\n${error.stack}`);
+    if (originalHandler) {
+      originalHandler(error, isFatal);
+    }
+  });
+}
+
 // Intercept fetch calls
 global.fetch = async (...args) => {
   const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || 'Unknown URL';
