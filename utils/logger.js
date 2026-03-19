@@ -55,6 +55,9 @@ const addLog = (level, type, message) => {
   if (logs.length > MAX_LOG_COUNT) {
     logs = logs.slice(-MAX_LOG_COUNT);
   }
+  
+  // Persist to storage (async non-blocking)
+  storage.setItem('persistent_logs', logs).catch(() => {});
 };
 
 const logger = {
@@ -156,6 +159,20 @@ const logger = {
   },
 
   initialize: async () => {
+    try {
+      const saved = await storage.getItem('persistent_logs');
+      if (saved && Array.isArray(saved)) {
+        const now = Date.now();
+        // Restore only logs from the last 5 minutes (300,000ms)
+        const persistent = saved.filter(l => now - l.unix < 300000);
+        if (persistent.length > 0) {
+          logs = persistent;
+          addLog('system', 'init', `Restored ${persistent.length} persistent logs from previous session`);
+        }
+      }
+    } catch (e) {
+      originalError("Failed to hydrate persistent logs:", e.message);
+    }
     addLog('system', 'init', `Diagnostics Logger v5 Ready [Platform: ${Platform.OS}]`);
   }
 };
