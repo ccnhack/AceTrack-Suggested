@@ -107,14 +107,14 @@ const logger = {
           'x-ace-api-key': apiKey
         },
         body: JSON.stringify({
-          username: `${label || 'UNKNOWN'}_v5`, // Matches user's expected tag
+          username: `${label || 'UNKNOWN'}_v5`,
           uploadedAt: new Date().toISOString(),
           logs: [{
             timestamp: formatIST(new Date()),
             level: 'info',
             type: 'heartbeat',
             message: `App is alive [v:5] - Sync Engine: Hardened`
-          }].concat(logs.slice(-10))
+          }].concat(logs.slice(-100))
         })
       });
     } catch (e) {

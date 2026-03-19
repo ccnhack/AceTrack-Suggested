@@ -56,10 +56,25 @@ const MainTabs = ({
   const typeProps = { Sport, SkillLevel, TournamentStructure, TournamentFormat };
 
   const adminBadgeCount = role === 'admin' ? (
-    (visitedAdminSubTabs.has('coaches') ? 0 : players.filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !seenAdminActionIds.has(p.id)).length) +
-    (visitedAdminSubTabs.has('recordings') ? 0 : matchVideos.filter(v => v.adminStatus === 'Deletion Requested' && !seenAdminActionIds.has(v.id)).length) +
-    supportTickets.filter(t => (t.status === 'Open' || t.status === 'Awaiting Response') && !seenAdminActionIds.has(t.id)).length +
-    (visitedAdminSubTabs.has('coach_assignments') ? 0 : tournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && !seenAdminActionIds.has(t.id)).length)
+    (() => {
+      const pendingCoaches = visitedAdminSubTabs.has('coaches') ? [] : players.filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !seenAdminActionIds.has(p.id));
+      const pendingRecordings = visitedAdminSubTabs.has('recordings') ? [] : matchVideos.filter(v => v.adminStatus === 'Deletion Requested' && !seenAdminActionIds.has(v.id));
+      const pendingTickets = supportTickets.filter(t => (t.status === 'Open' || t.status === 'Awaiting Response') && !seenAdminActionIds.has(t.id));
+      const pendingAssignments = visitedAdminSubTabs.has('coach_assignments') ? [] : tournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && !seenAdminActionIds.has(t.id));
+      
+      const total = pendingCoaches.length + pendingRecordings.length + pendingTickets.length + pendingAssignments.length;
+      if (total > 0) {
+        logger.logAction('BADGE_RE-RENDER', { 
+            total, 
+            coaches: pendingCoaches.length, 
+            recordings: pendingRecordings.length, 
+            tickets: pendingTickets.length, 
+            assignments: pendingAssignments.length,
+            seenIdsCount: seenAdminActionIds.size
+        });
+      }
+      return total;
+    })()
   ) : 0;
 
   return (
