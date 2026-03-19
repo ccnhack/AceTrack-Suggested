@@ -9,10 +9,7 @@
       "android"
     ],
     "android": {
-      "package": "com.hacker1717.acetrackmobile",
-      "permissions": [
-        "android.permission.DETECT_SCREEN_CAPTURE"
-      ]
+      "package": "com.hacker1717.acetrackmobile"
     },
     "ios": {
       "bundleIdentifier": "com.hacker1717.acetrackmobile"
