@@ -98,7 +98,7 @@ export default function App() {
     } else {
       setShowVerificationPrompt(false);
     }
-  }, [currentUser && currentUser.id, currentUser && currentUser.role, currentUser && currentUser.isEmailVerified, currentUser && currentUser.isPhoneVerified, isProfileEditActive]);
+  }, [currentUser, isProfileEditActive]);
 
 
   const checkForUpdates = async () => {

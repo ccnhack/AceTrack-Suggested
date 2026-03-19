@@ -1,17 +1,7 @@
 import { Platform } from 'react-native';
 import storage from './storage';
 
-// IST Formatting Options
-const IST_OPTIONS = {
-  timeZone: 'Asia/Kolkata',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hour12: false,
-};
+// IST Formatting removed for compatibility
 
 const formatIST = (date) => {
   try {
@@ -66,17 +56,20 @@ const addLog = (level, type, message) => {
 };
 
 // Intercept console calls
-console.log = (...args) => {
+console.log = function() {
+  var args = Array.prototype.slice.call(arguments);
   originalLog.apply(console, args);
   addLog('info', 'console', args.join(' '));
 };
 
-console.warn = (...args) => {
+console.warn = function() {
+  var args = Array.prototype.slice.call(arguments);
   originalWarn.apply(console, args);
   addLog('warn', 'console', args.join(' '));
 };
 
-console.error = (...args) => {
+console.error = function() {
+  var args = Array.prototype.slice.call(arguments);
   originalError.apply(console, args);
   addLog('error', 'console', args.join(' '));
 };
@@ -110,7 +103,8 @@ if (global.ErrorUtils) {
 }
 
 // Intercept fetch calls
-global.fetch = async (...args) => {
+global.fetch = async function() {
+  var args = Array.prototype.slice.call(arguments);
   const url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url ? args[0].url : 'Unknown URL');
   const options = args[1] || {};
   const method = options.method || 'GET';
@@ -159,8 +153,8 @@ const logger = {
               timestamp: crashDetails.timestamp,
               level: 'error',
               type: 'crash',
-              message: `RECOVERY LOG: ${crashDetails.message}\nSTACK: ${crashDetails.stack}`
-            }, ...logs.slice(-10)] // include last 10 logs for context
+              message: 'RECOVERY LOG: ' + crashDetails.message + '\nSTACK: ' + crashDetails.stack
+            }].concat(logs.slice(-10)) // include last 10 logs for context
           })
         });
 
