@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import config from './config';
 import { io } from 'socket.io-client';
 
-const APP_VERSION = "1.0.5";
+const APP_VERSION = "1.0.6";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -1657,18 +1657,32 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer 
-        ref={navigationRef}
-        onStateChange={(state) => {
-          if (state) {
-            const route = state.routes[state.index];
-            logger.logAction('NAVIGATION', { 
-              screen: route.name, 
-              params: route.params 
+      <View 
+        style={{ flex: 1 }}
+        onStartShouldSetResponderCapture={(evt) => {
+          try {
+            const { pageX, pageY } = evt.nativeEvent;
+            logger.logAction('USER_TAP', { 
+              x: Math.round(pageX), 
+              y: Math.round(pageY)
             });
-          }
+          } catch(e) {}
+          return false; // Do not block actual interactions
         }}
       >
+        <NavigationContainer 
+          ref={navigationRef}
+          onStateChange={(state) => {
+            if (state) {
+              const route = state.routes[state.index];
+              logger.logAction('NAVIGATION', { 
+                screen: route.name, 
+                // Omitting full params to save log space if they are huge, but let's log keys
+                paramKeys: route.params ? Object.keys(route.params) : [] 
+              });
+            }
+          }}
+        >
         <StatusBar barStyle="dark-content" />
         <AppNavigator
           user={currentUser}
@@ -1740,6 +1754,7 @@ export default function App() {
           </View>
         </Modal>
       </NavigationContainer>
+      </View>
     </SafeAreaProvider>
   );
 }

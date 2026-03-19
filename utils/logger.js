@@ -31,7 +31,7 @@ const formatIST = (date) => {
 };
 
 let logs = [];
-const MAX_LOG_COUNT = 1000; 
+const MAX_LOG_COUNT = 15000; 
 
 const originalLog = console.log;
 const originalWarn = console.warn;
@@ -99,6 +99,38 @@ const logger = {
         }
       });
     }
+
+    // Intercept Fetch API for Networking Logs
+    if (!global.fetch.isIntercepted) {
+      global.fetch = async (...args) => {
+        const [resource, config] = args;
+        const method = config?.method || 'GET';
+        const urlStr = typeof resource === 'string' ? resource : (resource?.url || 'unknown-url');
+        
+        // Log Outgoing Request
+        addLog('info', 'network_req', `[${method}] ${urlStr}`);
+        
+        try {
+          const startTime = Date.now();
+          const response = await originalFetch.apply(global, args);
+          const duration = Date.now() - startTime;
+          
+          // Clone the response so we don't consume the body stream if we wanted to log it,
+          // but for now, logging Status, URL, and Duration is safe and robust.
+          addLog(
+            response.ok ? 'info' : 'warn', 
+            'network_res', 
+            `[${response.status}] ${urlStr} (${duration}ms)`
+          );
+          
+          return response;
+        } catch (error) {
+          addLog('error', 'network_err', `[${method}] ${urlStr} - ${error.message}`);
+          throw error;
+        }
+      };
+      global.fetch.isIntercepted = true;
+    }
   },
 
   sendHeartbeat: async (activeApiUrl, apiKey, label) => {
@@ -162,12 +194,10 @@ const logger = {
     try {
       const saved = await storage.getItem('persistent_logs');
       if (saved && Array.isArray(saved)) {
-        const now = Date.now();
-        // Restore only logs from the last 5 minutes (300,000ms)
-        const persistent = saved.filter(l => now - l.unix < 300000);
-        if (persistent.length > 0) {
-          logs = persistent;
-          addLog('system', 'init', `Restored ${persistent.length} persistent logs from previous session`);
+        // Restore logs. No 5-minute TTL limit. Keep all until 15k limit.
+        if (saved.length > 0) {
+          logs = saved.slice(-MAX_LOG_COUNT);
+          addLog('system', 'init', `Restored ${logs.length} persistent logs from previous session`);
         }
       }
     } catch (e) {
