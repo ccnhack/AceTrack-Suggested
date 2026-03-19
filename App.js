@@ -252,7 +252,7 @@ export default function App() {
 
     try {
       setSyncingState(true);
-      logger.logAction('LOAD_DATA_START', { version: versionAtStart, isBackground });
+      logger.logAction('LOAD_DATA_START', { version: versionAtStart, isBackground: forceNoLoading });
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
