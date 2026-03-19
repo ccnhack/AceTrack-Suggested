@@ -53,6 +53,7 @@ const AdminHubScreen = ({
   const [userDiagFiles, setUserDiagFiles] = useState([]);
   const [selectedDiagFile, setSelectedDiagFile] = useState(null);
   const [diagContent, setDiagContent] = useState(null);
+  const [diagFileSize, setDiagFileSize] = useState(0);
   const [isFetchingDiags, setIsFetchingDiags] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
@@ -713,7 +714,11 @@ const AdminHubScreen = ({
                             const res = await fetch(`${activeApiUrl}/api/diagnostics/${file}`, {
                               headers: { 'x-ace-api-key': config.ACE_API_KEY }
                             });
-                            if (res.ok) setDiagContent(await res.json());
+                            if (res.ok) {
+                              const content = await res.json();
+                              setDiagContent(content);
+                              setDiagFileSize((JSON.stringify(content).length / 1024).toFixed(1));
+                            }
                           } catch (e) {
                             Alert.alert("Error", "Failed to fetch content.");
                           } finally {
@@ -736,7 +741,9 @@ const AdminHubScreen = ({
             {diagContent && (
               <View style={styles.diagViewPanel}>
                 <View style={styles.diagViewHeader}>
-                  <Text style={styles.diagViewTitle}>Report Details</Text>
+                  <Text style={styles.diagViewTitle}>
+                    Report Details {diagContent && `(${diagFileSize} KB)`}
+                  </Text>
                   <TouchableOpacity 
                     onPress={handleDownloadDiagnostic}
                     disabled={isDownloading}
@@ -1641,7 +1648,6 @@ const styles = StyleSheet.create({
   diagDownloadBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#16A34A',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
