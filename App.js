@@ -78,21 +78,6 @@ export default function App() {
 
     // 3. IMMEDIATE HYDRATION FROM STORAGE
     const startup = async () => {
-      await logger.initialize();
-      
-      // AUTO-RECOVERY: Check for previous crashes and upload to cloud
-      const cloudUrl = 'https://acetrack-api-q39m.onrender.com';
-      await logger.checkAndUploadCrash(cloudUrl, config.ACE_API_KEY);
-
-      // Register auto-sync for logs when threshold hits 500
-      logger.setThresholdCallback(500, async () => {
-        logger.logAction('AUTO_SYNC_THRESHOLD_REACHED');
-        // We use the same onUploadLogs logic but silently
-        if (handlers && handlers.onUploadLogs) {
-          await handlers.onUploadLogs(); 
-        }
-      });
-
       await hydrateFromStorage();
       // Only after local data is visible do we attempt a cloud pull
       loadData();
@@ -275,8 +260,8 @@ export default function App() {
       if (cloudData.players) {
         // CLEANUP: Filter out ghost players (ID: test) and nulls
         cloudData.players = cloudData.players.filter(p => p && p.id && String(p.id).toLowerCase() !== 'test');
-        console.log(`👥 Cloud Sync: Received ${cloudData.players.length} players. Names: ${cloudData.players.map(p => p.name).join(', ')}`);
-        logger.logAction('CLOUD_PLAYERS_SYNC', { count: cloudData.players.length, names: cloudData.players.map(p => p.name) });
+        console.log("👥 Cloud Sync: Received " + cloudData.players.length + " players.");
+        logger.logAction('CLOUD_PLAYERS_SYNC', { count: cloudData.players.length });
         setPlayers(cloudData.players);
         storage.setItem('players', cloudData.players);
         

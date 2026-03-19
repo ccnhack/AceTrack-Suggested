@@ -15,34 +15,9 @@ const IST_OPTIONS = {
 
 const formatIST = (date) => {
   try {
-    // Check if Intl and formatToParts are supported
-    if (typeof Intl !== 'undefined' && Intl.DateTimeFormat && typeof Intl.DateTimeFormat.prototype.formatToParts === 'function') {
-      const formatter = new Intl.DateTimeFormat('en-IN', IST_OPTIONS);
-      const parts = formatter.formatToParts(date);
-      const d = parts.find(p => p.type === 'day')?.value || '00';
-      const m = parts.find(p => p.type === 'month')?.value || '00';
-      const y = parts.find(p => p.type === 'year')?.value || '0000';
-      const h = parts.find(p => p.type === 'hour')?.value || '00';
-      const min = parts.find(p => p.type === 'minute')?.value || '00';
-      const s = parts.find(p => p.type === 'second')?.value || '00';
-      return `${y}-${m}-${d} ${h}:${min}:${s}`;
-    }
-    
-    // Simple fallback for older engines
-    const pad = n => n < 10 ? '0' + n : n;
-    const y = date.getFullYear();
-    const mo = pad(date.getMonth() + 1);
-    const d = pad(date.getDate());
-    const h = pad(date.getHours());
-    const mi = pad(date.getMinutes());
-    const s = pad(date.getSeconds());
-    return `${y}-${mo}-${d} ${h}:${mi}:${s}`;
+    return date.toISOString().replace('T', ' ').substring(0, 19);
   } catch (e) {
-    try {
-      return date.toISOString().replace('T', ' ').substring(0, 19);
-    } catch (e2) {
-      return 'Unknown Time';
-    }
+    return 'Unknown Time';
   }
 };
 
