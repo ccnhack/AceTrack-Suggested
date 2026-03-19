@@ -18,7 +18,7 @@ const AdminHubScreen = ({
   onBulkUpdateVideoStatus, onForceRefundVideo, onApproveDeleteVideo, 
   onRejectDeleteVideo, onPermanentDeleteVideo, onReplyTicket, 
   onUpdateTicketStatus, onManualSync, seenAdminActionIds = new Set(),
-  visitedAdminSubTabs = new Set(), setVisitedAdminSubTabs
+  setSeenAdminActionIds, visitedAdminSubTabs = new Set(), setVisitedAdminSubTabs
 }) => {
   const [subTab, setSubTab] = useState('individuals');
   const [search, setSearch] = useState('');
@@ -239,8 +239,36 @@ const AdminHubScreen = ({
                 onPress={() => { 
                   setSubTab(tab.id); 
                   setSearch(''); 
-                  if (tab.id !== 'grievances') {
+                  
+                  // 1. Mark the tab as visited
+                  if (tab.id !== 'grievances' && setVisitedAdminSubTabs) {
                     setVisitedAdminSubTabs(prev => new Set(prev).add(tab.id));
+                  }
+
+                  // 2. Mark the CURRENT items as seen so badges stay gone permanently (via storage)
+                  if (setSeenAdminActionIds) {
+                    const newSeenIds = new Set(seenAdminActionIds);
+                    let added = false;
+                    
+                    if (tab.id === 'coaches') {
+                      players.filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus)).forEach(p => {
+                        if (!newSeenIds.has(p.id)) { newSeenIds.add(p.id); added = true; }
+                      });
+                    } else if (tab.id === 'recordings') {
+                      matchVideos.filter(v => v.adminStatus === 'Deletion Requested').forEach(v => {
+                        if (!newSeenIds.has(v.id)) { newSeenIds.add(v.id); added = true; }
+                      });
+                    } else if (tab.id === 'coach_assignments') {
+                      tournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded).forEach(t => {
+                        if (!newSeenIds.has(t.id)) { newSeenIds.add(t.id); added = true; }
+                      });
+                    } else if (tab.id === 'grievances') {
+                      supportTickets.filter(t => t.status === 'Open' || t.status === 'Awaiting Response').forEach(t => {
+                        if (!newSeenIds.has(t.id)) { newSeenIds.add(t.id); added = true; }
+                      });
+                    }
+                    
+                    if (added) setSeenAdminActionIds(newSeenIds);
                   }
                 }}
                 style={[styles.tab, subTab === tab.id && styles.tabActive]}

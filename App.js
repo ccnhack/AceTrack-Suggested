@@ -136,7 +136,7 @@ export default function App() {
   const hydrateFromStorage = async () => {
     console.log("📦 Hydrating app state from local storage...");
     try {
-      const [p, t, v, m, st, ev, al, cm, ps, u, iuc] = await Promise.all([
+      const [p, t, v, m, st, ev, al, cm, ps, u, iuc, saids, vats] = await Promise.all([
         storage.getItem('players'),
         storage.getItem('tournaments'),
         storage.getItem('matchVideos'),
@@ -147,7 +147,9 @@ export default function App() {
         storage.getItem('chatbotMessages'),
         storage.getItem('pendingSync'),
         storage.getItem('currentUser'),
-        storage.getItem('isUsingCloud')
+        storage.getItem('isUsingCloud'),
+        storage.getItem('seenAdminActionIds'),
+        storage.getItem('visitedAdminSubTabs')
       ]);
 
       if (p) setPlayers(p);
@@ -171,6 +173,8 @@ export default function App() {
         setCurrentUser(u);
         setUserRole(u.role || 'user');
       }
+      if (saids && Array.isArray(saids)) setSeenAdminActionIds(new Set(saids));
+      if (vats && Array.isArray(vats)) setVisitedAdminSubTabs(new Set(vats));
       return true;
     } catch (e) {
       console.error("❌ Hydration failed:", e);
@@ -653,6 +657,16 @@ export default function App() {
       }, 100);
     },
     isUsingCloud,
+    seenAdminActionIds,
+    setSeenAdminActionIds: (ids) => {
+      setSeenAdminActionIds(ids);
+      storage.setItem('seenAdminActionIds', Array.from(ids));
+    },
+    visitedAdminSubTabs,
+    setVisitedAdminSubTabs: (tabs) => {
+      setVisitedAdminSubTabs(tabs);
+      storage.setItem('visitedAdminSubTabs', Array.from(tabs));
+    },
     setIsProfileEditActive, // Pass setter to ProfileScreen
     onSaveTournament: handleSaveTournament,
     onSaveVideo: handleSaveVideo,

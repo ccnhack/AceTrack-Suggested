@@ -24,11 +24,13 @@ const LoginScreen = ({
   const [newPass, setNewPass] = useState('');
   const [confirmPass, setConfirmPass] = useState('');
   const [isResetting, setIsResetting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const handleLogin = async () => {
     logger.logAction('LOGIN_CLICK', { username });
     setError('');
     setIsLoading(true);
+    setIsSyncing(false);
 
     try {
       // Admin Login logic
@@ -69,7 +71,9 @@ const LoginScreen = ({
       // ROBUSTNESS: If user not found locally, try to refresh data from cloud
       if (!foundUser && onRefreshData) {
         console.log(`🔍 User ${username} not found locally. Attempting cloud refresh...`);
+        setIsSyncing(true);
         const cloudResult = await onRefreshData();
+        setIsSyncing(false);
         // If cloudResult contains players, search in the fresh list immediately
         if (cloudResult && cloudResult.players) {
           const search = username.toLowerCase().trim();
@@ -111,6 +115,7 @@ const LoginScreen = ({
       setError("An unexpected error occurred during login.");
     } finally {
       setIsLoading(false);
+      setIsSyncing(false);
     }
   };
 
@@ -234,7 +239,14 @@ const LoginScreen = ({
           )}
 
           <TouchableOpacity onPress={handleLogin} style={styles.loginButton} disabled={isLoading}>
-            {isLoading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.loginButtonText}>Continue</Text>}
+            {isLoading ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <ActivityIndicator color="#FFFFFF" />
+                {isSyncing && <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '600' }}>Syncing account...</Text>}
+              </View>
+            ) : (
+              <Text style={styles.loginButtonText}>Continue</Text>
+            )}
           </TouchableOpacity>
         </View>
 

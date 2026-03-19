@@ -18,10 +18,9 @@ import RecordingsScreen from '../screens/RecordingsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
-
 const MainTabs = ({ 
   user, role, players, tournaments, matchVideos, matches, supportTickets, evaluations, 
-  seenAdminActionIds, reschedulingFrom, auditLogs, onLogout, 
+  seenAdminActionIds, setSeenAdminActionIds, reschedulingFrom, auditLogs, onLogout, 
   onSaveTournament, onUpdateTournament, onSaveVideo, onUpdateUser, onTopUp,
   onReplyTicket, onUpdateTicketStatus, onSaveTicket, onSaveEvaluation,
   onConfirmCoachRequest, onDeclineCoachRequest, onStartTournament, 
@@ -38,7 +37,7 @@ const MainTabs = ({
 }) => {
   const params = { 
     user, role, players, tournaments, matchVideos, matches, supportTickets, evaluations, 
-    seenAdminActionIds, reschedulingFrom, auditLogs, onLogout,
+    seenAdminActionIds, setSeenAdminActionIds, reschedulingFrom, auditLogs, onLogout,
     onSaveTournament, onUpdateTournament, onSaveVideo, onUpdateUser, onTopUp,
     onReplyTicket, onUpdateTicketStatus, onSaveTicket, onSaveEvaluation,
     onConfirmCoachRequest, onDeclineCoachRequest, onStartTournament, 
