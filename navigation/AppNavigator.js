@@ -31,9 +31,8 @@ const MainTabs = ({
   onCancelVideo,
   onRequestDeletion, onUnlockVideo, onPurchaseAiHighlights, onVideoPlay,
   onSaveCoachComment, onRegister, onReschedule, onCancelReschedule,
-  onOptOut, onLogFailedOtp, onLogTrace, setPlayers, onToggleFavourite,
-  onManualSync, isCloudOnline, lastSyncTime, onBatchUpdate, onUploadLogs, isUploadingLogs,
-  onVerifyAccount, isUsingCloud, onToggleCloud, setIsProfileEditActive
+  onVerifyAccount, isUsingCloud, onToggleCloud, setIsProfileEditActive,
+  visitedAdminSubTabs = new Set(), setVisitedAdminSubTabs
 }) => {
   const params = { 
     user, role, players, tournaments, matchVideos, matches, supportTickets, evaluations, 
@@ -149,7 +148,11 @@ const MainTabs = ({
   );
 };
 
-export default function AppNavigator({ user, role, players, tournaments, matchVideos, matches, tickets, evaluations, seenAdminActionIds, reschedulingFrom, auditLogs, onLogout, handlers }) {
+export default function AppNavigator({ 
+  user, role, players, tournaments, matchVideos, matches, tickets, evaluations, 
+  seenAdminActionIds, visitedAdminSubTabs, setVisitedAdminSubTabs, 
+  reschedulingFrom, auditLogs, onLogout, handlers 
+}) {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!user ? (
@@ -208,13 +211,15 @@ export default function AppNavigator({ user, role, players, tournaments, matchVi
               tournaments={tournaments} 
               matchVideos={matchVideos} 
               matches={matches}
-              supportTickets={tickets} 
-              evaluations={evaluations} 
-              seenAdminActionIds={seenAdminActionIds} 
+              supportTickets={tickets}
+              evaluations={evaluations}
+              seenAdminActionIds={seenAdminActionIds}
+              visitedAdminSubTabs={visitedAdminSubTabs}
+              setVisitedAdminSubTabs={setVisitedAdminSubTabs}
               reschedulingFrom={reschedulingFrom}
-              auditLogs={auditLogs} 
-              onLogout={onLogout} 
-              {...handlers} 
+              auditLogs={auditLogs}
+              onLogout={onLogout}
+              {...handlers}
             />
           )}
         </Stack.Screen>
