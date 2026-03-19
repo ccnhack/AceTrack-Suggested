@@ -539,12 +539,13 @@ const AdminHubScreen = ({
                 {players
                   .filter(p => {
                     const name = (p.name || '').toLowerCase();
-                    const id = (p.id || '').toLowerCase();
+                    const id = String(p.id || '').toLowerCase();
+                    const email = (p.email || '').toLowerCase();
                     const s = diagUserSearch.toLowerCase().trim();
-                    if (s) return name.includes(s) || id.includes(s);
+                    if (s) return name.includes(s) || id.includes(s) || email.includes(s);
                     const mocks = ['shashank', 'pranshu', 'academy', 'coach'];
-                    return mocks.some(m => name.includes(m) || id.includes(m)) || 
-                           name.includes('riya') || name.includes('saumya');
+                    return mocks.some(m => name.includes(m) || id.includes(m) || email.includes(m)) || 
+                           name.includes('riya') || name.includes('saumya') || email.includes('riya') || email.includes('saumya');
                   })
                   .map(p => (
                     <TouchableOpacity 
@@ -600,14 +601,16 @@ const AdminHubScreen = ({
                       </Text>
                     </TouchableOpacity>
                   ))}
-                {players.filter(p => {
+                  {players
+                  .filter(p => {
                     const name = (p.name || '').toLowerCase();
-                    const id = (p.id || '').toLowerCase();
+                    const id = String(p.id || '').toLowerCase();
+                    const email = (p.email || '').toLowerCase();
                     const s = diagUserSearch.toLowerCase().trim();
-                    if (s) return name.includes(s) || id.includes(s);
+                    if (s) return name.includes(s) || id.includes(s) || email.includes(s);
                     const mocks = ['shashank', 'pranshu', 'academy', 'coach'];
-                    return mocks.some(m => name.includes(m) || id.includes(m)) || 
-                           name.includes('riya') || name.includes('saumya');
+                    return mocks.some(m => name.includes(m) || id.includes(m) || email.includes(m)) || 
+                           name.includes('riya') || name.includes('saumya') || email.includes('riya') || email.includes('saumya');
                   }).length === 0 && (
                     <Text style={{ color: '#94A3B8', padding: 20, fontStyle: 'italic' }}>
                       No user matching "{diagUserSearch}" found.
