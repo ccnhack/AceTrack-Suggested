@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import config from './config';
 import { io } from 'socket.io-client';
 
-const APP_VERSION = "1.0.6";
+const APP_VERSION = "1.0.7";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -235,6 +235,7 @@ export default function App() {
 
       if (u) {
         setCurrentUser(u);
+        currentUserRef.current = u; // CRITICAL: Retain session reference
         setUserRole(u.role || 'user');
         // Cloud-synced seen state for admins: Overwrite local if cloud data exists
         if (u.role === 'admin') {
@@ -705,32 +706,34 @@ export default function App() {
         avatar: updates.currentUser?.avatar 
     });
 
-    // 1. Mirror currentUser -> players
-    if (updates.currentUser) {
-      const u = updates.currentUser;
-      const updatedPlayers = currentP.map(p => 
-        String(p.id).toLowerCase() === String(u.id).toLowerCase() ? u : p
-      );
-      if (!updatedPlayers.some(p => String(p.id).toLowerCase() === String(u.id).toLowerCase())) {
-        updatedPlayers.push(u);
-      }
-      
-      updates.players = updatedPlayers;
-      setPlayers(updatedPlayers);
-      setCurrentUser(u);
-      currentUserRef.current = u;
-    } else if (updates.players) {
+    // 1. Mirror components using 'players' array
+    if (updates.players) {
         setPlayers(updates.players);
+        playersRef.current = updates.players;
     }
 
-    // 2. Mirror players -> currentUser
-    if (updates.players && currentU && !updates.currentUser) {
-        const matching = updates.players.find(p => String(p.id).toLowerCase() === String(currentU.id).toLowerCase());
-        if (matching) {
-            setCurrentUser(matching);
-            currentUserRef.current = matching;
-            updates.currentUser = matching;
+    // 2. Protect current session. NEVER inherently trust updates.currentUser
+    if (currentU) {
+        // Soft update the local session from the matching global player record
+        const matchingGlobalUser = (updates.players || currentP).find(p => String(p.id).toLowerCase() === String(currentU.id).toLowerCase());
+        if (matchingGlobalUser) {
+            setCurrentUser(matchingGlobalUser);
+            currentUserRef.current = matchingGlobalUser;
         }
+    } else if (updates.currentUser && !updates.players) {
+        // Edge case: Local immediate UI updates before backend turnaround
+        setCurrentUser(updates.currentUser);
+        currentUserRef.current = updates.currentUser;
+        
+        const u = updates.currentUser;
+        const updatedPlayers = currentP.map(p => 
+          String(p.id).toLowerCase() === String(u.id).toLowerCase() ? u : p
+        );
+        if (!updatedPlayers.some(p => String(p.id).toLowerCase() === String(u.id).toLowerCase())) {
+          updatedPlayers.push(u);
+        }
+        setPlayers(updatedPlayers);
+        playersRef.current = updatedPlayers;
     }
 
     const success = await syncAndSaveData(updates);

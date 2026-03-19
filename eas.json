@@ -10,12 +10,18 @@
     "preview": {
       "distribution": "internal",
       "channel": "preview",
+      "env": {
+        "EXPO_PUBLIC_GROQ_API_KEY": "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"
+      },
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
       "channel": "production",
+      "env": {
+        "EXPO_PUBLIC_GROQ_API_KEY": "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"
+      },
       "android": {
         "buildType": "apk"
       }
