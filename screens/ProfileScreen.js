@@ -267,7 +267,7 @@ const ProfileScreen = ({
                 {user.avatar && !imageError ? (
                   <Image 
                     key={`${user.avatar}_${Math.random()}`}
-                    source={{ uri: user.avatar.includes('?') ? user.avatar : `${user.avatar}?v=${Math.random().toString(36).substring(7)}` }} 
+                    source={{ uri: `${user.avatar}${user.avatar.includes('?') ? '&' : '?'}v=${Math.random().toString(36).substring(7)}` }} 
                     style={styles.avatar} 
                     onError={() => {
                         console.log("📸 Avatar load error, switching to initials");
@@ -615,7 +615,7 @@ const ProfileScreen = ({
                       ) : (
                          <Image 
                            key={`${url}_${Math.random()}`} 
-                           source={{ uri: url.includes('?') ? url : `${url}?v=${Math.random().toString(36).substring(7)}` }} 
+                           source={{ uri: `${url}${url.includes('?') ? '&' : '?'}v=${Math.random().toString(36).substring(7)}` }} 
                            style={styles.avatarOptionImage} 
                          />
                       )}
