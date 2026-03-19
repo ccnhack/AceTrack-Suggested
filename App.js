@@ -1474,12 +1474,20 @@ export default function App() {
       syncAndSaveData({ chatbotMessages: updated });
     },
     onUploadLogs: async () => {
-      logger.logAction('Upload Diagnostics Clicked');
+      const activeUser = currentUserRef.current || currentUser; // Fallback to state
+      
+      logger.logAction('DIAGNOSTICS_UPLOAD_CLICK', { 
+        hasRef: !!currentUserRef.current, 
+        hasState: !!currentUser,
+        userId: activeUser?.id 
+      });
+
       console.log("📤 Attempting to upload diagnostics...");
       
-      if (!currentUserRef.current) {
-        console.warn("🛑 No user logged in, cannot upload logs.");
-        Alert.alert("Error", "No user logged in. Please log in again.");
+      if (!activeUser) {
+        console.warn("🛑 No user detected in Ref or State during upload.");
+        logger.logAction('DIAGNOSTICS_UPLOAD_ABORT', { error: 'No user detected' });
+        Alert.alert("Error", "No user logged in. Please log in again to send diagnostics.");
         return;
       }
       
@@ -1495,23 +1503,25 @@ export default function App() {
             'x-ace-api-key': config.ACE_API_KEY
           },
           body: JSON.stringify({
-            username: currentUserRef.current.name,
+            username: activeUser.name || activeUser.email || 'Unknown User',
             logs: logs
           })
         });
 
         if (response.ok) {
           const result = await response.json();
+          logger.logAction('DIAGNOSTICS_UPLOAD_SUCCESS', { filename: result.filename });
           console.log("✅ Diagnostics uploaded successfully:", result.filename);
           Alert.alert("Success", "Diagnostic logs have been sent to the cloud.");
         } else {
           const errData = await response.text();
+          logger.logAction('DIAGNOSTICS_UPLOAD_FAIL', { status: response.status, error: errData });
           console.error("❌ Diagnostics upload failed:", errData);
           throw new Error("Failed to upload logs");
         }
-      } catch (error) {
-        console.error("❌ uploadLogs Error:", error);
-        Alert.alert("Error", "Failed to upload diagnostic logs. Please try again.");
+      } catch (err) {
+        logger.logAction('DIAGNOSTICS_UPLOAD_ERROR', { error: err.message });
+        Alert.alert("Error", "Could not upload logs. Please check your internet connection.");
       } finally {
         setIsUploadingLogs(false);
       }

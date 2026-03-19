@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import storage from './storage';
 
 // IST Formatting Options
@@ -29,8 +30,8 @@ const formatIST = (date) => {
 };
 
 let logs = [];
-const MAX_LOG_AGE_MS = 5 * 60 * 1000; // 5 minutes
-const MAX_LOG_COUNT = 500; // Prevent memory issues
+const MAX_LOG_AGE_MS = 10 * 60 * 1000; // Increased to 10 minutes
+const MAX_LOG_COUNT = 1000; // Increased for better troubleshooting
 
 const originalLog = console.log;
 const originalWarn = console.warn;
@@ -105,8 +106,11 @@ const logger = {
   logAction: (action, details) => {
     addLog('info', 'action', `${action}${details ? ': ' + JSON.stringify(details) : ''}`);
   },
+  logError: (msg, err) => {
+    addLog('error', 'exception', `${msg}${err ? ': ' + err.message : ''}`);
+  },
   initialize: async () => {
-    addLog('system', 'init', 'Diagnostics Logger Initialized');
+    addLog('system', 'init', `Diagnostics Logger Initialized [Platform: ${Platform.OS}]`);
   }
 };
 

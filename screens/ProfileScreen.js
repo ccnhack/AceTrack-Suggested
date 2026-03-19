@@ -122,6 +122,7 @@ const ProfileScreen = ({
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [sessionCustomAvatar, setSessionCustomAvatar] = useState(null); // Persistence for session
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [isPickingImage, setIsPickingImage] = useState(false);
@@ -176,13 +177,18 @@ const ProfileScreen = ({
   if (user?.avatar && !suggestedAvatars.includes(user.avatar)) {
     customAvatars.push(user.avatar);
   }
+
+  // Add session-uploaded avatar if not already current
+  if (sessionCustomAvatar && !customAvatars.includes(sessionCustomAvatar)) {
+    customAvatars.push(sessionCustomAvatar);
+  }
   
   // Add newly picked/edited avatar if custom and not already in list
   if (editAvatar && !suggestedAvatars.includes(editAvatar) && !customAvatars.includes(editAvatar)) {
     customAvatars.unshift(editAvatar);
   }
 
-  const allAvatars = [...customAvatars, ...suggestedAvatars];
+  const allAvatars = [...new Set([...customAvatars, ...suggestedAvatars])];
 
   // Change Password States
   const [oldPassword, setOldPassword] = useState('');
@@ -628,29 +634,54 @@ const ProfileScreen = ({
                   let finalAvatar = editAvatar;
                   if (editAvatar && editAvatar.startsWith('file://')) {
                     setIsUploading(true);
+                    logger.logAction('AVATAR_UPLOAD_START', { localUri: editAvatar });
                     try {
                       const formData = new FormData();
-                      formData.append('video', { uri: editAvatar, name: 'avatar.jpg', type: 'image/jpeg' });
+                      // Server expects 'video' field name for generic uploads
+                      formData.append('video', { 
+                        uri: editAvatar, 
+                        name: `avatar_${user.id || 'new'}.jpg`, 
+                        type: 'image/jpeg' 
+                      });
+                      
                       const response = await fetch(`${config.API_BASE_URL}/api/upload`, {
                         method: 'POST',
                         body: formData,
-                        headers: { 'Content-Type': 'multipart/form-data' },
+                        headers: { 
+                          'Content-Type': 'multipart/form-data',
+                          'x-ace-api-key': config.ACE_API_KEY
+                        },
                       });
+                      
                       if (response.ok) {
                         const data = await response.json();
                         finalAvatar = data.url;
+                        setSessionCustomAvatar(data.url); // Persist in picker for session
+                        logger.logAction('AVATAR_UPLOAD_SUCCESS', { cloudUrl: data.url });
+                      } else {
+                        const errorText = await response.text();
+                        logger.logAction('AVATAR_UPLOAD_FAIL', { status: response.status, error: errorText });
+                        Alert.alert("Upload Failed", "Could not sync your image to the cloud. Please try again or use a prebuilt avatar.");
+                        setIsUploading(false);
+                        return; // DO NOT SAVE LOCAL URI TO CLOUD
                       }
-                    } catch (e) { console.error("Upload error:", e); }
+                    } catch (e) { 
+                      logger.logAction('AVATAR_UPLOAD_ERROR', { error: e.message });
+                      Alert.alert("Connection Error", "Network issue while uploading image.");
+                      setIsUploading(false);
+                      return; 
+                    }
                     finally { setIsUploading(false); }
                   }
+                  
                   onUpdateUser({ ...user, avatar: finalAvatar });
                   setShowAvatarPicker(false);
-                  Alert.alert("Success", "Avatar updated!");
+                  Alert.alert("Success", "Profile picture updated!");
                 }}
                 style={[styles.saveBtn, isUploading && { opacity: 0.5 }]}
                 disabled={isUploading}
               >
-                <Text style={styles.saveBtnText}>{isUploading ? "Syncing..." : "Update Picture"}</Text>
+                <Text style={styles.saveBtnText}>{isUploading ? "Uploading..." : "Update Picture"}</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
