@@ -113,7 +113,8 @@ const ProfileScreen = ({
   setIsProfileEditActive,
   onVerifyAccount,
   onUploadLogs,
-  isUploadingLogs
+  isUploadingLogs,
+  appVersion
 }) => {
   logger.logAction('SCREEN_VIEW', { screen: 'Profile' });
   const [showNotifications, setShowNotifications] = useState(false);
@@ -452,7 +453,7 @@ const ProfileScreen = ({
         </View>
 
         <View style={styles.footer}>
-            <Text style={styles.versionText}>AceTrack v1.0.0 (Mobile)</Text>
+            <Text style={styles.versionText}>AceTrack v{appVersion || '1.0.0'} (Mobile)</Text>
             <Text style={styles.legalText}>Privacy Policy • Terms of Service</Text>
         </View>
       </ScrollView>

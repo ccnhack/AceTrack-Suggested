@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { Sport, SkillLevel, TournamentStructure, TournamentFormat } from '../types';
+import logger from '../utils/logger';
 
 // Screens
 import LandingScreen from '../screens/LandingScreen';
@@ -20,7 +21,8 @@ const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 const MainTabs = ({ 
   user, role, players, tournaments, matchVideos, matches, supportTickets, evaluations, 
-  seenAdminActionIds, setSeenAdminActionIds, reschedulingFrom, auditLogs, onLogout, 
+  seenAdminActionIds, setSeenAdminActionIds, visitedAdminSubTabs, setVisitedAdminSubTabs, 
+  reschedulingFrom, auditLogs, onLogout, appVersion,
   onSaveTournament, onUpdateTournament, onSaveVideo, onUpdateUser, onTopUp,
   onReplyTicket, onUpdateTicketStatus, onSaveTicket, onSaveEvaluation,
   onConfirmCoachRequest, onDeclineCoachRequest, onStartTournament, 
@@ -156,6 +158,7 @@ const MainTabs = ({
             onManualSync={onManualSync}
             onToggleCloud={onToggleCloud}
             setIsProfileEditActive={setIsProfileEditActive}
+            appVersion={appVersion}
             {...typeProps} 
           />
         )}
@@ -167,7 +170,7 @@ const MainTabs = ({
 export default function AppNavigator({ 
   user, role, players, tournaments, matchVideos, matches, tickets, evaluations, 
   seenAdminActionIds, visitedAdminSubTabs, setVisitedAdminSubTabs, 
-  reschedulingFrom, auditLogs, onLogout, handlers 
+  reschedulingFrom, auditLogs, onLogout, handlers, appVersion 
 }) {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -235,6 +238,7 @@ export default function AppNavigator({
               reschedulingFrom={reschedulingFrom}
               auditLogs={auditLogs}
               onLogout={onLogout}
+              appVersion={appVersion}
               {...handlers}
             />
           )}

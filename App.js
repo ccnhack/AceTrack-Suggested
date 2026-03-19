@@ -19,6 +19,8 @@ import { Ionicons } from '@expo/vector-icons';
 import config from './config';
 import { io } from 'socket.io-client';
 
+const APP_VERSION = "1.0.1";
+
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
@@ -115,6 +117,7 @@ export default function App() {
       // INITIAL ARCHITECTURAL STATUS (As requested by user for diagnostics)
       logger.logAction('SYNC_ENGINE_STATUS', { 
         version: 'v5-HARDENED', 
+        appVersion: APP_VERSION,
         features: ['Ref-Mirroring', 'Atomic-Callbacks', 'Heartbeat-v36-RESTORED'],
         ota: {
           updateId: Updates.updateId || 'Built-in',
@@ -1670,6 +1673,7 @@ export default function App() {
         <AppNavigator
           user={currentUser}
           role={userRole}
+          appVersion={APP_VERSION}
           players={players.some(p => p.id === currentUser?.id) ? players : (currentUser ? [currentUser, ...players] : players)}
           tournaments={tournaments}
           matchVideos={matchVideos}
