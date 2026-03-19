@@ -130,6 +130,7 @@ const ProfileScreen = ({
   const [showVerifyModal, setShowVerifyModal] = useState(null); // 'email' | 'phone'
   const [verificationCode, setVerificationCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
+  const activeApiUrl = isUsingCloud ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL;
 
   // Edit Profile States
   const [editName, setEditName] = useState(user?.name || '');
@@ -644,7 +645,7 @@ const ProfileScreen = ({
                         type: 'image/jpeg' 
                       });
                       
-                      const response = await fetch(`${config.API_BASE_URL}/api/upload`, {
+                      const response = await fetch(`${activeApiUrl}/api/upload`, {
                         method: 'POST',
                         body: formData,
                         headers: { 
@@ -789,11 +790,12 @@ const ProfileScreen = ({
                       type: 'image/jpeg',
                     });
 
-                    const response = await fetch(`${config.API_BASE_URL}/api/upload`, {
+                    const response = await fetch(`${activeApiUrl}/api/upload`, {
                       method: 'POST',
                       body: formData,
                       headers: {
                         'Content-Type': 'multipart/form-data',
+                        'x-ace-api-key': config.ACE_API_KEY,
                       },
                     });
 

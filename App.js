@@ -169,10 +169,13 @@ export default function App() {
       } else if (iuc && typeof iuc === 'string') {
         setIsUsingCloud(iuc === 'true');
       }
+      if (saids && Array.isArray(saids)) setSeenAdminActionIds(new Set(saids));
+      if (vats && Array.isArray(vats)) setVisitedAdminSubTabs(new Set(vats));
+
       if (u) {
         setCurrentUser(u);
         setUserRole(u.role || 'user');
-        // Cloud-synced seen state for admins
+        // Cloud-synced seen state for admins: Overwrite local if cloud data exists
         if (u.role === 'admin') {
           if (u.seenAdminActionIds && Array.isArray(u.seenAdminActionIds)) {
             setSeenAdminActionIds(new Set(u.seenAdminActionIds));
@@ -182,8 +185,6 @@ export default function App() {
           }
         }
       }
-      if (saids && Array.isArray(saids)) setSeenAdminActionIds(new Set(saids));
-      if (vats && Array.isArray(vats)) setVisitedAdminSubTabs(new Set(vats));
       return true;
     } catch (e) {
       console.error("❌ Hydration failed:", e);
