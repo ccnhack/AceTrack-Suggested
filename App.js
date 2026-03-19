@@ -13,6 +13,7 @@ import {
 import storage from './utils/storage';
 import AppNavigator from './navigation/AppNavigator';
 import ChatBot from './components/ChatBot';
+import * as Updates from 'expo-updates';
 import logger from './utils/logger';
 import { Ionicons } from '@expo/vector-icons';
 import config from './config';
@@ -115,6 +116,11 @@ export default function App() {
       logger.logAction('SYNC_ENGINE_STATUS', { 
         version: 'v5-HARDENED', 
         features: ['Ref-Mirroring', 'Atomic-Callbacks', 'Heartbeat-v36-RESTORED'],
+        ota: {
+          updateId: Updates.updateId || 'Built-in',
+          channel: Updates.channel || 'Default',
+          runtimeVersion: Updates.runtimeVersion || 'Unknown'
+        },
         status: 'Operational'
       });
 
