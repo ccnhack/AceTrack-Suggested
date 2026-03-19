@@ -18,8 +18,12 @@ const AdminHubScreen = ({
   onBulkUpdateVideoStatus, onForceRefundVideo, onApproveDeleteVideo, 
   onRejectDeleteVideo, onPermanentDeleteVideo, onReplyTicket, 
   onUpdateTicketStatus, onManualSync, seenAdminActionIds = new Set(),
-  setSeenAdminActionIds, visitedAdminSubTabs = new Set(), setVisitedAdminSubTabs
+  setSeenAdminActionIds, visitedAdminSubTabs = new Set(), setVisitedAdminSubTabs,
+  isUsingCloud
 }) => {
+  const targetCloudUrl = 'https://acetrack-api-q39m.onrender.com';
+  const activeApiUrl = isUsingCloud ? targetCloudUrl : config.API_BASE_URL;
+
   const [subTab, setSubTab] = useState('individuals');
   const [search, setSearch] = useState('');
   const [coachSubTab, setCoachSubTab] = useState('pending');
@@ -602,7 +606,7 @@ const AdminHubScreen = ({
                         setSelectedDiagFile(null);
                         setDiagContent(null);
                         setIsFetchingDiags(true);
-                        const url = `${config.API_BASE_URL}/api/diagnostics`;
+                        const url = `${activeApiUrl}/api/diagnostics`;
                         try {
                           const res = await fetch(url, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
                           if (res.ok) {
@@ -686,7 +690,7 @@ const AdminHubScreen = ({
                           setSelectedDiagFile(file);
                           setIsFetchingDiags(true);
                           try {
-                            const res = await fetch(`${config.API_BASE_URL}/api/diagnostics/${file}`, {
+                            const res = await fetch(`${activeApiUrl}/api/diagnostics/${file}`, {
                               headers: { 'x-ace-api-key': config.ACE_API_KEY }
                             });
                             if (res.ok) setDiagContent(await res.json());
