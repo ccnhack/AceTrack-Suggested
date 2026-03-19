@@ -9,6 +9,16 @@ import logger from '../utils/logger';
 const DiagnosticsModal = ({ visible, onClose, onUpload, isUploading }) => {
     const logs = logger.getLogs();
     
+    // Calculate metadata
+    const totalLines = logs.length;
+    let fileSizeKB = '0.00';
+    try {
+        const logStr = JSON.stringify(logs);
+        fileSizeKB = (logStr.length / 1024).toFixed(2);
+    } catch (e) {
+        // Handle serialization errors gracefully
+    }
+    
     return (
         <Modal visible={visible} animationType="slide" transparent={true}>
             <View style={styles.modalOverlay}>
@@ -23,8 +33,21 @@ const DiagnosticsModal = ({ visible, onClose, onUpload, isUploading }) => {
                     <View style={styles.diagNotice}>
                         <Ionicons name="information-circle" size={18} color="#2563EB" />
                         <Text style={styles.diagNoticeText}>
-                            Logs from the last 5 minutes are captured to help troubleshoot connectivity and system issues.
+                            Persisted telemetry. Logs cycle at a maximum threshold to prevent memory overflow.
                         </Text>
+                    </View>
+
+                    <View style={styles.metaContainer}>
+                        <View style={styles.metaBox}>
+                            <Ionicons name="list" size={16} color="#475569" />
+                            <Text style={styles.metaLabel}>Total Lines:</Text>
+                            <Text style={styles.metaValue}>{totalLines.toLocaleString()}</Text>
+                        </View>
+                        <View style={styles.metaBox}>
+                            <Ionicons name="document-text" size={16} color="#475569" />
+                            <Text style={styles.metaLabel}>Est. Size:</Text>
+                            <Text style={styles.metaValue}>{fileSizeKB} KB</Text>
+                        </View>
                     </View>
 
                     <ScrollView 
@@ -198,6 +221,35 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     textTransform: 'uppercase',
     letterSpacing: 1,
+  },
+  metaContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    gap: 12,
+  },
+  metaBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    borderRadius: 12,
+    gap: 6,
+  },
+  metaLabel: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  metaValue: {
+    fontSize: 14,
+    color: '#0F172A',
+    fontWeight: '900',
+    flex: 1,
+    textAlign: 'right',
   },
 });
 
