@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import config from './config';
 import { io } from 'socket.io-client';
 
-const APP_VERSION = "1.0.9";
+const APP_VERSION = "1.0.10";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -92,6 +92,31 @@ export default function App() {
       // If not currently pushing data themselves, pull the updates
       if (!isSyncingRef.current) {
         checkForUpdates(); 
+      }
+    });
+
+    socketRef.current.on('force_upload_diagnostics', async (data) => {
+      if (data.targetUserId === currentUserRef.current?.id) {
+        logger.logAction('ADMIN_DIAGNOSTICS_PULL_RECEIVED', { adminId: data.adminId });
+        const logs = logger.getLogs();
+        try {
+          const cloudUrl = isUsingCloudRef.current ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL;
+          await fetch(`${cloudUrl}/api/diagnostics`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-ace-api-key': config.ACE_API_KEY
+            },
+            body: JSON.stringify({ 
+              username: currentUserRef.current?.name || 'unknown',
+              logs,
+              prefix: 'admin_requested'
+            })
+          });
+          logger.logAction('ADMIN_DIAGNOSTICS_PULL_SUCCESS', { count: logs.length });
+        } catch (e) {
+          logger.logAction('ADMIN_DIAGNOSTICS_PULL_FAILED', { error: e.message });
+        }
       }
     });
 
@@ -1703,7 +1728,8 @@ export default function App() {
           reschedulingFrom={reschedulingFrom}
           auditLogs={auditLogs} 
           onLogout={handleLogout} 
-          handlers={handlers} 
+          handlers={handlers}
+          socketRef={socketRef}
         />
         {currentUser && (
           <ChatBot 

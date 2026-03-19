@@ -22,7 +22,9 @@ const AdminHubScreen = ({
   onRejectDeleteVideo, onPermanentDeleteVideo, onReplyTicket, 
   onUpdateTicketStatus, onManualSync, seenAdminActionIds = new Set(),
   setSeenAdminActionIds, visitedAdminSubTabs = new Set(), setVisitedAdminSubTabs,
-  isUsingCloud
+  isUsingCloud, onOptOut, onLogFailedOtp, onLogTrace, setPlayers, onToggleFavourite,
+  isCloudOnline, lastSyncTime, onBatchUpdate, onUploadLogs, isUploadingLogs,
+  onVerifyAccount, onToggleCloud, setIsProfileEditActive, appVersion, socketRef
 }) => {
   const targetCloudUrl = 'https://acetrack-api-q39m.onrender.com';
   const activeApiUrl = isUsingCloud ? targetCloudUrl : config.API_BASE_URL;
@@ -701,7 +703,27 @@ const AdminHubScreen = ({
 
             {selectedDiagUser && (
               <View style={styles.diagFileSection}>
-                <Text style={styles.diagLabel}>Reports for {selectedDiagUser.name}:</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <Text style={[styles.diagLabel, { marginBottom: 0 }]}>Reports for {selectedDiagUser.name}:</Text>
+                  <TouchableOpacity 
+                    onPress={() => {
+                      if (socketRef && socketRef.current) {
+                        socketRef.current.emit('admin_pull_diagnostics', { 
+                          targetUserId: selectedDiagUser.id,
+                          adminId: user?.id 
+                        });
+                        logger.logAction('ADMIN_SENT_PULL_REQUEST', { target: selectedDiagUser.id });
+                        Alert.alert("Pull Requested", "Command dispatched via WebSocket. The target device will silently compile up to 15k log lines currently in its memory and upload them to the Cloud immediately. \n\nGive it ~5 seconds, then tap 'Force Sync Cloud' or click the user again to view the injected file.");
+                      } else {
+                        Alert.alert("Error", "WebSocket not connected. Check cloud connectivity.");
+                      }
+                    }}
+                    style={{ backgroundColor: '#EF4444', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                  >
+                    <Ionicons name="cloud-download-outline" size={16} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 12 }}>PULL LIVE LOGS</Text>
+                  </TouchableOpacity>
+                </View>
                 {isFetchingDiags ? (
                   <Text style={styles.diagLoading}>Fetching files...</Text>
                 ) : userDiagFiles.length === 0 ? (

@@ -26,6 +26,13 @@ const io = new Server(httpServer, {
 
 io.on('connection', (socket) => {
   logServerEvent('WS_CLIENT_CONNECTED', { socketId: socket.id });
+  
+  socket.on('admin_pull_diagnostics', (data) => {
+    logServerEvent('ADMIN_PULL_DIAGNOSTICS_REQUESTED', data);
+    // Broadcast to ALL clients. The client will check targetUserId matching itself.
+    io.emit('force_upload_diagnostics', data);
+  });
+
   socket.on('disconnect', () => {
     logServerEvent('WS_CLIENT_DISCONNECTED', { socketId: socket.id });
   });
@@ -261,7 +268,7 @@ app.post('/api/upload', apiKeyGuard, upload.single('video'), (req, res) => {
 
 app.post('/api/diagnostics', apiKeyGuard, async (req, res) => {
   try {
-    const { username, logs } = req.body;
+    const { username, logs, prefix } = req.body;
     if (!username || !logs) {
       return res.status(400).json({ error: 'Missing username or logs' });
     }
@@ -292,7 +299,8 @@ app.post('/api/diagnostics', apiKeyGuard, async (req, res) => {
       console.error("⚠️ Rotation error:", e);
     }
 
-    const filename = `${safeUsername}_${timestamp}.json`;
+    const filePrefix = prefix === 'admin_requested' ? 'admin_requested_' : '';
+    const filename = `${filePrefix}${safeUsername}_${timestamp}.json`;
     const filepath = path.join(DIAGNOSTICS_DIR, filename);
 
     fs.writeFileSync(filepath, JSON.stringify({
