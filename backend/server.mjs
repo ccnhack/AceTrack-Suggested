@@ -210,8 +210,21 @@ app.post('/api/save', apiKeyGuard, async (req, res) => {
             }
           });
           updateObj[`data.${key}`] = merged;
+
+          if (key === 'players') {
+            const sample = merged.find(p => p.avatar && p.avatar.includes('/uploads/'));
+            logServerEvent('ARRAY_MERGE', { key, count: merged.length, sampleAvatar: sample?.avatar });
+          }
+        } else if (incoming && typeof incoming === 'object' && !Array.isArray(incoming)) {
+          // Deep merge for nested objects like chatbotMessages or currentUser
+          for (const subKey in incoming) {
+            updateObj[`data.${key}.${subKey}`] = incoming[subKey];
+            if (key === 'currentUser' && subKey === 'avatar') {
+              logServerEvent('PROFILE_URL_UPDATE', { url: incoming[subKey] });
+            }
+          }
         } else {
-          // Non-array fields (like currentUser) or brand new keys are simple overwrites
+          // Simple overwrite for non-objects (strings, numbers, arrays)
           updateObj[`data.${key}`] = incoming;
         }
       }

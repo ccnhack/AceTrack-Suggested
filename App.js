@@ -51,6 +51,7 @@ export default function App() {
   const navigationRef = React.useRef();
   const isUsingCloudRef = React.useRef(true);
   const socketRef = React.useRef(null);
+  const playersRef = React.useRef(players);
 
   // Synchronous helper to update isSyncing state AND ref atomically
   const setSyncingState = (val) => {
@@ -65,6 +66,10 @@ export default function App() {
   useEffect(() => {
     isUsingCloudRef.current = isUsingCloud;
   }, [isUsingCloud]);
+
+  useEffect(() => {
+    playersRef.current = players;
+  }, [players]);
 
   useEffect(() => {
     // 1. WebSocket: Connect to real-time events
@@ -639,29 +644,47 @@ export default function App() {
     }
   };
 
-  const handleBatchUpdate = async (updates) => {
-    logger.logAction('BATCH_UPDATE_START', { keys: Object.keys(updates) });
+  const handleSyncUpdate = async (updates) => {
     const currentU = currentUserRef.current;
+    const currentP = playersRef.current;
     
-    // 1. Mirror currentUser updates into the players list
-    if (currentU && updates.currentUser) {
-       const updatedU = { ...currentU, ...updates.currentUser };
-       const updatedPlayers = players.map(p => 
-         String(p.id).toLowerCase() === String(updatedU.id).toLowerCase() ? updatedU : p
-       );
-       
-       // Force both to be in the sync for absolute consistency
-       updates.players = updatedPlayers;
-       updates.currentUser = updatedU;
-       
-       // Update state immediately
-       setPlayers(updatedPlayers);
-       setCurrentUser(updatedU);
-       currentUserRef.current = updatedU;
+    logger.logAction('SYNC_UPDATE_INIT', { 
+        keys: Object.keys(updates), 
+        hasUser: !!updates.currentUser,
+        avatar: updates.currentUser?.avatar 
+    });
+
+    // 1. Mirror currentUser -> players
+    if (updates.currentUser) {
+      const u = updates.currentUser;
+      const updatedPlayers = currentP.map(p => 
+        String(p.id).toLowerCase() === String(u.id).toLowerCase() ? u : p
+      );
+      if (!updatedPlayers.some(p => String(p.id).toLowerCase() === String(u.id).toLowerCase())) {
+        updatedPlayers.push(u);
+      }
+      
+      updates.players = updatedPlayers;
+      setPlayers(updatedPlayers);
+      setCurrentUser(u);
+      currentUserRef.current = u;
+    } else if (updates.players) {
+        setPlayers(updates.players);
     }
-    
-    const result = await syncAndSaveData(updates);
-    logger.logAction('BATCH_UPDATE_COMPLETE', { success: result });
+
+    // 2. Mirror players -> currentUser
+    if (updates.players && currentU && !updates.currentUser) {
+        const matching = updates.players.find(p => String(p.id).toLowerCase() === String(currentU.id).toLowerCase());
+        if (matching) {
+            setCurrentUser(matching);
+            currentUserRef.current = matching;
+            updates.currentUser = matching;
+        }
+    }
+
+    const success = await syncAndSaveData(updates);
+    logger.logAction('SYNC_UPDATE_FINISH', { success });
+    return success;
   };
 
   const handleLogTrace = (action, targetType, targetId, details, adminId = 'system') => {
@@ -715,16 +738,9 @@ export default function App() {
     setSeenAdminActionIds: (ids) => {
       setSeenAdminActionIds(ids);
       storage.setItem('seenAdminActionIds', Array.from(ids));
-      // Cross-device sync: save to admin's profile AND players list
       if (currentUserRef.current?.role === 'admin') {
-        const updatedUser = { ...currentUserRef.current, seenAdminActionIds: Array.from(ids) };
-        const updatedPlayers = players.map(p => 
-          String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p
-        );
-        setPlayers(updatedPlayers);
-        handleBatchUpdate({ 
-          currentUser: updatedUser,
-          players: updatedPlayers
+        handleSyncUpdate({ 
+          currentUser: { ...currentUserRef.current, seenAdminActionIds: Array.from(ids) } 
         });
       }
     },
@@ -732,16 +748,9 @@ export default function App() {
     setVisitedAdminSubTabs: (tabs) => {
       setVisitedAdminSubTabs(tabs);
       storage.setItem('visitedAdminSubTabs', Array.from(tabs));
-      // Cross-device sync: save to admin's profile AND players list
       if (currentUserRef.current?.role === 'admin') {
-        const updatedUser = { ...currentUserRef.current, visitedAdminSubTabs: Array.from(tabs) };
-        const updatedPlayers = players.map(p => 
-          String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p
-        );
-        setPlayers(updatedPlayers);
-        handleBatchUpdate({ 
-          currentUser: updatedUser,
-          players: updatedPlayers
+        handleSyncUpdate({ 
+          currentUser: { ...currentUserRef.current, visitedAdminSubTabs: Array.from(tabs) } 
         });
       }
     },
@@ -749,29 +758,7 @@ export default function App() {
     onSaveTournament: handleSaveTournament,
     onSaveVideo: handleSaveVideo,
     onUpdateUser: (u) => { 
-      // CRITICAL: Only update currentUser if this IS the logged-in user.
-      const loggedInUser = currentUserRef.current;
-      
-      // Always update the players list regardless of who was updated
-      const updatedPlayers = players.map(p => 
-        String(p.id).toLowerCase() === String(u.id).toLowerCase() ? u : p
-      );
-      // If the user doesn't exist in the list yet, add them
-      if (!players.some(p => String(p.id).toLowerCase() === String(u.id).toLowerCase())) {
-        updatedPlayers.push(u);
-      }
-      setPlayers(updatedPlayers);
-
-      logger.logAction('PROFILE_UPDATE_START', { userId: u.id, isMe: !!(loggedInUser && String(u.id).toLowerCase() === String(loggedInUser.id).toLowerCase()) });
-
-      // CRITICAL: Push BOTH currentUser AND players in a single call to prevent race conditions
-      if (loggedInUser && String(u.id).toLowerCase() === String(loggedInUser.id).toLowerCase()) {
-        setCurrentUser(u); 
-        currentUserRef.current = u;
-        syncAndSaveData({ currentUser: u, players: updatedPlayers });
-      } else {
-        syncAndSaveData({ players: updatedPlayers });
-      }
+       handleSyncUpdate({ currentUser: u });
     },
     onLogTrace: handleLogTrace,
     onManualSync: () => {
@@ -780,48 +767,19 @@ export default function App() {
     },
     onRegisterUser: handleRegisterUser,
     onVerifyAccount: (type) => {
-      if (!currentUser) return;
+      const currentU = currentUserRef.current;
+      const currentP = playersRef.current;
+      if (!currentU) return;
+      
       const updatedUser = {
-        ...currentUser,
+        ...currentU,
         [type === 'email' ? 'isEmailVerified' : 'isPhoneVerified']: true
       };
       
-      const isMe = currentUserRef.current && String(updatedUser.id).toLowerCase() === String(currentUserRef.current.id).toLowerCase();
-      if (isMe) {
-        setCurrentUser(updatedUser);
-        currentUserRef.current = updatedUser;
-      }
-
-      const updatedPlayers = players.map(p => 
-        String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p
-      );
-      setPlayers(updatedPlayers);
-      
-      const updates = { players: updatedPlayers };
-      if (isMe) updates.currentUser = updatedUser;
-      syncAndSaveData(updates);
+      handleSyncUpdate({ currentUser: updatedUser });
     },
     onBatchUpdate: (updates) => {
-      logger.logAction('Batch Update triggered', Object.keys(updates));
-      const syncObj = {};
-      if (updates.tournaments) {
-        setTournaments(updates.tournaments);
-        syncObj.tournaments = updates.tournaments;
-      }
-      if (updates.players) {
-        setPlayers(updates.players);
-        syncObj.players = updates.players;
-      }
-      if (updates.matches) {
-        setMatches(updates.matches);
-        syncObj.matches = updates.matches;
-      }
-      if (updates.currentUser) {
-        setCurrentUser(updates.currentUser);
-        currentUserRef.current = updates.currentUser;
-        syncObj.currentUser = updates.currentUser;
-      }
-      syncAndSaveData(syncObj);
+        handleSyncUpdate(updates);
     },
     isCloudOnline,
     isSyncing,
