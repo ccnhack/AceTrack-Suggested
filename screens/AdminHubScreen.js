@@ -433,7 +433,7 @@ const AdminHubScreen = ({
               <View style={[styles.infoBlock, { backgroundColor: '#F0FDF4' }]}>
                 <Text style={styles.infoLabel}>Assigned Coach</Text>
                 <View style={styles.assignRow}>
-                  <Text style={styles.coachDetailName}>{(players.find(p => p.id === t.assignedCoachId) || {}).name}</Text>
+                  <Text style={styles.coachDetailName}>{players.find(p => p.id === t.assignedCoachId)?.name}</Text>
                   <TouchableOpacity onPress={() => onRemoveCoach(t.id)} style={styles.miniRemoveBtn}>
                     <Text style={styles.miniRemoveText}>Remove</Text>
                   </TouchableOpacity>
@@ -473,7 +473,7 @@ const AdminHubScreen = ({
                 );
               })
             )}
-            {tournaments.every(t => !(t.failedOtpAttempts && t.failedOtpAttempts.length)) && (
+            {tournaments.every(t => !t.failedOtpAttempts?.length) && (
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>No failed attempts logged</Text>
               </View>
@@ -515,7 +515,7 @@ const AdminHubScreen = ({
                <TouchableOpacity 
                  onPress={() => {
                    logger.logAction('ADMIN_MANUAL_SYNC_TRIGGER');
-                   onManualSync && onManualSync();
+                   onManualSync?.();
                  }}
                  style={styles.diagSyncBtn}
                >
@@ -561,7 +561,7 @@ const AdminHubScreen = ({
                           const res = await fetch(url, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
                           if (res.ok) {
                             const data = await res.json();
-                            const pName = (p.name || p.email || '').toLowerCase();
+                            const pName = (p.name || '').toLowerCase();
                             const pId = String(p.id || '').toLowerCase();
                             const pEmail = (p.email || '').toLowerCase();
                             const firstName = pName.split(' ')[0];
@@ -580,7 +580,7 @@ const AdminHubScreen = ({
                                      (firstName.length > 3 && low.includes(firstName));
                             });
                             setUserDiagFiles(fs.reverse());
-                            logger.logAction('DIAGNOSTICS_FETCH_SUCCESS', { user: p.name || p.email, fileCount: fs.length });
+                            logger.logAction('DIAGNOSTICS_FETCH_SUCCESS', { user: p.name, fileCount: fs.length });
                           }
                         } catch (e) {
                           setUserDiagFiles([]);
@@ -590,14 +590,14 @@ const AdminHubScreen = ({
                           setIsFetchingDiags(false);
                         }
                       }}
-                      style={[styles.miniUserCard, selectedDiagUser && selectedDiagUser.id === p.id && styles.miniUserCardActive]}
+                      style={[styles.miniUserCard, selectedDiagUser?.id === p.id && styles.miniUserCardActive]}
                     >
                       <Image 
-                        source={{ uri: p.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name || p.email || 'User')}&background=random` }} 
+                        source={{ uri: p.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random` }} 
                         style={styles.miniAvatar} 
                       />
-                      <Text style={[styles.miniUserName, selectedDiagUser && selectedDiagUser.id === p.id && styles.miniUserNameActive]}>
-                        {(p.name || p.email || 'User').split(' ')[0]}
+                      <Text style={[styles.miniUserName, selectedDiagUser?.id === p.id && styles.miniUserNameActive]}>
+                        {p.name.split(' ')[0]}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -626,7 +626,7 @@ const AdminHubScreen = ({
 
             {selectedDiagUser && (
               <View style={styles.diagFileSection}>
-                <Text style={styles.diagLabel}>Reports for {selectedDiagUser.name || selectedDiagUser.email || 'User'}:</Text>
+                <Text style={styles.diagLabel}>Reports for {selectedDiagUser.name}:</Text>
                 {isFetchingDiags ? (
                   <Text style={styles.diagLoading}>Fetching files...</Text>
                 ) : userDiagFiles.length === 0 ? (
@@ -685,8 +685,8 @@ const AdminHubScreen = ({
                   <View style={styles.diagLogBox}>
                     {(diagContent.logs || []).map((log, idx) => (
                       <View key={idx} style={styles.diagLogLine}>
-                        <Text style={styles.diagLogTime}>[{(log.timestamp && log.timestamp.split(' ')[1]) || '00:00'}]</Text>
-                        <Text style={[styles.diagLogLevel, { color: log.level === 'error' ? '#EF4444' : log.level === 'warn' ? '#EAB308' : '#3B82F6' }]}>{(log.level && log.level.toUpperCase()) || ''}</Text>
+                        <Text style={styles.diagLogTime}>[{log.timestamp?.split(' ')[1] || '00:00'}]</Text>
+                        <Text style={[styles.diagLogLevel, { color: log.level === 'error' ? '#EF4444' : log.level === 'warn' ? '#EAB308' : '#3B82F6' }]}>{log.level?.toUpperCase()}</Text>
                         <Text style={styles.diagLogMsg}>{log.message}</Text>
                       </View>
                     ))}
@@ -745,7 +745,7 @@ const AdminHubScreen = ({
                 <View style={styles.sheetHeader}>
                     <View>
                         <Text style={styles.sheetTitle}>Sports Insights</Text>
-                        <Text style={styles.sheetSubtitle}>{viewingBreakdownFor && viewingBreakdownFor.academy ? viewingBreakdownFor.academy.name : ''}</Text>
+                        <Text style={styles.sheetSubtitle}>{viewingBreakdownFor?.academy.name}</Text>
                     </View>
                     <TouchableOpacity onPress={() => setViewingBreakdownFor(null)}>
                         <Ionicons name="close" size={24} color="#0F172A" />
@@ -764,7 +764,7 @@ const AdminHubScreen = ({
                 </ScrollView>
                 <View style={styles.sheetFooter}>
                     <Text style={styles.footerLabel}>Total Hosted</Text>
-                    <Text style={styles.footerValue}>{viewingBreakdownFor && viewingBreakdownFor.stats ? viewingBreakdownFor.stats.hostedCount : 0}</Text>
+                    <Text style={styles.footerValue}>{viewingBreakdownFor?.stats.hostedCount}</Text>
                 </View>
             </View>
         </View>

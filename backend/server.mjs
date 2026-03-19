@@ -145,27 +145,35 @@ app.post('/api/save', apiKeyGuard, async (req, res) => {
       return res.status(400).json({ error: 'Invalid payload: No syncable context found' });
     }
 
-    // 4. ATOMIC MERGE: For arrays like 'players', merge instead of overwrite to prevent data loss
+    // 4. ATOMIC MERGE: Merge arrays instead of overwriting to prevent data loss
     const state = await AppState.findOne().sort({ lastUpdated: -1 });
     const currentData = (state && state.data) ? state.data : {};
     
     const updateObj = { lastUpdated: Date.now() };
     for (const key of syncableKeys) {
-      if (req.body[key] !== undefined) {
-        if (key === 'players' && Array.isArray(req.body[key]) && Array.isArray(currentData[key])) {
-          // MERGE: Keep existing players not in the updates
-          const incoming = req.body[key];
-          const existing = currentData[key];
+      const incoming = req.body[key];
+      const existing = currentData[key];
+      
+      if (incoming !== undefined) {
+        if (Array.isArray(incoming) && Array.isArray(existing)) {
+          // MERGE Strategy: Start with the new incoming data
           const merged = [...incoming];
           
-          existing.forEach(p => {
-            if (p && p.id && !incoming.some(i => i && i.id && String(i.id).toLowerCase() === String(p.id).toLowerCase())) {
-              merged.push(p);
+          // Add existing items ONLY if they are NOT in the incoming list (by ID)
+          existing.forEach(oldItem => {
+            if (oldItem && oldItem.id) {
+              const isUpdated = incoming.some(newItem => 
+                newItem && newItem.id && String(newItem.id).toLowerCase() === String(oldItem.id).toLowerCase()
+              );
+              if (!isUpdated) {
+                merged.push(oldItem);
+              }
             }
           });
           updateObj[`data.${key}`] = merged;
         } else {
-          updateObj[`data.${key}`] = req.body[key];
+          // Non-array fields (like currentUser) or brand new keys are simple overwrites
+          updateObj[`data.${key}`] = incoming;
         }
       }
     }

@@ -60,13 +60,13 @@ export default function App() {
   }, [pendingSync]);
 
   useEffect(() => {
-    // 1. Polling: Reduced to 30 seconds to prevent UI thread pressure (ANR) on legacy Samsung hardware
+    // 1. Polling: Check for updates every 5 seconds for real-time feel
     const pollInterval = setInterval(() => {
       // Poll if not syncing. Even if not logged in, we want to see new players/tournaments
       if (!isSyncingRef.current) {
         checkForUpdates();
       }
-    }, 30000); // 30s instead of 5s
+    }, 5000);
 
     // 2. AppState: Refresh when app returns from background to foreground
     const subscription = AppState.addEventListener('change', nextAppState => {
@@ -78,32 +78,17 @@ export default function App() {
 
     // 3. IMMEDIATE HYDRATION FROM STORAGE
     const startup = async () => {
-      try {
-        await hydrateFromStorage();
-        // Only after local data is visible do we attempt a cloud pull
-        loadData();
-        
-        // HEARTBEAT: Periodically report "alive" status with metadata
-        const cloudUrl = 'https://acetrack-api-q39m.onrender.com';
-        const heartbeatInterval = setInterval(() => {
-          // Get current screen from navigationRef
-          const currentScreen = navigationRef.current ? navigationRef.current.getCurrentRoute() : { name: 'Unknown' };
-          logger.sendHeartbeat(cloudUrl, config.ACE_API_KEY, 'samsung', {
-            screen: currentScreen && currentScreen.name,
-            v: syncVersion.current
-          });
-        }, 30000); // Every 30 seconds to reduce pressure
+      await logger.initialize();
+      // Register auto-sync for logs when threshold hits 500
+      logger.setThresholdCallback(500, async () => {
+        logger.logAction('AUTO_SYNC_THRESHOLD_REACHED');
+        // We use the same onUploadLogs logic but silently
+        await actions.onUploadLogs(); 
+      });
 
-        // DELAYED DIAGNOSTICS: Enable interception only after app is stable
-        setTimeout(() => {
-          logger.enableInterception();
-          logger.checkAndUploadCrash(cloudUrl, config.ACE_API_KEY);
-        }, 10000); // Wait 10s for full native stability
-
-        return () => clearInterval(heartbeatInterval);
-      } catch (e) {
-        console.error("Critical Startup Error:", e);
-      }
+      await hydrateFromStorage();
+      // Only after local data is visible do we attempt a cloud pull
+      loadData();
     };
     startup();
 
@@ -121,7 +106,7 @@ export default function App() {
     } else {
       setShowVerificationPrompt(false);
     }
-  }, [currentUser, isProfileEditActive]);
+  }, [currentUser?.id, currentUser?.role, currentUser?.isEmailVerified, currentUser?.isPhoneVerified, isProfileEditActive]);
 
 
   const checkForUpdates = async () => {
@@ -256,11 +241,6 @@ export default function App() {
       if (!response.ok) throw new Error("Cloud fetch failed");
 
       const cloudData = await response.json();
-      
-      if (!cloudData || typeof cloudData !== 'object') {
-        console.error("❌ Cloud data malformed or empty");
-        return false;
-      }
       console.log(`✅ [v${versionAtStart}] Data fetched successfully [Keys: ${Object.keys(cloudData).join(', ')}]`);
       console.log("✅ Cloud data received. Keys:", Object.keys(cloudData));
       if (cloudData.tournaments) console.log(`🏆 Cloud Tournaments: ${cloudData.tournaments.length}`);
@@ -283,8 +263,8 @@ export default function App() {
       if (cloudData.players) {
         // CLEANUP: Filter out ghost players (ID: test) and nulls
         cloudData.players = cloudData.players.filter(p => p && p.id && String(p.id).toLowerCase() !== 'test');
-        console.log("👥 Cloud Sync: Received " + cloudData.players.length + " players.");
-        logger.logAction('CLOUD_PLAYERS_SYNC', { count: cloudData.players.length });
+        console.log(`👥 Cloud Sync: Received ${cloudData.players.length} players. Names: ${cloudData.players.map(p => p.name).join(', ')}`);
+        logger.logAction('CLOUD_PLAYERS_SYNC', { count: cloudData.players.length, names: cloudData.players.map(p => p.name) });
         setPlayers(cloudData.players);
         storage.setItem('players', cloudData.players);
         
@@ -337,7 +317,7 @@ export default function App() {
       }
       
       console.log(`✅ [v${versionAtStart}] loadData completed successfully`);
-      return true;
+      return cloudData;
     } catch (e) {
       console.log("📡 Cloud unreachable or error:", e.message);
       setIsCloudOnline(false);
@@ -567,9 +547,9 @@ export default function App() {
       const tournament = tournaments.find(t => t.id === v.tournamentId);
       
       [
-        ...(match && match.player1Id ? [match.player1Id] : []),
-        ...(match && match.player2Id ? [match.player2Id] : []),
-        ...(tournament && tournament.assignedCoachId ? [tournament.assignedCoachId] : [])
+        ...(match?.player1Id ? [match.player1Id] : []),
+        ...(match?.player2Id ? [match.player2Id] : []),
+        ...(tournament?.assignedCoachId ? [tournament.assignedCoachId] : [])
       ].forEach(id => recipientIds.add(id));
 
       updatedPlayers = players.map(p => {
@@ -1509,7 +1489,7 @@ export default function App() {
       logger.logAction('DIAGNOSTICS_UPLOAD_CLICK', { 
         hasRef: !!currentUserRef.current, 
         hasState: !!currentUser,
-        userId: activeUser ? activeUser.id : null 
+        userId: activeUser?.id 
       });
 
       console.log("📤 Attempting to upload diagnostics...");
@@ -1588,7 +1568,7 @@ export default function App() {
         <AppNavigator
           user={currentUser}
           role={userRole}
-          players={players.some(p => p.id === (currentUser ? currentUser.id : null)) ? players : (currentUser ? [currentUser, ...players] : players)}
+          players={players.some(p => p.id === currentUser?.id) ? players : (currentUser ? [currentUser, ...players] : players)}
           tournaments={tournaments}
           matchVideos={matchVideos}
           matches={matches}

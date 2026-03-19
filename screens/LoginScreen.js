@@ -43,14 +43,14 @@ const LoginScreen = ({
       }
 
       // Demo Academy Login
-      if (username === 'academy' && password === 'academy') {
+      if (username === 'academy' && password === 'password') {
         const demoUser = players.find(p => p.id === 'academy');
         if (demoUser) {
           onLoginSuccess('academy', demoUser);
         } else {
           onLoginSuccess('academy', {
-            id: 'academy', name: 'Ace Tennis Academy', email: 'academy@acetrack.com',
-            phone: '+91 9999999999', username: 'academy', password: 'academy',
+            id: 'academy', name: 'Ace Academy', email: 'academy@acetrack.com',
+            phone: '+91 9999999999', username: 'academy', password: 'password',
             role: 'academy', isEmailVerified: true, isPhoneVerified: true
           });
         }
@@ -61,21 +61,26 @@ const LoginScreen = ({
         const pEmail = (p.email || '').toLowerCase();
         const pId = String(p.id || '').toLowerCase();
         const pUsername = (p.username || '').toLowerCase();
+        const pName = (p.name || '').toLowerCase();
         const search = username.toLowerCase().trim();
-        return pEmail === search || pId === search || pUsername === search;
+        return pEmail === search || pId === search || pUsername === search || pName === search;
       });
 
       // ROBUSTNESS: If user not found locally, try to refresh data from cloud
       if (!foundUser && onRefreshData) {
         console.log(`🔍 User ${username} not found locally. Attempting cloud refresh...`);
-        const syncSuccess = await onRefreshData();
-        if (syncSuccess) {
-          // Re-search in updated players list (assuming players prop was updated via parent state)
-          // Since props won't update instantly in this closure, we might need to wait or rely on the next render
-          // However, for immediate feedback, we can assume the parent setPlayers was called.
-          Alert.alert("Syncing Account", "Syncing your account from the cloud... please try again in a second.");
-          setIsLoading(false);
-          return;
+        const cloudResult = await onRefreshData();
+        // If cloudResult contains players, search in the fresh list immediately
+        if (cloudResult && cloudResult.players) {
+          const search = username.toLowerCase().trim();
+          foundUser = cloudResult.players.find(p => {
+            const pEmail = (p.email || '').toLowerCase();
+            const pId = String(p.id || '').toLowerCase();
+            const pUsername = (p.username || '').toLowerCase();
+            const pName = (p.name || '').toLowerCase();
+            return pEmail === search || pId === search || pUsername === search || pName === search;
+          });
+          if (foundUser) console.log("✅ User found in fresh cloud data.");
         }
       }
 
@@ -91,7 +96,6 @@ const LoginScreen = ({
           setError('Invalid password. Please try again.');
         }
       } else {
-        // ENHANCED DIAGNOSTICS for 'saumya' issue
         const diagInfo = {
           searchingFor: username,
           totalPlayers: players.length,

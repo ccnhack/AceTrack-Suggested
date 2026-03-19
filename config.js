@@ -7,7 +7,7 @@ import { Platform } from 'react-native';
  * 'localhost' won't work on Android Emulators or Physical Devices.
  */
 // Automatically detect local IP from Expo's host URI (ideal for physical devices + emulators)
-const hostUri = Constants.expoConfig && Constants.expoConfig.hostUri ? Constants.expoConfig.hostUri : null;
+const hostUri = Constants.expoConfig?.hostUri;
 const hostIp = hostUri ? hostUri.split(':')[0] : null;
 let LOCAL_API_URL = hostIp ? `http://${hostIp}:8081` : 'http://localhost:8081';
 
