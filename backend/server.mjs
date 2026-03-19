@@ -189,6 +189,22 @@ app.post('/api/diagnostics', apiKeyGuard, async (req, res) => {
       .replace(/:/g, '-');
 
     const safeUsername = username.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    
+    // 1. Rotation Logic: Keep max 3 files per user
+    try {
+      const userFiles = fs.readdirSync(DIAGNOSTICS_DIR)
+        .filter(f => f.startsWith(`${safeUsername}_`))
+        .sort(); // Sort by name (which has timestamp)
+      
+      while (userFiles.length >= 3) {
+        const oldest = userFiles.shift();
+        fs.unlinkSync(path.join(DIAGNOSTICS_DIR, oldest));
+        console.log(`♻️ Rotated (deleted) old diagnostics: ${oldest}`);
+      }
+    } catch (e) {
+      console.error("⚠️ Rotation error:", e);
+    }
+
     const filename = `${safeUsername}_${timestamp}.json`;
     const filepath = path.join(DIAGNOSTICS_DIR, filename);
 

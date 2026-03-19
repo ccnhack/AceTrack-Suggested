@@ -30,8 +30,12 @@ const formatIST = (date) => {
 };
 
 let logs = [];
-const MAX_LOG_AGE_MS = 10 * 60 * 1000; // Increased to 10 minutes
-const MAX_LOG_COUNT = 1000; // Increased for better troubleshooting
+const MAX_LOG_AGE_MS = 10 * 60 * 1000; // 10 minutes
+const MAX_LOG_COUNT = 1000; 
+
+let threshold = 500;
+let onThresholdReached = null;
+let thresholdTriggeredInSession = false;
 
 const originalLog = console.log;
 const originalWarn = console.warn;
@@ -60,6 +64,12 @@ const addLog = (level, type, message) => {
   // 2. Enforce MAX_LOG_COUNT (keep most recent)
   if (logs.length > MAX_LOG_COUNT) {
     logs = logs.slice(logs.length - MAX_LOG_COUNT);
+  }
+
+  // 3. Check for threshold (once per session/until reset)
+  if (onThresholdReached && logs.length >= threshold && !thresholdTriggeredInSession) {
+    thresholdTriggeredInSession = true;
+    onThresholdReached();
   }
 };
 
@@ -108,6 +118,11 @@ const logger = {
   },
   logError: (msg, err) => {
     addLog('error', 'exception', `${msg}${err ? ': ' + err.message : ''}`);
+  },
+  setThresholdCallback: (limit, callback) => {
+    threshold = limit;
+    onThresholdReached = callback;
+    thresholdTriggeredInSession = false; // Reset for new session/callback
   },
   initialize: async () => {
     addLog('system', 'init', `Diagnostics Logger Initialized [Platform: ${Platform.OS}]`);

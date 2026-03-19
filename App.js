@@ -78,6 +78,13 @@ export default function App() {
     // 3. IMMEDIATE HYDRATION FROM STORAGE
     const startup = async () => {
       await logger.initialize();
+      // Register auto-sync for logs when threshold hits 500
+      logger.setThresholdCallback(500, async () => {
+        logger.logAction('AUTO_SYNC_THRESHOLD_REACHED');
+        // We use the same onUploadLogs logic but silently
+        await actions.onUploadLogs(); 
+      });
+
       await hydrateFromStorage();
       // Only after local data is visible do we attempt a cloud pull
       loadData();
@@ -91,14 +98,14 @@ export default function App() {
   }, []); 
 
   // 4. PERSISTENT VERIFICATION PROMPT: Ensure it shows up if unverified
-  // Fix: Don't show if user is already in the Edit Profile modal
+  // Fix: Don't show if user is admin OR already in the Edit Profile modal
   useEffect(() => {
-    if (currentUser && (!currentUser.isEmailVerified || !currentUser.isPhoneVerified) && !isProfileEditActive) {
+    if (currentUser && currentUser.role !== 'admin' && (!currentUser.isEmailVerified || !currentUser.isPhoneVerified) && !isProfileEditActive) {
       setShowVerificationPrompt(true);
     } else {
       setShowVerificationPrompt(false);
     }
-  }, [currentUser?.id, currentUser?.isEmailVerified, currentUser?.isPhoneVerified, isProfileEditActive]);
+  }, [currentUser?.id, currentUser?.role, currentUser?.isEmailVerified, currentUser?.isPhoneVerified, isProfileEditActive]);
 
 
   const checkForUpdates = async () => {

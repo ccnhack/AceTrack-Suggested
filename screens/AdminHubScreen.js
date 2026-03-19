@@ -9,6 +9,8 @@ import AdminAuditLogsPanel from '../components/AdminAuditLogsPanel';
 import AdminRecordingsDashboard from '../components/AdminRecordingsDashboard';
 import { AdminGrievancesPanel } from '../components/AdminGrievancesPanel';
 import ParticipantsModal from '../components/ParticipantsModal';
+import config from '../config';
+import logger from '../utils/logger';
 
 const AdminHubScreen = ({ 
   players, tournaments, matchVideos, supportTickets, auditLogs = [],
@@ -25,9 +27,15 @@ const AdminHubScreen = ({
   const [rejectComment, setRejectComment] = useState('');
   const [selectedAcademy, setSelectedAcademy] = useState(null);
   const [selectedCoachId, setSelectedCoachId] = useState(null);
-  const [viewingPlayersFor, setViewingPlayersFor] = useState(null);
-  const [viewingAssignmentFor, setViewingAssignmentFor] = useState(null);
   const [viewingBreakdownFor, setViewingBreakdownFor] = useState(null);
+  
+  // Diagnostics Dashboard States
+  const [diagUserSearch, setDiagUserSearch] = useState('');
+  const [selectedDiagUser, setSelectedDiagUser] = useState(null);
+  const [userDiagFiles, setUserDiagFiles] = useState([]);
+  const [selectedDiagFile, setSelectedDiagFile] = useState(null);
+  const [diagContent, setDiagContent] = useState(null);
+  const [isFetchingDiags, setIsFetchingDiags] = useState(false);
 
   const filterData = (data, field = 'name') => {
     if (!search) return data;
@@ -190,7 +198,8 @@ const AdminHubScreen = ({
             { id: 'coach_assignments', label: 'Coach Assignments', count: tournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && !seenAdminActionIds.has(t.id)).length },
             { id: 'recordings', label: 'Recordings', count: matchVideos.filter(v => v.adminStatus === 'Deletion Requested' && !seenAdminActionIds.has(v.id)).length },
             { id: 'grievances', label: 'Grievances', count: supportTickets.filter(t => (t.status === 'Open' || t.status === 'Awaiting Response') && !seenAdminActionIds.has(t.id)).length },
-            { id: 'audit', label: 'Audit Logs' }
+            { id: 'audit', label: 'Audit Logs' },
+            { id: 'diagnostics', label: 'Diagnostics' }
           ].map(tab => (
             <TouchableOpacity 
               key={tab.id} 
@@ -475,6 +484,147 @@ const AdminHubScreen = ({
 
         {subTab === 'audit' && (
           <AdminAuditLogsPanel auditLogs={auditLogs} players={players} />
+        )}
+
+        {subTab === 'diagnostics' && (
+          <View style={styles.diagnosticsContainer}>
+            <Text style={styles.sectionTitle}>System Diagnostics Management</Text>
+            
+            {/* User Search & Selection */}
+            <View style={styles.diagSearchBox}>
+              <Ionicons name="people-outline" size={16} color="#64748B" />
+              <TextInput 
+                 placeholder="Search user (shashank, saumya, etc.)..."
+                 value={diagUserSearch}
+                 onChangeText={setDiagUserSearch}
+                 style={styles.diagSearchInput}
+              />
+            </View>
+
+            <View style={styles.userListScroll}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {players.filter(p => !diagUserSearch || p.name.toLowerCase().includes(diagUserSearch.toLowerCase()) || p.id.toLowerCase().includes(diagUserSearch.toLowerCase()))
+                  .map(p => (
+                    <TouchableOpacity 
+                      key={p.id} 
+                      onPress={async () => {
+                        setSelectedDiagUser(p);
+                        setSelectedDiagFile(null);
+                        setDiagContent(null);
+                        setIsFetchingDiags(true);
+                        try {
+                          const response = await fetch(`${config.API_BASE_URL}/api/diagnostics`, {
+                            headers: { 'x-ace-api-key': config.ACE_API_KEY }
+                          });
+                          if (response.ok) {
+                            const data = await response.json();
+                            const safe = p.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                            const files = data.files.filter(f => f.startsWith(safe + '_'));
+                            setUserDiagFiles(files.reverse()); // latest first
+                          }
+                        } catch (e) {
+                          Alert.alert("Error", "Failed to fetch diagnostics files.");
+                        } finally {
+                          setIsFetchingDiags(false);
+                        }
+                      }}
+                      style={[styles.miniUserCard, selectedDiagUser?.id === p.id && styles.miniUserCardActive]}
+                    >
+                      <Image 
+                        source={{ uri: p.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random` }} 
+                        style={styles.miniAvatar} 
+                      />
+                      <Text style={[styles.miniUserName, selectedDiagUser?.id === p.id && styles.miniUserNameActive]}>
+                        {p.name.split(' ')[0]}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+              </ScrollView>
+            </View>
+
+            {/* File Selection */}
+            {selectedDiagUser && (
+              <View style={styles.diagFileSection}>
+                <Text style={styles.diagLabel}>Reports for {selectedDiagUser.name}:</Text>
+                {isFetchingDiags ? (
+                  <Text style={styles.diagLoading}>Fetching files...</Text>
+                ) : userDiagFiles.length === 0 ? (
+                  <Text style={styles.diagEmpty}>No reports found for this user.</Text>
+                ) : (
+                  <View style={styles.diagFileGrid}>
+                    {userDiagFiles.map(file => (
+                      <TouchableOpacity 
+                        key={file} 
+                        onPress={async () => {
+                          setSelectedDiagFile(file);
+                          setIsFetchingDiags(true);
+                          try {
+                            const response = await fetch(`${config.API_BASE_URL}/api/diagnostics/${file}`, {
+                              headers: { 'x-ace-api-key': config.ACE_API_KEY }
+                            });
+                            if (response.ok) {
+                              const content = await response.json();
+                              setDiagContent(content);
+                            }
+                          } catch (e) {
+                            Alert.alert("Error", "Failed to fetch report content.");
+                          } finally {
+                            setIsFetchingDiags(false);
+                          }
+                        }}
+                        style={[styles.diagFileItem, selectedDiagFile === file && styles.diagFileItemActive]}
+                      >
+                        <Ionicons name="document-text" size={20} color={selectedDiagFile === file ? "#FFFFFF" : "#3B82F6"} />
+                        <Text style={[styles.diagFileName, selectedDiagFile === file && styles.diagFileNameActive]}>
+                          {file.split('_').slice(1).join('_').replace('.json', '')}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Report Content */}
+            {diagContent && (
+              <View style={styles.diagViewPanel}>
+                 <View style={styles.diagViewHeader}>
+                    <Text style={styles.diagViewTitle}>Report Details</Text>
+                    <TouchableOpacity 
+                      onPress={() => {
+                        // Simulated Download
+                        Alert.alert("Download Started", `File ${selectedDiagFile} saved to downloads (Simulated).`);
+                      }}
+                      style={styles.diagDownloadBtn}
+                    >
+                      <Ionicons name="download" size={16} color="#FFFFFF" />
+                      <Text style={styles.diagDownloadText}>Download</Text>
+                    </TouchableOpacity>
+                 </View>
+                 <ScrollView style={styles.diagScrollArea}>
+                    <View style={styles.diagMetaRow}>
+                       <Text style={styles.diagMetaLabel}>User:</Text>
+                       <Text style={styles.diagMetaValue}>{diagContent.username}</Text>
+                    </View>
+                    <View style={styles.diagMetaRow}>
+                       <Text style={styles.diagMetaLabel}>Timestamp:</Text>
+                       <Text style={styles.diagMetaValue}>{diagContent.uploadedAt}</Text>
+                    </View>
+                    <View style={styles.diagLogBox}>
+                       {diagContent.logs.map((log, idx) => (
+                         <View key={idx} style={styles.diagLogLine}>
+                            <Text style={styles.diagLogTime}>[{log.timestamp.split(' ')[1]}]</Text>
+                            <Text style={[styles.diagLogLevel, { color: log.level === 'error' ? '#EF4444' : log.level === 'warn' ? '#EAB308' : '#3B82F6' }]}>
+                              {log.level.toUpperCase()}
+                            </Text>
+                            <Text style={styles.diagLogMsg}>{log.message}</Text>
+                         </View>
+                       ))}
+                    </View>
+                 </ScrollView>
+              </View>
+            )}
+          </View>
         )}
       </ScrollView>
 
@@ -1191,8 +1341,190 @@ const styles = StyleSheet.create({
   },
   footerValue: {
     fontSize: 18,
+    color: '#0F172A',
+  },
+  diagnosticsContainer: {
+    paddingBottom: 40,
+  },
+  sectionTitle: {
+    fontSize: 14,
     fontWeight: '900',
     color: '#0F172A',
+    marginBottom: 16,
+    textTransform: 'uppercase',
+  },
+  diagSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 16,
+  },
+  diagSearchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#0F172A',
+  },
+  userListScroll: {
+    marginBottom: 24,
+  },
+  miniUserCard: {
+    alignItems: 'center',
+    padding: 12,
+    marginRight: 12,
+    borderRadius: 20,
+    backgroundColor: '#F8FAFC',
+    width: 80,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  miniUserCardActive: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
+  },
+  miniAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginBottom: 8,
+  },
+  miniUserName: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  miniUserNameActive: {
+    color: '#FFFFFF',
+  },
+  diagFileSection: {
+    marginTop: 8,
+  },
+  diagLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 12,
+  },
+  diagLoading: { fontSize: 12, color: '#94A3B8', fontStyle: 'italic' },
+  diagEmpty: { fontSize: 12, color: '#94A3B8' },
+  diagFileGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  diagFileItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    gap: 8,
+    minWidth: '45%',
+  },
+  diagFileItemActive: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#2563EB',
+  },
+  diagFileName: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#1E40AF',
+  },
+  diagFileNameActive: {
+    color: '#FFFFFF',
+  },
+  diagViewPanel: {
+    marginTop: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+  },
+  diagViewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#F8FAFC',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  diagViewTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#0F172A',
+    textTransform: 'uppercase',
+  },
+  diagDownloadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 6,
+  },
+  diagDownloadText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+  diagScrollArea: {
+    maxHeight: 400,
+    padding: 16,
+  },
+  diagMetaRow: {
+    flexDirection: 'row',
+    marginBottom: 4,
+    gap: 8,
+  },
+  diagMetaLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+  diagMetaValue: {
+    fontSize: 11,
+    color: '#0F172A',
+    fontWeight: '600',
+  },
+  diagLogBox: {
+    marginTop: 16,
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    padding: 12,
+  },
+  diagLogLine: {
+    flexDirection: 'row',
+    marginBottom: 6,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E293B',
+    paddingBottom: 4,
+  },
+  diagLogTime: {
+    fontSize: 9,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    color: '#94A3B8',
+  },
+  diagLogLevel: {
+    fontSize: 9,
+    fontWeight: '900',
+    width: 45,
+  },
+  diagLogMsg: {
+    flex: 1,
+    fontSize: 9,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    color: '#E2E8F0',
   },
 });
 
