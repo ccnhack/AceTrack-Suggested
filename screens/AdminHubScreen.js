@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, StyleSheet, 
-  SafeAreaView, Image, TextInput, Modal, Alert, Linking, Platform
+  SafeAreaView, Image, TextInput, Modal, Alert, Linking, Platform, Share
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import PlayerDashboardView from '../components/PlayerDashboardView';
@@ -47,6 +47,24 @@ const AdminHubScreen = ({
   const [selectedDiagFile, setSelectedDiagFile] = useState(null);
   const [diagContent, setDiagContent] = useState(null);
   const [isFetchingDiags, setIsFetchingDiags] = useState(false);
+
+  const handleDownloadDiagnostic = async () => {
+    if (!diagContent) return;
+    try {
+      const fileName = `Report_${diagContent.username}_${Date.now()}.json`;
+      const content = JSON.stringify(diagContent, null, 2);
+      
+      await Share.share({
+        title: fileName,
+        message: content,
+        // On iOS, we can also provide a URL to a local file, but for JSON, 
+        // passing the content as a message is often more robust for 'Save to Files'
+      });
+    } catch (error) {
+      console.error("Share error:", error);
+      Alert.alert("Error", "Could not share the report.");
+    }
+  };
 
   const filterData = (data, field = 'name') => {
     if (!search) return data;
@@ -668,7 +686,7 @@ const AdminHubScreen = ({
                 <View style={styles.diagViewHeader}>
                   <Text style={styles.diagViewTitle}>Report Details</Text>
                   <TouchableOpacity 
-                    onPress={() => Alert.alert("Download Started", "File saved to downloads.")}
+                    onPress={handleDownloadDiagnostic}
                     style={styles.diagDownloadBtn}
                   >
                     <Ionicons name="download" size={16} color="#FFFFFF" />
