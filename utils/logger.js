@@ -111,7 +111,7 @@ if (global.ErrorUtils) {
 
 // Intercept fetch calls
 global.fetch = async (...args) => {
-  const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || 'Unknown URL';
+  const url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url ? args[0].url : 'Unknown URL');
   const options = args[1] || {};
   const method = options.method || 'GET';
   
