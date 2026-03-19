@@ -485,7 +485,7 @@ const AdminHubScreen = ({
         )}
 
         {subTab === 'audit' && (
-          <AdminAuditLogsPanel auditLogs={auditLogs} players={players} />
+          <AdminAuditLogsPanel auditLogs={auditLogs} players={players} search={search} />
         )}
 
         {subTab === 'diagnostics' && (
@@ -498,15 +498,39 @@ const AdminHubScreen = ({
               <TextInput 
                  placeholder="Search user (shashank, saumya, etc.)..."
                  value={diagUserSearch}
-                 onChangeText={setDiagUserSearch}
+                 onChangeText={(txt) => {
+                   setDiagUserSearch(txt);
+                   // If user is searching and previous selection is not in the new filtered list (eventually), 
+                   // we don't necessarily clear it, but we should clear if search is empty? No, keep focus.
+                 }}
                  style={styles.diagSearchInput}
               />
             </View>
 
             <View style={styles.userListScroll}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {players.filter(p => !diagUserSearch || p.name.toLowerCase().includes(diagUserSearch.toLowerCase()) || p.id.toLowerCase().includes(diagUserSearch.toLowerCase()))
-                  .map(p => (
+                {(() => {
+                  const allowedMocks = ['shashank', 'pranshu', 'academy', 'coach'];
+                  const filtered = players.filter(p => {
+                    const name = (p.name || '').toLowerCase();
+                    const id = (p.id || '').toLowerCase();
+                    const search = diagUserSearch.toLowerCase();
+                    
+                    // If searching, show any match
+                    if (search) {
+                      return name.includes(search) || id.includes(search);
+                    }
+                    
+                    // If not searching, show only the curated "Important/Mock" list
+                    return allowedMocks.some(m => name.includes(m) || id.includes(m)) || 
+                           name.includes('riya') || name.includes('saumya');
+                  });
+
+                  if (diagUserSearch && filtered.length === 0) {
+                    return <Text style={styles.diagEmptyUserText}>No user found matching "{diagUserSearch}"</Text>;
+                  }
+
+                  return filtered.map(p => (
                     <TouchableOpacity 
                       key={p.id} 
                       onPress={async () => {
@@ -525,7 +549,13 @@ const AdminHubScreen = ({
                             setUserDiagFiles(files.reverse()); // latest first
                           }
                         } catch (e) {
-                          Alert.alert("Error", "Failed to fetch diagnostics files.");
+                          // Silent check: if fetch fails, maybe server is down or no files (though server should return 200 [])
+                          setUserDiagFiles([]);
+                          if (String(p.id).length < 20) { // Likely a mock user
+                            console.log("Mock user diagnostics fetch skipped/failed.");
+                          } else {
+                            Alert.alert("Error", "Failed to fetch diagnostics files.");
+                          }
                         } finally {
                           setIsFetchingDiags(false);
                         }
@@ -540,7 +570,8 @@ const AdminHubScreen = ({
                         {p.name.split(' ')[0]}
                       </Text>
                     </TouchableOpacity>
-                  ))}
+                  ));
+                })()}
               </ScrollView>
             </View>
 
@@ -1414,6 +1445,14 @@ const styles = StyleSheet.create({
   },
   diagLoading: { fontSize: 12, color: '#94A3B8', fontStyle: 'italic' },
   diagEmpty: { fontSize: 12, color: '#94A3B8' },
+  diagEmptyUserText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+    padding: 12,
+    textAlign: 'center',
+    width: '100%',
+  },
   diagFileGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
