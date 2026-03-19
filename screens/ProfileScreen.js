@@ -266,8 +266,8 @@ const ProfileScreen = ({
             <View style={styles.avatarContainer}>
                 {user.avatar && !imageError ? (
                   <Image 
-                    key={`${user.avatar}_${Date.now()}`}
-                    source={{ uri: user.avatar.includes('?') ? user.avatar : `${user.avatar}?t=${Date.now()}` }} 
+                    key={`${user.avatar}_${Math.random()}`}
+                    source={{ uri: user.avatar.includes('?') ? user.avatar : `${user.avatar}?v=${Math.random().toString(36).substring(7)}` }} 
                     style={styles.avatar} 
                     onError={() => {
                         console.log("📸 Avatar load error, switching to initials");
@@ -613,7 +613,11 @@ const ProfileScreen = ({
                       {url.includes('ui-avatars.com') ? (
                          <AvatarPlaceholder name={user.name} size={56} />
                       ) : (
-                         <Image key={`${url}_${idx}`} source={{ uri: url.includes('?') ? url : `${url}?t=${idx}` }} style={styles.avatarOptionImage} />
+                         <Image 
+                           key={`${url}_${Math.random()}`} 
+                           source={{ uri: url.includes('?') ? url : `${url}?v=${Math.random().toString(36).substring(7)}` }} 
+                           style={styles.avatarOptionImage} 
+                         />
                       )}
                       {editAvatar === url && (
                         <View style={styles.selectedCheck}>
@@ -782,6 +786,7 @@ const ProfileScreen = ({
                 // If it's a local file URI, upload it to server first
                 if (editAvatar && editAvatar.startsWith('file://')) {
                   setIsUploading(true);
+                  logger.logAction('AVATAR_UPLOAD_START', { uri: editAvatar });
                   try {
                     const formData = new FormData();
                     formData.append('video', { // Server expects 'video' field name for now
@@ -802,11 +807,13 @@ const ProfileScreen = ({
                     if (response.ok) {
                       const data = await response.json();
                       finalAvatar = data.url;
+                      logger.logAction('AVATAR_UPLOAD_SUCCESS', { url: finalAvatar });
                     } else {
-                      throw new Error('Upload failed');
+                      throw new Error(`Upload failed with status ${response.status}`);
                     }
                   } catch (error) {
                     console.error("Avatar upload error:", error);
+                    logger.logAction('AVATAR_UPLOAD_ERROR', { error: error.message });
                     Alert.alert("Upload Failed", "Could not sync your custom image. Using previous avatar instead.");
                     finalAvatar = user.avatar;
                   } finally {

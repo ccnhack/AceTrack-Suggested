@@ -80,6 +80,7 @@ export default function App() {
 
     socketRef.current.on('data_updated', (payload) => {
       console.log("⚡ Real-time update received via WebSocket!", payload);
+      logger.logAction('WS_UPDATE_RECEIVED', { payload });
       // If not currently pushing data themselves, pull the updates
       if (!isSyncingRef.current) {
         checkForUpdates(); 
@@ -114,7 +115,7 @@ export default function App() {
       if (socketRef.current) socketRef.current.disconnect();
       subscription.remove();
     };
-  }, []); 
+  }, [isUsingCloud]); 
 
   // 4. PERSISTENT VERIFICATION PROMPT: Ensure it shows up if unverified
   // Fix: Don't show if user is admin OR already in the Edit Profile modal
@@ -125,30 +126,24 @@ export default function App() {
       setShowVerificationPrompt(false);
     }
   }, [currentUser?.id, currentUser?.role, currentUser?.isEmailVerified, currentUser?.isPhoneVerified, isProfileEditActive]);
-
-
   const checkForUpdates = async () => {
     try {
+      if (isSyncingRef.current) return;
+
       const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL;
       const response = await fetch(`${activeApiUrl}/api/status`, {
-        headers: {
-          'x-ace-api-key': config.ACE_API_KEY
-        }
+        headers: { 'x-ace-api-key': config.ACE_API_KEY }
       });
-      if (response.ok) {
-        const { lastUpdated } = await response.json();
-        const serverTime = String(lastUpdated);
-        const localTime = String(lastServerUpdateRef.current);
-        
-        if (serverTime && serverTime !== localTime) {
-          console.log(`🔄 [Sync] Real-time Update! Server: ${serverTime.slice(-5)} vs Local: ${localTime.slice(-5)}`);
-          // Use forceSync=true to bypass the isSyncingRef guard since we KNOW there's an update
-          await loadData(true, true);
-        }
+      const status = await response.json();
+
+      if (status.lastUpdated && status.lastUpdated !== lastServerUpdateRef.current) {
+        console.log("🆕 New cloud data available! Auto-refreshing...");
+        logger.logAction('CLOUD_UPDATE_DETECTED', { lastUpdated: status.lastUpdated });
+        await loadData(true, true);
       }
-    } catch (e) {
-      // Quietly log status errors to avoid console spam
-      console.log("📡 Status check failed:", e.message);
+    } catch (error) {
+      console.log("⚠️ Update check failed (silent):", error.message);
+      logger.logAction('CHECK_UPDATES_FAILED', { error: error.message });
     }
   };
 
@@ -215,7 +210,7 @@ export default function App() {
     // Read directly from storage to ensure we have the absolute latest pending list
     const latestPending = await storage.getItem('pendingSync') || [];
     if (latestPending.length === 0) return true;
-    
+
     console.log("📤 Attempting to sync pending offline data:", latestPending);
     const updates = {};
     for (const key of latestPending) {
@@ -240,7 +235,7 @@ export default function App() {
       console.log("📡 Sync already in progress, skipping background loadData");
       return;
     }
-    
+
     // First, try to sync any local changes.
     // If we have pending data and sync fails, we MUST NOT pull from cloud
     // because cloud data is now "stale" compared to our local offline work.
@@ -254,30 +249,31 @@ export default function App() {
 
     if (!forceNoLoading) setIsLoading(true);
     const versionAtStart = ++syncVersion.current;
-    
+
     try {
       setSyncingState(true);
+      logger.logAction('LOAD_DATA_START', { version: versionAtStart, isBackground });
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); 
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-      const activeApiUrl = isUsingCloud ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL;
-      
-      console.log(`📡 Fetching Updates from ${isUsingCloud ? 'CLOUD' : 'LOCAL'} [v${versionAtStart}]...`);
-      const response = await fetch(`${activeApiUrl}/api/data`, { 
+      const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL;
+
+      console.log(`📡 Fetching Updates from ${isUsingCloudRef.current ? 'CLOUD' : 'LOCAL'} [v${versionAtStart}]...`);
+      const response = await fetch(`${activeApiUrl}/api/data`, {
         signal: controller.signal,
         headers: {
           'x-ace-api-key': config.ACE_API_KEY
         }
       });
       clearTimeout(timeoutId);
-      
+
       if (!response.ok) throw new Error("Cloud fetch failed");
 
       const cloudData = await response.json();
       console.log(`✅ [v${versionAtStart}] Data fetched successfully [Keys: ${Object.keys(cloudData).join(', ')}]`);
       console.log("✅ Cloud data received. Keys:", Object.keys(cloudData));
       if (cloudData.tournaments) console.log(`🏆 Cloud Tournaments: ${cloudData.tournaments.length}`);
-      
+
       // DO NOT proceed if a newer sync has already started
       if (versionAtStart !== syncVersion.current && !forceSync) {
         console.log(`⏳ Discarding stale cloud pull [v${versionAtStart}]`);
@@ -287,9 +283,12 @@ export default function App() {
       console.log("✅ Cloud data received. Applying updates...");
       setIsCloudOnline(true);
       setLastSyncTime(new Date().toLocaleTimeString());
-      
+
       if (cloudData.lastUpdated) {
         lastServerUpdateRef.current = cloudData.lastUpdated;
+        logger.logAction('LOAD_DATA_SUCCESS', { lastUpdated: cloudData.lastUpdated });
+      } else {
+        logger.logAction('LOAD_DATA_LOCAL_ONLY');
       }
 
       // Update states and storage simultaneously
@@ -300,7 +299,7 @@ export default function App() {
         logger.logAction('CLOUD_PLAYERS_SYNC', { count: cloudData.players.length, names: cloudData.players.map(p => p.name) });
         setPlayers(cloudData.players);
         storage.setItem('players', cloudData.players);
-        
+
         // Refresh local user from cloud list if logged in
         const currentU = currentUserRef.current;
         if (currentU) {
@@ -310,10 +309,16 @@ export default function App() {
             currentUserRef.current = cloudUser;
             setUserRole(cloudUser.role || 'user');
             storage.setItem('currentUser', cloudUser);
+            
+            // CRITICAL FIX: Update independent admin states from the cloud profile
+            if (cloudUser.role === 'admin') {
+              if (cloudUser.seenAdminActionIds) setSeenAdminActionIds(new Set(cloudUser.seenAdminActionIds));
+              if (cloudUser.visitedAdminSubTabs) setVisitedAdminSubTabs(new Set(cloudUser.visitedAdminSubTabs));
+            }
           }
         }
       }
-      
+
       if (cloudData.tournaments) {
         // CLEANUP: Filter out 'test' from all player lists
         cloudData.tournaments = cloudData.tournaments.map(t => ({
@@ -348,7 +353,7 @@ export default function App() {
         setChatbotMessages(cloudData.chatbotMessages);
         storage.setItem('chatbotMessages', cloudData.chatbotMessages);
       }
-      
+
       console.log(`✅ [v${versionAtStart}] loadData completed successfully`);
       return cloudData;
     } catch (e) {
@@ -364,53 +369,42 @@ export default function App() {
     }
   };
 
-  const pushStateToCloud = async (updates = {}, forceCloud = false, isRetry = false) => {
-    if (Object.keys(updates).length === 0) return true;
+  const pushStateToCloud = async (updates) => {
+    if (!isUsingCloudRef.current) return;
     
-    // Increment version so any pending loadData is marked as stale immediately
-    const versionAtStart = ++syncVersion.current;
-    if (!isRetry) setSyncingState(true);
-    
+    const thisVersion = ++syncVersion.current;
     try {
-      // Force Cloud for critical operations like registration
-      const targetCloudUrl = 'https://acetrack-api-q39m.onrender.com';
-      const activeApiUrl = (forceCloud || isUsingCloud) ? targetCloudUrl : config.API_BASE_URL;
+      setSyncingState(true);
+      logger.logAction('PUSH_DATA_START', { keys: Object.keys(updates), version: thisVersion });
       
-      console.log(`☁️ Syncing partial state to ${ (forceCloud || isUsingCloud) ? 'CLOUD' : 'LOCAL'} [v${versionAtStart}]: ${Object.keys(updates).join(', ')}`);
+      const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL;
       const response = await fetch(`${activeApiUrl}/api/save`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'x-ace-api-key': config.ACE_API_KEY
         },
         body: JSON.stringify(updates)
       });
 
-      if (!response.ok) {
-        throw new Error(`Cloud save failed: ${response.status}`);
-      }
-      console.log(`✅ Cloud push successful [v${versionAtStart}]`);
-      setIsCloudOnline(true);
-      setLastSyncTime(new Date().toLocaleTimeString());
-
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
       const result = await response.json();
-      if (result.lastUpdated) {
+      
+      if (thisVersion === syncVersion.current) {
         lastServerUpdateRef.current = result.lastUpdated;
+        logger.logAction('PUSH_DATA_SUCCESS', { lastUpdated: result.lastUpdated });
+      } else {
+        console.log(`☁️ [v${thisVersion}] finished, but v${syncVersion.current} is now active.`);
       }
       return true;
-    } catch (e) {
-      console.error("❌ Cloud push failed:", e.message);
-      setIsCloudOnline(false);
+    } catch (error) {
+      console.error("❌ Cloud Push Error:", error);
+      logger.logAction('PUSH_DATA_ERROR', { error: error.message, version: thisVersion });
       return false;
     } finally {
-      // Versioning ensures that only the LATEST push can clear the global syncing state.
-      // However, we add a failsafe: if this was the latest version at start, we clear it.
-      if (versionAtStart === syncVersion.current) {
+      // Failsafe: only clear syncing if this was the latest intended push
+      if (thisVersion === syncVersion.current) {
         setSyncingState(false);
-      } else {
-        // If a newer sync started, we don't clear it (as the newer one will), 
-        // but we log it for debugging
-        console.log(`☁️ [v${versionAtStart}] finished, but v${syncVersion.current} is now active.`);
       }
     }
   };
@@ -645,6 +639,31 @@ export default function App() {
     }
   };
 
+  const handleBatchUpdate = async (updates) => {
+    logger.logAction('BATCH_UPDATE_START', { keys: Object.keys(updates) });
+    const currentU = currentUserRef.current;
+    
+    // 1. Mirror currentUser updates into the players list
+    if (currentU && updates.currentUser) {
+       const updatedU = { ...currentU, ...updates.currentUser };
+       const updatedPlayers = players.map(p => 
+         String(p.id).toLowerCase() === String(updatedU.id).toLowerCase() ? updatedU : p
+       );
+       
+       // Force both to be in the sync for absolute consistency
+       updates.players = updatedPlayers;
+       updates.currentUser = updatedU;
+       
+       // Update state immediately
+       setPlayers(updatedPlayers);
+       setCurrentUser(updatedU);
+       currentUserRef.current = updatedU;
+    }
+    
+    const result = await syncAndSaveData(updates);
+    logger.logAction('BATCH_UPDATE_COMPLETE', { success: result });
+  };
+
   const handleLogTrace = (action, targetType, targetId, details, adminId = 'system') => {
     const newLog = {
       id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -742,6 +761,8 @@ export default function App() {
         updatedPlayers.push(u);
       }
       setPlayers(updatedPlayers);
+
+      logger.logAction('PROFILE_UPDATE_START', { userId: u.id, isMe: !!(loggedInUser && String(u.id).toLowerCase() === String(loggedInUser.id).toLowerCase()) });
 
       // CRITICAL: Push BOTH currentUser AND players in a single call to prevent race conditions
       if (loggedInUser && String(u.id).toLowerCase() === String(loggedInUser.id).toLowerCase()) {

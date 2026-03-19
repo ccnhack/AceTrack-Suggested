@@ -24,6 +24,13 @@ const io = new Server(httpServer, {
   }
 });
 
+io.on('connection', (socket) => {
+  logServerEvent('WS_CLIENT_CONNECTED', { socketId: socket.id });
+  socket.on('disconnect', () => {
+    logServerEvent('WS_CLIENT_DISCONNECTED', { socketId: socket.id });
+  });
+});
+
 const PORT = process.env.PORT || 3005;
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 
@@ -62,6 +69,28 @@ const ACE_API_KEY = process.env.ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp
 // Middlewares
 app.use(cors());
 app.use(bodyParser.json({ limit: '500mb' }));
+
+// Helper for Server-Side Diagnostics
+const logServerEvent = (action, details = {}) => {
+  try {
+    const logFile = path.join(DIAGNOSTICS_DIR, 'server_events.json');
+    let logs = [];
+    if (fs.existsSync(logFile)) {
+      const content = fs.readFileSync(logFile, 'utf8');
+      logs = JSON.parse(content || '[]');
+    }
+    const newEntry = {
+      timestamp: new Date().toISOString(),
+      action,
+      ...details
+    };
+    logs.unshift(newEntry);
+    fs.writeFileSync(logFile, JSON.stringify(logs.slice(0, 1000), null, 2));
+    console.log(`📡 [Server Log] ${action}:`, details);
+  } catch (e) {
+    console.error("❌ Failed to write server log:", e.message);
+  }
+};
 
 // 1. API Key Guard
 const apiKeyGuard = (req, res, next) => {
@@ -200,6 +229,7 @@ app.post('/api/save', apiKeyGuard, async (req, res) => {
       keys: Object.keys(req.body) 
     });
 
+    logServerEvent('DATA_SAVE_SUCCESS', { lastUpdated: updatedState.lastUpdated });
     res.json({ success: true, lastUpdated: updatedState.lastUpdated });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -208,9 +238,11 @@ app.post('/api/save', apiKeyGuard, async (req, res) => {
 
 app.post('/api/upload', apiKeyGuard, upload.single('video'), (req, res) => {
   if (!req.file) {
+    logServerEvent('UPLOAD_FAILED', { error: 'No file received' });
     return res.status(400).json({ error: 'No file uploaded' });
   }
   const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+  logServerEvent('UPLOAD_SUCCESS', { filename: req.file.filename, url: fileUrl });
   res.json({ url: fileUrl, filename: req.file.filename });
 });
 
