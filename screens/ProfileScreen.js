@@ -254,22 +254,6 @@ const ProfileScreen = ({
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-            <TouchableOpacity 
-              style={styles.notificationBell} 
-              onPress={() => {
-                logger.logAction('MODAL_OPEN', { modal: 'Notifications' });
-                setShowNotifications(true);
-              }}
-            >
-                <Ionicons name="notifications-outline" size={24} color="#0F172A" />
-                {user.notifications?.some(n => !n.read) && (
-                    <View style={styles.notificationBadge}>
-                        <Text style={styles.badgeText}>
-                            {user.notifications.filter(n => !n.read).length}
-                        </Text>
-                    </View>
-                )}
-            </TouchableOpacity>
             <View style={styles.avatarContainer}>
                 {user.avatar && !imageError ? (
                   <Image 
@@ -331,6 +315,23 @@ const ProfileScreen = ({
                   <Text style={styles.lastSyncText}>Last: {lastSyncTime}</Text>
                 )}
             </View>
+
+            <TouchableOpacity 
+              style={styles.notificationBell} 
+              onPress={() => {
+                logger.logAction('MODAL_OPEN', { modal: 'Notifications' });
+                setShowNotifications(true);
+              }}
+            >
+                <Ionicons name="notifications-outline" size={24} color="#0F172A" />
+                {user.notifications?.some(n => !n.read) && (
+                    <View style={styles.notificationBadge}>
+                        <Text style={styles.badgeText}>
+                            {user.notifications.filter(n => !n.read).length}
+                        </Text>
+                    </View>
+                )}
+            </TouchableOpacity>
         </View>
 
         {/* Skill Dashboard (Optional, based on user roles etc) */}
@@ -895,7 +896,7 @@ const styles = StyleSheet.create({
     borderWidth: 4,
     borderColor: '#FFFFFF',
   },
-  editAvatarBtn: {
+  editBtn: {
     position: 'absolute',
     bottom: 0,
     right: 0,
@@ -1387,9 +1388,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   notificationBell: {
-    position: 'absolute',
-    top: 24,
-    right: 24,
+    position: 'relative',
+    marginLeft: 'auto',
     padding: 8,
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
