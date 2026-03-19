@@ -5,6 +5,8 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import PlayerDashboardView from '../components/PlayerDashboardView';
 import AdminAuditLogsPanel from '../components/AdminAuditLogsPanel';
 import AdminRecordingsDashboard from '../components/AdminRecordingsDashboard';
@@ -58,16 +60,31 @@ const AdminHubScreen = ({
     if (!diagContent || isDownloading) return;
     setIsDownloading(true);
     try {
-      const fileName = `Report_${diagContent.username}_${Date.now()}.json`;
+      const safeName = (diagContent.username || 'User').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      const fileName = `Report_${safeName}_${Date.now()}.json`;
+      const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
       const content = JSON.stringify(diagContent, null, 2);
       
-      await Share.share({
-        title: fileName,
-        message: content,
-      });
+      // 1. Write to local cache
+      await FileSystem.writeAsStringAsync(fileUri, content, { encoding: FileSystem.EncodingType.UTF8 });
+      
+      // 2. Share the file URI
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'application/json',
+          dialogTitle: 'Download Diagnostic Report',
+          UTI: 'public.json'
+        });
+      } else {
+        // Fallback to legacy Share if expo-sharing is unavailable (rare)
+        await Share.share({
+          title: fileName,
+          message: content,
+        });
+      }
     } catch (error) {
-      console.error("Share error:", error);
-      Alert.alert("Error", "Could not share the report.");
+      console.error("Download error:", error);
+      Alert.alert("Error", "Failed to prepare the report for download.");
     } finally {
       setIsDownloading(false);
     }
@@ -723,7 +740,7 @@ const AdminHubScreen = ({
                   <TouchableOpacity 
                     onPress={handleDownloadDiagnostic}
                     disabled={isDownloading}
-                    style={[styles.diagDownloadBtn, isDownloading && { backgroundColor: '#94A3B8' }]}
+                    style={[styles.diagDownloadBtn, { backgroundColor: isDownloading ? '#94A3B8' : '#16A34A' }]}
                   >
                     {isDownloading ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
