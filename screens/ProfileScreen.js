@@ -824,14 +824,15 @@ const ProfileScreen = ({
                 logger.logAction('PROFILE_UPDATE_SAVE', { 
                   name: editName, 
                   email: editEmail, 
-                  hasAvatar: !!finalAvatar 
+                  hasAvatar: !!finalAvatar,
+                  cacheBuster: 'HARDENED-v5'
                 });
                 onUpdateUser({ 
                   ...user, 
                   name: editName, 
                   email: editEmail, 
                   phone: editPhone, 
-                  avatar: finalAvatar 
+                  avatar: finalAvatar, 
                 });
                 setShowEditProfile(false);
                 Alert.alert("Success", "Profile updated successfully!");

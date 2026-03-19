@@ -111,6 +111,13 @@ export default function App() {
         return Platform.OS === 'android' ? 'samsung' : 'admin';
       };
 
+      // INITIAL ARCHITECTURAL STATUS (As requested by user for diagnostics)
+      logger.logAction('SYNC_ENGINE_STATUS', { 
+        version: 'v5-HARDENED', 
+        features: ['Ref-Mirroring', 'Atomic-Callbacks', 'Heartbeat-v36-RESTORED'],
+        status: 'Operational'
+      });
+
       // HEARTBEAT: Periodically report "alive" status (matches user's expected pattern)
       const heartbeatInterval = setInterval(() => {
         logger.sendHeartbeat(cloudUrl, config.ACE_API_KEY, getLabel());
