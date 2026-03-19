@@ -31,6 +31,8 @@ const MainTabs = ({
   onCancelVideo,
   onRequestDeletion, onUnlockVideo, onPurchaseAiHighlights, onVideoPlay,
   onSaveCoachComment, onRegister, onReschedule, onCancelReschedule,
+  onOptOut, onLogFailedOtp, onLogTrace, setPlayers, onToggleFavourite,
+  onManualSync, isCloudOnline, lastSyncTime, onBatchUpdate, onUploadLogs, isUploadingLogs,
   onVerifyAccount, isUsingCloud, onToggleCloud, setIsProfileEditActive,
   visitedAdminSubTabs = new Set(), setVisitedAdminSubTabs
 }) => {
