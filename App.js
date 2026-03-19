@@ -1506,7 +1506,10 @@ export default function App() {
         const logs = logger.getLogs();
         console.log(`📋 Sending ${logs.length} log entries...`);
         
-        const response = await fetch(`${config.API_BASE_URL}/api/diagnostics`, {
+        const targetCloudUrl = 'https://acetrack-api-q39m.onrender.com';
+        const activeApiUrl = isUsingCloud ? targetCloudUrl : config.API_BASE_URL;
+        
+        const response = await fetch(`${activeApiUrl}/api/diagnostics`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

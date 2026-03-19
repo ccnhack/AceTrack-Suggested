@@ -145,11 +145,28 @@ app.post('/api/save', apiKeyGuard, async (req, res) => {
       return res.status(400).json({ error: 'Invalid payload: No syncable context found' });
     }
 
-    // Atomic update using MongoDB $set with dot notation for individual keys
+    // 4. ATOMIC MERGE: For arrays like 'players', merge instead of overwrite to prevent data loss
+    const state = await AppState.findOne().sort({ lastUpdated: -1 });
+    const currentData = (state && state.data) ? state.data : {};
+    
     const updateObj = { lastUpdated: Date.now() };
     for (const key of syncableKeys) {
       if (req.body[key] !== undefined) {
-        updateObj[`data.${key}`] = req.body[key];
+        if (key === 'players' && Array.isArray(req.body[key]) && Array.isArray(currentData[key])) {
+          // MERGE: Keep existing players not in the updates
+          const incoming = req.body[key];
+          const existing = currentData[key];
+          const merged = [...incoming];
+          
+          existing.forEach(p => {
+            if (p && p.id && !incoming.some(i => i && i.id && String(i.id).toLowerCase() === String(p.id).toLowerCase())) {
+              merged.push(p);
+            }
+          });
+          updateObj[`data.${key}`] = merged;
+        } else {
+          updateObj[`data.${key}`] = req.body[key];
+        }
       }
     }
     
