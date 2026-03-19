@@ -214,8 +214,14 @@ export default function App() {
       } else if (iuc && typeof iuc === 'string') {
         setIsUsingCloud(iuc === 'true');
       }
-      if (saids && Array.isArray(saids)) setSeenAdminActionIds(new Set(saids));
-      if (vats && Array.isArray(vats)) setVisitedAdminSubTabs(new Set(vats));
+      if (saids && Array.isArray(saids)) {
+        setSeenAdminActionIds(new Set(saids));
+        logger.logAction('BADGE_HYDRATION_LOCAL', { key: 'seenAdminActionIds', count: saids.length });
+      }
+      if (vats && Array.isArray(vats)) {
+        setVisitedAdminSubTabs(new Set(vats));
+        logger.logAction('BADGE_HYDRATION_LOCAL', { key: 'visitedAdminSubTabs', count: vats.length });
+      }
 
       if (u) {
         setCurrentUser(u);
@@ -341,10 +347,19 @@ export default function App() {
             setUserRole(cloudUser.role || 'user');
             storage.setItem('currentUser', cloudUser);
             
-            // CRITICAL FIX: Update independent admin states from the cloud profile
+            // CRITICAL FIX: Update independent admin states and their storage keys from the cloud profile
             if (cloudUser.role === 'admin') {
-              if (cloudUser.seenAdminActionIds) setSeenAdminActionIds(new Set(cloudUser.seenAdminActionIds));
-              if (cloudUser.visitedAdminSubTabs) setVisitedAdminSubTabs(new Set(cloudUser.visitedAdminSubTabs));
+              if (cloudUser.seenAdminActionIds) {
+                const saids = new Set(cloudUser.seenAdminActionIds);
+                setSeenAdminActionIds(saids);
+                storage.setItem('seenAdminActionIds', Array.from(saids));
+                logger.logAction('BADGE_HYDRATION_CLOUD', { count: saids.size });
+              }
+              if (cloudUser.visitedAdminSubTabs) {
+                const vats = new Set(cloudUser.visitedAdminSubTabs);
+                setVisitedAdminSubTabs(vats);
+                storage.setItem('visitedAdminSubTabs', Array.from(vats));
+              }
             }
           }
         }
