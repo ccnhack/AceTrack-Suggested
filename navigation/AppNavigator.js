@@ -51,7 +51,7 @@ const MainTabs = ({
     onOptOut, onLogFailedOtp, onLogTrace, setPlayers, onToggleFavourite,
     onManualSync, isCloudOnline, lastSyncTime, onBatchUpdate, onUploadLogs, isUploadingLogs,
     onVerifyAccount, isUsingCloud, onToggleCloud, setIsProfileEditActive,
-    visitedAdminSubTabs, setVisitedAdminSubTabs
+    visitedAdminSubTabs, setVisitedAdminSubTabs, appVersion
   };
   
   const typeProps = { Sport, SkillLevel, TournamentStructure, TournamentFormat };
