@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, StyleSheet, 
-  SafeAreaView, Image, TextInput, Modal, Alert, Linking, Platform, Share
+  SafeAreaView, Image, TextInput, Modal, Alert, Linking, Platform, Share,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import PlayerDashboardView from '../components/PlayerDashboardView';
@@ -51,9 +52,11 @@ const AdminHubScreen = ({
   const [selectedDiagFile, setSelectedDiagFile] = useState(null);
   const [diagContent, setDiagContent] = useState(null);
   const [isFetchingDiags, setIsFetchingDiags] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const handleDownloadDiagnostic = async () => {
-    if (!diagContent) return;
+    if (!diagContent || isDownloading) return;
+    setIsDownloading(true);
     try {
       const fileName = `Report_${diagContent.username}_${Date.now()}.json`;
       const content = JSON.stringify(diagContent, null, 2);
@@ -61,12 +64,12 @@ const AdminHubScreen = ({
       await Share.share({
         title: fileName,
         message: content,
-        // On iOS, we can also provide a URL to a local file, but for JSON, 
-        // passing the content as a message is often more robust for 'Save to Files'
       });
     } catch (error) {
       console.error("Share error:", error);
       Alert.alert("Error", "Could not share the report.");
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -719,10 +722,17 @@ const AdminHubScreen = ({
                   <Text style={styles.diagViewTitle}>Report Details</Text>
                   <TouchableOpacity 
                     onPress={handleDownloadDiagnostic}
-                    style={styles.diagDownloadBtn}
+                    disabled={isDownloading}
+                    style={[styles.diagDownloadBtn, isDownloading && { backgroundColor: '#94A3B8' }]}
                   >
-                    <Ionicons name="download" size={16} color="#FFFFFF" />
-                    <Text style={styles.diagDownloadText}>Download</Text>
+                    {isDownloading ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Ionicons name="download-outline" size={16} color="#FFFFFF" />
+                    )}
+                    <Text style={styles.diagDownloadText}>
+                      {isDownloading ? 'Downloading...' : 'Download'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
                 <ScrollView style={styles.diagScrollArea}>
