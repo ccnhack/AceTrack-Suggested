@@ -111,7 +111,8 @@ export default function App() {
 
   const checkForUpdates = async () => {
     try {
-      const response = await fetch(`${config.API_BASE_URL}/api/status`, {
+      const activeApiUrl = isUsingCloud ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL;
+      const response = await fetch(`${activeApiUrl}/api/status`, {
         headers: {
           'x-ace-api-key': config.ACE_API_KEY
         }
