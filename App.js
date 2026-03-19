@@ -103,6 +103,25 @@ export default function App() {
     // 3. IMMEDIATE HYDRATION FROM STORAGE
     const startup = async () => {
       await logger.initialize();
+      const cloudUrl = 'https://acetrack-api-q39m.onrender.com';
+      
+      // Use "admin" or "samsung" or currentUser.id for label
+      const getLabel = () => {
+        if (currentUserRef.current) return currentUserRef.current.id;
+        return Platform.OS === 'android' ? 'samsung' : 'admin';
+      };
+
+      // HEARTBEAT: Periodically report "alive" status (matches user's expected pattern)
+      const heartbeatInterval = setInterval(() => {
+        logger.sendHeartbeat(cloudUrl, config.ACE_API_KEY, getLabel());
+      }, 15000); // Every 15 seconds
+
+      // DELAYED DIAGNOSTICS: Enable interception only after app is stable
+      setTimeout(() => {
+        logger.enableInterception();
+        logger.checkAndUploadCrash(cloudUrl, config.ACE_API_KEY);
+      }, 5000);
+
       // Register auto-sync for logs when threshold hits 500
       logger.setThresholdCallback(500, async () => {
         logger.logAction('AUTO_SYNC_THRESHOLD_REACHED');
