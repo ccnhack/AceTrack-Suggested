@@ -79,11 +79,18 @@ export default function App() {
     // 3. IMMEDIATE HYDRATION FROM STORAGE
     const startup = async () => {
       await logger.initialize();
+      
+      // AUTO-RECOVERY: Check for previous crashes and upload to cloud
+      const cloudUrl = 'https://acetrack-api-q39m.onrender.com';
+      await logger.checkAndUploadCrash(cloudUrl, config.ACE_API_KEY);
+
       // Register auto-sync for logs when threshold hits 500
       logger.setThresholdCallback(500, async () => {
         logger.logAction('AUTO_SYNC_THRESHOLD_REACHED');
         // We use the same onUploadLogs logic but silently
-        await actions.onUploadLogs(); 
+        if (handlers && handlers.onUploadLogs) {
+          await handlers.onUploadLogs(); 
+        }
       });
 
       await hydrateFromStorage();
@@ -241,6 +248,11 @@ export default function App() {
       if (!response.ok) throw new Error("Cloud fetch failed");
 
       const cloudData = await response.json();
+      
+      if (!cloudData || typeof cloudData !== 'object') {
+        console.error("❌ Cloud data malformed or empty");
+        return false;
+      }
       console.log(`✅ [v${versionAtStart}] Data fetched successfully [Keys: ${Object.keys(cloudData).join(', ')}]`);
       console.log("✅ Cloud data received. Keys:", Object.keys(cloudData));
       if (cloudData.tournaments) console.log(`🏆 Cloud Tournaments: ${cloudData.tournaments.length}`);

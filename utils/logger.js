@@ -109,8 +109,25 @@ console.error = (...args) => {
 // Intercept Global Errors (for crashes that don't reach console.error)
 if (global.ErrorUtils) {
   const originalHandler = global.ErrorUtils.getGlobalHandler();
-  global.ErrorUtils.setGlobalHandler((error, isFatal) => {
-    addLog('error', 'crash', `${isFatal ? 'FATAL: ' : ''}${error.message}\n${error.stack}`);
+  global.ErrorUtils.setGlobalHandler(async (error, isFatal) => {
+    const crashMsg = `${isFatal ? 'FATAL: ' : ''}${error.message}\n${error.stack}`;
+    addLog('error', 'crash', crashMsg);
+    
+    // PERSIST CRASH FOR AUTO-RECOVERY
+    try {
+      const crashLog = {
+        timestamp: formatIST(new Date()),
+        message: error.message,
+        stack: error.stack,
+        isFatal
+      };
+      // We use raw AsyncStorage here to avoid any issues with our own storage wrapper
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      await AsyncStorage.setItem('last_crash_log', JSON.stringify(crashLog));
+    } catch (e) {
+      originalLog('Failed to persist crash log:', e);
+    }
+
     if (originalHandler) {
       originalHandler(error, isFatal);
     }
@@ -146,6 +163,40 @@ const logger = {
   },
   logError: (msg, err) => {
     addLog('error', 'exception', `${msg}${err ? ': ' + err.message : ''}`);
+  },
+  checkAndUploadCrash: async (activeApiUrl, apiKey) => {
+    try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const saved = await AsyncStorage.getItem('last_crash_log');
+      if (saved) {
+        const crashDetails = JSON.parse(saved);
+        console.log("🛠️ Found previous crash log. Attempting auto-upload...");
+        
+        const response = await originalFetch(`${activeApiUrl}/api/diagnostics`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-ace-api-key': apiKey
+          },
+          body: JSON.stringify({
+            username: `CRASH_RECOVERY_${Platform.OS}`,
+            logs: [{
+              timestamp: crashDetails.timestamp,
+              level: 'error',
+              type: 'crash',
+              message: `RECOVERY LOG: ${crashDetails.message}\nSTACK: ${crashDetails.stack}`
+            }, ...logs.slice(-10)] // include last 10 logs for context
+          })
+        });
+
+        if (response.ok) {
+          console.log("✅ Previous crash log uploaded successfully.");
+          await AsyncStorage.removeItem('last_crash_log');
+        }
+      }
+    } catch (e) {
+      originalLog('Crash recovery upload failed:', e);
+    }
   },
   setThresholdCallback: (limit, callback) => {
     threshold = limit;
