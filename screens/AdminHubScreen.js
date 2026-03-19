@@ -737,7 +737,7 @@ const AdminHubScreen = ({
                   </View>
                 ) : (
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                    <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic', flex: 1, marginRight: 10 }}>Legacy Device (v1.0.10 update required for specific targeting).</Text>
+                    <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic', flex: 1, marginRight: 10 }}>No explicit hardware tracking yet. Signal will safely trigger any of their active legacy app instances.</Text>
                     <TouchableOpacity 
                       onPress={() => {
                         if (socketRef && socketRef.current) {
@@ -746,13 +746,13 @@ const AdminHubScreen = ({
                             adminId: user?.id 
                           });
                           logger.logAction('ADMIN_SENT_PULL_REQUEST', { target: selectedDiagUser.id });
-                          Alert.alert("Pull Requested", "Command dispatched to all user devices. Give it ~5 seconds to upload.");
+                          Alert.alert("Pull Requested", "Command dispatched securely to this user's devices. Give it ~5 seconds to upload.");
                         }
                       }}
                       style={{ backgroundColor: '#EF4444', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6 }}
                     >
                       <Ionicons name="cloud-download-outline" size={14} color="#FFFFFF" />
-                      <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 10 }}>PULL ALL</Text>
+                      <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 10 }}>PULL LIVE LOGS FOR {selectedDiagUser.name.split(' ')[0].toUpperCase()}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
