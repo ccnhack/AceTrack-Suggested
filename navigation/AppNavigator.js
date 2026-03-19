@@ -169,6 +169,9 @@ export default function AppNavigator({ user, role, players, tournaments, matchVi
                 {...props} 
                 players={players} 
                 onLoginSuccess={handlers.onLogin} 
+                onSignup={() => props.navigation.navigate('Signup')}
+                onResetPassword={handlers.onResetPassword}
+                onRefreshData={() => handlers.onToggleCloud && handlers.loadData(true, true)}
                 onBack={() => props.navigation.goBack()} 
                 isUsingCloud={handlers.isUsingCloud}
                 onToggleCloud={handlers.onToggleCloud}

@@ -208,7 +208,7 @@ export default function App() {
       console.log("⏳ Local changes pending sync. Skipping cloud pull to prevent overwrite.");
       setIsCloudOnline(false);
       setIsLoading(false);
-      return;
+      return false;
     }
 
     if (!forceNoLoading) setIsLoading(true);
@@ -233,13 +233,14 @@ export default function App() {
       if (!response.ok) throw new Error("Cloud fetch failed");
 
       const cloudData = await response.json();
+      console.log(`✅ [v${versionAtStart}] Data fetched successfully [Keys: ${Object.keys(cloudData).join(', ')}]`);
       console.log("✅ Cloud data received. Keys:", Object.keys(cloudData));
       if (cloudData.tournaments) console.log(`🏆 Cloud Tournaments: ${cloudData.tournaments.length}`);
       
       // DO NOT proceed if a newer sync has already started
       if (versionAtStart !== syncVersion.current && !forceSync) {
         console.log(`⏳ Discarding stale cloud pull [v${versionAtStart}]`);
-        return;
+        return false;
       }
 
       console.log("✅ Cloud data received. Applying updates...");
@@ -304,13 +305,14 @@ export default function App() {
         setChatbotMessages(cloudData.chatbotMessages);
         storage.setItem('chatbotMessages', cloudData.chatbotMessages);
       }
-
+      
+      console.log(`✅ [v${versionAtStart}] loadData completed successfully`);
+      return true;
     } catch (e) {
       console.log("📡 Cloud unreachable or error:", e.message);
       setIsCloudOnline(false);
-      // ALWAYS hydrate from storage on cloud failure — the storage contains the
-      // last successfully synced data, which is far better than showing mock data.
       await hydrateFromStorage();
+      return false;
     } finally {
       setIsLoading(false);
       if (versionAtStart === syncVersion.current) {
@@ -620,6 +622,15 @@ export default function App() {
       if (currentUser) logger.logAction('USER_LOGOUT', { id: currentUser.id });
       handleLogout();
     },
+    onResetPassword: async (userId, newPassword) => {
+      const updatedPlayers = players.map(p => 
+        p.id === userId ? { ...p, password: newPassword } : p
+      );
+      setPlayers(updatedPlayers);
+      await storage.setItem('players', updatedPlayers);
+      return await pushStateToCloud({ players: updatedPlayers }, true);
+    },
+    loadData: loadData,
     onToggleCloud: () => {
       const newValue = !isUsingCloud;
       setIsUsingCloud(newValue);
