@@ -33,6 +33,16 @@ io.on('connection', (socket) => {
     io.emit('force_upload_diagnostics', data);
   });
 
+  socket.on('admin_ping_device', (data) => {
+    // Relay ping to all clients to see if the target is online
+    io.emit('admin_ping_device_relay', data);
+  });
+
+  socket.on('device_pong', (data) => {
+    // Relay pong back to the admin hub
+    io.emit('device_pong_relay', data);
+  });
+
   socket.on('disconnect', () => {
     logServerEvent('WS_CLIENT_DISCONNECTED', { socketId: socket.id });
   });
@@ -152,7 +162,10 @@ app.get('/api/data', apiKeyGuard, async (req, res) => {
 app.get('/api/status', apiKeyGuard, async (req, res) => {
   try {
     const state = await AppState.findOne().sort({ lastUpdated: -1 }).select('lastUpdated');
-    res.json({ lastUpdated: state?.lastUpdated || 0 });
+    res.json({ 
+      lastUpdated: state?.lastUpdated || 0,
+      latestAppVersion: process.env.LATEST_APP_VERSION || '1.0.11'
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -268,7 +281,7 @@ app.post('/api/upload', apiKeyGuard, upload.single('video'), (req, res) => {
 
 app.post('/api/diagnostics', apiKeyGuard, async (req, res) => {
   try {
-    const { username, logs, prefix } = req.body;
+    const { username, logs, prefix, deviceId } = req.body;
     if (!username || !logs) {
       return res.status(400).json({ error: 'Missing username or logs' });
     }
@@ -300,11 +313,13 @@ app.post('/api/diagnostics', apiKeyGuard, async (req, res) => {
     }
 
     const filePrefix = prefix === 'admin_requested' ? 'admin_requested_' : '';
-    const filename = `${filePrefix}${safeUsername}_${timestamp}.json`;
+    const safeDeviceId = deviceId ? `_${deviceId.replace(/[^a-z0-9]/gi, '_')}` : '';
+    const filename = `${filePrefix}${safeUsername}${safeDeviceId}_${timestamp}.json`;
     const filepath = path.join(DIAGNOSTICS_DIR, filename);
 
     fs.writeFileSync(filepath, JSON.stringify({
       username,
+      deviceId: deviceId || 'Unknown Device',
       uploadedAt: istDate.toISOString().replace('Z', '+05:30'),
       logs
     }, null, 2));

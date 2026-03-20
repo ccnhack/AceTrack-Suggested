@@ -25,7 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import config from './config';
 import { io } from 'socket.io-client';
 
-const APP_VERSION = "1.0.10";
+const APP_VERSION = "1.0.11";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -51,9 +51,11 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isUploadingLogs, setIsUploadingLogs] = useState(false);
   const [appVersion, setAppVersion] = useState(APP_VERSION);
+  const [latestAppVersion, setLatestAppVersion] = useState(APP_VERSION);
+  const [showForceUpdate, setShowForceUpdate] = useState(false);
+  const [isUpdatingFromModal, setIsUpdatingFromModal] = useState(false);
+  
   const localDeviceIdRef = useRef(null);
-  const [isProfileEditActive, setIsProfileEditActive] = useState(false); // New state to track if profile edit is open
-  const [pendingSync, setPendingSync] = useState([]); // Keys that need to be pushed to cloud
   const [visitedAdminSubTabs, setVisitedAdminSubTabs] = useState(new Set());
   const isSyncingRef = React.useRef(false);
   const pendingSyncRef = React.useRef([]);
@@ -105,12 +107,14 @@ export default function App() {
 
     socketRef.current.on('force_upload_diagnostics', async (data) => {
       if (data.targetUserId === currentUserRef.current?.id) {
-        // Only comply if the admin specifically targeted THIS physical hardware 
+        logger.logAction('ADMIN_DIAGNOSTICS_PULL_RECEIVED', { adminId: data.adminId, targetUserId: data.targetUserId, myId: currentUserRef.current?.id, targetDeviceId: data.targetDeviceId, myDeviceId: localDeviceIdRef.current });
+        
+        // Let all active instances bypass strict hardware locking to guarantee log delivery
         if (data.targetDeviceId && data.targetDeviceId !== localDeviceIdRef.current) {
-          return;
+          logger.logAction('DIAGNOSTICS_PULL_DEVICE_MISMATCH_WARN', { targetDevice: data.targetDeviceId, localDevice: localDeviceIdRef.current });
+          // NO RETURN ABORT HERE - Just warn and proceed uploading logs anyway!
         }
 
-        logger.logAction('ADMIN_DIAGNOSTICS_PULL_RECEIVED', { adminId: data.adminId, deviceId: localDeviceIdRef.current });
         const logs = logger.getLogs();
         try {
           const cloudUrl = isUsingCloudRef.current ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL;
@@ -131,6 +135,18 @@ export default function App() {
         } catch (e) {
           logger.logAction('ADMIN_DIAGNOSTICS_PULL_FAILED', { error: e.message });
         }
+      }
+    });
+
+    socketRef.current.on('admin_ping_device_relay', (data) => {
+      // If the admin is actively checking if we are online, respond instantly!
+      if (data.targetUserId === currentUserRef.current?.id) {
+        socketRef.current.emit('device_pong', {
+          targetUserId: data.targetUserId,
+          deviceId: localDeviceIdRef.current || 'unknown',
+          deviceName: Constants.deviceName || Platform.OS,
+          timestamp: Date.now()
+        });
       }
     });
 
@@ -176,10 +192,7 @@ export default function App() {
         status: 'Operational'
       });
 
-      // HEARTBEAT: Periodically report "alive" status (matches user's expected pattern)
-      const heartbeatInterval = setInterval(() => {
-        logger.sendHeartbeat(cloudUrl, config.ACE_API_KEY, getLabel());
-      }, 15000); // Every 15 seconds
+      // User specifically requested to disable 15s heartbeats.
 
       // DELAYED DIAGNOSTICS: Enable interception only after app is stable
       setTimeout(() => {
@@ -187,8 +200,8 @@ export default function App() {
         logger.checkAndUploadCrash(cloudUrl, config.ACE_API_KEY);
       }, 5000);
 
-      // Register auto-sync for logs when threshold hits 500
-      logger.setThresholdCallback(500, async () => {
+      // Register auto-sync for logs when threshold hits 15000
+      logger.setThresholdCallback(15000, async () => {
         logger.logAction('AUTO_SYNC_THRESHOLD_REACHED');
         // We use the same onUploadLogs logic but silently
         await actions.onUploadLogs(); 
@@ -215,6 +228,19 @@ export default function App() {
       setShowVerificationPrompt(false);
     }
   }, [currentUser?.id, currentUser?.role, currentUser?.isEmailVerified, currentUser?.isPhoneVerified, isProfileEditActive]);
+  const isVersionObsolete = (local, remote) => {
+    try {
+      const [c1, c2, c3] = local.split('.').map(Number);
+      const [l1, l2, l3] = remote.split('.').map(Number);
+      if (c1 < l1) return true;
+      if (c1 === l1 && c2 < l2) return true;
+      if (c1 === l1 && c2 === l2 && c3 <= l3 - 2) return true;
+      return false;
+    } catch (e) {
+      return false;
+    }
+  };
+
   const checkForUpdates = async () => {
     try {
       if (isSyncingRef.current) return;
@@ -224,6 +250,14 @@ export default function App() {
         headers: { 'x-ace-api-key': config.ACE_API_KEY }
       });
       const status = await response.json();
+      
+      if (status.latestAppVersion) {
+        setLatestAppVersion(status.latestAppVersion);
+        if (isVersionObsolete(APP_VERSION, status.latestAppVersion)) {
+          setShowForceUpdate(true);
+          return; // Abort further syncs if obsolete
+        }
+      }
 
       if (status.lastUpdated && status.lastUpdated !== lastServerUpdateRef.current) {
         console.log("🆕 New cloud data available! Auto-refreshing...");
@@ -528,6 +562,16 @@ export default function App() {
       const dIndex = updates.currentUser.devices.findIndex(d => d.id === localDeviceIdRef.current);
       if (dIndex >= 0) updates.currentUser.devices[dIndex] = myTracker;
       else updates.currentUser.devices.push(myTracker);
+      
+      // MIRROR TO GLOBAL PLAYERS ARRAY FOR PERMANENT ANCHORING
+      if (!updates.players) {
+        updates.players = [...playersRef.current];
+      }
+      const pIndex = updates.players.findIndex(p => p.id === updates.currentUser.id);
+      if (pIndex >= 0) {
+        updates.players[pIndex] = { ...updates.players[pIndex], devices: updates.currentUser.devices };
+        setPlayers(updates.players);
+      }
     }
 
     try {
@@ -778,11 +822,17 @@ export default function App() {
 
     // 2. Protect current session. NEVER inherently trust updates.currentUser
     if (currentU) {
-        // Soft update the local session from the matching global player record
-        const matchingGlobalUser = (updates.players || currentP).find(p => String(p.id).toLowerCase() === String(currentU.id).toLowerCase());
-        if (matchingGlobalUser) {
-            setCurrentUser(matchingGlobalUser);
-            currentUserRef.current = matchingGlobalUser;
+        if (currentU.role === 'admin' && updates.currentUser) {
+            // ADMIN BYPASS: The Admin ghost-account is intentionally excluded from the global players array.
+            setCurrentUser(updates.currentUser);
+            currentUserRef.current = updates.currentUser;
+        } else {
+            // Soft update the local session from the matching global player record
+            const matchingGlobalUser = (updates.players || currentP).find(p => String(p.id).toLowerCase() === String(currentU.id).toLowerCase());
+            if (matchingGlobalUser) {
+                setCurrentUser(matchingGlobalUser);
+                currentUserRef.current = matchingGlobalUser;
+            }
         }
     } else if (updates.currentUser && !updates.players) {
         // Edge case: Local immediate UI updates before backend turnaround
@@ -877,7 +927,12 @@ export default function App() {
     onSaveTournament: handleSaveTournament,
     onSaveVideo: handleSaveVideo,
     onUpdateUser: (u) => { 
-       handleSyncUpdate({ currentUser: u });
+       // Required for new Session Sandbox: mutating local currentUser requires explicitly matching the global players array
+       const currentP = playersRef.current;
+       const updatedPlayers = currentP.map(p => 
+          String(p.id).toLowerCase() === String(u.id).toLowerCase() ? u : p
+       );
+       handleSyncUpdate({ currentUser: u, players: updatedPlayers });
     },
     onLogTrace: handleLogTrace,
     onManualSync: () => {
@@ -1689,7 +1744,9 @@ export default function App() {
           },
           body: JSON.stringify({
             username: activeUser.name || activeUser.email || 'Unknown User',
-            logs: logs
+            logs: logs,
+            prefix: 'admin_requested',
+            deviceId: localDeviceIdRef.current
           })
         });
 
@@ -1800,8 +1857,6 @@ export default function App() {
                 style={appStyles.verifyNowButton}
                 onPress={() => {
                   setShowVerificationPrompt(false);
-                  // We need to navigate to Profile tab AND tell it to open the edit modal.
-                  // We'll use the navigation reference if available or just assume it's correctly handled via params.
                   if (navigationRef.current) {
                     navigationRef.current.navigate('Profile', { autoEdit: true });
                   } else {
@@ -1821,6 +1876,46 @@ export default function App() {
             </View>
           </View>
         </Modal>
+
+        {/* Mandatory OTA Update Shield Modal */}
+        <Modal
+          visible={showForceUpdate}
+          transparent={false}
+          animationType="fade"
+          onRequestClose={() => {}} // Un-dismissible
+        >
+          <View style={{ flex: 1, backgroundColor: '#0F172A', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+            <Ionicons name="cloud-download" size={80} color="#38BDF8" style={{ marginBottom: 24 }} />
+            <Text style={{ fontSize: 28, fontWeight: '900', color: '#FFFFFF', marginBottom: 12, textAlign: 'center', letterSpacing: 0.5 }}>Update Required</Text>
+            <Text style={{ fontSize: 16, color: '#94A3B8', textAlign: 'center', marginBottom: 40, lineHeight: 24 }}>
+              Your app version ({APP_VERSION}) is obsolete and unsupported. You must update to the latest network API version ({latestAppVersion}) to restore access to AceTrack.
+            </Text>
+            
+            <TouchableOpacity 
+              disabled={isUpdatingFromModal}
+              onPress={async () => {
+                setIsUpdatingFromModal(true);
+                try {
+                  const update = await Updates.checkForUpdateAsync();
+                  if (update.isAvailable) {
+                    await Updates.fetchUpdateAsync();
+                    await Updates.reloadAsync();
+                  } else {
+                    Alert.alert("Update Not Found", "The OTA server did not return a manifest. Please try restarting the app or downloading from the store.");
+                    setIsUpdatingFromModal(false);
+                  }
+                } catch (e) {
+                  Alert.alert("OTA Update Failed", "Failed to physically connect to the OTA server. Error: " + e.message);
+                  setIsUpdatingFromModal(false);
+                }
+              }}
+              style={{ width: '100%', paddingVertical: 18, backgroundColor: '#10B981', borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 }}
+            >
+              {isUpdatingFromModal ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 16, textTransform: 'uppercase', letterSpacing: 1 }}>Download OTA Update</Text>}
+            </TouchableOpacity>
+          </View>
+        </Modal>
+
       </NavigationContainer>
       </View>
     </SafeAreaProvider>

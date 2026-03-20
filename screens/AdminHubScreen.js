@@ -58,6 +58,23 @@ const AdminHubScreen = ({
   const [diagFileSize, setDiagFileSize] = useState(0);
   const [isFetchingDiags, setIsFetchingDiags] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isPullingLive, setIsPullingLive] = useState(false);
+  const [onlineDevices, setOnlineDevices] = useState({});
+
+  React.useEffect(() => {
+    if (!socketRef || !socketRef.current) return;
+    const handlePong = (data) => {
+      setOnlineDevices(prev => ({
+        ...prev,
+        [data.deviceId]: true,
+        [data.targetUserId]: true // fallback tracking just by user id
+      }));
+    };
+    socketRef.current.on('device_pong_relay', handlePong);
+    return () => {
+      socketRef.current.off('device_pong_relay', handlePong);
+    };
+  }, [socketRef]);
 
   const handleDownloadDiagnostic = async () => {
     if (!diagContent || isDownloading) return;
@@ -633,6 +650,12 @@ const AdminHubScreen = ({
                         setSelectedDiagFile(null);
                         setDiagContent(null);
                         setIsFetchingDiags(true);
+                        
+                        // PING NATIVE DEVICE TO CHECK PRESENCE
+                        if (socketRef && socketRef.current) {
+                          socketRef.current.emit('admin_ping_device', { targetUserId: p.id });
+                        }
+                        
                         const url = `${activeApiUrl}/api/diagnostics`;
                         try {
                           const res = await fetch(url, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
@@ -711,10 +734,17 @@ const AdminHubScreen = ({
                         <View style={{ flex: 1, paddingRight: 10 }}>
                           <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0F172A' }}>{d.name}</Text>
                           <Text style={{ fontSize: 10, color: '#64748B' }}>ID: {d.id}</Text>
-                          <Text style={{ fontSize: 10, color: '#94A3B8' }}>Last Active: {new Date(d.lastActive).toLocaleString()}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: onlineDevices[d.id] ? '#10B981' : '#EF4444' }} />
+                            <Text style={{ fontSize: 10, color: onlineDevices[d.id] ? '#10B981' : '#EF4444', fontWeight: 'bold' }}>
+                              {onlineDevices[d.id] ? 'ONLINE (ACTIVE)' : 'OFFLINE'}
+                            </Text>
+                            <Text style={{ fontSize: 10, color: '#94A3B8' }}>• Last Active: {new Date(d.lastActive).toLocaleString()}</Text>
+                          </View>
                         </View>
                         <TouchableOpacity 
-                          onPress={() => {
+                          disabled={isPullingLive || !onlineDevices[d.id]}
+                          onPress={async () => {
                             if (socketRef && socketRef.current) {
                               socketRef.current.emit('admin_pull_diagnostics', { 
                                 targetUserId: selectedDiagUser.id,
@@ -722,23 +752,58 @@ const AdminHubScreen = ({
                                 adminId: user?.id 
                               });
                               logger.logAction('ADMIN_SENT_PULL_REQUEST', { target: selectedDiagUser.id, device: d.id });
-                              Alert.alert("Pull Requested", `Command dispatched targeting '${d.name}'. Give it ~5 seconds to upload, then tap 'Force Sync Cloud' or click the user again to view the injected file.`);
+                              
+                              const initialFiles = new Set(userDiagFiles);
+                              setIsPullingLive(true);
+                              let attempts = 0;
+                              
+                              const poll = async () => {
+                                while (attempts < 5) {
+                                  attempts++;
+                                  try {
+                                    const res = await fetch(`${activeApiUrl}/api/diagnostics`, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
+                                    if (res.ok) {
+                                      const data = await res.json();
+                                      const pName = (selectedDiagUser.name || '').toLowerCase();
+                                      const firstName = pName.split(' ')[0];
+                                      const safeName = pName.replace(/[^a-z0-9]/gi, '_');
+                                      const fs = data.files.filter(f => f.toLowerCase().includes(safeName) || f.toLowerCase().includes(firstName));
+                                      
+                                      // Diff detection: If server file rotation kept length at 3, detect the brand new filename explicitly
+                                      const hasNewFile = fs.some(f => !initialFiles.has(f));
+                                      if (hasNewFile) {
+                                        setUserDiagFiles(fs.reverse());
+                                        setIsPullingLive(false);
+                                        return; // Instantly halt the spinner when the file drops
+                                      }
+                                    }
+                                  } catch (e) {}
+                                  await new Promise(r => setTimeout(r, 3000));
+                                }
+                                setIsPullingLive(false); // Times out after 15s
+                              };
+                              poll();
+
                             } else {
                               Alert.alert("Error", "WebSocket not connected.");
                             }
                           }}
-                          style={{ backgroundColor: '#EF4444', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                          style={{ backgroundColor: (isPullingLive || !onlineDevices[d.id]) ? '#94A3B8' : '#EF4444', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: (isPullingLive || !onlineDevices[d.id]) ? 0.7 : 1 }}
                         >
-                          <Ionicons name="cloud-download-outline" size={14} color="#FFFFFF" />
-                          <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 10 }}>PULL LOGS</Text>
+                          {isPullingLive ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="cloud-download-outline" size={14} color="#FFFFFF" />}
+                          <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 10 }}>{isPullingLive ? 'PULLING...' : 'PULL LOGS'}</Text>
                         </TouchableOpacity>
                       </View>
                     ))}
                   </View>
                 ) : (
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                    <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic', flex: 1, marginRight: 10 }}>No explicit hardware tracking yet. Signal will safely trigger any of their active legacy app instances.</Text>
+                    <View style={{ flex: 1, marginRight: 10 }}>
+                      <Text style={{ fontSize: 11, color: onlineDevices[selectedDiagUser.id] ? '#10B981' : '#EF4444', fontWeight: 'bold', marginBottom: 2 }}>{onlineDevices[selectedDiagUser.id] ? 'ONLINE (ACTIVE)' : 'OFFLINE'}</Text>
+                      <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>No hardware logs stored on cluster. Live trigger will pull any unrecorded connected devices.</Text>
+                    </View>
                     <TouchableOpacity 
+                      disabled={isPullingLive || !onlineDevices[selectedDiagUser.id]}
                       onPress={() => {
                         if (socketRef && socketRef.current) {
                           socketRef.current.emit('admin_pull_diagnostics', { 
@@ -746,13 +811,42 @@ const AdminHubScreen = ({
                             adminId: user?.id 
                           });
                           logger.logAction('ADMIN_SENT_PULL_REQUEST', { target: selectedDiagUser.id });
-                          Alert.alert("Pull Requested", "Command dispatched securely to this user's devices. Give it ~5 seconds to upload.");
+                          
+                          const initialFiles = new Set(userDiagFiles);
+                          setIsPullingLive(true);
+                          let attempts = 0;
+                          
+                          const poll = async () => {
+                            while (attempts < 5) {
+                              attempts++;
+                              try {
+                                const res = await fetch(`${activeApiUrl}/api/diagnostics`, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
+                                if (res.ok) {
+                                  const data = await res.json();
+                                  const pName = (selectedDiagUser.name || '').toLowerCase();
+                                  const firstName = pName.split(' ')[0];
+                                  const safeName = pName.replace(/[^a-z0-9]/gi, '_');
+                                  const fs = data.files.filter(f => f.toLowerCase().includes(safeName) || f.toLowerCase().includes(firstName));
+                                  
+                                  const hasNewFile = fs.some(f => !initialFiles.has(f));
+                                  if (hasNewFile) {
+                                    setUserDiagFiles(fs.reverse());
+                                    setIsPullingLive(false);
+                                    return; // Instantly halt the spinner when the file drops
+                                  }
+                                }
+                              } catch (e) {}
+                              await new Promise(r => setTimeout(r, 3000));
+                            }
+                            setIsPullingLive(false); // Times out after 15s
+                          };
+                          poll();
                         }
                       }}
-                      style={{ backgroundColor: '#EF4444', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                      style={{ backgroundColor: (isPullingLive || !onlineDevices[selectedDiagUser.id]) ? '#94A3B8' : '#EF4444', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: (isPullingLive || !onlineDevices[selectedDiagUser.id]) ? 0.7 : 1 }}
                     >
-                      <Ionicons name="cloud-download-outline" size={14} color="#FFFFFF" />
-                      <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 10 }}>PULL LIVE LOGS FOR {selectedDiagUser.name.split(' ')[0].toUpperCase()}</Text>
+                      {isPullingLive ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="cloud-download-outline" size={14} color="#FFFFFF" />}
+                      <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 10 }}>{isPullingLive ? 'PULLING...' : `PULL LIVE LOGS FOR ${selectedDiagUser.name.split(' ')[0].toUpperCase()}`}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -789,7 +883,9 @@ const AdminHubScreen = ({
                       >
                         <Ionicons name="document-text" size={20} color={selectedDiagFile === file ? "#FFFFFF" : "#3B82F6"} />
                         <Text style={[styles.diagFileName, selectedDiagFile === file && styles.diagFileNameActive]}>
-                          {file.split('_').slice(1).join('_').replace('.json', '')}
+                          {file.startsWith('admin_requested_') 
+                            ? `[ADMIN PULL] ${file.replace('admin_requested_', '').replace('.json', '')}`
+                            : file.replace('.json', '')}
                         </Text>
                       </TouchableOpacity>
                     ))}
@@ -825,6 +921,9 @@ const AdminHubScreen = ({
                   </View>
                   <View style={styles.diagMetaRow}>
                     <Text style={styles.diagMetaLabel}>Date: {diagContent.uploadedAt}</Text>
+                  </View>
+                  <View style={styles.diagMetaRow}>
+                    <Text style={styles.diagMetaLabel}>Device: {diagContent.deviceId || 'Legacy App Instance'}</Text>
                   </View>
                   <View style={styles.diagLogBox}>
                     {(diagContent.logs || []).map((log, idx) => (
