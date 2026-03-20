@@ -64,6 +64,7 @@ const AdminHubScreen = ({
   React.useEffect(() => {
     if (!socketRef || !socketRef.current) return;
     const handlePong = (data) => {
+      console.log(`📡 [AdminHub] Pong received for ${data.targetUserId} (Device: ${data.deviceId})`);
       setOnlineDevices(prev => ({
         ...prev,
         [data.deviceId]: true,
@@ -752,15 +753,15 @@ const AdminHubScreen = ({
                     <Text style={{ fontSize: 12, color: '#64748B', fontWeight: 'bold', marginBottom: 8, textTransform: 'uppercase' }}>Active Devices</Text>
                     {selectedDiagUser.devices.map(d => (
                       <View key={d.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                        <View style={{ flex: 1, paddingRight: 10 }}>
-                          <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0F172A' }}>{d.name}</Text>
-                          <Text style={{ fontSize: 10, color: '#64748B' }}>ID: {d.id}</Text>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        <View style={{ flex: 1, paddingRight: 6 }}>
+                          <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0F172A' }} numberOfLines={1}>{d.name}</Text>
+                          <Text style={{ fontSize: 9, color: '#64748B' }}>ID: {d.id}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
                             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: onlineDevices[d.id] ? '#10B981' : '#EF4444' }} />
                             <Text style={{ fontSize: 10, color: onlineDevices[d.id] ? '#10B981' : '#EF4444', fontWeight: 'bold' }}>
-                              {onlineDevices[d.id] ? 'ONLINE (ACTIVE)' : 'OFFLINE'}
+                              {onlineDevices[d.id] ? 'ONLINE' : 'OFFLINE'}
                             </Text>
-                            <Text style={{ fontSize: 10, color: '#94A3B8' }}>• Last Active: {new Date(d.lastActive).toLocaleString()}</Text>
+                            <Text style={{ fontSize: 9, color: '#94A3B8' }}>• Last: {new Date(d.lastActive).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
                           </View>
                         </View>
                         <TouchableOpacity 
@@ -809,9 +810,20 @@ const AdminHubScreen = ({
                               Alert.alert("Error", "WebSocket not connected.");
                             }
                           }}
-                          style={{ backgroundColor: (isPullingLive || !onlineDevices[d.id]) ? '#94A3B8' : '#EF4444', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: (isPullingLive || !onlineDevices[d.id]) ? 0.7 : 1 }}
+                          style={{ 
+                            backgroundColor: (isPullingLive || !onlineDevices[d.id]) ? '#CBD5E1' : '#EF4444', 
+                            paddingHorizontal: 10, 
+                            paddingVertical: 6, 
+                            borderRadius: 16, 
+                            flexDirection: 'row', 
+                            alignItems: 'center', 
+                            gap: 4, 
+                            minWidth: 90,
+                            justifyContent: 'center',
+                            opacity: (isPullingLive || !onlineDevices[d.id]) ? 0.8 : 1 
+                          }}
                         >
-                          {isPullingLive ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="cloud-download-outline" size={14} color="#FFFFFF" />}
+                          {isPullingLive ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="cloud-download-outline" size={12} color="#FFFFFF" />}
                           <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 10 }}>{isPullingLive ? 'PULLING...' : 'PULL LOGS'}</Text>
                         </TouchableOpacity>
                       </View>
