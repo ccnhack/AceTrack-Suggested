@@ -25,7 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import config from './config';
 import { io } from 'socket.io-client';
 
-const APP_VERSION = "1.0.12";
+const APP_VERSION = "1.0.13";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -96,6 +96,16 @@ export default function App() {
 
     socketRef.current.on('connect', () => {
       console.log("🔌 WebSocket Connected for real-time sync");
+      logger.logAction('WS_CONNECTED', { socketId: socketRef.current?.id, url: activeApiUrl });
+    });
+
+    socketRef.current.on('disconnect', (reason) => {
+      logger.logAction('WS_DISCONNECTED', { reason });
+    });
+
+    // CATCH-ALL: Log every single event the socket receives for diagnostics
+    socketRef.current.onAny((eventName, ...args) => {
+      logger.logAction('WS_EVENT_RECEIVED', { event: eventName, argsPreview: JSON.stringify(args).substring(0, 200) });
     });
 
     socketRef.current.on('data_updated', (payload) => {
