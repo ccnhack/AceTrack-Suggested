@@ -169,7 +169,7 @@ const MainTabs = ({
 export default function AppNavigator({ 
   user, role, players, tournaments, matchVideos, matches, tickets, evaluations, 
   seenAdminActionIds, visitedAdminSubTabs, setVisitedAdminSubTabs, 
-  reschedulingFrom, auditLogs, onLogout, handlers, appVersion 
+  reschedulingFrom, auditLogs, onLogout, handlers, appVersion, socketRef 
 }) {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -238,6 +238,7 @@ export default function AppNavigator({
               auditLogs={auditLogs}
               onLogout={onLogout}
               appVersion={appVersion}
+              socketRef={socketRef}
               {...handlers}
             />
           )}
