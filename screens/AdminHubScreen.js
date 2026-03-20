@@ -653,9 +653,17 @@ const AdminHubScreen = ({
                         
                         // PING NATIVE DEVICE TO CHECK PRESENCE (3 retries at 1s intervals)
                         if (socketRef && socketRef.current) {
+                          const isConnected = socketRef.current.connected;
+                          const socketId = socketRef.current.id;
+                          console.log(`🏓 ADMIN PING: target=${p.id}, socketConnected=${isConnected}, socketId=${socketId}`);
+                          if (!isConnected) {
+                            console.warn('⚠️ Socket NOT connected! Pings will fail silently.');
+                          }
                           socketRef.current.emit('admin_ping_device', { targetUserId: p.id });
                           setTimeout(() => socketRef.current?.emit('admin_ping_device', { targetUserId: p.id }), 1000);
                           setTimeout(() => socketRef.current?.emit('admin_ping_device', { targetUserId: p.id }), 2000);
+                        } else {
+                          console.warn('⚠️ socketRef is null — no ping sent!');
                         }
                         
                         const url = `${activeApiUrl}/api/diagnostics`;
