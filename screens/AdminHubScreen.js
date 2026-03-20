@@ -651,9 +651,11 @@ const AdminHubScreen = ({
                         setDiagContent(null);
                         setIsFetchingDiags(true);
                         
-                        // PING NATIVE DEVICE TO CHECK PRESENCE
+                        // PING NATIVE DEVICE TO CHECK PRESENCE (3 retries at 1s intervals)
                         if (socketRef && socketRef.current) {
                           socketRef.current.emit('admin_ping_device', { targetUserId: p.id });
+                          setTimeout(() => socketRef.current?.emit('admin_ping_device', { targetUserId: p.id }), 1000);
+                          setTimeout(() => socketRef.current?.emit('admin_ping_device', { targetUserId: p.id }), 2000);
                         }
                         
                         const url = `${activeApiUrl}/api/diagnostics`;

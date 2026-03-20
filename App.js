@@ -56,6 +56,8 @@ export default function App() {
   const [isUpdatingFromModal, setIsUpdatingFromModal] = useState(false);
   
   const localDeviceIdRef = useRef(null);
+  const [isProfileEditActive, setIsProfileEditActive] = useState(false); // New state to track if profile edit is open
+  const [pendingSync, setPendingSync] = useState([]); // Keys that need to be pushed to cloud
   const [visitedAdminSubTabs, setVisitedAdminSubTabs] = useState(new Set());
   const isSyncingRef = React.useRef(false);
   const pendingSyncRef = React.useRef([]);
@@ -1745,7 +1747,7 @@ export default function App() {
           body: JSON.stringify({
             username: activeUser.name || activeUser.email || 'Unknown User',
             logs: logs,
-            prefix: 'admin_requested',
+            prefix: 'user_report',
             deviceId: localDeviceIdRef.current
           })
         });
