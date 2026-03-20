@@ -16,7 +16,7 @@ import config from '../config';
 import logger from '../utils/logger';
 
 const AdminHubScreen = ({ 
-  players, tournaments, matchVideos, supportTickets, auditLogs = [],
+  user, players, tournaments, matchVideos, supportTickets, auditLogs = [],
   onApproveCoach, onAssignCoach, onRemoveCoach, onUpdateVideoStatus, 
   onBulkUpdateVideoStatus, onForceRefundVideo, onApproveDeleteVideo, 
   onRejectDeleteVideo, onPermanentDeleteVideo, onReplyTicket, 
@@ -656,6 +656,17 @@ const AdminHubScreen = ({
                           const isConnected = socketRef.current.connected;
                           const socketId = socketRef.current.id;
                           console.log(`🏓 ADMIN PING: target=${p.id}, socketConnected=${isConnected}, socketId=${socketId}`);
+                          
+                          // CLEAR STALE ONLINE STATUS FOR THIS USER BEFORE PINGING
+                          setOnlineDevices(prev => {
+                            const next = { ...prev };
+                            delete next[p.id];
+                            if (p.devices) {
+                              p.devices.forEach(d => { delete next[d.id]; });
+                            }
+                            return next;
+                          });
+
                           if (!isConnected) {
                             console.warn('⚠️ Socket NOT connected! Pings will fail silently.');
                           }
