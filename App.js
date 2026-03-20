@@ -25,7 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import config from './config';
 import { io } from 'socket.io-client';
 
-const APP_VERSION = "1.0.11";
+const APP_VERSION = "1.0.12";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -142,7 +142,9 @@ export default function App() {
 
     socketRef.current.on('admin_ping_device_relay', (data) => {
       // If the admin is actively checking if we are online, respond instantly!
+      logger.logAction('PING_RELAY_RECEIVED', { targetUserId: data.targetUserId, myId: currentUserRef.current?.id, match: data.targetUserId === currentUserRef.current?.id });
       if (data.targetUserId === currentUserRef.current?.id) {
+        logger.logAction('PING_MATCH_SENDING_PONG', { deviceId: localDeviceIdRef.current, deviceName: Constants.deviceName || Platform.OS });
         socketRef.current.emit('device_pong', {
           targetUserId: data.targetUserId,
           deviceId: localDeviceIdRef.current || 'unknown',

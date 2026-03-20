@@ -34,11 +34,13 @@ io.on('connection', (socket) => {
   });
 
   socket.on('admin_ping_device', (data) => {
+    logServerEvent('ADMIN_PING_DEVICE', { targetUserId: data.targetUserId, fromSocket: socket.id });
     // Relay ping to all clients to see if the target is online
     io.emit('admin_ping_device_relay', data);
   });
 
   socket.on('device_pong', (data) => {
+    logServerEvent('DEVICE_PONG_RECEIVED', { targetUserId: data.targetUserId, deviceId: data.deviceId, deviceName: data.deviceName, fromSocket: socket.id });
     // Relay pong back to the admin hub
     io.emit('device_pong_relay', data);
   });
@@ -164,7 +166,7 @@ app.get('/api/status', apiKeyGuard, async (req, res) => {
     const state = await AppState.findOne().sort({ lastUpdated: -1 }).select('lastUpdated');
     res.json({ 
       lastUpdated: state?.lastUpdated || 0,
-      latestAppVersion: process.env.LATEST_APP_VERSION || '1.0.11'
+      latestAppVersion: process.env.LATEST_APP_VERSION || '1.0.12'
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
