@@ -61,8 +61,6 @@ const AdminHubScreen = ({
   const [isPullingLive, setIsPullingLive] = useState(false);
   const [onlineDevices, setOnlineDevices] = useState({});
 
-  React.useEffect(() => {
-    if (!socketRef || !socketRef.current) return;
     const handlePong = (data) => {
       console.log(`📡 [AdminHub] Pong received for ${data.targetUserId} (Device: ${data.deviceId})`);
       setOnlineDevices(prev => ({
@@ -71,11 +69,29 @@ const AdminHubScreen = ({
         [data.targetUserId]: true // fallback tracking just by user id
       }));
     };
-    socketRef.current.on('device_pong_relay', handlePong);
-    return () => {
-      socketRef.current.off('device_pong_relay', handlePong);
-    };
-  }, [socketRef]);
+
+    // Keep a local flag to ensure we don't double-register if screen re-renders
+    const isRegistered = React.useRef(false);
+
+    React.useEffect(() => {
+      // Re-check periodically if socket not yet available, OR register immediately
+      const timer = setInterval(() => {
+        if (socketRef && socketRef.current && !isRegistered.current) {
+          console.log("🔗 [AdminHub] Registering device_pong_relay listener");
+          socketRef.current.on('device_pong_relay', handlePong);
+          isRegistered.current = true;
+          clearInterval(timer);
+        }
+      }, 1000);
+
+      return () => {
+        clearInterval(timer);
+        if (socketRef && socketRef.current) {
+          socketRef.current.off('device_pong_relay', handlePong);
+          isRegistered.current = false;
+        }
+      };
+    }, []); // Run once, but timer handles late socket arrival
 
   const handleDownloadDiagnostic = async () => {
     if (!diagContent || isDownloading) return;
@@ -786,10 +802,13 @@ const AdminHubScreen = ({
                                     const res = await fetch(`${activeApiUrl}/api/diagnostics`, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
                                     if (res.ok) {
                                       const data = await res.json();
-                                      const pName = (selectedDiagUser.name || '').toLowerCase();
-                                      const firstName = pName.split(' ')[0];
-                                      const safeName = pName.replace(/[^a-z0-9]/gi, '_');
-                                      const fs = data.files.filter(f => f.toLowerCase().includes(safeName) || f.toLowerCase().includes(firstName));
+                                      const pNameRaw = (selectedDiagUser.name || '').toLowerCase();
+                                      const firstName = pNameRaw.split(' ')[0];
+                                      const safeName = pNameRaw.replace(/[^a-z0-9]/gi, '_');
+                                      const fs = data.files.filter(f => {
+                                        const lf = f.toLowerCase();
+                                        return lf.includes(safeName) || lf.includes(firstName);
+                                      });
                                       
                                       // Diff detection: If server file rotation kept length at 3, detect the brand new filename explicitly
                                       const hasNewFile = fs.some(f => !initialFiles.has(f));
@@ -856,10 +875,13 @@ const AdminHubScreen = ({
                                 const res = await fetch(`${activeApiUrl}/api/diagnostics`, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
                                 if (res.ok) {
                                   const data = await res.json();
-                                  const pName = (selectedDiagUser.name || '').toLowerCase();
-                                  const firstName = pName.split(' ')[0];
-                                  const safeName = pName.replace(/[^a-z0-9]/gi, '_');
-                                  const fs = data.files.filter(f => f.toLowerCase().includes(safeName) || f.toLowerCase().includes(firstName));
+                                  const pNameRaw = (selectedDiagUser.name || '').toLowerCase();
+                                  const firstName = pNameRaw.split(' ')[0];
+                                  const safeName = pNameRaw.replace(/[^a-z0-9]/gi, '_');
+                                  const fs = data.files.filter(f => {
+                                    const lf = f.toLowerCase();
+                                    return lf.includes(safeName) || lf.includes(firstName);
+                                  });
                                   
                                   const hasNewFile = fs.some(f => !initialFiles.has(f));
                                   if (hasNewFile) {

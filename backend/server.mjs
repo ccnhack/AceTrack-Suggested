@@ -166,7 +166,7 @@ app.get('/api/status', apiKeyGuard, async (req, res) => {
     const state = await AppState.findOne().sort({ lastUpdated: -1 }).select('lastUpdated');
     res.json({ 
       lastUpdated: state?.lastUpdated || 0,
-      latestAppVersion: process.env.LATEST_APP_VERSION || '1.0.17'
+      latestAppVersion: process.env.LATEST_APP_VERSION || '1.0.18'
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -300,12 +300,13 @@ app.post('/api/diagnostics', apiKeyGuard, async (req, res) => {
     const safeUsername = username.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     
     // 1. Rotation Logic: Keep max 3 files per user
+    // 1. Rotation Logic: Keep max 5 files per user
     try {
       const userFiles = fs.readdirSync(DIAGNOSTICS_DIR)
         .filter(f => f.startsWith(`${safeUsername}_`))
         .sort(); // Sort by name (which has timestamp)
       
-      while (userFiles.length >= 3) {
+      if (userFiles.length >= 5) {
         const oldest = userFiles.shift();
         fs.unlinkSync(path.join(DIAGNOSTICS_DIR, oldest));
         console.log(`♻️ Rotated (deleted) old diagnostics: ${oldest}`);
