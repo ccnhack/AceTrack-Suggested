@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import * as DocumentPicker from 'expo-document-picker';
 import { FullscreenVideoPlayer } from './FullscreenVideoPlayer';
+import config from '../config';
 
 const { width } = Dimensions.get('window');
 
@@ -158,6 +159,8 @@ export const VideoManagement = ({
   const [selectedMatchId, setSelectedMatchId] = useState('');
   const [showPurchasePrompt, setShowPurchasePrompt] = useState(null);
   const [playingPreview, setPlayingPreview] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
 
   const myTournaments = isPlayerMode 
@@ -220,6 +223,53 @@ export const VideoManagement = ({
         return;
     }
 
+    let cloudUrl = editingVideo?.videoUrl;
+    let cloudFilename = editingVideo?.filename || 'video.mp4';
+
+    // Cloud Upload Logic
+    if (videoFile) {
+      setIsUploading(true);
+      setUploadProgress(0.1);
+      onLogTrace && onLogTrace('Video Cloud Upload Start', 'upload', academyId, { filename: videoFile.name });
+
+      try {
+        const formData = new FormData();
+        formData.append('video', {
+          uri: videoFile.uri,
+          name: videoFile.name,
+          type: 'video/mp4' // Multer on server expects this
+        });
+
+        const response = await fetch(`${config.API_BASE_URL}/api/upload`, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            'x-ace-api-key': config.ACE_API_KEY
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          cloudUrl = data.url;
+          cloudFilename = data.filename;
+          setUploadProgress(1);
+          onLogTrace && onLogTrace('Video Cloud Upload Success', 'upload', academyId, { url: cloudUrl });
+        } else {
+          const errorText = await response.text();
+          throw new Error(`Upload failed: ${errorText}`);
+        }
+      } catch (err) {
+        console.error("Cloud upload error:", err);
+        onLogTrace && onLogTrace('Video Cloud Upload Error', 'upload', academyId, { error: err.message });
+        Alert.alert("Upload Failed", "Could not upload video to the cloud. Please check your connection.");
+        setIsUploading(false);
+        return;
+      } finally {
+        setIsUploading(false);
+      }
+    }
+
     const tournament = tournaments.find(t => t.id === selectedTournamentId);
     const match = matches.find(m => m.id === selectedMatchId);
 
@@ -231,11 +281,11 @@ export const VideoManagement = ({
       date: tournament?.date || new Date().toISOString().split('T')[0],
       playerIds: match ? [match.player1Id, match.player2Id].filter(id => !!id) : (tournament?.registeredPlayerIds || []),
       cameraType: cameraType,
-      videoUrl: videoFile?.uri || editingVideo?.videoUrl,
-      previewUrl: videoFile?.uri || editingVideo?.videoUrl,
+      videoUrl: cloudUrl,
+      previewUrl: cloudUrl, // For now, use same URL as preview
       price: Number(price),
       isPurchasable: true,
-      filename: videoFile?.name || editingVideo?.filename || 'video.mp4',
+      filename: cloudFilename,
       uploadDate: editingVideo?.uploadDate || new Date().toISOString(),
       adminStatus: editingVideo?.adminStatus || 'Active',
       status: videoFile ? 'processing' : editingVideo?.status,
@@ -634,8 +684,19 @@ export const VideoManagement = ({
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity onPress={handleFormSubmit} style={styles.saveButton}>
-              <Text style={styles.saveButtonText}>Save Video</Text>
+            <TouchableOpacity 
+              onPress={handleFormSubmit} 
+              style={[styles.saveButton, isUploading && styles.saveButtonDisabled]}
+              disabled={isUploading}
+            >
+              {isUploading ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+                  <Text style={styles.saveButtonText}>Uploading Video ({Math.round(uploadProgress * 100)}%)...</Text>
+                </View>
+              ) : (
+                <Text style={styles.saveButtonText}>Save Video</Text>
+              )}
             </TouchableOpacity>
           </ScrollView>
         </SafeAreaView>
