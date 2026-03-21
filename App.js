@@ -25,7 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import config from './config';
 import { io } from 'socket.io-client';
 
-const APP_VERSION = '1.0.29';
+const APP_VERSION = '1.0.30';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -174,61 +174,63 @@ export default function App() {
 
     // 3. IMMEDIATE HYDRATION FROM STORAGE & DEVICE REGISTRATION
     const startup = async () => {
-      // 1. EARLY INTERCEPTION: Enable immediately to catch hydration logs
-      await logger.initialize();
-      logger.enableInterception();
-      
-      const cloudUrl = 'https://acetrack-api-q39m.onrender.com';
-      logger.checkAndUploadCrash(cloudUrl, config.ACE_API_KEY);
+      try {
+        // 1. EARLY INTERCEPTION: Enable immediately to catch hydration logs
+        await logger.initialize();
+        logger.enableInterception();
+        
+        const cloudUrl = 'https://acetrack-api-q39m.onrender.com';
+        logger.checkAndUploadCrash(cloudUrl, config.ACE_API_KEY);
 
-      // Ensure stable hardware footprint
-      let hardwareId = await AsyncStorage.getItem('acetrack_device_id');
-      if (!hardwareId) {
-        const randomHex = Math.random().toString(16).substr(2, 4);
-        hardwareId = `${(Constants.deviceName || Platform.OS).replace(/[^a-zA-Z0-9]/g, '_')}-${randomHex}`;
-        await AsyncStorage.setItem('acetrack_device_id', hardwareId);
+        // Ensure stable hardware footprint
+        let hardwareId = await AsyncStorage.getItem('acetrack_device_id');
+        if (!hardwareId) {
+          const randomHex = Math.random().toString(16).substr(2, 4);
+          hardwareId = `${(Constants.deviceName || Platform.OS).replace(/[^a-zA-Z0-9]/g, '_')}-${randomHex}`;
+          await AsyncStorage.setItem('acetrack_device_id', hardwareId);
+        }
+        localDeviceIdRef.current = hardwareId;
+        
+        // Use "admin" or "samsung" or currentUser.id for label
+        const getLabel = () => {
+          if (currentUserRef.current) return currentUserRef.current.id;
+          return Platform.OS === 'android' ? 'samsung' : 'admin';
+        };
+
+        // INITIAL ARCHITECTURAL STATUS (As requested by user for diagnostics)
+        logger.logAction('SYNC_ENGINE_STATUS', { 
+          version: 'v5-HARDENED', 
+          appVersion: APP_VERSION,
+          features: ['Ref-Mirroring', 'Atomic-Callbacks', 'Heartbeat-v36-RESTORED'],
+          ota: {
+            updateId: Updates.updateId || 'Built-in',
+            channel: Updates.channel || 'Default',
+            runtimeVersion: Updates.runtimeVersion || 'Unknown'
+          },
+          status: 'Operational'
+        });
+
+        // User specifically requested to disable 15s heartbeats.
+
+        // Note: setThresholdCallback was removed due to scope-related ReferenceError in v1.0.29
+
+        await hydrateFromStorage();
+        
+        // STEP 2: Tiny wait to ensure React state batching has committed the user
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Only after local data is visible do we attempt a cloud pull
+        // We pass 'true' to loadData here to avoid redundant setIsLoading calls
+        await loadData(true); 
+
+      } catch (e) {
+        console.error("❌ Critical Startup Error:", e);
+        // We log it only if interception is already enabled, otherwise console is the only way
+        logger.logAction('CRITICAL_STARTUP_ERROR', { error: e.message, stack: e.stack });
+      } finally {
+        // STEP 3: Finally, reveal the app once everything is settled (GUARANTEED)
+        setIsLoading(false);
       }
-      localDeviceIdRef.current = hardwareId;
-      
-      // Use "admin" or "samsung" or currentUser.id for label
-      const getLabel = () => {
-        if (currentUserRef.current) return currentUserRef.current.id;
-        return Platform.OS === 'android' ? 'samsung' : 'admin';
-      };
-
-      // INITIAL ARCHITECTURAL STATUS (As requested by user for diagnostics)
-      logger.logAction('SYNC_ENGINE_STATUS', { 
-        version: 'v5-HARDENED', 
-        appVersion: APP_VERSION,
-        features: ['Ref-Mirroring', 'Atomic-Callbacks', 'Heartbeat-v36-RESTORED'],
-        ota: {
-          updateId: Updates.updateId || 'Built-in',
-          channel: Updates.channel || 'Default',
-          runtimeVersion: Updates.runtimeVersion || 'Unknown'
-        },
-        status: 'Operational'
-      });
-
-      // User specifically requested to disable 15s heartbeats.
-
-      // Register auto-sync for logs when threshold hits 15000
-      logger.setThresholdCallback(15000, async () => {
-        logger.logAction('AUTO_SYNC_THRESHOLD_REACHED');
-        // We use the same onUploadLogs logic but silently
-        await actions.onUploadLogs(); 
-      });
-
-      await hydrateFromStorage();
-      
-      // STEP 2: Tiny wait to ensure React state batching has committed the user
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Only after local data is visible do we attempt a cloud pull
-      // We pass 'true' to loadData here to avoid redundant setIsLoading calls
-      await loadData(true); 
-
-      // STEP 3: Finally, reveal the app once everything is settled
-      setIsLoading(false);
     };
     startup();
 
