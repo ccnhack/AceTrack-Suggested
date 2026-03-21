@@ -25,7 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import config from './config';
 import { io } from 'socket.io-client';
 
-const APP_VERSION = '1.0.28';
+const APP_VERSION = '1.0.29';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -219,8 +219,16 @@ export default function App() {
       });
 
       await hydrateFromStorage();
+      
+      // STEP 2: Tiny wait to ensure React state batching has committed the user
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       // Only after local data is visible do we attempt a cloud pull
-      loadData();
+      // We pass 'true' to loadData here to avoid redundant setIsLoading calls
+      await loadData(true); 
+
+      // STEP 3: Finally, reveal the app once everything is settled
+      setIsLoading(false);
     };
     startup();
 
@@ -328,9 +336,16 @@ export default function App() {
       }
 
       if (u) {
-        logger.logAction('HYDRATION_USER_RESTORED', { userId: u.id, role: u.role });
         setCurrentUser(u);
-        currentUserRef.current = u; // CRITICAL: Retain session reference
+        currentUserRef.current = u;
+        logger.logAction('HYDRATION_USER_RESTORED', { userId: u.id, role: u.role });
+        // Extra check to ensure state is set
+        setTimeout(() => {
+          logger.logAction('HYDRATION_USER_STABILITY_CHECK', { 
+            hasUser: !!u, 
+            sessionValid: !!u?.id 
+          });
+        }, 1000);
         setUserRole(u.role || 'user');
         // Cloud-synced seen state for admins: Overwrite local if cloud data exists
         if (u.role === 'admin') {
@@ -459,10 +474,15 @@ export default function App() {
                  new: cloudUser.avatar 
               });
             }
-            setCurrentUser(cloudUser);
-            currentUserRef.current = cloudUser;
-            setUserRole(cloudUser.role || 'user');
-            storage.setItem('currentUser', cloudUser);
+            // ONLY update if data actually changed to prevent render loops
+            const hasChanged = JSON.stringify(cloudUser) !== JSON.stringify(currentU);
+            if (hasChanged) {
+              console.log("🔄 Cloud user data differ from local. Updating state.");
+              setCurrentUser(cloudUser);
+              currentUserRef.current = cloudUser;
+              setUserRole(cloudUser.role || 'user');
+              storage.setItem('currentUser', cloudUser);
+            }
             
             // CRITICAL FIX: Update independent admin states and their storage keys from the cloud profile
             if (cloudUser.role === 'admin') {
@@ -525,9 +545,10 @@ export default function App() {
       await hydrateFromStorage();
       return false;
     } finally {
-      setIsLoading(false);
       if (versionAtStart === syncVersion.current) {
         setSyncingState(false);
+        // Only hide loading if this was a blocking load (sync version matches)
+        if (!forceNoLoading) setIsLoading(false);
       }
     }
   };

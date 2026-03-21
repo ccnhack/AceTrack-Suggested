@@ -117,7 +117,9 @@ const ProfileScreen = ({
   isUploadingLogs,
   appVersion
 }) => {
-  logger.logAction('SCREEN_VIEW', { screen: 'Profile' });
+  useEffect(() => {
+    logger.logAction('SCREEN_VIEW', { screen: 'Profile' });
+  }, []);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showCoachOnboarding, setShowCoachOnboarding] = useState(false);
   const [showSupport, setShowSupport] = useState(false);

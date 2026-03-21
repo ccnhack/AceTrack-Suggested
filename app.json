@@ -2,14 +2,24 @@
   "expo": {
     "name": "acetrack-mobile",
     "slug": "acetrack-mobile",
-    "version": "1.0.28",
+    "version": "1.0.29",
     "sdkVersion": "50.0.0",
     "platforms": [
       "ios",
       "android"
     ],
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F172A"
+    },
     "android": {
-      "package": "com.hacker1717.acetrackmobile"
+      "package": "com.hacker1717.acetrackmobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0F172A"
+      }
     },
     "ios": {
       "bundleIdentifier": "com.hacker1717.acetrackmobile"
