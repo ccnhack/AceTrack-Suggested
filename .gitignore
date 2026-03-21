@@ -39,3 +39,5 @@ yarn-debug.log*
 yarn-error.log*
 backend/diagnostics/
 *.zip
+/android
+/ios

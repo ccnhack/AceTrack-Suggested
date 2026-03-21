@@ -33,6 +33,9 @@
         "projectId": "3c2f128b-90a6-430a-892e-a219f6378063"
       }
     },
-    "owner": "hacker1717"
+    "owner": "hacker1717",
+    "plugins": [
+      "expo-font"
+    ]
   }
 }
