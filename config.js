@@ -34,4 +34,22 @@ export default {
   ACE_API_KEY,
   IS_ANDROID: Platform.OS === 'android',
   IS_IOS: Platform.OS === 'ios',
+  sanitizeUrl: (url) => {
+    if (!url) return url;
+    if (typeof url !== 'string') return url;
+    
+    let sanitized = url;
+    // 1. Force HTTPS for AceTrack API URLs
+    if (sanitized.includes('acetrack-api-q39m.onrender.com') && sanitized.startsWith('http:')) {
+      sanitized = sanitized.replace('http:', 'https:');
+    }
+    
+    // 2. Handle local IP addresses (emergency fallback to cloud URL if domain is missing)
+    const localIpRegex = /http:\/\/192\.168\.\d{1,3}\.\d{1,3}:3005/;
+    if (localIpRegex.test(sanitized)) {
+      sanitized = sanitized.replace(localIpRegex, 'https://acetrack-api-q39m.onrender.com');
+    }
+
+    return sanitized;
+  }
 };

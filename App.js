@@ -808,7 +808,18 @@ export default function App() {
     if (isNew) {
       setTimeout(() => {
         setMatchVideos(prev => {
-          const final = prev.map(item => item.id === v.id ? { ...item, status: 'ready' } : item);
+          const final = prev.map(item => {
+            if (item.id === v.id) {
+              return { 
+                ...item, 
+                status: 'ready',
+                videoUrl: config.sanitizeUrl(item.videoUrl),
+                previewUrl: config.sanitizeUrl(item.previewUrl),
+                watermarkedUrl: config.sanitizeUrl(item.watermarkedUrl)
+              };
+            }
+            return item;
+          });
           pushStateToCloud({ matchVideos: final });
           storage.setItem('matchVideos', final);
           return final;

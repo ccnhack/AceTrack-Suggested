@@ -7,6 +7,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import { FullscreenVideoPlayer } from './FullscreenVideoPlayer';
+import config from '../config';
 
 const { width } = Dimensions.get('window');
 
@@ -246,7 +247,7 @@ export const PlayerRecordings = ({
                   <View style={styles.videoPlayerContainer}>
                     <Video
                       style={styles.videoPlayer}
-                      source={{ uri: (isWatchingHighlights ? (video.highlightsUrl || video.videoUrl) : (video.watermarkedUrl || video.videoUrl)) || "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" }}
+                      source={{ uri: config.sanitizeUrl(isWatchingHighlights ? (video.highlightsUrl || video.videoUrl) : (video.watermarkedUrl || video.videoUrl)) || "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" }}
                       useNativeControls
                       resizeMode={ResizeMode.CONTAIN}
                       shouldPlay={playingPreview === video.id}
@@ -285,7 +286,7 @@ export const PlayerRecordings = ({
                     style={styles.videoPlaceholder}
                   >
                     <Image 
-                      source={{ uri: video.previewUrl || video.watermarkedUrl || "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?q=80" }} 
+                      source={{ uri: config.sanitizeUrl(video.previewUrl || video.watermarkedUrl) || "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?q=80" }} 
                       style={styles.placeholderImage} 
                     />
                     {video.adminStatus === 'Deletion Requested' ? (
@@ -423,7 +424,7 @@ export const PlayerRecordings = ({
           return (
             <FullscreenVideoPlayer
               visible={!!isFullscreen}
-              videoUrl={(isWatchingHighlights ? (v?.highlightsUrl || v?.videoUrl) : (v?.watermarkedUrl || v?.videoUrl)) || ""}
+              videoUrl={config.sanitizeUrl((isWatchingHighlights ? (v?.highlightsUrl || v?.videoUrl) : (v?.watermarkedUrl || v?.videoUrl)) || "")}
               onClose={() => setIsFullscreen(false)}
               initialStatus={miniStatus[isFullscreen] || {}}
               onPlaybackStatusUpdate={(status) => {

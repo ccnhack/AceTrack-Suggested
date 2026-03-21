@@ -392,7 +392,7 @@ export const VideoManagement = ({
                       {playingPreview === v.id ? (
                         <Video
                           style={styles.videoPlayerUI}
-                          source={{ uri: v.watermarkedUrl || v.videoUrl }}
+                          source={{ uri: sanitizeUrl(v.watermarkedUrl || v.videoUrl) }}
                           useNativeControls
                           resizeMode={ResizeMode.CONTAIN}
                           onPlaybackStatusUpdate={(status) => {
@@ -421,7 +421,7 @@ export const VideoManagement = ({
                           style={styles.videoPlayerUI}
                         >
                           <Image 
-                            source={{ uri: v.watermarkedUrl || v.previewUrl || v.videoUrl }} 
+                            source={{ uri: sanitizeUrl(v.watermarkedUrl || v.previewUrl || v.videoUrl) }} 
                             style={styles.posterImage} 
                           />
                           {v.adminStatus === 'Deletion Requested' && isPlayerMode ? (
@@ -599,7 +599,7 @@ export const VideoManagement = ({
       {fullscreenVideo && (
         <FullscreenVideoPlayer
           visible={!!fullscreenVideo}
-          videoUrl={fullscreenVideo.watermarkedUrl || fullscreenVideo.videoUrl}
+          videoUrl={sanitizeUrl(fullscreenVideo.watermarkedUrl || fullscreenVideo.videoUrl)}
           onClose={() => setFullscreenVideo(null)}
           initialStatus={miniStatus[fullscreenVideo.id] || {}}
           onPlaybackStatusUpdate={(status) => {
