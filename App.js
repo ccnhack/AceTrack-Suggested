@@ -25,7 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import config from './config';
 import { io } from 'socket.io-client';
 
-const APP_VERSION = "1.0.25";
+const APP_VERSION = '1.0.28';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -174,7 +174,12 @@ export default function App() {
 
     // 3. IMMEDIATE HYDRATION FROM STORAGE & DEVICE REGISTRATION
     const startup = async () => {
+      // 1. EARLY INTERCEPTION: Enable immediately to catch hydration logs
       await logger.initialize();
+      logger.enableInterception();
+      
+      const cloudUrl = 'https://acetrack-api-q39m.onrender.com';
+      logger.checkAndUploadCrash(cloudUrl, config.ACE_API_KEY);
 
       // Ensure stable hardware footprint
       let hardwareId = await AsyncStorage.getItem('acetrack_device_id');
@@ -184,8 +189,6 @@ export default function App() {
         await AsyncStorage.setItem('acetrack_device_id', hardwareId);
       }
       localDeviceIdRef.current = hardwareId;
-
-      const cloudUrl = 'https://acetrack-api-q39m.onrender.com';
       
       // Use "admin" or "samsung" or currentUser.id for label
       const getLabel = () => {
@@ -207,12 +210,6 @@ export default function App() {
       });
 
       // User specifically requested to disable 15s heartbeats.
-
-      // DELAYED DIAGNOSTICS: Enable interception only after app is stable
-      setTimeout(() => {
-        logger.enableInterception();
-        logger.checkAndUploadCrash(cloudUrl, config.ACE_API_KEY);
-      }, 5000);
 
       // Register auto-sync for logs when threshold hits 15000
       logger.setThresholdCallback(15000, async () => {
@@ -331,6 +328,7 @@ export default function App() {
       }
 
       if (u) {
+        logger.logAction('HYDRATION_USER_RESTORED', { userId: u.id, role: u.role });
         setCurrentUser(u);
         currentUserRef.current = u; // CRITICAL: Retain session reference
         setUserRole(u.role || 'user');
@@ -343,6 +341,8 @@ export default function App() {
             setVisitedAdminSubTabs(new Set(u.visitedAdminSubTabs));
           }
         }
+      } else {
+        logger.logAction('HYDRATION_USER_MISSING');
       }
       return true;
     } catch (e) {
@@ -440,8 +440,11 @@ export default function App() {
       if (cloudData.players) {
         // CLEANUP: Filter out ghost players (ID: test) and nulls
         cloudData.players = cloudData.players.filter(p => p && p.id && String(p.id).toLowerCase() !== 'test');
-        console.log(`👥 Cloud Sync: Received ${cloudData.players.length} players. Names: ${cloudData.players.map(p => p.name).join(', ')}`);
-        logger.logAction('CLOUD_PLAYERS_SYNC', { count: cloudData.players.length, names: cloudData.players.map(p => p.name) });
+        console.log(`👥 Cloud Sync: Received ${cloudData.players.length} players.`);
+        logger.logAction('CLOUD_PLAYERS_SYNC', { 
+          count: cloudData.players.length, 
+          players: cloudData.players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar })) 
+        });
         setPlayers(cloudData.players);
         storage.setItem('players', cloudData.players);
 
@@ -450,6 +453,12 @@ export default function App() {
         if (currentU) {
           const cloudUser = cloudData.players.find(p => String(p.id).toLowerCase() === String(currentU.id).toLowerCase());
           if (cloudUser) {
+            if (cloudUser.avatar !== currentU.avatar) {
+              logger.logAction('USER_AVATAR_CLOUD_OVERWRITE', { 
+                 old: currentU.avatar, 
+                 new: cloudUser.avatar 
+              });
+            }
             setCurrentUser(cloudUser);
             currentUserRef.current = cloudUser;
             setUserRole(cloudUser.role || 'user');
@@ -1369,12 +1378,24 @@ export default function App() {
           ...(currentUser.walletHistory || [])
         ] : (currentUser.walletHistory || [])
       };
-      setCurrentUser(updatedUser);
-      storage.setItem('currentUser', updatedUser);
+      const updatedMatchVideos = matchVideos.map(v => 
+        v.id === vid ? { 
+          ...v, 
+          purchases: (v.purchases || 0) + 1, 
+          revenue: (v.revenue || 0) + price 
+        } : v
+      );
+      setMatchVideos(updatedMatchVideos);
+      
       const updatedPlayers = players.map(p => p.id === currentUser.id ? updatedUser : p);
       setPlayers(updatedPlayers);
-      pushStateToCloud({ players: updatedPlayers });
-      storage.setItem('players', updatedPlayers);
+
+      syncAndSaveData({
+        currentUser: updatedUser,
+        players: updatedPlayers,
+        matchVideos: updatedMatchVideos
+      });
+
       Alert.alert("Success", "Match recording unlocked successfully!");
     },
     onPurchaseAiHighlights: (vid, uid, method) => {
@@ -1404,12 +1425,22 @@ export default function App() {
           ...(currentUser.walletHistory || [])
         ] : (currentUser.walletHistory || [])
       };
-      setCurrentUser(updatedUser);
-      storage.setItem('currentUser', updatedUser);
+      const updatedMatchVideos = matchVideos.map(v => 
+        v.id === vid ? { 
+          ...v, 
+          revenue: (v.revenue || 0) + price 
+        } : v
+      );
+      setMatchVideos(updatedMatchVideos);
+
       const updatedPlayers = players.map(p => p.id === currentUser.id ? updatedUser : p);
       setPlayers(updatedPlayers);
-      pushStateToCloud({ players: updatedPlayers });
-      storage.setItem('players', updatedPlayers);
+
+      syncAndSaveData({
+        currentUser: updatedUser,
+        players: updatedPlayers,
+        matchVideos: updatedMatchVideos
+      });
       Alert.alert("Success", "AI Highlights generated successfully!");
     },
     onVideoPlay: (vid, uid) => {

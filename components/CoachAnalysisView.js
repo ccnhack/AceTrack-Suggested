@@ -6,7 +6,7 @@ import {
 import { Video, ResizeMode } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { FullscreenVideoPlayer } from './FullscreenVideoPlayer';
-import config from '../config';
+import siteConfig from '../config';
 
 export const CoachAnalysisView = ({ video, coach, onSaveComment, onClose }) => {
   const [comments, setComments] = useState([]);
@@ -76,7 +76,7 @@ export const CoachAnalysisView = ({ video, coach, onSaveComment, onClose }) => {
                 <Video
                   ref={videoRef}
                   style={styles.video}
-                  source={{ uri: config.sanitizeUrl(video.watermarkedUrl || video.videoUrl) }}
+                  source={{ uri: (siteConfig?.sanitizeUrl || ((u) => u))(video.watermarkedUrl || video.videoUrl) }}
                   useNativeControls
                   resizeMode={ResizeMode.CONTAIN}
                   onPlaybackStatusUpdate={status => setPlaybackStatus(() => status)}

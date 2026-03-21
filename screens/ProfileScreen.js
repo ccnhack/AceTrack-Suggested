@@ -13,6 +13,7 @@ import { SupportTicketSystem } from '../components/SupportTicketSystem';
 import DiagnosticsModal from '../components/DiagnosticsModal';
 import config from '../config';
 import logger from '../utils/logger';
+import storage from '../utils/storage';
 
 const calculateAcademyTier = (uid, tournaments) => {
   const hostedCount = tournaments.filter(t => t.creatorId === uid).length;
@@ -146,8 +147,28 @@ const ProfileScreen = ({
       setEditName(user.name || '');
       setEditAvatar(user.avatar || '');
       setImageError(false);
+      logger.logAction('USER_AVATAR_INITIALIZED', { id: user.id, avatar: user.avatar });
     }
   }, [user?.id, user?.avatar]);
+
+  // Load persisted session avatar on mount
+  useEffect(() => {
+    const loadSessionAvatar = async () => {
+      const saved = await storage.getItem('sessionCustomAvatar');
+      if (saved) {
+        setSessionCustomAvatar(saved);
+        logger.logAction('SESSION_AVATAR_HYDRATED', { url: saved });
+      }
+    };
+    loadSessionAvatar();
+  }, []);
+
+  // Save to storage when it changes
+  useEffect(() => {
+    if (sessionCustomAvatar) {
+      storage.setItem('sessionCustomAvatar', sessionCustomAvatar);
+    }
+  }, [sessionCustomAvatar]);
   
   // Handle auto-open for Edit Profile (from global verification prompt)
   useEffect(() => {
@@ -638,7 +659,7 @@ const ProfileScreen = ({
               <TouchableOpacity 
                 onPress={async () => {
                   let finalAvatar = editAvatar;
-                  if (editAvatar && editAvatar.startsWith('file://')) {
+                  if (editAvatar && (editAvatar.startsWith('file://') || editAvatar.startsWith('content://'))) {
                     setIsUploading(true);
                     logger.logAction('AVATAR_UPLOAD_START', { localUri: editAvatar });
                     try {
@@ -679,10 +700,10 @@ const ProfileScreen = ({
                     }
                     finally { setIsUploading(false); }
                   }
-                  
-                  onUpdateUser({ ...user, avatar: finalAvatar });
-                  setShowAvatarPicker(false);
-                  Alert.alert("Success", "Profile picture updated!");
+                                    logger.logAction('PROFILE_UPDATE_FINAL', { userId: user.id, avatar: finalAvatar });
+                   onUpdateUser({ ...user, avatar: finalAvatar });
+                   setShowAvatarPicker(false);
+                   Alert.alert("Success", "Profile picture updated!");
                 }}
                 style={[styles.saveBtn, isUploading && { opacity: 0.5 }]}
                 disabled={isUploading}
@@ -784,8 +805,8 @@ const ProfileScreen = ({
               onPress={async () => {
                 let finalAvatar = editAvatar;
                 
-                // If it's a local file URI, upload it to server first
-                if (editAvatar && editAvatar.startsWith('file://')) {
+                // If it's a local file URI or content URI, upload it to server first
+                if (editAvatar && (editAvatar.startsWith('file://') || editAvatar.startsWith('content://'))) {
                   setIsUploading(true);
                   logger.logAction('AVATAR_UPLOAD_START', { uri: editAvatar });
                   try {
