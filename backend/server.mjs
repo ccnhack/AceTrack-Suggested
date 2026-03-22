@@ -358,11 +358,11 @@ const publicPath = path.join(__dirname, 'public');
 if (fs.existsSync(publicPath)) {
   app.use(express.static(publicPath));
   // SPA Fallback mapping
-  app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
+  app.use((req, res, next) => {
+    if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
       res.sendFile(path.join(publicPath, 'index.html'));
     } else {
-      res.status(404).json({ error: 'API route not found' });
+      next();
     }
   });
 }
