@@ -167,7 +167,7 @@ app.get('/api/status', apiKeyGuard, async (req, res) => {
     const state = await AppState.findOne().sort({ lastUpdated: -1 }).select('lastUpdated');
     res.json({ 
       lastUpdated: state?.lastUpdated || 0,
-      latestAppVersion: process.env.LATEST_APP_VERSION || '1.0.34'
+      latestAppVersion: process.env.LATEST_APP_VERSION || '1.0.35'
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -210,6 +210,23 @@ app.post('/api/save', apiKeyGuard, async (req, res) => {
     // 4. ATOMIC MERGE: Merge arrays instead of overwriting to prevent data loss
     const state = await AppState.findOne().sort({ lastUpdated: -1 });
     const currentData = (state && state.data) ? state.data : {};
+    
+    // 4.5 TOTAL OVERWRITE: If client explicitly requests a clean wipe/replace
+    if (req.body.overwrite === true) {
+      console.log("⚠️ [Server] ATOMIC OVERWRITE REQUESTED. Replacing all data.");
+      const cleanData = {};
+      for (const key of syncableKeys) {
+        if (req.body[key] !== undefined) {
+          cleanData[key] = req.body[key];
+        } else if (currentData[key]) {
+          cleanData[key] = currentData[key];
+        }
+      }
+      
+      const newState = new AppState({ data: cleanData, lastUpdated: Date.now() });
+      await newState.save();
+      return res.json({ success: true, message: 'Database overwritten successfully', lastUpdated: newState.lastUpdated });
+    }
     
     const updateObj = { lastUpdated: Date.now() };
     for (const key of syncableKeys) {
