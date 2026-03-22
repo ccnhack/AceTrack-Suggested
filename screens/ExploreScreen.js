@@ -31,7 +31,7 @@ const ExploreScreen = ({
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    if (tDate < today || t.tournamentStarted) return false;
+    if (tDate < today || t.tournamentStarted || t.status === 'ongoing' || t.status === 'completed') return false;
     if (t.registrationDeadline) {
       const deadlineDate = new Date(t.registrationDeadline);
       deadlineDate.setHours(23, 59, 59, 999);
