@@ -167,7 +167,7 @@ app.get('/api/status', apiKeyGuard, async (req, res) => {
     const state = await AppState.findOne().sort({ lastUpdated: -1 }).select('lastUpdated');
     res.json({ 
       lastUpdated: state?.lastUpdated || 0,
-      latestAppVersion: process.env.LATEST_APP_VERSION || '1.0.33'
+      latestAppVersion: process.env.LATEST_APP_VERSION || '1.0.34'
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

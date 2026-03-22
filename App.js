@@ -25,7 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import config from './config';
 import { io } from 'socket.io-client';
 
-const APP_VERSION = '1.0.33';
+const APP_VERSION = '1.0.34';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -340,6 +340,9 @@ export default function App() {
         setCurrentUser(u);
         currentUserRef.current = u;
         logger.logAction('HYDRATION_USER_RESTORED', { userId: u.id, role: u.role });
+        
+        // IMMEDIATE SYNC: Update device footprint upon startup restore
+        syncAndSaveData({ currentUser: u });
         // Extra check to ensure state is set
         setTimeout(() => {
           logger.logAction('HYDRATION_USER_STABILITY_CHECK', { 
@@ -685,6 +688,9 @@ export default function App() {
     currentUserRef.current = user;
     setUserRole(role);
     await storage.setItem('currentUser', user);
+
+    // IMMEDIATE SYNC: Update device footprint upon login
+    syncAndSaveData({ currentUser: user });
     
     // Ensure logged in user is in players list (case-insensitive check)
     const isNew = !players.some(p => String(p.id).toLowerCase() === String(user.id).toLowerCase());

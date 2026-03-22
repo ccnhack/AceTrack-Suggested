@@ -782,7 +782,7 @@ const AdminHubScreen = ({
                             <Text style={{ fontSize: 10, color: onlineDevices[d.id] ? '#10B981' : '#EF4444', fontWeight: 'bold' }}>
                               {onlineDevices[d.id] ? 'ONLINE' : 'OFFLINE'}
                             </Text>
-                            <Text style={{ fontSize: 9, color: '#94A3B8' }}>• Last: {new Date(d.lastActive).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                            <Text style={{ fontSize: 9, color: '#94A3B8' }}>• Last: {new Date(d.lastActive).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</Text>
                           </View>
                         </View>
                         <TouchableOpacity 
