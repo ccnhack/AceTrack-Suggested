@@ -181,15 +181,17 @@ export default function AppNavigator({
       {!user ? (
 // ... (omitting Landing, Login, Signup screens for brevity in target search if needed, but I'll provide full block)
         <>
-          <Stack.Screen name="Landing">
-            {(props) => (
-              <LandingScreen 
-                {...props} 
-                onLogin={() => props.navigation.navigate('Login')} 
-                onSignup={() => props.navigation.navigate('Signup')} 
-              />
-            )}
-          </Stack.Screen>
+          {Platform.OS !== 'web' && (
+            <Stack.Screen name="Landing">
+              {(props) => (
+                <LandingScreen 
+                  {...props} 
+                  onLogin={() => props.navigation.navigate('Login')} 
+                  onSignup={() => props.navigation.navigate('Signup')} 
+                />
+              )}
+            </Stack.Screen>
+          )}
           <Stack.Screen name="Login">
             {(props) => (
               <LoginScreen 
@@ -205,23 +207,25 @@ export default function AppNavigator({
               />
             )}
           </Stack.Screen>
-          <Stack.Screen name="Signup">
-            {(props) => (
-              <SignupScreen 
-                {...props} 
-                players={players} 
-                onSignupSuccess={(newUser) => {
-                  // handleRegisterUser handles cloud sync but NOT auto-login
-                  handlers.onRegisterUser(newUser);
-                  props.navigation.navigate('Login');
-                }}
-                onBack={() => props.navigation.goBack()}
-                Sport={Sport}
-                isUsingCloud={handlers.isUsingCloud}
-                onToggleCloud={handlers.onToggleCloud}
-              />
-            )}
-          </Stack.Screen>
+          {Platform.OS !== 'web' && (
+            <Stack.Screen name="Signup">
+              {(props) => (
+                <SignupScreen 
+                  {...props} 
+                  players={players} 
+                  onSignupSuccess={(newUser) => {
+                    // handleRegisterUser handles cloud sync but NOT auto-login
+                    handlers.onRegisterUser(newUser);
+                    props.navigation.navigate('Login');
+                  }}
+                  onBack={() => props.navigation.goBack()}
+                  Sport={Sport}
+                  isUsingCloud={handlers.isUsingCloud}
+                  onToggleCloud={handlers.onToggleCloud}
+                />
+              )}
+            </Stack.Screen>
+          )}
         </>
       ) : (
         <Stack.Screen name="Main">

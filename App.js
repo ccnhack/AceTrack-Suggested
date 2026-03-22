@@ -25,7 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import config from './config';
 import { io } from 'socket.io-client';
 
-const APP_VERSION = '1.0.39';
+const APP_VERSION = '1.0.40';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);

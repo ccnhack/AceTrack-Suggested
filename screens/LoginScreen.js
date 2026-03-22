@@ -196,7 +196,7 @@ const LoginScreen = ({
         <View style={styles.webOverlay}>
           <View style={styles.webLoginBox}>
             <View style={{ alignItems: 'center', marginBottom: 32 }}>
-              <Ionicons name="shield-checkmark" size={56} color="#10B981" />
+              <Image source={require('../assets/icon.png')} style={{ width: 80, height: 80, borderRadius: 20, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' }} />
               <Text style={styles.webTitle}>AceTrack Admin</Text>
               <Text style={styles.webSubtitle}>Authorized Personnel Only</Text>
             </View>
