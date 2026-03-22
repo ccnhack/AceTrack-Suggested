@@ -1,4 +1,5 @@
 import React from 'react';
+import { Platform } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -106,35 +107,39 @@ const MainTabs = ({
         }
       })}
     >
-      <Tab.Screen name="Explore">
-        {(props) => (
-          <ExploreScreen 
-            {...props} 
-            {...params} 
-            userId={user?.id}
-            userRole={role}
-            user={user}
-            userSports={user?.certifiedSports}
-            reschedulingFrom={reschedulingFrom}
-            onSelect={(t) => {}} // handled internally via TournamentDetailModal
-            {...typeProps} 
-          />
-        )}
-      </Tab.Screen>
-      {(role === 'user' || role === 'coach') && (
+      {Platform.OS !== 'web' && (
+        <Tab.Screen name="Explore">
+          {(props) => (
+            <ExploreScreen 
+              {...props} 
+              {...params} 
+              userId={user?.id}
+              userRole={role}
+              user={user}
+              userSports={user?.certifiedSports}
+              reschedulingFrom={reschedulingFrom}
+              onSelect={(t) => {}} // handled internally via TournamentDetailModal
+              {...typeProps} 
+            />
+          )}
+        </Tab.Screen>
+      )}
+      {Platform.OS !== 'web' && (role === 'user' || role === 'coach') && (
         <Tab.Screen name="Matches">
           {(props) => <MatchesScreen {...props} {...params} user={params.user} {...typeProps} />}
         </Tab.Screen>
       )}
-      {(role === 'user' || role === 'coach') && (
+      {Platform.OS !== 'web' && (role === 'user' || role === 'coach') && (
         <Tab.Screen name="Recordings">
           {(props) => <RecordingsScreen {...props} {...params} user={params.user} {...typeProps} />}
         </Tab.Screen>
       )}
-      <Tab.Screen name="Ranking">
-        {(props) => <RankingScreen {...props} {...params} user={params.user} {...typeProps} />}
-      </Tab.Screen>
-      {role === 'academy' && (
+      {Platform.OS !== 'web' && (
+        <Tab.Screen name="Ranking">
+          {(props) => <RankingScreen {...props} {...params} user={params.user} {...typeProps} />}
+        </Tab.Screen>
+      )}
+      {Platform.OS !== 'web' && role === 'academy' && (
         <Tab.Screen name="Academy">
           {(props) => <AcademyScreen {...props} {...params} academyId={params.user.id} matches={matches} onCancelVideo={onCancelVideo} {...typeProps} />}
         </Tab.Screen>

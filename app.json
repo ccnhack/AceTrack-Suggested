@@ -2,11 +2,12 @@
   "expo": {
     "name": "acetrack-mobile",
     "slug": "acetrack-mobile",
-    "version": "1.0.37",
+    "version": "1.0.39",
     "sdkVersion": "50.0.0",
     "platforms": [
       "ios",
-      "android"
+      "android",
+      "web"
     ],
     "icon": "./assets/icon.png",
     "splash": {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Dimensions, ScrollView, Alert, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Dimensions, ScrollView, Alert, Modal, ActivityIndicator, Platform, ImageBackground } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import config from '../config';
 import logger from '../utils/logger';
@@ -33,6 +33,23 @@ const LoginScreen = ({
     setIsSyncing(false);
 
     try {
+      // Web Admin Only restriction
+      if (Platform.OS === 'web') {
+        if (username === 'admin' && password === 'Password@123') {
+          onLoginSuccess('admin', { 
+            id: 'admin', 
+            name: 'System Admin', 
+            role: 'admin',
+            avatar: 'https://ui-avatars.com/api/?name=Admin&background=random'
+          });
+          return;
+        } else {
+          setError('Access Denied. This portal is strictly for AceTrack Administrators.');
+          setIsLoading(false);
+          return;
+        }
+      }
+
       // Admin Login logic
       if (username === 'admin' && password === 'Password@123') {
         onLoginSuccess('admin', { 
@@ -168,6 +185,77 @@ const LoginScreen = ({
       Alert.alert("Error", "Failed to update password. Please check your connection.");
     }
   };
+
+  if (Platform.OS === 'web') {
+    return (
+      <ImageBackground 
+        source={{ uri: "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?q=80&w=2000&auto=format&fit=crop" }} 
+        style={styles.webBg}
+        resizeMode="cover"
+      >
+        <View style={styles.webOverlay}>
+          <View style={styles.webLoginBox}>
+            <View style={{ alignItems: 'center', marginBottom: 32 }}>
+              <Ionicons name="shield-checkmark" size={56} color="#10B981" />
+              <Text style={styles.webTitle}>AceTrack Admin</Text>
+              <Text style={styles.webSubtitle}>Authorized Personnel Only</Text>
+            </View>
+
+            {error ? <View style={{ backgroundColor: '#FEE2E2', padding: 12, borderRadius: 8, marginBottom: 16 }}><Text style={{ color: '#EF4444', textAlign: 'center', fontSize: 13, fontWeight: 'bold' }}>{error}</Text></View> : null}
+
+            <View style={{ marginBottom: 20 }}>
+              <Text style={styles.webInputLabel}>Admin Username</Text>
+              <View style={styles.webInputWrapper}>
+                <Ionicons name="person-outline" size={20} color="#94A3B8" style={{ marginRight: 12 }} />
+                <TextInput 
+                  style={styles.webInput}
+                  placeholder="Enter admin username"
+                  placeholderTextColor="#94A3B8"
+                  value={username}
+                  onChangeText={setUsername}
+                  autoCapitalize="none"
+                  editable={!isLoading}
+                />
+              </View>
+            </View>
+
+            <View style={{ marginBottom: 32 }}>
+              <Text style={styles.webInputLabel}>Admin Password</Text>
+              <View style={styles.webInputWrapper}>
+                <Ionicons name="lock-closed-outline" size={20} color="#94A3B8" style={{ marginRight: 12 }} />
+                <TextInput 
+                  style={styles.webInput}
+                  placeholder="Enter secure password"
+                  placeholderTextColor="#94A3B8"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  editable={!isLoading}
+                  onSubmitEditing={handleLogin}
+                />
+              </View>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.webLoginButton}
+              onPress={handleLogin}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.webLoginButtonText}>ACCESS SECURE DASHBOARD</Text>
+              )}
+            </TouchableOpacity>
+
+            <Text style={{ textAlign: 'center', color: '#64748B', fontSize: 11, marginTop: 24, letterSpacing: 0.5 }}>
+              Platform actions are monitored and audited.
+            </Text>
+          </View>
+        </View>
+      </ImageBackground>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} bounces={false}>
@@ -357,7 +445,98 @@ const styles = StyleSheet.create({
   forgotPasswordText: { color: '#3B82F6', fontSize: 14, fontWeight: '600' },
   errorText: { color: '#EF4444', fontSize: 14, textAlign: 'center', marginTop: 4 },
   loginButton: { height: 56, backgroundColor: '#EF4444', borderRadius: 16, alignItems: 'center', justifyContent: 'center', elevation: 4, shadowColor: '#EF4444', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, marginTop: 12 },
-  loginButtonText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 },
+  registerText: {
+    color: '#0F172A',
+    fontWeight: 'bold',
+  },
+
+  // Web Admin Styles
+  webBg: {
+    flex: 1,
+    width: '100%',
+    height: '100vh',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  webOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  webLoginBox: {
+    width: 440,
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    padding: 48,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.3,
+    shadowRadius: 40,
+    elevation: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  webTitle: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginTop: 16,
+    letterSpacing: -0.5,
+  },
+  webSubtitle: {
+    fontSize: 14,
+    color: '#64748B',
+    marginTop: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    fontWeight: '600',
+  },
+  webInputLabel: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#475569',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  webInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9', // slightly solid to match premium feel
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    height: 52,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  webInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#0F172A',
+    fontWeight: '500',
+    height: '100%',
+    outlineStyle: 'none', // Web specific hack
+  },
+  webLoginButton: {
+    backgroundColor: '#0F172A',
+    height: 56,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    marginTop: 8,
+    cursor: 'pointer',
+  },
+  webLoginButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+  },
   devToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 12, backgroundColor: '#F1F5F9', borderRadius: 12, marginTop: 8, borderWidth: 1, borderColor: '#E2E8F0' },
   devToggleActive: { backgroundColor: '#3B82F6', borderColor: '#2563EB' },
   devToggleText: { fontSize: 12, fontWeight: 'bold', color: '#64748B', textTransform: 'uppercase' },

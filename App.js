@@ -25,7 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import config from './config';
 import { io } from 'socket.io-client';
 
-const APP_VERSION = '1.0.37';
+const APP_VERSION = '1.0.39';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -1215,7 +1215,7 @@ export default function App() {
         updatedPlayers = players.map(p => {
           if (playerFinalRatings[p.id]) {
             const avg = playerFinalRatings[p.id].reduce((a, b) => a + b, 0) / playerFinalRatings[p.id].length;
-            return { ...p, rating: Math.round(avg) };
+            return { ...p, rating: 1000 + Math.round(avg) };
           }
           return p;
         });

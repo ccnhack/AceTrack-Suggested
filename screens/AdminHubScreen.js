@@ -102,7 +102,23 @@ const AdminHubScreen = ({
       const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
       const content = JSON.stringify(diagContent, null, 2);
       
-      // 1. Write to local cache
+      // 1. If Web, use DOM download
+      if (Platform.OS === 'web') {
+        const blob = new Blob([content], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        logger.logAction('DIAGNOSTICS_DOWNLOAD_WEB', { file: fileName });
+        setIsDownloading(false);
+        return;
+      }
+
+      // 1. Write to local cache (Native)
       await FileSystem.writeAsStringAsync(fileUri, content, { encoding: FileSystem.EncodingType.UTF8 });
       
       // 2. Share the file URI
@@ -772,7 +788,11 @@ const AdminHubScreen = ({
                 {selectedDiagUser.devices && selectedDiagUser.devices.length > 0 ? (
                   <View style={{ marginBottom: 16 }}>
                     <Text style={{ fontSize: 12, color: '#64748B', fontWeight: 'bold', marginBottom: 8, textTransform: 'uppercase' }}>Active Devices</Text>
-                    {selectedDiagUser.devices.map(d => (
+                    {(selectedDiagUser.devices || []).slice().sort((a, b) => {
+                      const aOnline = onlineDevices[a.id] ? 1 : 0;
+                      const bOnline = onlineDevices[b.id] ? 1 : 0;
+                      return bOnline - aOnline;
+                    }).map(d => (
                       <View key={d.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
                         <View style={{ flex: 1, paddingRight: 6 }}>
                           <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0F172A' }} numberOfLines={1}>{d.name}</Text>

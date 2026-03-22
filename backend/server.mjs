@@ -167,7 +167,7 @@ app.get('/api/status', apiKeyGuard, async (req, res) => {
     const state = await AppState.findOne().sort({ lastUpdated: -1 }).select('lastUpdated');
     res.json({ 
       lastUpdated: state?.lastUpdated || 0,
-      latestAppVersion: process.env.LATEST_APP_VERSION || '1.0.37'
+      latestAppVersion: process.env.LATEST_APP_VERSION || '1.0.39'
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -352,6 +352,20 @@ app.post('/api/diagnostics', apiKeyGuard, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// Serve Web Admin Dashboard
+const publicPath = path.join(__dirname, 'public');
+if (fs.existsSync(publicPath)) {
+  app.use(express.static(publicPath));
+  // SPA Fallback mapping
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
+      res.sendFile(path.join(publicPath, 'index.html'));
+    } else {
+      res.status(404).json({ error: 'API route not found' });
+    }
+  });
+}
 
 httpServer.listen(PORT, () => {
   console.log(`🚀 AceTrack Shared Backend running on port ${PORT}`);
