@@ -99,7 +99,7 @@ const MainTabs = ({
         tabBarActiveTintColor: '#EF4444',
         tabBarInactiveTintColor: '#CBD5E1',
         headerShown: false,
-        tabBarStyle: {
+        tabBarStyle: Platform.OS === 'web' ? { display: 'none' } : {
           borderTopLeftRadius: 32,
           borderTopRightRadius: 32,
           height: 70,
