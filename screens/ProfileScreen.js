@@ -174,10 +174,13 @@ const ProfileScreen = ({
   
   // Handle auto-open for Edit Profile (from global verification prompt)
   useEffect(() => {
-    if (navigation?.getState && navigation.getState()?.routes[navigation.getState().index]?.params?.autoEdit) {
-      setShowEditProfile(true);
-      // Clear the param after opening to avoid re-opening on every re-render
-      navigation.setParams({ autoEdit: false });
+    try {
+      if (navigation?.getState?.()?.routes[navigation.getState().index]?.params?.autoEdit) {
+        setShowEditProfile(true);
+        navigation.setParams({ autoEdit: false });
+      }
+    } catch (e) {
+      console.warn("[ProfileScreen] Navigation state access failed:", e);
     }
   }, [navigation]);
   useEffect(() => {
