@@ -25,7 +25,8 @@ const AdminHubScreen = ({
   setSeenAdminActionIds, visitedAdminSubTabs = new Set(), setVisitedAdminSubTabs,
   isUsingCloud, onOptOut, onLogFailedOtp, onLogTrace, setPlayers, onToggleFavourite,
   isCloudOnline, lastSyncTime, onBatchUpdate, onUploadLogs, isUploadingLogs,
-  onVerifyAccount, onToggleCloud, setIsProfileEditActive, appVersion, socketRef
+  onVerifyAccount, onToggleCloud, setIsProfileEditActive, appVersion, socketRef,
+  navigation
 }) => {
   const targetCloudUrl = 'https://acetrack-api-q39m.onrender.com';
   const activeApiUrl = isUsingCloud ? targetCloudUrl : config.API_BASE_URL;

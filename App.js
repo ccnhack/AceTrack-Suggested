@@ -26,9 +26,8 @@ import config from './config';
 import { io } from 'socket.io-client';
 
 if (Platform.OS === 'web') {
-  const iconFont = require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf');
   const iconFontStyles = `@font-face {
-    src: url(${typeof iconFont === 'string' ? iconFont : iconFont.default || iconFont});
+    src: url('https://unpkg.com/ionicons@latest/dist/fonts/ionicons.ttf');
     font-family: Ionicons;
   }`;
   const style = document.createElement('style');
@@ -36,7 +35,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = '1.0.43';
+const APP_VERSION = '1.0.44';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
