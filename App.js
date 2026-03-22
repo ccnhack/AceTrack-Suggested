@@ -25,7 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import config from './config';
 import { io } from 'socket.io-client';
 
-const APP_VERSION = '1.0.31';
+const APP_VERSION = '1.0.32';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -185,8 +185,7 @@ export default function App() {
         // Ensure stable hardware footprint
         let hardwareId = await AsyncStorage.getItem('acetrack_device_id');
         if (!hardwareId) {
-          const randomHex = Math.random().toString(16).substr(2, 4);
-          hardwareId = `${(Constants.deviceName || Platform.OS).replace(/[^a-zA-Z0-9]/g, '_')}-${randomHex}`;
+          hardwareId = (Constants.deviceName || Platform.OS).replace(/[^a-zA-Z0-9]/g, '_');
           await AsyncStorage.setItem('acetrack_device_id', hardwareId);
         }
         localDeviceIdRef.current = hardwareId;
