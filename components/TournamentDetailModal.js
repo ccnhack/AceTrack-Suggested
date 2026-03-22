@@ -26,7 +26,19 @@ const TournamentDetailModal = ({
   const isPendingPayment = user && (tournament.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
   const isAssignedCoach = user && String(tournament.assignedCoachId).toLowerCase() === String(user.id).toLowerCase();
   const isFull = tournament.registeredPlayerIds?.length >= tournament.maxPlayers;
-  const isClosed = tournament.status !== 'upcoming';
+  
+  // DATE-BASED CLOSURE: Check if deadline has passed or tournament started
+  const isClosed = (() => {
+    if (tournament.tournamentStarted || tournament.status !== 'upcoming') return true;
+    if (tournament.registrationDeadline) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const deadline = new Date(tournament.registrationDeadline);
+      deadline.setHours(23, 59, 59, 999);
+      if (today > deadline) return true;
+    }
+    return false;
+  })();
 
   const creator = players.find(p => p.id === tournament.creatorId);
 
