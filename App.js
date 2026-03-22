@@ -22,6 +22,7 @@ import ChatBot from './components/ChatBot';
 import * as Updates from 'expo-updates';
 import logger from './utils/logger';
 import { Ionicons } from '@expo/vector-icons';
+import * as Font from 'expo-font';
 import config from './config';
 import { io } from 'socket.io-client';
 
@@ -33,9 +34,14 @@ if (Platform.OS === 'web') {
   const style = document.createElement('style');
   style.appendChild(document.createTextNode(iconFontStyles));
   document.head.appendChild(style);
+
+  // Supplemental Expo Font loading for deeper integration with @expo/vector-icons
+  Font.loadAsync({
+    Ionicons: 'https://unpkg.com/ionicons@latest/dist/fonts/ionicons.ttf',
+  });
 }
 
-const APP_VERSION = '1.0.44';
+const APP_VERSION = '1.0.45';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);

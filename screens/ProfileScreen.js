@@ -174,7 +174,7 @@ const ProfileScreen = ({
   
   // Handle auto-open for Edit Profile (from global verification prompt)
   useEffect(() => {
-    if (navigation.getState().routes[navigation.getState().index]?.params?.autoEdit) {
+    if (navigation?.getState && navigation.getState()?.routes[navigation.getState().index]?.params?.autoEdit) {
       setShowEditProfile(true);
       // Clear the param after opening to avoid re-opening on every re-render
       navigation.setParams({ autoEdit: false });
