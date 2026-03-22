@@ -25,7 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import config from './config';
 import { io } from 'socket.io-client';
 
-const APP_VERSION = '1.0.30';
+const APP_VERSION = '1.0.31';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -1824,6 +1824,15 @@ export default function App() {
           body: JSON.stringify({
             username: activeUser.name || activeUser.email || 'Unknown User',
             logs: logs,
+            state: {
+              currentUser: activeUser,
+              tournamentsCount: tournaments.length,
+              matchVideosCount: matchVideos.length,
+              matchesCount: matches.length,
+              role: userRole,
+              isUsingCloud,
+              appVersion: APP_VERSION
+            },
             prefix: 'user_report',
             deviceId: localDeviceIdRef.current
           })

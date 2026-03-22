@@ -43,9 +43,9 @@ const ExploreScreen = ({
     // Gender-based filtering for Individual/Player users
     if (userRole === 'user') {
       const format = t.format || "";
-      const gender = currentUser?.gender;
-      if (format.includes("Men's") && gender !== 'Male') return false;
-      if (format.includes("Women's") && gender !== 'Female') return false;
+      const gender = user?.gender; // Use prop gender instead of local const (hoisting/scoping fix)
+      if (format.includes("Men's") && gender && gender !== 'Male') return false;
+      if (format.includes("Women's") && gender && gender !== 'Female') return false;
     }
 
     return true;
