@@ -25,7 +25,18 @@ import { Ionicons } from '@expo/vector-icons';
 import config from './config';
 import { io } from 'socket.io-client';
 
-const APP_VERSION = '1.0.41';
+if (Platform.OS === 'web') {
+  const iconFont = require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf');
+  const iconFontStyles = `@font-face {
+    src: url(${typeof iconFont === 'string' ? iconFont : iconFont.default || iconFont});
+    font-family: Ionicons;
+  }`;
+  const style = document.createElement('style');
+  style.appendChild(document.createTextNode(iconFontStyles));
+  document.head.appendChild(style);
+}
+
+const APP_VERSION = '1.0.43';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);

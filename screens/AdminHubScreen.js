@@ -1171,6 +1171,7 @@ const AdminHubScreen = ({
              isUsingCloud={isUsingCloud} lastSyncTime={lastSyncTime}
              onManualSync={onManualSync} onToggleCloud={onToggleCloud}
              setIsProfileEditActive={setIsProfileEditActive} appVersion={appVersion}
+             navigation={navigation}
            />
         ) : (
            <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 24, shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 30, shadowOffset: { width: 0, height: 10 }, overflow: 'hidden' }}>
