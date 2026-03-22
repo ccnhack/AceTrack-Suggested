@@ -286,8 +286,9 @@ const AdminHubScreen = ({
     });
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
+  const isWeb = Platform.OS === 'web';
+  const content = (
+    <SafeAreaView style={[styles.container, isWeb && { maxWidth: 1200, alignSelf: 'center', width: '100%', backgroundColor: '#FFFFFF', padding: 24, marginVertical: 32, borderRadius: 24, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.08, shadowRadius: 40, overflow: 'hidden', height: '95vh', flex: 0 }]}>
       <View style={styles.header}>
         <Text style={styles.title}>Admin Hub</Text>
         <Text style={styles.subtitle}>System Overview & Management</Text>
@@ -1100,6 +1101,12 @@ const AdminHubScreen = ({
       />
     </SafeAreaView>
   );
+
+  return isWeb ? (
+    <View style={{ flex: 1, backgroundColor: '#F8FAFC', justifyContent: 'center' }}>
+      {content}
+    </View>
+  ) : content;
 };
 
 const styles = StyleSheet.create({

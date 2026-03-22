@@ -283,8 +283,9 @@ const ProfileScreen = ({
 
   const academyTier = user.role === 'academy' ? calculateAcademyTier(user.id, tournaments) : null;
 
-  return (
-    <SafeAreaView style={styles.container}>
+  const isWeb = Platform.OS === 'web';
+  const content = (
+    <SafeAreaView style={[styles.container, isWeb && { maxWidth: 900, alignSelf: 'center', width: '100%', backgroundColor: '#FFFFFF', padding: 24, marginVertical: 32, borderRadius: 24, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.08, shadowRadius: 40, overflow: 'hidden', height: '95vh', flex: 0 }]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
             <View style={styles.avatarContainer}>
@@ -995,6 +996,12 @@ const ProfileScreen = ({
       />
     </SafeAreaView>
   );
+
+  return isWeb ? (
+    <View style={{ flex: 1, backgroundColor: '#F8FAFC', justifyContent: 'center' }}>
+      {content}
+    </View>
+  ) : content;
 };
 
 const styles = StyleSheet.create({
