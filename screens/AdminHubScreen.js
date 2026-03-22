@@ -734,9 +734,14 @@ const AdminHubScreen = ({
                         source={{ uri: p.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random` }} 
                         style={styles.miniAvatar} 
                       />
-                      <Text style={[styles.miniUserName, selectedDiagUser?.id === p.id && styles.miniUserNameActive]}>
-                        {p.name.split(' ')[0]}
-                      </Text>
+                      <View style={{ alignItems: 'center' }}>
+                        <Text style={[styles.miniUserName, selectedDiagUser?.id === p.id && styles.miniUserNameActive]} numberOfLines={1}>
+                          {p.name.split(' ')[0]}
+                        </Text>
+                        <Text style={{ fontSize: 8, color: selectedDiagUser?.id === p.id ? '#FFFFFF' : '#94A3B8', fontWeight: 'bold' }}>
+                          ({p.id})
+                        </Text>
+                      </View>
                     </TouchableOpacity>
                   ))}
                   {players
