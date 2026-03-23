@@ -34,11 +34,46 @@ let logs = [];
 const MAX_LOG_COUNT = 5000; 
 
 let autoFlushConfig = null;
+const QUEUE_KEY = 'offline_diagnostics_queue';
+
+const processOfflineQueue = async () => {
+  if (!autoFlushConfig || !autoFlushConfig.url || !autoFlushConfig.key) return;
+  try {
+    let queue = await storage.getItem(QUEUE_KEY);
+    if (!queue) return;
+    if (typeof queue === 'string') {
+      try { queue = JSON.parse(queue); } catch(e) { queue = []; }
+    }
+    if (!Array.isArray(queue) || queue.length === 0) return;
+
+    const remainingQueue = [...queue];
+    for (const item of queue) {
+      try {
+        const res = await (global.fetch || fetch)(`${autoFlushConfig.url}/api/diagnostics/auto-flush`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-ace-api-key': autoFlushConfig.key },
+          body: JSON.stringify({
+            username: autoFlushConfig.user || 'UNKNOWN',
+            deviceId: autoFlushConfig.device || 'UNKNOWN',
+            logs: item.data
+          })
+        });
+        if (res.ok) {
+          const idx = remainingQueue.findIndex(q => q.id === item.id);
+          if (idx > -1) remainingQueue.splice(idx, 1);
+        }
+      } catch (e) {
+        break; // Stop processing queue if network is still down
+      }
+    }
+    await storage.setItem(QUEUE_KEY, remainingQueue);
+  } catch(e) {}
+};
 
 const triggerAutoFlush = async (payload) => {
   if (!autoFlushConfig || !autoFlushConfig.url || !autoFlushConfig.key) return;
   try {
-    await (global.fetch || fetch)(`${autoFlushConfig.url}/api/diagnostics/auto-flush`, {
+    const res = await (global.fetch || fetch)(`${autoFlushConfig.url}/api/diagnostics/auto-flush`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -50,8 +85,23 @@ const triggerAutoFlush = async (payload) => {
         logs: payload
       })
     });
+    if (!res.ok) throw new Error('Network response was not ok');
+    
+    // Attempt to flush offline queue since we confirmed network is back
+    processOfflineQueue();
   } catch (e) {
-    // Autonomously fail silently so app doesn't crash on network drop
+    // Autonomously fail silently and safely queue the payload locally!
+    try {
+      let queue = await storage.getItem(QUEUE_KEY);
+      if (typeof queue === 'string') {
+        try { queue = JSON.parse(queue); } catch(err) { queue = []; }
+      }
+      if (!Array.isArray(queue)) queue = [];
+      
+      queue.push({ id: Date.now().toString(), data: payload });
+      if (queue.length > 5) queue.shift(); // Hard cap at 5 offline payloads
+      await storage.setItem(QUEUE_KEY, queue);
+    } catch(storageErr) {}
   }
 };
 
@@ -90,6 +140,8 @@ const addLog = (level, type, message) => {
 const logger = {
   initAutoFlush: (url, key, user, device) => {
     autoFlushConfig = { url, key, user, device };
+    // Immediately attempt to process any historically pending offline payloads
+    processOfflineQueue();
   },
   getLogs: () => {
     return logs;
