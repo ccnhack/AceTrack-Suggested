@@ -1070,13 +1070,16 @@ export default function App() {
       
       Alert.alert("Success", `₹${amount} added to your AceTrack wallet!`);
     },
-    onReplyTicket: (id, text) => {
-      const msgText = typeof text === 'string' ? text : (text.text || String(text));
+    onReplyTicket: (id, text, image, replyToMsg) => {
+      const msgText = typeof text === 'string' ? text : (text?.text || String(text || ''));
       const msg = {
         senderId: currentUserRef.current?.id || 'admin',
         text: msgText,
         timestamp: new Date().toISOString()
       };
+      if (image) msg.image = image;
+      if (replyToMsg) msg.replyTo = { text: replyToMsg.text || '', senderId: replyToMsg.senderId || '' };
+      logger.logAction('SUPPORT_MSG_SENT', { ticketId: id, hasImage: !!image, hasReply: !!replyToMsg, textLen: msgText.length });
       const updated = supportTickets.map(t => t.id === id ? { ...t, messages: [...t.messages, msg] } : t);
       setSupportTickets(updated);
       syncAndSaveData({ supportTickets: updated });
