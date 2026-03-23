@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Updates from 'expo-updates';
 import { PlayerSkillDashboard, PlayerPerformanceAnalytics, PlayerWalletDashboard } from '../components/PlayerProfileFeatures';
 import CoachOnboardingModal from '../components/CoachOnboardingModal';
@@ -498,6 +499,7 @@ const ProfileScreen = ({
 
       {/* Support System Modal */}
       <Modal visible={showSupport} animationType="slide">
+        <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaView style={styles.supportContainer}>
             <View style={styles.supportHeader}>
                 <Text style={styles.supportTitle}>Support Center</Text>
@@ -515,6 +517,7 @@ const ProfileScreen = ({
               />
             ) : <Text>Support System Unavailable</Text>}
         </SafeAreaView>
+        </GestureHandlerRootView>
       </Modal>
 
       {/* Verification OTP Modal */}
