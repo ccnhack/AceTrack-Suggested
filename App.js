@@ -36,7 +36,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = '1.0.46';
+const APP_VERSION = '1.0.46.6';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -1069,7 +1069,12 @@ export default function App() {
       
       Alert.alert("Success", `₹${amount} added to your AceTrack wallet!`);
     },
-    onReplyTicket: (id, msg) => {
+    onReplyTicket: (id, text) => {
+      const msg = {
+        senderId: currentUserRef.current?.id || 'admin',
+        text: text,
+        timestamp: new Date().toISOString()
+      };
       const updated = supportTickets.map(t => t.id === id ? { ...t, messages: [...t.messages, msg] } : t);
       setSupportTickets(updated);
       syncAndSaveData({ supportTickets: updated });
