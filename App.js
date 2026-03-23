@@ -192,8 +192,12 @@ export default function App() {
         
         const cloudUrl = 'https://acetrack-api-q39m.onrender.com';
         logger.checkAndUploadCrash(cloudUrl, config.ACE_API_KEY);
-
-        // Ensure stable hardware footprint
+        if (Platform.OS === 'web') {
+          await Font.loadAsync(Ionicons.font);
+          console.log("🕸️ Ionicons manually loaded for web");
+        }
+        
+        // STEP 1: Always ensure hardware ID exists
         let hardwareId = await AsyncStorage.getItem('acetrack_device_id');
         if (!hardwareId) {
           hardwareId = (Constants.deviceName || Platform.OS).replace(/[^a-zA-Z0-9]/g, '_');
