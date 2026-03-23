@@ -36,7 +36,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = '1.0.46.6';
+const APP_VERSION = Platform.OS === 'web' ? '1.0.46.6' : '1.0.39';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
