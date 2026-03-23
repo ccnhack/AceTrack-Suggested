@@ -28,7 +28,7 @@ import { io } from 'socket.io-client';
 
 if (Platform.OS === 'web') {
   const iconFontStyles = `@font-face {
-    src: url('https://unpkg.com/ionicons@latest/dist/fonts/ionicons.ttf');
+    src: url('https://cdnjs.cloudflare.com/ajax/libs/react-native-vector-icons/9.2.0/Fonts/Ionicons.ttf');
     font-family: Ionicons;
   }`;
   const style = document.createElement('style');
@@ -193,8 +193,8 @@ export default function App() {
         const cloudUrl = 'https://acetrack-api-q39m.onrender.com';
         logger.checkAndUploadCrash(cloudUrl, config.ACE_API_KEY);
         if (Platform.OS === 'web') {
-          await Font.loadAsync(Ionicons.font);
-          console.log("🕸️ Ionicons manually loaded for web");
+          // Relies on injected CSS font-face for CORS safety
+          console.log("🕸️ Ionicons styling injected via CSS");
         }
         
         // STEP 1: Always ensure hardware ID exists
