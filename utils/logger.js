@@ -33,6 +33,28 @@ const formatIST = (date) => {
 let logs = [];
 const MAX_LOG_COUNT = 5000; 
 
+let autoFlushConfig = null;
+
+const triggerAutoFlush = async (payload) => {
+  if (!autoFlushConfig || !autoFlushConfig.url || !autoFlushConfig.key) return;
+  try {
+    await (global.fetch || fetch)(`${autoFlushConfig.url}/api/diagnostics/auto-flush`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-ace-api-key': autoFlushConfig.key
+      },
+      body: JSON.stringify({
+        username: autoFlushConfig.user || 'UNKNOWN',
+        deviceId: autoFlushConfig.device || 'UNKNOWN',
+        logs: payload
+      })
+    });
+  } catch (e) {
+    // Autonomously fail silently so app doesn't crash on network drop
+  }
+};
+
 const originalLog = console.log;
 const originalWarn = console.warn;
 const originalError = console.error;
@@ -52,15 +74,23 @@ const addLog = (level, type, message) => {
   };
   
   logs.push(logEntry);
-  if (logs.length > MAX_LOG_COUNT) {
-    logs = logs.slice(-MAX_LOG_COUNT);
-  }
   
-  // Persist to storage (async non-blocking)
-  storage.setItem('persistent_logs', logs).catch(() => {});
+  if (logs.length >= MAX_LOG_COUNT) {
+    // Auto-flush trigger: copy payload, reset logs, save empty array, send payload.
+    const payload = [...logs];
+    logs = [];
+    storage.setItem('persistent_logs', logs).catch(() => {});
+    triggerAutoFlush(payload);
+  } else {
+    // Persist to storage (async non-blocking) normally
+    storage.setItem('persistent_logs', logs).catch(() => {});
+  }
 };
 
 const logger = {
+  initAutoFlush: (url, key, user, device) => {
+    autoFlushConfig = { url, key, user, device };
+  },
   getLogs: () => {
     return logs;
   },

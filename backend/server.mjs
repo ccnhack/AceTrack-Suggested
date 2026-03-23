@@ -161,6 +161,43 @@ app.get('/api/data', apiKeyGuard, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+app.post('/api/diagnostics/auto-flush', apiKeyGuard, async (req, res) => {
+  try {
+    const { username, deviceId, logs } = req.body;
+    if (!logs || !Array.isArray(logs)) return res.status(400).json({ error: 'Missing logs payload' });
+
+    const safeUser = String(username || 'unknown').replace(/[^a-zA-Z0-9-]/gi, '_');
+    const safeDevice = String(deviceId || 'unknown').replace(/[^a-zA-Z0-9-]/gi, '_');
+    const timestamp = Date.now();
+    const filename = `${safeUser}_${safeDevice}_${timestamp}.log`;
+    
+    const filePath = path.join(DIAGNOSTICS_DIR, filename);
+    const logContent = logs.map(l => `[${l.timestamp}] ${l.level.toUpperCase()} [${l.type}]: ${l.message}`).join('\n');
+    fs.writeFileSync(filePath, logContent);
+
+    // Retention: Keep 3 newest logs for this exact user/device combo
+    const allFiles = fs.readdirSync(DIAGNOSTICS_DIR);
+    const userFiles = allFiles
+      .filter(f => f.startsWith(`${safeUser}_${safeDevice}_`) && f.endsWith('.log'))
+      .sort((a, b) => {
+         const timeA = parseInt(a.split('_').pop().replace('.log', '')) || 0;
+         const timeB = parseInt(b.split('_').pop().replace('.log', '')) || 0;
+         return timeB - timeA;
+      });
+
+    if (userFiles.length > 3) {
+      const filesToDelete = userFiles.slice(3);
+      filesToDelete.forEach(f => {
+        try { fs.unlinkSync(path.join(DIAGNOSTICS_DIR, f)); } catch(e) {}
+      });
+    }
+
+    res.json({ success: true, count: logs.length, retained: 3 });
+  } catch (error) {
+    console.error("Auto-flush error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 app.get('/api/status', apiKeyGuard, async (req, res) => {
   try {
