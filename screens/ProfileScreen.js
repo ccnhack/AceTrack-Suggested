@@ -288,11 +288,15 @@ const ProfileScreen = ({
 
   const isWeb = Platform.OS === 'web';
   const content = (
-    <SafeAreaView style={[styles.container, isWeb && { maxWidth: 900, alignSelf: 'center', width: '100%', backgroundColor: '#FFFFFF', padding: 24, marginVertical: 32, borderRadius: 24, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.08, shadowRadius: 40, overflow: 'hidden', height: '95vh', flex: 0 }]}>
+    <SafeAreaView style={[styles.container, isWeb && { maxWidth: 900, alignSelf: 'center', width: '100%', backgroundColor: '#FFFFFF', padding: 24, marginVertical: 16, borderRadius: 24, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.08, shadowRadius: 40, overflow: 'hidden', flex: 1 }]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
             <View style={styles.avatarContainer}>
-                {user.avatar && !imageError ? (
+                {user.role === 'admin' ? (
+                  <View style={[styles.avatar, { backgroundColor: '#0F172A', borderWidth: 2, borderColor: '#3B82F6', justifyContent: 'center', alignItems: 'center' }]}>
+                    <Image source={require('../assets/icon.png')} style={{width: 50, height: 50, resizeMode: 'contain'}} />
+                  </View>
+                ) : user.avatar && !imageError ? (
                   <Image 
                     key={`${user.avatar}_${Math.random()}`}
                     source={{ uri: `${user.avatar}${user.avatar.includes('?') ? '&' : '?'}v=${Math.random().toString(36).substring(7)}` }} 
