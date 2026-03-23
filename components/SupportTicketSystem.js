@@ -106,7 +106,10 @@ export const SupportTicketSystem = ({
 
   const renderMessage = (msg, index) => {
     // Resilient data extraction
-    const text = msg?.text || msg?.message || (typeof msg === 'string' ? msg : 'Empty message');
+    let text = msg?.text ?? msg?.message ?? (typeof msg === 'string' ? msg : null);
+    if (text === null || text === '') {
+      text = msg?.image ? '' : 'Empty message';
+    }
     const timestamp = msg?.timestamp || new Date().toISOString();
     const senderId = msg?.senderId || userId;
     const isMe = String(senderId) === String(userId);

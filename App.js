@@ -25,6 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Font from 'expo-font';
 import config from './config';
 import { io } from 'socket.io-client';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 if (Platform.OS === 'web') {
   const iconFontStyles = `@font-face {
@@ -36,7 +37,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = Platform.OS === 'web' ? '1.0.46.8' : '1.0.41';
+const APP_VERSION = Platform.OS === 'web' ? '1.0.46.9' : '1.0.42';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -1894,7 +1895,8 @@ export default function App() {
   }
 
   return (
-    <SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
       <View 
         style={{ flex: 1 }}
         onStartShouldSetResponderCapture={(evt) => {
@@ -2032,7 +2034,8 @@ export default function App() {
 
       </NavigationContainer>
       </View>
-    </SafeAreaProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 

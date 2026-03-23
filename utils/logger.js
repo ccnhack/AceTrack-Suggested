@@ -31,7 +31,7 @@ const formatIST = (date) => {
 };
 
 let logs = [];
-const MAX_LOG_COUNT = 15000; 
+const MAX_LOG_COUNT = 5000; 
 
 const originalLog = console.log;
 const originalWarn = console.warn;
