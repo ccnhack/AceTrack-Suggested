@@ -1070,9 +1070,10 @@ export default function App() {
       Alert.alert("Success", `₹${amount} added to your AceTrack wallet!`);
     },
     onReplyTicket: (id, text) => {
+      const msgText = typeof text === 'string' ? text : (text.text || String(text));
       const msg = {
         senderId: currentUserRef.current?.id || 'admin',
-        text: text,
+        text: msgText,
         timestamp: new Date().toISOString()
       };
       const updated = supportTickets.map(t => t.id === id ? { ...t, messages: [...t.messages, msg] } : t);

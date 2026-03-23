@@ -232,14 +232,18 @@ export const SupportTicketSystem = ({
             contentContainerStyle={styles.chatContent}
           >
             {selectedTicket.messages.map((msg, i) => {
-              const isMe = msg.senderId === userId;
+              const text = typeof msg === 'string' ? msg : (msg.text || '');
+              const senderId = typeof msg === 'string' ? selectedTicket.userId : (msg.senderId || '');
+              const timestamp = typeof msg === 'string' ? selectedTicket.createdAt : (msg.timestamp || selectedTicket.createdAt);
+              const isMe = String(senderId) === String(userId);
+
               return (
                 <View key={i} style={[styles.messageRow, isMe ? styles.messageMe : styles.messageOther]}>
                   <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
                     {!isMe && <Text style={styles.adminLabel}>Admin Support</Text>}
-                    <Text style={[styles.messageText, isMe ? styles.textMe : styles.textOther]}>{msg.text}</Text>
+                    <Text style={[styles.messageText, isMe ? styles.textMe : styles.textOther]}>{text}</Text>
                     <Text style={[styles.timestamp, isMe ? styles.timeMe : styles.timeOther]}>
-                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </Text>
                   </View>
                 </View>

@@ -119,16 +119,20 @@ export const AdminGrievancesPanel = ({
 
             <View style={styles.chatArea}>
               {selectedTicket.messages.map((msg, i) => {
-                const isAdmin = msg.senderId === 'admin_sys' || msg.senderId === 'admin';
+                const text = typeof msg === 'string' ? msg : (msg.text || '');
+                const senderId = typeof msg === 'string' ? selectedTicket.userId : (msg.senderId || '');
+                const timestamp = typeof msg === 'string' ? selectedTicket.createdAt : (msg.timestamp || selectedTicket.createdAt);
+                
+                const isAdmin = senderId === 'admin_sys' || senderId === 'admin';
                 return (
                   <View key={i} style={[styles.messageRow, isAdmin ? styles.messageMe : styles.messageOther]}>
                     <View style={[styles.bubble, isAdmin ? styles.bubbleMe : styles.bubbleOther]}>
                       <Text style={[styles.msgSender, isAdmin ? { color: '#FECACA' } : { color: '#94A3B8' }]}>
-                        {isAdmin ? 'Admin' : getUserName(msg.senderId)}
+                        {isAdmin ? 'Admin' : getUserName(senderId)}
                       </Text>
-                      <Text style={[styles.msgText, isAdmin ? { color: '#FFFFFF' } : { color: '#334155' }]}>{msg.text}</Text>
+                      <Text style={[styles.msgText, isAdmin ? { color: '#FFFFFF' } : { color: '#334155' }]}>{text}</Text>
                       <Text style={[styles.msgTime, isAdmin ? { color: '#FCA5A5' } : { color: '#CBD5E1' }]}>
-                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </Text>
                     </View>
                   </View>
