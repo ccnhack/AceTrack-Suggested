@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, TextInput, 
-  StyleSheet, Modal, SafeAreaView, KeyboardAvoidingView, Platform 
+  StyleSheet, Modal, SafeAreaView, KeyboardAvoidingView, Platform, Image, ActivityIndicator 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { Swipeable } from 'react-native-gesture-handler';
 
 const TICKET_TYPES = [
   'Technical Issue', 'Bug', 'Refund', 'Enhancement Request',
@@ -19,11 +21,17 @@ const statusColors = {
 };
 
 export const SupportTicketSystem = ({
-  userId, userName, tickets = [], onCreateTicket, onSendMessage
+  userId, userName, tickets = [], onCreateTicket, onSendMessage, 
+  onTypingStart, onTypingStop, onResolvePrompt, onToggleSupport
 }) => {
   const [view, setView] = useState('list');
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [newMessage, setNewMessage] = useState('');
+  const [replyToMsg, setReplyToMsg] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [isAdminTyping, setIsAdminTyping] = useState(false);
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
+
   const [formData, setFormData] = useState({
     type: 'Other',
     title: '',
@@ -34,10 +42,9 @@ export const SupportTicketSystem = ({
   const myTickets = (tickets || []).filter(t => t.userId === userId);
 
   useEffect(() => {
-    if (view === 'detail' && scrollViewRef.current && typeof scrollViewRef.current.scrollToEnd === 'function') {
-        scrollViewRef.current.scrollToEnd({ animated: true });
-    }
-  }, [selectedTicket?.messages, view]);
+    if (onToggleSupport) onToggleSupport(true);
+    return () => { if (onToggleSupport) onToggleSupport(false); };
+  }, []);
 
   useEffect(() => {
     if (selectedTicket) {
@@ -45,6 +52,19 @@ export const SupportTicketSystem = ({
       if (updated) setSelectedTicket(updated);
     }
   }, [tickets]);
+
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.5,
+      base64: true
+    });
+    if (!result.canceled) {
+      setSelectedImage(`data:image/jpeg;base64,${result.assets[0].base64}`);
+      setShowPlusMenu(false);
+    }
+  };
 
   const handleCreate = () => {
     if (!formData.title.trim() || !formData.description.trim()) {
@@ -67,9 +87,85 @@ export const SupportTicketSystem = ({
   };
 
   const handleSendMessage = () => {
-    if (!newMessage.trim() || !selectedTicket) return;
-    onSendMessage(selectedTicket.id, newMessage);
+    if ((!newMessage.trim() && !selectedImage) || !selectedTicket) return;
+    onSendMessage(selectedTicket.id, newMessage, selectedImage, replyToMsg);
     setNewMessage('');
+    setSelectedImage(null);
+    setReplyToMsg(null);
+  };
+
+  const renderMessageReply = (reply) => {
+    if (!reply) return null;
+    return (
+      <View style={styles.msgReplyPreview}>
+        <Text style={styles.msgReplyUser}>{reply.senderId === userId ? 'You' : 'Admin'}</Text>
+        <Text style={styles.msgReplyText} numberOfLines={1}>{reply.text}</Text>
+      </View>
+    );
+  };
+
+  const renderMessage = (msg, index) => {
+    // Resilient data extraction
+    const text = msg?.text || msg?.message || (typeof msg === 'string' ? msg : 'Empty message');
+    const timestamp = msg?.timestamp || new Date().toISOString();
+    const senderId = msg?.senderId || userId;
+    const isMe = String(senderId) === String(userId);
+    
+    if (msg.type === 'prompt') {
+      return (
+        <View key={msg.id || index} style={styles.promptCard}>
+          <Text style={styles.promptText}>{msg.text}</Text>
+          <View style={styles.promptActions}>
+            <TouchableOpacity onPress={() => onResolvePrompt(selectedTicket.id, 'Yes')} style={styles.promptBtnYes}>
+              <Text style={styles.promptBtnText}>Yes</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => onResolvePrompt(selectedTicket.id, 'No')} style={styles.promptBtnNo}>
+              <Text style={styles.promptBtnText}>No</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+
+    if (msg.type === 'restart') {
+      return (
+        <View key={msg.id || index} style={styles.systemNote}>
+          <Text style={styles.systemNoteText}>{msg.text}</Text>
+          <TouchableOpacity onPress={() => setView('create')} style={styles.restartBtn}>
+            <Text style={styles.restartBtnText}>Restart Chat</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    const renderRightActions = () => (
+      <View style={styles.swipeToReplyAction}>
+        <Ionicons name="arrow-undo" size={20} color="#64748B" />
+      </View>
+    );
+
+    return (
+      <Swipeable
+        key={msg.id || index}
+        renderRightActions={isMe ? renderRightActions : undefined}
+        renderLeftActions={!isMe ? renderRightActions : undefined}
+        onSwipeableOpen={() => setReplyToMsg(msg)}
+      >
+        <View style={[styles.messageBubble, isMe ? styles.myBubble : styles.otherBubble]}>
+          {!isMe && <Text style={styles.adminLabel}>Admin Support</Text>}
+          {renderMessageReply(msg.replyTo)}
+          {msg.image && (
+            <Image source={{ uri: msg.image }} style={styles.msgImage} resizeMode="contain" />
+          )}
+          <Text style={[styles.messageText, isMe ? styles.myText : styles.otherText]}>
+            {text}
+          </Text>
+          <Text style={styles.timestamp}>
+            {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+        </View>
+      </Swipeable>
+    );
   };
 
   if (view === 'list') {
@@ -220,51 +316,81 @@ export const SupportTicketSystem = ({
                 </View>
             </View>
         </View>
-
         <KeyboardAvoidingView 
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
           style={styles.flex}
-          keyboardVerticalOffset={100}
         >
           <ScrollView 
             ref={scrollViewRef}
-            style={styles.chatArea}
+            style={styles.chatArea} 
             contentContainerStyle={styles.chatContent}
+            onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
           >
-            {selectedTicket.messages.map((msg, i) => {
-              const text = typeof msg === 'string' ? msg : (msg.text || '');
-              const senderId = typeof msg === 'string' ? selectedTicket.userId : (msg.senderId || '');
-              const timestamp = typeof msg === 'string' ? selectedTicket.createdAt : (msg.timestamp || selectedTicket.createdAt);
-              const isMe = String(senderId) === String(userId);
-
-              return (
-                <View key={i} style={[styles.messageRow, isMe ? styles.messageMe : styles.messageOther]}>
-                  <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
-                    {!isMe && <Text style={styles.adminLabel}>Admin Support</Text>}
-                    <Text style={[styles.messageText, isMe ? styles.textMe : styles.textOther]}>{text}</Text>
-                    <Text style={[styles.timestamp, isMe ? styles.timeMe : styles.timeOther]}>
-                      {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })}
+            {selectedTicket.messages.map((msg, index) => renderMessage(msg, index))}
+            {isAdminTyping && (
+              <View style={styles.typingIndicator}>
+                <Text style={styles.typingText}>Admin is typing...</Text>
+              </View>
+            )}
           </ScrollView>
 
           <View style={styles.inputArea}>
+            {replyToMsg && (
+              <View style={styles.replyPreviewBar}>
+                <View style={styles.replyPreviewInner}>
+                  <Text style={styles.replyPreviewUser}>Replying to {replyToMsg.senderId === userId ? 'yourself' : 'Admin'}</Text>
+                  <Text style={styles.replyPreviewText} numberOfLines={1}>{replyToMsg.text}</Text>
+                </View>
+                <TouchableOpacity onPress={() => setReplyToMsg(null)}>
+                  <Ionicons name="close-circle" size={20} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {selectedImage && (
+              <View style={styles.imagePreviewBar}>
+                <Image source={{ uri: selectedImage }} style={styles.imagePreviewThumb} />
+                <TouchableOpacity style={styles.removeImageBtn} onPress={() => setSelectedImage(null)}>
+                  <Ionicons name="close-circle" size={20} color="#EF4444" />
+                </TouchableOpacity>
+              </View>
+            )}
+
             {!isClosed ? (
               <View style={styles.chatInputRow}>
+                <TouchableOpacity 
+                   onPress={() => setShowPlusMenu(!showPlusMenu)} 
+                   style={styles.plusBtn}
+                >
+                  <Ionicons name="add-circle" size={28} color="#2563EB" />
+                </TouchableOpacity>
+
+                {showPlusMenu && (
+                  <View style={styles.plusMenu}>
+                    <TouchableOpacity style={styles.plusMenuItem} onPress={pickImage}>
+                      <Ionicons name="image" size={18} color="#2563EB" />
+                      <Text style={styles.plusMenuText}>Gallery</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
                 <TextInput
                   value={newMessage}
-                  onChangeText={setNewMessage}
+                  onChangeText={(txt) => {
+                    setNewMessage(txt);
+                    if (txt.length > 0) onTypingStart?.(selectedTicket.id);
+                    else onTypingStop?.(selectedTicket.id);
+                  }}
+                  onBlur={() => onTypingStop?.(selectedTicket.id)}
                   placeholder="Type your message..."
                   style={styles.chatInput}
                   multiline
                 />
                 <TouchableOpacity 
                   onPress={handleSendMessage}
-                  disabled={!newMessage.trim()}
-                  style={[styles.sendBtn, !newMessage.trim() && styles.sendBtnDisabled]}
+                  disabled={!newMessage.trim() && !selectedImage}
+                  style={[styles.sendBtn, (!newMessage.trim() && !selectedImage) && styles.sendBtnDisabled]}
                 >
                   <Ionicons name="send" size={18} color="#FFFFFF" />
                 </TouchableOpacity>
@@ -281,8 +407,7 @@ export const SupportTicketSystem = ({
   }
 
   return null;
-};
-
+}
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -330,29 +455,23 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 24,
-    paddingTop: 0,
-    gap: 12,
+    gap: 16,
   },
   emptyContainer: {
-    padding: 60,
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: '#F1F5F9',
-    borderRadius: 32,
-    marginTop: 20,
+    marginTop: 100,
   },
   emptyTitle: {
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: '900',
-    color: '#CBD5E1',
-    textTransform: 'uppercase',
-    marginTop: 12,
+    color: '#0F172A',
+    marginTop: 16,
   },
   emptySubtitle: {
-    fontSize: 10,
-    color: '#CBD5E1',
+    fontSize: 12,
+    color: '#94A3B8',
     marginTop: 4,
   },
   ticketCard: {
@@ -361,44 +480,69 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    elevation: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  ticketCardUnread: {
-    borderColor: '#FEE2E2',
-    borderLeftWidth: 4,
-    borderLeftColor: '#EF4444',
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  ticketCardHeader: {
+  ticketInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  ticketTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
+    alignItems: 'center',
   },
   ticketTitle: {
     fontSize: 14,
     fontWeight: '900',
     color: '#0F172A',
+    flex: 1,
   },
   statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
   },
   statusBadgeText: {
-    fontSize: 7,
-    fontWeight: '900',
+    fontSize: 9,
+    fontWeight: 'bold',
     textTransform: 'uppercase',
   },
-  ticketCardFooter: {
+  ticketMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+  },
+  lastMsg: {
+    fontSize: 12,
+    color: '#64748B',
+    flex: 1,
+  },
+  unreadDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#EF4444',
+  },
+  unreadText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#EF4444',
+    textTransform: 'uppercase',
   },
   ticketType: {
     fontSize: 9,
@@ -424,18 +568,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     marginTop: 8,
-  },
-  unreadDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#EF4444',
-  },
-  unreadText: {
-    fontSize: 8,
-    fontWeight: '900',
-    color: '#EF4444',
-    textTransform: 'uppercase',
   },
   backBtn: {
     width: 40,
@@ -515,6 +647,201 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     textTransform: 'uppercase',
   },
+  chatArea: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  chatContent: {
+    padding: 20,
+    gap: 12,
+    paddingBottom: 40,
+  },
+  messageBubble: {
+    padding: 12,
+    borderRadius: 20,
+    marginBottom: 8,
+    maxWidth: '85%',
+  },
+  myBubble: {
+    backgroundColor: '#2563EB',
+    alignSelf: 'flex-end',
+    borderBottomRightRadius: 4,
+  },
+  otherBubble: {
+    backgroundColor: '#F1F5F9',
+    alignSelf: 'flex-start',
+    borderBottomLeftRadius: 4,
+  },
+  myText: {
+    color: '#FFFFFF',
+  },
+  otherText: {
+    color: '#0F172A',
+  },
+  msgImage: {
+    width: 200,
+    height: 150,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  msgReplyPreview: {
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#2563EB',
+    padding: 8,
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  msgReplyUser: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#2563EB',
+    marginBottom: 2,
+  },
+  msgReplyText: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  swipeToReplyAction: {
+    width: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  typingIndicator: {
+    padding: 8,
+    marginLeft: 16,
+  },
+  typingText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+  },
+  replyPreviewBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    borderLeftWidth: 4,
+    borderLeftColor: '#2563EB',
+  },
+  replyPreviewInner: {
+    flex: 1,
+  },
+  replyPreviewUser: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
+  replyPreviewText: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  imagePreviewBar: {
+    padding: 12,
+    backgroundColor: '#F8FAFC',
+    flexDirection: 'row',
+  },
+  imagePreviewThumb: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+  },
+  removeImageBtn: {
+    position: 'absolute',
+    top: 4,
+    left: 56,
+  },
+  plusBtn: {
+    paddingHorizontal: 8,
+  },
+  plusMenu: {
+    position: 'absolute',
+    bottom: 50,
+    left: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 8,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    zIndex: 100,
+  },
+  plusMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    gap: 8,
+  },
+  plusMenuText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  promptCard: {
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
+    borderRadius: 16,
+    padding: 16,
+    marginVertical: 12,
+    alignItems: 'center',
+  },
+  promptText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#9A3412',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  promptActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  promptBtnYes: {
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 24,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  promptBtnNo: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 24,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  promptBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  systemNote: {
+    alignItems: 'center',
+    marginVertical: 16,
+    paddingHorizontal: 32,
+  },
+  systemNoteText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  restartBtn: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  restartBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
   ticketTitleDetail: {
     fontSize: 14,
     fontWeight: '900',
@@ -536,15 +863,6 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 4,
     textTransform: 'uppercase',
-  },
-  chatArea: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  chatContent: {
-    padding: 20,
-    gap: 12,
-    paddingBottom: 40,
   },
   messageRow: {
     flexDirection: 'row',
@@ -587,6 +905,7 @@ const styles = StyleSheet.create({
   timestamp: {
     fontSize: 8,
     marginTop: 4,
+    color: '#94A3B8',
   },
   timeMe: { color: '#64748B', textAlign: 'right' },
   timeOther: { color: '#94A3B8' },

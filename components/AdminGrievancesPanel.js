@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, TextInput, 
-  StyleSheet, Modal, SafeAreaView, KeyboardAvoidingView, Platform 
+  StyleSheet, Modal, SafeAreaView, KeyboardAvoidingView, Platform, Image, ActivityIndicator 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { Swipeable } from 'react-native-gesture-handler';
 
 const statusColors = {
   'Open': { bg: '#EFF6FF', text: '#2563EB', border: '#DBEAFE' },
@@ -16,12 +18,16 @@ const statusColors = {
 const statusOptions = ['Open', 'In Progress', 'Awaiting Response', 'Resolved', 'Closed'];
 
 export const AdminGrievancesPanel = ({
-  tickets, players, onReply, onUpdateStatus
+  tickets, players, onReply, onUpdateStatus, onTypingStart, onTypingStop
 }) => {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [replyText, setReplyText] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [replyToMsg, setReplyToMsg] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [isUserTyping, setIsUserTyping] = useState(false);
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
   const scrollViewRef = useRef(null);
 
   useEffect(() => {
@@ -48,10 +54,74 @@ export const AdminGrievancesPanel = ({
       return t.title.toLowerCase().includes(q) || t.id.toLowerCase().includes(q) || getUserName(t.userId).toLowerCase().includes(q);
     });
 
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.5,
+      base64: true
+    });
+    if (!result.canceled) {
+      setSelectedImage(`data:image/jpeg;base64,${result.assets[0].base64}`);
+      setShowPlusMenu(false);
+    }
+  };
+
   const handleSendReply = () => {
-    if (!replyText.trim() || !selectedTicket) return;
-    onReply(selectedTicket.id, replyText);
+    if ((!replyText.trim() && !selectedImage) || !selectedTicket) return;
+    onReply(selectedTicket.id, replyText, selectedImage, replyToMsg);
     setReplyText('');
+    setSelectedImage(null);
+    setReplyToMsg(null);
+  };
+
+  const renderMessageReply = (reply) => {
+    if (!reply) return null;
+    return (
+      <View style={styles.msgReplyPreview}>
+        <Text style={styles.msgReplyUser}>{reply.senderId === 'admin' ? 'Admin' : getUserName(reply.senderId)}</Text>
+        <Text style={styles.msgReplyText} numberOfLines={1}>{reply.text}</Text>
+      </View>
+    );
+  };
+
+  const renderMessage = (msg, index) => {
+    // Resilient data extraction
+    const text = msg?.text || msg?.message || (typeof msg === 'string' ? msg : 'Empty message');
+    const timestamp = msg?.timestamp || new Date().toISOString();
+    const legacySender = selectedTicket?.userId || 'user';
+    const senderId = msg?.senderId || legacySender;
+    const isMe = senderId === 'admin';
+    const senderName = isMe ? 'Admin Support' : getUserName(senderId);
+
+    const renderRightActions = () => (
+      <View style={styles.swipeToReplyAction}>
+        <Ionicons name="arrow-undo" size={20} color="#64748B" />
+      </View>
+    );
+
+    return (
+      <Swipeable
+        key={msg.id || index}
+        renderRightActions={isMe ? renderRightActions : undefined}
+        renderLeftActions={!isMe ? renderRightActions : undefined}
+        onSwipeableOpen={() => setReplyToMsg(msg)}
+      >
+        <View style={[styles.messageBubble, isMe ? styles.myBubble : styles.otherBubble]}>
+          {renderMessageReply(msg.replyTo)}
+          {!isMe && <Text style={styles.senderLabel}>{senderName}</Text>}
+          {msg.image && (
+            <Image source={{ uri: msg.image }} style={styles.msgImage} resizeMode="contain" />
+          )}
+          <Text style={[styles.messageText, isMe ? styles.myText : styles.otherText]}>
+            {text}
+          </Text>
+          <Text style={styles.timestamp}>
+            {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+        </View>
+      </Swipeable>
+    );
   };
 
   if (selectedTicket) {
@@ -75,7 +145,7 @@ export const AdminGrievancesPanel = ({
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
           style={styles.flex}
         >
-          <ScrollView ref={scrollViewRef} style={styles.detailList} showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.detailList} showsVerticalScrollIndicator={false}>
             <View style={styles.infoCard}>
               <View style={styles.infoGrid}>
                 <View style={styles.infoItem}>
@@ -116,54 +186,88 @@ export const AdminGrievancesPanel = ({
                 </View>
               </View>
             </View>
-
-            <View style={styles.chatArea}>
-              {selectedTicket.messages.map((msg, i) => {
-                const text = typeof msg === 'string' ? msg : (msg.text || '');
-                const senderId = typeof msg === 'string' ? selectedTicket.userId : (msg.senderId || '');
-                const timestamp = typeof msg === 'string' ? selectedTicket.createdAt : (msg.timestamp || selectedTicket.createdAt);
-                
-                const isAdmin = senderId === 'admin_sys' || senderId === 'admin';
-                return (
-                  <View key={i} style={[styles.messageRow, isAdmin ? styles.messageMe : styles.messageOther]}>
-                    <View style={[styles.bubble, isAdmin ? styles.bubbleMe : styles.bubbleOther]}>
-                      <Text style={[styles.msgSender, isAdmin ? { color: '#FECACA' } : { color: '#94A3B8' }]}>
-                        {isAdmin ? 'Admin' : getUserName(senderId)}
-                      </Text>
-                      <Text style={[styles.msgText, isAdmin ? { color: '#FFFFFF' } : { color: '#334155' }]}>{text}</Text>
-                      <Text style={[styles.msgTime, isAdmin ? { color: '#FCA5A5' } : { color: '#CBD5E1' }]}>
-                        {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
           </ScrollView>
 
-          <View style={styles.inputArea}>
-            {!isClosed ? (
-              <View style={styles.replyRow}>
-                <TextInput
-                  value={replyText}
-                  onChangeText={setReplyText}
-                  placeholder="Type admin response..."
-                  style={styles.replyInput}
-                  multiline
-                />
-                <TouchableOpacity 
-                  onPress={handleSendReply}
-                  disabled={!replyText.trim()}
-                  style={[styles.sendBtn, !replyText.trim() && styles.sendBtnDisabled]}
-                >
-                  <Ionicons name="send" size={18} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <TouchableOpacity onPress={() => onUpdateStatus(selectedTicket.id, 'Open')} style={styles.reopenBtn}>
-                <Text style={styles.reopenBtnText}>Reopen Ticket</Text>
-              </TouchableOpacity>
-            )}
+          <View style={styles.chatContainer}>
+            <ScrollView 
+              ref={scrollViewRef} 
+              style={styles.chatScroll} 
+              onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+            >
+              {selectedTicket.messages.map((msg, index) => renderMessage(msg, index))}
+              {isUserTyping && (
+                <View style={styles.typingIndicator}>
+                  <Text style={styles.typingText}>User is typing...</Text>
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={styles.inputArea}>
+              {replyToMsg && (
+                <View style={styles.replyPreviewBar}>
+                  <View style={styles.replyPreviewInner}>
+                    <Text style={styles.replyPreviewUser}>Replying to {replyToMsg.senderId === 'admin' ? 'yourself' : getUserName(replyToMsg.senderId)}</Text>
+                    <Text style={styles.replyPreviewText} numberOfLines={1}>{replyToMsg.text}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setReplyToMsg(null)}>
+                    <Ionicons name="close-circle" size={20} color="#64748B" />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {selectedImage && (
+                <View style={styles.imagePreviewBar}>
+                  <Image source={{ uri: selectedImage }} style={styles.imagePreviewThumb} />
+                  <TouchableOpacity style={styles.removeImageBtn} onPress={() => setSelectedImage(null)}>
+                    <Ionicons name="close-circle" size={20} color="#EF4444" />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {!isClosed ? (
+                <View style={styles.chatInputRow}>
+                  <TouchableOpacity 
+                    onPress={() => setShowPlusMenu(!showPlusMenu)} 
+                    style={styles.plusBtn}
+                  >
+                    <Ionicons name="add-circle" size={28} color="#2563EB" />
+                  </TouchableOpacity>
+
+                  {showPlusMenu && (
+                    <View style={styles.plusMenu}>
+                      <TouchableOpacity style={styles.plusMenuItem} onPress={pickImage}>
+                        <Ionicons name="image" size={18} color="#2563EB" />
+                        <Text style={styles.plusMenuText}>Gallery</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  <TextInput
+                    style={styles.chatInput}
+                    value={replyText}
+                    onChangeText={(txt) => {
+                      setReplyText(txt);
+                      if (txt.length > 0) onTypingStart?.(selectedTicket.id);
+                      else onTypingStop?.(selectedTicket.id);
+                    }}
+                    onBlur={() => onTypingStop?.(selectedTicket.id)}
+                    placeholder="Type a reply..."
+                    multiline
+                  />
+                  <TouchableOpacity 
+                    style={[styles.sendBtn, (!replyText.trim() && !selectedImage) && styles.sendDisabled]} 
+                    disabled={!replyText.trim() && !selectedImage}
+                    onPress={handleSendReply}
+                  >
+                    <Ionicons name="send" size={18} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.closedNote}>
+                  <Text style={styles.closedNoteText}>This ticket is closed</Text>
+                </View>
+              )}
+            </View>
           </View>
         </KeyboardAvoidingView>
       </View>
@@ -526,6 +630,202 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: '#94A3B8',
     marginTop: 2,
+  },
+  // Advanced Chat Styles
+  chatContainer: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  chatScroll: {
+    flex: 1,
+    padding: 16,
+  },
+  messageBubble: {
+    padding: 12,
+    borderRadius: 20,
+    marginBottom: 8,
+    maxWidth: '85%',
+  },
+  myBubble: {
+    backgroundColor: '#2563EB',
+    alignSelf: 'flex-end',
+    borderBottomRightRadius: 4,
+  },
+  otherBubble: {
+    backgroundColor: '#FFFFFF',
+    alignSelf: 'flex-start',
+    borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  myText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+  },
+  otherText: {
+    color: '#0F172A',
+    fontSize: 14,
+  },
+  senderLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#2563EB',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  timestamp: {
+    fontSize: 9,
+    color: '#94A3B8',
+    alignSelf: 'flex-end',
+    marginTop: 4,
+  },
+  msgImage: {
+    width: 200,
+    height: 150,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  msgReplyPreview: {
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#2563EB',
+    padding: 8,
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  msgReplyUser: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#2563EB',
+    marginBottom: 2,
+  },
+  msgReplyText: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  swipeToReplyAction: {
+    width: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  typingIndicator: {
+    padding: 8,
+    marginBottom: 16,
+  },
+  typingText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+  },
+  inputArea: {
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingBottom: Platform.OS === 'ios' ? 20 : 0,
+  },
+  chatInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 12,
+  },
+  chatInput: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#0F172A',
+    maxHeight: 100,
+  },
+  plusBtn: {
+    paddingHorizontal: 4,
+  },
+  sendBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendDisabled: {
+    backgroundColor: '#F1F5F9',
+  },
+  replyPreviewBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    borderLeftWidth: 4,
+    borderLeftColor: '#2563EB',
+  },
+  replyPreviewInner: {
+    flex: 1,
+  },
+  replyPreviewUser: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
+  replyPreviewText: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  imagePreviewBar: {
+    padding: 12,
+    backgroundColor: '#F8FAFC',
+    flexDirection: 'row',
+  },
+  imagePreviewThumb: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+  },
+  removeImageBtn: {
+    position: 'absolute',
+    top: 4,
+    left: 56,
+  },
+  plusMenu: {
+    position: 'absolute',
+    bottom: 60,
+    left: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 8,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    zIndex: 1000,
+  },
+  plusMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    gap: 8,
+  },
+  plusMenuText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  closedNote: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  closedNoteText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
   },
   statusBadge: {
     paddingHorizontal: 8,
