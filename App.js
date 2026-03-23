@@ -28,7 +28,7 @@ import { io } from 'socket.io-client';
 
 if (Platform.OS === 'web') {
   const iconFontStyles = `@font-face {
-    src: url('https://cdnjs.cloudflare.com/ajax/libs/react-native-vector-icons/9.2.0/Fonts/Ionicons.ttf');
+    src: url('/fonts/Ionicons.ttf');
     font-family: Ionicons;
   }`;
   const style = document.createElement('style');
