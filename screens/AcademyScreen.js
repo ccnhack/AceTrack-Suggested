@@ -434,34 +434,75 @@ export const AcademyScreen = ({
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Academy Hub</Text>
-          <Text style={styles.subtitle}>Manage your events & scouts</Text>
+      {/* Premium Dashboard Header */}
+      <View style={styles.premiumHeader}>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.welcomeLabel}>Welcome back,</Text>
+            <Text style={styles.academyNameText}>{user?.name || 'Academy'}</Text>
+          </View>
+          <View style={styles.headerIcons}>
+            {subTab === 'tournaments' && (
+              <TouchableOpacity 
+                onPress={() => { setEditingT(null); setIsFormOpen(true); }}
+                style={styles.premiumAddBtn}
+              >
+                <Ionicons name="add" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-        {subTab === 'tournaments' && (
-          <TouchableOpacity 
-            onPress={() => { setEditingT(null); setIsFormOpen(true); }}
-            style={styles.addBtn}
-          >
-            <Ionicons name="add" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-        )}
+
+        <View style={styles.statsDashboard}>
+          <View style={styles.dashStatCard}>
+            <Text style={styles.dashStatVal}>{myTournaments.filter(t => t.status !== 'completed').length}</Text>
+            <Text style={styles.dashStatLabel}>Active Events</Text>
+          </View>
+          <View style={styles.dashStatDivider} />
+          <View style={styles.dashStatCard}>
+            <Text style={styles.dashStatVal}>{myParticipants.length}</Text>
+            <Text style={styles.dashStatLabel}>Total Players</Text>
+          </View>
+          <View style={styles.dashStatDivider} />
+          <View style={styles.dashStatCard}>
+            <Text style={styles.dashStatVal}>{matchVideos.filter(v => v.academyId === academyId).length}</Text>
+            <Text style={styles.dashStatLabel}>Video Assets</Text>
+          </View>
+        </View>
       </View>
 
-      <View style={styles.tabBar}>
-        <TouchableOpacity onPress={() => setSubTab('tournaments')} style={[styles.tab, subTab === 'tournaments' && styles.tabActive]}>
-          <Text style={[styles.tabText, subTab === 'tournaments' && styles.tabTextActive]}>Tournaments</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setSubTab('videos')} style={[styles.tab, subTab === 'videos' && styles.tabActive]}>
-          <Text style={[styles.tabText, subTab === 'videos' && styles.tabTextActive]}>Videos</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setSubTab('insights')} style={[styles.tab, subTab === 'insights' && styles.tabActive]}>
-          <Text style={[styles.tabText, subTab === 'insights' && styles.tabTextActive]}>Scout Feed</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setSubTab('broadcast')} style={[styles.tab, subTab === 'broadcast' && styles.tabActive]}>
-          <Text style={[styles.tabText, subTab === 'broadcast' && styles.tabTextActive]}>Broadcast</Text>
-        </TouchableOpacity>
+      {/* Modern Segmented Tabs */}
+      <View style={styles.segmentedTabContainer}>
+        <View style={styles.segmentedTabBar}>
+          <TouchableOpacity 
+            onPress={() => setSubTab('tournaments')} 
+            style={[styles.segTab, subTab === 'tournaments' && styles.segTabActive]}
+          >
+            <Ionicons name="trophy" size={16} color={subTab === 'tournaments' ? '#6366F1' : '#94A3B8'} />
+            <Text style={[styles.segTabText, subTab === 'tournaments' && styles.segTabTextActive]}>Events</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => setSubTab('videos')} 
+            style={[styles.segTab, subTab === 'videos' && styles.segTabActive]}
+          >
+            <Ionicons name="videocam" size={16} color={subTab === 'videos' ? '#6366F1' : '#94A3B8'} />
+            <Text style={[styles.segTabText, subTab === 'videos' && styles.segTabTextActive]}>Media</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => setSubTab('insights')} 
+            style={[styles.segTab, subTab === 'insights' && styles.segTabActive]}
+          >
+            <Ionicons name="people" size={16} color={subTab === 'insights' ? '#6366F1' : '#94A3B8'} />
+            <Text style={[styles.segTabText, subTab === 'insights' && styles.segTabTextActive]}>Scouts</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => setSubTab('broadcast')} 
+            style={[styles.segTab, subTab === 'broadcast' && styles.segTabActive]}
+          >
+            <Ionicons name="megaphone" size={16} color={subTab === 'broadcast' ? '#6366F1' : '#94A3B8'} />
+            <Text style={[styles.segTabText, subTab === 'broadcast' && styles.segTabTextActive]}>Blast</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 100 }}>
@@ -477,68 +518,109 @@ export const AcademyScreen = ({
             </View>
 
             {filteredTournaments.map(t => (
-              <View key={t.id} style={[styles.tCard, tFilter === 'past' && styles.tCardPast]}>
-                <View style={styles.tCardHeader}>
-                  <View style={styles.flex}>
-                    <Text style={styles.tTitle}>{t.title}</Text>
-                    <Text style={styles.tMeta}>{t.date} • {t.location}</Text>
+              <View key={t.id} style={[styles.premiumCard, tFilter === 'past' && styles.tCardPast]}>
+                <View style={styles.premiumCardBody}>
+                  <View style={styles.tCardMainInfo}>
+                    <View style={styles.sportBadgeSmall}>
+                        <Ionicons 
+                            name={t.sport === Sport.Tennis ? "tennisball" : (t.sport === Sport.Badminton ? "fitness" : "disc")} 
+                            size={12} 
+                            color="#6366F1" 
+                        />
+                        <Text style={styles.sportBadgeTextSmall}>{t.sport}</Text>
+                    </View>
+                    <Text style={styles.premiumTTitle}>{t.title}</Text>
+                    <View style={styles.locationRow}>
+                        <Ionicons name="location" size={12} color="#94A3B8" />
+                        <Text style={styles.locationTextSmall} numberOfLines={1}>{t.location}</Text>
+                    </View>
                   </View>
-                  <TouchableOpacity 
-                    onPress={() => { setEditingT(t); setIsFormOpen(true); }}
-                    style={styles.editBtn}
-                  >
-                    <Ionicons name={tFilter === 'past' ? "eye" : "create"} size={18} color="#94A3B8" />
-                  </TouchableOpacity>
+                  
+                  <View style={styles.tCardRightActions}>
+                    <TouchableOpacity 
+                        onPress={() => { setEditingT(t); setIsFormOpen(true); }}
+                        style={styles.premiumEditBtn}
+                    >
+                        <Ionicons name={tFilter === 'past' ? "eye" : "create"} size={20} color="#6366F1" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.premiumTInfoGrid}>
+                    <View style={styles.infoGridItem}>
+                        <Text style={styles.infoGridLabel}>Date</Text>
+                        <Text style={styles.infoGridValue}>{t.date}</Text>
+                    </View>
+                    <View style={styles.infoGridItem}>
+                        <Text style={styles.infoGridLabel}>Participants</Text>
+                        <Text style={styles.infoGridValue}>
+                          {[...new Set([
+                            ...(t.registeredPlayerIds || []),
+                            ...(t.pendingPaymentPlayerIds || []),
+                            ...Object.keys(t.playerStatuses || {})
+                          ])].filter(pid => pid && String(pid).toLowerCase() !== 'test').length} / {t.maxPlayers}
+                        </Text>
+                    </View>
+                    <View style={styles.infoGridItem}>
+                        <Text style={styles.infoGridLabel}>Entry Fee</Text>
+                        <Text style={styles.infoGridValue}>₹{t.entryFee}</Text>
+                    </View>
                 </View>
 
                 {(t.coachStatus === 'Coach Assigned' || t.coachStatus === 'Coach Assigned - Academy') && t.assignedCoachId && (
-                    <View style={styles.coachBanner}>
-                        <View style={styles.coachInfo}>
-                            <Text style={styles.coachLabel}>Coach Assigned</Text>
-                            <Text style={styles.coachName}>{players.find(p => p.id === t.assignedCoachId)?.name}</Text>
-                        </View>
-                        {tFilter === 'upcoming' && t.status !== 'completed' && !t.tournamentConcluded && (
-                            <View style={styles.otpSection}>
-                                {visibleOtps.has(t.id) ? (
-                                    <View style={styles.otpRow}>
-                                        <View style={styles.otpBox}>
-                                            <Text style={styles.otpLabel}>Start</Text>
-                                            <Text style={styles.otpValue}>{t.startOtp || 'N/A'}</Text>
-                                        </View>
-                                        <View style={styles.otpBox}>
-                                            <Text style={styles.otpLabel}>End</Text>
-                                            <Text style={styles.otpValue}>{t.endOtp || 'N/A'}</Text>
-                                        </View>
-                                    </View>
-                                ) : (
-                                    <TouchableOpacity 
-                                        onPress={() => setVisibleOtps(prev => new Set(prev).add(t.id))}
-                                        style={styles.viewOtpBtn}
-                                    >
-                                        <Text style={styles.viewOtpBtnText}>VIEW OTP</Text>
-                                    </TouchableOpacity>
-                                )}
+                    <View style={styles.premiumCoachSection}>
+                        <View style={styles.premiumCoachHeader}>
+                            <View style={styles.premiumCoachAvatar}>
+                                <Ionicons name="person" size={14} color="#6366F1" />
                             </View>
-                        )}
+                            <View style={styles.flex}>
+                                <Text style={styles.premiumCoachLabel}>Assigned Coach</Text>
+                                <Text style={styles.premiumCoachName}>{players.find(p => p.id === t.assignedCoachId)?.name}</Text>
+                            </View>
+                            {tFilter === 'upcoming' && t.status !== 'completed' && !t.tournamentConcluded && (
+                                <View style={styles.premiumOtpTrigger}>
+                                    {visibleOtps.has(t.id) ? (
+                                        <TouchableOpacity 
+                                            onPress={() => setVisibleOtps(prev => {
+                                                const next = new Set(prev);
+                                                next.delete(t.id);
+                                                return next;
+                                            })}
+                                            style={styles.premiumOtpBox}
+                                        >
+                                            <Text style={styles.pOtpVal}>{t.startOtp}</Text>
+                                            <View style={styles.pOtpLine} />
+                                            <Text style={styles.pOtpVal}>{t.endOtp}</Text>
+                                        </TouchableOpacity>
+                                    ) : (
+                                        <TouchableOpacity 
+                                            onPress={() => setVisibleOtps(prev => new Set(prev).add(t.id))}
+                                            style={styles.pViewOtpBtn}
+                                        >
+                                            <Text style={styles.pViewOtpText}>OTP</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                            )}
+                        </View>
                     </View>
                 )}
 
-                <View style={styles.tCardFooter}>
-                  <View style={styles.statsRow}>
-                    <TouchableOpacity onPress={() => setViewingTournamentId(t.id)} style={styles.statItem}>
-                        <Text style={styles.statLabel}>Players</Text>
-                        <Text style={styles.statValue}>{(t.registeredPlayerIds || []).filter(Boolean).length}/{t.maxPlayers}</Text>
+                <View style={styles.premiumCardFooter}>
+                    <TouchableOpacity 
+                        onPress={() => setViewingTournamentId(t.id)}
+                        style={styles.premiumPrimaryBtn}
+                    >
+                        <Text style={styles.premiumPrimaryBtnText}>Manage Roster</Text>
+                        <Ionicons name="chevron-forward" size={14} color="#FFFFFF" />
                     </TouchableOpacity>
-                    <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>Entry</Text>
-                        <Text style={styles.statValue}>₹{t.entryFee}</Text>
+                    
+                    <View style={[styles.premiumStatusPill, tFilter === 'past' ? styles.statusPillPast : styles.statusPillActive]}>
+                        <View style={[styles.statusDot, tFilter === 'past' ? { backgroundColor: '#94A3B8' } : { backgroundColor: '#EF4444' }]} />
+                        <Text style={[styles.premiumStatusText, tFilter === 'past' ? { color: '#64748B' } : { color: '#EF4444' }]}>
+                            {tFilter === 'past' ? 'Archived' : (t.status === 'upcoming' ? 'Upcoming' : t.status)}
+                        </Text>
                     </View>
-                  </View>
-                  <View style={[styles.statusBadge, tFilter === 'past' ? styles.statusBadgePast : styles.statusBadgeActive]}>
-                    <Text style={[styles.statusBadgeText, tFilter === 'past' ? styles.statusBadgeTextPast : styles.statusBadgeTextActive]}>
-                        {tFilter === 'past' ? 'Completed' : t.status}
-                    </Text>
-                  </View>
                 </View>
               </View>
             ))}
@@ -573,10 +655,19 @@ export const AcademyScreen = ({
         )}
 
         {subTab === 'broadcast' && (
-          <View style={{ padding: 20 }}>
-            <Text style={{ fontSize: 20, fontWeight: '900', color: '#1a1a1a', marginBottom: 10 }}>Communication Center</Text>
-            <Text style={{ color: '#666', marginBottom: 20 }}>Send blast messages to all participants across your tournaments.</Text>
-            <BroadcastTools tournaments={tournaments.filter(t => t.creatorId === academyId)} />
+          <View style={styles.broadcastContainer}>
+            <View style={styles.broadcastHeader}>
+                <View style={styles.broadcastIconBg}>
+                    <Ionicons name="megaphone" size={24} color="#6366F1" />
+                </View>
+                <View style={styles.flex}>
+                    <Text style={styles.broadcastTitle}>Communication Center</Text>
+                    <Text style={styles.broadcastSubtitle}>Send blast messages to all participants across your events.</Text>
+                </View>
+            </View>
+            <View style={styles.broadcastCard}>
+                <BroadcastTools tournaments={tournaments.filter(t => t.creatorId === academyId)} />
+            </View>
           </View>
         )}
       </ScrollView>
@@ -906,258 +997,338 @@ export const AcademyScreen = ({
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  header: {
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  premiumHeader: {
     padding: 24,
+    backgroundColor: '#FFFFFF',
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.05,
+    shadowRadius: 20,
+    elevation: 10,
+    zIndex: 10,
+  },
+  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 24,
   },
-  title: {
+  welcomeLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  academyNameText: {
     fontSize: 24,
     fontWeight: '900',
     color: '#0F172A',
-    textTransform: 'uppercase',
+    marginTop: 2,
   },
-  subtitle: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-    marginTop: 4,
-  },
-  addBtn: {
+  premiumAddBtn: {
     width: 48,
     height: 48,
-    backgroundColor: '#0F172A',
-    borderRadius: 24,
-    alignItems: 'center',
+    borderRadius: 16,
+    backgroundColor: '#6366F1',
     justifyContent: 'center',
-    elevation: 4,
+    alignItems: 'center',
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  statsDashboard: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 20,
+    padding: 16,
+    alignItems: 'center',
+  },
+  dashStatCard: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  dashStatVal: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  dashStatLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    marginTop: 2,
+  },
+  dashStatDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#E2E8F0',
+  },
+  segmentedTabContainer: {
+    paddingHorizontal: 20,
+    marginTop: -20,
+    zIndex: 20,
+  },
+  segmentedTabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowRadius: 10,
+    elevation: 5,
   },
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    marginHorizontal: 24,
-    borderRadius: 16,
-    padding: 4,
-    marginBottom: 20,
-  },
-  tab: {
+  segTab: {
     flex: 1,
-    paddingVertical: 12,
+    flexDirection: 'row',
+    paddingVertical: 10,
+    borderRadius: 16,
+    justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 12,
+    gap: 6,
   },
-  tabActive: {
-    backgroundColor: '#FFFFFF',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+  segTabActive: {
+    backgroundColor: '#EEF2FF',
   },
-  tabText: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#64748B',
-    textTransform: 'uppercase',
+  segTabText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#94A3B8',
   },
-  tabTextActive: {
-    color: '#0F172A',
+  segTabTextActive: {
+    color: '#6366F1',
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
+    paddingTop: 30,
   },
   filterRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
+    marginBottom: 20,
+    gap: 10,
   },
   filterBtn: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   filterBtnActive: {
     backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
   },
   filterBtnText: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
   },
   filterBtnTextActive: {
     color: '#FFFFFF',
   },
-  tCard: {
+  premiumCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 32,
-    padding: 20,
+    borderRadius: 24,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 3,
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
   },
-  tCardPast: {
-    opacity: 0.7,
-    backgroundColor: '#F8FAFC',
-  },
-  tCardHeader: {
+  premiumCardBody: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
     marginBottom: 16,
   },
-  tTitle: {
-    fontSize: 16,
+  tCardMainInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  sportBadgeSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  sportBadgeTextSmall: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#6366F1',
+    textTransform: 'uppercase',
+  },
+  premiumTTitle: {
+    fontSize: 18,
     fontWeight: '900',
     color: '#0F172A',
-    textTransform: 'uppercase',
   },
-  tMeta: {
-    fontSize: 10,
-    fontWeight: 'bold',
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  locationTextSmall: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  premiumEditBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  premiumTInfoGrid: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 16,
+  },
+  infoGridItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  infoGridLabel: {
+    fontSize: 8,
+    fontWeight: '800',
     color: '#94A3B8',
     textTransform: 'uppercase',
-    marginTop: 4,
   },
-  editBtn: {
-    padding: 8,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
+  infoGridValue: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#334155',
+    marginTop: 2,
   },
-  coachBanner: {
-    backgroundColor: '#EFF6FF',
-    padding: 16,
-    borderRadius: 20,
+  premiumCoachSection: {
+    backgroundColor: '#EEF2FF',
+    borderRadius: 16,
+    padding: 12,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#DBEAFE',
   },
-  coachInfo: {
+  premiumCoachHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  premiumCoachAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  premiumCoachLabel: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#6366F1',
+    textTransform: 'uppercase',
+  },
+  premiumCoachName: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#1E40AF',
+  },
+  premiumOtpTrigger: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  pViewOtpBtn: {
+    paddingHorizontal: 4,
+  },
+  pViewOtpText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#6366F1',
+  },
+  premiumOtpBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pOtpVal: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#0F172A',
+    letterSpacing: 1,
+  },
+  pOtpLine: {
+    width: 1,
+    height: 12,
+    backgroundColor: '#E2E8F0',
+  },
+  premiumCardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
   },
-  coachLabel: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#3B82F6',
-    textTransform: 'uppercase',
-  },
-  coachName: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#1E40AF',
-  },
-  otpSection: {
-    minHeight: 40,
-    justifyContent: 'center',
-  },
-  viewOtpBtn: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#3B82F6',
+  premiumPrimaryBtn: {
+    flexDirection: 'row',
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 12,
     alignItems: 'center',
+    gap: 6,
   },
-  viewOtpBtnText: {
-    fontSize: 10,
+  premiumPrimaryBtnText: {
+    fontSize: 11,
     fontWeight: '900',
-    color: '#3B82F6',
-    letterSpacing: 1,
-  },
-  otpRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  otpBox: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    padding: 8,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-  },
-  otpLabel: {
-    fontSize: 8,
-    fontWeight: '900',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-    marginBottom: 2,
-  },
-  otpValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    letterSpacing: 2,
-  },
-  tCardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  statItem: {
-    gap: 2,
-  },
-  statLabel: {
-    fontSize: 8,
-    fontWeight: '900',
-    color: '#94A3B8',
+    color: '#FFFFFF',
     textTransform: 'uppercase',
   },
-  statValue: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#0F172A',
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
+  premiumStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
   },
-  statusBadgeActive: {
+  statusPillActive: {
     backgroundColor: '#FEF2F2',
   },
-  statusBadgePast: {
-    backgroundColor: '#E2E8F0',
+  statusPillPast: {
+    backgroundColor: '#F1F5F9',
   },
-  statusBadgeText: {
-    fontSize: 8,
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  premiumStatusText: {
+    fontSize: 9,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
-  statusBadgeTextActive: {
-    color: '#EF4444',
-  },
-  statusBadgeTextPast: {
-    color: '#64748B',
+  tCardPast: {
+    opacity: 0.8,
+    backgroundColor: '#F8FAFC',
   },
   emptyView: {
     paddingVertical: 80,
@@ -1396,6 +1567,47 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#6366F1',
     textTransform: 'uppercase',
+  },
+  broadcastContainer: {
+    paddingTop: 10,
+  },
+  broadcastHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 24,
+    backgroundColor: '#FFFFFF',
+    padding: 20,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  broadcastIconBg: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#EEF2FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  broadcastTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  broadcastSubtitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  broadcastCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
 });
 

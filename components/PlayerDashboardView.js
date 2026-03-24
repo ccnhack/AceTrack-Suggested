@@ -23,7 +23,7 @@ const PlayerDashboardView = ({ players, tournaments, title }) => {
           >
             <View style={styles.cardHeader}>
               <Image 
-                source={{ uri: p.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random` }} 
+                source={{ uri: (p.avatar && p.avatar !== 'null') ? p.avatar : `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random` }} 
                 style={styles.avatar} 
               />
               <View style={styles.info}>

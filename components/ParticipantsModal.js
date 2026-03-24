@@ -97,7 +97,7 @@ const ParticipantsModal = ({
                   {tournament.assignedCoachId || tournament.confirmedCoachId ? (
                     <>
                       <Image 
-                        source={{ uri: (players.find(p => p.id === (tournament.assignedCoachId || tournament.confirmedCoachId))?.avatar) || `https://ui-avatars.com/api/?name=${encodeURIComponent(players.find(p => p.id === (tournament.assignedCoachId || tournament.confirmedCoachId))?.name || 'Coach')}&background=random` }} 
+                        source={{ uri: (players.find(p => p.id === (tournament.assignedCoachId || tournament.confirmedCoachId))?.avatar && players.find(p => p.id === (tournament.assignedCoachId || tournament.confirmedCoachId))?.avatar !== 'null') ? players.find(p => p.id === (tournament.assignedCoachId || tournament.confirmedCoachId))?.avatar : `https://ui-avatars.com/api/?name=${encodeURIComponent(players.find(p => p.id === (tournament.assignedCoachId || tournament.confirmedCoachId))?.name || 'Coach')}&background=random` }} 
                         style={styles.avatar} 
                       />
                       <View style={styles.flex}>
@@ -242,7 +242,7 @@ const ParticipantsModal = ({
                       <View style={styles.playerRow}>
                           <Image 
                             key={`${pid}-${p.avatar}`}
-                            source={{ uri: p.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random` }} 
+                            source={{ uri: (p.avatar && p.avatar !== 'null') ? p.avatar : `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random` }} 
                             style={styles.avatar} 
                           />
                           <View style={styles.flex}>

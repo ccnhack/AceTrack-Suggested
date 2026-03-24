@@ -138,7 +138,26 @@ const ProfileScreen = ({
   const [showVerifyModal, setShowVerifyModal] = useState(null); // 'email' | 'phone'
   const [verificationCode, setVerificationCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [latestVersion, setLatestVersion] = useState('');
   const activeApiUrl = isUsingCloud ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL;
+
+  useEffect(() => {
+    const checkUpdate = async () => {
+      if (__DEV__) return;
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (update.isAvailable) {
+          setUpdateAvailable(true);
+          // Standardized simulated version for visibility during testing
+          setLatestVersion(update.manifest?.version || '1.0.44');
+        }
+      } catch (e) {
+        console.log("Update check failed:", e);
+      }
+    };
+    checkUpdate();
+  }, []);
 
   // Edit Profile States
   const [message, setMessage] = useState('');
@@ -418,6 +437,23 @@ const ProfileScreen = ({
           </View>
         )}
 
+        {/* --- App Update Available (New) --- */}
+        {updateAvailable && (
+          <TouchableOpacity 
+              onPress={handleManualUpdate}
+              style={styles.updateCard}
+          >
+              <View style={styles.updateIconContainer}>
+                  <Ionicons name="sync-outline" size={18} color="#475569" />
+              </View>
+              <Text style={styles.updateText}>App Update Available</Text>
+              <View style={styles.versionBadgeContainer}>
+                  <Text style={styles.versionBadgeText}>v{latestVersion || '1.0.44'}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+          </TouchableOpacity>
+        )}
+
         {/* --- NEW: Expert Panel Feature Hub --- */}
         <View style={styles.section}>
             <Text style={styles.sectionTitle}>Expert Panel Features</Text>
@@ -537,19 +573,6 @@ const ProfileScreen = ({
                 <Text style={[styles.menuLabel, { color: '#EF4444' }]}>Logout</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-                onPress={() => {
-                  logger.logAction('CHECK_UPDATE_CLICK');
-                  handleManualUpdate();
-                }}
-                style={[styles.menuItem, styles.updateItem]}
-            >
-                <View style={[styles.menuIcon, { backgroundColor: '#F0FDF4' }]}>
-                    <Ionicons name="cloud-download-outline" size={20} color="#16A34A" />
-                </View>
-                <Text style={[styles.menuLabel, { color: '#16A34A' }]}>Update App (Force OTA)</Text>
-                <Ionicons name="refresh-outline" size={16} color="#16A34A" />
-            </TouchableOpacity>
         </View>
 
         <View style={styles.footer}>
@@ -2021,6 +2044,48 @@ const styles = StyleSheet.create({
   },
   devToggleTextActive: {
     color: '#FFFFFF',
+  },
+  updateCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    padding: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  updateIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  updateText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  versionBadgeContainer: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  versionBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748B',
   },
 });
 
