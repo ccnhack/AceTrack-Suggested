@@ -26,6 +26,8 @@ import * as Font from 'expo-font';
 import config from './config';
 import { io } from 'socket.io-client';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import ErrorBoundary from './components/ErrorBoundary';
+import OnboardingScreen from './screens/OnboardingScreen';
 
 if (Platform.OS === 'web') {
   const iconFontStyles = `@font-face {
@@ -37,7 +39,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = Platform.OS === 'web' ? '1.0.46.10' : '1.0.43';
+const APP_VERSION = Platform.OS === 'web' ? '2.0.0-web' : '2.0.0';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -62,6 +64,7 @@ export default function App() {
   const [showVerificationPrompt, setShowVerificationPrompt] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isUploadingLogs, setIsUploadingLogs] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [appVersion, setAppVersion] = useState(APP_VERSION);
   const [latestAppVersion, setLatestAppVersion] = useState(APP_VERSION);
   const [showForceUpdate, setShowForceUpdate] = useState(false);

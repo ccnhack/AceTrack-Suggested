@@ -1,6 +1,6 @@
 {
   "name": "acetrack-mobile",
-  "version": "1.0.43",
+  "version": "2.0.0",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
@@ -23,6 +23,7 @@
     "expo-document-picker": "~11.10.1",
     "expo-file-system": "~16.0.9",
     "expo-font": "~11.10.3",
+    "expo-haptics": "^55.0.9",
     "expo-image-picker": "~14.7.1",
     "expo-linear-gradient": "~12.7.2",
     "expo-screen-orientation": "~6.4.1",
