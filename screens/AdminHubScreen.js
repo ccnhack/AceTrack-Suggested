@@ -203,7 +203,7 @@ const AdminHubScreen = ({
         >
           <View style={styles.cardHeader}>
             <Image 
-              source={{ uri: c.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(c.name)}&background=random` }} 
+              source={{ uri: (c.avatar && c.avatar !== 'null') ? c.avatar : `https://ui-avatars.com/api/?name=${encodeURIComponent(c.name)}&background=random` }} 
               style={styles.avatar} 
             />
             <View style={styles.flex}>
@@ -290,26 +290,53 @@ const AdminHubScreen = ({
 
   const isWeb = Platform.OS === 'web';
   const content = (
-    <SafeAreaView style={[styles.container, isWeb && { flex: 1, backgroundColor: '#FFFFFF', paddingHorizontal: 32 }]}>
-      <View style={[styles.header, isWeb && { marginTop: 32 }]}>
-        <Text style={styles.title}>Admin Hub</Text>
-        <Text style={styles.subtitle}>System Overview & Management</Text>
+    <SafeAreaView style={styles.container}>
+      {/* Premium Admin Header */}
+      <View style={styles.premiumHeader}>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.welcomeLabel}>System Administrator</Text>
+            <Text style={styles.adminTitleText}>{user?.name || 'Admin'}</Text>
+          </View>
+          <TouchableOpacity 
+            onPress={() => onManualSync?.()}
+            style={styles.premiumSyncBtn}
+          >
+            <Ionicons name="refresh" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.statsDashboard}>
+          <View style={styles.dashStatCard}>
+            <Text style={styles.dashStatVal}>{players.filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus)).length}</Text>
+            <Text style={styles.dashStatLabel}>Coaches</Text>
+          </View>
+          <View style={styles.dashStatDivider} />
+          <View style={styles.dashStatCard}>
+            <Text style={styles.dashStatVal}>{matchVideos.filter(v => v.adminStatus === 'Deletion Requested').length}</Text>
+            <Text style={styles.dashStatLabel}>Deletions</Text>
+          </View>
+          <View style={styles.dashStatDivider} />
+          <View style={styles.dashStatCard}>
+            <Text style={[styles.dashStatVal, { color: '#EF4444' }]}>{supportTickets.filter(t => t.status === 'Open').length}</Text>
+            <Text style={styles.dashStatLabel}>Grievances</Text>
+          </View>
+        </View>
       </View>
 
       {!isWeb && (
-      <View style={styles.tabContainer}>
+      <View style={styles.segmentedTabWrapper}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScroll}>
           {[
-            { id: 'individuals', label: 'Individuals' },
-            { id: 'academies', label: 'Academies' },
-            { id: 'coaches', label: 'Coaches', count: players.filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !seenAdminActionIds.has(p.id)).length },
-            { id: 'security', label: 'Security' },
-            { id: 'tournaments', label: 'Tournaments' },
-            { id: 'coach_assignments', label: 'Coach Assignments', count: tournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && !seenAdminActionIds.has(t.id)).length },
-            { id: 'recordings', label: 'Recordings', count: matchVideos.filter(v => v.adminStatus === 'Deletion Requested' && !seenAdminActionIds.has(v.id)).length },
-            { id: 'grievances', label: 'Grievances', count: supportTickets.filter(t => t.status === 'Open').length },
-            { id: 'audit', label: 'Audit Logs' },
-            { id: 'diagnostics', label: 'Diagnostics' }
+            { id: 'individuals', label: 'Individuals', icon: 'person' },
+            { id: 'academies', label: 'Academies', icon: 'business' },
+            { id: 'coaches', label: 'Coaches', icon: 'fitness', count: players.filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !seenAdminActionIds.has(p.id)).length },
+            { id: 'security', label: 'Security', icon: 'shield-checkmark' },
+            { id: 'tournaments', label: 'Tournaments', icon: 'trophy' },
+            { id: 'coach_assignments', label: 'Assignments', icon: 'git-pull-request', count: tournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && !seenAdminActionIds.has(t.id)).length },
+            { id: 'recordings', label: 'Media', icon: 'videocam', count: matchVideos.filter(v => v.adminStatus === 'Deletion Requested' && !seenAdminActionIds.has(v.id)).length },
+            { id: 'grievances', label: 'Tickets', icon: 'warning', count: supportTickets.filter(t => t.status === 'Open').length },
+            { id: 'audit', label: 'Logs', icon: 'list' }
           ].map(tab => {
             const isVisited = visitedAdminSubTabs.has(tab.id);
             const showBadge = tab.count > 0 && (tab.id === 'grievances' ? true : !isVisited);
@@ -320,17 +347,12 @@ const AdminHubScreen = ({
                 onPress={() => { 
                   setSubTab(tab.id); 
                   setSearch(''); 
-                  
-                  // 1. Mark the tab as visited
                   if (tab.id !== 'grievances' && setVisitedAdminSubTabs) {
                     setVisitedAdminSubTabs(prev => new Set(prev).add(tab.id));
                   }
-
-                  // 2. Mark the CURRENT items as seen so badges stay gone permanently (via storage)
                   if (setSeenAdminActionIds) {
                     const newSeenIds = new Set(seenAdminActionIds);
                     let added = false;
-                    
                     if (tab.id === 'coaches') {
                       players.filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus)).forEach(p => {
                         const pid = String(p.id);
@@ -352,15 +374,15 @@ const AdminHubScreen = ({
                         if (!newSeenIds.has(sid)) { newSeenIds.add(sid); added = true; }
                       });
                     }
-                    
                     if (added) setSeenAdminActionIds(newSeenIds);
                   }
                 }}
-                style={[styles.tab, subTab === tab.id && styles.tabActive]}
+                style={[styles.segTab, subTab === tab.id && styles.segTabActive]}
               >
-                <Text style={[styles.tabText, subTab === tab.id && styles.tabTextActive]}>{tab.label}</Text>
+                <Ionicons name={tab.icon} size={14} color={subTab === tab.id ? '#6366F1' : '#94A3B8'} />
+                <Text style={[styles.segTabText, subTab === tab.id && styles.segTabTextActive]}>{tab.label}</Text>
                 {showBadge && (
-                  <View style={styles.badge}>
+                  <View style={styles.premiumBadge}>
                     <Text style={styles.badgeText}>{tab.count}</Text>
                   </View>
                 )}
@@ -752,7 +774,7 @@ const AdminHubScreen = ({
                       style={[styles.miniUserCard, selectedDiagUser?.id === p.id && styles.miniUserCardActive]}
                     >
                       <Image 
-                        source={{ uri: p.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random` }} 
+                        source={{ uri: (p.avatar && p.avatar !== 'null') ? p.avatar : `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random` }} 
                         style={styles.miniAvatar} 
                       />
                       <View style={{ alignItems: 'center' }}>
@@ -1185,86 +1207,149 @@ const AdminHubScreen = ({
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  header: {
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  premiumHeader: {
     padding: 24,
+    backgroundColor: '#FFFFFF',
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.05,
+    shadowRadius: 20,
+    elevation: 10,
+    zIndex: 10,
   },
-  title: {
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  welcomeLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  adminTitleText: {
     fontSize: 24,
     fontWeight: '900',
     color: '#0F172A',
-    textTransform: 'uppercase',
+    marginTop: 2,
   },
-  subtitle: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-    marginTop: 4,
-  },
-  tabContainer: {
-    paddingBottom: 4,
-  },
-  tabScroll: {
-    paddingHorizontal: 24,
-    gap: 12,
-  },
-  tab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+  premiumSyncBtn: {
+    width: 48,
+    height: 48,
     borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-    gap: 8,
-  },
-  tabActive: {
     backgroundColor: '#0F172A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  tabText: {
-    fontSize: 10,
+  statsDashboard: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 20,
+    padding: 16,
+    alignItems: 'center',
+  },
+  dashStatCard: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  dashStatVal: {
+    fontSize: 18,
     fontWeight: '900',
+    color: '#0F172A',
+  },
+  dashStatLabel: {
+    fontSize: 9,
+    fontWeight: '700',
     color: '#64748B',
     textTransform: 'uppercase',
+    marginTop: 2,
   },
-  tabTextActive: {
-    color: '#FFFFFF',
+  dashStatDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#E2E8F0',
   },
-  badge: {
+  segmentedTabWrapper: {
+    paddingHorizontal: 20,
+    marginTop: -20,
+    zIndex: 20,
+  },
+  tabScroll: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+    gap: 8,
+  },
+  segTab: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    minWidth: 100,
+  },
+  segTabActive: {
+    backgroundColor: '#EEF2FF',
+  },
+  segTabText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#94A3B8',
+  },
+  segTabTextActive: {
+    color: '#6366F1',
+  },
+  premiumBadge: {
+    height: 18,
+    minWidth: 18,
+    borderRadius: 9,
     backgroundColor: '#EF4444',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
   },
   badgeText: {
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: '900',
     color: '#FFFFFF',
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    margin: 24,
-    marginTop: 12,
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 20,
+    marginTop: 30,
     paddingHorizontal: 16,
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#F1F5F9',
   },
   searchInput: {
     flex: 1,
     paddingVertical: 14,
+    paddingHorizontal: 12,
     fontSize: 14,
     fontWeight: '500',
     color: '#0F172A',
-    marginLeft: 10,
   },
   content: {
     flex: 1,
