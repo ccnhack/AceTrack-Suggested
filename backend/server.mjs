@@ -13,11 +13,36 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import mongoSanitize from 'express-mongo-sanitize';
 import helmet from 'helmet';
+import admin from 'firebase-admin';
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// ═══════════════════════════════════════════════════════════════
+// 🔥 FIREBASE: Initialize Admin SDK (SEC Fix #1)
+// ═══════════════════════════════════════════════════════════════
+const serviceAccountPath = path.join(__dirname, 'firebase-service-account.json');
+try {
+  let serviceAccount;
+  if (fs.existsSync(serviceAccountPath)) {
+    serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+  } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  }
+
+  if (serviceAccount) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+    console.log('🔥 Firebase Admin initialized');
+  } else {
+    console.warn('⚠️ Firebase Admin NOT initialized: No service account found');
+  }
+} catch (error) {
+  console.error('❌ Failed to initialize Firebase Admin:', error.message);
+}
 
 const APP_VERSION = '2.0.0'; // AceTrack Suggested — Expert Panel Enhanced
 

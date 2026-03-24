@@ -42,3 +42,4 @@ backend/diagnostics/
 /android
 /ios
 backend/public/
+backend/firebase-service-account.json

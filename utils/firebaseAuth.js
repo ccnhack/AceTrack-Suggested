@@ -11,12 +11,13 @@
 
 // TODO: Replace with your actual Firebase config
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY_HERE",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyAEBVorVssOXB0CCStIVg0Nd7mmXpjeh4A",
+  authDomain: "acetrack-ad98e.firebaseapp.com",
+  projectId: "acetrack-ad98e",
+  storageBucket: "acetrack-ad98e.firebasestorage.app",
+  messagingSenderId: "45583316683",
+  appId: "1:45583316683:web:1529124dd94c07c1398d4e",
+  measurementId: "G-ZLVSZPQ4D2"
 };
 
 /**
