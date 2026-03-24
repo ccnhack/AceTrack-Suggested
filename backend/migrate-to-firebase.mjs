@@ -15,7 +15,7 @@ const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  storageBucket: 'acetrack-ad98e.appspot.com'
+  storageBucket: 'acetrack-ad98e.firebasestorage.app'
 });
 
 const bucket = admin.storage().bucket();
@@ -29,34 +29,56 @@ const AppStateSchema = new mongoose.Schema({
   lastUpdated: { type: Date, default: Date.now }
 }, { minimize: false });
 
-const AppState = mongoose.model('AppState', AppStateSchema);
+const AppState = mongoose.model('AppState', AppStateSchema, 'appstates');
 
 async function migrate() {
   console.log('🚀 Starting Migration to Firebase Storage...');
   
+  // Debug: List buckets
+  try {
+    const [buckets] = await admin.storage().getBuckets();
+    console.log('🪣 Available buckets:', buckets.map(b => b.name).join(', '));
+  } catch (err) {
+    console.error('❌ Failed to list buckets:', err.message);
+  }
+
   const state = await AppState.findOne().sort({ lastUpdated: -1 });
   if (!state || !state.data) {
-    console.error('❌ No AppState found to migrate');
+    const count = await AppState.countDocuments();
+    console.log(`📊 Documents in [appstates]: ${count}`);
+    console.error('❌ No AppState found to migrate.');
+    process.exit(1);
+  }
+  if (!state || !state.data) {
+    console.error('❌ No AppState found to migrate. Check if "AppState" collection exists in the current database.');
     process.exit(1);
   }
 
   const data = state.data;
+  console.log(`📊 Data Summary: ${data.players?.length || 0} players, ${data.matchVideos?.length || 0} videos, ${data.tournaments?.length || 0} tournaments`);
+  
+  // Sample URL check
+  if (data.players && data.players.length > 0) {
+    console.log(`🔗 Sample player avatar: ${data.players[0].avatar}`);
+  }
+  if (data.matchVideos && data.matchVideos.length > 0) {
+    console.log(`🔗 Sample video URL: ${data.matchVideos[0].videoUrl}`);
+  }
+
   let changed = false;
 
   // 1. Migrate Player Avatars
   if (data.players) {
     for (let player of data.players) {
       if (player.avatar && player.avatar.includes('/uploads/')) {
-        const filename = player.avatar.split('/').pop();
-        const localPath = path.join(UPLOADS_DIR, filename);
+        const url = player.avatar;
+        const filename = url.split('/').pop();
         
-        if (fs.existsSync(localPath)) {
-          console.log(`📸 Migrating avatar for ${player.name}: ${filename}`);
-          const firebaseURL = await uploadToFirebase(localPath, filename, 'image/jpeg');
-          if (firebaseURL) {
-            player.avatar = firebaseURL;
-            changed = true;
-          }
+        console.log(`📸 Migrating avatar for ${player.name}: ${filename}`);
+        const firebaseURL = await migrateFromUrl(url, filename, 'image/jpeg');
+        if (firebaseURL) {
+          player.avatar = firebaseURL;
+          changed = true;
         }
       }
     }
@@ -65,21 +87,18 @@ async function migrate() {
   // 2. Migrate Match Videos
   if (data.matchVideos) {
     for (let video of data.matchVideos) {
-      // Check videoUrl, previewUrl, watermarkedUrl
       const fields = ['videoUrl', 'previewUrl', 'watermarkedUrl'];
       for (let field of fields) {
         if (video[field] && video[field].includes('/uploads/')) {
-          const filename = video[field].split('/').pop();
-          const localPath = path.join(UPLOADS_DIR, filename);
+          const url = video[field];
+          const filename = url.split('/').pop();
           
-          if (fs.existsSync(localPath)) {
-            console.log(`📽️ Migrating ${field} for video ${video.id}: ${filename}`);
-            const mimeType = filename.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg';
-            const firebaseURL = await uploadToFirebase(localPath, filename, mimeType);
-            if (firebaseURL) {
-              video[field] = firebaseURL;
-              changed = true;
-            }
+          console.log(`📽️ Migrating ${field} for video ${video.id}: ${filename}`);
+          const mimeType = filename.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg';
+          const firebaseURL = await migrateFromUrl(url, filename, mimeType);
+          if (firebaseURL) {
+            video[field] = firebaseURL;
+            changed = true;
           }
         }
       }
@@ -92,26 +111,29 @@ async function migrate() {
     await state.save();
     console.log('✅ Migration Complete! Database updated with Firebase URLs.');
   } else {
-    console.log('ℹ️ No local files found to migrate.');
+    console.log('ℹ️ No files found that needed migration.');
   }
 
   mongoose.disconnect();
 }
 
-async function uploadToFirebase(localPath, filename, mimeType) {
+async function migrateFromUrl(url, filename, mimeType) {
   try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+    const buffer = await response.arrayBuffer();
+
     const destination = `uploads/${filename}`;
-    await bucket.upload(localPath, {
-      destination: destination,
-      metadata: {
-        contentType: mimeType,
-      }
-    });
     const file = bucket.file(destination);
-    await file.makePublic();
+    
+    await file.save(Buffer.from(buffer), {
+      metadata: { contentType: mimeType },
+      public: true
+    });
+
     return `https://storage.googleapis.com/${bucket.name}/${destination}`;
   } catch (error) {
-    console.error(`❌ Failed to upload ${filename}:`, error.message);
+    console.error(`❌ Failed to migrate ${filename}:`, error.message);
     return null;
   }
 }

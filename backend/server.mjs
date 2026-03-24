@@ -1,4 +1,5 @@
 import express from 'express';
+import { v2 as cloudinary } from 'cloudinary';
 import cors from 'cors';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
@@ -21,6 +22,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ═══════════════════════════════════════════════════════════════
+// ☁️ Cloudinary Configuration
+// ═══════════════════════════════════════════════════════════════
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+console.log('☁️ Cloudinary initialized');
+
+// ═══════════════════════════════════════════════════════════════
 // 🔥 FIREBASE: Initialize Admin SDK (SEC Fix #1)
 // ═══════════════════════════════════════════════════════════════
 const serviceAccountPath = path.join(__dirname, 'firebase-service-account.json');
@@ -35,7 +46,7 @@ try {
   if (serviceAccount) {
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
-      storageBucket: 'acetrack-ad98e.appspot.com'
+      storageBucket: 'acetrack-ad98e.firebasestorage.app'
     });
     console.log('🔥 Firebase Admin initialized');
   } else {
@@ -44,8 +55,6 @@ try {
 } catch (error) {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
-
-const bucket = admin.storage().bucket();
 
 const APP_VERSION = '2.0.0'; // AceTrack Suggested — Expert Panel Enhanced
 
@@ -463,39 +472,28 @@ router.post('/upload', apiKeyGuard, upload.single('video'), async (req, res) => 
   }
 
   try {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const filename = uniqueSuffix + '-' + (req.file.originalname || 'upload.bin');
-    const blob = bucket.file(`uploads/${filename}`);
-    
-    const blobStream = blob.createWriteStream({
-      metadata: {
-        contentType: req.file.mimetype,
+    // Stream upload to Cloudinary
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        resource_type: 'auto',
+        folder: 'acetrack',
+        public_id: `${Date.now()}-${Math.round(Math.random() * 1e9)}`,
       },
-      resumable: false
-    });
-
-    blobStream.on('error', (err) => {
-      console.error('Firebase Upload Error:', err);
-      res.status(500).json({ error: 'Upload to Firebase failed' });
-    });
-
-    blobStream.on('finish', async () => {
-      // Make the file public
-      try {
-        await blob.makePublic();
-        const fileUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
+      (error, result) => {
+        if (error) {
+          console.error("❌ Cloudinary Upload Error:", error);
+          logServerEvent('UPLOAD_FAILED_CLOUDINARY', { error: error.message });
+          return res.status(500).json({ error: "Failed to upload to cloud" });
+        }
         
-        logAudit(req, 'FILE_UPLOAD_FIREBASE', [], { filename, size: req.file.size });
-        logServerEvent('UPLOAD_SUCCESS_FIREBASE', { filename, url: fileUrl });
+        logAudit(req, 'FILE_UPLOAD_CLOUDINARY', [], { url: result.secure_url, size: req.file.size });
+        logServerEvent('UPLOAD_SUCCESS_CLOUDINARY', { url: result.secure_url });
         
-        res.json({ url: fileUrl, filename: filename });
-      } catch (err) {
-        console.error('Make Public Error:', err);
-        res.status(500).json({ error: 'Failed to set file permissions' });
+        res.json({ url: result.secure_url });
       }
-    });
+    );
 
-    blobStream.end(req.file.buffer);
+    stream.end(req.file.buffer);
   } catch (error) {
     console.error('Upload Process Error:', error);
     res.status(500).json({ error: error.message });
