@@ -28,6 +28,7 @@ import { io } from 'socket.io-client';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import ErrorBoundary from './components/ErrorBoundary';
 import OnboardingScreen from './screens/OnboardingScreen';
+import { initializeFirebase } from './utils/firebaseAuth';
 
 if (Platform.OS === 'web') {
   const iconFontStyles = `@font-face {
@@ -261,6 +262,8 @@ export default function App() {
   // 4. PERSISTENT VERIFICATION PROMPT: Ensure it shows up if unverified
   // Fix: Don't show if user is admin OR already in the Edit Profile modal
   useEffect(() => {
+    // Initialize Firebase
+    initializeFirebase();
     if (currentUser && currentUser.role !== 'admin' && (!currentUser.isEmailVerified || !currentUser.isPhoneVerified) && !isProfileEditActive) {
       setShowVerificationPrompt(true);
     } else {
