@@ -19,7 +19,7 @@ if (Platform.OS === 'android' && (!hostIp || hostIp === '127.0.0.1' || hostIp ==
 // ENVIRONMENT SWITCH:
 // In development (__DEV__ is true), use the local auto-detected IP.
 // In production (built APK/IPA), always use the stable Render Cloud URL.
-const CLOUD_API_URL = 'https://acetrack-api-q39m.onrender.com';
+const CLOUD_API_URL = 'https://acetrack-suggested.onrender.com';
 const API_BASE_URL = __DEV__ ? LOCAL_API_URL : CLOUD_API_URL;
 const GROQ_API_KEY = (Constants.expoConfig && Constants.expoConfig.extra && Constants.expoConfig.extra.groqApiKey)
   ? Constants.expoConfig.extra.groqApiKey
@@ -40,14 +40,14 @@ export default {
     
     let sanitized = url;
     // 1. Force HTTPS for AceTrack API URLs
-    if (sanitized.includes('acetrack-api-q39m.onrender.com') && sanitized.startsWith('http:')) {
+    if (sanitized.includes('acetrack-suggested.onrender.com') && sanitized.startsWith('http:')) {
       sanitized = sanitized.replace('http:', 'https:');
     }
     
     // 2. Handle local IP addresses (emergency fallback to cloud URL if domain is missing)
     const localIpRegex = /http:\/\/192\.168\.\d{1,3}\.\d{1,3}:3005/;
     if (localIpRegex.test(sanitized)) {
-      sanitized = sanitized.replace(localIpRegex, 'https://acetrack-api-q39m.onrender.com');
+      sanitized = sanitized.replace(localIpRegex, 'https://acetrack-suggested.onrender.com');
     }
 
     return sanitized;
