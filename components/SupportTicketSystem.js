@@ -31,6 +31,7 @@ export const SupportTicketSystem = ({
   const [selectedImage, setSelectedImage] = useState(null);
   const [isAdminTyping, setIsAdminTyping] = useState(false);
   const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const [showTypePicker, setShowTypePicker] = useState(false);
 
   const [formData, setFormData] = useState({
     type: 'Other',
@@ -251,10 +252,7 @@ export const SupportTicketSystem = ({
             <View style={styles.inputGroup}>
                 <Text style={styles.label}>Issue Type</Text>
                 <TouchableOpacity 
-                    onPress={() => {
-                        const nextIdx = (TICKET_TYPES.indexOf(formData.type) + 1) % TICKET_TYPES.length;
-                        setFormData(p => ({ ...p, type: TICKET_TYPES[nextIdx] }));
-                    }}
+                    onPress={() => setShowTypePicker(true)}
                     style={styles.picker}
                 >
                     <Text style={styles.pickerText}>{formData.type}</Text>
@@ -295,6 +293,34 @@ export const SupportTicketSystem = ({
                 <Text style={styles.submitBtnText}>Submit Ticket</Text>
             </TouchableOpacity>
         </ScrollView>
+
+        <Modal transparent visible={showTypePicker} animationType="slide">
+            <View style={styles.modalOverlay}>
+                <View style={styles.pickerSheet}>
+                    <View style={styles.pickerHeader}>
+                        <Text style={styles.pickerTitle}>Select Issue Type</Text>
+                        <TouchableOpacity onPress={() => setShowTypePicker(false)}>
+                            <Ionicons name="close" size={24} color="#0F172A" />
+                        </TouchableOpacity>
+                    </View>
+                    <ScrollView style={styles.pickerList}>
+                        {TICKET_TYPES.map((type) => (
+                            <TouchableOpacity 
+                                key={type} 
+                                onPress={() => {
+                                    setFormData(p => ({ ...p, type }));
+                                    setShowTypePicker(false);
+                                }}
+                                style={styles.pickerItem}
+                            >
+                                <Text style={[styles.pickerItemText, formData.type === type && styles.pickerItemTextActive]}>{type}</Text>
+                                {formData.type === type && <Ionicons name="checkmark" size={20} color="#3B82F6" />}
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+            </View>
+        </Modal>
       </View>
     );
   }
@@ -954,5 +980,48 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#94A3B8',
     textTransform: 'uppercase',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  pickerSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '70%',
+    padding: 20,
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  pickerTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+    textTransform: 'uppercase',
+  },
+  pickerList: {
+    marginBottom: 20,
+  },
+  pickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  pickerItemText: {
+    fontSize: 16,
+    color: '#475569',
+  },
+  pickerItemTextActive: {
+    color: '#3B82F6',
+    fontWeight: '700',
   },
 });
