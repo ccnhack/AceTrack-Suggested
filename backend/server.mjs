@@ -34,7 +34,8 @@ try {
 
   if (serviceAccount) {
     admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
+      credential: admin.credential.cert(serviceAccount),
+      storageBucket: 'acetrack-ad98e.appspot.com'
     });
     console.log('🔥 Firebase Admin initialized');
   } else {
@@ -43,6 +44,8 @@ try {
 } catch (error) {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
+
+const bucket = admin.storage().bucket();
 
 const APP_VERSION = '2.0.0'; // AceTrack Suggested — Expert Panel Enhanced
 
@@ -354,13 +357,7 @@ app.use('/uploads', express.static(UPLOADS_DIR, {
   }
 }));
 
-const storageConfig = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, UPLOADS_DIR),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + '-' + file.originalname);
-  }
-});
+const storageConfig = multer.memoryStorage();
 const upload = multer({ 
   storage: storageConfig,
   limits: { fileSize: 100 * 1024 * 1024 } // 100MB max upload
@@ -459,15 +456,50 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
 });
 
 // POST /api/v1/upload
-router.post('/upload', apiKeyGuard, upload.single('video'), (req, res) => {
+router.post('/upload', apiKeyGuard, upload.single('video'), async (req, res) => {
   if (!req.file) {
     logServerEvent('UPLOAD_FAILED', { error: 'No file received' });
     return res.status(400).json({ error: 'No file uploaded' });
   }
-  const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-  logAudit(req, 'FILE_UPLOAD', [], { filename: req.file.filename, size: req.file.size });
-  logServerEvent('UPLOAD_SUCCESS', { filename: req.file.filename, url: fileUrl });
-  res.json({ url: fileUrl, filename: req.file.filename });
+
+  try {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const filename = uniqueSuffix + '-' + (req.file.originalname || 'upload.bin');
+    const blob = bucket.file(`uploads/${filename}`);
+    
+    const blobStream = blob.createWriteStream({
+      metadata: {
+        contentType: req.file.mimetype,
+      },
+      resumable: false
+    });
+
+    blobStream.on('error', (err) => {
+      console.error('Firebase Upload Error:', err);
+      res.status(500).json({ error: 'Upload to Firebase failed' });
+    });
+
+    blobStream.on('finish', async () => {
+      // Make the file public
+      try {
+        await blob.makePublic();
+        const fileUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
+        
+        logAudit(req, 'FILE_UPLOAD_FIREBASE', [], { filename, size: req.file.size });
+        logServerEvent('UPLOAD_SUCCESS_FIREBASE', { filename, url: fileUrl });
+        
+        res.json({ url: fileUrl, filename: filename });
+      } catch (err) {
+        console.error('Make Public Error:', err);
+        res.status(500).json({ error: 'Failed to set file permissions' });
+      }
+    });
+
+    blobStream.end(req.file.buffer);
+  } catch (error) {
+    console.error('Upload Process Error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // GET /api/v1/diagnostics
