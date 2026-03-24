@@ -102,6 +102,7 @@ const MainTabs = ({
           else if (route.name === 'Matchmaking') iconName = focused ? 'people' : 'people-outline';
           return <Ionicons name={iconName} size={size} color={color} />;
         },
+        tabBarLabel: route.name === 'Matchmaking' && role === 'coach' ? 'Bookings' : route.name,
         tabBarActiveTintColor: '#EF4444',
         tabBarInactiveTintColor: '#CBD5E1',
         headerShown: false,

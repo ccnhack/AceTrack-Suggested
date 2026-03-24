@@ -10,6 +10,34 @@ import designSystem from '../theme/designSystem';
 
 const { width } = Dimensions.get('window');
 
+const deg2rad = (deg) => deg * (Math.PI / 180);
+
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+  const R = 6371; // Radius of the earth in km
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+    Math.sin(dLon / 2) * Math.sin(dLon / 2); 
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); 
+  const d = R * c; // Distance in km
+  return d.toFixed(1);
+};
+
+const CITY_COORDS = {
+  'Bangalore': { latitude: 12.9716, longitude: 77.5946 },
+  'Mumbai': { latitude: 19.0760, longitude: 72.8777 },
+  'Delhi': { latitude: 28.6139, longitude: 77.2090 },
+  'Whitefield': { latitude: 12.9698, longitude: 77.7500 },
+  'Chennai': { latitude: 13.0827, longitude: 80.2707 },
+  'Hyderabad': { latitude: 17.3850, longitude: 78.4867 },
+  'Pune': { latitude: 18.5204, longitude: 73.8567 },
+};
+
+const POPULAR_CITIES = ['All', ...Object.keys(CITY_COORDS)];
+
 const ExploreScreen = ({ 
   tournaments, onSelect, reschedulingFrom, onCancelReschedule, userId, 
   userRole, userSports, players = [], Sport, SkillLevel, user,
@@ -40,6 +68,30 @@ const ExploreScreen = ({
         if (typeof Location.getCurrentPositionAsync === 'function') {
           let location = await Location.getCurrentPositionAsync({});
           setUserLocation(location.coords);
+
+          // Auto-select city hub based on proximity
+          if (cityFilter === 'All') {
+            let closestCity = 'All';
+            let minDistance = 50; // Threshold of 50km
+
+            Object.entries(CITY_COORDS).forEach(([cityName, coords]) => {
+              const dist = calculateDistance(
+                location.coords.latitude,
+                location.coords.longitude,
+                coords.latitude,
+                coords.longitude
+              );
+              if (dist && parseFloat(dist) < minDistance) {
+                minDistance = parseFloat(dist);
+                closestCity = cityName;
+              }
+            });
+
+            if (closestCity !== 'All') {
+              setCityFilter(closestCity);
+              console.log(`📍 Auto-selected hub: ${closestCity} (${minDistance}km away)`);
+            }
+          }
         }
       } catch (err) {
         console.warn('Location module error:', err.message);
@@ -48,23 +100,6 @@ const ExploreScreen = ({
     })();
   }, []);
 
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    if (!lat1 || !lon1 || !lat2 || !lon2) return null;
-    const R = 6371; // Radius of the earth in km
-    const dLat = deg2rad(lat2 - lat1);
-    const dLon = deg2rad(lon2 - lon1);
-    const a = 
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
-      Math.sin(dLon / 2) * Math.sin(dLon / 2); 
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); 
-    const d = R * c; // Distance in km
-    return d.toFixed(1);
-  };
-
-  const deg2rad = (deg) => deg * (Math.PI / 180);
-
-  const POPULAR_CITIES = ['All', 'Bangalore', 'Mumbai', 'Delhi', 'Whitefield', 'Chennai', 'Hyderabad', 'Pune'];
   const INITIAL_CITIES = ['All', 'Bangalore', 'Mumbai']; // Only show 3 options initially
   const filteredCities = (citySearch ? POPULAR_CITIES : INITIAL_CITIES).filter(c => c.toLowerCase().includes(citySearch.toLowerCase()));
 

@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, StyleSheet, 
   SafeAreaView, Modal, TextInput, Alert, Dimensions,
-  KeyboardAvoidingView, Platform
+  KeyboardAvoidingView, Platform, ActivityIndicator
 } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
 import { VideoManagement } from '../components/VideoManagement';
 import PlayerDashboardView from '../components/PlayerDashboardView';
@@ -282,6 +284,56 @@ export const AcademyScreen = ({
     resetForm();
   };
 
+  const handleClone = (t) => {
+    setFormTitle(`${t.title} (Clone)`);
+    setFormSport(t.sport);
+    setFormSkill(t.skillLevel);
+    setFormVenue(t.venue || t.location?.split(', ')[1] || '');
+    
+    // Default to today + 7 for clone
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    const dateStr = d.toISOString().split('T')[0];
+    setFormDate(dateStr);
+    setSelectedDate(dateStr);
+    
+    setFormRegDeadline(t.registrationDeadline);
+    setFormTime(t.time);
+    setFormFee(t.entryFee?.toString());
+    setFormMaxPlayers(t.maxPlayers?.toString());
+    setFormStructure(t.structure);
+    setFormFormat(t.format);
+    setFormPrize(t.prizePool);
+    setFormDescription(t.description);
+    setCoachAssignmentType(t.coachAssignmentType);
+    setSelectedAcademyCoachId(t.assignedCoachId);
+    
+    setEditingT(null); // Ensure it saves as NEW
+    setIsFormOpen(true);
+    Alert.alert("Template Loaded", "Configuration copied from " + t.title);
+  };
+
+  const exportToCSV = async () => {
+    try {
+      let csv = "Tournament,Sport,Date,Participants,Revenue\n";
+      myTournaments.forEach(t => {
+        const pCount = [...new Set([
+          ...(t.registeredPlayerIds || []),
+          ...(t.pendingPaymentPlayerIds || []),
+          ...Object.keys(t.playerStatuses || {})
+        ])].filter(pid => pid && String(pid).toLowerCase() !== 'test').length;
+        const revenue = pCount * (t.entryFee || 0);
+        csv += `"${t.title}","${t.sport}","${t.date}",${pCount},${revenue}\n`;
+      });
+
+      const filename = `${FileSystem.documentDirectory}AceTrack_Revenue_${Date.now()}.csv`;
+      await FileSystem.writeAsStringAsync(filename, csv);
+      await Sharing.shareAsync(filename);
+    } catch (e) {
+      Alert.alert("Export Failed", e.message);
+    }
+  };
+
   const renderPickerModal = () => {
     if (!activePicker) return null;
 
@@ -442,6 +494,9 @@ export const AcademyScreen = ({
             <Text style={styles.academyNameText}>{user?.name || 'Academy'}</Text>
           </View>
           <View style={styles.headerIcons}>
+            <TouchableOpacity onPress={exportToCSV} style={[styles.premiumAddBtn, { backgroundColor: '#F0FDF4', marginRight: 10 }]}>
+              <Ionicons name="download-outline" size={20} color="#16A34A" />
+            </TouchableOpacity>
             {subTab === 'tournaments' && (
               <TouchableOpacity 
                 onPress={() => { setEditingT(null); setIsFormOpen(true); }}
@@ -537,6 +592,12 @@ export const AcademyScreen = ({
                   </View>
                   
                   <View style={styles.tCardRightActions}>
+                    <TouchableOpacity 
+                        onPress={() => handleClone(t)}
+                        style={[styles.premiumEditBtn, { marginRight: 8, backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}
+                    >
+                        <Ionicons name="copy-outline" size={18} color="#10B981" />
+                    </TouchableOpacity>
                     <TouchableOpacity 
                         onPress={() => { setEditingT(t); setIsFormOpen(true); }}
                         style={styles.premiumEditBtn}

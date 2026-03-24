@@ -165,15 +165,22 @@ const ProfileScreen = ({
   const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().substring(0, 7));
 
   const MOCK_EVENTS = [
-    { id: '1', title: 'Bangalore Open TT', date: '2026-03-25', sport: 'Table Tennis' },
-    { id: '2', title: 'Whitefield Badminton League', date: '2026-03-28', sport: 'Badminton' },
-    { id: '3', title: 'Karnataka State Ranking', date: '2026-04-10', sport: 'Badminton' },
-    { id: '4', title: 'Mysore Open', date: '2026-04-22', sport: 'Table Tennis' },
-    { id: '5', title: 'Summer Smash', date: '2026-05-05', sport: 'Cricket' },
-    { id: '6', title: 'May Day Cup', date: '2026-05-15', sport: 'Badminton' },
+    { id: '1', title: 'Bangalore Open TT', date: '2026-03-25', sport: 'Table Tennis', type: 'tournament' },
+    { id: '2', title: 'Whitefield Badminton League', date: '2026-03-28', sport: 'Badminton', type: 'tournament' },
+    { id: '3', title: 'Karnataka State Ranking', date: '2026-04-10', sport: 'Badminton', type: 'tournament' },
+    { id: '4', title: 'Mysore Open', date: '2026-04-22', sport: 'Table Tennis', type: 'tournament' },
+    { id: '5', title: 'Summer Smash', date: '2026-05-05', sport: 'Cricket', type: 'tournament' },
+    { id: '6', title: 'May Day Cup', date: '2026-05-15', sport: 'Badminton', type: 'tournament' },
   ];
 
-  const filteredEvents = MOCK_EVENTS.filter(event => {
+  const MOCK_CONFIRMED_BOOKINGS = user.role === 'coach' ? [
+    { id: 'cb1', title: 'Coaching: Aaryan Sharma', date: '2026-03-26', sport: 'Tennis', type: 'booking' },
+    { id: 'cb2', title: 'Coaching: Rohan G.', date: '2026-03-28', sport: 'Cricket', type: 'booking' },
+  ] : [];
+
+  const allEvents = [...MOCK_EVENTS, ...MOCK_CONFIRMED_BOOKINGS];
+
+  const filteredEvents = allEvents.filter(event => {
     const eventMonth = event.date.substring(0, 7);
     const date = new Date(currentMonth + '-01');
     const nextMonthDate = new Date(date.setMonth(date.getMonth() + 1));
@@ -182,8 +189,11 @@ const ProfileScreen = ({
   });
 
   const markedDates = {};
-  MOCK_EVENTS.forEach(event => {
-    markedDates[event.date] = { marked: true, dotColor: designSystem.colors.primary };
+  allEvents.forEach(event => {
+    markedDates[event.date] = { 
+        marked: true, 
+        dotColor: event.type === 'booking' ? '#22C55E' : designSystem.colors.primary 
+    };
   });
   const [editName, setEditName] = useState(user?.name || '');
   const [editEmail, setEditEmail] = useState(user?.email || '');
@@ -462,15 +472,17 @@ const ProfileScreen = ({
                     <View style={[styles.featureIcon, { backgroundColor: '#EEF2FF' }]}>
                         <Ionicons name="people" size={24} color="#4F46E5" />
                     </View>
-                    <Text style={styles.featureLabel}>Matchmaking</Text>
+                    <Text style={styles.featureLabel}>{user.role === 'coach' ? 'Bookings' : 'Matchmaking'}</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.featureTile} onPress={() => navigation.navigate('CoachDirectory')}>
-                    <View style={[styles.featureIcon, { backgroundColor: '#FFF7ED' }]}>
-                        <Ionicons name="school" size={24} color="#EA580C" />
-                    </View>
-                    <Text style={styles.featureLabel}>Coaches</Text>
-                </TouchableOpacity>
+                {user.role !== 'coach' && (
+                  <TouchableOpacity style={styles.featureTile} onPress={() => navigation.navigate('CoachDirectory')}>
+                      <View style={[styles.featureIcon, { backgroundColor: '#FFF7ED' }]}>
+                          <Ionicons name="school" size={24} color="#EA580C" />
+                      </View>
+                      <Text style={styles.featureLabel}>Coaches</Text>
+                  </TouchableOpacity>
+                )}
 
                 <TouchableOpacity style={styles.featureTile} onPress={() => setIsCalendarModalVisible(true)}>
                     <View style={[styles.featureIcon, { backgroundColor: '#F0FDF4' }]}>
@@ -1091,7 +1103,7 @@ const ProfileScreen = ({
                 <View style={styles.modalOverlay}>
                     <View style={styles.calendarModalContent}>
                         <View style={styles.calendarModalHeader}>
-                            <Text style={styles.calendarModalTitle}>Tournament Calendar</Text>
+                            <Text style={styles.calendarModalTitle}>{user.role === 'coach' ? 'Calendar' : 'Tournament Calendar'}</Text>
                             <TouchableOpacity onPress={() => setIsCalendarModalVisible(false)} style={styles.calendarCloseBtn}>
                                 <Ionicons name="close" size={28} color="#333" />
                             </TouchableOpacity>
@@ -1121,7 +1133,14 @@ const ProfileScreen = ({
                                     <Text style={styles.dateMonth}>{monthNames[eventDate.getMonth()]}</Text>
                                   </View>
                                   <View style={styles.eventInfo}>
-                                    <Text style={styles.eventTitle}>{item.title}</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Text style={styles.eventTitle}>{item.title}</Text>
+                                        {item.type === 'booking' && (
+                                            <View style={{ backgroundColor: '#F0FDF4', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#BBF7D0' }}>
+                                                <Text style={{ fontSize: 8, fontWeight: '900', color: '#16A34A' }}>CONFIRMED BOOKING</Text>
+                                            </View>
+                                        )}
+                                    </View>
                                     <Text style={styles.eventSport}>{item.sport}</Text>
                                   </View>
                                 </View>

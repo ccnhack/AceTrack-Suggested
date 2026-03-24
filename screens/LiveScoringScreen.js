@@ -173,7 +173,11 @@ export default function LiveScoringScreen({ route, onSaveEvaluation, navigation 
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>Player Evaluation</Text>
-                <Text style={styles.modalPlayer}>{typeof selectedPlayer === 'object' ? selectedPlayer.name : (selectedPlayer || 'Unknown Player')}</Text>
+                <Text style={styles.modalPlayer}>
+                  {typeof selectedPlayer === 'object' && selectedPlayer !== null 
+                    ? selectedPlayer.name 
+                    : (selectedPlayer || 'Unknown Player')}
+                </Text>
               </View>
               <TouchableOpacity onPress={() => setEvalModalVisible(false)}>
                 <Ionicons name="close" size={28} color="#fff" />
