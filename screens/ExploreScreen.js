@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, Image, 
-  StyleSheet, SafeAreaView, Dimensions, FlatList, Modal, Alert, ActivityIndicator 
+  StyleSheet, SafeAreaView, Dimensions, FlatList, Modal, Alert, ActivityIndicator, TextInput 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import TournamentDetailModal from '../components/TournamentDetailModal';
+import designSystem from '../theme/designSystem';
 
 const { width } = Dimensions.get('window');
 
@@ -14,8 +16,57 @@ const ExploreScreen = ({
   onRegister, onAssignCoach, isSyncing
 }) => {
   const [sportFilter, setSportFilter] = useState('All');
+  const [cityFilter, setCityFilter] = useState('All');
+  const [isCityDropdownVisible, setIsCityDropdownVisible] = useState(false);
+  const [citySearch, setCitySearch] = useState('');
   const [selectedTournament, setSelectedTournament] = useState(null);
   const [regPaymentTarget, setRegPaymentTarget] = useState(null);
+  const [userLocation, setUserLocation] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!Location || typeof Location.requestForegroundPermissionsAsync !== 'function') {
+          console.warn('Location module or required functions not found.');
+          return;
+        }
+
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.log('Permission to access location was denied');
+          return;
+        }
+
+        if (typeof Location.getCurrentPositionAsync === 'function') {
+          let location = await Location.getCurrentPositionAsync({});
+          setUserLocation(location.coords);
+        }
+      } catch (err) {
+        console.warn('Location module error:', err.message);
+        // Fallback or silent failure to prevent app crash
+      }
+    })();
+  }, []);
+
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+    const R = 6371; // Radius of the earth in km
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1);
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+      Math.sin(dLon / 2) * Math.sin(dLon / 2); 
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); 
+    const d = R * c; // Distance in km
+    return d.toFixed(1);
+  };
+
+  const deg2rad = (deg) => deg * (Math.PI / 180);
+
+  const POPULAR_CITIES = ['All', 'Bangalore', 'Mumbai', 'Delhi', 'Whitefield', 'Chennai', 'Hyderabad', 'Pune'];
+  const INITIAL_CITIES = ['All', 'Bangalore', 'Mumbai']; // Only show 3 options initially
+  const filteredCities = (citySearch ? POPULAR_CITIES : INITIAL_CITIES).filter(c => c.toLowerCase().includes(citySearch.toLowerCase()));
 
   const getSportImage = (sport) => {
     switch (sport) {
@@ -26,51 +77,58 @@ const ExploreScreen = ({
     }
   };
 
-  const activeTournaments = tournaments.filter(t => {
-    const tDate = new Date(t.date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    if (tDate < today || t.tournamentStarted || t.status === 'ongoing' || t.status === 'completed') return false;
-    if (t.registrationDeadline) {
-      const deadlineDate = new Date(t.registrationDeadline);
-      deadlineDate.setHours(23, 59, 59, 999);
-      if (today > deadlineDate) return false;
-    }
-    if (userRole === 'coach' && userSports && !userSports.includes(t.sport)) return false;
-    if (reschedulingFrom && t.id === reschedulingFrom) return false;
-
-    // Gender-based filtering for Individual/Player users
-    if (userRole === 'user') {
-      const format = t.format || "";
-      const gender = user?.gender; // Use prop gender instead of local const (hoisting/scoping fix)
-      if (format.includes("Men's") && gender && gender !== 'Male') return false;
-      if (format.includes("Women's") && gender && gender !== 'Female') return false;
-    }
-
-    return true;
-  });
-
-  const filteredTournaments = sportFilter === 'All' 
-    ? activeTournaments 
-    : activeTournaments.filter(t => t.sport === sportFilter);
-
   const availableSports = userRole === 'coach' && userSports ? userSports : Object.values(Sport);
   const currentUser = userId ? players.find(p => p.id === userId) : null;
   const isBeginnerProtected = currentUser?.isBeginnerProtected || false;
+
+  const processedTournaments = tournaments
+    .filter(t => {
+      const tDate = new Date(t.date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (tDate < today || t.tournamentStarted || t.status === 'ongoing' || t.status === 'completed') return false;
+      if (t.registrationDeadline) {
+        const deadlineDate = new Date(t.registrationDeadline);
+        deadlineDate.setHours(23, 59, 59, 999);
+        if (today > deadlineDate) return false;
+      }
+      if (userRole === 'coach' && userSports && !userSports.includes(t.sport)) return false;
+      if (reschedulingFrom && t.id === reschedulingFrom) return false;
+      if (cityFilter !== 'All' && t.location && !t.location.includes(cityFilter)) return false;
+
+      // Gender-based filtering for Individual/Player users
+      if (userRole === 'user') {
+        const format = t.format || "";
+        const gender = user?.gender; 
+        if (format.includes("Men's") && gender && gender !== 'Male') return false;
+        if (format.includes("Women's") && gender && gender !== 'Female') return false;
+      }
+
+      return true;
+    })
+    .map(t => {
+      const distance = userLocation && t.lat && t.lng ? calculateDistance(userLocation.latitude, userLocation.longitude, t.lat, t.lng) : null;
+      return { ...t, distance: distance ? parseFloat(distance) : Infinity };
+    });
+
+  const filteredTournaments = sportFilter === 'All' 
+    ? processedTournaments 
+    : processedTournaments.filter(t => t.sport === sportFilter);
+
   const displayTournaments = isBeginnerProtected 
     ? filteredTournaments.filter(t => t.skillLevel === 'Beginner')
     : filteredTournaments;
 
-  const recommendedTournaments = currentUser && !isBeginnerProtected
-    ? displayTournaments.filter(t => {
-        if (t.skillLevel === currentUser.skillLevel) return true;
-        if (currentUser.trueSkillRating && t.skillRange) {
-           return currentUser.trueSkillRating >= t.skillRange.min && currentUser.trueSkillRating <= t.skillRange.max;
+  const sortedTournaments = [...displayTournaments].sort((a, b) => a.distance - b.distance);
+
+  const recommendedTournaments = sortedTournaments
+    .filter(t => {
+        if (userRole === 'user' && currentUser?.trueSkillRating) {
+           if (t.skillRange) return currentUser.trueSkillRating >= t.skillRange.min && currentUser.trueSkillRating <= t.skillRange.max;
         }
         return false;
-      }).slice(0, 2)
-    : [];
+    }).slice(0, 2);
 
   const renderTournamentCard = ({ item: t, isRec = false }) => {
     const isRegistered = userId && t.registeredPlayerIds?.some(id => String(id).toLowerCase() === String(userId).toLowerCase());
@@ -79,20 +137,22 @@ const ExploreScreen = ({
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const deadline = new Date(t.registrationDeadline);
-    deadline.setHours(0, 0, 0, 0);
-    const diffTime = deadline.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const deadline = t.registrationDeadline ? new Date(t.registrationDeadline) : null;
+    if (deadline) deadline.setHours(0, 0, 0, 0);
+    const diffTime = deadline ? deadline.getTime() - today.getTime() : null;
+    const diffDays = diffTime !== null ? Math.ceil(diffTime / (1000 * 60 * 60 * 24)) : null;
 
     let registrationMessage = '';
-    if (diffDays < 0) registrationMessage = 'Registration Closed';
-    else if (diffDays === 0) registrationMessage = 'Hurry Up! Registration closes today.';
-    else if (diffDays <= 3) registrationMessage = `Hurry Up! Registration closes in ${diffDays} day${diffDays === 1 ? '' : 's'}.`;
-    else registrationMessage = `Registrations are open. Closes in ${diffDays} days.`;
+    if (diffDays !== null) {
+      if (diffDays < 0) registrationMessage = 'Registration Closed';
+      else if (diffDays === 0) registrationMessage = 'Hurry Up! Registration closes today.';
+      else if (diffDays <= 3) registrationMessage = `Hurry Up! Registration closes in ${diffDays} day${diffDays === 1 ? '' : 's'}.`;
+      else registrationMessage = `Registrations are open. Closes in ${diffDays} days.`;
+    }
 
     if (isRec) {
       return (
-        <TouchableOpacity onPress={() => setSelectedTournament(t)} style={styles.recCard}>
+        <TouchableOpacity key={t.id} onPress={() => setSelectedTournament(t)} style={styles.recCard}>
           <View style={styles.recCardHeader}>
             <View>
               <View style={styles.bestMatchBadge}>
@@ -159,7 +219,7 @@ const ExploreScreen = ({
           <View style={styles.infoRow}>
             <View style={styles.infoCol}>
               <View style={styles.infoLabelContainer}>
-                <Ionicons name="calendar-outline" size={14} color="#64748B" />
+                <Ionicons name="calendar-outline" size={12} color="#94A3B8" />
                 <Text style={styles.infoLabel}>Date</Text>
               </View>
               <Text style={styles.infoValue}>{t.date}</Text>
@@ -167,37 +227,45 @@ const ExploreScreen = ({
             <View style={styles.divider} />
             <View style={styles.infoCol}>
               <View style={styles.infoLabelContainer}>
-                <Ionicons name="time-outline" size={14} color="#64748B" />
-                <Text style={styles.infoLabel}>Time</Text>
+                <Ionicons name="people-outline" size={12} color="#94A3B8" />
+                <Text style={styles.infoLabel}>Slots</Text>
               </View>
-              <Text style={styles.infoValue}>{t.time}</Text>
-            </View>
-            {userRole !== 'coach' && (
-              <>
-                <View style={styles.divider} />
-                <View style={[styles.infoCol, { width: 60 }]}>
-                  <View style={styles.infoLabelContainer}>
-                    <Ionicons name="cash-outline" size={14} color="#64748B" />
-                    <Text style={styles.infoLabel}>Entry</Text>
-                  </View>
-                  <Text style={styles.infoValue}>₹{t.entryFee}</Text>
-                </View>
-              </>
-            )}
-          </View>
-          {userRole !== 'coach' && (
-            <View style={styles.cardFooter}>
-              <Text style={[
-                styles.regMessage, 
-                diffDays < 0 ? { color: '#94A3B8' } : diffDays <= 3 ? { color: '#EF4444' } : { color: '#16A34A' }
-              ]}>
-                {registrationMessage}
+              <Text style={styles.infoValue}>
+                {(t.registeredPlayerIds || []).filter(Boolean).length}/{t.maxPlayers}
               </Text>
-              <View style={styles.arrowButton}>
-                <Ionicons name="chevron-forward" size={16} color="#FFFFFF" />
-              </View>
             </View>
-          )}
+            <View style={styles.divider} />
+            <View style={styles.infoCol}>
+              <View style={styles.infoLabelContainer}>
+                <Ionicons name="cash-outline" size={12} color="#94A3B8" />
+                <Text style={styles.infoLabel}>Entry</Text>
+              </View>
+              <Text style={styles.infoValue}>₹{t.entryFee}</Text>
+            </View>
+          </View>
+
+          <View style={styles.cardFooter}>
+            <View>
+              {userRole !== 'coach' ? (
+                <Text style={[
+                  styles.regMessage, 
+                  diffDays < 0 ? { color: '#94A3B8' } : diffDays <= 3 ? { color: '#EF4444' } : { color: '#16A34A' }
+                ]}>
+                  {registrationMessage}
+                </Text>
+              ) : (
+                <Text style={[styles.regMessage, { color: '#3B82F6' }]}>COACH VIEW</Text>
+              )}
+              {t.distance !== Infinity && (
+                <Text style={styles.distanceIndicator}>
+                  <Ionicons name="navigate-outline" size={10} color="#64748B" /> {t.distance} km away
+                </Text>
+              )}
+            </View>
+            <View style={styles.arrowButton}>
+              <Ionicons name="chevron-forward" size={16} color="#FFFFFF" />
+            </View>
+          </View>
         </View>
       </TouchableOpacity>
     );
@@ -279,99 +347,148 @@ const ExploreScreen = ({
   };
 
   return (
-    <>
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.hero}>
+    <View style={styles.container}>
+      <SafeAreaView style={styles.hero}>
         <View style={styles.heroContent}>
-          <Text style={styles.heroTitle}>AceTrack</Text>
-          <Text style={styles.heroSubtitle}>Bangalore Elite Circuit</Text>
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterContainer}>
-          {['All', ...availableSports].map(sport => (
-            <TouchableOpacity
-              key={sport}
-              onPress={() => setSportFilter(sport)}
-              style={[styles.filterButton, sportFilter === sport && styles.filterButtonActive]}
+          <View style={styles.headerRow}>
+            <View>
+              <Text style={styles.heroTitle}>AceTrack</Text>
+              <Text style={styles.heroSubtitle}>Bangalore Elite Circuit</Text>
+            </View>
+            <TouchableOpacity 
+              style={[styles.compactCityPicker, isCityDropdownVisible && styles.compactCityPickerActive]} 
+              onPress={() => setIsCityDropdownVisible(!isCityDropdownVisible)}
             >
-              <Text style={[styles.filterButtonText, sportFilter === sport && styles.filterButtonTextActive]}>{sport}</Text>
+              <Ionicons name="location" size={14} color="#FFFFFF" />
+              <Text style={styles.compactCityText} numberOfLines={1}>
+                {cityFilter === 'All' ? 'Select Hub' : cityFilter}
+              </Text>
+              <Ionicons name="chevron-down" size={12} color="rgba(255,255,255,0.6)" />
             </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      <View style={styles.main}>
-        {recommendedTournaments.length > 0 && !reschedulingFrom && userRole !== 'coach' && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Recommended for you</Text>
-            {recommendedTournaments.map(t => (
-              <React.Fragment key={`rec-${t.id}`}>
-                {renderTournamentCard({ item: t, isRec: true })}
-              </React.Fragment>
-            ))}
-          </View>
-        )}
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>
-            {reschedulingFrom ? 'Pick a new arena' : userRole === 'coach' ? 'Coaching Opportunities' : 'Upcoming Arenas'}
-          </Text>
-          <View style={styles.liveBadge}>
-            <Text style={styles.liveBadgeText}>Live Slots</Text>
           </View>
         </View>
 
-        {isBeginnerProtected && (
-          <View style={styles.alert}>
-            <Ionicons name="shield-checkmark" size={16} color="#3B82F6" />
-            <Text style={styles.alertText}>Beginner Protection Active. Showing only Beginner tournaments.</Text>
+        {isCityDropdownVisible && (
+          <View style={styles.cityDropdown}>
+            <View style={styles.dropdownHeader}>
+              <Ionicons name="search" size={14} color="#94A3B8" />
+              <TextInput 
+                placeholder="Search city..." 
+                placeholderTextColor="#64748B"
+                value={citySearch}
+                onChangeText={setCitySearch}
+                style={styles.dropdownSearchInput}
+                autoFocus
+              />
+            </View>
+            <View style={styles.dropdownList}>
+              {filteredCities.slice(0, 3).map((item) => (
+                <TouchableOpacity 
+                  key={item}
+                  style={styles.dropdownItem} 
+                  onPress={() => { setCityFilter(item); setIsCityDropdownVisible(false); setCitySearch(''); }}
+                >
+                  <Text style={[styles.dropdownItemText, cityFilter === item && styles.dropdownItemTextActive]}>
+                    {item === 'All' ? 'All Locations' : item}
+                  </Text>
+                  {cityFilter === item && <Ionicons name="checkmark" size={14} color="#EF4444" />}
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         )}
 
-        {reschedulingFrom && (
-          <View style={styles.rescheduleAlert}>
-            <Text style={styles.rescheduleAlertText}>Rescheduling in progress. Please select your new arena below.</Text>
-            <TouchableOpacity onPress={onCancelReschedule} style={styles.cancelBox}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        <View style={styles.sportFilterContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sportFilterRow}>
+            {['All', ...availableSports].map(sport => (
+              <TouchableOpacity 
+                key={sport}
+                onPress={() => setSportFilter(sport)}
+                style={[styles.sportChip, sportFilter === sport && styles.sportChipActive]}
+              >
+                <Text style={[styles.sportChipText, sportFilter === sport && styles.sportChipTextActive]}>{sport}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </SafeAreaView>
 
-        <View style={styles.list}>
-          {displayTournaments.length > 0 ? (
-            displayTournaments.map(t => (
-              <React.Fragment key={t.id}>
-                {renderTournamentCard({ item: t })}
-              </React.Fragment>
-            ))
-          ) : (
-            <View style={styles.empty}>
-              {isSyncing ? (
-                <ActivityIndicator size="large" color="#3B82F6" />
-              ) : (
-                <>
-                  <Ionicons name="alert-circle-outline" size={48} color="#94A3B8" />
-                  <Text style={styles.emptyText}>No active arenas found</Text>
-                </>
-              )}
+      <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
+        <View style={styles.main}>
+          {recommendedTournaments.length > 0 && !reschedulingFrom && userRole !== 'coach' && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Recommended for you</Text>
+              {recommendedTournaments.map(t => (
+                <React.Fragment key={`rec-${t.id}`}>
+                  {renderTournamentCard({ item: t, isRec: true })}
+                </React.Fragment>
+              ))}
             </View>
           )}
-        </View>
-      </View>
-    </ScrollView>
 
-    <TournamentDetailModal
-      tournament={selectedTournament}
-      visible={!!selectedTournament}
-      onClose={() => setSelectedTournament(null)}
-      user={user}
-      role={userRole}
-      players={players}
-      onRegister={(t) => setRegPaymentTarget(t)}
-      onCoachOptIn={(t) => onAssignCoach(t.id, userId)}
-    />
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>
+              {reschedulingFrom ? 'Pick a new arena' : userRole === 'coach' ? 'Coaching Opportunities' : 'Upcoming Arenas'}
+            </Text>
+            <View style={styles.liveBadge}>
+              <Text style={styles.liveBadgeText}>Live Slots</Text>
+            </View>
+          </View>
+
+          {isBeginnerProtected && (
+            <View style={styles.alert}>
+              <Ionicons name="shield-checkmark" size={16} color="#3B82F6" />
+              <Text style={styles.alertText}>Beginner Protection Active. Showing only Beginner tournaments.</Text>
+            </View>
+          )}
+
+          {reschedulingFrom && (
+            <View style={styles.rescheduleAlert}>
+              <Text style={styles.rescheduleAlertText}>Rescheduling in progress. Please select your new arena below.</Text>
+              <TouchableOpacity onPress={onCancelReschedule} style={styles.cancelBox}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <View style={styles.list}>
+            {displayTournaments.length > 0 ? (
+              displayTournaments.map(t => (
+                <React.Fragment key={t.id}>
+                  {renderTournamentCard({ item: t })}
+                </React.Fragment>
+              ))
+            ) : (
+              <View style={styles.empty}>
+                {isSyncing ? (
+                  <ActivityIndicator size="large" color="#3B82F6" />
+                ) : (
+                  <>
+                    <Ionicons name="alert-circle-outline" size={48} color="#94A3B8" />
+                    <Text style={styles.emptyText}>No active arenas found</Text>
+                  </>
+                )}
+              </View>
+            )}
+          </View>
+        </View>
+      </ScrollView>
+
+
+
+      <TournamentDetailModal
+        tournament={selectedTournament}
+        visible={!!selectedTournament}
+        onClose={() => setSelectedTournament(null)}
+        user={user}
+        role={userRole}
+        players={players}
+        onRegister={(t) => setRegPaymentTarget(t)}
+        onCoachOptIn={(t) => onAssignCoach(t.id, userId)}
+      />
 
     {renderPaymentModal()}
-    </>
+    </View>
   );
 };
 
@@ -384,12 +501,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#0F172A',
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
-    paddingTop: 60,
-    paddingBottom: 40,
+    paddingBottom: 20,
   },
   heroContent: {
     paddingHorizontal: 24,
-    marginBottom: 24,
+    paddingTop: 16,
+    marginBottom: 12,
   },
   heroTitle: {
     fontSize: 32,
@@ -429,9 +546,33 @@ const styles = StyleSheet.create({
   filterButtonTextActive: {
     color: '#FFFFFF',
   },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  compactCityPicker: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', maxWidth: '40%' },
+  compactCityPickerActive: { backgroundColor: 'rgba(255,255,255,0.2)', borderColor: '#EF4444' },
+  compactCityText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800', marginHorizontal: 4 },
+  cityDropdown: { backgroundColor: '#1E293B', borderRadius: 20, marginTop: 8, padding: 12, marginHorizontal: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 15, elevation: 20 },
+  dropdownHeader: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(15, 23, 42, 0.6)', borderRadius: 12, paddingHorizontal: 12, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  dropdownSearchInput: { flex: 1, height: 40, color: '#FFFFFF', fontSize: 13, marginLeft: 8 },
+  dropdownList: { gap: 2 },
+  dropdownItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, borderRadius: 8 },
+  dropdownItemText: { fontSize: 14, fontWeight: '700', color: '#94A3B8' },
+  dropdownItemTextActive: { color: '#FFFFFF' },
+  sportFilterContainer: { paddingLeft: 24, marginTop: 10 },
+  sportFilterRow: { flexDirection: 'row' },
+  sportChip: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', marginRight: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  sportChipActive: { backgroundColor: '#EF4444', borderColor: '#EF4444' },
+  sportChipText: { fontSize: 12, color: '#94A3B8', fontWeight: '900', textTransform: 'uppercase' },
+  sportChipTextActive: { color: '#fff' },
   main: {
     padding: 24,
     paddingBottom: 100,
+  },
+  distanceIndicator: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#64748B',
+    marginTop: 2,
+    textTransform: 'uppercase',
   },
   section: {
     marginBottom: 32,

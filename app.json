@@ -25,18 +25,15 @@
     "ios": {
       "bundleIdentifier": "com.hacker1717.acetrackmobile.suggested"
     },
-    "updates": {
-      "url": "https://u.expo.dev/3c2f128b-90a6-430a-892e-a219f6378063"
-    },
     "runtimeVersion": "2.0.0",
-    "extra": {
-      "eas": {
-        "projectId": "3c2f128b-90a6-430a-892e-a219f6378063"
-      }
-    },
-    "owner": "hacker1717",
     "plugins": [
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "636e8270-95c8-44e0-bf6f-bb544a857002"
+      }
+    },
+    "owner": "acetrack-suggested"
   }
 }

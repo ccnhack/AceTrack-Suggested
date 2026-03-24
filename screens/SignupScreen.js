@@ -23,7 +23,10 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, Sport, isUsingCloud, o
     gender: 'Male',
     certifiedSports: [],
     govIdUrl: '',
-    certificationUrl: ''
+    certificationUrl: '',
+    city: '',
+    state: '',
+    managedSports: []
   });
   const [error, setError] = useState('');
   const [usernameStatus, setUsernameStatus] = useState('idle');
@@ -78,7 +81,12 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, Sport, isUsingCloud, o
     const nameValid = isAcademy ? !!formData.academyName : (!!formData.firstName && !!formData.lastName);
 
     if (!nameValid || !formData.username || !formData.email || !formData.password || !formData.phone) {
-      setError('All fields are required.');
+      setError('All basic fields are required.');
+      return;
+    }
+
+    if (isAcademy && (!formData.city || !formData.state)) {
+      setError('City and State are required for Academy registration.');
       return;
     }
 
@@ -107,7 +115,8 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, Sport, isUsingCloud, o
       noShows: 0,
       cancellations: 0,
       preferredFormat: 'Singles',
-      city: 'Bangalore',
+      city: isAcademy ? formData.city : 'Bangalore',
+      state: isAcademy ? formData.state : 'Karnataka',
       avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(isAcademy ? formData.academyName : `${formData.firstName} ${formData.lastName}`)}&background=random`,
       credits: 0,
       cancelledTournamentIds: [],
@@ -120,6 +129,9 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, Sport, isUsingCloud, o
         certifiedSports: formData.certifiedSports,
         govIdUrl: formData.govIdUrl,
         certificationUrl: formData.certificationUrl
+      }),
+      ...(isAcademy && {
+        managedSports: formData.managedSports
       })
     };
 
@@ -231,15 +243,73 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, Sport, isUsingCloud, o
             )}
           </>
         ) : (
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Academy Name</Text>
-            <TextInput 
-              style={styles.input}
-              placeholder="Elite Sports Center"
-              value={formData.academyName}
-              onChangeText={(val) => setFormData({...formData, academyName: val})}
-            />
-          </View>
+          <>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Academy Name</Text>
+              <TextInput 
+                style={styles.input}
+                placeholder="Elite Sports Center"
+                value={formData.academyName}
+                onChangeText={(val) => setFormData({...formData, academyName: val})}
+              />
+            </View>
+            <View style={styles.row}>
+              <View style={styles.inputGroupCol}>
+                <Text style={styles.inputLabel}>City</Text>
+                <TextInput 
+                  style={styles.input}
+                  placeholder="Bangalore"
+                  value={formData.city}
+                  onChangeText={(val) => setFormData({...formData, city: val})}
+                />
+              </View>
+              <View style={styles.inputGroupCol}>
+                <Text style={styles.inputLabel}>State</Text>
+                <TextInput 
+                  style={styles.input}
+                  placeholder="Karnataka"
+                  value={formData.state}
+                  onChangeText={(val) => setFormData({...formData, state: val})}
+                />
+              </View>
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Managed Sports</Text>
+              <TouchableOpacity 
+                onPress={() => setIsSportsDropdownOpen(!isSportsDropdownOpen)}
+                style={styles.dropdownButton}
+              >
+                <Text style={styles.dropdownButtonText}>
+                  {formData.managedSports.length > 0 
+                    ? formData.managedSports.join(', ') 
+                    : 'Select Sports (Multi)'}
+                </Text>
+                <Ionicons name={isSportsDropdownOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#94A3B8" />
+              </TouchableOpacity>
+              
+              {isSportsDropdownOpen && (
+                <View style={styles.dropdownList}>
+                  {Object.values(Sport).map(s => {
+                    const isSelected = formData.managedSports.includes(s);
+                    return (
+                      <TouchableOpacity
+                        key={s}
+                        onPress={() => {
+                          const newSports = isSelected
+                            ? formData.managedSports.filter(sport => sport !== s)
+                            : [...formData.managedSports, s];
+                          setFormData({ ...formData, managedSports: newSports });
+                        }}
+                        style={[styles.dropdownItem, isSelected && styles.dropdownItemActive]}
+                      >
+                        <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemTextActive]}>{s}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          </>
         )}
 
         <View style={styles.inputGroup}>

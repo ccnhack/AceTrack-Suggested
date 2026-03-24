@@ -11,6 +11,7 @@ import ParticipantsModal from '../components/ParticipantsModal';
 import PureJSDateTimePicker from '../components/PureJSDateTimePicker';
 import { Sport, SkillLevel, TournamentStructure, TournamentFormat } from '../types';
 import logger from '../utils/logger';
+import BroadcastTools from '../components/BroadcastTools';
 
 const { width, height } = Dimensions.get('window');
 
@@ -219,11 +220,33 @@ export const AcademyScreen = ({
       }
     }
 
+    // Advanced Location Mapping: Format [Academy Name], [Venue], [City], [State]
+    const academyName = user?.name || 'Academy';
+    const city = user?.city || 'Bangalore';
+    const state = user?.state || 'Karnataka';
+    const fullLocation = `${academyName}, ${formVenue}, ${city}, ${state}`;
+
+    // Geocoding Simulation (Mapping to Lat/Lng)
+    const getCoords = (loc) => {
+      // Mock coordinates for demonstration
+      if (loc.toLowerCase().includes('bangalore')) return { lat: 12.9716, lng: 77.5946 };
+      if (loc.toLowerCase().includes('mumbai')) return { lat: 19.0760, lng: 72.8777 };
+      if (loc.toLowerCase().includes('delhi')) return { lat: 28.6139, lng: 77.2090 };
+      return { lat: 12.9716 + (Math.random() - 0.5) * 0.1, lng: 77.5946 + (Math.random() - 0.5) * 0.1 };
+    };
+
+    const coords = getCoords(fullLocation);
+
     const newT = {
       id: editingT?.id || `t_${Date.now()}`,
       title: formTitle,
       sport: formSport,
-      location: formVenue,
+      location: fullLocation,
+      venue: formVenue,
+      city: city,
+      state: state,
+      lat: coords.lat,
+      lng: coords.lng,
       date: formDate,
       time: formTime,
       registrationDeadline: formRegDeadline,
@@ -436,6 +459,9 @@ export const AcademyScreen = ({
         <TouchableOpacity onPress={() => setSubTab('insights')} style={[styles.tab, subTab === 'insights' && styles.tabActive]}>
           <Text style={[styles.tabText, subTab === 'insights' && styles.tabTextActive]}>Scout Feed</Text>
         </TouchableOpacity>
+        <TouchableOpacity onPress={() => setSubTab('broadcast')} style={[styles.tab, subTab === 'broadcast' && styles.tabActive]}>
+          <Text style={[styles.tabText, subTab === 'broadcast' && styles.tabTextActive]}>Broadcast</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 100 }}>
@@ -545,6 +571,14 @@ export const AcademyScreen = ({
         {subTab === 'insights' && (
           <PlayerDashboardView players={myParticipants} tournaments={myTournaments} title="Scout Feed" />
         )}
+
+        {subTab === 'broadcast' && (
+          <View style={{ padding: 20 }}>
+            <Text style={{ fontSize: 20, fontWeight: '900', color: '#1a1a1a', marginBottom: 10 }}>Communication Center</Text>
+            <Text style={{ color: '#666', marginBottom: 20 }}>Send blast messages to all participants across your tournaments.</Text>
+            <BroadcastTools tournaments={tournaments.filter(t => t.creatorId === academyId)} />
+          </View>
+        )}
       </ScrollView>
 
       {/* Forms & Modals */}
@@ -631,9 +665,14 @@ export const AcademyScreen = ({
                         {isReadOnly ? 'Tournament Details' : (editingT ? 'Edit Tournament' : 'Host New Event')}
                     </Text>
                     {!isReadOnly && !editingT && (
-                        <TouchableOpacity onPress={autofillTestData} style={styles.autofillBtn}>
-                            <Text style={styles.autofillBtnText}>Autofill Test</Text>
-                        </TouchableOpacity>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <TouchableOpacity onPress={autofillTestData} style={styles.autofillBtn}>
+                                <Text style={styles.autofillBtnText}>Test Feed</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={autofillTestData} style={[styles.autofillBtn, { backgroundColor: '#F0FDF4' }]}>
+                                <Text style={[styles.autofillBtnText, { color: '#16A34A' }]}>Use Template</Text>
+                            </TouchableOpacity>
+                        </View>
                     )}
                 </View>
                 <TouchableOpacity onPress={() => setIsFormOpen(false)} style={styles.formCloseBtn}>

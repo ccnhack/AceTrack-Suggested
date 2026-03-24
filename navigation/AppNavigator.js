@@ -17,6 +17,11 @@ import AdminHubScreen from '../screens/AdminHubScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import RankingScreen from '../screens/RankingScreen';
 import RecordingsScreen from '../screens/RecordingsScreen';
+import MatchmakingScreen from '../screens/MatchmakingScreen';
+import CoachDirectoryScreen from '../screens/CoachDirectoryScreen';
+import SubscriptionScreen from '../screens/SubscriptionScreen';
+import LiveScoringScreen from '../screens/LiveScoringScreen';
+import TournamentCalendarScreen from '../screens/TournamentCalendarScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -94,6 +99,7 @@ const MainTabs = ({
           else if (route.name === 'Recordings') iconName = focused ? 'play-circle' : 'play-circle-outline';
           else if (route.name === 'Admin') iconName = focused ? 'settings' : 'settings-outline';
           else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
+          else if (route.name === 'Matchmaking') iconName = focused ? 'people' : 'people-outline';
           return <Ionicons name={iconName} size={size} color={color} />;
         },
         tabBarActiveTintColor: '#EF4444',
@@ -149,6 +155,9 @@ const MainTabs = ({
           {(props) => <AdminHubScreen {...props} {...params} {...typeProps} />}
         </Tab.Screen>
       )}
+      <Tab.Screen name="Matchmaking">
+        {(props) => <MatchmakingScreen {...props} {...params} />}
+      </Tab.Screen>
       <Tab.Screen name="Profile">
         {(props) => (
           <ProfileScreen 
@@ -253,6 +262,15 @@ export default function AppNavigator({
           )}
         </Stack.Screen>
       )}
+      <Stack.Screen name="CoachDirectory">
+        {(props) => <CoachDirectoryScreen {...props} user={user} players={players} tournaments={tournaments} {...handlers} />}
+      </Stack.Screen>
+      <Stack.Screen name="Subscriptions">
+        {(props) => <SubscriptionScreen {...props} user={user} />}
+      </Stack.Screen>
+      <Stack.Screen name="LiveScoring">
+        {(props) => <LiveScoringScreen {...props} user={user} players={players} evaluations={evaluations} {...handlers} />}
+      </Stack.Screen>
     </Stack.Navigator>
   );
 }

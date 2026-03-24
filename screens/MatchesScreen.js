@@ -404,6 +404,16 @@ const MatchesScreen = ({
                         >
                           <Text style={styles.buttonText}>{t.tournamentStarted ? 'View Players' : 'Start Event'}</Text>
                         </TouchableOpacity>
+
+                        {t.tournamentStarted && (
+                          <TouchableOpacity 
+                            onPress={() => navigation.navigate('LiveScoring', { match: t })}
+                            style={[styles.actionButton, { backgroundColor: '#000', borderWidth: 1, borderColor: '#333' }]}
+                          >
+                            <Ionicons name="stats-chart" size={14} color="#fff" />
+                            <Text style={[styles.buttonText, { marginLeft: 5 }]}>Live Score</Text>
+                          </TouchableOpacity>
+                        )}
                         {t.tournamentStarted ? (
                           <TouchableOpacity
                             onPress={() => setShowOtpModal({ tournament: t, type: 'end' })}

@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  View, Text, TouchableOpacity, ScrollView, Image, 
+  View, Text, TouchableOpacity, ScrollView, Image, FlatList,
   StyleSheet, SafeAreaView, Modal, TextInput, Alert,
   KeyboardAvoidingView, Platform 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Calendar } from 'react-native-calendars';
+import designSystem from '../theme/designSystem';
+import { Sport } from '../types';
 import * as ImagePicker from 'expo-image-picker';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Updates from 'expo-updates';
@@ -138,10 +141,37 @@ const ProfileScreen = ({
   const activeApiUrl = isUsingCloud ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL;
 
   // Edit Profile States
+  const [message, setMessage] = useState('');
+  const [isCalendarModalVisible, setIsCalendarModalVisible] = useState(false);
+  const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().substring(0, 7));
+
+  const MOCK_EVENTS = [
+    { id: '1', title: 'Bangalore Open TT', date: '2026-03-25', sport: 'Table Tennis' },
+    { id: '2', title: 'Whitefield Badminton League', date: '2026-03-28', sport: 'Badminton' },
+    { id: '3', title: 'Karnataka State Ranking', date: '2026-04-10', sport: 'Badminton' },
+    { id: '4', title: 'Mysore Open', date: '2026-04-22', sport: 'Table Tennis' },
+    { id: '5', title: 'Summer Smash', date: '2026-05-05', sport: 'Cricket' },
+    { id: '6', title: 'May Day Cup', date: '2026-05-15', sport: 'Badminton' },
+  ];
+
+  const filteredEvents = MOCK_EVENTS.filter(event => {
+    const eventMonth = event.date.substring(0, 7);
+    const date = new Date(currentMonth + '-01');
+    const nextMonthDate = new Date(date.setMonth(date.getMonth() + 1));
+    const nextMonth = nextMonthDate.toISOString().substring(0, 7);
+    return eventMonth === currentMonth || eventMonth === nextMonth;
+  });
+
+  const markedDates = {};
+  MOCK_EVENTS.forEach(event => {
+    markedDates[event.date] = { marked: true, dotColor: designSystem.colors.primary };
+  });
   const [editName, setEditName] = useState(user?.name || '');
   const [editEmail, setEditEmail] = useState(user?.email || '');
   const [editPhone, setEditPhone] = useState(user?.phone || '');
   const [editAvatar, setEditAvatar] = useState(user?.avatar || '');
+  const [editManagedSports, setEditManagedSports] = useState(user?.managedSports || []);
+  const [isSportsDropdownOpen, setIsSportsDropdownOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
 
   // Sync edit state with user if user changes from cloud
@@ -149,10 +179,11 @@ const ProfileScreen = ({
     if (user) {
       setEditName(user.name || '');
       setEditAvatar(user.avatar || '');
+      setEditManagedSports(user.managedSports || []);
       setImageError(false);
       logger.logAction('USER_AVATAR_INITIALIZED', { id: user.id, avatar: user.avatar });
     }
-  }, [user?.id, user?.avatar]);
+  }, [user?.id, user?.avatar, user?.managedSports]);
 
   // Load persisted session avatar on mount
   useEffect(() => {
@@ -329,6 +360,7 @@ const ProfileScreen = ({
                     </View>
                   </View>
                 )}
+
                 {user.role !== 'admin' && user.role !== 'academy' && user.role !== 'coach' && (
                   <TouchableOpacity onPress={() => setShowWalletModal(true)} style={styles.walletTrigger}>
                     <Ionicons name="wallet" size={12} color="#16A34A" />
@@ -385,6 +417,42 @@ const ProfileScreen = ({
               <PlayerSkillDashboard user={user} />
           </View>
         )}
+
+        {/* --- NEW: Expert Panel Feature Hub --- */}
+        <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Expert Panel Features</Text>
+            <View style={styles.featureGrid}>
+                <TouchableOpacity style={styles.featureTile} onPress={() => navigation.navigate('Matchmaking')}>
+                    <View style={[styles.featureIcon, { backgroundColor: '#EEF2FF' }]}>
+                        <Ionicons name="people" size={24} color="#4F46E5" />
+                    </View>
+                    <Text style={styles.featureLabel}>Matchmaking</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.featureTile} onPress={() => navigation.navigate('CoachDirectory')}>
+                    <View style={[styles.featureIcon, { backgroundColor: '#FFF7ED' }]}>
+                        <Ionicons name="school" size={24} color="#EA580C" />
+                    </View>
+                    <Text style={styles.featureLabel}>Coaches</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.featureTile} onPress={() => setIsCalendarModalVisible(true)}>
+                    <View style={[styles.featureIcon, { backgroundColor: '#F0FDF4' }]}>
+                        <Ionicons name="calendar" size={24} color="#16A34A" />
+                    </View>
+                    <Text style={styles.featureLabel}>Calendar</Text>
+                </TouchableOpacity>
+
+                {user.role === 'academy' && (
+                  <TouchableOpacity style={styles.featureTile} onPress={() => navigation.navigate('Subscriptions')}>
+                      <View style={[styles.featureIcon, { backgroundColor: '#FDF2F8' }]}>
+                          <Ionicons name="card" size={24} color="#DB2777" />
+                      </View>
+                      <Text style={styles.featureLabel}>Sub Plan</Text>
+                  </TouchableOpacity>
+                )}
+            </View>
+        </View>
 
         <View style={styles.menuSection}>
             <TouchableOpacity 
@@ -736,149 +804,140 @@ const ProfileScreen = ({
             style={styles.keyboardView}
           >
             <View style={styles.editModalContent}>
+              <TouchableOpacity onPress={() => setShowEditProfile(false)} style={styles.closeBtn}>
+                <Ionicons name="close" size={24} color="#0F172A" />
+              </TouchableOpacity>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Edit Profile</Text>
-                <TouchableOpacity onPress={() => setShowEditProfile(false)} style={styles.closeBtn}>
-                  <Ionicons name="close" size={24} color="#0F172A" />
-                </TouchableOpacity>
+                <Text style={styles.editModalTitle}>Edit Profile</Text>
               </View>
 
               <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
 
-            <View style={styles.inputGroup}>
-              <View style={styles.labelRow}>
-                <Text style={styles.inputLabel}>Full Name</Text>
-              </View>
-              <TextInput 
-                style={styles.input}
-                value={editName}
-                onChangeText={setEditName}
-                placeholder="Enter name"
-              />
-            </View>
+                <View style={styles.inputGroup}>
+                  <View style={styles.labelRow}>
+                    <Text style={styles.inputLabel}>Full Name</Text>
+                  </View>
+                  <TextInput 
+                    style={styles.input}
+                    value={editName}
+                    onChangeText={setEditName}
+                    placeholder="Enter name"
+                  />
+                </View>
 
-
-            <View style={styles.inputGroup}>
-              <View style={styles.labelRow}>
-                <Text style={styles.inputLabel}>Email Address</Text>
-                {user.role !== 'admin' && (
-                  user.isEmailVerified ? (
-                    <View style={styles.inlineVerifiedBadge}>
-                      <Ionicons name="checkmark-circle" size={12} color="#16A34A" />
-                      <Text style={styles.verifiedText}>Verified</Text>
-                    </View>
-                  ) : (
-                    <TouchableOpacity 
-                      style={styles.inlineVerifyBtn}
-                      onPress={() => setShowVerifyModal('email')}
-                    >
-                      <Text style={styles.verifyBtnText}>Verify Now</Text>
-                    </TouchableOpacity>
-                  )
-                )}
-              </View>
-              <TextInput 
-                style={styles.input}
-                value={editEmail}
-                onChangeText={setEditEmail}
-                placeholder="Enter email"
-                keyboardType="email-address"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <View style={styles.labelRow}>
-                <Text style={styles.inputLabel}>Phone Number</Text>
-                {user.role !== 'admin' && (
-                  user.isPhoneVerified ? (
-                    <View style={styles.inlineVerifiedBadge}>
-                      <Ionicons name="checkmark-circle" size={12} color="#16A34A" />
-                      <Text style={styles.verifiedText}>Verified</Text>
-                    </View>
-                  ) : (
-                    <TouchableOpacity 
-                      style={styles.inlineVerifyBtn}
-                      onPress={() => setShowVerifyModal('phone')}
-                    >
-                      <Text style={styles.verifyBtnText}>Verify Now</Text>
-                    </TouchableOpacity>
-                  )
-                )}
-              </View>
-              <TextInput 
-                style={styles.input}
-                value={editPhone}
-                onChangeText={setEditPhone}
-                placeholder="Enter phone"
-                keyboardType="phone-pad"
-              />
-            </View>
-
-            <TouchableOpacity 
-              onPress={async () => {
-                let finalAvatar = editAvatar;
+            {user.role === 'academy' && (
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Managed Sports</Text>
+                <TouchableOpacity 
+                  onPress={() => setIsSportsDropdownOpen(!isSportsDropdownOpen)}
+                  style={styles.dropdownButton}
+                >
+                  <Text style={styles.dropdownButtonText}>
+                    {editManagedSports.length > 0 
+                      ? editManagedSports.join(', ') 
+                      : 'Select Sports'}
+                  </Text>
+                  <Ionicons name={isSportsDropdownOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#94A3B8" />
+                </TouchableOpacity>
                 
-                // If it's a local file URI or content URI, upload it to server first
-                if (editAvatar && (editAvatar.startsWith('file://') || editAvatar.startsWith('content://'))) {
-                  setIsUploading(true);
-                  logger.logAction('AVATAR_UPLOAD_START', { uri: editAvatar });
-                  try {
-                    const formData = new FormData();
-                    formData.append('video', { // Server expects 'video' field name for now
-                      uri: editAvatar,
-                      name: 'avatar.jpg',
-                      type: 'image/jpeg',
+                {isSportsDropdownOpen && (
+                  <View style={styles.dropdownList}>
+                    {Object.values(Sport).map(s => {
+                      const isSelected = editManagedSports.includes(s);
+                      return (
+                        <TouchableOpacity
+                          key={s}
+                          onPress={() => {
+                            const newSports = isSelected
+                              ? editManagedSports.filter(sport => sport !== s)
+                              : [...editManagedSports, s];
+                            setEditManagedSports(newSports);
+                          }}
+                          style={[styles.dropdownItem, isSelected && styles.dropdownItemActive]}
+                        >
+                          <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemTextActive]}>{s}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            )}
+
+
+                <View style={styles.inputGroup}>
+                  <View style={styles.labelRow}>
+                    <Text style={styles.inputLabel}>Email Address</Text>
+                    {user.role !== 'admin' && (
+                      user.isEmailVerified ? (
+                        <View style={styles.inlineVerifiedBadge}>
+                          <Ionicons name="checkmark-circle" size={12} color="#16A34A" />
+                          <Text style={styles.verifiedText}>Verified</Text>
+                        </View>
+                      ) : (
+                        <TouchableOpacity 
+                          style={styles.inlineVerifyBtn}
+                          onPress={() => setShowVerifyModal('email')}
+                        >
+                          <Text style={styles.verifyBtnText}>Verify Now</Text>
+                        </TouchableOpacity>
+                      )
+                    )}
+                  </View>
+                  <TextInput 
+                    style={styles.input}
+                    value={editEmail}
+                    onChangeText={setEditEmail}
+                    placeholder="john@example.com"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <View style={styles.labelRow}>
+                    <Text style={styles.inputLabel}>Phone Number</Text>
+                    {user.role !== 'admin' && (
+                      user.isPhoneVerified ? (
+                        <View style={styles.inlineVerifiedBadge}>
+                          <Ionicons name="checkmark-circle" size={12} color="#16A34A" />
+                          <Text style={styles.verifiedText}>Verified</Text>
+                        </View>
+                      ) : (
+                        <TouchableOpacity 
+                          style={styles.inlineVerifyBtn}
+                          onPress={() => setShowVerifyModal('phone')}
+                        >
+                          <Text style={styles.verifyBtnText}>Verify Now</Text>
+                        </TouchableOpacity>
+                      )
+                    )}
+                  </View>
+                  <TextInput 
+                    style={styles.input}
+                    value={editPhone}
+                    onChangeText={setEditPhone}
+                    placeholder="+91 9876543210"
+                    keyboardType="phone-pad"
+                  />
+                </View>
+
+                <TouchableOpacity 
+                  onPress={() => {
+                    onUpdateUser({ 
+                      ...user, 
+                      name: editName, 
+                      email: editEmail, 
+                      phone: editPhone,
+                      managedSports: editManagedSports
                     });
-
-                    const response = await fetch(`${activeApiUrl}/api/upload`, {
-                      method: 'POST',
-                      body: formData,
-                      headers: {
-                        'Content-Type': 'multipart/form-data',
-                        'x-ace-api-key': config.ACE_API_KEY,
-                      },
-                    });
-
-                    if (response.ok) {
-                      const data = await response.json();
-                      finalAvatar = data.url;
-                      logger.logAction('AVATAR_UPLOAD_SUCCESS', { url: finalAvatar });
-                    } else {
-                      throw new Error(`Upload failed with status ${response.status}`);
-                    }
-                  } catch (error) {
-                    console.error("Avatar upload error:", error);
-                    logger.logAction('AVATAR_UPLOAD_ERROR', { error: error.message });
-                    Alert.alert("Upload Failed", "Could not sync your custom image. Using previous avatar instead.");
-                    finalAvatar = user.avatar;
-                  } finally {
-                    setIsUploading(false);
-                  }
-                }
-
-                logger.logAction('PROFILE_UPDATE_SAVE', { 
-                  name: editName, 
-                  email: editEmail, 
-                  hasAvatar: !!finalAvatar,
-                  cacheBuster: 'HARDENED-v5'
-                });
-                onUpdateUser({ 
-                  ...user, 
-                  name: editName, 
-                  email: editEmail, 
-                  phone: editPhone, 
-                  avatar: finalAvatar, 
-                });
-                setShowEditProfile(false);
-                Alert.alert("Success", "Profile updated successfully!");
-              }}
-              style={[styles.saveBtn, isUploading && { opacity: 0.5 }]}
-              disabled={isUploading}
-            >
-              <Text style={styles.saveBtnText}>
-                {isUploading ? "Syncing Image..." : "Save Changes"}
-              </Text>
-            </TouchableOpacity>
+                    setShowEditProfile(false);
+                    Alert.alert("Success", "Profile updated successfully!");
+                  }}
+                  style={styles.saveBtn}
+                >
+                  <Text style={styles.saveBtnText}>Save Changes</Text>
+                </TouchableOpacity>
 
             <TouchableOpacity onPress={() => setShowEditProfile(false)} style={styles.cancelBtn}>
               <Text style={styles.cancelBtnText}>Cancel</Text>
@@ -1004,6 +1063,55 @@ const ProfileScreen = ({
             }
         }}
       />
+            {/* Calendar Modal */}
+            <Modal visible={isCalendarModalVisible} animationType="slide" transparent>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.calendarModalContent}>
+                        <View style={styles.calendarModalHeader}>
+                            <Text style={styles.calendarModalTitle}>Tournament Calendar</Text>
+                            <TouchableOpacity onPress={() => setIsCalendarModalVisible(false)} style={styles.calendarCloseBtn}>
+                                <Ionicons name="close" size={28} color="#333" />
+                            </TouchableOpacity>
+                        </View>
+                        <Calendar 
+                          onMonthChange={(month) => setCurrentMonth(month.dateString.substring(0, 7))}
+                          theme={{
+                            todayTextColor: designSystem.colors.primary,
+                            arrowColor: designSystem.colors.primary,
+                            dotColor: designSystem.colors.primary,
+                            selectedDayBackgroundColor: designSystem.colors.primary,
+                          }}
+                          markedDates={markedDates}
+                        />
+                        <View style={styles.eventsSection}>
+                          <Text style={styles.calendarSectionTitle}>Upcoming Events</Text>
+                          <FlatList
+                            data={filteredEvents}
+                            keyExtractor={item => item.id}
+                            renderItem={({ item }) => {
+                              const eventDate = new Date(item.date);
+                              const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+                              return (
+                                <View style={styles.eventCard}>
+                                  <View style={styles.dateBox}>
+                                    <Text style={styles.dateDay}>{item.date.split('-')[2]}</Text>
+                                    <Text style={styles.dateMonth}>{monthNames[eventDate.getMonth()]}</Text>
+                                  </View>
+                                  <View style={styles.eventInfo}>
+                                    <Text style={styles.eventTitle}>{item.title}</Text>
+                                    <Text style={styles.eventSport}>{item.sport}</Text>
+                                  </View>
+                                </View>
+                              );
+                            }}
+                          />
+                        </View>
+                        <TouchableOpacity style={styles.calendarCloseBtnLarge} onPress={() => setIsCalendarModalVisible(false)}>
+                            <Text style={styles.calendarCloseBtnText}>Close</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
     </SafeAreaView>
   );
 
@@ -1387,24 +1495,91 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  calendarModalContent: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 24,
+    height: '80%',
+    width: '100%',
+    position: 'absolute',
+    bottom: 0,
+  },
+  eventsSection: {
+    marginTop: 25,
+    flex: 1,
+  },
+  eventCard: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    padding: 15,
+    borderRadius: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  dateBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingRight: 15,
+    borderRightWidth: 1,
+    borderRightColor: '#E2E8F0',
+  },
+  dateDay: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: designSystem.colors.primary,
+  },
+  dateMonth: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  eventInfo: {
+    paddingLeft: 15,
+    justifyContent: 'center',
+  },
+  eventTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  eventSport: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  calendarCloseBtnLarge: {
+    backgroundColor: '#F1F5F9',
+    padding: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  calendarCloseBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  calendarSectionTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 16 },
   keyboardView: {
     width: '100%',
     alignItems: 'center',
   },
-  modalHeader: {
+  calendarModalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 20,
     width: '100%',
   },
-  modalTitle: {
+  calendarModalTitle: {
     fontSize: 20,
     fontWeight: '900',
     color: '#0F172A',
     textTransform: 'uppercase',
   },
-  closeBtn: {
+  calendarCloseBtn: {
     padding: 4,
   },
   walletTrigger: {
@@ -1494,13 +1669,15 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 16 },
     shadowOpacity: 0.3,
     shadowRadius: 32,
+    position: 'relative',
   },
   editModalTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '900',
     color: '#0F172A',
     textTransform: 'uppercase',
-    marginBottom: 24,
+    marginBottom: 30,
+    marginTop: 10,
     textAlign: 'center',
     letterSpacing: 1,
   },
@@ -1514,6 +1691,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginLeft: 4,
+    marginBottom: 8,
   },
   input: {
     backgroundColor: '#F8FAFC',
@@ -1524,6 +1702,53 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#0F172A',
     fontWeight: 'bold',
+    marginTop: 4,
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 4,
+  },
+  dropdownButtonText: {
+    fontSize: 14,
+    color: '#0F172A',
+    fontWeight: 'bold',
+  },
+  dropdownList: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    borderRadius: 16,
+    marginTop: 8,
+    padding: 8,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  dropdownItem: {
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 4,
+  },
+  dropdownItemActive: {
+    backgroundColor: '#EEF2FF',
+  },
+  dropdownItemText: {
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  dropdownItemTextActive: {
+    color: '#6366F1',
+    fontWeight: '900',
   },
   saveBtn: {
     backgroundColor: '#0F172A',
@@ -1604,49 +1829,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F1F5F9',
   },
-  modalVerificationCard: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  // verificationHeader: { // Duplicate, already defined above
-  //   flexDirection: 'row',
-  //   alignItems: 'center',
-  //   marginBottom: 16,
-  //   gap: 8,
-  // },
-  // verificationValue: { // Duplicate, already defined above
-  //   fontSize: 13,
-  //   color: '#334155',
-  // },
-  // verifiedBadge: { // Duplicate, already defined above
-  //   flexDirection: 'row',
-  //   alignItems: 'center',
-  //   gap: 4,
-  //   backgroundColor: '#F0FDF4',
-  //   paddingHorizontal: 8,
-  //   paddingVertical: 4,
-  //   borderRadius: 8,
-  // },
-  // verifiedText: { // Duplicate, already defined above
-  //   fontSize: 11,
-  //   color: '#16A34A',
-  //   fontWeight: '900',
-  // },
-  // verifyBtn: { // Duplicate, already defined above
-  //   backgroundColor: '#3B82F6',
-  //   paddingHorizontal: 12,
-  //   paddingVertical: 6,
-  //   borderRadius: 8,
-  // },
-  // verifyBtnText: { // Duplicate, already defined above
-  //   color: '#FFFFFF',
-  //   fontSize: 11,
-  //   fontWeight: '900',
-  // },
   labelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1684,6 +1866,12 @@ const styles = StyleSheet.create({
   notificationText: {
     flex: 1,
   },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 16 },
+  featureGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  featureTile: { width: '48%', backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, alignItems: 'center' },
+  featureIcon: { width: 48, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  featureLabel: { fontSize: 13, fontWeight: '700', color: '#1E293B' },
+  menuSection: { marginTop: 8 },
   notificationTitle: {
     fontSize: 14,
     color: '#0F172A',
@@ -1711,9 +1899,13 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   closeBtn: {
+    position: 'absolute',
+    top: 24,
+    right: 24,
     padding: 8,
     backgroundColor: '#F1F5F9',
     borderRadius: 20,
+    zIndex: 10,
   },
   clearBtn: {
     paddingVertical: 14,

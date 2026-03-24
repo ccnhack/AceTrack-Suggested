@@ -1,0 +1,348 @@
+import React, { useState, useMemo } from 'react';
+import { 
+  View, Text, StyleSheet, FlatList, TouchableOpacity, 
+  Image, Modal, Alert, ScrollView, TextInput, SafeAreaView 
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import designSystem from '../theme/designSystem';
+import { Calendar } from 'react-native-calendars';
+
+export default function CoachDirectoryScreen({ user, role, players = [], onUpdateUser, onBatchUpdate, navigation }) {
+  const [search, setSearch] = useState('');
+  const [selectedCoach, setSelectedCoach] = useState(null);
+  const [bookingModalVisible, setBookingModalVisible] = useState(false);
+  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedTime, setSelectedTime] = useState(null);
+  
+  const coaches = useMemo(() => {
+    return players.filter(p => p.role === 'coach')
+      .filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || 
+                   p.managedSports?.some(s => s.toLowerCase().includes(search.toLowerCase())));
+  }, [players, search]);
+
+  const handleBook = (coach) => {
+    setSelectedCoach(coach);
+    setSelectedDate('');
+    setSelectedTime(null);
+    setBookingModalVisible(true);
+  };
+
+  const confirmBookingRequest = () => {
+    if (!selectedDate || !selectedTime) {
+      Alert.alert("Selection Required", "Please choose both a date and a time slot.");
+      return;
+    }
+
+    const newBooking = {
+      id: `book_${Date.now()}`,
+      coachId: selectedCoach.id,
+      coachName: selectedCoach.name,
+      userId: user.id,
+      userName: user.name,
+      date: selectedDate,
+      time: selectedTime,
+      status: 'Requested', // Requested -> Confirmed -> Pending Payment -> Paid
+      createdAt: new Date().toISOString()
+    };
+
+    const updatedUser = {
+      ...user,
+      bookings: [...(user.bookings || []), newBooking]
+    };
+
+    if (onUpdateUser) {
+      onUpdateUser(updatedUser);
+      Alert.alert("Request Sent", `Booking request sent to ${selectedCoach.name}. You will be notified of the confirmation.`);
+    }
+    setBookingModalVisible(false);
+  };
+
+  const handleUpdateBookingStatus = (bookingId, newStatus) => {
+    const updatedUser = {
+      ...user,
+      bookings: (user.bookings || []).map(b => b.id === bookingId ? { ...b, status: newStatus } : b)
+    };
+    if (onUpdateUser) onUpdateUser(updatedUser);
+  };
+
+  const renderCoachCard = ({ item }) => (
+    <TouchableOpacity style={styles.coachCard} onPress={() => handleBook(item)}>
+      <Image 
+        source={{ uri: item.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name)}&background=random` }} 
+        style={styles.coachAvatar} 
+      />
+      <View style={styles.coachInfo}>
+        <View style={styles.nameHeader}>
+          <Text style={styles.coachName}>{item.name}</Text>
+          <View style={styles.ratingBadge}>
+            <Ionicons name="star" size={10} color="#F59E0B" />
+            <Text style={styles.ratingText}>4.9</Text>
+          </View>
+        </View>
+        <Text style={styles.specialties}>
+          {item.managedSports?.join(' • ') || 'Multi-sport'} Specialist
+        </Text>
+        <View style={styles.experienceRow}>
+           <Ionicons name="ribbon-outline" size={12} color="#6366F1" />
+           <Text style={styles.expText}>8+ Years Experience</Text>
+        </View>
+      </View>
+      <View style={styles.priceTag}>
+        <Text style={styles.priceAmount}>₹1200</Text>
+        <Text style={styles.priceUnit}>/HOUR</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderDashboardBooking = (booking) => (
+    <View key={booking.id} style={styles.dashboardCard}>
+       <View style={styles.cardHeader}>
+          <View>
+            <Text style={styles.cardTitle}>{booking.userName || booking.coachName}</Text>
+            <Text style={styles.cardDate}>{booking.date} @ {booking.time}</Text>
+          </View>
+          <View style={[styles.statusTag, 
+            booking.status === 'Requested' && { backgroundColor: '#FEF3C7' },
+            booking.status === 'Confirmed' && { backgroundColor: '#DCFCE7' },
+            booking.status === 'Pending Payment' && { backgroundColor: '#FFEDD5' },
+          ]}>
+            <Text style={[styles.statusTagText,
+              booking.status === 'Requested' && { color: '#D97706' },
+              booking.status === 'Confirmed' && { color: '#16A34A' },
+              booking.status === 'Pending Payment' && { color: '#EA580C' },
+            ]}>{booking.status}</Text>
+          </View>
+       </View>
+       
+       {role === 'coach' && booking.status === 'Requested' && (
+         <View style={styles.actionRow}>
+           <TouchableOpacity 
+             style={[styles.actionBtn, { backgroundColor: '#10B981' }]}
+             onPress={() => handleUpdateBookingStatus(booking.id, 'Confirmed')}
+           >
+             <Text style={styles.actionBtnText}>Confirm</Text>
+           </TouchableOpacity>
+           <TouchableOpacity 
+             style={[styles.actionBtn, { backgroundColor: '#EF4444' }]}
+             onPress={() => handleUpdateBookingStatus(booking.id, 'Declined')}
+           >
+             <Text style={styles.actionBtnText}>Decline</Text>
+           </TouchableOpacity>
+         </View>
+       )}
+
+       {role === 'user' && booking.status === 'Confirmed' && (
+         <TouchableOpacity 
+           style={styles.payBtn}
+           onPress={() => handleUpdateBookingStatus(booking.id, 'Paid')}
+         >
+           <Text style={styles.payBtnText}>Pay & Finalize</Text>
+         </TouchableOpacity>
+       )}
+    </View>
+  );
+
+  if (role === 'coach') {
+    const coachBookings = players.flatMap(p => p.bookings || []).filter(b => b.coachId === user.id);
+    
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.pageHeader}>
+          <Text style={styles.pageTitle}>Management Hub</Text>
+          <Text style={styles.pageSubtitle}>Track student bookings and schedule</Text>
+        </View>
+
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.statsGrid}>
+             <View style={styles.statBox}>
+               <Text style={styles.statNum}>{coachBookings.filter(b => b.status === 'Requested').length}</Text>
+               <Text style={styles.statLab}>Requests</Text>
+             </View>
+             <View style={styles.statBox}>
+               <Text style={styles.statNum}>{coachBookings.filter(b => b.status === 'Confirmed' || b.status === 'Paid').length}</Text>
+               <Text style={styles.statLab}>Active Students</Text>
+             </View>
+          </View>
+
+          <Text style={styles.sectionTitle}>Booking Requests</Text>
+          {coachBookings.length > 0 ? (
+            coachBookings.map(renderDashboardBooking)
+          ) : (
+            <Text style={styles.emptyText}>No pending requests at the moment.</Text>
+          )}
+
+          <Text style={[styles.sectionTitle, { marginTop: 30 }]}>Schedule Lock</Text>
+          <View style={styles.calendarContainer}>
+            <Calendar 
+              markedDates={user.blockedDates || {}}
+              onDayPress={(day) => {
+                const dateStr = day.dateString;
+                const isBlocked = user.blockedDates?.[dateStr];
+                const updatedUser = {
+                  ...user,
+                  blockedDates: {
+                    ...(user.blockedDates || {}),
+                    [dateStr]: isBlocked ? null : { selected: true, marked: true, selectedColor: '#EF4444' }
+                  }
+                };
+                if (onUpdateUser) onUpdateUser(updatedUser);
+              }}
+              theme={{
+                 todayTextColor: '#6366F1',
+                 selectedDayBackgroundColor: '#6366F1',
+                 arrowColor: '#6366F1',
+              }}
+            />
+            <Text style={styles.calendarHint}>Tap a date to block/unblock it for new bookings.</Text>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.pageHeader}>
+        <Text style={styles.pageTitle}>Coach Discovery</Text>
+        <Text style={styles.pageSubtitle}>Expert guidance for your sporting career</Text>
+        
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={20} color="#94A3B8" />
+          <TextInput 
+            placeholder="Search by name or sport..."
+            placeholderTextColor="#94A3B8"
+            style={styles.searchInput}
+            value={search}
+            onChangeText={setSearch}
+          />
+        </View>
+      </View>
+
+      <FlatList 
+        data={coaches}
+        renderItem={renderCoachCard}
+        keyExtractor={item => item.id}
+        contentContainerStyle={styles.coachList}
+        ListEmptyComponent={
+          <View style={styles.emptyView}>
+            <Ionicons name="people-outline" size={60} color="#E2E8F0" />
+            <Text style={styles.emptyText}>No coaches matching your criteria.</Text>
+          </View>
+        }
+      />
+
+      {/* Booking Modal */}
+      <Modal visible={bookingModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalLabel}>BOOKING REQUEST</Text>
+                <Text style={styles.modalTitle}>{selectedCoach?.name}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setBookingModalVisible(false)} style={styles.modalClose}>
+                <Ionicons name="close" size={28} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.calendarBox}>
+                 <Text style={styles.calLabel}>Select Preferred Date</Text>
+                 <Calendar 
+                   onDayPress={(day) => setSelectedDate(day.dateString)}
+                   markedDates={{
+                     ...(selectedCoach?.blockedDates || {}),
+                     [selectedDate]: { selected: true, selectedColor: '#6366F1' }
+                   }}
+                   theme={{
+                     todayTextColor: '#6366F1',
+                     selectedDayBackgroundColor: '#6366F1',
+                   }}
+                 />
+              </View>
+
+              <Text style={styles.calLabel}>Select Time Slot</Text>
+              <View style={styles.timeSlots}>
+                 {['09:00 AM', '10:00 AM', '11:00 AM', '04:00 PM', '05:00 PM', '06:00 PM'].map(slot => (
+                   <TouchableOpacity 
+                     key={slot}
+                     style={[styles.slotBtn, selectedTime === slot && styles.slotBtnActive]}
+                     onPress={() => setSelectedTime(slot)}
+                   >
+                     <Text style={[styles.slotText, selectedTime === slot && styles.slotTextActive]}>{slot}</Text>
+                   </TouchableOpacity>
+                 ))}
+              </View>
+
+              <TouchableOpacity style={styles.confirmBtn} onPress={confirmBookingRequest}>
+                <Text style={styles.confirmBtnText}>Request Booking</Text>
+                <Ionicons name="arrow-forward" size={20} color="#fff" />
+              </TouchableOpacity>
+              <Text style={styles.disclaimer}>No payment required at this stage.</Text>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  pageHeader: { padding: 24, backgroundColor: '#FFFFFF', borderBottomLeftRadius: 32, borderBottomRightRadius: 32, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 5 },
+  pageTitle: { fontSize: 28, fontWeight: '900', color: '#0F172A', textTransform: 'uppercase' },
+  pageSubtitle: { fontSize: 13, color: '#64748B', marginTop: 4, fontWeight: '600' },
+  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', borderRadius: 16, paddingHorizontal: 16, marginTop: 20 },
+  searchInput: { flex: 1, paddingVertical: 14, fontSize: 14, color: '#0F172A', fontWeight: '600' },
+  coachList: { padding: 20 },
+  coachCard: { flexDirection: 'row', backgroundColor: '#FFFFFF', borderRadius: 24, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9', alignItems: 'center' },
+  coachAvatar: { width: 64, height: 64, borderRadius: 16 },
+  coachInfo: { flex: 1, marginLeft: 16 },
+  nameHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  coachName: { fontSize: 16, fontWeight: '900', color: '#0F172A' },
+  ratingBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, gap: 4 },
+  ratingText: { fontSize: 10, fontWeight: '900', color: '#D97706' },
+  specialties: { fontSize: 12, color: '#64748B', fontWeight: '700', marginBottom: 6 },
+  experienceRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  expText: { fontSize: 11, color: '#6366F1', fontWeight: '800' },
+  priceTag: { alignItems: 'flex-end', marginLeft: 10 },
+  priceAmount: { fontSize: 16, fontWeight: '900', color: '#0F172A' },
+  priceUnit: { fontSize: 8, fontWeight: '900', color: '#94A3B8' },
+  emptyView: { flex: 1, alignItems: 'center', marginTop: 100 },
+  emptyText: { color: '#94A3B8', fontSize: 14, fontWeight: '700', marginTop: 10 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.7)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 40, borderTopRightRadius: 40, height: '90%', padding: 24 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 },
+  modalLabel: { fontSize: 10, fontWeight: '900', color: '#6366F1', letterSpacing: 2 },
+  modalTitle: { fontSize: 24, fontWeight: '900', color: '#0F172A', marginTop: 4 },
+  modalClose: { padding: 4 },
+  calendarBox: { marginBottom: 24 },
+  calLabel: { fontSize: 12, fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 },
+  timeSlots: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 30 },
+  slotBtn: { backgroundColor: '#F1F5F9', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 14, width: '31%', alignItems: 'center' },
+  slotBtnActive: { backgroundColor: '#6366F1' },
+  slotText: { fontSize: 12, fontWeight: '900', color: '#64748B' },
+  slotTextActive: { color: '#FFFFFF' },
+  confirmBtn: { backgroundColor: '#0F172A', paddingVertical: 18, borderRadius: 20, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
+  confirmBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900', textTransform: 'uppercase' },
+  disclaimer: { textAlign: 'center', color: '#94A3B8', fontSize: 11, marginTop: 12, fontWeight: '600' },
+  content: { flex: 1, padding: 24 },
+  statsGrid: { flexDirection: 'row', gap: 16, marginBottom: 30 },
+  statBox: { flex: 1, backgroundColor: '#FFFFFF', padding: 20, borderRadius: 24, alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9' },
+  statNum: { fontSize: 24, fontWeight: '900', color: '#0F172A' },
+  statLab: { fontSize: 10, fontWeight: '900', color: '#64748B', textTransform: 'uppercase', marginTop: 4 },
+  sectionTitle: { fontSize: 18, fontWeight: '900', color: '#0F172A', textTransform: 'uppercase', marginBottom: 16 },
+  dashboardCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9' },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  cardTitle: { fontSize: 16, fontWeight: '900', color: '#0F172A' },
+  cardDate: { fontSize: 12, color: '#64748B', fontWeight: '700', marginTop: 2 },
+  statusTag: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  statusTagText: { fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+  actionRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  actionBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
+  actionBtnText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
+  payBtn: { backgroundColor: '#6366F1', paddingVertical: 14, borderRadius: 16, alignItems: 'center', marginTop: 15 },
+  payBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
+  calendarContainer: { backgroundColor: '#FFFFFF', borderRadius: 24, overflow: 'hidden', padding: 10, borderWidth: 1, borderColor: '#F1F5F9' },
+  calendarHint: { textAlign: 'center', fontSize: 11, color: '#64748B', fontWeight: '600', padding: 10 }
+});

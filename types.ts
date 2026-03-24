@@ -94,6 +94,7 @@ export interface Player {
   coachOnboardingCompleted?: boolean;
   academyId?: string | null;
   pincode?: string;
+  managedSports?: Sport[];
   
   // New features
   trueSkillRating?: number;
@@ -140,6 +141,10 @@ export interface Tournament {
   pendingPaymentPlayerIds?: string[];
   status: 'upcoming' | 'ongoing' | 'completed';
   description: string;
+  city?: string;
+  state?: string;
+  lat?: number;
+  lng?: number;
   creatorId?: string; // ID of the academy or admin who created it
   assignedCoachIds?: string[]; // Coaches opted-in for this tournament
   coachOtps?: Record<string, string>; // Maps coachId to their specific OTP
