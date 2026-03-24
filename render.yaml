@@ -1,0 +1,12 @@
+services:
+  - type: web
+
+    env: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node server.mjs
+    envVars:
+      - key: PORT
+        value: 3005
+      - key: MONGODB_URI
+        sync: false # User must set this in Render UI

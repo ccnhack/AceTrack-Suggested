@@ -1,0 +1,1091 @@
+{
+  "players": [
+    {
+      "id": "arjun",
+      "name": "Arjun Mehta",
+      "email": "arjun.m@example.com",
+      "phone": "9876543210",
+      "skillLevel": "Intermediate",
+      "rating": 1250,
+      "matchesPlayed": 12,
+      "wins": 8,
+      "losses": 4,
+      "noShows": 0,
+      "cancellations": 1,
+      "preferredFormat": "Singles",
+      "mostPlayedVenue": "Sarjapur Indoor Arena",
+      "city": "Bangalore",
+      "avatar": "https://ui-avatars.com/api/?name=Arjun+Kumar&background=random",
+      "credits": 0,
+      "cancelledTournamentIds": [],
+      "trueSkillRating": 1250,
+      "performanceAnalytics": {
+        "shotDistribution": {
+          "smashes": 25,
+          "drops": 30,
+          "clears": 35,
+          "netShots": 10
+        },
+        "rallyStats": {
+          "longestRally": 24,
+          "averageRallyLength": 8,
+          "winningShots": 45,
+          "unforcedErrors": 12
+        }
+      }
+    },
+    {
+      "id": "rohan",
+      "name": "Rohan Sharma",
+      "phone": "9988776655",
+      "avatar": "https://ui-avatars.com/api/?name=Rohan+Sharma&background=random",
+      "skillLevel": "Intermediate",
+      "rating": 1210,
+      "matchesPlayed": 5,
+      "wins": 3,
+      "losses": 2,
+      "noShows": 1,
+      "cancellations": 0,
+      "preferredFormat": "Doubles",
+      "mostPlayedVenue": "Sarjapur Indoor Arena",
+      "city": "Bangalore",
+      "email": "rohan@test.com",
+      "role": "user",
+      "credits": 0,
+      "cancelledTournamentIds": [],
+      "trueSkillRating": 1210,
+      "trueSkillHistory": [
+        {
+          "date": "2025-01-01",
+          "rating": 1180
+        },
+        {
+          "date": "2025-02-01",
+          "rating": 1210
+        }
+      ],
+      "notifications": [
+        {
+          "id": "notif_1773477129831",
+          "title": "Support Update",
+          "message": "New reply on ticket: Refund for cancelled tournament",
+          "date": "2026-03-14T08:32:09.831Z",
+          "read": false,
+          "type": "system"
+        }
+      ]
+    },
+    {
+      "id": "sneha",
+      "name": "Sneha Rao",
+      "phone": "9123456789",
+      "avatar": "https://ui-avatars.com/api/?name=Sneha+Rao&background=random",
+      "skillLevel": "Intermediate",
+      "rating": 1280,
+      "matchesPlayed": 20,
+      "wins": 15,
+      "losses": 5,
+      "noShows": 0,
+      "cancellations": 2,
+      "preferredFormat": "Both",
+      "mostPlayedVenue": "PCA Stadium Grounds",
+      "city": "Bangalore",
+      "email": "sneha@test.com",
+      "role": "user",
+      "credits": 0,
+      "cancelledTournamentIds": [],
+      "trueSkillRating": 1280,
+      "trueSkillHistory": [
+        {
+          "date": "2025-01-01",
+          "rating": 1200
+        },
+        {
+          "date": "2025-02-01",
+          "rating": 1280
+        }
+      ]
+    },
+    {
+      "id": "kiran",
+      "name": "Kiran K",
+      "phone": "9334455667",
+      "avatar": "https://ui-avatars.com/api/?name=Kiran+K&background=random",
+      "skillLevel": "Intermediate",
+      "rating": 1190,
+      "matchesPlayed": 8,
+      "wins": 4,
+      "losses": 4,
+      "noShows": 0,
+      "cancellations": 0,
+      "preferredFormat": "Singles",
+      "mostPlayedVenue": "E-City Arena",
+      "city": "Bangalore",
+      "email": "kiran@test.com",
+      "role": "user",
+      "credits": 0,
+      "cancelledTournamentIds": [],
+      "trueSkillRating": 1190,
+      "trueSkillHistory": [
+        {
+          "date": "2025-01-01",
+          "rating": 1150
+        },
+        {
+          "date": "2025-02-01",
+          "rating": 1190
+        }
+      ]
+    },
+    {
+      "id": "shashank",
+      "name": "Shashank Shekhar",
+      "phone": "9000000001",
+      "avatar": "https://ui-avatars.com/api/?name=Shashank&background=random",
+      "skillLevel": "Beginner",
+      "rating": 1000,
+      "matchesPlayed": 0,
+      "wins": 0,
+      "losses": 0,
+      "noShows": 0,
+      "cancellations": 0,
+      "preferredFormat": "Singles",
+      "city": "Bangalore",
+      "email": "shashank@test.com",
+      "role": "user",
+      "credits": 138,
+      "cancelledTournamentIds": [],
+      "trueSkillRating": 1000,
+      "isBeginnerProtected": true,
+      "isEmailVerified": true,
+      "isPhoneVerified": true,
+      "gender": "Male",
+      "notifications": [
+        {
+          "id": "notif_refund_1773519291456_shashank",
+          "message": "The video for tournament \"testing video\" has been removed. ₹49 has been refunded to your AceTrack wallet.",
+          "read": true,
+          "date": "2026-03-14T20:14:51.456Z",
+          "type": "general"
+        },
+        {
+          "id": "notif_del_1773519283486_shashank",
+          "message": "The match recording for tournament \"testing video\" is currently under review.",
+          "read": true,
+          "date": "2026-03-14T20:14:43.486Z",
+          "type": "video",
+          "tournamentId": "t_1773476835161"
+        },
+        {
+          "id": "notif_1773519230336_0.6281028203817729",
+          "message": "A new match recording is available for your tournament – 'testing video'!",
+          "read": true,
+          "date": "2026-03-14T20:13:50.336Z",
+          "type": "video",
+          "tournamentId": "t_1773476835161"
+        },
+        {
+          "id": "notif_del_1773518940044_shashank",
+          "message": "The match recording for tournament \"testing video\" is currently under review.",
+          "read": true,
+          "date": "2026-03-14T20:09:00.044Z",
+          "type": "video",
+          "tournamentId": "t_1773476835161"
+        },
+        {
+          "id": "notif_refund_1773518786377_shashank",
+          "message": "The video for tournament \"testing video\" has been removed. ₹49 has been refunded to your AceTrack wallet.",
+          "read": true,
+          "date": "2026-03-14T20:06:26.377Z",
+          "type": "general"
+        },
+        {
+          "id": "notif_del_1773518778111_shashank",
+          "message": "The match recording for tournament \"testing video\" is currently under review.",
+          "read": true,
+          "date": "2026-03-14T20:06:18.111Z",
+          "type": "video",
+          "tournamentId": "t_1773476835161"
+        },
+        {
+          "id": "notif_1773518751353_0.045870296232341845",
+          "message": "A new match recording is available for your tournament – 'testing video'!",
+          "read": true,
+          "date": "2026-03-14T20:05:51.353Z",
+          "type": "video",
+          "tournamentId": "t_1773476835161"
+        },
+        {
+          "id": "notif_del_1773518707957_shashank",
+          "message": "The match recording for tournament \"testing video\" is currently under review.",
+          "read": true,
+          "date": "2026-03-14T20:05:07.957Z",
+          "type": "video",
+          "tournamentId": "t_1773476835161"
+        },
+        {
+          "id": "notif_refund_1773518660099_shashank",
+          "message": "The video for tournament \"testing video\" has been removed. ₹49 has been refunded to your AceTrack wallet.",
+          "read": true,
+          "date": "2026-03-14T20:04:20.099Z",
+          "type": "general"
+        },
+        {
+          "id": "notif_del_1773518647903_shashank",
+          "message": "The match recording for tournament \"testing video\" is currently under review.",
+          "read": true,
+          "date": "2026-03-14T20:04:07.903Z",
+          "type": "video",
+          "tournamentId": "t_1773476835161"
+        },
+        {
+          "id": "notif_1773518464504_0.04400022016197391",
+          "message": "A new match recording is available for your tournament – 'testing video'!",
+          "read": true,
+          "date": "2026-03-14T20:01:04.504Z",
+          "type": "video",
+          "tournamentId": "t_1773476835161"
+        },
+        {
+          "id": "notif_refund_1773518287367_shashank",
+          "message": "The video for tournament \"testing video\" has been removed. ₹49 has been refunded to your AceTrack wallet.",
+          "read": true,
+          "date": "2026-03-14T19:58:07.367Z",
+          "type": "general"
+        },
+        {
+          "id": "notif_del_1773518276495_shashank",
+          "message": "The match recording for tournament \"testing video\" is currently under review.",
+          "read": true,
+          "date": "2026-03-14T19:57:56.495Z",
+          "type": "video",
+          "tournamentId": "t_1773476835161"
+        },
+        {
+          "id": "notif_1773517956638_0.9907018340272206",
+          "message": "A new match recording is available for your tournament – 'testing video'!",
+          "read": true,
+          "date": "2026-03-14T19:52:36.638Z",
+          "type": "video",
+          "tournamentId": "t_1773476835161"
+        },
+        {
+          "id": "notif_del_1773517322216_shashank",
+          "message": "The match recording for tournament \"testing video\" is currently under review.",
+          "read": true,
+          "date": "2026-03-14T19:42:02.216Z",
+          "type": "video",
+          "tournamentId": "t_1773476835161"
+        },
+        {
+          "id": "notif_refund_1773516912489_shashank",
+          "message": "The video for tournament \"testing video\" has been removed. ₹49 has been refunded to your AceTrack wallet.",
+          "read": true,
+          "date": "2026-03-14T19:35:12.489Z",
+          "type": "general"
+        },
+        {
+          "id": "notif_del_1773515875026_shashank",
+          "message": "The match recording for tournament \"testing video\" is currently under review.",
+          "read": true,
+          "date": "2026-03-14T19:17:55.026Z",
+          "type": "video",
+          "tournamentId": "t_1773476835161"
+        },
+        {
+          "id": "notif_1773478955559_0.6119514302690658",
+          "message": "A new match recording is available for your tournament – 'testing video'!",
+          "read": true,
+          "date": "2026-03-14T09:02:35.559Z",
+          "type": "video",
+          "tournamentId": "t_1773476835161"
+        },
+        {
+          "id": "notif_1773478608456",
+          "title": "Tournament Invitation",
+          "message": "Ace Academy has successfully added you to testing video. Please Complete the payment to join.",
+          "date": "2026-03-14T08:56:48.456Z",
+          "read": true,
+          "type": "general"
+        },
+        {
+          "id": "notif_unlock_1773479032382",
+          "message": "Successfully unlocked full match recording via UPI.",
+          "read": true,
+          "date": "2026-03-14T09:03:52.382Z",
+          "type": "video"
+        },
+        {
+          "id": "notif_unlock_1773479035498",
+          "message": "Successfully unlocked full match recording via UPI.",
+          "read": true,
+          "date": "2026-03-14T09:03:55.499Z",
+          "type": "video"
+        },
+        {
+          "id": "notif_unlock_1773479046557",
+          "message": "Successfully unlocked full match recording via UPI.",
+          "read": true,
+          "date": "2026-03-14T09:04:06.557Z",
+          "type": "video"
+        },
+        {
+          "id": "notif_1773479301085",
+          "title": "AI Highlights Unlocked",
+          "message": "You have successfully purchased AI highlights for your match.",
+          "timestamp": "2026-03-14T09:08:21.085Z",
+          "read": true,
+          "type": "video"
+        },
+        {
+          "id": "notif_unlock_1773515720788",
+          "message": "Successfully unlocked full match recording via UPI.",
+          "read": true,
+          "date": "2026-03-14T19:15:20.788Z",
+          "type": "video"
+        },
+        {
+          "id": "notif_unlock_1773515727054",
+          "message": "Successfully unlocked full match recording via UPI.",
+          "read": true,
+          "date": "2026-03-14T19:15:27.054Z",
+          "type": "video"
+        },
+        {
+          "id": "notif_1773515756550",
+          "title": "AI Highlights Unlocked",
+          "message": "You have successfully purchased AI highlights for your match.",
+          "date": "2026-03-14T19:15:56.550Z",
+          "read": true,
+          "type": "video"
+        },
+        {
+          "id": "notif_unlock_1773517969640",
+          "message": "Successfully unlocked full match recording via UPI.",
+          "read": true,
+          "date": "2026-03-14T19:52:49.640Z",
+          "type": "video"
+        },
+        {
+          "id": "notif_1773518177624",
+          "title": "AI Highlights Unlocked",
+          "message": "You have successfully purchased AI highlights for your match.",
+          "date": "2026-03-14T19:56:17.624Z",
+          "read": true,
+          "type": "video"
+        },
+        {
+          "id": "notif_unlock_1773518472766",
+          "message": "Successfully unlocked full match recording via Wallet.",
+          "read": true,
+          "date": "2026-03-14T20:01:12.766Z",
+          "type": "video"
+        },
+        {
+          "id": "notif_unlock_1773518756303",
+          "message": "Successfully unlocked full match recording via Wallet.",
+          "read": true,
+          "date": "2026-03-14T20:05:56.303Z",
+          "type": "video"
+        },
+        {
+          "id": "notif_unlock_1773519239602",
+          "message": "Successfully unlocked full match recording via Wallet.",
+          "read": true,
+          "date": "2026-03-14T20:13:59.602Z",
+          "type": "video"
+        }
+      ],
+      "rescheduleCounts": {},
+      "purchasedVideos": [
+        "v1773478948239",
+        "v1773478948239",
+        "v1773478948239"
+      ],
+      "purchasedHighlights": [
+        "v1773478948239",
+        "v1773515337346",
+        "v1773517955623"
+      ],
+      "walletHistory": [
+        {
+          "id": "wallet_refund_1773519291456_shashank",
+          "amount": 49,
+          "type": "credit",
+          "description": "Refund – Video removed: testing video",
+          "date": "2026-03-14T20:14:51.456Z"
+        },
+        {
+          "id": "wallet_1773519239602",
+          "amount": 49,
+          "type": "debit",
+          "description": "Video unlocked – testing video",
+          "date": "2026-03-14T20:13:59.602Z"
+        },
+        {
+          "id": "wallet_refund_1773518786378_shashank",
+          "amount": 49,
+          "type": "credit",
+          "description": "Refund – Video removed: testing video",
+          "date": "2026-03-14T20:06:26.378Z"
+        },
+        {
+          "id": "wallet_1773518756303",
+          "amount": 49,
+          "type": "debit",
+          "description": "Video unlocked – testing video",
+          "date": "2026-03-14T20:05:56.303Z"
+        },
+        {
+          "id": "wallet_refund_1773518660099_shashank",
+          "amount": 49,
+          "type": "credit",
+          "description": "Refund – Video removed: testing video",
+          "date": "2026-03-14T20:04:20.099Z"
+        },
+        {
+          "id": "wallet_1773518472766",
+          "amount": 49,
+          "type": "debit",
+          "description": "Video unlocked – testing video",
+          "date": "2026-03-14T20:01:12.766Z"
+        },
+        {
+          "id": "wallet_refund_1773518287367_shashank",
+          "amount": 49,
+          "type": "credit",
+          "description": "Refund – Video removed: testing video",
+          "date": "2026-03-14T19:58:07.367Z"
+        },
+        {
+          "id": "wallet_refund_1773516912489_shashank",
+          "amount": 49,
+          "type": "credit",
+          "description": "Refund – Video removed: testing video",
+          "date": "2026-03-14T19:35:12.489Z"
+        }
+      ]
+    },
+    {
+      "id": "pranshu",
+      "name": "Pranshu",
+      "phone": "9000000002",
+      "avatar": "https://ui-avatars.com/api/?name=Pranshu&background=random",
+      "skillLevel": "Beginner",
+      "rating": 1050,
+      "matchesPlayed": 0,
+      "wins": 0,
+      "losses": 0,
+      "noShows": 0,
+      "cancellations": 0,
+      "preferredFormat": "Singles",
+      "city": "Bangalore",
+      "email": "pranshu@test.com",
+      "role": "user",
+      "credits": 100,
+      "cancelledTournamentIds": [],
+      "trueSkillRating": 1050,
+      "isBeginnerProtected": true
+    },
+    {
+      "id": "rahul",
+      "name": "Rahul",
+      "phone": "9000000005",
+      "avatar": "https://ui-avatars.com/api/?name=Rahul&background=random",
+      "skillLevel": "Beginner",
+      "rating": 1020,
+      "matchesPlayed": 0,
+      "wins": 0,
+      "losses": 0,
+      "noShows": 0,
+      "cancellations": 0,
+      "preferredFormat": "Singles",
+      "city": "Bangalore",
+      "email": "rahul@test.com",
+      "role": "user",
+      "credits": 100,
+      "cancelledTournamentIds": [],
+      "trueSkillRating": 1020,
+      "isBeginnerProtected": true
+    },
+    {
+      "id": "coach_1",
+      "name": "Coach Pullela",
+      "phone": "9000000003",
+      "avatar": "https://ui-avatars.com/api/?name=Coach+Pullela&background=random",
+      "skillLevel": "Advanced",
+      "rating": 2500,
+      "matchesPlayed": 0,
+      "wins": 0,
+      "losses": 0,
+      "noShows": 0,
+      "cancellations": 0,
+      "preferredFormat": "Singles",
+      "city": "Bangalore",
+      "email": "coach@test.com",
+      "credits": 0,
+      "cancelledTournamentIds": [],
+      "role": "coach",
+      "isApprovedCoach": true,
+      "certifiedSports": [
+        "Badminton"
+      ],
+      "password": "password",
+      "trueSkillRating": 2500,
+      "coachStatus": "approved",
+      "coachOnboardingCompleted": true,
+      "academyId": "academy_1",
+      "isEmailVerified": true,
+      "isPhoneVerified": true,
+      "notifications": [
+        {
+          "id": "notif_1773519230336_0.18323983074566874",
+          "message": "A new match recording is available for your assigned tournament – 'testing video'!",
+          "read": false,
+          "date": "2026-03-14T20:13:50.336Z",
+          "type": "video",
+          "tournamentId": "t_1773476835161"
+        },
+        {
+          "id": "notif_1773518751353_0.733252471612315",
+          "message": "A new match recording is available for your assigned tournament – 'testing video'!",
+          "read": false,
+          "date": "2026-03-14T20:05:51.353Z",
+          "type": "video",
+          "tournamentId": "t_1773476835161"
+        },
+        {
+          "id": "notif_1773518464504_0.6870881095856894",
+          "message": "A new match recording is available for your assigned tournament – 'testing video'!",
+          "read": false,
+          "date": "2026-03-14T20:01:04.504Z",
+          "type": "video",
+          "tournamentId": "t_1773476835161"
+        },
+        {
+          "id": "notif_1773517956638_0.32513531683985797",
+          "message": "A new match recording is available for your assigned tournament – 'testing video'!",
+          "read": false,
+          "date": "2026-03-14T19:52:36.638Z",
+          "type": "video",
+          "tournamentId": "t_1773476835161"
+        }
+      ]
+    },
+    {
+      "id": "coach_2",
+      "name": "Pending Coach",
+      "phone": "9000000004",
+      "avatar": "https://ui-avatars.com/api/?name=Pending+Coach&background=random",
+      "skillLevel": "Advanced",
+      "rating": 2500,
+      "matchesPlayed": 0,
+      "wins": 0,
+      "losses": 0,
+      "noShows": 0,
+      "cancellations": 0,
+      "preferredFormat": "Singles",
+      "city": "Bangalore",
+      "email": "pending@test.com",
+      "credits": 0,
+      "cancelledTournamentIds": [],
+      "role": "coach",
+      "isApprovedCoach": true,
+      "certifiedSports": [
+        "Table Tennis"
+      ],
+      "password": "password",
+      "trueSkillRating": 2500,
+      "coachStatus": "approved"
+    },
+    {
+      "id": "academy_1",
+      "name": "Ace Academy",
+      "email": "academy@acetrack.com",
+      "phone": "1234567890",
+      "skillLevel": "Advanced",
+      "rating": 2000,
+      "matchesPlayed": 0,
+      "wins": 0,
+      "losses": 0,
+      "noShows": 0,
+      "cancellations": 0,
+      "preferredFormat": "Both",
+      "city": "Bangalore",
+      "avatar": "https://ui-avatars.com/api/?name=Demo+Academy&background=random",
+      "credits": 0,
+      "cancelledTournamentIds": [],
+      "role": "academy",
+      "isEmailVerified": true,
+      "isPhoneVerified": true,
+      "notifications": []
+    }
+  ],
+  "tournaments": [
+    {
+      "id": "t1",
+      "title": "Bangalore Open Smashers",
+      "sport": "Badminton",
+      "location": "Sarjapur Indoor Arena",
+      "date": "2025-06-15",
+      "registrationDeadline": "2025-06-14",
+      "time": "09:00 AM",
+      "skillLevel": "Intermediate",
+      "structure": "Round Robin",
+      "format": "Men's Singles",
+      "entryFee": 550,
+      "prizePool": "₹10,000 + Trophies",
+      "minMatches": 3,
+      "maxPlayers": 16,
+      "registeredPlayerIds": [
+        "rohan",
+        "sneha",
+        "kiran"
+      ],
+      "status": "upcoming",
+      "description": "A friendly yet competitive tournament for intermediate badminton players. Guaranteed 3 matches for everyone!",
+      "creatorId": "system",
+      "assignedCoachIds": [],
+      "coachOtps": {
+        "c1": "123456"
+      },
+      "startOtp": "111111",
+      "endOtp": "222222"
+    },
+    {
+      "id": "t2",
+      "title": "Electronic City TT Cup",
+      "sport": "Table Tennis",
+      "location": "Playo Arena, E-City",
+      "date": "2025-06-22",
+      "registrationDeadline": "2025-06-21",
+      "time": "10:30 AM",
+      "skillLevel": "Beginner",
+      "structure": "League",
+      "format": "Men's Doubles",
+      "entryFee": 450,
+      "prizePool": "₹5,000 + Vouchers",
+      "minMatches": 4,
+      "maxPlayers": 12,
+      "registeredPlayerIds": [
+        "arjun",
+        "shashank",
+        "pranshu",
+        "rahul"
+      ],
+      "status": "upcoming",
+      "description": "The perfect place to start your competitive journey in Table Tennis. Focus on fair play and learning.",
+      "creatorId": "system",
+      "assignedCoachIds": [],
+      "coachOtps": {
+        "c1": "654321"
+      },
+      "startOtp": "333333",
+      "endOtp": "444444"
+    },
+    {
+      "id": "t4",
+      "title": "Mohali Cricket Weekend",
+      "sport": "Cricket",
+      "location": "PCA Stadium Grounds",
+      "date": "2025-12-13",
+      "registrationDeadline": "2025-12-12",
+      "time": "07:00 AM",
+      "skillLevel": "Intermediate",
+      "structure": "Knockout",
+      "format": "Men's Singles",
+      "entryFee": 800,
+      "prizePool": "₹25,000 + Gear",
+      "minMatches": 2,
+      "maxPlayers": 8,
+      "registeredPlayerIds": [
+        "rohan",
+        "sneha"
+      ],
+      "status": "upcoming",
+      "description": "Experience the thrill of playing at a professional venue. T20 format, knockout rounds.",
+      "creatorId": "system",
+      "assignedCoachIds": [],
+      "coachOtps": {
+        "c1": "987654"
+      },
+      "startOtp": "555555",
+      "endOtp": "666666"
+    },
+    {
+      "id": "t_testing",
+      "title": "TESTING",
+      "sport": "Badminton",
+      "location": "Test Stadium",
+      "date": "2027-01-01",
+      "time": "10:00",
+      "registrationDeadline": "2026-12-31",
+      "skillLevel": "Advanced",
+      "format": "Mixed Singles",
+      "entryFee": 500,
+      "prizePool": "₹5000",
+      "minMatches": 1,
+      "maxPlayers": 32,
+      "registeredPlayerIds": [],
+      "status": "upcoming",
+      "description": "Mock tournament for testing OTP and security flows"
+    },
+    {
+      "id": "t_testing_coach_assign",
+      "title": "TESTING",
+      "sport": "Badminton",
+      "location": "SARJAPUR",
+      "date": "2026-01-22",
+      "registrationDeadline": "2026-01-21",
+      "time": "09:00 AM",
+      "skillLevel": "Advanced",
+      "structure": "Knockout",
+      "format": "Men's Singles",
+      "entryFee": 200,
+      "prizePool": "₹5000",
+      "minMatches": 1,
+      "maxPlayers": 10,
+      "registeredPlayerIds": [
+        "arjun",
+        "rohan",
+        "sneha"
+      ],
+      "status": "upcoming",
+      "description": "Testing tournament for coach assignment.",
+      "creatorId": "academy_1",
+      "coachAssignmentType": "platform",
+      "coachStatus": "Awaiting Coach Confirmation",
+      "declinedCoachIds": [
+        "coach_1"
+      ]
+    },
+    {
+      "id": "t_1773476835161",
+      "title": "testing video",
+      "sport": "Badminton",
+      "location": "Mahadevapura",
+      "date": "2026-03-18",
+      "time": "09:00 AM",
+      "registrationDeadline": "2026-03-18",
+      "skillLevel": "Beginner",
+      "structure": "Round Robin",
+      "format": "Men's Singles",
+      "entryFee": 200,
+      "prizePool": "5000",
+      "minMatches": 0,
+      "maxPlayers": 8,
+      "registeredPlayerIds": [
+        "shashank"
+      ],
+      "pendingPaymentPlayerIds": [],
+      "status": "completed",
+      "description": "Testing video",
+      "creatorId": "academy_1",
+      "coachAssignmentType": "platform",
+      "coachStatus": "Coach Assigned",
+      "tournamentStarted": true,
+      "ratingsModified": true,
+      "assignedCoachId": "coach_1",
+      "assignedCoachIds": [
+        "coach_1"
+      ],
+      "startOtp": "215080",
+      "endOtp": "263754",
+      "playerStatuses": {
+        "shashank": "Qualified"
+      },
+      "roundDecisions": {
+        "1": {
+          "shashank": "Qualified"
+        }
+      }
+    }
+  ],
+  "evaluations": [
+    {
+      "id": "eval_final_t_1773476835161_shashank",
+      "playerId": "shashank",
+      "coachId": "coach_1",
+      "tournamentId": "t_1773476835161",
+      "date": "2026-03-14T09:01:50.338Z",
+      "sport": "Badminton",
+      "scores": {
+        "serve": 6,
+        "control": 7,
+        "backhand": 7,
+        "smash": 7,
+        "footwork": 7,
+        "defense": 7,
+        "coordination": 7,
+        "consistency": 7
+      },
+      "averageScore": 6.9
+    }
+  ],
+  "matchVideos": [
+    {
+      "id": "v1",
+      "tournamentId": "t1",
+      "matchId": "m3",
+      "sport": "Badminton",
+      "date": "2025-06-15",
+      "playerIds": [
+        "arjun",
+        "rohan"
+      ],
+      "cameraType": "Dual",
+      "videoUrl": "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+      "previewUrl": "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+      "price": 79,
+      "isPurchasable": true,
+      "highlightsUrl": "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4"
+    },
+    {
+      "id": "v1773519229195",
+      "tournamentId": "t_1773476835161",
+      "matchId": "M-T_1773-218",
+      "sport": "Badminton",
+      "date": "2026-03-18",
+      "playerIds": [
+        "shashank"
+      ],
+      "cameraType": "Single",
+      "videoUrl": "http://192.168.1.170:3005/uploads/1773519229152-47033486-Match_M-T_1773-882.mp4",
+      "previewUrl": "http://192.168.1.170:3005/uploads/1773519229152-47033486-Match_M-T_1773-882.mp4",
+      "price": 49,
+      "isPurchasable": true,
+      "filename": "Match_M-T_1773-882.mp4",
+      "uploadDate": "2026-03-14T20:13:49.195Z",
+      "adminStatus": "Active",
+      "videoFile": {},
+      "watermarkedUrl": "http://192.168.1.170:3005/uploads/1773519229152-47033486-Match_M-T_1773-882.mp4",
+      "revenue": 49,
+      "purchases": 1,
+      "views": 1,
+      "viewedPlayerIds": [
+        "shashank"
+      ],
+      "deletionReason": "Poor video quality",
+      "deletionComment": "",
+      "refundsIssued": 1,
+      "refundAmount": 49,
+      "refundedPlayerIds": [
+        "shashank"
+      ]
+    }
+  ],
+  "supportTickets": [
+    {
+      "id": "tkt_1",
+      "userId": "rohan",
+      "type": "Refund",
+      "title": "Refund for cancelled tournament",
+      "description": "I opted out of the Bangalore Open Smashers. Where is my refund?",
+      "status": "Awaiting Response",
+      "createdAt": "2026-03-10T10:00:00Z",
+      "messages": [
+        {
+          "senderId": "rohan",
+          "text": "I opted out of the Bangalore Open Smashers. Where is my refund?",
+          "timestamp": "2026-03-10T10:00:00Z"
+        },
+        {
+          "senderId": "admin_sys",
+          "text": "Ok",
+          "timestamp": "2026-03-14T08:32:09.831Z"
+        }
+      ]
+    }
+  ],
+  "auditLogs": [
+    {
+      "id": "log_1773519310470",
+      "adminId": "admin_sys",
+      "action": "Update Video Status",
+      "targetId": "v1773519229195",
+      "targetType": "video",
+      "details": "Changed status to Active",
+      "timestamp": "2026-03-14T20:15:10.470Z"
+    },
+    {
+      "id": "log_1773518929780",
+      "adminId": "admin_sys",
+      "action": "Update Video Status",
+      "targetId": "v1773518750305",
+      "targetType": "video",
+      "details": "Changed status to Active",
+      "timestamp": "2026-03-14T20:08:49.780Z"
+    },
+    {
+      "id": "log_1773518696224",
+      "adminId": "admin_sys",
+      "action": "Update Video Status",
+      "targetId": "v1773518462534",
+      "targetType": "video",
+      "details": "Changed status to Active",
+      "timestamp": "2026-03-14T20:04:56.224Z"
+    },
+    {
+      "id": "log_1773517289267",
+      "adminId": "admin_sys",
+      "action": "Update Video Status",
+      "targetId": "v1773515337346",
+      "targetType": "video",
+      "details": "Changed status to Active",
+      "timestamp": "2026-03-14T19:41:29.267Z"
+    },
+    {
+      "id": "log_1773517284943",
+      "adminId": "admin_sys",
+      "action": "Update Video Status",
+      "targetId": "v1773515337346",
+      "targetType": "video",
+      "details": "Changed status to Trash",
+      "timestamp": "2026-03-14T19:41:24.943Z"
+    },
+    {
+      "id": "log_1773517284541",
+      "adminId": "admin_sys",
+      "action": "Update Video Status",
+      "targetId": "v1773515337346",
+      "targetType": "video",
+      "details": "Changed status to Trash",
+      "timestamp": "2026-03-14T19:41:24.541Z"
+    },
+    {
+      "id": "log_1773517283743",
+      "adminId": "admin_sys",
+      "action": "Update Video Status",
+      "targetId": "v1773515337346",
+      "targetType": "video",
+      "details": "Changed status to Trash",
+      "timestamp": "2026-03-14T19:41:23.743Z"
+    },
+    {
+      "id": "log_1773517281241",
+      "adminId": "admin_sys",
+      "action": "Update Video Status",
+      "targetId": "v1773515337346",
+      "targetType": "video",
+      "details": "Changed status to Trash",
+      "timestamp": "2026-03-14T19:41:21.241Z"
+    },
+    {
+      "id": "log_1773517281106",
+      "adminId": "admin_sys",
+      "action": "Update Video Status",
+      "targetId": "v1773515337346",
+      "targetType": "video",
+      "details": "Changed status to Trash",
+      "timestamp": "2026-03-14T19:41:21.106Z"
+    },
+    {
+      "id": "log_1773517280909",
+      "adminId": "admin_sys",
+      "action": "Update Video Status",
+      "targetId": "v1773515337346",
+      "targetType": "video",
+      "details": "Changed status to Trash",
+      "timestamp": "2026-03-14T19:41:20.909Z"
+    },
+    {
+      "id": "log_1773517280659",
+      "adminId": "admin_sys",
+      "action": "Update Video Status",
+      "targetId": "v1773515337346",
+      "targetType": "video",
+      "details": "Changed status to Trash",
+      "timestamp": "2026-03-14T19:41:20.659Z"
+    },
+    {
+      "id": "log_1773517280242",
+      "adminId": "admin_sys",
+      "action": "Update Video Status",
+      "targetId": "v1773515337346",
+      "targetType": "video",
+      "details": "Changed status to Trash",
+      "timestamp": "2026-03-14T19:41:20.242Z"
+    },
+    {
+      "id": "log_1773517279411",
+      "adminId": "admin_sys",
+      "action": "Update Video Status",
+      "targetId": "v1773515337346",
+      "targetType": "video",
+      "details": "Changed status to Trash",
+      "timestamp": "2026-03-14T19:41:19.411Z"
+    },
+    {
+      "id": "log_1773517279224",
+      "adminId": "admin_sys",
+      "action": "Update Video Status",
+      "targetId": "v1773515337346",
+      "targetType": "video",
+      "details": "Changed status to Trash",
+      "timestamp": "2026-03-14T19:41:19.224Z"
+    },
+    {
+      "id": "log_1773517279042",
+      "adminId": "admin_sys",
+      "action": "Update Video Status",
+      "targetId": "v1773515337346",
+      "targetType": "video",
+      "details": "Changed status to Trash",
+      "timestamp": "2026-03-14T19:41:19.042Z"
+    },
+    {
+      "id": "log_1773517278856",
+      "adminId": "admin_sys",
+      "action": "Update Video Status",
+      "targetId": "v1773515337346",
+      "targetType": "video",
+      "details": "Changed status to Trash",
+      "timestamp": "2026-03-14T19:41:18.856Z"
+    },
+    {
+      "id": "log_1773517278678",
+      "adminId": "admin_sys",
+      "action": "Update Video Status",
+      "targetId": "v1773515337346",
+      "targetType": "video",
+      "details": "Changed status to Trash",
+      "timestamp": "2026-03-14T19:41:18.678Z"
+    },
+    {
+      "id": "log_1773517278443",
+      "adminId": "admin_sys",
+      "action": "Update Video Status",
+      "targetId": "v1773515337346",
+      "targetType": "video",
+      "details": "Changed status to Trash",
+      "timestamp": "2026-03-14T19:41:18.443Z"
+    },
+    {
+      "id": "log_1773517278059",
+      "adminId": "admin_sys",
+      "action": "Update Video Status",
+      "targetId": "v1773515337346",
+      "targetType": "video",
+      "details": "Changed status to Trash",
+      "timestamp": "2026-03-14T19:41:18.059Z"
+    },
+    {
+      "id": "log_1773517277492",
+      "adminId": "admin_sys",
+      "action": "Update Video Status",
+      "targetId": "v1773515337346",
+      "targetType": "video",
+      "details": "Changed status to Trash",
+      "timestamp": "2026-03-14T19:41:17.492Z"
+    },
+    {
+      "id": "log_1773517275524",
+      "adminId": "admin_sys",
+      "action": "Update Video Status",
+      "targetId": "v1773515337346",
+      "targetType": "video",
+      "details": "Changed status to Trash",
+      "timestamp": "2026-03-14T19:41:15.524Z"
+    }
+  ]
+}

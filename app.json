@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "acetrack-mobile",
+    "slug": "acetrack-mobile",
+    "version": "1.0.43",
+    "sdkVersion": "50.0.0",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F172A"
+    },
+    "android": {
+      "package": "com.hacker1717.acetrackmobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0F172A"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.hacker1717.acetrackmobile"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/3c2f128b-90a6-430a-892e-a219f6378063"
+    },
+    "runtimeVersion": "1.0.0",
+    "extra": {
+      "eas": {
+        "projectId": "3c2f128b-90a6-430a-892e-a219f6378063"
+      }
+    },
+    "owner": "hacker1717",
+    "plugins": [
+      "expo-font"
+    ]
+  }
+}
