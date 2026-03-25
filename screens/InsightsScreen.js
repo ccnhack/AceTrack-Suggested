@@ -8,8 +8,9 @@ const screenWidth = Dimensions.get('window').width;
 
 const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) => {
   const [selectedCity, setSelectedCity] = useState(null);
+  const [selectedAcademyId, setSelectedAcademyId] = useState(null);
 
-  // 1. Process Sports Distribution
+  // 1. Process Sports Distribution (General)
   const sportsStats = useMemo(() => {
     const counts = {};
     players.forEach(p => {
@@ -64,6 +65,36 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
       }));
   }, [tournaments, players]);
 
+  // 5. Academy Detail Stats (Sports & Participation)
+  const academyDetailStats = useMemo(() => {
+    if (!selectedAcademyId) return null;
+    const hosted = tournaments.filter(t => (t.creatorId || 'system') === selectedAcademyId);
+    
+    // Sports distribution
+    const sportsCounts = {};
+    hosted.forEach(t => {
+      sportsCounts[t.sport] = (sportsCounts[t.sport] || 0) + 1;
+    });
+    const sportsDist = Object.entries(sportsCounts).map(([name, count]) => ({
+      name,
+      count,
+      percent: (count / hosted.length) * 100
+    }));
+
+    // Participation
+    const totalParticipation = hosted.reduce((sum, t) => sum + (t.registeredPlayerIds?.length || 0), 0);
+    const avgParticipation = Math.round(totalParticipation / Math.max(hosted.length, 1));
+    const academyName = players.find(p => p.id === selectedAcademyId)?.name || (selectedAcademyId === 'system' ? 'Platform Admin' : 'Academy');
+
+    return {
+      name: academyName,
+      sportsDistribution: sportsDist,
+      totalParticipation,
+      avgParticipation,
+      count: hosted.length
+    };
+  }, [tournaments, selectedAcademyId, players]);
+
   // Growth Data Points
   const growthPoints = [35, 55, 48, 75, 92, 110];
 
@@ -90,8 +121,8 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
         </View>
 
         {/* Sports Popularity */}
-        <View style={styles.chartCard}>
-          <Text style={styles.chartTitle}>Sports Popularity</Text>
+        <View style={styles.chartCard} pointerEvents="none">
+          <Text style={styles.chartTitle}>Global Sports Split</Text>
           <View style={styles.barChartContainer}>
             {sportsStats.map((item, index) => (
               <View key={item.name} style={styles.barRow}>
@@ -107,38 +138,86 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
           </View>
         </View>
 
-        {/* Top Academies (NEW) */}
+        {/* Top Academies & Detail Drill-down */}
         <View style={styles.chartCard}>
-          <Text style={styles.chartTitle}>Top Hosting Academies</Text>
-          <Text style={styles.chartSubtitle}>Based on total tournaments hosted</Text>
-          <View style={styles.academyList}>
-            {academyStats.map((item, index) => (
-              <View key={item.id} style={styles.academyRow}>
-                <View style={[styles.academyRank, { backgroundColor: index === 0 ? '#6366F1' : '#F1F5F9' }]}>
-                    <Text style={[styles.rankText, { color: index === 0 ? '#fff' : '#475569' }]}>{index + 1}</Text>
-                </View>
-                <View style={styles.academyInfo}>
-                  <Text style={styles.academyName} numberOfLines={1}>{item.name}</Text>
-                  <Text style={styles.academyTournaments}>{item.count} Tournaments</Text>
-                </View>
-                <View style={styles.academyPercentContainer}>
-                    <Text style={styles.academyPercent}>{Math.round(item.percent)}%</Text>
-                </View>
-              </View>
-            ))}
+          <View style={styles.chartHeader}>
+            <Text style={styles.chartTitle}>
+                {selectedAcademyId ? 'Academy Performance' : 'Top Hosting Academies'}
+            </Text>
+            {selectedAcademyId && (
+                <TouchableOpacity onPress={() => setSelectedAcademyId(null)} style={styles.backBtn}>
+                    <Ionicons name="arrow-back" size={14} color="#6366F1" />
+                    <Text style={styles.backBtnText}>All</Text>
+                </TouchableOpacity>
+            )}
           </View>
+          
+          {selectedAcademyId ? (
+            <View style={styles.academyDetail}>
+                <View style={styles.academyHero}>
+                    <Text style={styles.detailName}>{academyDetailStats?.name}</Text>
+                    <View style={styles.detailStatsRow}>
+                        <View style={styles.detailStat}>
+                            <Text style={styles.detailStatVal}>{academyDetailStats?.count}</Text>
+                            <Text style={styles.detailStatLabel}>Events</Text>
+                        </View>
+                        <View style={styles.detailStat}>
+                            <Text style={styles.detailStatVal}>{academyDetailStats?.totalParticipation}</Text>
+                            <Text style={styles.detailStatLabel}>Players</Text>
+                        </View>
+                        <View style={styles.detailStat}>
+                            <Text style={styles.detailStatVal}>{academyDetailStats?.avgParticipation}</Text>
+                            <Text style={styles.detailStatLabel}>Avg/Event</Text>
+                        </View>
+                    </View>
+                </View>
+                
+                <Text style={styles.subChartTitle}>Sport Distribution</Text>
+                {academyDetailStats?.sportsDistribution.map((item) => (
+                    <View key={item.name} style={styles.detailBarRow}>
+                        <View style={styles.barLabelContainer}>
+                            <Text style={styles.barLabel}>{item.name}</Text>
+                            <Text style={styles.barValue}>{item.count} Hostings</Text>
+                        </View>
+                        <View style={styles.barTrack}>
+                            <View style={[styles.barFill, { width: `${item.percent}%`, backgroundColor: '#6366F1' }]} />
+                        </View>
+                    </View>
+                ))}
+            </View>
+          ) : (
+            <View style={styles.academyList}>
+              {academyStats.map((item, index) => (
+                <TouchableOpacity 
+                    key={item.id} 
+                    style={styles.academyRow}
+                    onPress={() => setSelectedAcademyId(item.id)}
+                >
+                  <View style={[styles.academyRank, { backgroundColor: index === 0 ? '#6366F1' : '#F1F5F9' }]}>
+                      <Text style={[styles.rankText, { color: index === 0 ? '#fff' : '#475569' }]}>{index + 1}</Text>
+                  </View>
+                  <View style={styles.academyInfo}>
+                    <Text style={styles.academyName} numberOfLines={1}>{item.name}</Text>
+                    <Text style={styles.academyTournaments}>{item.count} Tournaments Hosted</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={14} color="#CBD5E1" />
+                </TouchableOpacity>
+              ))}
+              <Text style={styles.drillInfo}>Click an academy to see player participation</Text>
+            </View>
+          )}
         </View>
 
         {/* Geographic Hotspots with Drill-down */}
         <View style={styles.chartCard}>
           <View style={styles.chartHeader}>
             <Text style={styles.chartTitle}>
-                {selectedCity ? `Areas in ${selectedCity}` : 'Geographic Hotspots'}
+                {selectedCity ? `Areas in ${selectedCity}` : 'Hotspot Cities'}
             </Text>
             {selectedCity && (
                 <TouchableOpacity onPress={() => setSelectedCity(null)} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={14} color="#6366F1" />
-                    <Text style={styles.backBtnText}>Back</Text>
+                    <Text style={styles.backBtnText}>Cities</Text>
                 </TouchableOpacity>
             )}
           </View>
@@ -161,7 +240,7 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
               </TouchableOpacity>
             ))}
           </View>
-          {!selectedCity && <Text style={styles.drillInfo}>Click a city to see area-wise breakdown</Text>}
+          {!selectedCity && <Text style={styles.drillInfo}>Click a city to see area-wise distribution</Text>}
         </View>
 
         {/* Community Growth Mini Visual */}
@@ -326,13 +405,20 @@ const styles = StyleSheet.create({
   academyInfo: { flex: 1 },
   academyName: { fontSize: 14, fontWeight: '700', color: '#334155' },
   academyTournaments: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
-  academyPercentContainer: { 
-    backgroundColor: '#F1F5F9', 
-    paddingHorizontal: 8, 
-    paddingVertical: 4, 
-    borderRadius: 6 
+  academyDetail: { marginTop: 4 },
+  academyHero: { 
+    backgroundColor: '#F8FAFC', 
+    padding: 16, 
+    borderRadius: 16, 
+    marginBottom: 20 
   },
-  academyPercent: { fontSize: 11, fontWeight: '700', color: '#64748B' },
+  detailName: { fontSize: 18, fontWeight: '800', color: '#1E293B', marginBottom: 12 },
+  detailStatsRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  detailStat: { alignItems: 'center' },
+  detailStatVal: { fontSize: 16, fontWeight: '800', color: '#6366F1' },
+  detailStatLabel: { fontSize: 10, color: '#94A3B8', fontWeight: '700', textTransform: 'uppercase' },
+  subChartTitle: { fontSize: 14, fontWeight: '700', color: '#475569', marginBottom: 16, marginLeft: 2 },
+  detailBarRow: { marginBottom: 14 },
   geoContainer: { marginTop: 4 },
   geoRow: { 
     flexDirection: 'row', 
