@@ -820,20 +820,30 @@ ${tournament.sponsorName ? `<div class="sponsor">Sponsored by ${tournament.spons
 // ═══════════════════════════════════════════════════════════════
 // Serve Web Admin Dashboard
 // ═══════════════════════════════════════════════════════════════
-const publicPath = path.join(__dirname, 'public');
+// Use process.cwd() as fallback to ensure Render finds it
+const publicPath = fs.existsSync(path.join(__dirname, 'public')) 
+  ? path.join(__dirname, 'public')
+  : path.join(process.cwd(), 'backend', 'public');
+
+console.log(`🌐 [Frontend] Checking public directory at: ${publicPath}`);
 if (fs.existsSync(publicPath)) {
-  console.log(`🌐 [Frontend] Serving static files from: ${publicPath}`);
+  console.log(`✅ [Frontend] Successfully serving static files from: ${publicPath}`);
   app.use('/', express.static(publicPath));
   
-  // SPA Fallback: Redirect all non-API/non-results GET requests to index.html
+  // SPA Fallback
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api') || req.path.startsWith('/socket.io') || req.path.startsWith('/results')) {
       return next();
     }
-    res.sendFile(path.join(publicPath, 'index.html'));
+    const indexFile = path.join(publicPath, 'index.html');
+    if (fs.existsSync(indexFile)) {
+      res.sendFile(indexFile);
+    } else {
+      next();
+    }
   });
 } else {
-  console.warn(`⚠️ [Frontend] Public directory NOT found at: ${publicPath}`);
+  console.warn(`❌ [Frontend] Public directory NOT found. Searched in: ${path.join(__dirname, 'public')} and ${path.join(process.cwd(), 'backend', 'public')}`);
 }
 
 // ═══════════════════════════════════════════════════════════════
