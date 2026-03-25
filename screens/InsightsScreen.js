@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useRef } from 'react';
+import React, { useMemo, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,6 +7,8 @@ import designSystem from '../theme/designSystem';
 const screenWidth = Dimensions.get('window').width;
 
 const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) => {
+  const [selectedCity, setSelectedCity] = useState(null);
+
   // 1. Process Sports Distribution
   const sportsStats = useMemo(() => {
     const counts = {};
@@ -19,7 +21,7 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
     return sorted.map(([name, count]) => ({ name, count, percent: (count / max) * 100 }));
   }, [players]);
 
-  // 2. Process Geographic Insights
+  // 2. Process Geographic Insights (Cities)
   const cityStats = useMemo(() => {
     const counts = {};
     players.forEach(p => {
@@ -31,7 +33,38 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
     return sorted.map(([name, count]) => ({ name, count, percent: Math.round((count / total) * 100) }));
   }, [players]);
 
-  // 3. Simulated Growth Data (Mock)
+  // 3. Drill-down Area Stats (within city)
+  const areaStats = useMemo(() => {
+    if (!selectedCity) return [];
+    const counts = {};
+    players.filter(p => p.city === selectedCity).forEach(p => {
+        const area = p.mostPlayedVenue || 'General Area';
+        counts[area] = (counts[area] || 0) + 1;
+    });
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const total = players.filter(p => p.city === selectedCity).length || 1;
+    return sorted.map(([name, count]) => ({ name, count, percent: Math.round((count / total) * 100) }));
+  }, [players, selectedCity]);
+
+  // 4. Academy Hosting Stats
+  const academyStats = useMemo(() => {
+    const counts = {};
+    tournaments.forEach(t => {
+        const authorId = t.creatorId || 'system';
+        counts[authorId] = (counts[authorId] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([id, count]) => ({
+        id,
+        name: players.find(p => p.id === id)?.name || (id === 'system' ? 'Platform Admin' : 'Unknown Academy'),
+        count,
+        percent: (count / Math.max(tournaments.length, 1)) * 100
+      }));
+  }, [tournaments, players]);
+
+  // Growth Data Points
   const growthPoints = [35, 55, 48, 75, 92, 110];
 
   return (
@@ -56,12 +89,9 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
           <StatBox title="Footage" value={matchVideos.length} icon="videocam" color="#10B981" trend="+24%" />
         </View>
 
-        {/* Custom Sports Popularity Chart (Vertical Bars) */}
+        {/* Sports Popularity */}
         <View style={styles.chartCard}>
-          <View style={styles.chartHeader}>
-            <Text style={styles.chartTitle}>Sports Popularity</Text>
-            <Text style={styles.chartSubtitle}>Active participants by sport</Text>
-          </View>
+          <Text style={styles.chartTitle}>Sports Popularity</Text>
           <View style={styles.barChartContainer}>
             {sportsStats.map((item, index) => (
               <View key={item.name} style={styles.barRow}>
@@ -77,7 +107,64 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
           </View>
         </View>
 
-        {/* Community Growth (Vertical Bar Mock Line Chart) */}
+        {/* Top Academies (NEW) */}
+        <View style={styles.chartCard}>
+          <Text style={styles.chartTitle}>Top Hosting Academies</Text>
+          <Text style={styles.chartSubtitle}>Based on total tournaments hosted</Text>
+          <View style={styles.academyList}>
+            {academyStats.map((item, index) => (
+              <View key={item.id} style={styles.academyRow}>
+                <View style={[styles.academyRank, { backgroundColor: index === 0 ? '#6366F1' : '#F1F5F9' }]}>
+                    <Text style={[styles.rankText, { color: index === 0 ? '#fff' : '#475569' }]}>{index + 1}</Text>
+                </View>
+                <View style={styles.academyInfo}>
+                  <Text style={styles.academyName} numberOfLines={1}>{item.name}</Text>
+                  <Text style={styles.academyTournaments}>{item.count} Tournaments</Text>
+                </View>
+                <View style={styles.academyPercentContainer}>
+                    <Text style={styles.academyPercent}>{Math.round(item.percent)}%</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Geographic Hotspots with Drill-down */}
+        <View style={styles.chartCard}>
+          <View style={styles.chartHeader}>
+            <Text style={styles.chartTitle}>
+                {selectedCity ? `Areas in ${selectedCity}` : 'Geographic Hotspots'}
+            </Text>
+            {selectedCity && (
+                <TouchableOpacity onPress={() => setSelectedCity(null)} style={styles.backBtn}>
+                    <Ionicons name="arrow-back" size={14} color="#6366F1" />
+                    <Text style={styles.backBtnText}>Back</Text>
+                </TouchableOpacity>
+            )}
+          </View>
+          
+          <View style={styles.geoContainer}>
+            {(selectedCity ? areaStats : cityStats).map((item, index) => (
+              <TouchableOpacity 
+                key={item.name} 
+                style={styles.geoRow}
+                onPress={() => !selectedCity && setSelectedCity(item.name)}
+                disabled={!!selectedCity}
+              >
+                <View style={[styles.dot, { backgroundColor: ['#6366F1', '#EC4899', '#10B981', '#F59E0B'][index % 4] }]} />
+                <Text style={styles.geoName}>{item.name}</Text>
+                <View style={styles.geoValueContainer}>
+                    <Text style={styles.geoCount}>{item.count}</Text>
+                    <Text style={styles.geoPercent}>{item.percent}%</Text>
+                </View>
+                {!selectedCity && <Ionicons name="chevron-forward" size={14} color="#CBD5E1" />}
+              </TouchableOpacity>
+            ))}
+          </View>
+          {!selectedCity && <Text style={styles.drillInfo}>Click a city to see area-wise breakdown</Text>}
+        </View>
+
+        {/* Community Growth Mini Visual */}
         <View style={styles.chartCard}>
             <View style={styles.chartHeader}>
                 <Text style={styles.chartTitle}>Monthly Growth</Text>
@@ -94,24 +181,6 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
                     </View>
                 ))}
             </View>
-            <Text style={styles.growthCaption}>Consistently increasing player retention and new signups.</Text>
-        </View>
-
-        {/* Geographic Hotspots (List instead of Pie for stability) */}
-        <View style={styles.chartCard}>
-          <Text style={styles.chartTitle}>Geographic Distribution</Text>
-          <View style={styles.geoContainer}>
-            {cityStats.map((item, index) => (
-              <View key={item.name} style={styles.geoRow}>
-                <View style={[styles.dot, { backgroundColor: ['#6366F1', '#EC4899', '#10B981', '#F59E0B'][index % 4] }]} />
-                <Text style={styles.geoName}>{item.name}</Text>
-                <View style={styles.geoValueContainer}>
-                    <Text style={styles.geoCount}>{item.count}</Text>
-                    <Text style={styles.geoPercent}>{item.percent}%</Text>
-                </View>
-              </View>
-            ))}
-          </View>
         </View>
 
         <View style={{ height: 40 }} />
@@ -217,10 +286,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'flex-start',
-    marginBottom: 20 
+    marginBottom: 16 
   },
   chartTitle: { fontSize: 17, fontWeight: '700', color: '#1E293B' },
-  chartSubtitle: { fontSize: 12, color: '#94A3B8', marginTop: 2 },
+  chartSubtitle: { fontSize: 12, color: '#94A3B8', marginTop: 2, marginBottom: 16 },
   barChartContainer: { marginTop: 10 },
   barRow: { marginBottom: 18 },
   barLabelContainer: { 
@@ -238,13 +307,61 @@ const styles = StyleSheet.create({
     overflow: 'hidden'
   },
   barFill: { height: '100%', borderRadius: 4 },
+  academyList: { marginTop: 8 },
+  academyRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: 16,
+    paddingVertical: 4
+  },
+  academyRank: { 
+    width: 28, 
+    height: 28, 
+    borderRadius: 8, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    marginRight: 12
+  },
+  rankText: { fontSize: 12, fontWeight: '800' },
+  academyInfo: { flex: 1 },
+  academyName: { fontSize: 14, fontWeight: '700', color: '#334155' },
+  academyTournaments: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
+  academyPercentContainer: { 
+    backgroundColor: '#F1F5F9', 
+    paddingHorizontal: 8, 
+    paddingVertical: 4, 
+    borderRadius: 6 
+  },
+  academyPercent: { fontSize: 11, fontWeight: '700', color: '#64748B' },
+  geoContainer: { marginTop: 4 },
+  geoRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingVertical: 14, 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#F8FAFC' 
+  },
+  dot: { width: 10, height: 10, borderRadius: 5, marginRight: 12 },
+  geoName: { flex: 1, fontSize: 14, fontWeight: '600', color: '#334155' },
+  geoValueContainer: { alignItems: 'flex-end', marginRight: 10 },
+  geoCount: { fontSize: 13, fontWeight: '700', color: '#1E293B' },
+  geoPercent: { fontSize: 11, fontWeight: '600', color: '#94A3B8' },
+  backBtn: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#EEF2FF', 
+    paddingHorizontal: 10, 
+    paddingVertical: 4, 
+    borderRadius: 8 
+  },
+  backBtnText: { fontSize: 12, fontWeight: '700', color: '#6366F1', marginLeft: 4 },
+  drillInfo: { fontSize: 12, color: '#94A3B8', fontStyle: 'italic', marginTop: 12, textAlign: 'center' },
   growthContainer: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'flex-end',
-    height: 120,
-    paddingTop: 10,
-    marginBottom: 16
+    height: 100,
+    marginTop: 10
   },
   growthColumn: { alignItems: 'center', width: (screenWidth - 80) / 6 },
   growthBar: { 
@@ -262,21 +379,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4, 
     borderRadius: 8 
   },
-  growthBadgeText: { fontSize: 11, fontWeight: '700', color: '#10B981', marginLeft: 4 },
-  growthCaption: { fontSize: 12, color: '#64748B', fontStyle: 'italic', textAlign: 'center' },
-  geoContainer: { marginTop: 10 },
-  geoRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingVertical: 14, 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#F8FAFC' 
-  },
-  dot: { width: 10, height: 10, borderRadius: 5, marginRight: 12 },
-  geoName: { flex: 1, fontSize: 14, fontWeight: '600', color: '#334155' },
-  geoValueContainer: { alignItems: 'flex-end' },
-  geoCount: { fontSize: 13, fontWeight: '700', color: '#1E293B' },
-  geoPercent: { fontSize: 11, fontWeight: '600', color: '#94A3B8' }
+  growthBadgeText: { fontSize: 11, fontWeight: '700', color: '#10B981', marginLeft: 4 }
 });
 
 export default InsightsScreen;
