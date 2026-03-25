@@ -5,6 +5,8 @@ import {
   SafeAreaView, FlatList
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import designSystem from '../theme/designSystem';
 
 const { width } = Dimensions.get('window');
 
@@ -94,8 +96,8 @@ const AdminRecordingsDashboard = ({
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Overview Cards */}
-      <View style={styles.overviewDashboard}>
-        <Text style={styles.overviewLabel}>Video Overview</Text>
+      <LinearGradient colors={['#6366F1', '#4F46E5']} style={styles.premiumOverview}>
+        <Text style={styles.premiumLabel}>Video Infrastructure & Analytics</Text>
         <View style={styles.statsGrid}>
           <TouchableOpacity 
             onPress={() => {
@@ -104,18 +106,21 @@ const AdminRecordingsDashboard = ({
               setFilterStatus('All');
               setShowTrashOnly(false);
             }} 
-            style={[styles.statBox, !showTrashOnly && styles.statBoxActive]}
+            style={[styles.glassStat, !showTrashOnly && styles.glassStatActive]}
           >
-            <Text style={styles.statValue}>{totalVideos}</Text>
-            <Text style={styles.statSubLabel}>Total Videos</Text>
+            <Ionicons name="videocam" size={20} color="#FFF" style={{ marginBottom: 8 }} />
+            <Text style={styles.premiumStatValue}>{totalVideos}</Text>
+            <Text style={styles.premiumStatLabel}>Total Videos</Text>
           </TouchableOpacity>
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{(totalVideos * 2.2).toFixed(1)} <Text style={styles.unit}>GB</Text></Text>
-            <Text style={styles.statSubLabel}>Storage</Text>
+          <View style={styles.glassStat}>
+            <Ionicons name="server-outline" size={20} color="#FFF" style={{ marginBottom: 8 }} />
+            <Text style={styles.premiumStatValue}>{(totalVideos * 1.8).toFixed(1)} <Text style={styles.premiumUnit}>GB</Text></Text>
+            <Text style={styles.premiumStatLabel}>Storage Used</Text>
           </View>
-          <TouchableOpacity onPress={() => setShowTodayVideosPopup(true)} style={styles.statBox}>
-            <Text style={styles.statValue}>{videosToday}</Text>
-            <Text style={styles.statSubLabel}>Today</Text>
+          <TouchableOpacity onPress={() => setShowTodayVideosPopup(true)} style={styles.glassStat}>
+            <Ionicons name="today" size={20} color="#FFF" style={{ marginBottom: 8 }} />
+            <Text style={styles.premiumStatValue}>{videosToday}</Text>
+            <Text style={styles.premiumStatLabel}>Uploaded Today</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.statsGrid}>
@@ -127,27 +132,27 @@ const AdminRecordingsDashboard = ({
                 Alert.alert("Admin Feedback", "No Review required. All deletion requests have been actioned.");
               }
             }} 
-            style={[styles.statBox, styles.statBoxWarning]}
+            style={[styles.glassStat, styles.glassStatWarning]}
           >
-            <Text style={[styles.statValue, styles.textWarning]}>{pendingDeletions}</Text>
-            <Text style={[styles.statSubLabel, styles.textWarning]}>Pending Deletions</Text>
+            <Text style={styles.premiumStatValue}>{pendingDeletions}</Text>
+            <Text style={styles.premiumStatLabel}>Requested Delete</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             onPress={() => {
               setFilterStatus('All');
               setShowTrashOnly(true);
             }} 
-            style={[styles.statBox, showTrashOnly && styles.statBoxActive]}
+            style={[styles.glassStat, showTrashOnly && styles.glassStatActive]}
           >
-            <Text style={styles.statValue}>{trashVideosCount}</Text>
-            <Text style={styles.statSubLabel}>Trash / Removed</Text>
+            <Text style={styles.premiumStatValue}>{trashVideosCount}</Text>
+            <Text style={styles.premiumStatLabel}>Trash Bin</Text>
           </TouchableOpacity>
-          <View style={[styles.statBox, styles.statBoxSuccess]}>
-            <Text style={[styles.statValue, styles.textSuccess]}>₹{totalRevenue.toLocaleString()}</Text>
-            <Text style={[styles.statSubLabel, styles.textSuccess]}>Total Revenue</Text>
+          <View style={[styles.glassStat, styles.glassStatSuccess]}>
+            <Text style={styles.premiumStatValue}>₹{(totalRevenue/1000).toFixed(1)}k</Text>
+            <Text style={styles.premiumStatLabel}>Est. Revenue</Text>
           </View>
         </View>
-      </View>
+      </LinearGradient>
 
       {/* Search & Filter */}
       <View style={styles.searchContainer}>
@@ -394,28 +399,62 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     paddingTop: 16,
   },
-  overviewDashboard: {
-    backgroundColor: '#FFFFFF',
+  premiumOverview: {
     padding: 24,
     borderRadius: 32,
     marginHorizontal: 16,
     marginBottom: 24,
-    shadowColor: '#6366F1',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.05,
-    shadowRadius: 20,
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
+    ...designSystem.shadows.indigo,
   },
-  overviewLabel: {
-    color: '#94A3B8',
+  premiumLabel: {
+    color: 'rgba(255, 255, 255, 0.9)',
     fontSize: 10,
     fontWeight: '900',
     textTransform: 'uppercase',
     letterSpacing: 2,
     marginBottom: 20,
     textAlign: 'center',
+  },
+  glassStat: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 24,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+    justifyContent: 'center',
+  },
+  glassStatActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+  },
+  glassStatWarning: {
+    backgroundColor: 'rgba(254, 215, 170, 0.15)',
+    borderColor: 'rgba(254, 215, 170, 0.25)',
+  },
+  glassStatSuccess: {
+    backgroundColor: 'rgba(187, 247, 208, 0.15)',
+    borderColor: 'rgba(187, 247, 208, 0.25)',
+  },
+  premiumStatValue: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  premiumUnit: {
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '700',
+  },
+  premiumStatLabel: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 7,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    marginTop: 6,
+    textAlign: 'center',
+    letterSpacing: 0.5,
   },
   statsGrid: {
     flexDirection: 'row',

@@ -798,66 +798,1112 @@ export default function App() {
     return success;
   };
 
-  const onUpdateSeenAdminActions = async (userId, actionIds) => {
-     if (userRole !== 'admin') return;
-     const normalized = Array.from(actionIds).map(id => String(id));
-     setSeenAdminActionIds(new Set(normalized));
-     await storage.setItem('seenAdminActionIds', normalized);
-     
-     // CRITICAL: Push updated badge state to the admin's cloud profile
-     if (currentUser) {
-        const updatedUser = { ...currentUser, seenAdminActionIds: normalized };
-        setCurrentUser(updatedUser);
-        currentUserRef.current = updatedUser;
-        syncAndSaveData({ currentUser: updatedUser });
-     }
+  const handleSaveTournament = (t) => {
+    const updated = tournaments.map(item => item.id === t.id ? t : item);
+    if (!tournaments.find(item => item.id === t.id)) updated.unshift(t);
+    setTournaments(updated);
+    syncAndSaveData({ tournaments: updated });
   };
 
-  const onUpdateVisitedAdminSubTabs = async (tabs) => {
-     if (userRole !== 'admin') return;
-     const normalized = Array.from(tabs);
-     setVisitedAdminSubTabs(new Set(normalized));
-     await storage.setItem('visitedAdminSubTabs', normalized);
-     
-     // CRITICAL: Push updated badge state to the admin's cloud profile
-     if (currentUser) {
-        const updatedUser = { ...currentUser, visitedAdminSubTabs: normalized };
-        setCurrentUser(updatedUser);
-        currentUserRef.current = updatedUser;
-        syncAndSaveData({ currentUser: updatedUser });
-     }
-  };
+  const handleSaveVideo = (v) => {
+    const isNew = !matchVideos.find(item => item.id === v.id);
+    const updatedVideos = matchVideos.map(item => item.id === v.id ? v : item);
+    if (isNew) updatedVideos.unshift(v);
+    
+    let updatedPlayers = players;
+    const recipientIds = new Set();
 
-  const onVerifyAccount = (type) => {
-    if (!currentUser) return;
-    const updated = { 
-      ...currentUser, 
-      [`is${type.charAt(0).toUpperCase() + type.slice(1)}Verified`]: true 
-    };
-    
-    // PERMANENCE FIX: Update both currentUser session and global players array
-    setCurrentUser(updated);
-    currentUserRef.current = updated;
-    
-    // Sync to cloud IMMEDIATELY to prevent state loss on re-login
-    const updatedPlayers = players.map(p => 
-      String(p.id).toLowerCase() === String(updated.id).toLowerCase() ? updated : p
-    );
+    if (isNew) {
+      const match = matches.find(m => m.id === v.matchId);
+      const tournament = tournaments.find(t => t.id === v.tournamentId);
+      
+      [
+        ...(match?.player1Id ? [match.player1Id] : []),
+        ...(match?.player2Id ? [match.player2Id] : []),
+        ...(tournament?.assignedCoachId ? [tournament.assignedCoachId] : [])
+      ].forEach(id => recipientIds.add(id));
+
+      updatedPlayers = players.map(p => {
+        if (recipientIds.has(p.id)) {
+            const notif = {
+                id: `notif-${Date.now()}-${p.id}`,
+                title: 'New Video Uploaded',
+                message: `Recording for match ${v.matchId} is now available.`,
+                date: new Date().toISOString(),
+                read: false,
+                type: 'video',
+                tournamentId: v.tournamentId
+            };
+            return { ...p, notifications: [notif, ...(p.notifications || [])] };
+        }
+        return p;
+      });
+    }
+
+    setMatchVideos(updatedVideos);
     setPlayers(updatedPlayers);
-    
-    syncAndSaveData({ 
-      currentUser: updated, 
-      players: updatedPlayers 
-    });
-    
-    logger.logAction('ACCOUNT_VERIFIED', { type, userId: updated.id });
+
+    const updates = {
+      matchVideos: updatedVideos,
+      players: updatedPlayers
+    };
+
+    if (isNew && currentUser && recipientIds.has(currentUser.id)) {
+      const updatedUser = updatedPlayers.find(p => p.id === currentUser.id);
+      setCurrentUser(updatedUser);
+      updates.currentUser = updatedUser;
+    }
+
+    syncAndSaveData(updates);
+
+    if (isNew && recipientIds.size > 0) {
+      Alert.alert(
+        "Video Uploaded",
+        `Notifications sent to ${recipientIds.size} participants for match ${v.matchId}.`
+      );
+    }
+
+    // Processing simulation (remains local-only until finished)
+    if (isNew) {
+      setTimeout(() => {
+        setMatchVideos(prev => {
+          const final = prev.map(item => {
+            if (item.id === v.id) {
+              return { 
+                ...item, 
+                status: 'ready',
+                videoUrl: config.sanitizeUrl(item.videoUrl),
+                previewUrl: config.sanitizeUrl(item.previewUrl),
+                watermarkedUrl: config.sanitizeUrl(item.watermarkedUrl)
+              };
+            }
+            return item;
+          });
+          pushStateToCloud({ matchVideos: final });
+          storage.setItem('matchVideos', final);
+          return final;
+        });
+        console.log(`--- VIDEO ${v.id} PROCESSING COMPLETE ---`);
+      }, 5000);
+    }
   };
 
+  const handleSyncUpdate = async (updates) => {
+    const currentU = currentUserRef.current;
+    const currentP = playersRef.current;
+    
+    logger.logAction('SYNC_UPDATE_INIT', { 
+        keys: Object.keys(updates), 
+        hasUser: !!updates.currentUser,
+        avatar: updates.currentUser?.avatar 
+    });
+
+    // 1. Mirror components using 'players' array
+    if (updates.players) {
+        setPlayers(updates.players);
+        playersRef.current = updates.players;
+    }
+
+    // 2. Protect current session. NEVER inherently trust updates.currentUser
+    if (currentU) {
+        if (currentU.role === 'admin' && updates.currentUser) {
+            // ADMIN BYPASS: The Admin ghost-account is intentionally excluded from the global players array.
+            setCurrentUser(updates.currentUser);
+            currentUserRef.current = updates.currentUser;
+        } else {
+            // Soft update the local session from the matching global player record
+            const matchingGlobalUser = (updates.players || currentP).find(p => String(p.id).toLowerCase() === String(currentU.id).toLowerCase());
+            if (matchingGlobalUser) {
+                setCurrentUser(matchingGlobalUser);
+                currentUserRef.current = matchingGlobalUser;
+            }
+        }
+    } else if (updates.currentUser && !updates.players) {
+        // Edge case: Local immediate UI updates before backend turnaround
+        setCurrentUser(updates.currentUser);
+        currentUserRef.current = updates.currentUser;
+        
+        const u = updates.currentUser;
+        const updatedPlayers = currentP.map(p => 
+          String(p.id).toLowerCase() === String(u.id).toLowerCase() ? u : p
+        );
+        if (!updatedPlayers.some(p => String(p.id).toLowerCase() === String(u.id).toLowerCase())) {
+          updatedPlayers.push(u);
+        }
+        setPlayers(updatedPlayers);
+        playersRef.current = updatedPlayers;
+    }
+
+    const success = await syncAndSaveData(updates);
+    logger.logAction('SYNC_UPDATE_FINISH', { success });
+    return success;
+  };
+
+  const handleLogTrace = (action, targetType, targetId, details, adminId = 'system') => {
+    const newLog = {
+      id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      action,
+      targetType,
+      targetId,
+      details: typeof details === 'string' ? details : JSON.stringify(details),
+      adminId,
+      timestamp: new Date().toISOString()
+    };
+    setAuditLogs(prev => {
+      const updated = [newLog, ...prev].slice(0, 500); // Keep last 500 logs
+      syncAndSaveData({ auditLogs: updated });
+      return updated;
+    });
+  };
+
+  const handlers = {
+    onLogin: (role, user) => {
+      logger.logAction('USER_LOGIN', { id: user.id, email: user.email, role: role });
+      handleLogin(role, user);
+    },
+    onLogout: () => {
+      if (currentUser) logger.logAction('USER_LOGOUT', { id: currentUser.id });
+      handleLogout();
+    },
+    onResetPassword: async (userId, newPassword) => {
+      const updatedPlayers = players.map(p => 
+        p.id === userId ? { ...p, password: newPassword } : p
+      );
+      setPlayers(updatedPlayers);
+      await storage.setItem('players', updatedPlayers);
+      return await pushStateToCloud({ players: updatedPlayers }, true);
+    },
+    loadData: loadData,
+    onToggleCloud: () => {
+      const newValue = !isUsingCloud;
+      setIsUsingCloud(newValue);
+      storage.setItem('isUsingCloud', newValue);
+      logger.logAction('ENV_SWITCH', { isUsingCloud: newValue });
+      // Give state a moment to settle then reload
+      setTimeout(() => {
+        setIsLoading(true);
+        loadData(true, true);
+      }, 100);
+    },
+    isUsingCloud,
+    seenAdminActionIds,
+    setSeenAdminActionIds: (ids) => {
+      const normalized = new Set(Array.from(ids).map(id => String(id)));
+      setSeenAdminActionIds(normalized);
+      storage.setItem('seenAdminActionIds', Array.from(normalized));
+      if (currentUserRef.current?.role === 'admin') {
+        handleSyncUpdate({ 
+          currentUser: { ...currentUserRef.current, seenAdminActionIds: Array.from(normalized) } 
+        });
+      }
+    },
+    visitedAdminSubTabs,
+    setVisitedAdminSubTabs: (tabs) => {
+      setVisitedAdminSubTabs(tabs);
+      storage.setItem('visitedAdminSubTabs', Array.from(tabs));
+      if (currentUserRef.current?.role === 'admin') {
+        handleSyncUpdate({ 
+          currentUser: { ...currentUserRef.current, visitedAdminSubTabs: Array.from(tabs) } 
+        });
+      }
+    },
+    setIsProfileEditActive, // Pass setter to ProfileScreen
+    onSaveTournament: handleSaveTournament,
+    onSaveVideo: handleSaveVideo,
+    onUpdateUser: (u) => { 
+       // Required for new Session Sandbox: mutating local currentUser requires explicitly matching the global players array
+       const currentP = playersRef.current;
+       const updatedPlayers = currentP.map(p => 
+          String(p.id).toLowerCase() === String(u.id).toLowerCase() ? u : p
+       );
+       handleSyncUpdate({ currentUser: u, players: updatedPlayers });
+    },
+    onLogTrace: handleLogTrace,
+    onManualSync: () => {
+      logger.logAction('Manual Sync Clicked');
+      loadData(true, true); // Don't show full-screen loader for force sync
+    },
+    onRegisterUser: handleRegisterUser,
+    onVerifyAccount: (type) => {
+      const currentU = currentUserRef.current;
+      const currentP = playersRef.current;
+      if (!currentU) return;
+      
+      const updatedUser = {
+        ...currentU,
+        [type === 'email' ? 'isEmailVerified' : 'isPhoneVerified']: true
+      };
+      
+      const updatedPlayers = currentP.map(p => 
+        String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p
+      );
+      
+      handleSyncUpdate({ currentUser: updatedUser, players: updatedPlayers });
+      console.log(`✅ ${type} verification synchronized for user ${updatedUser.id}`);
+    },
+    onBatchUpdate: (updates) => {
+        handleSyncUpdate(updates);
+    },
+    isCloudOnline,
+    isSyncing,
+    lastSyncTime,
+    onTopUp: (amount) => {
+      if (!currentUser) return;
+      const updatedUser = {
+        ...currentUser,
+        credits: (currentUser.credits || 0) + amount,
+        walletHistory: [
+          {
+            id: Date.now().toString(),
+            type: 'credit',
+            amount: amount,
+            description: 'Wallet Top Up',
+            date: new Date().toISOString()
+          },
+          ...(currentUser.walletHistory || [])
+        ]
+      };
+      const isMe = currentUserRef.current && String(updatedUser.id).toLowerCase() === String(currentUserRef.current.id).toLowerCase();
+      if (isMe) {
+        setCurrentUser(updatedUser);
+        currentUserRef.current = updatedUser;
+      }
+
+      const updatedPlayers = players.map(p => 
+        String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p
+      );
+      setPlayers(updatedPlayers);
+      
+      // Unified Sync & Save
+      const updates = { players: updatedPlayers };
+      if (isMe) updates.currentUser = updatedUser;
+      syncAndSaveData(updates);
+      
+      Alert.alert("Success", `₹${amount} added to your AceTrack wallet!`);
+    },
+    onReplyTicket: (id, text, image, replyToMsg) => {
+      const msgText = typeof text === 'string' ? text : (text?.text || String(text || ''));
+      const msg = {
+        senderId: currentUserRef.current?.id || 'admin',
+        text: msgText,
+        timestamp: new Date().toISOString()
+      };
+      if (image) msg.image = image;
+      if (replyToMsg) msg.replyTo = { text: replyToMsg.text || '', senderId: replyToMsg.senderId || '' };
+      logger.logAction('SUPPORT_MSG_SENT', { ticketId: id, hasImage: !!image, hasReply: !!replyToMsg, textLen: msgText.length });
+      const updated = supportTickets.map(t => t.id === id ? { ...t, messages: [...t.messages, msg] } : t);
+      setSupportTickets(updated);
+      syncAndSaveData({ supportTickets: updated });
+    },
+    onUpdateTicketStatus: (id, status) => {
+      const updated = supportTickets.map(t => t.id === id ? { ...t, status } : t);
+      setSupportTickets(updated);
+      syncAndSaveData({ supportTickets: updated });
+
+      if (currentUser) {
+          const ticket = updated.find(t => t.id === id);
+          if (ticket && ticket.userId === currentUser.id) {
+            const notif = {
+                id: `notif-${Date.now()}`,
+                title: 'Ticket Status Updated',
+                message: `Your ticket "${ticket.title}" is now ${status}.`,
+                date: new Date().toISOString(),
+                read: false,
+                type: 'support'
+            };
+            const updatedUser = { ...currentUser, notifications: [notif, ...(currentUser.notifications || [])] };
+            const isMe = currentUserRef.current && String(updatedUser.id).toLowerCase() === String(currentUserRef.current.id).toLowerCase();
+            if (isMe) {
+              setCurrentUser(updatedUser);
+              currentUserRef.current = updatedUser;
+            }
+            
+            const updatedPlayers = players.map(p => 
+              String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p
+            );
+            setPlayers(updatedPlayers);
+            
+            // Unified Sync & Save
+            const userUpdates = { players: updatedPlayers };
+            if (isMe) userUpdates.currentUser = updatedUser;
+            syncAndSaveData(userUpdates);
+          }
+      }
+    },
+    onSaveTicket: (ticket) => {
+      const newTicket = {
+        ...ticket,
+        id: `ticket-${Date.now()}`,
+        status: 'Open',
+        createdAt: new Date().toISOString(),
+      };
+      const updated = [newTicket, ...supportTickets];
+      setSupportTickets(updated);
+      syncAndSaveData({ supportTickets: updated });
+
+      if (currentUser) {
+          const notif = {
+              id: `notif-${Date.now()}`,
+              title: 'Support Ticket Raised',
+              message: `Your ticket "${ticket.title}" has been created successfully.`,
+              date: new Date().toISOString(),
+              read: false,
+              type: 'support'
+          };
+          const updatedUser = { ...currentUser, notifications: [notif, ...(currentUser.notifications || [])] };
+          const isMe = currentUserRef.current && String(updatedUser.id).toLowerCase() === String(currentUserRef.current.id).toLowerCase();
+          if (isMe) {
+            setCurrentUser(updatedUser);
+            currentUserRef.current = updatedUser;
+            storage.setItem('currentUser', updatedUser);
+          }
+          
+          const updatedPlayers = players.map(p => 
+            String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p
+          );
+          setPlayers(updatedPlayers);
+          storage.setItem('players', updatedPlayers);
+          
+          // IMMEDIATE SYNC
+          const saveUpdates = { players: updatedPlayers };
+          if (isMe) saveUpdates.currentUser = updatedUser;
+          pushStateToCloud(saveUpdates);
+      }
+    },
+    onSaveEvaluation: (e) => {
+      const updated = evaluations.map(item => item.id === e.id ? e : item);
+      if (!evaluations.find(item => item.id === e.id)) updated.unshift(e);
+      setEvaluations(updated);
+      pushStateToCloud({ evaluations: updated });
+      storage.setItem('evaluations', updated);
+    },
+    onConfirmCoachRequest: (t) => {
+      if (!currentUser) return;
+
+      Alert.alert(
+        "Confirm Assignment",
+        "Are you sure you want to accept this coaching assignment?",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Accept",
+            onPress: () => {
+              const startOtp = Math.floor(100000 + Math.random() * 900000).toString();
+              const endOtp = Math.floor(100000 + Math.random() * 900000).toString();
+
+              const updatedTournament = {
+                ...t,
+                coachStatus: 'Coach Assigned',
+                assignedCoachId: currentUser.id,
+                assignedCoachIds: [...(t.assignedCoachIds || []), currentUser.id],
+                startOtp,
+                endOtp,
+                tournamentStarted: false,
+                ratingsModified: false
+              };
+
+              const updatedTournaments = tournaments.map(item => item.id === t.id ? updatedTournament : item);
+              setTournaments(updatedTournaments);
+              pushStateToCloud({ tournaments: updatedTournaments });
+              storage.setItem('tournaments', updatedTournaments);
+              Alert.alert("Success", "Successfully assigned as coach!");
+            }
+          }
+        ]
+      );
+    },
+    onDeclineCoachRequest: (t) => {
+      if (!currentUser) return;
+      const updated = tournaments.map(item => {
+        if (item.id === t.id) {
+          return {
+            ...item,
+            declinedCoachIds: [...(item.declinedCoachIds || []), currentUser.id]
+          };
+        }
+        return item;
+      });
+      setTournaments(updated);
+      pushStateToCloud({ tournaments: updated });
+      storage.setItem('tournaments', updated);
+      Alert.alert("Declined", "You have declined this coaching request.");
+    },
+    onStartTournament: (t) => {
+      const updated = tournaments.map(item => item.id === t.id ? { ...item, tournamentStarted: true, status: 'ongoing', currentRound: item.currentRound || 1 } : item);
+      setTournaments(updated);
+      pushStateToCloud({ tournaments: updated });
+      storage.setItem('tournaments', updated);
+      Alert.alert("Success", "Tournament started!");
+    },
+    onEndTournament: (t) => {
+      // Aggregate evaluations for final rating
+      const tournamentEvals = evaluations.filter(e => e.tournamentId === t.id);
+      const playerFinalRatings = {};
+
+      tournamentEvals.forEach(e => {
+        if (!playerFinalRatings[e.playerId]) playerFinalRatings[e.playerId] = [];
+        playerFinalRatings[e.playerId].push(e.averageScore);
+      });
+
+      // Update player ratings in state if we have evaluations
+      let updatedPlayers = players;
+      if (Object.keys(playerFinalRatings).length > 0) {
+        updatedPlayers = players.map(p => {
+          if (playerFinalRatings[p.id]) {
+            const avg = playerFinalRatings[p.id].reduce((a, b) => a + b, 0) / playerFinalRatings[p.id].length;
+            return { ...p, rating: 1000 + Math.round(avg) };
+          }
+          return p;
+        });
+        setPlayers(updatedPlayers);
+      }
+
+      const updated = tournaments.map(item => item.id === t.id ? { ...item, tournamentStarted: false, tournamentConcluded: true, status: 'completed' } : item);
+      setTournaments(updated);
+      
+      const updatePayload = { tournaments: updated };
+      if (Object.keys(playerFinalRatings).length > 0) {
+        updatePayload.players = updatedPlayers;
+      }
+      
+      pushStateToCloud(updatePayload);
+      storage.setItem('tournaments', updated);
+      if (updatePayload.players) storage.setItem('players', updatedPlayers);
+      
+      Alert.alert("Success", "Tournament concluded successfully!");
+    },
+    onApproveCoach: (id, status, reason) => {
+      const updated = players.map(p => 
+        p.id === id 
+          ? { ...p, coachStatus: status, coachRejectReason: reason, isApprovedCoach: status === 'approved' } 
+          : p
+      );
+      setPlayers(updated);
+      pushStateToCloud({ players: updated });
+      storage.setItem('players', updated);
+    },
+    onAssignCoach: (tid, cid) => {
+      const updated = tournaments.map(t => t.id === tid ? { ...t, assignedCoachId: cid, coachStatus: 'Coach Assigned' } : t);
+      setTournaments(updated);
+      pushStateToCloud({ tournaments: updated });
+      storage.setItem('tournaments', updated);
+    },
+    onRemoveCoach: (tid) => {
+      const updated = tournaments.map(t => t.id === tid ? { ...t, assignedCoachId: null, coachStatus: 'Awaiting Assignment' } : t);
+      setTournaments(updated);
+      pushStateToCloud({ tournaments: updated });
+      storage.setItem('tournaments', updated);
+    },
+    onUpdateVideoStatus: (id, status) => {
+      const updated = matchVideos.map(v => v.id === id ? { ...v, adminStatus: status } : v);
+      setMatchVideos(updated);
+      pushStateToCloud({ matchVideos: updated });
+      storage.setItem('matchVideos', updated);
+    },
+    onBulkUpdateVideoStatus: (ids, status) => {
+      const updated = matchVideos.map(v => ids.includes(v.id) ? { ...v, adminStatus: status } : v);
+      setMatchVideos(updated);
+      pushStateToCloud({ matchVideos: updated });
+      storage.setItem('matchVideos', updated);
+    },
+    onForceRefundVideo: (id) => {
+      const updated = matchVideos.map(v => v.id === id ? { ...v, refundsIssued: (v.refundsIssued || 0) + 1 } : v);
+      setMatchVideos(updated);
+      pushStateToCloud({ matchVideos: updated });
+      storage.setItem('matchVideos', updated);
+    },
+    onApproveDeleteVideo: (id) => {
+      const video = matchVideos.find(v => v.id === id);
+      if (!video) return;
+
+      // 1. Move to Removed status in matchVideos
+      const updatedVideos = matchVideos.map(v => v.id === id ? { ...v, adminStatus: 'Removed' } : v);
+
+      // 2. Process refunds for ALL players
+      const updatedPlayers = players.map(player => {
+        let credits = player.credits || 0;
+        let pVideos = player.purchasedVideos || [];
+        let pHighlights = player.purchasedHighlights || [];
+        let history = player.walletHistory || [];
+        let notifs = player.notifications || [];
+        let modified = false;
+
+        // Refund for Full Video
+        if (pVideos.includes(id)) {
+          const amount = video.price || 0;
+          credits += amount;
+          pVideos = pVideos.filter(vid => vid !== id);
+          history = [{
+            id: `ref-${Date.now()}-${Math.random()}`,
+            type: 'credit',
+            amount: amount,
+            description: `Refund: Match Deletion (${video.matchId})`,
+            date: new Date().toISOString()
+          }, ...history];
+          notifs = [{
+            id: `notif-${Date.now()}`,
+            title: 'Refund Issued',
+            message: `Video #${video.matchId} was removed. ₹${amount} refunded to wallet.`,
+            date: new Date().toISOString(),
+            read: false,
+            type: 'system'
+          }, ...notifs];
+          modified = true;
+        }
+
+        // Refund for Highlights
+        if (pHighlights.includes(id)) {
+          const hAmount = 20; // Standard highlight price
+          credits += hAmount;
+          pHighlights = pHighlights.filter(vid => vid !== id);
+          history = [{
+            id: `refh-${Date.now()}-${Math.random()}`,
+            type: 'credit',
+            amount: hAmount,
+            description: `Refund: AI Highlights (${video.matchId})`,
+            date: new Date().toISOString()
+          }, ...history];
+          modified = true;
+        }
+
+        if (modified) {
+          return {
+            ...player,
+            credits,
+            purchasedVideos: pVideos,
+            purchasedHighlights: pHighlights,
+            walletHistory: history,
+            notifications: notifs
+          };
+        }
+        return player;
+      });
+
+      setMatchVideos(updatedVideos);
+      setPlayers(updatedPlayers);
+
+      pushStateToCloud({
+        matchVideos: updatedVideos,
+        players: updatedPlayers
+      });
+
+      storage.setItem('matchVideos', updatedVideos);
+      storage.setItem('players', updatedPlayers);
+      
+      Alert.alert("Deletion Approved", "Video moved to trash and refunds issued to all purchasers.");
+    },
+    onRejectDeleteVideo: (id) => {
+      const updated = matchVideos.map(v => v.id === id ? { ...v, adminStatus: 'Active' } : v);
+      setMatchVideos(updated);
+      pushStateToCloud({ matchVideos: updated });
+      storage.setItem('matchVideos', updated);
+    },
+    onPermanentDeleteVideo: (id) => {
+      const updated = matchVideos.filter(v => v.id !== id);
+      setMatchVideos(updated);
+      pushStateToCloud({ matchVideos: updated });
+      storage.setItem('matchVideos', updated);
+    },
+    onCancelVideo: (id) => {
+      const updated = matchVideos.filter(v => v.id !== id);
+      setMatchVideos(updated);
+      pushStateToCloud({ matchVideos: updated });
+      storage.setItem('matchVideos', updated);
+    },
+    onRequestDeletion: (id, reason) => {
+      const updated = matchVideos.map(v => v.id === id ? { ...v, adminStatus: 'Deletion Requested', deletionReason: reason } : v);
+      setMatchVideos(updated);
+      pushStateToCloud({ matchVideos: updated });
+      storage.setItem('matchVideos', updated);
+    },
+    onUnlockVideo: (vid, price, method) => {
+      if (!currentUser) return;
+      const notif = {
+        id: `notif-${Date.now()}`,
+        title: 'Video Unlocked',
+        message: `You have successfully unlocked a match recording.`,
+        date: new Date().toISOString(),
+        read: false,
+        type: 'video'
+      };
+      const updatedUser = {
+        ...currentUser,
+        credits: method === 'wallet' ? (currentUser.credits || 0) - price : (currentUser.credits || 0),
+        purchasedVideos: [...(currentUser.purchasedVideos || []), vid],
+        notifications: [notif, ...(currentUser.notifications || [])],
+        walletHistory: method === 'wallet' ? [
+          {
+            id: Date.now().toString(),
+            type: 'debit',
+            amount: price,
+            description: `Unlocked Match Recording`,
+            date: new Date().toISOString()
+          },
+          ...(currentUser.walletHistory || [])
+        ] : (currentUser.walletHistory || [])
+      };
+      const updatedMatchVideos = matchVideos.map(v => 
+        v.id === vid ? { 
+          ...v, 
+          purchases: (v.purchases || 0) + 1, 
+          revenue: (v.revenue || 0) + price 
+        } : v
+      );
+      setMatchVideos(updatedMatchVideos);
+      
+      const updatedPlayers = players.map(p => p.id === currentUser.id ? updatedUser : p);
+      setPlayers(updatedPlayers);
+
+      syncAndSaveData({
+        currentUser: updatedUser,
+        players: updatedPlayers,
+        matchVideos: updatedMatchVideos
+      });
+
+      Alert.alert("Success", "Match recording unlocked successfully!");
+    },
+    onPurchaseAiHighlights: (vid, uid, method) => {
+      if (!currentUser) return;
+      const price = 20;
+      const notif = {
+        id: `notif-${Date.now()}`,
+        title: 'AI Highlights Ready',
+        message: `Your AI highlights for video ${vid} have been generated.`,
+        date: new Date().toISOString(),
+        read: false,
+        type: 'video'
+      };
+      const updatedUser = {
+        ...currentUser,
+        credits: method === 'wallet' ? (currentUser.credits || 0) - price : (currentUser.credits || 0),
+        purchasedHighlights: [...(currentUser.purchasedHighlights || []), vid],
+        notifications: [notif, ...(currentUser.notifications || [])],
+        walletHistory: method === 'wallet' ? [
+          {
+            id: Date.now().toString(),
+            type: 'debit',
+            amount: price,
+            description: `AI Highlights Unlock`,
+            date: new Date().toISOString()
+          },
+          ...(currentUser.walletHistory || [])
+        ] : (currentUser.walletHistory || [])
+      };
+      const updatedMatchVideos = matchVideos.map(v => 
+        v.id === vid ? { 
+          ...v, 
+          revenue: (v.revenue || 0) + price 
+        } : v
+      );
+      setMatchVideos(updatedMatchVideos);
+
+      const updatedPlayers = players.map(p => p.id === currentUser.id ? updatedUser : p);
+      setPlayers(updatedPlayers);
+
+      syncAndSaveData({
+        currentUser: updatedUser,
+        players: updatedPlayers,
+        matchVideos: updatedMatchVideos
+      });
+      Alert.alert("Success", "AI Highlights generated successfully!");
+    },
+    onVideoPlay: (vid, uid) => {
+      const updated = matchVideos.map(v => {
+        if (v.id === vid) {
+          const currentViewers = v.viewerIds || [];
+          if (!uid || currentViewers.includes(uid)) return v;
+          return { ...v, viewerIds: [...currentViewers, uid] };
+        }
+        return v;
+      });
+      setMatchVideos(updated);
+      syncAndSaveData({ matchVideos: updated });
+    },
+    onToggleFavourite: (vid) => {
+      if (!currentUser) return;
+      const isFav = (currentUser.favouritedVideos || []).includes(vid);
+      const updatedFavs = isFav 
+        ? (currentUser.favouritedVideos || []).filter(id => id !== vid)
+        : [...(currentUser.favouritedVideos || []), vid];
+      
+      const updatedUser = { ...currentUser, favouritedVideos: updatedFavs };
+      setCurrentUser(updatedUser);
+      const updatedPlayers = players.map(p => p.id === currentUser.id ? updatedUser : p);
+      setPlayers(updatedPlayers);
+      syncAndSaveData({ 
+        players: updatedPlayers,
+        currentUser: updatedUser 
+      });
+    },
+    onUpdateTournament: (t) => {
+      handleSaveTournament(t);
+    },
+    onSaveCoachComment: (tid, comment) => {
+      const updated = tournaments.map(t => {
+        if (t.id === tid) {
+          return {
+            ...t,
+            coachComments: [...(t.coachComments || []), {
+              id: Date.now(),
+              coachId: currentUser.id,
+              text: comment,
+              timestamp: new Date().toISOString()
+            }]
+          };
+        }
+        return t;
+      });
+      setTournaments(updated);
+      syncAndSaveData({ tournaments: updated });
+    },
+    onRegister: (t, method, totalCost, isRescheduling, reschedulingFrom) => {
+      if (!currentUser) return;
+
+      logger.logAction('TOURNAMENT_ENROLL', { 
+        tournamentId: t.id, 
+        name: t.name, 
+        method, 
+        cost: totalCost,
+        isRescheduling 
+      });
+
+      // 1. Calculate Updated Tournaments
+      const updatedTournaments = tournaments.map(item => {
+        if (isRescheduling && item.id === reschedulingFrom) {
+          return { ...item, registeredPlayerIds: (item.registeredPlayerIds || []).filter(id => id !== currentUser.id) };
+        }
+        if (item.id === t.id) {
+          const updatedStatuses = { ...(item.playerStatuses || {}) };
+          updatedStatuses[currentUser.id] = 'Registered';
+
+          return {
+            ...item,
+            registeredPlayerIds: [...(item.registeredPlayerIds || []), currentUser.id],
+            pendingPaymentPlayerIds: (item.pendingPaymentPlayerIds || []).filter(id => id !== currentUser.id),
+            playerStatuses: updatedStatuses
+          };
+        }
+        return item;
+      });
+
+      // 2. Calculate Updated User
+      let newCredits = currentUser.credits || 0;
+      if (totalCost < 0) {
+        newCredits += Math.abs(totalCost);
+      } else if (totalCost > 0 && method === 'credits') {
+        newCredits -= totalCost;
+      }
+
+      const newRescheduleCounts = { ...(currentUser.rescheduleCounts || {}) };
+      if (isRescheduling) {
+        newRescheduleCounts[t.id] = (newRescheduleCounts[reschedulingFrom] || 0) + 1;
+        delete newRescheduleCounts[reschedulingFrom];
+      }
+
+      const newHistory = [...(currentUser.walletHistory || [])];
+      if (totalCost !== 0 && method === 'credits') {
+        newHistory.unshift({
+          id: Date.now().toString(),
+          type: totalCost < 0 ? 'credit' : 'debit',
+          amount: Math.abs(totalCost),
+          description: isRescheduling ? `Arena Swap: ${t.title}` : `Registration: ${t.title}`,
+          date: new Date().toISOString()
+        });
+      }
+
+      const notif = {
+        id: `notif-${Date.now()}`,
+        title: isRescheduling ? 'Arena Swapped' : 'Registration Confirmed',
+        message: isRescheduling ? `Your registration has been moved to ${t.title}.` : `You are successfully registered for ${t.title}.`,
+        date: new Date().toISOString(),
+        read: false,
+        type: 'general',
+        tournamentId: t.id
+      };
+      const updatedUser = {
+        ...currentUser,
+        credits: newCredits,
+        rescheduleCounts: newRescheduleCounts,
+        walletHistory: newHistory,
+        registeredTournamentIds: [...(currentUser.registeredTournamentIds || []), t.id],
+        notifications: [notif, ...(currentUser.notifications || [])]
+      };
+
+      // 3. Calculate Updated Players list
+      const isExistingPlayer = players.some(p => String(p.id).toLowerCase() === String(currentUser.id).toLowerCase());
+      const updatedPlayers = isExistingPlayer 
+        ? players.map(p => String(p.id).toLowerCase() === String(currentUser.id).toLowerCase() ? updatedUser : p)
+        : [updatedUser, ...players];
+
+      // 4. Apply all State Updates
+      setTournaments(updatedTournaments);
+      setPlayers(updatedPlayers);
+      if (isRescheduling) setReschedulingFrom(null);
+
+      const isMe = currentUserRef.current && String(updatedUser.id).toLowerCase() === String(currentUserRef.current.id).toLowerCase();
+      if (isMe) {
+        setCurrentUser(updatedUser);
+        currentUserRef.current = updatedUser;
+      }
+
+      // 5. Unified Sync & Save
+      const syncUpdates = {
+        tournaments: updatedTournaments,
+        players: updatedPlayers
+      };
+      if (isMe) syncUpdates.currentUser = updatedUser;
+      syncAndSaveData(syncUpdates);
+    },
+    onReschedule: (t) => {
+      setReschedulingFrom(t.id);
+    },
+    onCancelReschedule: () => setReschedulingFrom(null),
+    onOptOut: (t) => {
+      if (!currentUser) return;
+
+      const confirmCancel = () => {
+        if (currentUser.role === 'coach') {
+          const updatedTournaments = tournaments.map(item => {
+            if (item.id === t.id) {
+              const newCoachOtps = { ...(item.coachOtps || {}) };
+              delete newCoachOtps[currentUser.id];
+              return {
+                ...item,
+                assignedCoachId: item.assignedCoachId === currentUser.id ? undefined : item.assignedCoachId,
+                assignedCoachIds: (item.assignedCoachIds || []).filter(id => id !== currentUser.id),
+                coachOtps: newCoachOtps,
+                coachStatus: 'Awaiting Coach Confirmation'
+              };
+            }
+            return item;
+          });
+          setTournaments(updatedTournaments);
+          syncAndSaveData({ tournaments: updatedTournaments });
+          Alert.alert("Success", "Coach assignment cancelled. Your OTP has been invalidated.");
+          return;
+        }
+
+        const isRegistered = (t.registeredPlayerIds || []).includes(currentUser.id);
+
+        const getUpdatedTournaments = () => {
+          return tournaments.map(item => {
+            if (item.id === t.id) {
+              const isActuallyRegistered = (item.registeredPlayerIds || []).includes(currentUser.id);
+              const updatedStatuses = { ...(item.playerStatuses || {}) };
+              updatedStatuses[currentUser.id] = isActuallyRegistered ? 'Opted-Out' : 'Denied';
+
+              return {
+                ...item,
+                registeredPlayerIds: (item.registeredPlayerIds || []).filter(pid => String(pid).toLowerCase() !== String(currentUser.id).toLowerCase()),
+                pendingPaymentPlayerIds: (item.pendingPaymentPlayerIds || []).filter(pid => String(pid).toLowerCase() !== String(currentUser.id).toLowerCase()),
+                playerStatuses: updatedStatuses
+              };
+            }
+            return item;
+          });
+        };
+
+        if (!isRegistered) {
+          const updatedTournaments = getUpdatedTournaments();
+          setTournaments(updatedTournaments);
+          syncAndSaveData({ tournaments: updatedTournaments });
+          Alert.alert("Success", "Invitation/Request cancelled successfully.");
+          return;
+        }
+
+        // If registered, ask for refund choice
+        Alert.alert(
+          "Refund Method",
+          "How would you like to receive your refund?",
+          [
+            {
+              text: "Refund to Wallet",
+              onPress: () => {
+                const updatedTournaments = getUpdatedTournaments();
+                const updatedUser = {
+                  ...currentUser,
+                  credits: (currentUser.credits || 0) + (t.entryFee || 0),
+                  cancelledTournamentIds: [...(currentUser.cancelledTournamentIds || []), t.id],
+                  walletHistory: [
+                    {
+                      id: Date.now().toString(),
+                      type: 'credit',
+                      amount: t.entryFee,
+                      description: `Refund: ${t.title}`,
+                      date: new Date().toISOString()
+                    },
+                    ...(currentUser.walletHistory || [])
+                  ]
+                };
+                const updatedPlayers = players.map(p => p.id === currentUser.id ? updatedUser : p);
+                
+                setTournaments(updatedTournaments);
+                setPlayers(updatedPlayers);
+                
+                const isMe = currentUserRef.current && String(updatedUser.id).toLowerCase() === String(currentUserRef.current.id).toLowerCase();
+                if (isMe) {
+                  setCurrentUser(updatedUser);
+                  currentUserRef.current = updatedUser;
+                }
+
+                const syncUpdates = { 
+                  tournaments: updatedTournaments, 
+                  players: updatedPlayers
+                };
+                if (isMe) syncUpdates.currentUser = updatedUser;
+                syncAndSaveData(syncUpdates);
+                
+                Alert.alert("Success", `₹${t.entryFee} credited to your AceTrack wallet.`);
+              }
+            },
+            {
+              text: "Refund to Source Account",
+              onPress: () => {
+                const updatedTournaments = getUpdatedTournaments();
+                const updatedUser = {
+                  ...currentUser,
+                  cancelledTournamentIds: [...(currentUser.cancelledTournamentIds || []), t.id]
+                };
+                const updatedPlayers = players.map(p => p.id === currentUser.id ? updatedUser : p);
+                
+                setTournaments(updatedTournaments);
+                setPlayers(updatedPlayers);
+                
+                const isMe = currentUserRef.current && String(updatedUser.id).toLowerCase() === String(currentUserRef.current.id).toLowerCase();
+                if (isMe) {
+                  setCurrentUser(updatedUser);
+                  currentUserRef.current = updatedUser;
+                }
+
+                const syncUpdates = { 
+                  tournaments: updatedTournaments, 
+                  players: updatedPlayers
+                };
+                if (isMe) syncUpdates.currentUser = updatedUser;
+                syncAndSaveData(syncUpdates);
+                
+                Alert.alert("Refund Initiated", "Refund will be processed to your source account within 5-7 working days.");
+              }
+            },
+            { text: "Keep Registration", style: "cancel" }
+          ]
+        );
+      };
+
+      Alert.alert(
+        "Confirm Opt-out",
+        currentUser.role === 'coach' ? "Are you sure you want to cancel this coaching assignment?" : "Are you sure you want to opt-out of this tournament?",
+        [
+          { text: "No, Keep it", style: "cancel" },
+          { text: "Yes, Proceed", onPress: confirmCancel }
+        ]
+      );
+    },
+    onLogFailedOtp: (tid, cid, otp) => {
+      const updated = tournaments.map(t => {
+        if (t.id === tid) {
+          return {
+            ...t,
+            failedOtpAttempts: [
+              ...(t.failedOtpAttempts || []),
+              { coachId: cid, otp, timestamp: new Date().toISOString() }
+            ]
+          };
+        }
+        return t;
+      });
+      setTournaments(updated);
+      syncAndSaveData({ tournaments: updated });
+      console.log(`Failed OTP logged for tournament ${tid}, coach ${cid}`);
+    },
+    setPlayers: (updater) => {
+      const updated = typeof updater === 'function' ? updater(players) : updater;
+      setPlayers(updated);
+      syncAndSaveData({ players: updated });
+    },
+    onSendChatMessage: (messages) => {
+      if (!currentUser) return;
+      const updated = {
+        ...chatbotMessages,
+        [currentUser.id]: messages
+      };
+      setChatbotMessages(updated);
+      syncAndSaveData({ chatbotMessages: updated });
+    },
+    onUploadLogs: async () => {
+      const activeUser = currentUserRef.current || currentUser; // Fallback to state
+      
+      logger.logAction('DIAGNOSTICS_UPLOAD_CLICK', { 
+        hasRef: !!currentUserRef.current, 
+        hasState: !!currentUser,
+        userId: activeUser?.id 
+      });
+
+      console.log("📤 Attempting to upload diagnostics...");
+      
+      if (!activeUser) {
+        console.warn("🛑 No user detected in Ref or State during upload.");
+        logger.logAction('DIAGNOSTICS_UPLOAD_ABORT', { error: 'No user detected' });
+        Alert.alert("Error", "No user logged in. Please log in again to send diagnostics.");
+        return;
+      }
+      
+      setIsUploadingLogs(true);
+      try {
+        const logs = logger.getLogs();
+        console.log(`📋 Sending ${logs.length} log entries...`);
+        
+        const targetCloudUrl = 'https://acetrack-api-q39m.onrender.com';
+        const activeApiUrl = isUsingCloud ? targetCloudUrl : config.API_BASE_URL;
+        
+        const response = await fetch(`${activeApiUrl}/api/diagnostics`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-ace-api-key': config.ACE_API_KEY
+          },
+          body: JSON.stringify({
+            username: activeUser.name || activeUser.email || 'Unknown User',
+            logs: logs,
+            state: {
+              currentUser: activeUser,
+              tournamentsCount: tournaments.length,
+              matchVideosCount: matchVideos.length,
+              matchesCount: matches.length,
+              role: userRole,
+              isUsingCloud,
+              appVersion: APP_VERSION
+            },
+            prefix: 'user_report',
+            deviceId: localDeviceIdRef.current
+          })
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          logger.logAction('DIAGNOSTICS_UPLOAD_SUCCESS', { filename: result.filename });
+          console.log("✅ Diagnostics uploaded successfully:", result.filename);
+          Alert.alert("Success", "Diagnostic logs have been sent to the cloud.");
+        } else {
+          const errData = await response.text();
+          logger.logAction('DIAGNOSTICS_UPLOAD_FAIL', { status: response.status, error: errData });
+          console.error("❌ Diagnostics upload failed:", errData);
+          throw new Error("Failed to upload logs");
+        }
+      } catch (err) {
+        logger.logAction('DIAGNOSTICS_UPLOAD_ERROR', { error: err.message });
+        Alert.alert("Error", "Could not upload logs. Please check your internet connection.");
+      } finally {
+        setIsUploadingLogs(false);
+      }
+    },
+    isUploadingLogs
+    // ... add other handlers as needed by screens
+  };
   if (isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#0F172A', justifyContent: 'center', alignItems: 'center' }}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#EF4444" />
-        <Text style={{ color: '#94A3B8', marginTop: 16, fontWeight: 'bold', letterSpacing: 1 }}>INITIALIZING ACETRACK...</Text>
       </View>
     );
   }
@@ -865,134 +1911,229 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <ErrorBoundary>
-          <StatusBar barStyle="light-content" />
-          <NavigationContainer ref={navigationRef}>
-            <View style={{ flex: 1 }}>
-              <AppNavigator 
-                user={currentUser}
-                userRole={userRole}
-                players={players}
-                tournaments={tournaments}
-                matchVideos={matchVideos}
-                supportTickets={supportTickets}
-                evaluations={evaluations}
-                matches={matches}
-                auditLogs={auditLogs}
-                onLogin={handleLogin}
-                onLogout={handleLogout}
-                onRegisterUser={handleRegisterUser}
-                onSaveEvaluation={(ev) => syncAndSaveData({ evaluations: [ev, ...evaluations] })}
-                onSaveTicket={(st) => syncAndSaveData({ supportTickets: [st, ...supportTickets] })}
-                onReplyTicket={(id, msg) => {
-                  const updated = supportTickets.map(t => t.id === id ? { ...t, messages: [...t.messages, msg], lastUpdated: new Date().toISOString() } : t);
-                  setSupportTickets(updated);
-                  syncAndSaveData({ supportTickets: updated });
-                }}
-                onUpdateTournament={(t) => {
-                  const updated = tournaments.map(item => item.id === t.id ? t : item);
-                  setTournaments(updated);
-                  syncAndSaveData({ tournaments: updated });
-                }}
-                onStartTournament={(t) => {
-                  const updated = tournaments.map(item => item.id === t.id ? { ...item, status: 'ongoing', tournamentStarted: true, startTime: new Date().toISOString() } : item);
-                  setTournaments(updated);
-                  syncAndSaveData({ tournaments: updated });
-                }}
-                onEndTournament={(t) => {
-                  const updated = tournaments.map(item => item.id === t.id ? { ...item, status: 'completed', tournamentConcluded: true, endTime: new Date().toISOString() } : item);
-                  setTournaments(updated);
-                  syncAndSaveData({ tournaments: updated });
-                }}
-                onAssignCoach={(tid, cid) => {
-                  const updated = tournaments.map(t => t.id === tid ? { ...t, assignedCoachId: cid, coachStatus: 'Assigned' } : t);
-                  setTournaments(updated);
-                  syncAndSaveData({ tournaments: updated });
-                }}
-                onConfirmCoachRequest={(t) => {
-                   const updated = tournaments.map(item => item.id === t.id ? { ...item, assignedCoachId: currentUser.id, coachStatus: 'Confirmed' } : item);
-                   setTournaments(updated);
-                   syncAndSaveData({ tournaments: updated });
-                }}
-                onDeclineCoachRequest={(t) => {
-                   const declined = [...(t.declinedCoachIds || []), currentUser.id];
-                   const updated = tournaments.map(item => item.id === t.id ? { ...item, declinedCoachIds: declined } : item);
-                   setTournaments(updated);
-                   syncAndSaveData({ tournaments: updated });
-                }}
-                onSaveCoachComment={(tid, comment) => {
-                  const updated = tournaments.map(t => t.id === tid ? { ...t, coachComment: comment } : t);
-                  setTournaments(updated);
-                  syncAndSaveData({ tournaments: updated });
-                }}
-                onRegister={(t, method, fee, isReschedule, rescheduleFrom) => {
-                  const updatedTournaments = tournaments.map(item => {
-                    if (item.id === t.id) {
-                      return { ...item, registeredPlayerIds: [...(item.registeredPlayerIds || []), user.id] };
-                    }
-                    if (isReschedule && item.id === rescheduleFrom) {
-                       return { ...item, registeredPlayerIds: (item.registeredPlayerIds || []).filter(id => id !== user.id) };
-                    }
-                    return item;
-                  });
-                  setTournaments(updatedTournaments);
-                  const updatedUser = { ...currentUser, credits: (currentUser.credits || 0) - fee };
-                  setCurrentUser(updatedUser);
-                  syncAndSaveData({ tournaments: updatedTournaments, currentUser: updatedUser });
-                }}
-                onReschedule={(t) => setReschedulingFrom(t.id)}
-                onCancelReschedule={() => setReschedulingFrom(null)}
-                onOptOut={(t) => {
-                   const updated = tournaments.map(item => item.id === t.id ? { ...item, registeredPlayerIds: (item.registeredPlayerIds || []).filter(id => id !== user.id), pendingPaymentPlayerIds: (item.pendingPaymentPlayerIds || []).filter(id => id !== user.id) } : item);
-                   setTournaments(updated);
-                   syncAndSaveData({ tournaments: updated });
-                }}
-                isCloudOnline={isCloudOnline}
-                lastSyncTime={lastSyncTime}
-                isSyncing={isSyncing}
-                isUploadingLogs={isUploadingLogs}
-                chatbotMessages={chatbotMessages}
-                onSendChatMessage={(msg) => {
-                  const userId = currentUser?.id || 'anonymous';
-                  const updatedMap = { ...chatbotMessages, [userId]: msg };
-                  setChatbotMessages(updatedMap);
-                  syncAndSaveData({ chatbotMessages: updatedMap });
-                }}
-                onVerifyAccount={onVerifyAccount}
-                seenAdminActionIds={seenAdminActionIds}
-                onUpdateSeenAdminActions={onUpdateSeenAdminActions}
-                visitedAdminSubTabs={visitedAdminSubTabs}
-                onUpdateVisitedAdminSubTabs={onUpdateVisitedAdminSubTabs}
-                onLogFailedOtp={(tid, cid, otp) => {
-                   const log = { id: `log_${Date.now()}`, type: 'FAILED_OTP', tournamentId: tid, coachId: cid, otp, timestamp: new Date().toISOString() };
-                   syncAndSaveData({ auditLogs: [log, ...auditLogs] });
-                }}
-                onSetProfileEditActive={setIsProfileEditActive}
-              />
+      <View 
+        style={{ flex: 1 }}
+        onStartShouldSetResponderCapture={(evt) => {
+          try {
+            const { pageX, pageY } = evt.nativeEvent;
+            logger.logAction('USER_TAP', { 
+              x: Math.round(pageX), 
+              y: Math.round(pageY)
+            });
+          } catch(e) {}
+          return false; // Do not block actual interactions
+        }}
+      >
+        <NavigationContainer 
+          ref={navigationRef}
+          onStateChange={(state) => {
+            if (state) {
+              const route = state.routes[state.index];
+              logger.logAction('NAVIGATION', { 
+                screen: route.name, 
+                // Omitting full params to save log space if they are huge, but let's log keys
+                paramKeys: route.params ? Object.keys(route.params) : [] 
+              });
+            }
+          }}
+        >
+        <StatusBar barStyle="dark-content" />
+        <AppNavigator
+          user={currentUser}
+          role={userRole}
+          appVersion={APP_VERSION}
+          players={players.some(p => p.id === currentUser?.id) ? players : (currentUser ? [currentUser, ...players] : players)}
+          tournaments={tournaments}
+          matchVideos={matchVideos}
+          matches={matches}
+          tickets={supportTickets}
+          evaluations={evaluations}
+          seenAdminActionIds={seenAdminActionIds}
+          visitedAdminSubTabs={visitedAdminSubTabs}
+          setVisitedAdminSubTabs={setVisitedAdminSubTabs}
+          reschedulingFrom={reschedulingFrom}
+          auditLogs={auditLogs} 
+          onLogout={handleLogout} 
+          handlers={handlers}
+          socketRef={socketRef}
+        />
+        {currentUser && (
+          <ChatBot 
+            user={currentUser} 
+            userRole={userRole}
+            userId={currentUser?.id}
+            players={players}
+            evaluations={evaluations} 
+            chatbotMessages={chatbotMessages}
+            onSendChatMessage={handlers.onSendChatMessage}
+            tournaments={tournaments}
+            onSaveTicket={handlers.onSaveTicket}
+          />
+        )}
+
+        {/* Verification Prompt Modal */}
+        <Modal
+          visible={showVerificationPrompt}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowVerificationPrompt(false)}
+        >
+          <View style={appStyles.modalOverlay}>
+            <View style={appStyles.verificationModalContent}>
+              <View style={appStyles.verificationIconContainer}>
+                <Ionicons name="shield-checkmark" size={40} color="#EF4444" />
+              </View>
+              <Text style={appStyles.verificationTitle}>Complete Verification</Text>
+              <Text style={appStyles.verificationDescription}>
+                Please verify your email and phone number to unlock all features, including tournament registrations.
+              </Text>
               
-              {/* Global AI Assistant */}
-              {currentUser && (
-                <ChatBot 
-                  user={currentUser}
-                  userRole={userRole}
-                  userId={currentUser?.id}
-                  evaluations={evaluations}
-                  chatbotMessages={chatbotMessages}
-                  onSendChatMessage={(msg) => {
-                    const userId = currentUser.id;
-                    const updatedMap = { ...chatbotMessages, [userId]: msg };
-                    setChatbotMessages(updatedMap);
-                    syncAndSaveData({ chatbotMessages: updatedMap });
-                  }}
-                  tournaments={tournaments}
-                  onSaveTicket={(st) => syncAndSaveData({ supportTickets: [st, ...supportTickets] })}
-                  players={players}
-                />
-              )}
+              <TouchableOpacity 
+                style={appStyles.verifyNowButton}
+                onPress={() => {
+                  setShowVerificationPrompt(false);
+                  if (navigationRef.current) {
+                    navigationRef.current.navigate('Profile', { autoEdit: true });
+                  } else {
+                    Alert.alert("Profile", "Please head to the Profile tab to complete verification.");
+                  }
+                }}
+              >
+                <Text style={appStyles.verifyNowText}>Complete Now</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={appStyles.maybeLaterButton}
+                onPress={() => setShowVerificationPrompt(false)}
+              >
+                <Text style={appStyles.maybeLaterText}>Maybe Later</Text>
+              </TouchableOpacity>
             </View>
-          </NavigationContainer>
-        </ErrorBoundary>
+          </View>
+        </Modal>
+
+        {/* Mandatory OTA Update Shield Modal */}
+        <Modal
+          visible={showForceUpdate}
+          transparent={false}
+          animationType="fade"
+          onRequestClose={() => {}} // Un-dismissible
+        >
+          <View style={{ flex: 1, backgroundColor: '#0F172A', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+            <Ionicons name="cloud-download" size={80} color="#38BDF8" style={{ marginBottom: 24 }} />
+            <Text style={{ fontSize: 28, fontWeight: '900', color: '#FFFFFF', marginBottom: 12, textAlign: 'center', letterSpacing: 0.5 }}>Update Required</Text>
+            <Text style={{ fontSize: 16, color: '#94A3B8', textAlign: 'center', marginBottom: 40, lineHeight: 24 }}>
+              Your app version ({APP_VERSION}) is obsolete and unsupported. You must update to the latest network API version ({latestAppVersion}) to restore access to AceTrack.
+            </Text>
+            
+            <TouchableOpacity 
+              disabled={isUpdatingFromModal}
+              onPress={async () => {
+                setIsUpdatingFromModal(true);
+                try {
+                  const update = await Updates.checkForUpdateAsync();
+                  if (update.isAvailable) {
+                    await Updates.fetchUpdateAsync();
+                    await Updates.reloadAsync();
+                  } else {
+                    Alert.alert("Update Not Found", "The OTA server did not return a manifest. Please try restarting the app or downloading from the store.");
+                    setIsUpdatingFromModal(false);
+                  }
+                } catch (e) {
+                  Alert.alert("OTA Update Failed", "Failed to physically connect to the OTA server. Error: " + e.message);
+                  setIsUpdatingFromModal(false);
+                }
+              }}
+              style={{ width: '100%', paddingVertical: 18, backgroundColor: '#10B981', borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 }}
+            >
+              {isUpdatingFromModal ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 16, textTransform: 'uppercase', letterSpacing: 1 }}>Download OTA Update</Text>}
+            </TouchableOpacity>
+          </View>
+        </Modal>
+
+      </NavigationContainer>
+      </View>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
+
+const appStyles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  verificationModalContent: {
+    backgroundColor: '#FFFFFF',
+    width: '100%',
+    borderRadius: 32,
+    padding: 32,
+    alignItems: 'center',
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+  },
+  verificationIconContainer: {
+    width: 80,
+    height: 80,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  verificationTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0F172A',
+    textTransform: 'uppercase',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  verificationDescription: {
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  verifyNowButton: {
+    width: '100%',
+    backgroundColor: '#EF4444',
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  verifyNowText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 16,
+    textTransform: 'uppercase',
+  },
+  maybeLaterButton: {
+    width: '100%',
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  maybeLaterText: {
+    color: '#94A3B8',
+    fontWeight: 'bold',
+    fontSize: 14,
+    textTransform: 'uppercase',
+  },
+});
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF'
+  }
+});

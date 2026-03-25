@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, StyleSheet, 
   SafeAreaView, Image, TextInput, Modal, Alert, Linking, Platform, Share,
-  ActivityIndicator
+  ActivityIndicator, Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import PlayerDashboardView from '../components/PlayerDashboardView';
@@ -15,6 +16,7 @@ import ParticipantsModal from '../components/ParticipantsModal';
 import config from '../config';
 import logger from '../utils/logger';
 import ProfileScreen from './ProfileScreen';
+import designSystem from '../theme/designSystem';
 
 const AdminHubScreen = ({ 
   user, players, tournaments, matchVideos, supportTickets, auditLogs = [],
@@ -28,6 +30,7 @@ const AdminHubScreen = ({
   onVerifyAccount, onToggleCloud, setIsProfileEditActive, appVersion, socketRef,
   navigation
 }) => {
+  const screenWidth = Dimensions.get('window').width;
   const targetCloudUrl = 'https://acetrack-api-q39m.onrender.com';
   const activeApiUrl = isUsingCloud ? targetCloudUrl : config.API_BASE_URL;
 
@@ -42,6 +45,7 @@ const AdminHubScreen = ({
   const [viewingPlayersFor, setViewingPlayersFor] = useState(null);
   const [viewingAssignmentFor, setViewingAssignmentFor] = useState(null);
   const [viewingBreakdownFor, setViewingBreakdownFor] = useState(null);
+  const [viewingCoachStatusList, setViewingCoachStatusList] = useState(null); // 'Sent' | 'Declined' | 'Remaining' | 'Opted Out'
   
   // Diagnostics Dashboard States
   const [diagUserSearch, setDiagUserSearch] = useState('');
@@ -156,7 +160,14 @@ const AdminHubScreen = ({
   const filteredIndividuals = filterData(players.filter(p => !p.role || p.role === 'user'));
   const filteredAcademies = filterData(players.filter(p => p.role === 'academy'));
   const filteredCoaches = filterData(players.filter(p => p.role === 'coach'));
-  const filteredTournaments = filterData(tournaments, 'title');
+  const filteredTournaments = tournaments.filter(t => {
+    if (!search) return true;
+    const s = search.toLowerCase();
+    const academy = players.find(p => p.id === t.creatorId);
+    return (t.title || '').toLowerCase().includes(s) ||
+           (t.id || '').toLowerCase().includes(s) ||
+           (academy?.name || '').toLowerCase().includes(s);
+  });
 
   const getAcademyStats = (academyId) => {
     const academyTs = tournaments.filter(t => t.creatorId === academyId);
@@ -199,7 +210,7 @@ const AdminHubScreen = ({
           key={c.id} 
           activeOpacity={0.9}
           onPress={() => setSelectedCoachId(isSelected ? null : c.id)}
-          style={[styles.adminCard, isSelected && styles.cardActive]}
+          style={[styles.adminCard, isSelected && { borderLeftColor: '#10B981', backgroundColor: '#F8FAFC' }]}
         >
           <View style={styles.cardHeader}>
             <Image 
@@ -208,17 +219,20 @@ const AdminHubScreen = ({
             />
             <View style={styles.flex}>
               <Text style={styles.cardTitle}>{c.name}</Text>
-              <Text style={styles.cardSubtitle}>{c.phone}</Text>
+              <View style={styles.row}>
+                <Ionicons name="call-outline" size={10} color="#94A3B8" />
+                <Text style={[styles.cardSubtitle, { marginLeft: 4 }]}>{c.phone}</Text>
+              </View>
             </View>
-            <View style={[styles.statusBadge, { backgroundColor: c.coachStatus === 'approved' ? '#DCFCE7' : c.coachStatus === 'revoked' || c.coachStatus === 'rejected' ? '#FEE2E2' : c.coachStatus === 'addendum' ? '#FEF9C3' : '#FFEDD5' }]}>
-              <Text style={[styles.statusText, { color: c.coachStatus === 'approved' ? '#15803D' : c.coachStatus === 'revoked' || c.coachStatus === 'rejected' ? '#B91C1C' : c.coachStatus === 'addendum' ? '#A16207' : '#C2410C' }]}>
-                {c.coachStatus || 'Pending'}
+            <View style={[styles.statusBadge, { backgroundColor: c.coachStatus === 'approved' ? '#DCFCE7' : c.coachStatus === 'revoked' || c.coachStatus === 'rejected' ? '#FEE2E2' : c.coachStatus === 'addendum' ? '#FEF9C3' : '#F1F5F9' }]}>
+              <Text style={[styles.statusText, { color: c.coachStatus === 'approved' ? '#15803D' : c.coachStatus === 'revoked' || c.coachStatus === 'rejected' ? '#B91C1C' : c.coachStatus === 'addendum' ? '#A16207' : '#64748B' }]}>
+                {(c.coachStatus || 'Pending').toUpperCase()}
               </Text>
             </View>
           </View>
 
           {isSelected && (
-            <View style={[styles.infoBlock, { backgroundColor: '#F0F9FF', borderLeftWidth: 4, borderLeftColor: '#0EA5E9' }]}>
+            <View style={[styles.infoBlock, { backgroundColor: '#EEF2FF', borderLeftWidth: 4, borderLeftColor: '#6366F1', marginTop: 12 }]}>
               <Text style={styles.infoLabel}>Account Details</Text>
               <View style={styles.detailRow}>
                 <Text style={styles.detailTitle}>Username</Text>
@@ -231,25 +245,32 @@ const AdminHubScreen = ({
             </View>
           )}
 
-          <View style={styles.infoBlock}>
-            <Text style={styles.infoLabel}>Certified Sports: <Text style={styles.infoValue}>{c.certifiedSports?.join(', ')}</Text></Text>
-            <TouchableOpacity 
-              onPress={() => c.govIdUrl ? Linking.openURL(c.govIdUrl) : Alert.alert("Not Found", "Government ID document has not been uploaded.")} 
-              style={[styles.linkBtn, !c.govIdUrl && { opacity: 0.5 }]}
-            >
-              <Ionicons name="documents" size={12} color={c.govIdUrl ? "#3B82F6" : "#94A3B8"} />
-              <Text style={[styles.linkText, !c.govIdUrl && { color: "#94A3B8" }]}>Gov ID: {c.govIdUrl ? "Download Document" : "Not Provided"}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              onPress={() => c.certificationUrl ? Linking.openURL(c.certificationUrl) : Alert.alert("Not Found", "Certification document has not been uploaded.")} 
-              style={[styles.linkBtn, !c.certificationUrl && { opacity: 0.5 }]}
-            >
-              <Ionicons name="ribbon" size={12} color={c.certificationUrl ? "#3B82F6" : "#94A3B8"} />
-              <Text style={[styles.linkText, !c.certificationUrl && { color: "#94A3B8" }]}>Cert: {c.certificationUrl ? "Download Document" : "Not Provided"}</Text>
-            </TouchableOpacity>
+          <View style={styles.expandedContent}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <Ionicons name="ribbon-outline" size={14} color="#6366F1" />
+                <Text style={[styles.infoLabel, { marginLeft: 6, marginBottom: 0 }]}>Certified Sports: <Text style={styles.infoValue}>{c.certifiedSports?.join(', ')}</Text></Text>
+            </View>
+            
+            <View style={styles.documentGrid}>
+              <TouchableOpacity 
+                onPress={() => c.govIdUrl ? Linking.openURL(c.govIdUrl) : Alert.alert("Not Found", "Government ID document has not been uploaded.")} 
+                style={[styles.docBtn, !c.govIdUrl && { opacity: 0.5 }]}
+              >
+                <Ionicons name="card-outline" size={16} color={c.govIdUrl ? "#6366F1" : "#94A3B8"} />
+                <Text style={[styles.docBtnText, !c.govIdUrl && { color: "#94A3B8" }]}>Gov ID</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={() => c.certificationUrl ? Linking.openURL(c.certificationUrl) : Alert.alert("Not Found", "Certification document has not been uploaded.")} 
+                style={[styles.docBtn, !c.certificationUrl && { opacity: 0.5 }]}
+              >
+                <Ionicons name="medal-outline" size={16} color={c.certificationUrl ? "#6366F1" : "#94A3B8"} />
+                <Text style={[styles.docBtnText, !c.certificationUrl && { color: "#94A3B8" }]}>Certificate</Text>
+              </TouchableOpacity>
+            </View>
+
             {(c.coachStatus === 'rejected' || c.coachStatus === 'addendum') && c.coachRejectReason && (
-              <View style={styles.reasonLine}>
-                <Text style={styles.infoLabel}>Reason:</Text>
+              <View style={[styles.reasonBox, { marginTop: 12 }]}>
+                <Text style={styles.reasonLabel}>Decision Note:</Text>
                 <Text style={styles.reasonText}>{c.coachRejectReason}</Text>
               </View>
             )}
@@ -270,17 +291,20 @@ const AdminHubScreen = ({
           )}
           {coachSubTab === 'approved' && (
             <TouchableOpacity onPress={() => onApproveCoach(c.id, 'revoked')} style={styles.fullActionBtn}>
-              <Text style={styles.fullActionBtnText}>Revoke Access</Text>
+              <Ionicons name="close-circle-outline" size={16} color="#EF4444" style={{ marginRight: 6 }} />
+              <Text style={[styles.fullActionBtnText, { color: '#EF4444' }]}>Revoke Access</Text>
             </TouchableOpacity>
           )}
           {coachSubTab === 'revoked' && (
             <TouchableOpacity onPress={() => onApproveCoach(c.id, 'approved')} style={[styles.fullActionBtn, { backgroundColor: '#F0FDF4' }]}>
+              <Ionicons name="checkmark-circle-outline" size={16} color="#16A34A" style={{ marginRight: 6 }} />
               <Text style={[styles.fullActionBtnText, { color: '#16A34A' }]}>Restore Access</Text>
             </TouchableOpacity>
           )}
           {coachSubTab === 'rejected_addendum' && c.coachStatus === 'addendum' && (
-            <TouchableOpacity onPress={() => onApproveCoach(c.id, 'pending')} style={[styles.fullActionBtn, { backgroundColor: '#EFF6FF' }]}>
-              <Text style={[styles.fullActionBtnText, { color: '#2563EB' }]}>Simulate User Response</Text>
+            <TouchableOpacity onPress={() => onApproveCoach(c.id, 'pending')} style={[styles.fullActionBtn, { backgroundColor: '#EEF2FF' }]}>
+              <Ionicons name="refresh-outline" size={16} color="#6366F1" style={{ marginRight: 6 }} />
+              <Text style={[styles.fullActionBtnText, { color: '#6366F1' }]}>Simulate User Response</Text>
             </TouchableOpacity>
           )}
         </TouchableOpacity>
@@ -290,29 +314,39 @@ const AdminHubScreen = ({
 
   const isWeb = Platform.OS === 'web';
   const content = (
-    <SafeAreaView style={[styles.container, isWeb && { flex: 1, backgroundColor: '#FFFFFF', paddingHorizontal: 32 }]}>
-      <View style={[styles.header, isWeb && { marginTop: 32 }]}>
-        <Text style={styles.title}>Admin Hub</Text>
-        <Text style={styles.subtitle}>System Overview & Management</Text>
-      </View>
+    <View style={styles.container}>
+      <LinearGradient colors={['#6366F1', '#4F46E5']} style={styles.premiumHeader}>
+        <SafeAreaView>
+          <View style={styles.headerContent}>
+            <View>
+              <Text style={styles.premiumTitle}>Admin Hub</Text>
+              <Text style={styles.premiumSubtitle}>System Overview & Management</Text>
+            </View>
+            <TouchableOpacity style={styles.headerIcon}>
+              <Ionicons name="shield-checkmark" size={24} color="#FFF" />
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
 
       {!isWeb && (
       <View style={styles.tabContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScroll}>
           {[
-            { id: 'individuals', label: 'Individuals' },
-            { id: 'academies', label: 'Academies' },
-            { id: 'coaches', label: 'Coaches', count: players.filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !seenAdminActionIds.has(p.id)).length },
-            { id: 'security', label: 'Security' },
-            { id: 'tournaments', label: 'Tournaments' },
-            { id: 'coach_assignments', label: 'Coach Assignments', count: tournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && !seenAdminActionIds.has(t.id)).length },
-            { id: 'recordings', label: 'Recordings', count: matchVideos.filter(v => v.adminStatus === 'Deletion Requested' && !seenAdminActionIds.has(v.id)).length },
-            { id: 'grievances', label: 'Grievances', count: supportTickets.filter(t => t.status === 'Open').length },
-            { id: 'audit', label: 'Audit Logs' },
-            { id: 'diagnostics', label: 'Diagnostics' }
+            { id: 'individuals', label: 'Individuals', icon: 'person' },
+            { id: 'academies', label: 'Academies', icon: 'business' },
+            { id: 'coaches', label: 'Coaches', icon: 'school', count: players.filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !seenAdminActionIds.has(p.id)).length },
+            { id: 'security', label: 'Security', icon: 'lock-closed' },
+            { id: 'tournaments', label: 'Tournaments', icon: 'trophy' },
+            { id: 'coach_assignments', label: 'Assignments', icon: 'people', count: tournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && !seenAdminActionIds.has(t.id)).length },
+            { id: 'recordings', label: 'Videos', icon: 'videocam', count: matchVideos.filter(v => v.adminStatus === 'Deletion Requested' && !seenAdminActionIds.has(v.id)).length },
+            { id: 'grievances', label: 'Tickets', icon: 'chatbubbles', count: supportTickets.filter(t => t.status === 'Open').length },
+            { id: 'audit', label: 'Audit', icon: 'list' },
+            { id: 'diagnostics', label: 'Diag', icon: 'pulse' }
           ].map(tab => {
             const isVisited = visitedAdminSubTabs.has(tab.id);
             const showBadge = tab.count > 0 && (tab.id === 'grievances' ? true : !isVisited);
+            const isActive = subTab === tab.id;
 
             return (
               <TouchableOpacity 
@@ -320,17 +354,12 @@ const AdminHubScreen = ({
                 onPress={() => { 
                   setSubTab(tab.id); 
                   setSearch(''); 
-                  
-                  // 1. Mark the tab as visited
                   if (tab.id !== 'grievances' && setVisitedAdminSubTabs) {
                     setVisitedAdminSubTabs(prev => new Set(prev).add(tab.id));
                   }
-
-                  // 2. Mark the CURRENT items as seen so badges stay gone permanently (via storage)
                   if (setSeenAdminActionIds) {
                     const newSeenIds = new Set(seenAdminActionIds);
                     let added = false;
-                    
                     if (tab.id === 'coaches') {
                       players.filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus)).forEach(p => {
                         const pid = String(p.id);
@@ -352,18 +381,14 @@ const AdminHubScreen = ({
                         if (!newSeenIds.has(sid)) { newSeenIds.add(sid); added = true; }
                       });
                     }
-                    
                     if (added) setSeenAdminActionIds(newSeenIds);
                   }
                 }}
-                style={[styles.tab, subTab === tab.id && styles.tabActive]}
+                style={[styles.premiumTab, isActive && styles.premiumTabActive]}
               >
-                <Text style={[styles.tabText, subTab === tab.id && styles.tabTextActive]}>{tab.label}</Text>
-                {showBadge && (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{tab.count}</Text>
-                  </View>
-                )}
+                <Ionicons name={tab.icon} size={14} color={isActive ? '#FFF' : '#64748B'} style={{ marginRight: 6 }} />
+                <Text style={[styles.premiumTabText, isActive && styles.premiumTabTextActive]}>{tab.label}</Text>
+                {showBadge && <View style={styles.premiumBadge}><Text style={styles.premiumBadgeText}>{tab.count}</Text></View>}
               </TouchableOpacity>
             );
           })}
@@ -479,8 +504,11 @@ const AdminHubScreen = ({
                         onPress={() => setViewingPlayersFor(t)}
                         style={styles.hostedTItem}
                       >
-                        <Text style={styles.hostedTTitle}>{t.title}</Text>
-                        <Text style={styles.hostedTSport}>{t.sport}</Text>
+                        <View>
+                           <Text style={styles.hostedTTitle}>{t.title}</Text>
+                           <Text style={styles.hostedTSport}>{t.sport}</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={14} color="#6366F1" />
                       </TouchableOpacity>
                     ))}
                     {stats.hostedCount === 0 && <Text style={styles.emptyNote}>No events hosted</Text>}
@@ -491,44 +519,62 @@ const AdminHubScreen = ({
           );
         })}
 
-        {subTab === 'tournaments' && filteredTournaments.map(t => (
-          <TouchableOpacity 
-            key={t.id} 
-            onPress={() => setViewingPlayersFor(t)}
-            style={styles.adminCard}
-          >
-            <View style={styles.cardHeader}>
-              <View style={styles.flex}>
-                <Text style={styles.cardTitle}>{t.title}</Text>
-                <Text style={styles.cardSubtitle}>{t.sport} • {t.date}</Text>
+        {subTab === 'tournaments' && filteredTournaments.map(t => {
+          const academy = players.find(p => p.id === t.creatorId);
+          return (
+            <TouchableOpacity 
+              key={t.id} 
+              onPress={() => setViewingPlayersFor(t)}
+              style={styles.adminCard}
+            >
+              <View style={styles.cardHeader}>
+                <View style={styles.flex}>
+                  <Text style={styles.cardTitle}>{t.title}</Text>
+                  <Text style={styles.cardSubtitle}>{t.sport} • {t.date}</Text>
+                  {academy && (
+                    <View style={[styles.row, { marginTop: 4 }]}>
+                      <Ionicons name="business-outline" size={10} color="#6366F1" />
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#6366F1', marginLeft: 4 }}>{academy.name}</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.ratingBox}>
+                  <Text style={styles.ratingValue}>{t.registeredPlayerIds.length}/{t.maxPlayers}</Text>
+                  <Text style={styles.ratingLabel}>Slots</Text>
+                </View>
+                <Ionicons name="people-outline" size={16} color="#6366F1" style={{ marginLeft: 10 }} />
               </View>
-              <View style={styles.ratingBox}>
-                <Text style={styles.ratingValue}>{t.registeredPlayerIds.length}/{t.maxPlayers}</Text>
-                <Text style={styles.ratingLabel}>Slots</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))}
+            </TouchableOpacity>
+          );
+        })}
 
         {subTab === 'coach_assignments' && tournaments.filter(t => 
           (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration' || t.coachStatus === 'Awaiting Assignment') && 
           !t.assignedCoachId && 
           t.status !== 'completed' && 
           !t.tournamentConcluded
-        ).map(t => (
-          <View key={t.id} style={styles.adminCard}>
-            <View style={styles.cardHeader}>
-              <View style={styles.flex}>
-                <Text style={styles.cardTitle}>{t.title}</Text>
-                <Text style={styles.cardSubtitle}>{t.sport} • {t.date}</Text>
+        ).map(t => {
+          const academy = players.find(p => p.id === t.creatorId);
+          return (
+            <View key={t.id} style={styles.adminCard}>
+              <View style={styles.cardHeader}>
+                <View style={styles.flex}>
+                  <Text style={styles.cardTitle}>{t.title}</Text>
+                  <Text style={styles.cardSubtitle}>{t.sport} • {t.date}</Text>
+                  {academy && (
+                    <View style={[styles.row, { marginTop: 4 }]}>
+                      <Ionicons name="business-outline" size={10} color="#6366F1" />
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#6366F1', marginLeft: 4 }}>{academy.name}</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={[styles.statusBadge, styles.wideBadge, { backgroundColor: t.coachStatus?.includes('Assigned') ? '#DCFCE7' : t.coachStatus?.includes('Confirmed') ? '#FEF9C3' : '#F1F5F9' }]}>
+                  <Text style={[styles.statusText, { color: t.coachStatus?.includes('Assigned') ? '#15803D' : t.coachStatus?.includes('Confirmed') ? '#A16207' : '#64748B' }]}>{t.coachStatus}</Text>
+                </View>
               </View>
-              <View style={[styles.statusBadge, styles.wideBadge, { backgroundColor: t.coachStatus?.includes('Assigned') ? '#DCFCE7' : t.coachStatus?.includes('Confirmed') ? '#FEF9C3' : '#F1F5F9' }]}>
-                <Text style={[styles.statusText, { color: t.coachStatus?.includes('Assigned') ? '#15803D' : t.coachStatus?.includes('Confirmed') ? '#A16207' : '#64748B' }]}>{t.coachStatus}</Text>
-              </View>
-            </View>
 
             {t.coachStatus === 'Pending Coach Registration' && t.invitedCoachDetails && (
-              <View style={[styles.infoBlock, { backgroundColor: '#FFF7ED' }]}>
+              <View style={[styles.infoBlock, { backgroundColor: '#FFF7ED', borderLeftWidth: 3, borderLeftColor: '#F97316' }]}>
                 <Text style={styles.infoLabel}>Invited Coach Details</Text>
                 <Text style={styles.coachDetailName}>{t.invitedCoachDetails.name}</Text>
                 <Text style={styles.coachDetailText}>{t.invitedCoachDetails.email}</Text>
@@ -536,7 +582,7 @@ const AdminHubScreen = ({
             )}
 
             {t.coachStatus === 'Coach Confirmed - Awaiting Assignment' && t.confirmedCoachId && (
-              <View style={[styles.infoBlock, { backgroundColor: '#FEF9C3' }]}>
+              <View style={[styles.infoBlock, { backgroundColor: '#FEF9C3', borderLeftWidth: 3, borderLeftColor: '#EAB308' }]}>
                 <Text style={styles.infoLabel}>Confirmed Coach</Text>
                 <View style={styles.assignRow}>
                   <Text style={styles.coachDetailName}>{players.find(p => p.id === t.confirmedCoachId)?.name}</Text>
@@ -548,7 +594,7 @@ const AdminHubScreen = ({
             )}
 
             {t.coachAssignmentType === 'platform' && !t.assignedCoachId && t.assignedCoachIds?.length > 0 && (
-              <View style={[styles.infoBlock, { backgroundColor: '#EFF6FF' }]}>
+              <View style={[styles.infoBlock, { backgroundColor: '#EEF2FF', borderLeftWidth: 3, borderLeftColor: '#6366F1' }]}>
                 <Text style={styles.infoLabel}>Opted-in Coaches</Text>
                 {t.assignedCoachIds.map(cid => (
                   <View key={cid} style={styles.optedInRow}>
@@ -562,7 +608,7 @@ const AdminHubScreen = ({
             )}
 
             {(t.coachStatus === 'Coach Assigned' || t.coachStatus === 'Coach Assigned - Academy') && t.assignedCoachId && (
-              <View style={[styles.infoBlock, { backgroundColor: '#F0FDF4' }]}>
+              <View style={[styles.infoBlock, { backgroundColor: '#F0FDF4', borderLeftWidth: 3, borderLeftColor: '#22C55E' }]}>
                 <Text style={styles.infoLabel}>Assigned Coach</Text>
                 <View style={styles.assignRow}>
                   <Text style={styles.coachDetailName}>{players.find(p => p.id === t.assignedCoachId)?.name}</Text>
@@ -574,26 +620,27 @@ const AdminHubScreen = ({
             )}
 
             <TouchableOpacity onPress={() => setViewingAssignmentFor(t)} style={styles.detailsBtn}>
-              <Text style={styles.detailsBtnText}>View Details</Text>
+              <Text style={styles.detailsBtnText}>View Full Details</Text>
             </TouchableOpacity>
           </View>
-        ))}
+        );
+      })}
 
         {subTab === 'security' && (
           <View>
-            <Text style={styles.sectionTitle}>Failed OTP Attempts</Text>
+            <Text style={styles.sectionTitle}>Failed Access Attempts</Text>
             {tournaments.flatMap(t => 
               (t.failedOtpAttempts || []).map((attempt, idx) => {
                 const coach = players.find(p => p.id === attempt.coachId);
                 return (
-                  <View key={`${t.id}-${idx}`} style={[styles.adminCard, { borderColor: '#FEE2E2' }]}>
+                  <View key={`${t.id}-${idx}`} style={[styles.adminCard, { borderLeftColor: '#EF4444' }]}>
                     <View style={styles.cardHeader}>
                       <View style={styles.flex}>
-                        <Text style={[styles.cardTitle, { color: '#EF4444' }]}>Failed Access Attempt</Text>
+                        <Text style={[styles.cardTitle, { color: '#EF4444' }]}>Security Alert</Text>
                         <Text style={styles.cardSubtitle}>{new Date(attempt.timestamp).toLocaleString()}</Text>
                       </View>
                       <View style={[styles.statusBadge, { backgroundColor: '#FEF2F2' }]}>
-                        <Text style={[styles.statusText, { color: '#EF4444' }]}>Alert</Text>
+                        <Ionicons name="warning" size={14} color="#EF4444" />
                       </View>
                     </View>
                     <View style={styles.alertContent}>
@@ -607,7 +654,8 @@ const AdminHubScreen = ({
             )}
             {tournaments.every(t => !t.failedOtpAttempts?.length) && (
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No failed attempts logged</Text>
+                <Ionicons name="shield-checkmark" size={48} color="#E2E8F0" />
+                <Text style={[styles.emptyText, { marginTop: 12 }]}>No security alerts logged</Text>
               </View>
             )}
           </View>
@@ -1098,12 +1146,138 @@ const AdminHubScreen = ({
         </View>
       </Modal>
 
+      {/* Assignment Details Modal */}
+      <Modal visible={!!viewingAssignmentFor} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+            <View style={styles.sheetContent}>
+                <View style={styles.sheetHeader}>
+                    <View style={styles.flex}>
+                        <Text style={styles.sheetTitle}>Assignment Analytics</Text>
+                        <Text style={styles.sheetSubtitle}>{viewingAssignmentFor?.title}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => { setViewingAssignmentFor(null); setViewingCoachStatusList(null); }}>
+                        <Ionicons name="close" size={24} color="#0F172A" />
+                    </TouchableOpacity>
+                </View>
+
+                {(() => {
+                  const sentIds = viewingAssignmentFor?.notifiedCoachIds || [];
+                  const declinedIds = viewingAssignmentFor?.declinedCoachIds || [];
+                  const optedOutIds = viewingAssignmentFor?.optedOutCoachIds || [];
+                  const remainingIds = sentIds.filter(id => !declinedIds.includes(id) && !optedOutIds.includes(id));
+
+                  const stats = [
+                    { label: 'Sent', count: sentIds.length, color: '#3B82F6', light: '#EFF6FF', ids: sentIds },
+                    { label: 'Declined', count: declinedIds.length, color: '#EF4444', light: '#FEF2F2', ids: declinedIds },
+                    { label: 'Remaining', count: remainingIds.length, color: '#F59E0B', light: '#FFFBEB', ids: remainingIds },
+                    { label: 'Opted Out', count: optedOutIds.length, color: '#6B7280', light: '#F9FAFB', ids: optedOutIds }
+                  ];
+
+                  if (viewingCoachStatusList) {
+                    const activeStat = stats.find(s => s.label === viewingCoachStatusList);
+                    const listIds = activeStat?.ids || [];
+                    const listCoaches = listIds.map(id => players.find(p => p.id === id)).filter(Boolean);
+
+                    return (
+                      <View style={styles.flex}>
+                        <View style={styles.drillDownHeader}>
+                          <TouchableOpacity onPress={() => setViewingCoachStatusList(null)} style={styles.backBtn}>
+                            <Ionicons name="arrow-back" size={20} color="#6366F1" />
+                            <Text style={styles.backBtnText}>Back to Summary</Text>
+                          </TouchableOpacity>
+                          <View style={styles.flex}>
+                            <Text style={styles.drillDownTitle}>{viewingCoachStatusList} Coaches ({listCoaches.length})</Text>
+                          </View>
+                        </View>
+                        <ScrollView style={styles.sheetScroll}>
+                          {listCoaches.length > 0 ? listCoaches.map((c) => (
+                            <View key={c.id} style={styles.coachListRow}>
+                              <Image 
+                                source={{ uri: (c.avatar && c.avatar !== 'null') ? c.avatar : `https://ui-avatars.com/api/?name=${encodeURIComponent(c.name)}&background=random` }} 
+                                style={styles.coachSmallAvatar} 
+                              />
+                              <View>
+                                <Text style={styles.coachNameText}>{c.name}</Text>
+                                <Text style={styles.coachMetaText}>{c.id} • {c.email}</Text>
+                              </View>
+                            </View>
+                          )) : (
+                            <View style={styles.emptyContainer}>
+                              <Ionicons name="people-outline" size={48} color="#E2E8F0" />
+                              <Text style={styles.emptyText}>No coaches found in this category</Text>
+                            </View>
+                          )}
+                        </ScrollView>
+                      </View>
+                    );
+                  }
+
+                  return (
+                    <ScrollView style={styles.sheetScroll}>
+                      <View style={styles.detailSection}>
+                          <Text style={styles.detailLabel}>Recruitment Progress</Text>
+                          <View style={styles.analyticsTable}>
+                            <View style={styles.tableHead}>
+                              <Text style={styles.tableHeadText}>Notification Status</Text>
+                              <Text style={[styles.tableHeadText, { textAlign: 'right' }]}>Count</Text>
+                            </View>
+                            
+                            {stats.map((item) => (
+                              <TouchableOpacity 
+                                key={item.label} 
+                                onPress={() => setViewingCoachStatusList(item.label)}
+                                style={styles.tableRow}
+                              >
+                                <View style={styles.rowLabelGroup}>
+                                  <View style={[styles.statusDot, { backgroundColor: item.color }]} />
+                                  <Text style={styles.tableRowLabel}>{item.label}</Text>
+                                </View>
+                                <View style={[styles.countBadge, { backgroundColor: item.light }]}>
+                                  <Text style={[styles.countBadgeText, { color: item.color }]}>{item.count}</Text>
+                                </View>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                      </View>
+
+                      <View style={styles.detailSection}>
+                          <Text style={styles.detailLabel}>Host Academy</Text>
+                          <View style={styles.academyBanner}>
+                             <Ionicons name="business" size={20} color="#6366F1" />
+                             <Text style={styles.academyNameDetail}>
+                                {players.find(p => p.id === viewingAssignmentFor?.creatorId)?.name || 'Unknown Academy'}
+                             </Text>
+                          </View>
+                      </View>
+
+                      <View style={[styles.detailSection, { marginBottom: 100 }]}>
+                          <Text style={styles.detailLabel}>Primary Assignment</Text>
+                          {viewingAssignmentFor?.assignedCoachId ? (
+                             <View style={[styles.infoBlock, { backgroundColor: '#F0FDF4', borderLeftWidth: 4, borderLeftColor: '#22C55E' }]}>
+                                <Text style={styles.coachDetailName}>
+                                  {players.find(p => p.id === viewingAssignmentFor.assignedCoachId)?.name}
+                                </Text>
+                                <Text style={styles.coachDetailText}>Assigned Coach</Text>
+                             </View>
+                          ) : (
+                             <View style={[styles.infoBlock, { backgroundColor: '#F8FAFC' }]}>
+                                <Text style={[styles.coachDetailText, { textAlign: 'center' }]}>No coach assigned yet</Text>
+                             </View>
+                          )}
+                      </View>
+                    </ScrollView>
+                  );
+                })()}
+            </View>
+        </View>
+      </Modal>
+
       <ParticipantsModal 
         tournament={viewingPlayersFor} 
         players={players} 
         onClose={() => setViewingPlayersFor(null)} 
       />
-    </SafeAreaView>
+    </View>
   );
 
   const renderWebSidebar = () => (
@@ -1185,851 +1359,206 @@ const AdminHubScreen = ({
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  premiumHeader: { paddingBottom: 24, borderBottomLeftRadius: 32, borderBottomRightRadius: 32, paddingTop: Platform.OS === 'ios' ? 0 : 20 },
+  headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, marginTop: 10 },
+  premiumTitle: { fontSize: 26, fontWeight: '900', color: '#FFF' },
+  premiumSubtitle: { fontSize: 13, color: '#E0E7FF', marginTop: 2 },
+  headerIcon: { width: 46, height: 46, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+  tabContainer: { marginVertical: 20 },
+  tabScroll: { paddingHorizontal: 16 },
+  premiumTab: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 16, 
+    paddingVertical: 10, 
+    borderRadius: 20, 
+    backgroundColor: '#FFF', 
+    marginRight: 10,
+    ...designSystem.shadows.sm
   },
-  header: {
-    padding: 24,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: '#0F172A',
-    textTransform: 'uppercase',
-  },
-  subtitle: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-    marginTop: 4,
-  },
-  tabContainer: {
-    paddingBottom: 4,
-  },
-  tabScroll: {
-    paddingHorizontal: 24,
-    gap: 12,
-  },
-  tab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-    gap: 8,
-  },
-  tabActive: {
-    backgroundColor: '#0F172A',
-  },
-  tabText: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#64748B',
-    textTransform: 'uppercase',
-  },
-  tabTextActive: {
-    color: '#FFFFFF',
-  },
-  badge: {
-    backgroundColor: '#EF4444',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FFFFFF',
-  },
-  badgeText: {
-    fontSize: 8,
-    fontWeight: '900',
-    color: '#FFFFFF',
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    margin: 24,
-    marginTop: 12,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 14,
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#0F172A',
-    marginLeft: 10,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-  },
-  coachSubTabs: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
-    padding: 4,
+  premiumTabActive: { backgroundColor: '#6366F1' },
+  premiumTabText: { fontSize: 13, fontWeight: '800', color: '#64748B' },
+  premiumTabTextActive: { color: '#FFF' },
+  premiumBadge: { backgroundColor: '#EF4444', borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 6 },
+  premiumBadgeText: { color: '#FFF', fontSize: 9, fontWeight: '900' },
+  searchBar: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#FFF', 
+    marginHorizontal: 24, 
+    paddingHorizontal: 16, 
+    borderRadius: 20, 
     marginBottom: 20,
-    gap: 4,
+    ...designSystem.shadows.sm
   },
-  coachSubTab: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 8,
+  searchInput: { flex: 1, paddingVertical: 12, marginLeft: 10, fontSize: 14, color: '#1E293B', fontWeight: '600' },
+  content: { flex: 1, paddingHorizontal: 24 },
+  adminCard: { 
+    backgroundColor: '#FFF', 
+    borderRadius: 24, 
+    padding: 20, 
+    marginBottom: 16, 
+    borderLeftWidth: 4, 
+    borderLeftColor: '#6366F1',
+    ...designSystem.shadows.sm
   },
-  coachSubTabActive: {
-    backgroundColor: '#FFFFFF',
-  },
-  coachSubTabText: {
-    fontSize: 8,
-    fontWeight: '900',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-  },
-  coachSubTabTextActive: {
-    color: '#0F172A',
-  },
-  adminCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 32,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-  },
-  cardActive: {
-    borderColor: '#EF4444',
-    borderWidth: 2,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  initialsBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  initialsText: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#94A3B8',
-  },
+  cardActive: { borderLeftColor: '#10B981' },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  avatar: { width: 48, height: 48, borderRadius: 16, marginRight: 14 },
+  initialsBox: { backgroundColor: '#EEF2FF', justifyContent: 'center', alignItems: 'center' },
+  initialsText: { fontSize: 18, fontWeight: '800', color: '#6366F1' },
   flex: { flex: 1 },
-  cardTitle: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#0F172A',
-    textTransform: 'uppercase',
-  },
-  cardSubtitle: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-    marginTop: 2,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  wideBadge: {
-    minWidth: 80,
-    alignItems: 'center',
-  },
-  statusText: {
-    fontSize: 8,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-  },
-  infoBlock: {
-    backgroundColor: '#F8FAFC',
-    padding: 16,
-    borderRadius: 24,
-    marginTop: 16,
-    gap: 8,
-  },
-  infoLabel: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#475569',
-    textTransform: 'uppercase',
-  },
-  infoValue: {
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  linkBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  linkText: {
-    fontSize: 11,
-    color: '#3B82F6',
-    textDecorationLine: 'underline',
-  },
-  reasonLine: {
-    marginTop: 4,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-  },
-  reasonText: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 4,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 16,
-  },
-  actionBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  approveBtn: { backgroundColor: '#22C55E' },
-  rejectBtn: { backgroundColor: '#FEF2F2' },
+  cardTitle: { fontSize: 16, fontWeight: '800', color: '#1E293B' },
+  cardSubtitle: { fontSize: 12, color: '#64748B', marginTop: 2, fontWeight: '600' },
+  statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  statusText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
+  infoBlock: { marginTop: 16, padding: 16, borderRadius: 16, backgroundColor: '#F1F5F9' },
+  infoLabel: { fontSize: 11, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', marginBottom: 8 },
+  infoValue: { color: '#1E293B', textTransform: 'none' },
+  detailRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  detailTitle: { fontSize: 12, color: '#64748B', fontWeight: '600' },
+  detailValue: { fontSize: 12, color: '#1E293B', fontWeight: '700' },
+  linkBtn: { flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 6 },
+  linkText: { fontSize: 12, color: '#6366F1', fontWeight: '700' },
+  reasonLine: { marginTop: 12, borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 12 },
+  reasonText: { fontSize: 12, color: '#EF4444', fontWeight: '600' },
+  actionRow: { flexDirection: 'row', marginTop: 16, gap: 10 },
+  actionBtn: { flex: 1, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  approveBtn: { backgroundColor: '#6366F1' },
+  actionBtnText: { fontSize: 13, fontWeight: '800', color: '#FFF' },
+  rejectBtn: { backgroundColor: '#FEE2E2' },
   addendumBtn: { backgroundColor: '#FEF9C3' },
-  actionBtnText: {
-    fontSize: 8,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    textTransform: 'uppercase',
-  },
-  fullActionBtn: {
-    width: '100%',
-    paddingVertical: 14,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 16,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  fullActionBtnText: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#64748B',
-    textTransform: 'uppercase',
-  },
-  tierBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-    marginTop: 4,
-  },
-  tierText: {
-    fontSize: 7,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-  },
-  statsInline: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  inlineStat: {
-    alignItems: 'center',
-  },
-  inlineStatBtn: {
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  inlineValue: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#0F172A',
-  },
-  inlineLabel: {
-    fontSize: 7,
-    fontWeight: '900',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-  },
-  expandedContent: {
-    marginTop: 20,
-    paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#F8FAFC',
-    gap: 24,
-  },
-  detailsBlock: {
-    backgroundColor: '#F8FAFC',
-    padding: 20,
-    borderRadius: 24,
-    gap: 12,
-  },
-  blockLabel: {
-    fontSize: 8,
-    fontWeight: '900',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-    marginBottom: 4,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  detailTitle: {
-    fontSize: 9,
-    fontWeight: 'bold',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-  },
-  detailValue: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: '#334155',
-  },
-  gridStats: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  gridStatBox: {
-    flex: 1,
-    backgroundColor: '#F1F5F9',
-    padding: 20,
-    borderRadius: 24,
-  },
-  gridStatLabel: {
-    fontSize: 8,
-    fontWeight: '900',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-    marginBottom: 4,
-  },
-  gridStatValue: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#334155',
-    textTransform: 'uppercase',
-  },
-  tournamentList: {
-    gap: 12,
-  },
-  hostedTItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 20,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 24,
-  },
-  hostedTTitle: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: '#1E293B',
-    textTransform: 'uppercase',
-  },
-  hostedTSport: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#EF4444',
-    textTransform: 'uppercase',
-  },
-  ratingBox: {
-    alignItems: 'flex-end',
-  },
-  ratingValue: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#0F172A',
-  },
-  ratingLabel: {
-    fontSize: 8,
-    fontWeight: '900',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-  },
-  assignRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  coachDetailName: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  coachDetailText: {
-    fontSize: 12,
-    color: '#475569',
-  },
-  miniAssignBtn: {
-    backgroundColor: '#EAB308',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  miniAssignBtnBlue: {
-    backgroundColor: '#3B82F6',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  miniAssignText: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    textTransform: 'uppercase',
-  },
-  miniRemoveBtn: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  miniRemoveText: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#EF4444',
-    textTransform: 'uppercase',
-  },
-  optedInRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  detailsBtn: {
-    marginTop: 16,
-    paddingVertical: 12,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 16,
-    alignItems: 'center',
-  },
-  detailsBtnText: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#64748B',
-    textTransform: 'uppercase',
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#0F172A',
-    textTransform: 'uppercase',
-    marginBottom: 16,
-  },
-  alertContent: {
-    backgroundColor: '#F8FAFC',
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
-    marginTop: 12,
-    gap: 4,
-  },
-  alertLabel: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#475569',
-    textTransform: 'uppercase',
-  },
-  alertValue: {
-    color: '#64748B',
-    fontWeight: '500',
-    textTransform: 'none',
-  },
-  alertOtp: {
-    color: '#EF4444',
-    fontWeight: '900',
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 4,
-    borderRadius: 4,
-  },
-  emptyContainer: {
-    paddingVertical: 80,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#CBD5E1',
-    textTransform: 'uppercase',
-    fontStyle: 'italic',
-  },
-  emptyNote: {
-    textAlign: 'center',
-    fontSize: 10,
-    color: '#94A3B8',
-    paddingVertical: 12,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 40,
-    padding: 32,
-    gap: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#0F172A',
-    textTransform: 'uppercase',
-  },
-  modalSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  modalInput: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 20,
-    padding: 16,
-    height: 120,
-    textAlignVertical: 'top',
-    fontSize: 14,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  modalCancel: {
-    flex: 1,
-    paddingVertical: 16,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 16,
-    alignItems: 'center',
-  },
-  modalCancelText: {
-    fontWeight: 'bold',
-    color: '#64748B',
-  },
-  modalSubmit: {
-    flex: 1.5,
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-  },
-  modalSubmitText: {
-    fontWeight: '900',
-    color: '#FFFFFF',
-    textTransform: 'uppercase',
-  },
-  sheetContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 40,
-    borderTopRightRadius: 40,
-    maxHeight: '70%',
-    width: '100%',
-    marginTop: 'auto',
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 32,
-    paddingBottom: 16,
-  },
-  sheetTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#0F172A',
-    textTransform: 'uppercase',
-  },
-  sheetSubtitle: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-    marginTop: 4,
-  },
-  sheetScroll: {
-    paddingHorizontal: 32,
-  },
-  insightRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
-  },
-  insightLabel: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#475569',
-    textTransform: 'uppercase',
-  },
-  insightCount: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#EF4444',
-  },
-  sheetFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 32,
-    borderTopWidth: 1,
-    borderTopColor: '#F8FAFC',
-  },
-  footerLabel: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-  },
-  footerValue: {
-    fontSize: 18,
-    color: '#0F172A',
-  },
-  diagnosticsContainer: {
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#0F172A',
-    textTransform: 'uppercase',
-  },
-  diagHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  diagSyncBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#3B82F6',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    gap: 6,
-  },
-  diagSyncBtnText: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#FFFFFF',
-  },
-  diagSearchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 16,
-  },
-  diagSearchInput: {
-    flex: 1,
-    paddingVertical: 12,
-    marginLeft: 8,
-    fontSize: 14,
-    color: '#0F172A',
-  },
-  userListScroll: {
-    marginBottom: 24,
-  },
-  miniUserCard: {
-    alignItems: 'center',
-    padding: 12,
-    marginRight: 12,
-    borderRadius: 20,
-    backgroundColor: '#F8FAFC',
-    width: 80,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  miniUserCardActive: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
-  },
-  miniAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginBottom: 8,
-  },
-  miniUserName: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  miniUserNameActive: {
-    color: '#FFFFFF',
-  },
-  diagFileSection: {
-    marginTop: 8,
-  },
-  diagLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#1E293B',
-    marginBottom: 12,
-  },
-  diagLoading: { fontSize: 12, color: '#94A3B8', fontStyle: 'italic' },
-  diagEmpty: { fontSize: 12, color: '#94A3B8' },
-  diagEmptyUserText: {
-    fontSize: 12,
-    color: '#94A3B8',
-    fontStyle: 'italic',
-    padding: 12,
-    textAlign: 'center',
-    width: '100%',
-  },
-  diagFileGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  diagFileItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EFF6FF',
-    padding: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-    gap: 8,
-    minWidth: '45%',
-  },
-  diagFileItemActive: {
-    backgroundColor: '#3B82F6',
-    borderColor: '#2563EB',
-  },
-  diagFileName: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#1E40AF',
-  },
-  diagFileNameActive: {
-    color: '#FFFFFF',
-  },
-  diagViewPanel: {
-    marginTop: 24,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
-  },
-  diagViewHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#F8FAFC',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  diagViewTitle: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#0F172A',
-    textTransform: 'uppercase',
-  },
-  diagDownloadBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    gap: 6,
-  },
-  diagDownloadText: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#FFFFFF',
-  },
-  diagScrollArea: {
-    maxHeight: 400,
-    padding: 16,
-  },
-  diagMetaRow: {
-    flexDirection: 'row',
-    marginBottom: 4,
-    gap: 8,
-  },
-  diagMetaLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#64748B',
-  },
-  diagMetaValue: {
-    fontSize: 11,
-    color: '#0F172A',
-    fontWeight: '600',
-  },
-  diagLogBox: {
-    marginTop: 16,
-    backgroundColor: '#0F172A',
-    borderRadius: 12,
-    padding: 12,
-  },
-  diagLogLine: {
-    flexDirection: 'row',
-    marginBottom: 6,
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
-    paddingBottom: 4,
-  },
-  diagLogTime: {
-    fontSize: 9,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    color: '#94A3B8',
-  },
-  diagLogLevel: {
-    fontSize: 9,
-    fontWeight: '900',
-    width: 45,
-  },
-  diagLogMsg: {
-    flex: 1,
-    fontSize: 9,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    color: '#E2E8F0',
-  },
+  fullActionBtn: { height: 48, borderRadius: 16, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center', marginTop: 20 },
+  fullActionBtnText: { fontSize: 14, fontWeight: '800', color: '#64748B' },
+  coachSubTabs: { flexDirection: 'row', marginBottom: 20, gap: 8 },
+  coachSubTab: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: '#FFF', ...designSystem.shadows.sm },
+  coachSubTabActive: { backgroundColor: '#6366F1' },
+  coachSubTabText: { fontSize: 11, fontWeight: '800', color: '#64748B' },
+  coachSubTabTextActive: { color: '#FFF' },
+  emptyContainer: { padding: 40, alignItems: 'center' },
+  emptyText: { fontSize: 14, color: '#94A3B8', fontWeight: '600' },
+  tierBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start', marginTop: 4 },
+  tierText: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase' },
+  statsInline: { flexDirection: 'row', gap: 12 },
+  inlineStat: { alignItems: 'center' },
+  inlineStatBtn: { alignItems: 'center' },
+  inlineValue: { fontSize: 14, fontWeight: '800', color: '#1E293B' },
+  inlineLabel: { fontSize: 9, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase' },
+  expandedContent: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  detailsBlock: { marginBottom: 16 },
+  blockLabel: { fontSize: 11, fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', marginBottom: 12 },
+  gridStats: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  gridStatBox: { flex: 1, padding: 12, borderRadius: 12, backgroundColor: '#F8FAFC' },
+  gridStatLabel: { fontSize: 10, color: '#94A3B8', fontWeight: '700', marginBottom: 4 },
+  gridStatValue: { fontSize: 11, color: '#1E293B', fontWeight: '800' },
+  tournamentList: { marginTop: 8 },
+  hostedTItem: { padding: 12, borderRadius: 12, backgroundColor: '#F8FAFC', marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  hostedTTitle: { fontSize: 13, fontWeight: '700', color: '#1E293B' },
+  hostedTSport: { fontSize: 11, color: '#6366F1', fontWeight: '800' },
+  emptyNote: { fontSize: 12, color: '#94A3B8', fontStyle: 'italic', textAlign: 'center', marginTop: 8 },
+  ratingBox: { alignItems: 'center' },
+  ratingValue: { fontSize: 16, fontWeight: '800', color: '#6366F1' },
+  ratingLabel: { fontSize: 9, color: '#94A3B8', fontWeight: '700', textTransform: 'uppercase' },
+  wideBadge: { width: 100, alignItems: 'center' },
+  assignRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  coachDetailName: { fontSize: 13, fontWeight: '700', color: '#1E293B' },
+  coachDetailText: { fontSize: 11, color: '#64748B', marginTop: 2 },
+  miniAssignBtn: { backgroundColor: '#6366F1', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  miniAssignBtnBlue: { backgroundColor: '#3B82F6', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  miniAssignText: { color: '#FFF', fontSize: 10, fontWeight: '800' },
+  miniRemoveBtn: { backgroundColor: '#FEE2E2', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  miniRemoveText: { color: '#EF4444', fontSize: 10, fontWeight: '800' },
+  optedInRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  detailsBtn: { marginTop: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center' },
+  detailsBtnText: { fontSize: 13, fontWeight: '800', color: '#6366F1' },
+  sectionTitle: { fontSize: 14, fontWeight: '900', color: '#1E293B', textTransform: 'uppercase', marginBottom: 16, marginTop: 10 },
+  alertContent: { marginTop: 10 },
+  alertLabel: { fontSize: 12, color: '#64748B', fontWeight: '700', marginBottom: 4 },
+  alertValue: { color: '#1E293B', fontWeight: '800' },
+  alertOtp: { color: '#EF4444', fontWeight: '900', letterSpacing: 1 },
+  diagnosticsContainer: { paddingHorizontal: 24, paddingBottom: 40 },
+  diagHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 },
+  diagSyncBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#6366F1', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, gap: 6 },
+  diagSyncBtnText: { fontSize: 10, fontWeight: '900', color: '#FFFFFF' },
+  diagSearchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', paddingHorizontal: 16, borderRadius: 16, ...designSystem.shadows.sm, marginBottom: 16 },
+  diagSearchInput: { flex: 1, paddingVertical: 12, marginLeft: 10, fontSize: 14, color: '#1E293B' },
+  userListScroll: { marginBottom: 24 },
+  miniUserCard: { alignItems: 'center', padding: 12, marginRight: 12, borderRadius: 20, backgroundColor: '#FFF', width: 85, ...designSystem.shadows.sm },
+  miniUserCardActive: { backgroundColor: '#6366F1' },
+  miniAvatar: { width: 44, height: 44, borderRadius: 14, marginBottom: 8 },
+  miniUserName: { fontSize: 10, fontWeight: '700', color: '#64748B' },
+  miniUserNameActive: { color: '#FFFFFF' },
+  diagFileSection: { marginTop: 8 },
+  diagLabel: { fontSize: 14, fontWeight: '800', color: '#1E293B', marginBottom: 16 },
+  diagFileGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  diagFileItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF2FF', padding: 12, borderRadius: 16, gap: 8, minWidth: '45%' },
+  diagFileItemActive: { backgroundColor: '#6366F1' },
+  diagFileName: { fontSize: 10, fontWeight: '700', color: '#6366F1' },
+  diagFileNameActive: { color: '#FFFFFF' },
+  diagViewPanel: { marginTop: 24, backgroundColor: '#FFF', borderRadius: 24, ...designSystem.shadows.md, overflow: 'hidden' },
+  diagViewHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  diagViewTitle: { fontSize: 12, fontWeight: '900', color: '#1E293B', textTransform: 'uppercase' },
+  diagDownloadBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, gap: 6, backgroundColor: '#10B981' },
+  diagDownloadText: { fontSize: 10, fontWeight: '900', color: '#FFFFFF' },
+  diagScrollArea: { maxHeight: 400, padding: 16 },
+  diagMetaRow: { flexDirection: 'row', marginBottom: 6, gap: 10 },
+  diagMetaLabel: { fontSize: 11, fontWeight: '800', color: '#64748B' },
+  diagMetaValue: { fontSize: 11, color: '#1E293B', fontWeight: '700' },
+  diagLogBox: { marginTop: 16, backgroundColor: '#0F172A', borderRadius: 16, padding: 16 },
+  diagLogLine: { flexDirection: 'row', marginBottom: 8, gap: 10, borderBottomWidth: 1, borderBottomColor: '#1E293B', paddingBottom: 6 },
+  diagLogTime: { fontSize: 9, color: '#94A3B8' },
+  diagLogLevel: { fontSize: 9, fontWeight: '900' },
+  diagLogMsg: { flex: 1, fontSize: 10, color: '#E2E8F0' },
+  sheetContent: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '70%', backgroundColor: '#fff', borderTopLeftRadius: 32, borderTopRightRadius: 32, ...designSystem.shadows.lg },
+  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+  sheetTitle: { fontSize: 20, fontWeight: '900', color: '#1E293B' },
+  sheetScroll: { flex: 1, padding: 24 },
+  insightRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: 16, backgroundColor: '#F8FAFC', borderRadius: 16 },
+  insightLabel: { fontSize: 14, fontWeight: '700', color: '#334155' },
+  insightCount: { fontSize: 16, fontWeight: '900', color: '#6366F1' },
+  sheetFooter: { flexDirection: 'row', justifyContent: 'space-between', padding: 32, borderTopWidth: 1, borderTopColor: '#F8FAFC' },
+  footerLabel: { fontSize: 10, fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase' },
+  footerValue: { fontSize: 18, color: '#0F172A', fontWeight: '900' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', padding: 24 },
+  modalContent: { backgroundColor: '#FFFFFF', borderRadius: 32, padding: 24, gap: 16 },
+  modalTitle: { fontSize: 18, fontWeight: '900', color: '#1E293B' },
+  modalSubtitle: { fontSize: 12, color: '#64748B' },
+  modalInput: { backgroundColor: '#F8FAFC', borderRadius: 16, padding: 16, height: 120, textAlignVertical: 'top', fontSize: 14, borderWidth: 1, borderColor: '#F1F5F9' },
+  modalActions: { flexDirection: 'row', gap: 12, marginTop: 10 },
+  modalCancel: { flex: 1, paddingVertical: 14, backgroundColor: '#F1F5F9', borderRadius: 12, alignItems: 'center' },
+  modalCancelText: { fontWeight: '700', color: '#64748B' },
+  modalSubmit: { flex: 1.5, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  modalSubmitText: { fontWeight: '900', color: '#FFFFFF' },
+  documentGrid: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  docBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', padding: 12, borderRadius: 12, gap: 8, borderWidth: 1, borderColor: '#E2E8F0' },
+  docBtnText: { fontSize: 12, fontWeight: '700', color: '#1E293B' },
+  reasonBox: { backgroundColor: '#FEF2F2', padding: 12, borderRadius: 12, borderLeftWidth: 4, borderLeftColor: '#EF4444' },
+  reasonLabel: { fontSize: 10, fontWeight: '800', color: '#B91C1C', textTransform: 'uppercase', marginBottom: 4 },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  detailSection: { marginBottom: 24 },
+  detailLabel: { fontSize: 10, fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase', marginBottom: 6, letterSpacing: 1 },
+  detailValue: { fontSize: 16, fontWeight: '800', color: '#1E293B' },
+  detailSubValue: { fontSize: 13, color: '#64748B', marginTop: 2, fontWeight: '600' },
+  analyticsTable: { marginTop: 12, backgroundColor: '#FFFFFF', borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: '#F1F5F9' },
+  tableHead: { flexDirection: 'row', justifyContent: 'space-between', padding: 16, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  tableHeadText: { fontSize: 10, fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 1 },
+  tableRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+  rowLabelGroup: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  tableRowLabel: { fontSize: 14, fontWeight: '700', color: '#1E293B' },
+  countBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
+  countBadgeText: { fontSize: 13, fontWeight: '900' },
+  academyBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#EEF2FF', padding: 16, borderRadius: 16 },
+  academyNameDetail: { fontSize: 15, fontWeight: '800', color: '#6366F1' },
+  drillDownHeader: { padding: 24, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+  backBtnText: { fontSize: 12, fontWeight: '800', color: '#6366F1' },
+  drillDownTitle: { fontSize: 18, fontWeight: '900', color: '#0F172A' },
+  coachListRow: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F8FAFC', gap: 16 },
+  coachSmallAvatar: { width: 40, height: 40, borderRadius: 12 },
+  coachNameText: { fontSize: 14, fontWeight: '800', color: '#1E293B' },
+  coachMetaText: { fontSize: 11, color: '#64748B', fontWeight: '600', marginTop: 1 },
 });
 
 export default AdminHubScreen;

@@ -138,6 +138,7 @@ const addLog = (level, type, message) => {
 };
 
 const logger = {
+  addLog,
   initAutoFlush: (url, key, user, device) => {
     autoFlushConfig = { url, key, user, device };
     // Immediately attempt to process any historically pending offline payloads

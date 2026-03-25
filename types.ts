@@ -160,6 +160,8 @@ export interface Tournament {
   assignedCoachId?: string;
   confirmedCoachId?: string;
   declinedCoachIds?: string[];
+  notifiedCoachIds?: string[];
+  optedOutCoachIds?: string[];
   invitedCoachDetails?: { name: string; email: string; phone?: string };
   
   // Multi-round & Teams

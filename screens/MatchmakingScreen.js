@@ -265,83 +265,111 @@ export default function MatchmakingScreen({ user }) {
     );
   };
 
-  const renderRequested = () => (
-    <ScrollView style={styles.tabContent}>
-      {(role === 'coach' || receivedRequests.length > 0) && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{role === 'coach' ? 'Booking Requests' : 'Received Challenges'}</Text>
-          {receivedRequests.length === 0 ? (
-              <Text style={[styles.emptyText, { textAlign: 'center', marginTop: 30, marginBottom: 20, fontSize: 13 }]}>No Requests Received</Text>
-          ) : (
-            receivedRequests.map(req => (
-              <TouchableOpacity key={req.id} style={styles.requestCard} onPress={() => openDetails(req)}>
+  const renderRequested = () => {
+    const counteredRequests = sentRequests.filter(req => req.status === 'Countered');
+    const actualSentRequests = sentRequests.filter(req => req.status !== 'Countered');
+
+    return (
+      <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+        {(role === 'coach' || receivedRequests.length > 0) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{role === 'coach' ? 'Booking Requests' : 'Received Challenges'}</Text>
+            {receivedRequests.length === 0 ? (
+                <Text style={[styles.emptyText, { textAlign: 'center', marginTop: 30, marginBottom: 20, fontSize: 13 }]}>No Requests Received</Text>
+            ) : (
+              receivedRequests.map(req => (
+                <TouchableOpacity key={req.id} style={styles.requestCard} onPress={() => openDetails(req)}>
+                  <View style={styles.info}>
+                    <Text style={styles.name}>{req.name}</Text>
+                    <Text style={[styles.details, req.status === 'Counter Proposed' && { color: '#D97706' }]}>
+                      {req.sport} • {req.time || (req.proposedDate + ' @ ' + req.proposedTime)}
+                      {req.status === 'Counter Proposed' ? ' (Negotiating)' : ''}
+                    </Text>
+                  </View>
+                  <View style={styles.actionRow}>
+                    <TouchableOpacity style={styles.smallBtn} onPress={() => handleCounter(req)}>
+                      <Text style={styles.smallBtnText}>Counter</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.smallBtn, { backgroundColor: '#22C55E' }]} onPress={() => handleAcceptChallenge(req)}>
+                      <Text style={styles.smallBtnText}>{role === 'coach' ? 'Confirm' : 'Accept'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
+        )}
+
+        {/* Dedicated Countered Section */}
+        {counteredRequests.length > 0 && (
+          <View style={[styles.section, { marginTop: 20 }]}>
+            <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Countered</Text>
+                {role === 'coach' && counteredRequests.some(r => r.hasUserResponse) && (
+                    <View style={[styles.badge, { backgroundColor: '#EF4444' }]}>
+                        <Text style={styles.badgeText}>{counteredRequests.filter(r => r.hasUserResponse).length} NEW RESPONSE</Text>
+                    </View>
+                )}
+            </View>
+            {counteredRequests.map(req => (
+              <TouchableOpacity key={req.id} style={[styles.requestCard, { borderLeftColor: '#F59E0B' }]} onPress={() => openDetails(req)}>
                 <View style={styles.info}>
-                  <Text style={styles.name}>{req.name}</Text>
-                  <Text style={[styles.details, req.status === 'Counter Proposed' && { color: '#D97706' }]}>
-                    {req.sport} • {req.time || (req.proposedDate + ' @ ' + req.proposedTime)}
-                    {req.status === 'Counter Proposed' ? ' (Negotiating)' : ''}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                      <Text style={[styles.name, { flex: 1 }]} numberOfLines={1}>{req.name}</Text>
+                      {req.hasUserResponse && (
+                          <View style={styles.responseTag}>
+                              <Text style={styles.responseTagText}>USER RESPONDED</Text>
+                          </View>
+                      )}
+                  </View>
+                  <Text style={styles.details}>{req.sport} • {req.proposedDate} at {req.proposedTime} • {req.status}</Text>
                 </View>
                 <View style={styles.actionRow}>
                   <TouchableOpacity style={styles.smallBtn} onPress={() => handleCounter(req)}>
                     <Text style={styles.smallBtnText}>Counter</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.smallBtn, { backgroundColor: '#22C55E' }]} onPress={() => handleAcceptChallenge(req)}>
-                    <Text style={styles.smallBtnText}>{role === 'coach' ? 'Confirm' : 'Accept'}</Text>
+                  <TouchableOpacity 
+                      style={[styles.smallBtn, { backgroundColor: (role === 'coach' ? (req.hasUserResponse ? '#22C55E' : '#E2E8F0') : '#F1F5F9') }]} 
+                      onPress={() => role === 'coach' ? (req.hasUserResponse ? handleConfirmBooking(req) : null) : handleCounter(req)}
+                  >
+                      <Text style={[styles.smallBtnText, { color: (role === 'coach' ? (req.hasUserResponse ? '#fff' : '#94A3B8') : '#333') }]}>
+                        {role === 'coach' ? 'Confirm' : 'Accept'}
+                      </Text>
                   </TouchableOpacity>
                 </View>
               </TouchableOpacity>
-            ))
-          )}
-        </View>
-      )}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{role === 'coach' ? 'Countered' : 'Sent Requests'}</Text>
-            {role === 'coach' && sentRequests.some(r => r.hasUserResponse) && (
-                <View style={[styles.badge, { backgroundColor: '#EF4444' }]}>
-                    <Text style={styles.badgeText}>{sentRequests.filter(r => r.hasUserResponse).length} NEW RESPONSE</Text>
+            ))}
+          </View>
+        )}
+
+        <View style={[styles.section, { marginTop: counteredRequests.length > 0 ? 20 : 0 }]}>
+          <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Sent Requests</Text>
+          </View>
+          {actualSentRequests.length === 0 && <Text style={styles.emptyText}>No pending requests sent.</Text>}
+          {actualSentRequests.map(req => (
+            <TouchableOpacity key={req.id} style={styles.requestCard} onPress={() => openDetails(req)}>
+               <View style={styles.info}>
+                  <Text style={styles.name} numberOfLines={1}>{req.name}</Text>
+                  <Text style={styles.details}>{req.sport} • {req.proposedDate} at {req.proposedTime} • {req.status || 'Pending'}</Text>
                 </View>
-            )}
-        </View>
-        {sentRequests.length === 0 && <Text style={styles.emptyText}>No pending requests sent.</Text>}
-        {sentRequests.map(req => (
-          <TouchableOpacity key={req.id} style={styles.requestCard} onPress={() => openDetails(req)}>
-             <View style={styles.info}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                    <Text style={[styles.name, { flex: 1 }]} numberOfLines={1}>{req.name}</Text>
-                    {req.hasUserResponse && (
-                        <View style={styles.responseTag}>
-                            <Text style={styles.responseTagText}>USER RESPONDED</Text>
-                        </View>
-                    )}
+                <View style={styles.actionRow}>
+                  <TouchableOpacity style={styles.smallBtn} onPress={() => handleCounter(req)}>
+                    <Text style={styles.smallBtnText}>Counter</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.smallBtn, { backgroundColor: '#FEE2E2' }]} 
+                    onPress={() => setSentRequests(sentRequests.filter(r => r.id !== req.id))}
+                  >
+                    <Text style={[styles.smallBtnText, { color: '#EF4444' }]}>Cancel</Text>
+                  </TouchableOpacity>
                 </View>
-                <Text style={styles.details}>{req.sport} • {req.proposedDate} at {req.proposedTime} • {req.status}</Text>
-              </View>
-              {role === 'coach' ? (
-                  <View style={styles.actionRow}>
-                    <TouchableOpacity style={styles.smallBtn} onPress={() => handleCounter(req)}>
-                      <Text style={styles.smallBtnText}>Counter</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                        style={[styles.smallBtn, { backgroundColor: req.hasUserResponse ? '#22C55E' : '#E2E8F0' }]} 
-                        onPress={() => req.hasUserResponse ? handleConfirmBooking(req) : null}
-                    >
-                        <Text style={[styles.smallBtnText, { color: req.hasUserResponse ? '#fff' : '#94A3B8' }]}>Confirm</Text>
-                    </TouchableOpacity>
-                  </View>
-              ) : (
-                  <View style={styles.actionRow}>
-                    <TouchableOpacity onPress={() => setSentRequests(sentRequests.filter(r => r.id !== req.id))}>
-                        <Ionicons name="close-circle" size={24} color="#EF4444" />
-                    </TouchableOpacity>
-                  </View>
-              )}
-          </TouchableOpacity>
-        ))}
-      </View>
-    </ScrollView>
-  );
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
+    );
+  };
 
   const renderAccepted = () => (
     <View style={styles.tabContent}>

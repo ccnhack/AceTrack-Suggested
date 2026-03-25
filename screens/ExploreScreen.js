@@ -623,6 +623,8 @@ const ExploreScreen = (props) => {
         </View>
       </ScrollView>
 
+
+
       <TournamentDetailModal
         tournament={selectedTournament}
         visible={!!selectedTournament}

@@ -51,7 +51,9 @@ export const AdminGrievancesPanel = ({
     .filter(t => {
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();
-      return t.title.toLowerCase().includes(q) || t.id.toLowerCase().includes(q) || getUserName(t.userId).toLowerCase().includes(q);
+      const userName = getUserName(t.userId).toLowerCase();
+      const userId = t.userId.toLowerCase();
+      return t.title.toLowerCase().includes(q) || t.id.toLowerCase().includes(q) || userName.includes(q) || userId.includes(q);
     });
 
   const pickImage = async () => {
