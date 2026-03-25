@@ -822,14 +822,18 @@ ${tournament.sponsorName ? `<div class="sponsor">Sponsored by ${tournament.spons
 // ═══════════════════════════════════════════════════════════════
 const publicPath = path.join(__dirname, 'public');
 if (fs.existsSync(publicPath)) {
-  app.use(express.static(publicPath));
-  app.use((req, res, next) => {
-    if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/socket.io') && !req.path.startsWith('/results')) {
-      res.sendFile(path.join(publicPath, 'index.html'));
-    } else {
-      next();
+  console.log(`🌐 [Frontend] Serving static files from: ${publicPath}`);
+  app.use('/', express.static(publicPath));
+  
+  // SPA Fallback: Redirect all non-API/non-results GET requests to index.html
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/socket.io') || req.path.startsWith('/results')) {
+      return next();
     }
+    res.sendFile(path.join(publicPath, 'index.html'));
   });
+} else {
+  console.warn(`⚠️ [Frontend] Public directory NOT found at: ${publicPath}`);
 }
 
 // ═══════════════════════════════════════════════════════════════
