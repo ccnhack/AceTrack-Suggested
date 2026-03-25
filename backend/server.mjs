@@ -201,7 +201,8 @@ const finalPublicPath = fs.existsSync(publicPath) ? publicPath : altPublicPath;
 
 console.log(`🌐 [Frontend] Checking public directory at: ${finalPublicPath}`);
 
-// Force root to index.html immediately
+// Force root to index.html immediately - DISABLED to test default static index
+/*
 app.get('/', (req, res) => {
   const indexFile = path.join(finalPublicPath, 'index.html');
   if (fs.existsSync(indexFile)) {
@@ -212,6 +213,7 @@ app.get('/', (req, res) => {
     res.status(404).send('Dashboard index.html not found on server');
   }
 });
+*/
 
 if (fs.existsSync(finalPublicPath)) {
   console.log(`✅ [Frontend] Serving static files from: ${finalPublicPath}`);
