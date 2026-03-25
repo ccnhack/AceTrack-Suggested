@@ -141,22 +141,8 @@ const ProfileScreen = ({
   const [isUpdatingBinary, setIsUpdatingBinary] = useState(false);
   const activeApiUrl = isUsingCloud ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
 
-  useEffect(() => {
-    const checkUpdate = async () => {
-      if (__DEV__) return;
-      try {
-        const update = await Updates.checkForUpdateAsync();
-        if (update.isAvailable) {
-          setUpdateAvailable(true);
-          // Standardized simulated version for visibility during testing
-          setLatestVersion(update.manifest?.version || '1.0.44');
-        }
-      } catch (e) {
-        console.log("Update check failed:", e);
-      }
-    };
-    checkUpdate();
-  }, []);
+  // Removed invalid useEffect that caused crash
+
 
   // Edit Profile States
   const [message, setMessage] = useState('');
@@ -630,9 +616,10 @@ const ProfileScreen = ({
         </View>
 
         <View style={styles.footer}>
-            <Text style={styles.versionText}>AceTrack v{appVersion || '1.0.0'} (Mobile)</Text>
+            <Text style={styles.versionText}>AceTrack v{appVersion || '2.0.1'} (Mobile)</Text>
             <Text style={styles.legalText}>Privacy Policy • Terms of Service</Text>
         </View>
+
       </ScrollView>
 
       <DiagnosticsModal 
@@ -655,9 +642,10 @@ const ProfileScreen = ({
             {SupportTicketSystem ? (
               <SupportTicketSystem 
                   tickets={supportTickets || []}
-                  userId={user.id}
-                  userName={user.name}
+                  userId={user?.id || 'unknown'}
+                  userName={user?.name || 'User'}
                   onCreateTicket={onSaveTicket}
+
                   onSendMessage={onReplyTicket}
               />
             ) : <Text>Support System Unavailable</Text>}
