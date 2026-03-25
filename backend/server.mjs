@@ -72,6 +72,12 @@ const ALLOWED_ORIGINS = [
 const app = express();
 app.set('trust proxy', true);
 
+// 🔍 GLOBAL REQUEST LOGGER (Temporary Debug)
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - IP: ${req.ip}`);
+  next();
+});
+
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: Helmet for HTTP headers (SEC)
 // ═══════════════════════════════════════════════════════════════
