@@ -195,16 +195,22 @@ const logServerEvent = (action, details = {}) => {
   }
 };
 
-const publicPath = path.join(process.cwd(), 'backend', 'public');
+const distPath = path.join(process.cwd(), 'dist');
+const backendPublicPath = path.join(process.cwd(), 'backend', 'public');
 const altPublicPath = path.join(__dirname, 'public');
-const finalPublicPath = fs.existsSync(publicPath) ? publicPath : altPublicPath;
 
-console.log(`🌐 [Frontend] Checking public directory at: ${finalPublicPath}`);
+let staticPath = altPublicPath;
+if (fs.existsSync(distPath)) {
+  staticPath = distPath;
+} else if (fs.existsSync(backendPublicPath)) {
+  staticPath = backendPublicPath;
+}
 
-// Force root to index.html immediately - DISABLED to test default static index
-/*
+console.log(`🌐 [Frontend] Serving static files from: ${staticPath}`);
+
+// Force root to index.html immediately
 app.get('/', (req, res) => {
-  const indexFile = path.join(finalPublicPath, 'index.html');
+  const indexFile = path.join(staticPath, 'index.html');
   if (fs.existsSync(indexFile)) {
     console.log(`✅ [Frontend] Serving index.html from: ${indexFile}`);
     res.sendFile(indexFile);
@@ -213,12 +219,8 @@ app.get('/', (req, res) => {
     res.status(404).send('Dashboard index.html not found on server');
   }
 });
-*/
 
-if (fs.existsSync(finalPublicPath)) {
-  console.log(`✅ [Frontend] Serving static files from: ${finalPublicPath}`);
-  app.use(express.static(finalPublicPath));
-}
+app.use(express.static(staticPath));
 
 // ═══════════════════════════════════════════════════════════════
 // 🔍 DEBUG: Filesystem Inspector (Temporary)
@@ -877,11 +879,13 @@ app.get('*', (req, res, next) => {
     return next();
   }
   
-  const pPath = fs.existsSync(path.join(process.cwd(), 'backend', 'public'))
-    ? path.join(process.cwd(), 'backend', 'public')
-    : path.join(__dirname, 'public');
+  const dPath = path.join(process.cwd(), 'dist');
+  const bPath = path.join(process.cwd(), 'backend', 'public');
+  const aPath = path.join(__dirname, 'public');
+  
+  const fPath = fs.existsSync(dPath) ? dPath : (fs.existsSync(bPath) ? bPath : aPath);
     
-  const indexFile = path.join(pPath, 'index.html');
+  const indexFile = path.join(fPath, 'index.html');
   if (fs.existsSync(indexFile)) {
     res.sendFile(indexFile);
   } else {
