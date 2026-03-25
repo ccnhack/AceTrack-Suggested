@@ -548,12 +548,26 @@ router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), async (req
     const filename = `${filePrefix}${safeUsername}${safeDeviceId}_${timestamp}.json`;
     const filepath = path.join(DIAGNOSTICS_DIR, filename);
 
-    fs.writeFileSync(filepath, JSON.stringify({
+    const reportData = {
       username,
       deviceId: deviceId || 'Unknown Device',
       uploadedAt: istDate.toISOString().replace('Z', '+05:30'),
       logs
-    }, null, 2));
+    };
+
+    fs.writeFileSync(filepath, JSON.stringify(reportData, null, 2));
+
+    // ☁️ Persistence Fix: Upload to Cloudinary
+    try {
+      const cloudResult = await cloudinary.uploader.upload(filepath, {
+        folder: 'acetrack/diagnostics',
+        resource_type: 'raw',
+        public_id: filename
+      });
+      logServerEvent('DIAGNOSTICS_CLOUDINARY_BACKUP_SUCCESS', { url: cloudResult.secure_url });
+    } catch (err) {
+      console.error('❌ Cloudinary Diagnostics Backup Failed:', err.message);
+    }
 
     res.json({ success: true, filename });
   } catch (error) {
@@ -573,6 +587,18 @@ router.post('/diagnostics/auto-flush', apiKeyGuard, validate(AutoFlushSchema), a
     const filePath = path.join(DIAGNOSTICS_DIR, filename);
     const logContent = logs.map(l => `[${l.timestamp}] ${l.level.toUpperCase()} [${l.type}]: ${l.message}`).join('\n');
     fs.writeFileSync(filePath, logContent);
+
+    // ☁️ Persistence Fix: Upload to Cloudinary
+    try {
+      const cloudResult = await cloudinary.uploader.upload(filePath, {
+        folder: 'acetrack/diagnostics/auto-flush',
+        resource_type: 'raw',
+        public_id: filename
+      });
+      logServerEvent('AUTO_FLUSH_CLOUDINARY_BACKUP_SUCCESS', { url: cloudResult.secure_url });
+    } catch (err) {
+      console.error('❌ Cloudinary Auto-Flush Backup Failed:', err.message);
+    }
 
     // Retention: Keep 3 newest
     const allFiles = fs.readdirSync(DIAGNOSTICS_DIR);
