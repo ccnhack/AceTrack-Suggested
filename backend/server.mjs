@@ -137,6 +137,26 @@ app.use((req, res, next) => {
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: Rate Limiting (SEC Fix #4)
 // ═══════════════════════════════════════════════════════════════
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 100,
+  message: { error: 'Too many requests. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const strictLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: 'Too many attempts. Please wait before trying again.' }
+});
+
+const otpLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: { error: 'Too many OTP attempts. Account temporarily locked.' }
+});
+
 app.use('/api/', globalLimiter);
 
 const publicPath = path.join(process.cwd(), 'backend', 'public');
