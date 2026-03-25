@@ -64,7 +64,7 @@ const AdminHubScreen = ({
   const [diagFileSize, setDiagFileSize] = useState(0);
   const [isFetchingDiags, setIsFetchingDiags] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [isPullingLive, setIsPullingLive] = useState(false);
+  const [pullingDeviceIds, setPullingDeviceIds] = useState({});
   const [onlineDevices, setOnlineDevices] = useState({});
 
     const handlePong = (data) => {
@@ -693,9 +693,47 @@ const AdminHubScreen = ({
             <View style={styles.diagHeaderRow}>
                <Text style={[styles.sectionTitle, { flex: 1, marginRight: 12, minWidth: 150 }]}>System Diagnostics Management</Text>
                <TouchableOpacity 
-                 onPress={() => {
+                 onPress={async () => {
                    logger.logAction('ADMIN_MANUAL_SYNC_TRIGGER');
                    onManualSync?.();
+                   
+                   // Re-fetch diagnostic files if a user is currently selected
+                   if (selectedDiagUser) {
+                      setIsFetchingDiags(true);
+                      setUserDiagFiles([]);
+                      try {
+                        const url = `${activeApiUrl}/api/diagnostics`;
+                        const res = await fetch(url, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
+                        if (res.ok) {
+                            const data = await res.json();
+                            const pName = (selectedDiagUser.name || '').toLowerCase();
+                            const pId = String(selectedDiagUser.id || '').toLowerCase();
+                            const firstName = pName.split(' ')[0];
+
+                            const safeName = selectedDiagUser.name ? selectedDiagUser.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() : '';
+                            const safeId = selectedDiagUser.id ? String(selectedDiagUser.id).replace(/[^a-z0-9]/gi, '_').toLowerCase() : '';
+                            const pEmailPrefix = selectedDiagUser.email ? selectedDiagUser.email.split('@')[0] : '';
+                            const safeEmail = pEmailPrefix.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                            
+                            let fs = data.files.filter(f => {
+                              const low = f.toLowerCase();
+                              return (safeName && low.startsWith(safeName + '_')) || 
+                                     (safeId && low.startsWith(safeId + '_')) ||
+                                     (safeEmail && low.startsWith(safeEmail + '_')) ||
+                                     (safeName && low.startsWith('admin_requested_' + safeName + '_')) ||
+                                     (safeName && low.includes(`_${safeName}_`)) ||
+                                     (firstName.length > 3 && low.includes(firstName.toLowerCase()));
+                            });
+                            
+                            fs = fs.sort((a, b) => b.localeCompare(a)).slice(0, 3);
+                            setUserDiagFiles(fs);
+                        }
+                      } catch (e) {
+                         console.error("Force sync auto-refetch error", e);
+                      } finally {
+                         setIsFetchingDiags(false);
+                      }
+                   }
                  }}
                  style={styles.diagSyncBtn}
                >
@@ -864,7 +902,7 @@ const AdminHubScreen = ({
                           </View>
                         </View>
                         <TouchableOpacity 
-                          disabled={isPullingLive || !onlineDevices[d.id]}
+                          disabled={pullingDeviceIds[d.id] || !onlineDevices[d.id]}
                           onPress={async () => {
                             if (socketRef && socketRef.current) {
                               socketRef.current.emit('admin_pull_diagnostics', { 
@@ -875,7 +913,8 @@ const AdminHubScreen = ({
                               logger.logAction('ADMIN_SENT_PULL_REQUEST', { target: selectedDiagUser.id, device: d.id });
                               
                               const initialFiles = new Set(userDiagFiles);
-                              setIsPullingLive(true);
+                              // Set specifically this device to pulling state
+                            setPullingDeviceIds(prev => ({ ...prev, [d.id]: true }));
                               let attempts = 0;
                               
                               const poll = async () => {
@@ -897,36 +936,50 @@ const AdminHubScreen = ({
                                       const hasNewFile = fs.some(f => !initialFiles.has(f));
                                       if (hasNewFile) {
                                         setUserDiagFiles(fs.reverse());
-                                        setIsPullingLive(false);
+                                        setPullingDeviceIds(prev => { const next = {...prev}; delete next[d.id]; return next; });
                                         return; // Instantly halt the spinner when the file drops
                                       }
                                     }
                                   } catch (e) {}
                                   await new Promise(r => setTimeout(r, 3000));
-                                }
-                                setIsPullingLive(false); // Times out after 15s
-                              };
-                              poll();
-
-                            } else {
-                              Alert.alert("Error", "WebSocket not connected.");
+                          disabled={pullingDeviceIds[d.id] || !onlineDevices[d.id]}
+                          onPress={() => {
+                            if (!socketRef || !socketRef.current || !socketRef.current.connected) {
+                              Alert.alert('Cloud Reconnecting', 'The real-time cloud connection is currently offline. Trying to reconnect...');
+                              return;
                             }
+                            // Set specifically this device to pulling state
+                            setPullingDeviceIds(prev => ({ ...prev, [d.id]: true }));
+                            logger.logAction('ADMIN_PULL_LOGS', { targetUserId: selectedDiagUser.id, deviceId: d.id });
+                            
+                            socketRef.current.emit('admin_pull_diagnostics', { 
+                              targetUserId: selectedDiagUser.id,
+                              deviceId: d.id,
+                              adminId: user?.id || 'admin'
+                            });
+                            
+                            setTimeout(() => {
+                              setPullingDeviceIds(prev => { const next = {...prev}; delete next[d.id]; return next; });
+                              Alert.alert(
+                                "Pull Sent",
+                                "The pull command was transmitted via cloud socket to device: " + String(d.id).substring(0,8) + "... If online, it will upload shortly."
+                              );
+                            }, 3000);
                           }}
-                          style={{ 
-                            backgroundColor: (isPullingLive || !onlineDevices[d.id]) ? '#CBD5E1' : '#EF4444', 
-                            paddingHorizontal: 10, 
-                            paddingVertical: 6, 
-                            borderRadius: 16, 
-                            flexDirection: 'row', 
+                          style={{
+                            backgroundColor: (pullingDeviceIds[d.id] || !onlineDevices[d.id]) ? '#CBD5E1' : '#EF4444', 
+                            paddingHorizontal: 8, 
+                            paddingVertical: 4, 
+                            borderRadius: 6,
+                            marginLeft: 12,                              flexDirection: 'row', 
                             alignItems: 'center', 
-                            gap: 4, 
-                            minWidth: 90,
-                            justifyContent: 'center',
-                            opacity: (isPullingLive || !onlineDevices[d.id]) ? 0.8 : 1 
+                            borderWidth: 1, 
+                            borderColor: (pullingDeviceIds[d.id] || !onlineDevices[d.id]) ? '#94A3B8' : '#DC2626',
+                            opacity: (pullingDeviceIds[d.id] || !onlineDevices[d.id]) ? 0.8 : 1 
                           }}
                         >
-                          {isPullingLive ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="cloud-download-outline" size={12} color="#FFFFFF" />}
-                          <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 10 }}>{isPullingLive ? 'PULLING...' : 'PULL LOGS'}</Text>
+                          {pullingDeviceIds[d.id] ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="cloud-download-outline" size={12} color="#FFFFFF" />}
+                          <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 10 }}>{pullingDeviceIds[d.id] ? 'PULLING...' : 'PULL LOGS'}</Text>
                         </TouchableOpacity>
                       </View>
                     ))}
@@ -937,54 +990,35 @@ const AdminHubScreen = ({
                       <Text style={{ fontSize: 11, color: onlineDevices[selectedDiagUser.id] ? '#10B981' : '#EF4444', fontWeight: 'bold', marginBottom: 2 }}>{onlineDevices[selectedDiagUser.id] ? 'ONLINE (ACTIVE)' : 'OFFLINE'}</Text>
                       <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>No hardware logs stored on cluster. Live trigger will pull any unrecorded connected devices.</Text>
                     </View>
-                    <TouchableOpacity 
-                      disabled={isPullingLive || !onlineDevices[selectedDiagUser.id]}
+                    <TouchableOpacity
+                      disabled={pullingDeviceIds[selectedDiagUser.id] || !onlineDevices[selectedDiagUser.id]}
                       onPress={() => {
-                        if (socketRef && socketRef.current) {
-                          socketRef.current.emit('admin_pull_diagnostics', { 
-                            targetUserId: selectedDiagUser.id,
-                            adminId: user?.id 
-                          });
-                          logger.logAction('ADMIN_SENT_PULL_REQUEST', { target: selectedDiagUser.id });
-                          
-                          const initialFiles = new Set(userDiagFiles);
-                          setIsPullingLive(true);
-                          let attempts = 0;
-                          
-                          const poll = async () => {
-                            while (attempts < 5) {
-                              attempts++;
-                              try {
-                                const res = await fetch(`${activeApiUrl}/api/diagnostics`, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
-                                if (res.ok) {
-                                  const data = await res.json();
-                                  const pNameRaw = (selectedDiagUser.name || '').toLowerCase();
-                                  const firstName = pNameRaw.split(' ')[0];
-                                  const safeName = pNameRaw.replace(/[^a-z0-9]/gi, '_');
-                                  const fs = data.files.filter(f => {
-                                    const lf = f.toLowerCase();
-                                    return lf.includes(safeName) || lf.includes(firstName);
-                                  });
-                                  
-                                  const hasNewFile = fs.some(f => !initialFiles.has(f));
-                                  if (hasNewFile) {
-                                    setUserDiagFiles(fs.reverse());
-                                    setIsPullingLive(false);
-                                    return; // Instantly halt the spinner when the file drops
-                                  }
-                                }
-                              } catch (e) {}
-                              await new Promise(r => setTimeout(r, 3000));
-                            }
-                            setIsPullingLive(false); // Times out after 15s
-                          };
-                          poll();
+                        if (!socketRef || !socketRef.current || !socketRef.current.connected) {
+                          Alert.alert('Cloud Offline', 'The real-time connection is down.');
+                          return;
                         }
+                        setPullingDeviceIds(prev => ({ ...prev, [selectedDiagUser.id]: true }));
+                        
+                        // Fire to ALL matching devices online just in case
+                        selectedDiagUser.devices?.forEach(d => {
+                           if (onlineDevices[d.id]) {
+                             socketRef.current.emit('admin_pull_diagnostics', { 
+                                targetUserId: selectedDiagUser.id,
+                                deviceId: d.id,
+                                adminId: user?.id || 'admin'
+                             });
+                           }
+                        });
+                        
+                        setTimeout(() => {
+                          setPullingDeviceIds(prev => { const next = {...prev}; delete next[selectedDiagUser.id]; return next; });
+                          Alert.alert("Pull Command Broadcasted", "Pulls requested to active devices.");
+                        }, 3000);
                       }}
-                      style={{ backgroundColor: (isPullingLive || !onlineDevices[selectedDiagUser.id]) ? '#94A3B8' : '#EF4444', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: (isPullingLive || !onlineDevices[selectedDiagUser.id]) ? 0.7 : 1 }}
+                      style={{ backgroundColor: (pullingDeviceIds[selectedDiagUser.id] || !onlineDevices[selectedDiagUser.id]) ? '#94A3B8' : '#EF4444', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: (pullingDeviceIds[selectedDiagUser.id] || !onlineDevices[selectedDiagUser.id]) ? 0.7 : 1 }}
                     >
-                      {isPullingLive ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="cloud-download-outline" size={14} color="#FFFFFF" />}
-                      <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 10 }}>{isPullingLive ? 'PULLING...' : `PULL LIVE LOGS FOR ${selectedDiagUser.name.split(' ')[0].toUpperCase()}`}</Text>
+                      {pullingDeviceIds[selectedDiagUser.id] ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="cloud-download-outline" size={14} color="#FFFFFF" />}
+                      <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 10 }}>{pullingDeviceIds[selectedDiagUser.id] ? 'PULLING...' : `PULL LIVE LOGS FOR ${selectedDiagUser.name.split(' ')[0].toUpperCase()}`}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
