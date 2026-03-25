@@ -133,24 +133,23 @@ app.use((req, res, next) => {
 // ═══════════════════════════════════════════════════════════════
 app.use('/api/', globalLimiter);
 
-// ═══════════════════════════════════════════════════════════════
-// Serve Web Admin Dashboard (Static Files)
-// ═══════════════════════════════════════════════════════════════
 const publicPath = path.join(process.cwd(), 'backend', 'public');
-console.log(`🌐 [Frontend] Checking public directory at: ${publicPath}`);
+const altPublicPath = path.join(__dirname, 'public');
+const finalPublicPath = fs.existsSync(publicPath) ? publicPath : altPublicPath;
 
-if (fs.existsSync(publicPath)) {
-  console.log(`✅ [Frontend] Successfully serving static files from: ${publicPath}`);
-  app.use(express.static(publicPath));
-} else {
-  // Fallback for local development or different folder structure
-  const altPublicPath = path.join(__dirname, 'public');
-  if (fs.existsSync(altPublicPath)) {
-    console.log(`✅ [Frontend] Successfully serving static files from (alt): ${altPublicPath}`);
-    app.use(express.static(altPublicPath));
+// Force root to index.html immediately
+app.get('/', (req, res) => {
+  const indexFile = path.join(finalPublicPath, 'index.html');
+  if (fs.existsSync(indexFile)) {
+    res.sendFile(indexFile);
   } else {
-    console.warn(`❌ [Frontend] Public directory NOT found. Searched: ${publicPath} and ${altPublicPath}`);
+    res.status(404).send('Dashboard index.html not found on server');
   }
+});
+
+if (fs.existsSync(finalPublicPath)) {
+  console.log(`✅ [Frontend] Serving static files from: ${finalPublicPath}`);
+  app.use(express.static(finalPublicPath));
 }
 
 // ═══════════════════════════════════════════════════════════════
