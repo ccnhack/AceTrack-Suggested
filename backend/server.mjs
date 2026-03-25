@@ -56,7 +56,7 @@ try {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
 
-const APP_VERSION = '2.0.0'; // AceTrack Suggested — Expert Panel Enhanced
+const APP_VERSION = '2.0.1'; // AceTrack Suggested — Stable Sync Fix
 
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: CORS Whitelist (SEC Fix #3)
