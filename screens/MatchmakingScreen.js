@@ -76,6 +76,7 @@ export default function MatchmakingScreen({ user }) {
   const [counterTime, setCounterTime] = useState('');
   const [venueSearchQuery, setVenueSearchQuery] = useState('');
   const [selectedAcademyForVenue, setSelectedAcademyForVenue] = useState(null);
+  const [counterVenue, setCounterVenue] = useState('opponent');
   const [expandedSlot, setExpandedSlot] = useState(null);
 
   const parseTime = (timeStr) => {
@@ -179,7 +180,7 @@ export default function MatchmakingScreen({ user }) {
     }
     const venueLabel = role === 'coach' 
         ? (selectedAcademyForVenue ? selectedAcademyForVenue.name : 'Coach-suggested Venue')
-        : (counterVenue === 'own' ? 'Our Academy Grounds' : (selectedChallenge.name + ' Grounds'));
+        : (counterVenue === 'own' ? 'Our Academy Grounds' : ((selectedChallenge?.name || 'Opponent') + ' Grounds'));
     
     const counteredItem = {
       ...selectedChallenge,
