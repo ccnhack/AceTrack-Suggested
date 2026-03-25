@@ -414,6 +414,76 @@ router.get('/status', apiKeyGuard, async (req, res) => {
   }
 });
 
+// GET /api/v1/diagnostics
+router.get('/diagnostics', apiKeyGuard, async (req, res) => {
+  try {
+    let cloudFiles = [];
+    try {
+      // Fetch raw files from the 'acetrack/diagnostics' folder
+      const result = await cloudinary.search
+        .expression('folder:acetrack/diagnostics/*')
+        .sort_by('created_at', 'desc')
+        .max_results(500)
+        .execute();
+        
+      cloudFiles = result.resources.map(file => {
+        const parts = file.public_id.split('/');
+        return parts[parts.length - 1];
+      });
+    } catch (e) {
+      console.warn('Cloudinary search failed, fetching only local files:', e.message);
+    }
+    
+    let localFiles = [];
+    try {
+      if (fs.existsSync(DIAGNOSTICS_DIR)) {
+        localFiles = fs.readdirSync(DIAGNOSTICS_DIR);
+      }
+    } catch (e) {
+      console.warn('Local read failed:', e.message);
+    }
+    
+    // Combine and deduplicate
+    const allFiles = [...new Set([...cloudFiles, ...localFiles])];
+    res.json({ success: true, files: allFiles });
+  } catch (error) {
+    console.error('Diagnostics Fetch Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/v1/diagnostics/:filename
+router.get('/diagnostics/:filename', apiKeyGuard, async (req, res) => {
+  try {
+    const { filename } = req.params;
+    
+    // 1. Check Cloudinary First
+    try {
+      const publicId = `acetrack/diagnostics/${filename}`;
+      const fileUrl = cloudinary.url(publicId, { resource_type: 'raw', secure: true });
+      // Fetch using global node fetch
+      const cloudRes = await fetch(fileUrl);
+      if (cloudRes.ok) {
+        const data = await cloudRes.json();
+        return res.json(data);
+      }
+    } catch (cloudErr) {
+      console.log(`Cloudinary fetch failed for ${filename}, trying local fallback.`);
+    }
+
+    // 2. Fallback to Local Disk
+    const filepath = path.join(DIAGNOSTICS_DIR, filename);
+    if (fs.existsSync(filepath)) {
+      const data = fs.readFileSync(filepath, 'utf8');
+      return res.json(JSON.parse(data));
+    }
+
+    res.status(404).json({ error: 'File not found in cloud or local storage' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /api/v1/save
 router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => {
   try {
@@ -521,9 +591,23 @@ router.post('/upload', apiKeyGuard, upload.single('video'), async (req, res) => 
 // GET /api/v1/diagnostics
 router.get('/diagnostics', apiKeyGuard, async (req, res) => {
   try {
-    const files = fs.readdirSync(DIAGNOSTICS_DIR);
+    // Fetch raw files from the 'acetrack/diagnostics' folder
+    const result = await cloudinary.search
+      .expression('folder:acetrack/diagnostics/*')
+      .sort_by('created_at', 'desc')
+      .max_results(500)
+      .execute();
+      
+    // Map to just the filenames to match the old frontend expectation
+    const files = result.resources.map(file => {
+      // Return just the filename part, with extension
+      const parts = file.public_id.split('/');
+      return parts[parts.length - 1] + '.' + file.format;
+    });
+    
     res.json({ success: true, files });
   } catch (error) {
+    console.error('Cloudinary Diagnostics Fetch Error:', error);
     res.status(500).json({ error: error.message });
   }
 });
