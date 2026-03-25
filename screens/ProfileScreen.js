@@ -134,6 +134,8 @@ const ProfileScreen = ({
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [isPickingImage, setIsPickingImage] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
   const [showVerifyModal, setShowVerifyModal] = useState(null); // 'email' | 'phone'
   const [verificationCode, setVerificationCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
