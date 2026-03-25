@@ -138,8 +138,7 @@ const ProfileScreen = ({
   const [showVerifyModal, setShowVerifyModal] = useState(null); // 'email' | 'phone'
   const [verificationCode, setVerificationCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
-  const [updateAvailable, setUpdateAvailable] = useState(false);
-  const [latestVersion, setLatestVersion] = useState('');
+  const [isUpdatingBinary, setIsUpdatingBinary] = useState(false);
   const activeApiUrl = isUsingCloud ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
 
   useEffect(() => {
@@ -576,6 +575,44 @@ const ProfileScreen = ({
                     <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
                 </TouchableOpacity>
             )}
+
+            <TouchableOpacity 
+                onPress={async () => {
+                  if (__DEV__) {
+                    Alert.alert("Dev Mode", "OTA updates are disabled in development. This will work in the production app.");
+                    return;
+                  }
+                  try {
+                    setIsUpdatingBinary(true);
+                    logger.logAction('MANUAL_OTA_CHECK_START');
+                    const update = await Updates.checkForUpdateAsync();
+                    if (update.isAvailable) {
+                      Alert.alert("Update Found", "New version detected. Downloading...");
+                      await Updates.fetchUpdateAsync();
+                      Alert.alert("Success", "Update downloaded. Restarting app...", [
+                        { text: "OK", onPress: () => Updates.reloadAsync() }
+                      ]);
+                    } else {
+                      Alert.alert("Up to Date", "You are already on the latest version.");
+                    }
+                  } catch (e) {
+                    logger.logAction('MANUAL_OTA_CHECK_ERROR', { error: e.message });
+                    Alert.alert("Update Error", "Could not reach update server. Please check your internet connection.");
+                  } finally {
+                    setIsUpdatingBinary(false);
+                  }
+                }}
+                style={styles.menuItem}
+                disabled={isUpdatingBinary}
+            >
+                <View style={[styles.menuIcon, { backgroundColor: '#F0F9FF' }]}>
+                    <Ionicons name={isUpdatingBinary ? "hourglass-outline" : "cloud-download-outline"} size={20} color="#0369A1" />
+                </View>
+                <Text style={[styles.menuLabel, { color: '#0369A1', fontWeight: 'bold' }]}>
+                  {isUpdatingBinary ? "Checking for updates..." : "Force Update App"}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+            </TouchableOpacity>
 
             <TouchableOpacity 
                 onPress={() => {
