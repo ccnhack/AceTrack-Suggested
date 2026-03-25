@@ -10,15 +10,17 @@ const screenWidth = Dimensions.get('window').width;
 const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) => {
   const [selectedCity, setSelectedCity] = useState(null);
   const [selectedAcademyId, setSelectedAcademyId] = useState(null);
-  const [selectedStat, setSelectedStat] = useState(null); // 'Players' | 'Tournaments' | 'Footage' | null
+  const [selectedStat, setSelectedStat] = useState(null); // 'Players' | 'Tournaments' | 'Footage' | 'Coaches' | null
   const [selectedArea, setSelectedArea] = useState(null);
+  const [selectedCoachId, setSelectedCoachId] = useState(null);
 
   // Initial Diagnostic Log
   useEffect(() => {
     logger.logAction('Insights_Mount', { 
         playerCount: players.length, 
         tournamentCount: tournaments.length, 
-        videoCount: matchVideos.length 
+        videoCount: matchVideos.length,
+        coachCount: players.filter(p => p.role === 'coach').length
     });
   }, []);
 
@@ -121,6 +123,21 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
         });
         return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([name, count]) => ({ name, value: count, label: 'Uploads' }));
     }
+    if (selectedStat === 'Coaches') {
+        const counts = {};
+        tournaments.forEach(t => {
+            const coachIds = (t.assignedCoachIds || []).concat(Object.keys(t.coachOtps || {}));
+            [...new Set(coachIds)].forEach(cid => {
+                counts[cid] = (counts[cid] || 0) + 1;
+            });
+        });
+        return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([cid, count]) => ({
+            id: cid,
+            name: players.find(p => p.id === cid)?.name || 'Unknown Coach',
+            value: count,
+            label: 'Judged'
+        }));
+    }
     return null;
   }, [selectedStat, players, tournaments, matchVideos]);
 
@@ -149,6 +166,29 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
     };
   }, [players, selectedArea]);
 
+  // 8. Coach Detail Stats
+  const coachDetailStats = useMemo(() => {
+    if (!selectedCoachId) return null;
+    const judged = tournaments.filter(t => 
+        (t.assignedCoachIds || []).includes(selectedCoachId) || 
+        Object.keys(t.coachOtps || {}).includes(selectedCoachId)
+    );
+    
+    const sportsCounts = {};
+    const areaCounts = {};
+    judged.forEach(t => {
+        sportsCounts[t.sport] = (sportsCounts[t.sport] || 0) + 1;
+        areaCounts[t.location] = (areaCounts[t.location] || 0) + 1;
+    });
+
+    return {
+        count: judged.length,
+        sportsDist: Object.entries(sportsCounts).map(([name, count]) => ({ name, count, percent: (count / judged.length) * 100 })),
+        areaDist: Object.entries(areaCounts).map(([name, count]) => ({ name, count, percent: (count / judged.length) * 100 })),
+        tournaments: judged.slice(0, 5)
+    };
+  }, [tournaments, selectedCoachId]);
+
   // Growth Data with Percentages
   const growthStats = useMemo(() => {
     const rawData = [35, 55, 48, 75, 92, 110];
@@ -166,6 +206,7 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
     logger.logAction('Insights_Stat_Toggle', { stat, action: newVal ? 'open' : 'close' });
     setSelectedStat(newVal);
     setSelectedArea(null);
+    setSelectedCoachId(null);
   };
 
   const handleCitySelect = (city) => {
@@ -181,6 +222,11 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
   const handleAreaSelect = (area) => {
     logger.logAction('Insights_Area_DeepDive', { area });
     setSelectedArea(area);
+  };
+
+  const handleCoachSelect = (id, name) => {
+    logger.logAction('Insights_Coach_DeepDive', { id, name });
+    setSelectedCoachId(id);
   };
 
   return (
@@ -203,17 +249,22 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
           <StatBox title="Players" value={players.length} icon="people" color="#6366F1" trend="+12%" isActive={selectedStat === 'Players'} onPress={() => handleStatSelect('Players')} />
           <StatBox title="Tournaments" value={tournaments.length} icon="trophy" color="#F59E0B" trend="+5%" isActive={selectedStat === 'Tournaments'} onPress={() => handleStatSelect('Tournaments')} />
           <StatBox title="Footage" value={matchVideos.length} icon="videocam" color="#10B981" trend="+24%" isActive={selectedStat === 'Footage'} onPress={() => handleStatSelect('Footage')} />
+          <StatBox title="Coaches" value={players.filter(p => p.role === 'coach').length} icon="school" color="#8B5CF6" trend="+18%" isActive={selectedStat === 'Coaches'} onPress={() => handleStatSelect('Coaches')} />
         </View>
 
-        {/* Dynamic Stat Drill-down with Area Deep-dive */}
+        {/* Dynamic Stat Drill-down with Area/Coach Deep-dive */}
         {selectedStat && (
             <View style={styles.chartCard}>
                 <View style={styles.chartHeader}>
                     <Text style={styles.chartTitle}>
-                        {selectedArea ? 'Neighborhood Detail' : `${selectedStat} Distribution`}
+                        {selectedArea ? 'Neighborhood Detail' : selectedCoachId ? 'Coach Performance' : `${selectedStat} Distribution`}
                     </Text>
-                    <TouchableOpacity onPress={() => selectedArea ? setSelectedArea(null) : setSelectedStat(null)}>
-                        <Ionicons name={selectedArea ? "arrow-back-circle" : "close-circle"} size={22} color="#6366F1" />
+                    <TouchableOpacity onPress={() => {
+                        if (selectedArea) setSelectedArea(null);
+                        else if (selectedCoachId) setSelectedCoachId(null);
+                        else setSelectedStat(null);
+                    }}>
+                        <Ionicons name={(selectedArea || selectedCoachId) ? "arrow-back-circle" : "close-circle"} size={22} color="#6366F1" />
                     </TouchableOpacity>
                 </View>
 
@@ -223,7 +274,7 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
                             <Text style={styles.areaHeroTitle}>{selectedArea}</Text>
                             <Text style={styles.areaHeroCount}>{neighborhoodStats?.total} Total Players</Text>
                          </View>
-                         
+                         {/* ... Existing Area Detail logic ... */}
                          <Text style={styles.subChartTitle}>Sport Engagement</Text>
                          {neighborhoodStats?.sportsDistribution.map((item) => (
                              <View key={item.name} style={styles.detailBarRow}>
@@ -231,34 +282,55 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
                                     <Text style={styles.barLabel}>{item.name}</Text>
                                     <Text style={styles.barValue}>{item.count} Players</Text>
                                 </View>
-                                <View style={styles.barTrack}>
-                                    <View style={[styles.barFill, { width: `${item.percent}%`, backgroundColor: '#6366F1' }]} />
-                                </View>
+                                <View style={styles.barTrack}><View style={[styles.barFill, { width: `${item.percent}%`, backgroundColor: '#6366F1' }]} /></View>
                              </View>
                          ))}
+                    </View>
+                ) : selectedCoachId ? (
+                    <View style={styles.coachDetail}>
+                        <View style={styles.areaHero}>
+                            <Text style={styles.areaHeroTitle}>{players.find(p => p.id === selectedCoachId)?.name}</Text>
+                            <Text style={styles.areaHeroCount}>{coachDetailStats?.count} Tournaments Judged</Text>
+                        </View>
 
-                         <Text style={[styles.subChartTitle, { marginTop: 20 }]}>Top Active Players</Text>
-                         <View style={styles.playerList}>
-                            {neighborhoodStats?.players.map((p) => (
-                                <View key={p.id} style={styles.playerRow}>
-                                    <Ionicons name="person-circle" size={24} color="#6366F1" />
-                                    <Text style={styles.playerName}>{p.name}</Text>
-                                    <View style={styles.playerTag}><Text style={styles.playerTagText}>{p.skillLevel}</Text></View>
+                        <Text style={styles.subChartTitle}>Specialties (Sports)</Text>
+                        {coachDetailStats?.sportsDist.map((item) => (
+                             <View key={item.name} style={styles.detailBarRow}>
+                                <View style={styles.barLabelContainer}>
+                                    <Text style={styles.barLabel}>{item.name}</Text>
+                                    <Text style={styles.barValue}>{item.count} Events</Text>
                                 </View>
-                            ))}
-                         </View>
+                                <View style={styles.barTrack}><View style={[styles.barFill, { width: `${item.percent}%`, backgroundColor: '#8B5CF6' }]} /></View>
+                             </View>
+                        ))}
+
+                        <Text style={[styles.subChartTitle, { marginTop: 20 }]}>Geographic Activity (Areas)</Text>
+                        {coachDetailStats?.areaDist.map((item) => (
+                             <View key={item.name} style={styles.detailBarRow}>
+                                <View style={styles.barLabelContainer}>
+                                    <Text style={styles.barLabel}>{item.name}</Text>
+                                    <Text style={styles.barValue}>{item.count} Events</Text>
+                                </View>
+                                <View style={styles.barTrack}><View style={[styles.barFill, { width: `${item.percent}%`, backgroundColor: '#10B981' }]} /></View>
+                             </View>
+                        ))}
                     </View>
                 ) : (
                     <View>
                         <View style={styles.drillInfoBox}>
                             <Ionicons name="location" size={14} color="#6366F1" />
-                            <Text style={styles.drillInfoText}>Click an area to see specific players and their sports</Text>
+                            <Text style={styles.drillInfoText}>
+                                {selectedStat === 'Coaches' ? 'Click a coach to see their judging history and specialties' : 'Click an area to see specific players and their sports'}
+                            </Text>
                         </View>
                         {statDrillDownData?.map((item, index) => (
                             <TouchableOpacity 
-                                key={item.name} 
+                                key={item.name || item.id} 
                                 style={styles.barRow}
-                                onPress={() => selectedStat === 'Players' && handleAreaSelect(item.name)}
+                                onPress={() => {
+                                    if (selectedStat === 'Players') handleAreaSelect(item.name);
+                                    if (selectedStat === 'Coaches') handleCoachSelect(item.id, item.name);
+                                }}
                             >
                                 <View style={styles.barLabelContainer}>
                                     <View style={styles.flexItem}>
@@ -266,10 +338,10 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
                                         {item.newPct !== undefined && <Text style={styles.newLabel}>{item.newPct}% New Joiners</Text>}
                                     </View>
                                     <Text style={styles.barValue}>{item.value} {item.label}</Text>
-                                    {selectedStat === 'Players' && <Ionicons name="chevron-forward" size={14} color="#CBD5E1" />}
+                                    {(selectedStat === 'Players' || selectedStat === 'Coaches') && <Ionicons name="chevron-forward" size={14} color="#CBD5E1" />}
                                 </View>
                                 <View style={styles.barTrack}>
-                                    <View style={[styles.barFill, { width: `${(item.value / statDrillDownData[0].value) * 100}%`, backgroundColor: index === 0 ? '#6366F1' : '#CBD5E1' }]} />
+                                    <View style={[styles.barFill, { width: `${(item.value / (statDrillDownData[0].value || 1)) * 100}%`, backgroundColor: index === 0 ? (selectedStat === 'Coaches' ? '#8B5CF6' : '#6366F1') : '#CBD5E1' }]} />
                                 </View>
                             </TouchableOpacity>
                         ))}
@@ -409,8 +481,8 @@ const styles = StyleSheet.create({
   welcomeText: { fontSize: 26, fontWeight: '800', color: '#1E293B' },
   subText: { fontSize: 13, color: '#64748B', marginTop: 2 },
   refreshBtn: { width: 46, height: 46, borderRadius: 14, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', ...designSystem.shadows?.sm },
-  statsGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
-  statBox: { backgroundColor: '#fff', width: (screenWidth - 40 - 20) / 3, padding: 14, borderRadius: 20, ...designSystem.shadows?.sm },
+  statsGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 10 },
+  statBox: { backgroundColor: '#fff', width: (screenWidth - 40 - 10) / 2 - 5, padding: 14, borderRadius: 20, ...designSystem.shadows?.sm },
   iconCircle: { width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
   statValue: { fontSize: 20, fontWeight: '800', color: '#1E293B' },
   statTitle: { fontSize: 10, color: '#94A3B8', fontWeight: '700', textTransform: 'uppercase', marginBottom: 6 },

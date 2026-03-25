@@ -468,14 +468,19 @@ const ProfileScreen = ({
         <View style={styles.section}>
             <Text style={styles.sectionTitle}>Expert Panel Features</Text>
             <View style={styles.featureGrid}>
-                <TouchableOpacity style={styles.featureTile} onPress={() => navigation.navigate('Matchmaking')}>
-                    <View style={[styles.featureIcon, { backgroundColor: '#EEF2FF' }]}>
-                        <Ionicons name="people" size={24} color="#4F46E5" />
+                <TouchableOpacity 
+                    style={styles.featureTile} 
+                    onPress={() => navigation.navigate(user.role === 'admin' ? 'Insights' : 'Matchmaking')}
+                >
+                    <View style={[styles.featureIcon, { backgroundColor: user.role === 'admin' ? '#EEF2FF' : '#EEF2FF' }]}>
+                        <Ionicons name={user.role === 'admin' ? 'analytics' : 'people'} size={24} color="#4F46E5" />
                     </View>
-                    <Text style={styles.featureLabel}>{user.role === 'coach' ? 'Bookings' : 'Matchmaking'}</Text>
+                    <Text style={styles.featureLabel}>
+                        {user.role === 'admin' ? 'Insights' : user.role === 'coach' ? 'Bookings' : 'Matchmaking'}
+                    </Text>
                 </TouchableOpacity>
 
-                {user.role !== 'coach' && (
+                {user.role !== 'coach' && user.role !== 'admin' && (
                   <TouchableOpacity style={styles.featureTile} onPress={() => navigation.navigate('CoachDirectory')}>
                       <View style={[styles.featureIcon, { backgroundColor: '#FFF7ED' }]}>
                           <Ionicons name="school" size={24} color="#EA580C" />
