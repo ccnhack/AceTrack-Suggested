@@ -576,15 +576,30 @@ router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), async (req
     fs.writeFileSync(filepath, JSON.stringify(reportData, null, 2));
 
     // ☁️ Persistence Fix: Upload to Cloudinary
+    console.log(`☁️ [Cloudinary] Starting upload for: ${filename} (Size: ${fs.statSync(filepath).size} bytes)`);
     try {
       const cloudResult = await cloudinary.uploader.upload(filepath, {
         folder: 'acetrack/diagnostics',
         resource_type: 'raw',
-        public_id: filename
+        public_id: filename,
+        use_filename: true,
+        unique_filename: false
       });
-      logServerEvent('DIAGNOSTICS_CLOUDINARY_BACKUP_SUCCESS', { url: cloudResult.secure_url });
+      console.log(`✅ [Cloudinary] Upload Success: ${cloudResult.secure_url} (ID: ${cloudResult.public_id})`);
+      logServerEvent('DIAGNOSTICS_CLOUDINARY_BACKUP_SUCCESS', { 
+        url: cloudResult.secure_url,
+        public_id: cloudResult.public_id,
+        filename: filename
+      });
+      logAudit(req, 'DIAG_UPLOAD_CLOUDINARY_SUCCESS', [], { url: cloudResult.secure_url, filename });
     } catch (err) {
-      console.error('❌ Cloudinary Diagnostics Backup Failed:', err.message);
+      console.error('❌ [Cloudinary] Diagnostics Backup Failed:', err.message);
+      logServerEvent('DIAGNOSTICS_CLOUDINARY_BACKUP_ERROR', { 
+        error: err.message, 
+        filename,
+        stack: err.stack 
+      });
+      logAudit(req, 'DIAG_UPLOAD_CLOUDINARY_FAILED', [], { error: err.message, filename });
     }
 
     res.json({ success: true, filename });
@@ -607,15 +622,29 @@ router.post('/diagnostics/auto-flush', apiKeyGuard, validate(AutoFlushSchema), a
     fs.writeFileSync(filePath, logContent);
 
     // ☁️ Persistence Fix: Upload to Cloudinary
+    console.log(`☁️ [Cloudinary Auto-Flush] Starting upload for: ${filename} (Size: ${fs.statSync(filePath).size} bytes)`);
     try {
       const cloudResult = await cloudinary.uploader.upload(filePath, {
         folder: 'acetrack/diagnostics/auto-flush',
         resource_type: 'raw',
-        public_id: filename
+        public_id: filename,
+        use_filename: true,
+        unique_filename: false
       });
-      logServerEvent('AUTO_FLUSH_CLOUDINARY_BACKUP_SUCCESS', { url: cloudResult.secure_url });
+      console.log(`✅ [Cloudinary Auto-Flush] Success: ${cloudResult.secure_url}`);
+      logServerEvent('AUTO_FLUSH_CLOUDINARY_BACKUP_SUCCESS', { 
+        url: cloudResult.secure_url,
+        filename: filename
+      });
+      logAudit(req, 'AUTO_FLUSH_UPLOAD_CLOUDINARY_SUCCESS', [], { url: cloudResult.secure_url, filename });
     } catch (err) {
-      console.error('❌ Cloudinary Auto-Flush Backup Failed:', err.message);
+      console.error('❌ [Cloudinary Auto-Flush] Backup Failed:', err.message);
+      logServerEvent('AUTO_FLUSH_CLOUDINARY_BACKUP_ERROR', { 
+        error: err.message, 
+        filename,
+        stack: err.stack
+      });
+      logAudit(req, 'AUTO_FLUSH_UPLOAD_CLOUDINARY_FAILED', [], { error: err.message, filename });
     }
 
     // Retention: Keep 3 newest
