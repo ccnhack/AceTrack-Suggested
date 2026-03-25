@@ -770,22 +770,23 @@ const AdminHubScreen = ({
                             const data = await res.json();
                             const pName = (p.name || '').toLowerCase();
                             const pId = String(p.id || '').toLowerCase();
-                            const pEmail = (p.email || '').toLowerCase();
+                            const pEmailRaw = (p.email || '');
                             const firstName = pName.split(' ')[0];
 
-                            const safeName = pName.replace(/[^a-z0-9]/gi, '_');
-                            const safeId = pId.replace(/[^a-z0-9]/gi, '_');
-                            const safeEmail = pEmail.replace(/[^a-z0-9]/gi, '_');
+                            const safeName = p.name ? p.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() : '';
+                            const safeId = p.id ? String(p.id).replace(/[^a-z0-9]/gi, '_').toLowerCase() : '';
+                            const pEmailPrefix = p.email ? p.email.split('@')[0] : '';
+                            const safeEmail = pEmailPrefix.replace(/[^a-z0-9]/gi, '_').toLowerCase();
                             
                             // Check for files matching name, id, email or even parts
                             let fs = data.files.filter(f => {
                               const low = f.toLowerCase();
-                              return low.startsWith(safeName + '_') || 
-                                     low.startsWith(safeId + '_') ||
-                                     low.startsWith(safeEmail + '_') ||
-                                     low.startsWith('admin_requested_' + safeName + '_') ||
-                                     low.includes(`_${safeName}_`) ||
-                                     (firstName.length > 3 && low.includes(firstName));
+                              return (safeName && low.startsWith(safeName + '_')) || 
+                                     (safeId && low.startsWith(safeId + '_')) ||
+                                     (safeEmail && low.startsWith(safeEmail + '_')) ||
+                                     (safeName && low.startsWith('admin_requested_' + safeName + '_')) ||
+                                     (safeName && low.includes(`_${safeName}_`)) ||
+                                     (firstName.length > 3 && low.includes(firstName.toLowerCase()));
                             });
                             
                             // Sort descending (newest first) by lexical name comparison, then take latest 3
