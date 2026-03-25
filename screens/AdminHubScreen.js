@@ -66,6 +66,7 @@ const AdminHubScreen = ({
   const [isDownloading, setIsDownloading] = useState(false);
   const [isPullingLive, setIsPullingLive] = useState(false);
   const [onlineDevices, setOnlineDevices] = useState({});
+  const [pullingDeviceIds, setPullingDeviceIds] = useState({});
 
     const handlePong = (data) => {
       console.log(`📡 [AdminHub] Pong received for ${data.targetUserId} (Device: ${data.deviceId})`);
@@ -846,21 +847,44 @@ const AdminHubScreen = ({
                 {selectedDiagUser.devices && selectedDiagUser.devices.length > 0 ? (
                   <View style={{ marginBottom: 16 }}>
                     <Text style={{ fontSize: 12, color: '#64748B', fontWeight: 'bold', marginBottom: 8, textTransform: 'uppercase' }}>Active Devices</Text>
-                    {(selectedDiagUser.devices || []).slice().sort((a, b) => {
+                    {(selectedDiagUser.devices || []).filter(d => {
+                      const threeDaysAgo = Date.now() - (3 * 24 * 60 * 60 * 1000);
+                      return d.lastActive >= threeDaysAgo;
+                    }).sort((a, b) => {
                       const aOnline = onlineDevices[a.id] ? 1 : 0;
                       const bOnline = onlineDevices[b.id] ? 1 : 0;
                       return bOnline - aOnline;
-                    }).map(d => (
+                    }).map(d => {
+                      // Debug logger for missing versions
+                      if (!d.appVersion || !d.platformVersion) {
+                        console.log(`[AdminHub] Device version missing: ID=${d.id}, App=${d.appVersion}, Platform=${d.platformVersion}`);
+                        logger.logAction('DEVICE_VERSION_MISSING', { deviceId: d.id, app: d.appVersion, platform: d.platformVersion });
+                      }
+                      return (
                       <View key={d.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
                         <View style={{ flex: 1, paddingRight: 6 }}>
-                          <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0F172A' }} numberOfLines={1}>{d.name}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0F172A' }} numberOfLines={1}>{d.name}</Text>
+                            <View style={{ flexDirection: 'row', gap: 4 }}>
+                              {d.platformVersion && (
+                                <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                                  <Text style={{ fontSize: 9, fontWeight: '700', color: '#64748B' }}>{d.platformVersion}</Text>
+                                </View>
+                              )}
+                              {d.appVersion && (
+                                <View style={{ backgroundColor: '#EEF2FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#C7D2FE' }}>
+                                  <Text style={{ fontSize: 9, fontWeight: '900', color: '#4F46E5' }}>{d.appVersion}</Text>
+                                </View>
+                              )}
+                            </View>
+                          </View>
                           <Text style={{ fontSize: 9, color: '#64748B' }}>ID: {d.id}</Text>
                           <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
                             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: onlineDevices[d.id] ? '#10B981' : '#EF4444' }} />
                             <Text style={{ fontSize: 10, color: onlineDevices[d.id] ? '#10B981' : '#EF4444', fontWeight: 'bold' }}>
                               {onlineDevices[d.id] ? 'ONLINE' : 'OFFLINE'}
                             </Text>
-                            <Text style={{ fontSize: 9, color: '#94A3B8' }}>• Last: {new Date(d.lastActive).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</Text>
+                            <Text style={{ fontSize: 9, color: '#94A3B8' }}>• {new Date(d.lastActive).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</Text>
                           </View>
                         </View>
                         <TouchableOpacity 
@@ -929,7 +953,7 @@ const AdminHubScreen = ({
                           <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 10 }}>{pullingDeviceIds[d.id] ? 'PULLING...' : 'PULL LOGS'}</Text>
                         </TouchableOpacity>
                       </View>
-                    ))}
+                    )})}
                   </View>
                 ) : (
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>

@@ -88,9 +88,10 @@ const ExploreScreen = (props) => {
       
       setUserLocation(location.coords);
       setSelectedHub('Current Location');
-      setCityFilter('All'); // Match everything when using proximity
+      setCityFilter('All'); // Priority: proximity mode
       logger.addLog(`Location fetched: ${location.coords.latitude}, ${location.coords.longitude}`, 'info', 'console');
 
+      // Find identifying name for the header
       let closestCity = 'All';
       let minDistance = 50; 
 
@@ -106,16 +107,17 @@ const ExploreScreen = (props) => {
           closestCity = cityName;
         }
       });
-      
-      setCityFilter(closestCity);
-      logger.logAction('LOCATION_DETECT_SUCCESS', { 
-        coords: location.coords, 
-        closestCity, 
-        minDistance 
-      });
-      if (closestCity === 'All') {
-        Alert.alert('Location Updated', 'No nearby hubs found. Showing all tournaments.');
+
+      // Special handling: if we are in 'Current Location' mode, we might want to show the closest city in header
+      if (closestCity !== 'All') {
+        setSelectedHub(`Current Location (${closestCity})`);
       }
+
+      logger.logAction('LOCATION_DETECT_SUCCESS', { 
+        coords: location.coords,
+        selectedHub: closestCity !== 'All' ? `Current Location (${closestCity})` : 'Current Location'
+      });
+      setIsFetchingLoc(false);
     } catch (e) {
       Alert.alert('Error', 'Could not detect location.');
     }
@@ -219,10 +221,6 @@ const ExploreScreen = (props) => {
       const isPast = isTournamentPast(t);
       const isOpen = statusOpen && deadlineOpen && (!isPast || t.status === 'ongoing');
 
-      if (__DEV__ && userRole?.toLowerCase() === 'admin') {
-         console.log(`🔍 [AdminTrace] ID: ${t.id}, Open: ${isOpen}, S: ${!t.tournamentStarted}, St: ${t.status}, D: ${t.date}, Dead: ${t.registrationDeadline}`);
-      }
-
       if (!isOpen) return false;
 
       // Admin bypasses all other filters (City, Gender, Skill Level, Sport)
@@ -232,7 +230,13 @@ const ExploreScreen = (props) => {
       if (userRole === 'coach' && userSports && !userSports.includes(t.sport)) return false;
       if (reschedulingFrom && t.id === reschedulingFrom) return false;
       
-      if (cityFilter !== 'All') {
+      // Location Filtering
+      if (selectedHub === 'Current Location') {
+        // In Current Location mode, we show everything but sorted by distance
+        // You could add a distance threshold here if desired:
+        // const distance = userLocation && t.lat && t.lng ? calculateDistance(userLocation.latitude, userLocation.longitude, t.lat, t.lng) : null;
+        // if (distance && parseFloat(distance) > 50) return false;
+      } else if (cityFilter !== 'All') {
         const inLocation = t.location?.toLowerCase().includes(cityFilter.toLowerCase());
         const inCity = t.city?.toLowerCase().includes(cityFilter.toLowerCase());
         if (!inLocation && !inCity) return false;
@@ -245,6 +249,9 @@ const ExploreScreen = (props) => {
         if (format.includes("Men's") && gender && gender !== 'Male') return false;
         if (format.includes("Women's") && gender && gender !== 'Female') return false;
       }
+
+      // Sport Filter
+      if (sportFilter !== 'All' && t.sport !== sportFilter) return false;
 
       return true;
     })
@@ -269,7 +276,16 @@ const ExploreScreen = (props) => {
     ? filteredTournaments.filter(t => t.skillLevel === 'Beginner')
     : filteredTournaments;
 
-  const sortedTournaments = [...displayTournaments].sort((a, b) => a.distance - b.distance);
+  const sortedTournaments = [...displayTournaments].sort((a, b) => {
+    // Priority sort by distance if user location is available
+    if (userLocation && a.distance !== b.distance) {
+      return a.distance - b.distance;
+    }
+    // Fallback: stay consistent with distance but add secondary sorting (e.g. date)
+    const dateA = parseDate(a.date)?.getTime() || 0;
+    const dateB = parseDate(b.date)?.getTime() || 0;
+    return dateA - dateB;
+  });
 
   const recommendedTournaments = sortedTournaments
     .filter(t => {
@@ -502,7 +518,9 @@ const ExploreScreen = (props) => {
           <View style={styles.headerRow}>
             <View>
               <Text style={styles.heroTitle}>AceTrack</Text>
-              <Text style={styles.heroSubtitle}>Bangalore Elite Circuit</Text>
+              <Text style={styles.heroSubtitle}>
+                {selectedHub.includes('Current Location') ? 'Nearby Arenas' : `${cityFilter} Circuit`}
+              </Text>
             </View>
             <TouchableOpacity 
               style={[styles.compactCityPicker, isCityDropdownVisible && styles.compactCityPickerActive]} 
@@ -510,7 +528,10 @@ const ExploreScreen = (props) => {
             >
               <Ionicons name="location" size={14} color="#FFFFFF" />
               <Text style={styles.compactCityText} numberOfLines={1}>
-                {selectedHub === 'Current Location' ? 'Current Location' : (cityFilter === 'All' ? 'India' : cityFilter)}
+                {selectedHub.includes('Current Location') 
+                   ? (selectedHub.includes('(') ? selectedHub.split('(')[1].replace(')', '') : 'Current Location') 
+                   : (cityFilter === 'All' ? 'India' : cityFilter)
+                }
               </Text>
               <Ionicons name="chevron-down" size={12} color="rgba(255,255,255,0.6)" />
             </TouchableOpacity>

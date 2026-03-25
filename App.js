@@ -40,7 +40,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = Platform.OS === 'web' ? '2.0.1-web' : '2.0.1';
+const APP_VERSION = Platform.OS === 'web' ? '2.0.3-web' : '2.0.3';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -626,6 +626,8 @@ export default function App() {
       const myTracker = {
         id: localDeviceIdRef.current,
         name: Constants.deviceName || Platform.OS,
+        appVersion: APP_VERSION,
+        platformVersion: `${Platform.OS === 'ios' ? 'iOS' : 'Android'} ${Platform.Version}`,
         lastActive: Date.now()
       };
       updates.currentUser.devices = updates.currentUser.devices || [];
