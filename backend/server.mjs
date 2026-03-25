@@ -195,27 +195,20 @@ const logServerEvent = (action, details = {}) => {
   }
 };
 
-const distPath = path.join(process.cwd(), 'dist');
-const backendPublicPath = path.join(process.cwd(), 'backend', 'public');
-const altPublicPath = path.join(__dirname, 'public');
-
-let staticPath = altPublicPath;
-if (fs.existsSync(distPath)) {
-  staticPath = distPath;
-} else if (fs.existsSync(backendPublicPath)) {
-  staticPath = backendPublicPath;
-}
-
-console.log(`🌐 [Frontend] Serving static files from: ${staticPath}`);
-
-// Force root to index.html immediately
 app.get('/', (req, res) => {
-  const indexFile = path.join(staticPath, 'index.html');
-  if (fs.existsSync(indexFile)) {
+  const possibleIndices = [
+    path.join(staticPath, 'index.html'),
+    path.join(process.cwd(), 'backend', 'index.html'),
+    path.join(__dirname, 'index.html')
+  ];
+  
+  const indexFile = possibleIndices.find(p => fs.existsSync(p));
+
+  if (indexFile) {
     console.log(`✅ [Frontend] Serving index.html from: ${indexFile}`);
     res.sendFile(indexFile);
   } else {
-    console.warn(`❌ [Frontend] index.html NOT found at: ${indexFile}`);
+    console.warn(`❌ [Frontend] index.html NOT found in: ${possibleIndices.join(', ')}`);
     res.status(404).send('Dashboard index.html not found on server');
   }
 });
@@ -879,14 +872,14 @@ app.get(/(.*)/, (req, res, next) => {
     return next();
   }
   
-  const dPath = path.join(process.cwd(), 'dist');
-  const bPath = path.join(process.cwd(), 'backend', 'public');
-  const aPath = path.join(__dirname, 'public');
-  
-  const fPath = fs.existsSync(dPath) ? dPath : (fs.existsSync(bPath) ? bPath : aPath);
-    
-  const indexFile = path.join(fPath, 'index.html');
-  if (fs.existsSync(indexFile)) {
+  const possibleIndices = [
+    path.join(fPath, 'index.html'),
+    path.join(process.cwd(), 'backend', 'index.html'),
+    path.join(__dirname, 'index.html')
+  ];
+  const indexFile = possibleIndices.find(p => fs.existsSync(p));
+
+  if (indexFile) {
     res.sendFile(indexFile);
   } else {
     next();
