@@ -635,12 +635,12 @@ router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), async (req
     const timestamp = istDate.toISOString().replace(/T/, '_').replace(/\..+/, '').replace(/:/g, '-');
     const safeUsername = username.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     
-    // Rotation: Keep max 5 files per user
+    // Rotation: Keep max 3 files per user locally
     try {
       const userFiles = fs.readdirSync(DIAGNOSTICS_DIR)
-        .filter(f => f.startsWith(`${safeUsername}_`))
+        .filter(f => f.startsWith(`${safeUsername}_`) || f.startsWith(`admin_requested_${safeUsername}_`))
         .sort();
-      if (userFiles.length >= 5) {
+      while (userFiles.length >= 3) {
         fs.unlinkSync(path.join(DIAGNOSTICS_DIR, userFiles.shift()));
       }
     } catch (e) { /* silent */ }
@@ -676,6 +676,30 @@ router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), async (req
         filename: filename
       });
       logAudit(req, 'DIAG_UPLOAD_CLOUDINARY_SUCCESS', [], { url: cloudResult.secure_url, filename });
+      
+      // Cloudinary Rotation: Keep max 3 files per user in the cloud
+      try {
+        const result = await cloudinary.search
+          .expression('folder:acetrack/diagnostics/*')
+          .sort_by('created_at', 'desc')
+          .max_results(100)
+          .execute();
+          
+        const userFilesCloud = result.resources.filter(f => {
+          const fName = f.public_id.split('/').pop().toLowerCase();
+          return fName.startsWith(`${safeUsername}_`) || 
+                 fName.startsWith(`admin_requested_${safeUsername}_`);
+        });
+        
+        if (userFilesCloud.length > 3) {
+          const filesToDelete = userFilesCloud.slice(3).map(f => f.public_id);
+          console.log(`🧹 [Cloudinary] Rotating ${filesToDelete.length} old diagnostic(s) for ${safeUsername}`);
+          await cloudinary.api.delete_resources(filesToDelete, { resource_type: 'raw' });
+        }
+      } catch (rotationErr) {
+        console.error('❌ [Cloudinary] Rotation Failed:', rotationErr.message);
+      }
+      
     } catch (err) {
       console.error('❌ [Cloudinary] Diagnostics Backup Failed:', err.message);
       logServerEvent('DIAGNOSTICS_CLOUDINARY_BACKUP_ERROR', { 

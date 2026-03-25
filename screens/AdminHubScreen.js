@@ -778,15 +778,19 @@ const AdminHubScreen = ({
                             const safeEmail = pEmail.replace(/[^a-z0-9]/gi, '_');
                             
                             // Check for files matching name, id, email or even parts
-                            const fs = data.files.filter(f => {
+                            let fs = data.files.filter(f => {
                               const low = f.toLowerCase();
                               return low.startsWith(safeName + '_') || 
                                      low.startsWith(safeId + '_') ||
                                      low.startsWith(safeEmail + '_') ||
+                                     low.startsWith('admin_requested_' + safeName + '_') ||
                                      low.includes(`_${safeName}_`) ||
                                      (firstName.length > 3 && low.includes(firstName));
                             });
-                            setUserDiagFiles(fs.reverse());
+                            
+                            // Sort descending (newest first) by lexical name comparison, then take latest 3
+                            fs = fs.sort((a, b) => b.localeCompare(a)).slice(0, 3);
+                            setUserDiagFiles(fs);
                             logger.logAction('DIAGNOSTICS_FETCH_SUCCESS', { user: p.name, fileCount: fs.length });
                           }
                         } catch (e) {
