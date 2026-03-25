@@ -43,3 +43,10 @@ backend/diagnostics/
 /ios
 backend/public/
 backend/firebase-service-account.json
+
+# Scripts and Temporary files
+*.mjs
+backend/*.mjs
+!backend/server.mjs
+backend/app.json
+/tmp/
