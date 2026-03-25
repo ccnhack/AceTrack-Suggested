@@ -154,6 +154,21 @@ const otpLimiter = rateLimit({
 app.use('/api/', globalLimiter);
 
 // ═══════════════════════════════════════════════════════════════
+// 🔍 DEBUG: Filesystem Inspector (Temporary)
+// ═══════════════════════════════════════════════════════════════
+app.get('/api/debug-path', apiKeyGuard, (req, res) => {
+  const info = {
+    cwd: process.cwd(),
+    __dirname,
+    rootContents: fs.readdirSync(process.cwd()),
+    backendContents: fs.existsSync(path.join(process.cwd(), 'backend')) ? fs.readdirSync(path.join(process.cwd(), 'backend')) : 'NOT FOUND',
+    publicExists: fs.existsSync(path.join(process.cwd(), 'backend', 'public')),
+    nodeEnv: process.env.NODE_ENV
+  };
+  res.json(info);
+});
+
+// ═══════════════════════════════════════════════════════════════
 // WebSocket Setup
 // ═══════════════════════════════════════════════════════════════
 const httpServer = createServer(app);
