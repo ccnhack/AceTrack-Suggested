@@ -50,7 +50,7 @@ export const openPaymentSheet = async (order, userInfo = {}) => {
   /*
   const options = {
     description: 'AceTrack Tournament Entry',
-    image: 'https://acetrack-api-q39m.onrender.com/icon.png',
+    image: 'https://acetrack-suggested.onrender.com/icon.png',
     currency: order.currency,
     key: RAZORPAY_KEY_ID,
     amount: order.amount,

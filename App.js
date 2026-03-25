@@ -104,7 +104,7 @@ export default function App() {
 
   useEffect(() => {
     // 1. WebSocket: Connect to real-time events
-    const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL;
+    const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
     socketRef.current = io(activeApiUrl, {
       transports: ['websocket'],
       reconnection: true
@@ -145,7 +145,7 @@ export default function App() {
 
         const logs = logger.getLogs();
         try {
-          const cloudUrl = isUsingCloudRef.current ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL;
+          const cloudUrl = isUsingCloudRef.current ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
           await fetch(`${cloudUrl}/api/diagnostics`, {
             method: 'POST',
             headers: {
@@ -195,7 +195,7 @@ export default function App() {
         await logger.initialize();
         logger.enableInterception();
         
-        const cloudUrl = 'https://acetrack-api-q39m.onrender.com';
+        const cloudUrl = 'https://acetrack-suggested.onrender.com';
         logger.checkAndUploadCrash(cloudUrl, config.ACE_API_KEY);
         if (Platform.OS === 'web') {
           // Relies on injected CSS font-face for CORS safety
@@ -287,7 +287,7 @@ export default function App() {
     try {
       if (isSyncingRef.current) return;
 
-      const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL;
+      const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
       const response = await fetch(`${activeApiUrl}/api/status`, {
         headers: { 'x-ace-api-key': config.ACE_API_KEY }
       });
@@ -442,7 +442,7 @@ export default function App() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-      const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL;
+      const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
 
       console.log(`📡 Fetching Updates from ${isUsingCloudRef.current ? 'CLOUD' : 'LOCAL'} [v${versionAtStart}]...`);
       const response = await fetch(`${activeApiUrl}/api/data`, {
@@ -587,7 +587,7 @@ export default function App() {
       setSyncingState(true);
       logger.logAction('PUSH_DATA_START', { keys: Object.keys(updates), version: thisVersion });
       
-      const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL;
+      const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
       const response = await fetch(`${activeApiUrl}/api/save`, {
         method: 'POST',
         headers: {
@@ -1853,7 +1853,7 @@ export default function App() {
         const logs = logger.getLogs();
         console.log(`📋 Sending ${logs.length} log entries...`);
         
-        const targetCloudUrl = 'https://acetrack-api-q39m.onrender.com';
+        const targetCloudUrl = 'https://acetrack-suggested.onrender.com';
         const activeApiUrl = isUsingCloud ? targetCloudUrl : config.API_BASE_URL;
         
         const response = await fetch(`${activeApiUrl}/api/diagnostics`, {

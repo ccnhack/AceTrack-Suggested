@@ -122,7 +122,7 @@ const LoginScreen = ({
           totalPlayers: players.length,
           sampleIds: players.slice(0, 5).map(p => p.id),
           isUsingCloud,
-          apiUrl: isUsingCloud ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL
+          apiUrl: isUsingCloud ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL
         };
         logger.logAction('LOGIN_FAILURE_DIAG', diagInfo);
         setError('Invalid credentials. Check your username or email.');

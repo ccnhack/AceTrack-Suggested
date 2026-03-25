@@ -140,7 +140,7 @@ const ProfileScreen = ({
   const [isVerifying, setIsVerifying] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [latestVersion, setLatestVersion] = useState('');
-  const activeApiUrl = isUsingCloud ? 'https://acetrack-api-q39m.onrender.com' : config.API_BASE_URL;
+  const activeApiUrl = isUsingCloud ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
 
   useEffect(() => {
     const checkUpdate = async () => {

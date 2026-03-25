@@ -31,7 +31,7 @@ const AdminHubScreen = ({
   navigation
 }) => {
   const screenWidth = Dimensions.get('window').width;
-  const targetCloudUrl = 'https://acetrack-api-q39m.onrender.com';
+  const targetCloudUrl = 'https://acetrack-suggested.onrender.com';
   const activeApiUrl = isUsingCloud ? targetCloudUrl : config.API_BASE_URL;
 
   const [subTab, setSubTab] = useState('individuals');

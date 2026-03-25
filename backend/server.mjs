@@ -63,7 +63,7 @@ const APP_VERSION = '2.0.0'; // AceTrack Suggested — Expert Panel Enhanced
 // ═══════════════════════════════════════════════════════════════
 const ALLOWED_ORIGINS = [
   'https://acetrack-suggested.onrender.com',
-  'https://acetrack-api-q39m.onrender.com',
+  'https://acetrack-suggested.onrender.com',
   'http://localhost:8081',
   'http://localhost:19006',
   'http://localhost:3005'
