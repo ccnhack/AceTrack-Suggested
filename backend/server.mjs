@@ -683,7 +683,7 @@ router.get('/audit-logs', apiKeyGuard, async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 // 🌐 Mount API v1 + backward-compatible un-versioned routes
 // ═══════════════════════════════════════════════════════════════
-app.use('/api/v1', router);
+app.use('/api', router);
 
 // Backward compatibility: also mount at /api/ for older clients
 app.use('/api', router);
