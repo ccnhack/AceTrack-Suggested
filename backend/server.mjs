@@ -103,7 +103,19 @@ app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: MongoDB injection prevention (SEC Fix #5)
+// Express 5 Compatibility: Redefine req.query as writable
 // ═══════════════════════════════════════════════════════════════
+app.use((req, res, next) => {
+  if (req.query) {
+    Object.defineProperty(req, 'query', {
+      value: { ...req.query },
+      writable: true,
+      enumerable: true,
+      configurable: true
+    });
+  }
+  next();
+});
 app.use(mongoSanitize());
 
 // ═══════════════════════════════════════════════════════════════
