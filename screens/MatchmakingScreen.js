@@ -76,7 +76,7 @@ export default function MatchmakingScreen({ user }) {
   const [counterTime, setCounterTime] = useState('');
   const [venueSearchQuery, setVenueSearchQuery] = useState('');
   const [selectedAcademyForVenue, setSelectedAcademyForVenue] = useState(null);
-  const [counterVenue, setCounterVenue] = useState('opponent');
+  const [negotiatedVenue, setNegotiatedVenue] = useState('opponent');
   const [expandedSlot, setExpandedSlot] = useState(null);
 
   const parseTime = (timeStr) => {
@@ -158,6 +158,7 @@ export default function MatchmakingScreen({ user }) {
     setCounterTime(req.proposedTime || '');
     setVenueSearchQuery('');
     setSelectedAcademyForVenue(null);
+    setNegotiatedVenue('opponent');
     setIsCounterModalVisible(true);
     setIsDetailsModalVisible(false);
   };
@@ -180,7 +181,7 @@ export default function MatchmakingScreen({ user }) {
     }
     const venueLabel = role === 'coach' 
         ? (selectedAcademyForVenue ? selectedAcademyForVenue.name : 'Coach-suggested Venue')
-        : (counterVenue === 'own' ? 'Our Academy Grounds' : ((selectedChallenge?.name || 'Opponent') + ' Grounds'));
+        : (negotiatedVenue === 'own' ? 'Our Academy Grounds' : ((selectedChallenge?.name || 'Opponent') + ' Grounds'));
     
     const counteredItem = {
       ...selectedChallenge,
@@ -819,18 +820,18 @@ export default function MatchmakingScreen({ user }) {
               ) : (
                 <View style={styles.venueRow}>
                   <TouchableOpacity
-                    style={[styles.venueBtn, counterVenue === 'opponent' && styles.venueBtnActive]}
-                    onPress={() => setCounterVenue('opponent')}
+                    style={[styles.venueBtn, negotiatedVenue === 'opponent' && styles.venueBtnActive]}
+                    onPress={() => setNegotiatedVenue('opponent')}
                   >
-                    <Ionicons name="business" size={20} color={counterVenue === 'opponent' ? '#6366F1' : '#94A3B8'} />
-                    <Text style={[styles.venueText, counterVenue === 'opponent' && styles.venueTextActive]}>{selectedChallenge?.name}</Text>
+                    <Ionicons name="business" size={20} color={negotiatedVenue === 'opponent' ? '#6366F1' : '#94A3B8'} />
+                    <Text style={[styles.venueText, negotiatedVenue === 'opponent' && styles.venueTextActive]}>{selectedChallenge?.name}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
-                    style={[styles.venueBtn, counterVenue === 'own' && styles.venueBtnActive]}
-                    onPress={() => setCounterVenue('own')}
+                    style={[styles.venueBtn, negotiatedVenue === 'own' && styles.venueBtnActive]}
+                    onPress={() => setNegotiatedVenue('own')}
                   >
-                    <Ionicons name="home" size={20} color={counterVenue === 'own' ? '#6366F1' : '#94A3B8'} />
-                    <Text style={[styles.venueText, counterVenue === 'own' && styles.venueTextActive]}>Our Academy</Text>
+                    <Ionicons name="home" size={20} color={negotiatedVenue === 'own' ? '#6366F1' : '#94A3B8'} />
+                    <Text style={[styles.venueText, negotiatedVenue === 'own' && styles.venueTextActive]}>Our Academy</Text>
                   </TouchableOpacity>
                 </View>
               )}
