@@ -420,15 +420,18 @@ router.get('/diagnostics', apiKeyGuard, async (req, res) => {
     let cloudFiles = [];
     try {
       // Fetch raw files from the 'acetrack/diagnostics' folder
+      // Corrected expression: removed '/*' which can fail in some search contexts
       const result = await cloudinary.search
-        .expression('folder:acetrack/diagnostics/*')
+        .expression('folder:acetrack/diagnostics')
         .sort_by('created_at', 'desc')
         .max_results(500)
         .execute();
         
       cloudFiles = result.resources.map(file => {
         const parts = file.public_id.split('/');
-        return parts[parts.length - 1];
+        const basename = parts[parts.length - 1];
+        // Ensure extension is included if not in basename
+        return basename.endsWith('.' + file.format) ? basename : `${basename}.${file.format}`;
       });
     } catch (e) {
       console.warn('Cloudinary search failed, fetching only local files:', e.message);
@@ -437,7 +440,7 @@ router.get('/diagnostics', apiKeyGuard, async (req, res) => {
     let localFiles = [];
     try {
       if (fs.existsSync(DIAGNOSTICS_DIR)) {
-        localFiles = fs.readdirSync(DIAGNOSTICS_DIR);
+        localFiles = fs.readdirSync(DIAGNOSTICS_DIR).filter(f => f.endsWith('.json') || f.endsWith('.log'));
       }
     } catch (e) {
       console.warn('Local read failed:', e.message);
@@ -588,42 +591,7 @@ router.post('/upload', apiKeyGuard, upload.single('video'), async (req, res) => 
   }
 });
 
-// GET /api/v1/diagnostics
-router.get('/diagnostics', apiKeyGuard, async (req, res) => {
-  try {
-    // Fetch raw files from the 'acetrack/diagnostics' folder
-    const result = await cloudinary.search
-      .expression('folder:acetrack/diagnostics/*')
-      .sort_by('created_at', 'desc')
-      .max_results(500)
-      .execute();
-      
-    // Map to just the filenames to match the old frontend expectation
-    const files = result.resources.map(file => {
-      // Return just the filename part, with extension
-      const parts = file.public_id.split('/');
-      return parts[parts.length - 1] + '.' + file.format;
-    });
-    
-    res.json({ success: true, files });
-  } catch (error) {
-    console.error('Cloudinary Diagnostics Fetch Error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
 
-// GET /api/v1/diagnostics/:filename
-router.get('/diagnostics/:filename', apiKeyGuard, async (req, res) => {
-  try {
-    const { filename } = req.params;
-    const filepath = path.join(DIAGNOSTICS_DIR, filename);
-    if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'File not found' });
-    const content = fs.readFileSync(filepath, 'utf8');
-    res.json(JSON.parse(content));
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
 
 // POST /api/v1/diagnostics
 router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), async (req, res) => {
