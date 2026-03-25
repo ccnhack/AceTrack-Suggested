@@ -2,7 +2,7 @@
   "expo": {
     "name": "AceTrack Suggested",
     "slug": "acetrack-mobile",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "sdkVersion": "50.0.0",
     "platforms": [
       "ios",
@@ -25,7 +25,7 @@
     "ios": {
       "bundleIdentifier": "com.hacker1717.acetrackmobile.suggested"
     },
-    "runtimeVersion": "2.0.0",
+    "runtimeVersion": "2.0.1",
     "plugins": [
       "expo-font"
     ],
