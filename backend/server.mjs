@@ -874,7 +874,7 @@ ${tournament.sponsorName ? `<div class="sponsor">Sponsored by ${tournament.spons
 // ═══════════════════════════════════════════════════════════════
 // SPA Fallback: Support direct hits on internal React routes
 // ═══════════════════════════════════════════════════════════════
-app.get('(.*)', (req, res, next) => {
+app.get('/:splat*', (req, res, next) => {
   if (req.path.startsWith('/api') || req.path.startsWith('/socket.io') || req.path.startsWith('/results')) {
     return next();
   }
