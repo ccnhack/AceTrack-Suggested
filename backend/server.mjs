@@ -137,12 +137,16 @@ const publicPath = path.join(process.cwd(), 'backend', 'public');
 const altPublicPath = path.join(__dirname, 'public');
 const finalPublicPath = fs.existsSync(publicPath) ? publicPath : altPublicPath;
 
+console.log(`🌐 [Frontend] Checking public directory at: ${finalPublicPath}`);
+
 // Force root to index.html immediately
 app.get('/', (req, res) => {
   const indexFile = path.join(finalPublicPath, 'index.html');
   if (fs.existsSync(indexFile)) {
+    console.log(`✅ [Frontend] Serving index.html from: ${indexFile}`);
     res.sendFile(indexFile);
   } else {
+    console.warn(`❌ [Frontend] index.html NOT found at: ${indexFile}`);
     res.status(404).send('Dashboard index.html not found on server');
   }
 });
