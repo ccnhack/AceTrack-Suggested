@@ -240,7 +240,8 @@ export const VideoManagement = ({
           type: 'video/mp4' // Multer on server expects this
         });
 
-        const response = await fetch(`${config.API_BASE_URL}/api/upload`, {
+        const uploadApiUrl = 'https://acetrack-suggested.onrender.com';
+        const response = await fetch(`${uploadApiUrl}/api/upload`, {
           method: 'POST',
           body: formData,
           headers: {
