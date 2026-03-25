@@ -53,6 +53,9 @@ const ExploreScreen = (props) => {
   const [selectedTournament, setSelectedTournament] = useState(null);
   const [regPaymentTarget, setRegPaymentTarget] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
+  const [isFetchingLoc, setIsFetchingLoc] = useState(false);
+  const [selectedHub, setSelectedHub] = useState('All');
+
 
   // Handle Deep Linking from ChatBot
   useEffect(() => {
@@ -105,6 +108,11 @@ const ExploreScreen = (props) => {
       });
       
       setCityFilter(closestCity);
+      logger.logAction('LOCATION_DETECT_SUCCESS', { 
+        coords: location.coords, 
+        closestCity, 
+        minDistance 
+      });
       if (closestCity === 'All') {
         Alert.alert('Location Updated', 'No nearby hubs found. Showing all tournaments.');
       }
@@ -151,6 +159,8 @@ const ExploreScreen = (props) => {
 
             if (closestCity !== 'All') {
               setCityFilter(closestCity);
+              setSelectedHub(closestCity);
+              logger.logAction('LOCATION_AUTO_SELECT', { closestCity, minDistance });
               console.log(`📍 Auto-selected hub: ${closestCity} (${minDistance}km away)`);
             }
           }
@@ -500,7 +510,7 @@ const ExploreScreen = (props) => {
             >
               <Ionicons name="location" size={14} color="#FFFFFF" />
               <Text style={styles.compactCityText} numberOfLines={1}>
-                {cityFilter === 'All' ? 'India' : cityFilter}
+                {selectedHub === 'Current Location' ? 'Current Location' : (cityFilter === 'All' ? 'India' : cityFilter)}
               </Text>
               <Ionicons name="chevron-down" size={12} color="rgba(255,255,255,0.6)" />
             </TouchableOpacity>
@@ -535,7 +545,12 @@ const ExploreScreen = (props) => {
                 <TouchableOpacity 
                   key={item}
                   style={styles.dropdownItem} 
-                  onPress={() => { setCityFilter(item); setIsCityDropdownVisible(false); setCitySearch(''); }}
+                  onPress={() => { 
+                    setCityFilter(item); 
+                    setSelectedHub(item);
+                    setIsCityDropdownVisible(false); 
+                    setCitySearch(''); 
+                  }}
                 >
                   <Text style={[styles.dropdownItemText, cityFilter === item && styles.dropdownItemTextActive]}>
                     {item === 'All' ? 'All Locations' : item}
