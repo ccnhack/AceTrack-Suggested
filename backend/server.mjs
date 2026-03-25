@@ -485,10 +485,16 @@ router.post('/upload', apiKeyGuard, upload.single('video'), async (req, res) => 
 
   try {
     // Stream upload to Cloudinary
+    // Determine folder based on mimetype
+    let uploadFolder = 'acetrack';
+    if (req.file.mimetype.startsWith('video/')) uploadFolder = 'acetrack/videos';
+    else if (req.file.mimetype.startsWith('image/')) uploadFolder = 'acetrack/images';
+    else uploadFolder = 'acetrack/others';
+
     const stream = cloudinary.uploader.upload_stream(
       {
         resource_type: 'auto',
-        folder: 'acetrack',
+        folder: uploadFolder,
         public_id: `${Date.now()}-${Math.round(Math.random() * 1e9)}`,
       },
       (error, result) => {
