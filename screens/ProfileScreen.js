@@ -134,14 +134,80 @@ const ProfileScreen = ({
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [isPickingImage, setIsPickingImage] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [showVerifyModal, setShowVerifyModal] = useState(null); // 'email' | 'phone'
-  const [verificationCode, setVerificationCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
-  const [isUpdatingBinary, setIsUpdatingBinary] = useState(false);
+  const [isUpdatingBinary, setIsUpdatingBinary] = useState(false); // Move it here
+
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [latestVersion, setLatestVersion] = useState(null);
+
   const activeApiUrl = isUsingCloud ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
 
-  // Removed invalid useEffect that caused crash
+  // New Update Check logic
+  useEffect(() => {
+    const checkUpdates = async () => {
+      try {
+        const response = await fetch(`${activeApiUrl}/api/status`, {
+          headers: { 'x-api-key': config.ACE_API_KEY || 'ace-secret-key-1717' }
+        });
+        const data = await response.json();
+        if (data && data.latestAppVersion) {
+            setLatestVersion(data.latestAppVersion);
+            // Local appVersion comes from props
+            if (appVersion && data.latestAppVersion !== appVersion) {
+              setUpdateAvailable(true);
+            }
+        }
+      } catch (err) {
+        console.warn("Update check failed:", err);
+      }
+    };
+    
+    checkUpdates();
+  }, [appVersion, activeApiUrl]);
+
+  const handleManualUpdate = async () => {
+    if (__DEV__) {
+      Alert.alert("Dev Mode", "OTA updates are disabled in development.");
+      return;
+    }
+    try {
+      setIsUpdatingBinary(true);
+      const update = await Updates.checkForUpdateAsync();
+      if (update.isAvailable) {
+        await Updates.fetchUpdateAsync();
+        Alert.alert("Success", "Update downloaded. Restarting...", [
+          { text: "OK", onPress: () => Updates.reloadAsync() }
+        ]);
+      } else {
+        setUpdateAvailable(false);
+        Alert.alert("Up to Date", "Already on latest version.");
+      }
+    } catch (e) {
+      Alert.alert("Error", e.message);
+    } finally {
+      setIsUpdatingBinary(false);
+    }
+  };
+
+  const renderUpdateCard = () => {
+    if (!updateAvailable) return null;
+    return (
+      <TouchableOpacity 
+          onPress={handleManualUpdate}
+          style={styles.updateCard}
+      >
+          <View style={styles.updateIconContainer}>
+              <Ionicons name="sync-outline" size={18} color="#475569" />
+          </View>
+          <Text style={styles.updateText}>App Update Available</Text>
+          <View style={styles.versionBadgeContainer}>
+              <Text style={styles.versionBadgeText}>v{latestVersion || '2.0.1'}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+      </TouchableOpacity>
+    );
+  };
+
 
 
   // Edit Profile States
@@ -299,34 +365,7 @@ const ProfileScreen = ({
     }
   };
 
-  const handleManualUpdate = async () => {
-    if (__DEV__) {
-      Alert.alert("Dev Mode", "OTA updates are disabled in development mode. This will work in the production APK.");
-      return;
-    }
 
-    try {
-      const update = await Updates.checkForUpdateAsync();
-      if (update.isAvailable) {
-        Alert.alert(
-          "Update Available", 
-          "A new version of AceTrack is available. Downloading now...",
-          [{ text: "OK" }]
-        );
-        await Updates.fetchUpdateAsync();
-        Alert.alert(
-          "Update Successful", 
-          "Click OK to restart.",
-          [{ text: "OK", onPress: () => Updates.reloadAsync() }]
-        );
-      } else {
-        Alert.alert("Up to Date", "Your app is already running the latest version.");
-      }
-    } catch (error) {
-      Alert.alert("Update Failed", "Could not check for updates. Please check your internet connection.");
-      console.error("Manual update error:", error);
-    }
-  };
 
   if (!user) return null;
 
@@ -428,12 +467,12 @@ const ProfileScreen = ({
         {user.role !== 'admin' && user.role !== 'academy' && user.role !== 'coach' && (
           <View style={styles.section}>
               <Text style={styles.sectionTitle}>Skills</Text>
+              {renderUpdateCard()}
               <PlayerSkillDashboard user={user} />
           </View>
         )}
 
-        {/* Removed invalid updateAvailable reference causing crash */}
-
+        {(user.role === 'admin' || user.role === 'academy' || user.role === 'coach') && renderUpdateCard()}
 
         {/* --- NEW: Expert Panel Feature Hub --- */}
         <View style={styles.section}>
