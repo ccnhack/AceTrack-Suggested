@@ -18,6 +18,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import RankingScreen from '../screens/RankingScreen';
 import RecordingsScreen from '../screens/RecordingsScreen';
 import MatchmakingScreen from '../screens/MatchmakingScreen';
+import InsightsScreen from '../screens/InsightsScreen';
 import CoachDirectoryScreen from '../screens/CoachDirectoryScreen';
 import SubscriptionScreen from '../screens/SubscriptionScreen';
 import LiveScoringScreen from '../screens/LiveScoringScreen';
@@ -100,6 +101,7 @@ const MainTabs = ({
           else if (route.name === 'Admin') iconName = focused ? 'settings' : 'settings-outline';
           else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
           else if (route.name === 'Matchmaking') iconName = focused ? 'people' : 'people-outline';
+          else if (route.name === 'Insights') iconName = focused ? 'bar-chart' : 'bar-chart-outline';
           return <Ionicons name={iconName} size={size} color={color} />;
         },
         tabBarLabel: route.name === 'Matchmaking' && role === 'coach' ? 'Bookings' : route.name,
@@ -156,9 +158,15 @@ const MainTabs = ({
           {(props) => <AdminHubScreen {...props} {...params} {...typeProps} />}
         </Tab.Screen>
       )}
-      <Tab.Screen name="Matchmaking">
-        {(props) => <MatchmakingScreen {...props} {...params} />}
-      </Tab.Screen>
+      {role === 'admin' ? (
+        <Tab.Screen name="Insights">
+          {(props) => <InsightsScreen {...props} {...params} />}
+        </Tab.Screen>
+      ) : (
+        <Tab.Screen name="Matchmaking">
+          {(props) => <MatchmakingScreen {...props} {...params} />}
+        </Tab.Screen>
+      )}
       <Tab.Screen name="Profile">
         {(props) => (
           <ProfileScreen 
