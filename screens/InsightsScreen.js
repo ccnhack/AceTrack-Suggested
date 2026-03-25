@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Anima
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import designSystem from '../theme/designSystem';
+import logger from '../utils/logger';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -11,6 +12,15 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
   const [selectedAcademyId, setSelectedAcademyId] = useState(null);
   const [selectedStat, setSelectedStat] = useState(null); // 'Players' | 'Tournaments' | 'Footage' | null
   const [selectedArea, setSelectedArea] = useState(null);
+
+  // Initial Diagnostic Log
+  useEffect(() => {
+    logger.logAction('Insights_Mount', { 
+        playerCount: players.length, 
+        tournamentCount: tournaments.length, 
+        videoCount: matchVideos.length 
+    });
+  }, []);
 
   // 1. Process Sports Distribution (General)
   const sportsStats = useMemo(() => {
@@ -150,6 +160,29 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
     });
   }, []);
 
+  // Action Handlers with Logging
+  const handleStatSelect = (stat) => {
+    const newVal = selectedStat === stat ? null : stat;
+    logger.logAction('Insights_Stat_Toggle', { stat, action: newVal ? 'open' : 'close' });
+    setSelectedStat(newVal);
+    setSelectedArea(null);
+  };
+
+  const handleCitySelect = (city) => {
+    logger.logAction('Insights_City_Select', { city });
+    setSelectedCity(city);
+  };
+
+  const handleAcademySelect = (id, name) => {
+    logger.logAction('Insights_Academy_Select', { id, name });
+    setSelectedAcademyId(id);
+  };
+
+  const handleAreaSelect = (area) => {
+    logger.logAction('Insights_Area_DeepDive', { area });
+    setSelectedArea(area);
+  };
+
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <LinearGradient colors={['#F8FAFC', '#F1F5F9']} style={styles.content}>
@@ -167,9 +200,9 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
 
         {/* Quick Stats Grid */}
         <View style={styles.statsGrid}>
-          <StatBox title="Players" value={players.length} icon="people" color="#6366F1" trend="+12%" isActive={selectedStat === 'Players'} onPress={() => { setSelectedStat(selectedStat === 'Players' ? null : 'Players'); setSelectedArea(null); }} />
-          <StatBox title="Tournaments" value={tournaments.length} icon="trophy" color="#F59E0B" trend="+5%" isActive={selectedStat === 'Tournaments'} onPress={() => { setSelectedStat(selectedStat === 'Tournaments' ? null : 'Tournaments'); setSelectedArea(null); }} />
-          <StatBox title="Footage" value={matchVideos.length} icon="videocam" color="#10B981" trend="+24%" isActive={selectedStat === 'Footage'} onPress={() => { setSelectedStat(selectedStat === 'Footage' ? null : 'Footage'); setSelectedArea(null); }} />
+          <StatBox title="Players" value={players.length} icon="people" color="#6366F1" trend="+12%" isActive={selectedStat === 'Players'} onPress={() => handleStatSelect('Players')} />
+          <StatBox title="Tournaments" value={tournaments.length} icon="trophy" color="#F59E0B" trend="+5%" isActive={selectedStat === 'Tournaments'} onPress={() => handleStatSelect('Tournaments')} />
+          <StatBox title="Footage" value={matchVideos.length} icon="videocam" color="#10B981" trend="+24%" isActive={selectedStat === 'Footage'} onPress={() => handleStatSelect('Footage')} />
         </View>
 
         {/* Dynamic Stat Drill-down with Area Deep-dive */}
@@ -225,7 +258,7 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
                             <TouchableOpacity 
                                 key={item.name} 
                                 style={styles.barRow}
-                                onPress={() => selectedStat === 'Players' && setSelectedArea(item.name)}
+                                onPress={() => selectedStat === 'Players' && handleAreaSelect(item.name)}
                             >
                                 <View style={styles.barLabelContainer}>
                                     <View style={styles.flexItem}>
@@ -243,6 +276,63 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
                     </View>
                 )}
             </View>
+        )}
+
+        {/* Home View Sections (Only if no stat selected) */}
+        {!selectedStat && (
+            <>
+                <View style={styles.chartCard}>
+                    <View style={styles.chartHeader}>
+                        <Text style={styles.chartTitle}>Top Hosting Academies</Text>
+                        {selectedAcademyId && (
+                            <TouchableOpacity onPress={() => setSelectedAcademyId(null)} style={styles.backBtn}>
+                                <Ionicons name="arrow-back" size={14} color="#6366F1" />
+                                <Text style={styles.backBtnText}>All</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                    {selectedAcademyId ? (
+                        <View style={styles.academyDetail}>
+                            <Text style={styles.detailName}>{players.find(p => p.id === selectedAcademyId)?.name}</Text>
+                            <View style={styles.detailStatsRow}>
+                                <View style={styles.detailStat}><Text style={styles.detailStatVal}>{academyDetailStats?.count}</Text><Text style={styles.detailStatLabel}>Events</Text></View>
+                                <View style={styles.detailStat}><Text style={styles.detailStatVal}>{academyDetailStats?.totalParticipation}</Text><Text style={styles.detailStatLabel}>Players</Text></View>
+                            </View>
+                        </View>
+                    ) : (
+                        <View style={styles.academyList}>
+                            {academyStats.map((item, index) => (
+                                <TouchableOpacity key={item.id} style={styles.academyRow} onPress={() => handleAcademySelect(item.id, item.name)}>
+                                    <View style={[styles.academyRank, { backgroundColor: index === 0 ? '#6366F1' : '#F1F5F9' }]}><Text style={[styles.rankText, { color: index === 0 ? '#fff' : '#475569' }]}>{index+1}</Text></View>
+                                    <Text style={styles.academyName}>{item.name}</Text>
+                                    <Text style={styles.academyTournaments}>{item.count} Hosts</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    )}
+                </View>
+
+                <View style={styles.chartCard}>
+                    <View style={styles.chartHeader}>
+                        <Text style={styles.chartTitle}>{selectedCity ? `Areas in ${selectedCity}` : 'Hotspot Cities'}</Text>
+                        {selectedCity && (
+                            <TouchableOpacity onPress={() => setSelectedCity(null)} style={styles.backBtn}>
+                                <Ionicons name="arrow-back" size={14} color="#6366F1" />
+                                <Text style={styles.backBtnText}>Cities</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                    <View style={styles.geoContainer}>
+                        {(selectedCity ? areaStats : cityStats).map((item, index) => (
+                            <TouchableOpacity key={item.name} style={styles.geoRow} onPress={() => !selectedCity && handleCitySelect(item.name)}>
+                                <View style={[styles.dot, { backgroundColor: ['#6366F1', '#EC4899', '#10B981', '#F59E0B'][index % 4] }]} />
+                                <Text style={styles.geoName}>{item.name}</Text>
+                                <Text style={styles.geoCount}>{item.count}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </View>
+            </>
         )}
 
         {/* Global Split (Only if no stat selected) */}
@@ -265,7 +355,7 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
             </View>
         )}
 
-        {/* Community Growth (ENHANCED) */}
+        {/* Community Growth */}
         <View style={styles.chartCard}>
             <View style={styles.chartHeaderExpanded}>
                 <View>
@@ -305,15 +395,10 @@ const StatBox = ({ title, value, icon, color, trend, isActive, onPress }) => (
     ]} 
     onPress={onPress}
   >
-    <View style={[styles.iconCircle, { backgroundColor: `${color}15` }]}>
-      <Ionicons name={icon} size={20} color={color} />
-    </View>
+    <View style={[styles.iconCircle, { backgroundColor: `${color}15` }]}><Ionicons name={icon} size={20} color={color} /></View>
     <Text style={styles.statValue}>{value}</Text>
     <Text style={styles.statTitle}>{title}</Text>
-    <View style={styles.trendRow}>
-        <Ionicons name="caret-up" size={12} color="#10B981" />
-        <Text style={styles.trendText}>{trend}</Text>
-    </View>
+    <View style={styles.trendRow}><Ionicons name="caret-up" size={12} color="#10B981" /><Text style={styles.trendText}>{trend}</Text></View>
   </TouchableOpacity>
 );
 
@@ -365,7 +450,26 @@ const styles = StyleSheet.create({
   growthBadgeText: { fontSize: 11, fontWeight: '700', color: '#6366F1', marginLeft: 4 },
   pctContainer: { height: 20, justifyContent: 'flex-end', marginBottom: 4 },
   pctText: { fontSize: 9, fontWeight: '800', color: '#10B981' },
-  flexItem: { flex: 1 }
+  flexItem: { flex: 1 },
+  backBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF2FF', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  backBtnText: { fontSize: 12, fontWeight: '700', color: '#6366F1', marginLeft: 4 },
+  academyList: { marginTop: 4 },
+  academyRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+  academyRank: { width: 24, height: 24, borderRadius: 6, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  rankText: { fontSize: 11, fontWeight: '800' },
+  academyName: { fontSize: 14, fontWeight: '700', color: '#334155', flex: 1 },
+  academyTournaments: { fontSize: 12, fontWeight: '700', color: '#1E293B' },
+  academyDetail: { paddingVertical: 8 },
+  detailName: { fontSize: 16, fontWeight: '700', color: '#334155', marginBottom: 12 },
+  detailStatsRow: { flexDirection: 'row', gap: 20 },
+  detailStat: { alignItems: 'center' },
+  detailStatVal: { fontSize: 16, fontWeight: '800', color: '#6366F1' },
+  detailStatLabel: { fontSize: 9, color: '#94A3B8', fontWeight: '700', textTransform: 'uppercase' },
+  geoContainer: { marginTop: 4 },
+  geoRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+  dot: { width: 10, height: 10, borderRadius: 5, marginRight: 12 },
+  geoName: { flex: 1, fontSize: 14, fontWeight: '600', color: '#334155' },
+  geoCount: { fontSize: 13, fontWeight: '700', color: '#1E293B' },
 });
 
 export default InsightsScreen;
