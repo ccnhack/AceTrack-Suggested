@@ -297,11 +297,23 @@ const AnimatedBar = ({ width, color }) => {
 };
 
 const StatBox = ({ title, value, icon, color, trend, isActive, onPress }) => (
-  <TouchableOpacity style={[styles.statBox, isActive && { borderColor: color, borderWidth: 1.5, backgroundColor: `${color}05` }]} onPress={onPress}>
-    <View style={[styles.iconCircle, { backgroundColor: `${color}15` }]}><Ionicons name={icon} size={20} color={color} /></View>
+  <TouchableOpacity 
+    style={[
+      styles.statBox, 
+      { borderColor: isActive ? color : '#fff', borderWidth: 2 },
+      isActive && { backgroundColor: '#F8FAFC' }
+    ]} 
+    onPress={onPress}
+  >
+    <View style={[styles.iconCircle, { backgroundColor: `${color}15` }]}>
+      <Ionicons name={icon} size={20} color={color} />
+    </View>
     <Text style={styles.statValue}>{value}</Text>
     <Text style={styles.statTitle}>{title}</Text>
-    <View style={styles.trendRow}><Ionicons name="caret-up" size={12} color="#10B981" /><Text style={styles.trendText}>{trend}</Text></View>
+    <View style={styles.trendRow}>
+        <Ionicons name="caret-up" size={12} color="#10B981" />
+        <Text style={styles.trendText}>{trend}</Text>
+    </View>
   </TouchableOpacity>
 );
 
@@ -332,8 +344,8 @@ const styles = StyleSheet.create({
   newLabel: { fontSize: 10, color: '#10B981', fontWeight: '700', marginTop: 1 },
   barTrack: { height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 4 },
-  drillInfoBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', padding: 10, borderRadius: 12, marginBottom: 16 },
-  drillInfoText: { fontSize: 10, color: '#64748B', marginLeft: 8, fontWeight: '700', flex: 1 },
+  drillInfoBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', padding: 12, borderRadius: 14, marginBottom: 20, width: '100%' },
+  drillInfoText: { fontSize: 11, color: '#475569', marginLeft: 8, fontWeight: '700', flex: 1, lineHeight: 15 },
   areaDetail: { marginTop: 4 },
   areaHero: { backgroundColor: '#F8FAFC', padding: 16, borderRadius: 16, marginBottom: 20 },
   areaHeroTitle: { fontSize: 18, fontWeight: '800', color: '#1E293B', marginBottom: 4 },
