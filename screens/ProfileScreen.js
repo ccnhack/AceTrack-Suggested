@@ -432,22 +432,8 @@ const ProfileScreen = ({
           </View>
         )}
 
-        {/* --- App Update Available (New) --- */}
-        {updateAvailable && (
-          <TouchableOpacity 
-              onPress={handleManualUpdate}
-              style={styles.updateCard}
-          >
-              <View style={styles.updateIconContainer}>
-                  <Ionicons name="sync-outline" size={18} color="#475569" />
-              </View>
-              <Text style={styles.updateText}>App Update Available</Text>
-              <View style={styles.versionBadgeContainer}>
-                  <Text style={styles.versionBadgeText}>v{latestVersion || '1.0.44'}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
-          </TouchableOpacity>
-        )}
+        {/* Removed invalid updateAvailable reference causing crash */}
+
 
         {/* --- NEW: Expert Panel Feature Hub --- */}
         <View style={styles.section}>
