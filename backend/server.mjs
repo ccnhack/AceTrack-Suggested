@@ -131,27 +131,27 @@ app.use((req, res, next) => {
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: Rate Limiting (SEC Fix #4)
 // ═══════════════════════════════════════════════════════════════
-const globalLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 100,
-  message: { error: 'Too many requests. Please try again later.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-const strictLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 10,
-  message: { error: 'Too many attempts. Please wait before trying again.' }
-});
-
-const otpLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 5,
-  message: { error: 'Too many OTP attempts. Account temporarily locked.' }
-});
-
 app.use('/api/', globalLimiter);
+
+// ═══════════════════════════════════════════════════════════════
+// Serve Web Admin Dashboard (Static Files)
+// ═══════════════════════════════════════════════════════════════
+const publicPath = path.join(process.cwd(), 'backend', 'public');
+console.log(`🌐 [Frontend] Checking public directory at: ${publicPath}`);
+
+if (fs.existsSync(publicPath)) {
+  console.log(`✅ [Frontend] Successfully serving static files from: ${publicPath}`);
+  app.use(express.static(publicPath));
+} else {
+  // Fallback for local development or different folder structure
+  const altPublicPath = path.join(__dirname, 'public');
+  if (fs.existsSync(altPublicPath)) {
+    console.log(`✅ [Frontend] Successfully serving static files from (alt): ${altPublicPath}`);
+    app.use(express.static(altPublicPath));
+  } else {
+    console.warn(`❌ [Frontend] Public directory NOT found. Searched: ${publicPath} and ${altPublicPath}`);
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════
 // 🔍 DEBUG: Filesystem Inspector (Temporary)
@@ -833,33 +833,24 @@ ${tournament.sponsorName ? `<div class="sponsor">Sponsored by ${tournament.spons
 });
 
 // ═══════════════════════════════════════════════════════════════
-// Serve Web Admin Dashboard
+// SPA Fallback: Support direct hits on internal React routes
 // ═══════════════════════════════════════════════════════════════
-// Use process.cwd() as fallback to ensure Render finds it
-const publicPath = fs.existsSync(path.join(__dirname, 'public')) 
-  ? path.join(__dirname, 'public')
-  : path.join(process.cwd(), 'backend', 'public');
-
-console.log(`🌐 [Frontend] Checking public directory at: ${publicPath}`);
-if (fs.existsSync(publicPath)) {
-  console.log(`✅ [Frontend] Successfully serving static files from: ${publicPath}`);
-  app.use('/', express.static(publicPath));
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api') || req.path.startsWith('/socket.io') || req.path.startsWith('/results')) {
+    return next();
+  }
   
-  // SPA Fallback
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api') || req.path.startsWith('/socket.io') || req.path.startsWith('/results')) {
-      return next();
-    }
-    const indexFile = path.join(publicPath, 'index.html');
-    if (fs.existsSync(indexFile)) {
-      res.sendFile(indexFile);
-    } else {
-      next();
-    }
-  });
-} else {
-  console.warn(`❌ [Frontend] Public directory NOT found. Searched in: ${path.join(__dirname, 'public')} and ${path.join(process.cwd(), 'backend', 'public')}`);
-}
+  const pPath = fs.existsSync(path.join(process.cwd(), 'backend', 'public'))
+    ? path.join(process.cwd(), 'backend', 'public')
+    : path.join(__dirname, 'public');
+    
+  const indexFile = path.join(pPath, 'index.html');
+  if (fs.existsSync(indexFile)) {
+    res.sendFile(indexFile);
+  } else {
+    next();
+  }
+});
 
 // ═══════════════════════════════════════════════════════════════
 // 🚀 Start
