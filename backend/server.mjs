@@ -159,6 +159,42 @@ const otpLimiter = rateLimit({
 
 app.use('/api/', globalLimiter);
 
+// ═══════════════════════════════════════════════════════════════
+// Security & Middleware (MOVED UP for Boot)
+// ═══════════════════════════════════════════════════════════════
+const ACE_API_KEY = process.env.ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=';
+
+const apiKeyGuard = (req, res, next) => {
+  const providedKey = req.headers['x-ace-api-key'];
+  if (providedKey !== ACE_API_KEY) {
+    if (typeof logAudit === 'function') {
+      logAudit(req, 'UNAUTHORIZED_ACCESS', [], { ip: req.ip });
+    }
+    console.warn(`🛑 Unauthorized access attempt from ${req.ip}`);
+    return res.status(401).json({ error: 'Unauthorized: Invalid or missing API Key' });
+  }
+  next();
+};
+
+const logServerEvent = (action, details = {}) => {
+  try {
+    const DIAG_DIR = path.join(__dirname, 'diagnostics');
+    if (!fs.existsSync(DIAG_DIR)) fs.mkdirSync(DIAG_DIR, { recursive: true });
+    
+    const logFile = path.join(DIAG_DIR, 'server_events.json');
+    let logs = [];
+    if (fs.existsSync(logFile)) {
+      const content = fs.readFileSync(logFile, 'utf8');
+      logs = JSON.parse(content || '[]');
+    }
+    logs.unshift({ timestamp: new Date().toISOString(), action, ...details });
+    fs.writeFileSync(logFile, JSON.stringify(logs.slice(0, 1000), null, 2));
+    console.log(`📡 [Server Log] ${action}:`, details);
+  } catch (e) {
+    console.error("❌ Failed to write server log:", e.message);
+  }
+};
+
 const publicPath = path.join(process.cwd(), 'backend', 'public');
 const altPublicPath = path.join(__dirname, 'public');
 const finalPublicPath = fs.existsSync(publicPath) ? publicPath : altPublicPath;
@@ -301,21 +337,6 @@ const AuditLog = mongoose.model('AuditLog', AuditLogSchema);
 // };
 
 // ═══════════════════════════════════════════════════════════════
-// Security & Middleware
-// ═══════════════════════════════════════════════════════════════
-const ACE_API_KEY = process.env.ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=';
-
-const apiKeyGuard = (req, res, next) => {
-  const providedKey = req.headers['x-ace-api-key'];
-  if (providedKey !== ACE_API_KEY) {
-    logAudit(req, 'UNAUTHORIZED_ACCESS', [], { ip: req.ip });
-    console.warn(`🛑 Unauthorized access attempt from ${req.ip}`);
-    return res.status(401).json({ error: 'Unauthorized: Invalid or missing API Key' });
-  }
-  next();
-};
-
-// ═══════════════════════════════════════════════════════════════
 // 📋 Zod Validation Schemas (SE/SEC Fix #5)
 // ═══════════════════════════════════════════════════════════════
 const DiagnosticsSchema = z.object({
@@ -376,21 +397,6 @@ export const compareOtp = async (plainOtp, hashedOtp) => {
 // ═══════════════════════════════════════════════════════════════
 // Helpers
 // ═══════════════════════════════════════════════════════════════
-const logServerEvent = (action, details = {}) => {
-  try {
-    const logFile = path.join(DIAGNOSTICS_DIR, 'server_events.json');
-    let logs = [];
-    if (fs.existsSync(logFile)) {
-      const content = fs.readFileSync(logFile, 'utf8');
-      logs = JSON.parse(content || '[]');
-    }
-    logs.unshift({ timestamp: new Date().toISOString(), action, ...details });
-    fs.writeFileSync(logFile, JSON.stringify(logs.slice(0, 1000), null, 2));
-    console.log(`📡 [Server Log] ${action}:`, details);
-  } catch (e) {
-    console.error("❌ Failed to write server log:", e.message);
-  }
-};
 
 const logAudit = async (req, action, changedCollections = [], details = {}) => {
   try {
