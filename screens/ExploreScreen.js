@@ -5,8 +5,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import logger from '../utils/logger';
 import TournamentDetailModal from '../components/TournamentDetailModal';
 import designSystem from '../theme/designSystem';
+import { isTournamentPast } from '../utils/tournamentUtils';
 
 const { width } = Dimensions.get('window');
 
@@ -38,11 +40,12 @@ const CITY_COORDS = {
 
 const POPULAR_CITIES = ['All', ...Object.keys(CITY_COORDS)];
 
-const ExploreScreen = ({ 
-  tournaments, onSelect, reschedulingFrom, onCancelReschedule, userId, 
-  userRole, userSports, players = [], Sport, SkillLevel, user,
-  onRegister, onAssignCoach, isSyncing
-}) => {
+const ExploreScreen = (props) => {
+  const { 
+    tournaments, onSelect, reschedulingFrom, onCancelReschedule, userId, 
+    userRole, userSports, players = [], Sport, SkillLevel, user,
+    onRegister, onAssignCoach, isSyncing
+  } = props;
   const [sportFilter, setSportFilter] = useState('All');
   const [cityFilter, setCityFilter] = useState('All');
   const [isCityDropdownVisible, setIsCityDropdownVisible] = useState(false);
@@ -50,6 +53,65 @@ const ExploreScreen = ({
   const [selectedTournament, setSelectedTournament] = useState(null);
   const [regPaymentTarget, setRegPaymentTarget] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
+
+  // Handle Deep Linking from ChatBot
+  useEffect(() => {
+    if (props.route?.params?.selectedTournamentId) {
+      const tid = props.route.params.selectedTournamentId;
+      const t = tournaments.find(it => String(it.id) === String(tid));
+      if (t) {
+        setSelectedTournament(t);
+        // Clear param to avoid re-opening on every render
+        props.navigation.setParams({ selectedTournamentId: null });
+      }
+    }
+  }, [props.route?.params?.selectedTournamentId, tournaments]);
+
+  const handleDetectLocation = async () => {
+    setIsCityDropdownVisible(false);
+    setIsFetchingLoc(true);
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        logger.addLog('Location permission denied', 'warn', 'console');
+        Alert.alert('Permission Denied', 'Please enable location services in your settings to find nearby tournaments.');
+        setIsFetchingLoc(false);
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      
+      setUserLocation(location.coords);
+      setSelectedHub('Current Location');
+      setCityFilter('All'); // Match everything when using proximity
+      logger.addLog(`Location fetched: ${location.coords.latitude}, ${location.coords.longitude}`, 'info', 'console');
+
+      let closestCity = 'All';
+      let minDistance = 50; 
+
+      Object.entries(CITY_COORDS).forEach(([cityName, coords]) => {
+        const dist = calculateDistance(
+          location.coords.latitude,
+          location.coords.longitude,
+          coords.latitude,
+          coords.longitude
+        );
+        if (dist && parseFloat(dist) < minDistance) {
+          minDistance = parseFloat(dist);
+          closestCity = cityName;
+        }
+      });
+      
+      setCityFilter(closestCity);
+      if (closestCity === 'All') {
+        Alert.alert('Location Updated', 'No nearby hubs found. Showing all tournaments.');
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Could not detect location.');
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -69,8 +131,8 @@ const ExploreScreen = ({
           let location = await Location.getCurrentPositionAsync({});
           setUserLocation(location.coords);
 
-          // Auto-select city hub based on proximity
-          if (cityFilter === 'All') {
+          // Auto-select city hub based on proximity for regular users/coaches only
+          if (cityFilter === 'All' && userRole !== 'admin') {
             let closestCity = 'All';
             let minDistance = 50; // Threshold of 50km
 
@@ -112,27 +174,61 @@ const ExploreScreen = ({
     }
   };
 
+  const parseDate = (d) => {
+    if (!d) return null;
+    const date = new Date(d);
+    if (isNaN(date.getTime())) {
+      // Handle DD-MM-YYYY format
+      const parts = d.split('-');
+      if (parts.length === 3) {
+        return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+      }
+    }
+    return date;
+  };
+
   const availableSports = userRole === 'coach' && userSports ? userSports : Object.values(Sport);
   const currentUser = userId ? players.find(p => p.id === userId) : null;
   const isBeginnerProtected = currentUser?.isBeginnerProtected || false;
 
   const processedTournaments = tournaments
     .filter(t => {
-      const tDate = new Date(t.date);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
+
+      const tournamentDate = parseDate(t.date);
+      if (!tournamentDate) return false;
+
+      const regDeadline = parseDate(t.registrationDeadline);
+      if (regDeadline) regDeadline.setHours(23, 59, 59, 999);
       
-      if (tDate < today || t.tournamentStarted || t.status === 'ongoing' || t.status === 'completed') return false;
-      if (t.registrationDeadline) {
-        const deadlineDate = new Date(t.registrationDeadline);
-        deadlineDate.setHours(23, 59, 59, 999);
-        if (today > deadlineDate) return false;
+      const isDeadlinePassed = regDeadline && (regDeadline.getTime() < today.getTime());
+      const deadlineOpen = !regDeadline || !isDeadlinePassed || userRole?.toLowerCase() === 'admin' || t.status === 'ongoing';
+      
+      const statusOpen = (t.status === 'upcoming' || t.status === 'ongoing') && t.status !== 'completed';
+      const isPast = isTournamentPast(t);
+      const isOpen = statusOpen && deadlineOpen && (!isPast || t.status === 'ongoing');
+
+      if (__DEV__ && userRole?.toLowerCase() === 'admin') {
+         console.log(`🔍 [AdminTrace] ID: ${t.id}, Open: ${isOpen}, S: ${!t.tournamentStarted}, St: ${t.status}, D: ${t.date}, Dead: ${t.registrationDeadline}`);
       }
+
+      if (!isOpen) return false;
+
+      // Admin bypasses all other filters (City, Gender, Skill Level, Sport)
+      if (userRole?.toLowerCase() === 'admin') return true;
+
+      // Role-specific filters
       if (userRole === 'coach' && userSports && !userSports.includes(t.sport)) return false;
       if (reschedulingFrom && t.id === reschedulingFrom) return false;
-      if (cityFilter !== 'All' && t.location && !t.location.includes(cityFilter)) return false;
+      
+      if (cityFilter !== 'All') {
+        const inLocation = t.location?.toLowerCase().includes(cityFilter.toLowerCase());
+        const inCity = t.city?.toLowerCase().includes(cityFilter.toLowerCase());
+        if (!inLocation && !inCity) return false;
+      }
 
-      // Gender-based filtering for Individual/Player users
+      // Gender-based filtering for Individual/Player users ONLY
       if (userRole === 'user') {
         const format = t.format || "";
         const gender = user?.gender; 
@@ -144,14 +240,22 @@ const ExploreScreen = ({
     })
     .map(t => {
       const distance = userLocation && t.lat && t.lng ? calculateDistance(userLocation.latitude, userLocation.longitude, t.lat, t.lng) : null;
-      return { ...t, distance: distance ? parseFloat(distance) : Infinity };
+      return { ...t, distance: distance ? parseFloat(distance) : 99999 };
     });
+  const filteredTournaments = processedTournaments;
 
-  const filteredTournaments = sportFilter === 'All' 
-    ? processedTournaments 
-    : processedTournaments.filter(t => t.sport === sportFilter);
+  // Admin Trace: Log filter results for troubleshooting via useEffect to avoid re-render loops
+  React.useEffect(() => {
+    if (userRole?.toLowerCase() === 'admin' && tournaments?.length > 0) {
+      logger.addLog(`🔍 [Explore] Role: ${userRole}, Hub: ${cityFilter}, Matches: ${filteredTournaments.length} / Total: ${tournaments.length}`, 'info', 'console');
+      if (filteredTournaments.length === 0) {
+        const sample = tournaments[0];
+        logger.addLog(`⚠️ Explore filter trace (T1): ID=${sample.id}, Status=${sample.status}, Date=${sample.date}, Started=${sample.tournamentStarted}`, 'warn', 'console');
+      }
+    }
+  }, [tournaments, filteredTournaments.length, userRole, cityFilter]);
 
-  const displayTournaments = isBeginnerProtected 
+  const displayTournaments = (isBeginnerProtected && userRole !== 'admin') 
     ? filteredTournaments.filter(t => t.skillLevel === 'Beginner')
     : filteredTournaments;
 
@@ -396,7 +500,7 @@ const ExploreScreen = ({
             >
               <Ionicons name="location" size={14} color="#FFFFFF" />
               <Text style={styles.compactCityText} numberOfLines={1}>
-                {cityFilter === 'All' ? 'Select Hub' : cityFilter}
+                {cityFilter === 'All' ? 'India' : cityFilter}
               </Text>
               <Ionicons name="chevron-down" size={12} color="rgba(255,255,255,0.6)" />
             </TouchableOpacity>
@@ -417,7 +521,17 @@ const ExploreScreen = ({
               />
             </View>
             <View style={styles.dropdownList}>
-              {filteredCities.slice(0, 3).map((item) => (
+              <TouchableOpacity 
+                style={styles.currentLocationItem}
+                onPress={handleDetectLocation}
+              >
+                <View style={styles.currentLocationIcon}>
+                   <Ionicons name="navigate" size={12} color="#EF4444" />
+                </View>
+                <Text style={styles.currentLocationText}>Current Location</Text>
+              </TouchableOpacity>
+
+              {filteredCities.map((item) => (
                 <TouchableOpacity 
                   key={item}
                   style={styles.dropdownItem} 
@@ -509,8 +623,6 @@ const ExploreScreen = ({
         </View>
       </ScrollView>
 
-
-
       <TournamentDetailModal
         tournament={selectedTournament}
         visible={!!selectedTournament}
@@ -589,6 +701,33 @@ const styles = StyleSheet.create({
   dropdownHeader: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(15, 23, 42, 0.6)', borderRadius: 12, paddingHorizontal: 12, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
   dropdownSearchInput: { flex: 1, height: 40, color: '#FFFFFF', fontSize: 13, marginLeft: 8 },
   dropdownList: { gap: 2 },
+  currentLocationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.05)',
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  currentLocationIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  currentLocationText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#EF4444',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   dropdownItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, borderRadius: 8 },
   dropdownItemText: { fontSize: 14, fontWeight: '700', color: '#94A3B8' },
   dropdownItemTextActive: { color: '#FFFFFF' },

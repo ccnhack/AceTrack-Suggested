@@ -2,14 +2,113 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, TextInput, 
   StyleSheet, Modal, KeyboardAvoidingView, Platform, 
-  SafeAreaView, ActivityIndicator
+  SafeAreaView, ActivityIndicator, Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { generateAIResponse } from '../services/aiService';
 import config from '../config';
+import { isTournamentPast } from '../utils/tournamentUtils';
 
-const ChatBot = ({ user, evaluations, chatbotMessages, onSendChatMessage }) => {
+const { width } = Dimensions.get('window');
+
+// Premium Markdown-lite Renderer
+const MarkdownText = ({ text, isUser }) => {
+  if (!text) return null;
+
+  const lines = text.split('\n');
+  return (
+    <View style={{ gap: 2 }}>
+      {lines.map((line, idx) => {
+        const trimmedLine = line.trim();
+        
+        // Spacer for actual empty lines to improve readability (breathability)
+        if (line === '') return <View key={idx} style={{ height: 10 }} />;
+        if (!trimmedLine) return null;
+
+        // Header handling (###)
+        if (trimmedLine.startsWith('###')) {
+          return (
+            <Text key={idx} style={[styles.headerText, { fontWeight: '900', color: '#0F172A', marginTop: 12, marginBottom: 4 }]}>
+              {trimmedLine.replace('###', '').trim().toUpperCase()}
+            </Text>
+          );
+        }
+        
+        // Bullet handling (* or -)
+        const isBullet = trimmedLine.startsWith('*') || trimmedLine.startsWith('-');
+        let content = trimmedLine;
+        if (isBullet) {
+          content = '• ' + trimmedLine.substring(1).trim();
+        }
+
+        // Bold handling (**text**)
+        const parts = content.split(/(\*\*.*?\*\*)/g);
+        
+        return (
+          <Text key={idx} style={[
+            styles.messageText, 
+            isUser ? styles.userText : styles.modelText,
+            { lineHeight: 22 }, // Increased breathability
+            isBullet && { marginLeft: 16, color: '#334155' }
+          ]}>
+            {parts.map((part, pIdx) => {
+              if (part.startsWith('**') && part.endsWith('**')) {
+                return (
+                  <Text key={pIdx} style={{ fontWeight: '900', color: '#0F172A' }}>
+                    {part.slice(2, -2)}
+                  </Text>
+                );
+              }
+              return part;
+            })}
+          </Text>
+        );
+      })}
+    </View>
+  );
+};
+
+const TournamentCard = ({ tournament, onNavigate, userRole, userId }) => {
+  if (!tournament) return null;
+
+  let btnLabel = "View & Register";
+  if (userRole === 'academy') {
+    btnLabel = "View Details";
+  } else if (userRole === 'coach') {
+    const isAssigned = tournament.assignedCoachId || (tournament.assignedCoachIds && tournament.assignedCoachIds.length > 0);
+    btnLabel = isAssigned ? "View Details" : "View and Accept";
+  }
+
+  return (
+    <View style={styles.actionCard}>
+      <View style={styles.actionCardHeader}>
+        <Ionicons name="trophy" size={20} color="#F59E0B" />
+        <Text style={styles.actionCardTitle}>{tournament.title}</Text>
+      </View>
+      <View style={styles.actionCardBody}>
+        <Text style={styles.actionCardText}><Ionicons name="calendar-outline" size={12} /> {tournament.date}</Text>
+        <Text style={styles.actionCardText}><Ionicons name="location-outline" size={12} /> {tournament.location}</Text>
+        <Text style={styles.actionCardText}><Ionicons name="cash-outline" size={12} /> ₹{tournament.entryFee}</Text>
+      </View>
+      <TouchableOpacity 
+        style={styles.actionCardButton} 
+        onPress={() => onNavigate(tournament)}
+      >
+        <Text style={styles.actionCardButtonText}>{btnLabel}</Text>
+        <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+const ChatBot = ({ 
+  user, userRole, userId, userSports, evaluations, 
+  chatbotMessages, onSendChatMessage, tournaments, 
+  onSaveTicket, players = [] 
+}) => {
   const [isOpen, setIsOpen] = useState(false);
+  const navigation = useNavigation();
   const initialMessage = { role: 'model', text: 'Hi! I am your AceTrack assistant. Ask me anything about tournaments, rules, or training tips!' };
   const messages = (chatbotMessages && user && chatbotMessages[user.id]) || [initialMessage];
   const [input, setInput] = useState('');
@@ -29,7 +128,62 @@ const ChatBot = ({ user, evaluations, chatbotMessages, onSendChatMessage }) => {
     }
     setPrevIsOpen(isOpen);
     prevMessagesCountRef.current = messages.length;
+
+    // Check for actions in the latest message
+    if (newMsg && messages.length > 0) {
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg.role === 'model' && lastMsg.text.includes('ACTION:')) {
+        handleActionTriggers(lastMsg.text);
+      }
+    }
   }, [messages, isOpen]);
+
+  const handleActionTriggers = (text) => {
+    // 1. Navigation Action: ACTION:NAV_TO_TOURNAMENT (REMOVED: Automatic navigation is disabled for a smoother UX)
+    // We now only render interactive cards via getTournamentsFromAction() and wait for user click.
+
+    // 2. Ticket Action: ACTION:RAISE_TICKET TYPE:DESCRIPTION
+    const ticketMatch = text.match(/ACTION:RAISE_TICKET\s+([^:]+):(.+)/);
+    if (ticketMatch && ticketMatch[1] && ticketMatch[2] && onSaveTicket) {
+      const type = ticketMatch[1].trim();
+      const description = ticketMatch[2].trim();
+
+      onSaveTicket({
+        id: `ticket_${Date.now()}`, // Generate a unique ID for the ticket
+        userId: user.id,
+        userName: user.name, // Assuming user.name is available
+        type: type,
+        description: description,
+        status: 'Open', // Default status
+        date: new Date().toISOString(),
+        messages: [{ // Include the initial message that triggered the ticket
+          senderId: user.id,
+          text: description,
+          timestamp: new Date().toISOString()
+        }]
+      });
+      console.log("AI automatically raised support ticket:", type);
+    }
+  };
+
+  const cleanMessage = (text) => {
+    if (!text) return '';
+    // Hide all ACTION: triggers (including ID: and TYPE: suffixes) and technical ID mentions
+    return text
+      .replace(/ACTION:[A-Z_]+\s+ID:[a-zA-Z0-9_-]+/g, '')
+      .replace(/ACTION:[A-Z_]+\s+[^:]+:.+/g, '')
+      .replace(/(?:Tournament\s+)?ID:\s*[a-zA-Z0-9_-]+/gi, '')
+      .trim();
+  };
+
+  const getTournamentsFromAction = (text) => {
+    // Collect all unique tournament IDs from the message (avoiding trailing punctuation)
+    const matches = text.match(/ACTION:NAV_TO_TOURNAMENT\s+ID:([a-zA-Z0-9_-]+)/g);
+    if (!matches || !tournaments) return [];
+
+    const ids = matches.map(m => m.split('ID:').pop());
+    return tournaments.filter(t => ids.includes(String(t.id)));
+  };
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -40,22 +194,84 @@ const ChatBot = ({ user, evaluations, chatbotMessages, onSendChatMessage }) => {
     onSendChatMessage(newMessages); // Pushes to cloud global state
     setIsLoading(true);
 
-    try {
-      const systemInstruction = `You are the Ace Assistant, a highly intelligent and helpful chatbot integrated directly into the AceTrack mobile app. 
-AceTrack is a premier Badminton Academy Management, Tournament Tracking, and Player Analytics platform.
-Key App Features & Highlights you must know about:
-1. Tournaments: Automated scheduling, Group/Knockout stages, interactive draws, and live digital scoring/umpiring.
-2. Analytics: Players get detailed Match Videos with AI-generated Highlights (smashes, drop shots, rallies) and technical skills evaluation dashboards.
-3. Coach Ecosystem: Admins assign coaches to tournaments ("platform" vs "academy" coaches). Coaches submit player evaluations securely.
-4. Player Wallet: Users can top-up digital credits to purchase/unlock premium match videos and AI highlights.
-5. Roles: Admins (full dashboard access, grievance resolution), Coaches (assignment tracking, evaluations), and Players.
-6. Real-time: The app features robust WebSocket syncing, so matches and scores update instantly across all devices.
+    const parseDate = (d) => {
+      if (!d) return null;
+      const date = new Date(d);
+      if (isNaN(date.getTime())) {
+        const parts = d.split('-');
+        if (parts.length === 3) {
+          return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+        }
+      }
+      return date;
+    };
 
-Your goal is to be incredibly helpful, concise, friendly, and knowledgeable about these features. When a user asks what the app can do, answer dynamically based on this feature list. Keep answers relatively short formatting with markdown.`; 
+      try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const openTournaments = (tournaments || []).filter(t => {
+          // Use the more granular time-based filter
+          const isPast = isTournamentPast(t);
+          
+          const regDeadline = parseDate(t.registrationDeadline);
+          if (regDeadline) regDeadline.setHours(23, 59, 59, 999);
+
+          // Inclusion criteria:
+          // 1. Must be upcoming or ongoing (not completed)
+          // 2. Must not be past its scheduled start time (unless ongoing)
+          const isOngoingOrUpcoming = t.status === 'upcoming' || t.status === 'ongoing';
+          const isNotCompleted = t.status !== 'completed';
+          const isTimeOpen = !isPast || t.status === 'ongoing';
+
+          if (!isOngoingOrUpcoming || !isNotCompleted || !isTimeOpen) {
+            return false;
+          }
+
+          // Gender-based filtering for Individual/Player users ONLY
+          if (userRole?.toLowerCase() === 'user') {
+            const format = t.format || "";
+            const gender = user?.gender;
+            if (format.includes("Men's") && gender && gender !== 'Male') return false;
+            if (format.includes("Women's") && gender && gender !== 'Female') return false;
+          }
+
+          return true;
+        });
+
+        console.log(`🤖 [ChatBot] Context: ${openTournaments.length} open/relevant tournaments found out of ${tournaments?.length || 0} total.`);
+        if (__DEV__ && userRole?.toLowerCase() === 'admin') {
+           console.log(`🤖 [ChatBot] Admin Mode Context: ${openTournaments.length} matches.`);
+        }
+
+      const tournamentContext = openTournaments.slice(0, 10).map(t =>
+        `- ID: ${t.id}, Title: ${t.title}, Sport: ${t.sport}, Date: ${t.date}, Location: ${t.location}, Entry Fee: ₹${t.entryFee}`
+      ).join('\n');
+
+      const systemInstruction = `You are the Ace Assistant, a highly intelligent and helpful chatbot integrated directly into the AceTrack mobile app.
+AceTrack is a premier Badminton Academy Management, Tournament Tracking, and Player Analytics platform.
+
+Current Active Tournaments:
+${tournamentContext}
+
+Special Protocol Instructions:
+1. Tournament Recommendation: If you suggest tournaments, you MUST add "ACTION:NAV_TO_TOURNAMENT ID:ID" at the end of your message for EACH recommended tournament (where ID is the ID from the list). Provide multiple recommendations if relevant.
+2. IMPORTANT: DO NOT include the technical 'ID' (e.g., t1, t_123) in your visible verbal response. Use it ONLY in the ACTION:NAV_TO_TOURNAMENT code.
+3. Support Tickets: If a user has a technical issue, bug, or payment problem, confirm you'll help and add "ACTION:RAISE_TICKET TYPE:DESCRIPTION" at the end.
+   - TYPE must be one of: [Technical Issue, Bug, Refund, Payment Issue, Other].
+   - DESCRIPTION must be a one-sentence summary of their problem.
+
+General App Knowledge:
+1. Tournaments: Automated scheduling, draws, and live digital scoring.
+2. Analytics: Match Videos with AI-generated Highlights (smashes, drop shots, rallies).
+3. Wallet: Users top-up credits to unlock premium match videos/AI highlights.
+4. User Context: The user is ${user.name} (${user.role}). Preferred Sports: ${user.certifiedSports?.join(', ') || user.managedSports?.join(', ') || 'All Sports'}.
+
+Keep answers concise, premium, and friendly. Use ### for headers and **bold** for emphasis. NEVER show technical tournament IDs in the text bubble.`;
 
       const messagesWithContext = [
         { role: 'system', text: systemInstruction },
-        ...newMessages.map(m => ({ role: m.role, text: m.text }))
+        ...newMessages.slice(-5).map(m => ({ role: m.role, text: m.text })) // Last 5 for context window efficiency
       ];
 
       const aiText = await generateAIResponse(messagesWithContext);
@@ -64,7 +280,6 @@ Your goal is to be incredibly helpful, concise, friendly, and knowledgeable abou
     } catch (e) {
       console.error("AI Assistant Error:", e);
       let errorMsg = `AI Service Error: ${e.message || "Unknown error"}`;
-      // ... error handling ...
       const errorMessages = [...newMessages, { role: 'model', text: errorMsg, isError: true }];
       onSendChatMessage(errorMessages);
     } finally {
@@ -72,11 +287,17 @@ Your goal is to be incredibly helpful, concise, friendly, and knowledgeable abou
     }
   };
 
+  const handleNavigateToTournament = (t) => {
+    setIsOpen(false);
+    // Deep linking to Explore tab with the tournament ID
+    navigation.navigate('Explore', { selectedTournamentId: t.id });
+  };
+
   return (
     <>
       {/* Floating Action Button */}
       {!isOpen && (
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => setIsOpen(true)}
           style={styles.fab}
           activeOpacity={0.8}
@@ -88,8 +309,8 @@ Your goal is to be incredibly helpful, concise, friendly, and knowledgeable abou
       {/* Chat Modal */}
       <Modal visible={isOpen} animationType="slide" transparent={false}>
         <SafeAreaView style={styles.container}>
-          <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.flex}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
           >
@@ -103,7 +324,7 @@ Your goal is to be incredibly helpful, concise, friendly, and knowledgeable abou
                   <Text style={styles.headerTitle}>Ace Assistant</Text>
                   <View style={styles.statusContainer}>
                     <View style={styles.onlineDot} />
-                    <Text style={styles.statusText}>Groq AI • Online (v1.1-GROQ)</Text>
+                    <Text style={styles.statusText}>AceTrack Engine • Online</Text>
                   </View>
                 </View>
               </View>
@@ -113,20 +334,44 @@ Your goal is to be incredibly helpful, concise, friendly, and knowledgeable abou
             </View>
 
             {/* Messages */}
-            <ScrollView 
+            <ScrollView
               ref={scrollViewRef}
               style={styles.messageArea}
               contentContainerStyle={styles.messageContent}
             >
-              {messages.map((m, i) => (
-                <View key={i} style={[styles.messageRow, m.role === 'user' ? styles.userRow : styles.modelRow]}>
-                  <View style={[styles.bubble, m.role === 'user' ? styles.userBubble : styles.modelBubble]}>
-                    <Text style={[styles.messageText, m.role === 'user' ? styles.userText : styles.modelText]}>
-                      {m.text}
-                    </Text>
+              {messages.map((m, i) => {
+                const recommendedTournaments = m.role === 'model' ? getTournamentsFromAction(m.text) : [];
+                const cleanedText = cleanMessage(m.text);
+
+                return (
+                  <View key={i} style={[styles.messageRow, m.role === 'user' ? styles.userRow : styles.modelRow]}>
+                    <View style={[styles.bubble, m.role === 'user' ? styles.userBubble : styles.modelBubble]}>
+                      <MarkdownText
+                        text={cleanedText}
+                        isUser={m.role === 'user'}
+                      />
+                      {recommendedTournaments.length > 0 && (
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          style={styles.carouselContainer}
+                          contentContainerStyle={styles.carouselContent}
+                        >
+                          {recommendedTournaments.map(t => (
+                            <TournamentCard
+                              key={t.id}
+                              tournament={t}
+                              onNavigate={handleNavigateToTournament}
+                              userRole={userRole}
+                              userId={userId}
+                            />
+                          ))}
+                        </ScrollView>
+                      )}
+                    </View>
                   </View>
-                </View>
-              ))}
+                );
+              })}
               {isLoading && (
                 <View style={styles.modelRow}>
                   <View style={[styles.bubble, styles.modelBubble, styles.loadingBubble]}>
@@ -143,7 +388,7 @@ Your goal is to be incredibly helpful, concise, friendly, and knowledgeable abou
                   style={styles.input}
                   value={input}
                   onChangeText={setInput}
-                  placeholder="Ask about rules, strategies..."
+                  placeholder="Ask about tournaments, report issues..."
                   placeholderTextColor="#94A3B8"
                   multiline
                 />
@@ -260,8 +505,8 @@ const styles = StyleSheet.create({
   },
   bubble: {
     maxWidth: '85%',
-    padding: 16,
-    borderRadius: 20,
+    padding: 14,
+    borderRadius: 20, // Slightly less round for a more structured premium look
     elevation: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -276,18 +521,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: '#F1F5F9', // Subtle border for definition
   },
   loadingBubble: {
     paddingVertical: 12,
     paddingHorizontal: 16,
-    alignItems: 'center',
     justifyContent: 'center',
   },
   messageText: {
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 22,
     fontWeight: '500',
+  },
+  headerText: {
+    fontSize: 18,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    marginTop: 4,
   },
   userText: {
     color: '#FFFFFF',
@@ -307,10 +558,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
-    borderRadius: 20,
+    borderRadius: 24,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
   },
   input: {
     flex: 1,
@@ -330,6 +581,59 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     backgroundColor: '#CBD5E1',
+  },
+  // Action Card Styles
+  carouselContainer: {
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  carouselContent: {
+    paddingRight: 16,
+    gap: 12,
+  },
+  actionCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    width: width * 0.65,
+  },
+  actionCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  actionCardTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0F172A',
+    flex: 1,
+  },
+  actionCardBody: {
+    gap: 4,
+    marginBottom: 12,
+  },
+  actionCardText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  actionCardButton: {
+    backgroundColor: '#0F172A',
+    paddingVertical: 10,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  actionCardButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '900',
+    textTransform: 'uppercase',
   },
 });
 

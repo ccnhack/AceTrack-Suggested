@@ -200,6 +200,48 @@ export const createRefundPolicy = (tournamentDate, daysBeforeDeadline = 3, fullR
   };
 };
 
+/**
+ * Check if a tournament's scheduled start time has passed
+ * @param {Object} tournament 
+ * @param {Date} now - Optional override for testing
+ * @returns {boolean}
+ */
+export const isTournamentPast = (tournament, now = new Date()) => {
+  if (!tournament || !tournament.date) return true;
+  
+  const [year, month, day] = tournament.date.split('-').map(Number);
+  const tDate = new Date(year, month - 1, day);
+  
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  tDate.setHours(0, 0, 0, 0);
+  
+  if (tDate < today) return true;
+  if (tDate > today) return false;
+  
+  // Same day: check time
+  if (!tournament.time) return false;
+  
+  try {
+    const timeMatch = tournament.time.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if (!timeMatch) return false;
+    
+    let [_, hours, minutes, period] = timeMatch;
+    hours = parseInt(hours);
+    minutes = parseInt(minutes);
+    
+    if (period.toUpperCase() === 'PM' && hours < 12) hours += 12;
+    if (period.toUpperCase() === 'AM' && hours === 12) hours = 0;
+    
+    const tDateTime = new Date(now);
+    tDateTime.setHours(hours, minutes, 0, 0);
+    
+    return tDateTime < now;
+  } catch (e) {
+    return false;
+  }
+};
+
 export default {
   cloneTournament,
   addToWaitlist,
@@ -208,4 +250,5 @@ export default {
   generateFinancialCSV,
   getTournamentAnalytics,
   createRefundPolicy,
+  isTournamentPast,
 };

@@ -8,6 +8,7 @@ import TournamentBracket from '../components/TournamentBracket';
 import Slider from '@react-native-community/slider';
 import { LinearGradient } from 'expo-linear-gradient';
 import logger from '../utils/logger';
+import { parseTournamentDateTime, isTournamentPast } from '../utils/tournamentUtils';
 
 // Styles
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -58,18 +59,17 @@ const MatchesScreen = ({
     ? tournaments.filter(t =>
       t.coachAssignmentType === 'platform' &&
       t.coachStatus === 'Awaiting Coach Confirmation' &&
-      !t.declinedCoachIds?.includes(user.id)
+      !t.declinedCoachIds?.includes(user.id) &&
+      !isTournamentPast(t)
     )
     : [];
 
   const displayedMatches = viewMode === 'requests' ? requestTournaments : assignedTournaments.filter(t => {
-    const tDate = new Date(t.date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const isPast = isTournamentPast(t);
     if (viewMode === 'upcoming') {
-      return t.status !== 'completed' && !t.tournamentConcluded && (tDate >= today || t.tournamentStarted);
+      return t.status !== 'completed' && !t.tournamentConcluded && (!isPast || t.tournamentStarted);
     } else {
-      return t.status === 'completed' || t.tournamentConcluded || (tDate < today && !t.tournamentStarted);
+      return t.status === 'completed' || t.tournamentConcluded || (isPast && !t.tournamentStarted);
     }
   });
 
@@ -368,21 +368,9 @@ const MatchesScreen = ({
                     </TouchableOpacity>
                   </>
                 ) : t.status === 'completed' ? (
-                  <>
-                    <View style={[styles.actionButton, styles.buttonDisabled]}>
-                      <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Event Concluded</Text>
-                    </View>
-                    {isCoach && matchVideos.filter(v => v.tournamentId === t.id).map(video => (
-                      <TouchableOpacity
-                        key={video.id}
-                        onPress={() => setAnalyzingVideo(video)}
-                        style={[styles.actionButton, styles.buttonVideo]}
-                      >
-                        <Ionicons name="videocam" size={14} color="#EF4444" />
-                        <Text style={[styles.buttonText, { color: '#EF4444' }]}>Analyze Video</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </>
+                  <View style={[styles.actionButton, styles.buttonDisabled, { width: '100%' }]}>
+                    <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Event Concluded</Text>
+                  </View>
                 ) : isCoach ? (
                   <>
                     {(t.status === 'completed' || t.tournamentConcluded) ? (
