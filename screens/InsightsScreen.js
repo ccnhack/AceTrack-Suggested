@@ -10,6 +10,7 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
   const [selectedCity, setSelectedCity] = useState(null);
   const [selectedAcademyId, setSelectedAcademyId] = useState(null);
   const [selectedStat, setSelectedStat] = useState(null); // 'Players' | 'Tournaments' | 'Footage' | null
+  const [selectedArea, setSelectedArea] = useState(null);
 
   // 1. Process Sports Distribution (General)
   const sportsStats = useMemo(() => {
@@ -77,7 +78,7 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
     return { sportsDistribution: sportsDist, totalParticipation, count: hosted.length };
   }, [tournaments, selectedAcademyId]);
 
-  // 6. Stat Box Drill-downs (ENHANCED)
+  // 6. Stat Box Drill-downs
   const statDrillDownData = useMemo(() => {
     if (!selectedStat) return null;
     if (selectedStat === 'Players') {
@@ -86,16 +87,13 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
         players.forEach((p, index) => { 
             const area = p.mostPlayedVenue || 'General Area'; 
             counts[area] = (counts[area] || 0) + 1; 
-            // Treat the last 30% of mock data as "new arrivals"
             if (index > players.length * 0.7) {
                 newCounts[area] = (newCounts[area] || 0) + 1;
             }
         });
         return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([name, count]) => ({ 
-            name, 
-            value: count, 
-            label: 'Players',
-            newPct: Math.round(((newCounts[name] || 0) / count) * 100)
+            name, value: count, label: 'Players', 
+            newPct: Math.round(((newCounts[name] || 0) / count) * 100) 
         }));
     }
     if (selectedStat === 'Tournaments') {
@@ -115,6 +113,31 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
     }
     return null;
   }, [selectedStat, players, tournaments, matchVideos]);
+
+  // 7. Neighborhood Deep-dive Stats (Players & Sports)
+  const neighborhoodStats = useMemo(() => {
+    if (!selectedArea) return null;
+    const areaPlayers = players.filter(p => (p.mostPlayedVenue || 'General Area') === selectedArea);
+    
+    // Sports distribution for these specific players
+    const sportsCounts = {};
+    areaPlayers.forEach(p => {
+      const sport = p.sport || (p.certifiedSports && p.certifiedSports[0]) || 'Other';
+      sportsCounts[sport] = (sportsCounts[sport] || 0) + 1;
+    });
+    
+    const sportsDist = Object.entries(sportsCounts).map(([name, count]) => ({
+      name,
+      count,
+      percent: (count / areaPlayers.length) * 100
+    }));
+
+    return {
+      players: areaPlayers.slice(0, 8),
+      sportsDistribution: sportsDist,
+      total: areaPlayers.length
+    };
+  }, [players, selectedArea]);
 
   // Growth Data with Percentages
   const growthStats = useMemo(() => {
@@ -144,97 +167,77 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
 
         {/* Quick Stats Grid */}
         <View style={styles.statsGrid}>
-          <StatBox 
-            title="Players" 
-            value={players.length} 
-            icon="people" 
-            color="#6366F1" 
-            trend="+12%" 
-            isActive={selectedStat === 'Players'}
-            onPress={() => setSelectedStat(selectedStat === 'Players' ? null : 'Players')}
-          />
-          <StatBox 
-            title="Tournaments" 
-            value={tournaments.length} 
-            icon="trophy" 
-            color="#F59E0B" 
-            trend="+5%" 
-            isActive={selectedStat === 'Tournaments'}
-            onPress={() => setSelectedStat(selectedStat === 'Tournaments' ? null : 'Tournaments')}
-          />
-          <StatBox 
-            title="Footage" 
-            value={matchVideos.length} 
-            icon="videocam" 
-            color="#10B981" 
-            trend="+24%" 
-            isActive={selectedStat === 'Footage'}
-            onPress={() => setSelectedStat(selectedStat === 'Footage' ? null : 'Footage')}
-          />
+          <StatBox title="Players" value={players.length} icon="people" color="#6366F1" trend="+12%" isActive={selectedStat === 'Players'} onPress={() => { setSelectedStat(selectedStat === 'Players' ? null : 'Players'); setSelectedArea(null); }} />
+          <StatBox title="Tournaments" value={tournaments.length} icon="trophy" color="#F59E0B" trend="+5%" isActive={selectedStat === 'Tournaments'} onPress={() => { setSelectedStat(selectedStat === 'Tournaments' ? null : 'Tournaments'); setSelectedArea(null); }} />
+          <StatBox title="Footage" value={matchVideos.length} icon="videocam" color="#10B981" trend="+24%" isActive={selectedStat === 'Footage'} onPress={() => { setSelectedStat(selectedStat === 'Footage' ? null : 'Footage'); setSelectedArea(null); }} />
         </View>
 
-        {/* Dynamic Stat Drill-down (ENHANCED) */}
+        {/* Dynamic Stat Drill-down with Area Deep-dive */}
         {selectedStat && (
             <View style={styles.chartCard}>
                 <View style={styles.chartHeader}>
-                    <Text style={styles.chartTitle}>{selectedStat} Distribution</Text>
-                    <TouchableOpacity onPress={() => setSelectedStat(null)}>
-                        <Ionicons name="close-circle" size={20} color="#CBD5E1" />
+                    <Text style={styles.chartTitle}>
+                        {selectedArea ? 'Neighborhood Detail' : `${selectedStat} Distribution`}
+                    </Text>
+                    <TouchableOpacity onPress={() => selectedArea ? setSelectedArea(null) : setSelectedStat(null)}>
+                        <Ionicons name={selectedArea ? "arrow-back-circle" : "close-circle"} size={22} color="#6366F1" />
                     </TouchableOpacity>
                 </View>
-                <View style={styles.drillInfoBox}>
-                    <Ionicons name="search" size={14} color="#6366F1" />
-                    <Text style={styles.drillInfoText}>
-                        {selectedStat === 'Players' ? 'Showing total vs % of new players per area' : `Breaking down ${selectedStat.toLowerCase()} by primary location/organizer`}
-                    </Text>
-                </View>
-                {statDrillDownData?.map((item, index) => (
-                    <View key={item.name} style={styles.barRow}>
-                        <View style={styles.barLabelContainer}>
-                            <View style={styles.flexItem}>
-                                <Text style={styles.barLabel} numberOfLines={1}>{item.name}</Text>
-                                {item.newPct !== undefined && (
-                                    <Text style={styles.newLabel}>{item.newPct}% New Joiners</Text>
-                                )}
-                            </View>
-                            <Text style={styles.barValue}>{item.value} {item.label}</Text>
-                        </View>
-                        <View style={styles.barTrack}>
-                            <View style={[styles.barFill, { width: `${(item.value / statDrillDownData[0].value) * 100}%`, backgroundColor: index === 0 ? '#6366F1' : '#CBD5E1' }]} />
-                        </View>
-                    </View>
-                ))}
-            </View>
-        )}
 
-        {/* Academy Leaderboard (Only if no stat selected) */}
-        {!selectedStat && (
-            <View style={styles.chartCard}>
-                <View style={styles.chartHeader}>
-                    <Text style={styles.chartTitle}>Top Hosting Academies</Text>
-                    {selectedAcademyId && (
-                        <TouchableOpacity onPress={() => setSelectedAcademyId(null)} style={styles.backBtn}>
-                            <Ionicons name="arrow-back" size={14} color="#6366F1" />
-                            <Text style={styles.backBtnText}>All</Text>
-                        </TouchableOpacity>
-                    )}
-                </View>
-                
-                {selectedAcademyId ? (
-                    <View style={styles.academyDetail}>
-                        <Text style={styles.detailName}>{players.find(p => p.id === selectedAcademyId)?.name}</Text>
-                        <View style={styles.detailStatsRow}>
-                            <View style={styles.detailStat}><Text style={styles.detailStatVal}>{academyDetailStats?.count}</Text><Text style={styles.detailStatLabel}>Events</Text></View>
-                            <View style={styles.detailStat}><Text style={styles.detailStatVal}>{academyDetailStats?.totalParticipation}</Text><Text style={styles.detailStatLabel}>Players</Text></View>
-                        </View>
+                {selectedArea ? (
+                    <View style={styles.areaDetail}>
+                         <View style={styles.areaHero}>
+                            <Text style={styles.areaHeroTitle}>{selectedArea}</Text>
+                            <Text style={styles.areaHeroCount}>{neighborhoodStats?.total} Total Players</Text>
+                         </View>
+                         
+                         <Text style={styles.subChartTitle}>Sport Engagement</Text>
+                         {neighborhoodStats?.sportsDistribution.map((item) => (
+                             <View key={item.name} style={styles.detailBarRow}>
+                                <View style={styles.barLabelContainer}>
+                                    <Text style={styles.barLabel}>{item.name}</Text>
+                                    <Text style={styles.barValue}>{item.count} Players</Text>
+                                </View>
+                                <View style={styles.barTrack}>
+                                    <View style={[styles.barFill, { width: `${item.percent}%`, backgroundColor: '#6366F1' }]} />
+                                </View>
+                             </View>
+                         ))}
+
+                         <Text style={[styles.subChartTitle, { marginTop: 20 }]}>Top Active Players</Text>
+                         <View style={styles.playerList}>
+                            {neighborhoodStats?.players.map((p) => (
+                                <View key={p.id} style={styles.playerRow}>
+                                    <Ionicons name="person-circle" size={24} color="#6366F1" />
+                                    <Text style={styles.playerName}>{p.name}</Text>
+                                    <View style={styles.playerTag}><Text style={styles.playerTagText}>{p.skillLevel}</Text></View>
+                                </View>
+                            ))}
+                         </View>
                     </View>
                 ) : (
-                    <View style={styles.academyList}>
-                        {academyStats.map((item, index) => (
-                            <TouchableOpacity key={item.id} style={styles.academyRow} onPress={() => setSelectedAcademyId(item.id)}>
-                                <View style={[styles.academyRank, { backgroundColor: index === 0 ? '#6366F1' : '#F1F5F9' }]}><Text style={[styles.rankText, { color: index === 0 ? '#fff' : '#475569' }]}>{index+1}</Text></View>
-                                <Text style={styles.academyName}>{item.name}</Text>
-                                <Text style={styles.academyTournaments}>{item.count} Hosts</Text>
+                    <View>
+                        <View style={styles.drillInfoBox}>
+                            <Ionicons name="location" size={14} color="#6366F1" />
+                            <Text style={styles.drillInfoText}>Click an area to see specific players and their sports</Text>
+                        </View>
+                        {statDrillDownData?.map((item, index) => (
+                            <TouchableOpacity 
+                                key={item.name} 
+                                style={styles.barRow}
+                                onPress={() => selectedStat === 'Players' && setSelectedArea(item.name)}
+                            >
+                                <View style={styles.barLabelContainer}>
+                                    <View style={styles.flexItem}>
+                                        <Text style={styles.barLabel}>{item.name}</Text>
+                                        {item.newPct !== undefined && <Text style={styles.newLabel}>{item.newPct}% New Joiners</Text>}
+                                    </View>
+                                    <Text style={styles.barValue}>{item.value} {item.label}</Text>
+                                    {selectedStat === 'Players' && <Ionicons name="chevron-forward" size={14} color="#CBD5E1" />}
+                                </View>
+                                <View style={styles.barTrack}>
+                                    <View style={[styles.barFill, { width: `${(item.value / statDrillDownData[0].value) * 100}%`, backgroundColor: index === 0 ? '#6366F1' : '#CBD5E1' }]} />
+                                </View>
                             </TouchableOpacity>
                         ))}
                     </View>
@@ -242,54 +245,43 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
             </View>
         )}
 
-        {/* Hotspot Cities (Only if no stat selected) */}
+        {/* Global Split (Only if no stat selected) */}
         {!selectedStat && (
-            <View style={styles.chartCard}>
-                <View style={styles.chartHeader}>
-                    <Text style={styles.chartTitle}>{selectedCity ? `Areas in ${selectedCity}` : 'Hotspot Cities'}</Text>
-                    {selectedCity && (
-                        <TouchableOpacity onPress={() => setSelectedCity(null)} style={styles.backBtn}>
-                            <Ionicons name="arrow-back" size={14} color="#6366F1" />
-                            <Text style={styles.backBtnText}>Cities</Text>
-                        </TouchableOpacity>
-                    )}
-                </View>
-                <View style={styles.geoContainer}>
-                    {(selectedCity ? areaStats : cityStats).map((item, index) => (
-                        <TouchableOpacity key={item.name} style={styles.geoRow} onPress={() => !selectedCity && setSelectedCity(item.name)}>
-                            <View style={[styles.dot, { backgroundColor: ['#6366F1', '#EC4899', '#10B981', '#F59E0B'][index % 4] }]} />
-                            <Text style={styles.geoName}>{item.name}</Text>
-                            <Text style={styles.geoCount}>{item.count}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
+            <View style={styles.chartCard} pointerEvents="none">
+              <Text style={styles.chartTitle}>Global Sports Split</Text>
+              <View style={styles.barChartContainer}>
+                {sportsStats.map((item, index) => (
+                  <View key={item.name} style={styles.barRow}>
+                    <View style={styles.barLabelContainer}>
+                      <Text style={styles.barLabel}>{item.name}</Text>
+                      <Text style={styles.barValue}>{item.count}</Text>
+                    </View>
+                    <View style={styles.barTrack}>
+                      <AnimatedBar width={`${item.percent}%`} color={index === 0 ? '#6366F1' : '#94A3B8'} />
+                    </View>
+                  </View>
+                ))}
+              </View>
             </View>
         )}
 
-        {/* Community Growth with UI Fix (FIXED OVERLAP) */}
+        {/* Community Growth (ENHANCED) */}
         <View style={styles.chartCard}>
             <View style={styles.chartHeaderExpanded}>
                 <View>
                     <Text style={styles.chartTitle}>Community Growth</Text>
                     <Text style={styles.chartSubtitle}>Month-over-month engagement</Text>
                 </View>
-                <View style={styles.growthBadge}>
-                    <Ionicons name="flash" size={14} color="#6366F1" />
-                    <Text style={styles.growthBadgeText}>Active</Text>
-                </View>
+                <View style={styles.growthBadge}><Ionicons name="flash" size={14} color="#6366F1" /><Text style={styles.growthBadgeText}>Active</Text></View>
             </View>
             <View style={styles.growthContainer}>
                 {growthStats.map((item, index) => (
                     <View key={index} style={styles.growthColumn}>
-                        <View style={styles.pctContainer}>
-                           {item.pct > 0 && <Text style={styles.pctText}>+{item.pct}%</Text>}
-                        </View>
-                        <View style={[styles.growthBar, { height: item.val }]} />
-                        <Text style={styles.growthLabel}>{item.p}</Text>
+                        <View style={styles.pctContainer}>{item.pct > 0 && <Text style={styles.pctText}>+{item.pct}%</Text>}</View>
+                        <View style={[styles.growthBar, { height: item.val }]} /><Text style={styles.growthLabel}>{item.p}</Text>
                     </View>
                 ))}
             </View>
-            <Text style={styles.growthCaption}>Consistently increasing player retention and engagement since launch.</Text>
         </View>
 
         <View style={{ height: 40 }} />
@@ -300,28 +292,16 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
 
 const AnimatedBar = ({ width, color }) => {
   const animatedWidth = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(animatedWidth, { toValue: 1, duration: 1200, useNativeDriver: false }).start();
-  }, [width]);
-  return (
-    <Animated.View style={[styles.barFill, { backgroundColor: color, width: animatedWidth.interpolate({ inputRange: [0, 1], outputRange: ['0%', width] }) }]} />
-  );
+  useEffect(() => { Animated.timing(animatedWidth, { toValue: 1, duration: 1200, useNativeDriver: false }).start(); }, [width]);
+  return (<Animated.View style={[styles.barFill, { backgroundColor: color, width: animatedWidth.interpolate({ inputRange: [0, 1], outputRange: ['0%', width] }) }]} />);
 };
 
 const StatBox = ({ title, value, icon, color, trend, isActive, onPress }) => (
-  <TouchableOpacity 
-    style={[styles.statBox, isActive && { borderColor: color, borderWidth: 1.5, backgroundColor: `${color}05` }]} 
-    onPress={onPress}
-  >
-    <View style={[styles.iconCircle, { backgroundColor: `${color}15` }]}>
-      <Ionicons name={icon} size={20} color={color} />
-    </View>
+  <TouchableOpacity style={[styles.statBox, isActive && { borderColor: color, borderWidth: 1.5, backgroundColor: `${color}05` }]} onPress={onPress}>
+    <View style={[styles.iconCircle, { backgroundColor: `${color}15` }]}><Ionicons name={icon} size={20} color={color} /></View>
     <Text style={styles.statValue}>{value}</Text>
     <Text style={styles.statTitle}>{title}</Text>
-    <View style={styles.trendRow}>
-        <Ionicons name="caret-up" size={12} color="#10B981" />
-        <Text style={styles.trendText}>{trend}</Text>
-    </View>
+    <View style={styles.trendRow}><Ionicons name="caret-up" size={12} color="#10B981" /><Text style={styles.trendText}>{trend}</Text></View>
   </TouchableOpacity>
 );
 
@@ -340,50 +320,40 @@ const styles = StyleSheet.create({
   trendRow: { flexDirection: 'row', alignItems: 'center' },
   trendText: { fontSize: 9, color: '#10B981', fontWeight: '700', marginLeft: 2 },
   chartCard: { backgroundColor: '#fff', borderRadius: 24, padding: 20, marginBottom: 20, ...designSystem.shadows?.sm },
-  chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   chartHeaderExpanded: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 },
   chartTitle: { fontSize: 17, fontWeight: '700', color: '#1E293B' },
   chartSubtitle: { fontSize: 11, color: '#94A3B8', marginTop: 2 },
   barChartContainer: { marginTop: 10 },
   barRow: { marginBottom: 18 },
   barLabelContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, paddingHorizontal: 2 },
-  barLabel: { fontSize: 13, fontWeight: '700', color: '#334155', maxWidth: screenWidth * 0.4 },
-  barValue: { fontSize: 12, fontWeight: '800', color: '#1E293B' },
+  barLabel: { fontSize: 13, fontWeight: '700', color: '#334155', flex: 1 },
+  barValue: { fontSize: 12, fontWeight: '800', color: '#1E293B', marginRight: 8 },
   newLabel: { fontSize: 10, color: '#10B981', fontWeight: '700', marginTop: 1 },
   barTrack: { height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 4 },
   drillInfoBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', padding: 10, borderRadius: 12, marginBottom: 16 },
-  drillInfoText: { fontSize: 10, color: '#64748B', marginLeft: 8, fontWeight: '700' },
-  academyList: { marginTop: 4 },
-  academyRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
-  academyRank: { width: 24, height: 24, borderRadius: 6, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  rankText: { fontSize: 11, fontWeight: '800' },
-  academyName: { fontSize: 14, fontWeight: '700', color: '#334155', flex: 1 },
-  academyTournaments: { fontSize: 12, fontWeight: '700', color: '#1E293B' },
-  flexItem: { flex: 1 },
-  academyDetail: { paddingVertical: 8 },
-  detailName: { fontSize: 16, fontWeight: '700', color: '#334155', marginBottom: 12 },
-  detailStatsRow: { flexDirection: 'row', gap: 20 },
-  detailStat: { alignItems: 'center' },
-  detailStatVal: { fontSize: 16, fontWeight: '800', color: '#6366F1' },
-  detailStatLabel: { fontSize: 9, color: '#94A3B8', fontWeight: '700', textTransform: 'uppercase' },
-  geoContainer: { marginTop: 4 },
-  geoRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
-  dot: { width: 10, height: 10, borderRadius: 5, marginRight: 12 },
-  geoName: { flex: 1, fontSize: 14, fontWeight: '600', color: '#334155' },
-  geoCount: { fontSize: 13, fontWeight: '700', color: '#1E293B' },
-  backBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF2FF', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  backBtnText: { fontSize: 12, fontWeight: '700', color: '#6366F1', marginLeft: 4 },
-  drillInfo: { fontSize: 11, color: '#94A3B8', fontStyle: 'italic', marginTop: 12, textAlign: 'center' },
-  growthContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 120, marginTop: 4, marginBottom: 10 },
+  drillInfoText: { fontSize: 10, color: '#64748B', marginLeft: 8, fontWeight: '700', flex: 1 },
+  areaDetail: { marginTop: 4 },
+  areaHero: { backgroundColor: '#F8FAFC', padding: 16, borderRadius: 16, marginBottom: 20 },
+  areaHeroTitle: { fontSize: 18, fontWeight: '800', color: '#1E293B', marginBottom: 4 },
+  areaHeroCount: { fontSize: 13, fontWeight: '700', color: '#6366F1' },
+  subChartTitle: { fontSize: 14, fontWeight: '700', color: '#475569', marginBottom: 16, marginLeft: 2 },
+  detailBarRow: { marginBottom: 14 },
+  playerList: { marginTop: 8 },
+  playerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, backgroundColor: '#fff', padding: 10, borderRadius: 12, borderContent: '#F1F5F9', borderWidth: 1 },
+  playerName: { flex: 1, fontSize: 13, fontWeight: '600', color: '#334155', marginLeft: 10 },
+  playerTag: { backgroundColor: '#EEF2FF', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  playerTagText: { fontSize: 9, fontWeight: '700', color: '#6366F1' },
+  growthContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 110, marginTop: 4 },
   growthColumn: { alignItems: 'center', width: (screenWidth - 80) / 6 },
   growthBar: { width: 14, backgroundColor: '#6366F1', borderRadius: 6, opacity: 0.8 },
   growthLabel: { fontSize: 10, color: '#94A3B8', marginTop: 8, fontWeight: '700' },
-  growthBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF2FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, alignSelf: 'flex-start' },
+  growthBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF2FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   growthBadgeText: { fontSize: 11, fontWeight: '700', color: '#6366F1', marginLeft: 4 },
-  growthCaption: { fontSize: 11, color: '#64748B', fontStyle: 'italic', textAlign: 'center' },
   pctContainer: { height: 20, justifyContent: 'flex-end', marginBottom: 4 },
-  pctText: { fontSize: 9, fontWeight: '800', color: '#10B981' }
+  pctText: { fontSize: 9, fontWeight: '800', color: '#10B981' },
+  flexItem: { flex: 1 }
 });
 
 export default InsightsScreen;
