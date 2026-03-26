@@ -40,8 +40,8 @@ const ONBOARDING_SLIDES = [
   },
 ];
 
-const OnboardingScreen = ({ onComplete }) => {
-  const [currentSlide, setCurrentSlide] = useState(0);
+const OnboardingScreen = ({ onComplete, initialStep = 0 }) => {
+  const [currentSlide, setCurrentSlide] = useState(initialStep);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
 

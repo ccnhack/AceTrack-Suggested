@@ -199,17 +199,6 @@ export default function AppNavigator({
       {!user ? (
 // ... (omitting Landing, Login, Signup screens for brevity in target search if needed, but I'll provide full block)
         <>
-          {Platform.OS !== 'web' && (
-            <Stack.Screen name="Landing">
-              {(props) => (
-                <LandingScreen 
-                  {...props} 
-                  onLogin={() => props.navigation.navigate('Login')} 
-                  onSignup={() => props.navigation.navigate('Signup')} 
-                />
-              )}
-            </Stack.Screen>
-          )}
           <Stack.Screen name="Login">
             {(props) => (
               <LoginScreen 
@@ -219,7 +208,7 @@ export default function AppNavigator({
                 onSignup={() => props.navigation.navigate('Signup')}
                 onResetPassword={handlers.onResetPassword}
                 onRefreshData={() => handlers.onToggleCloud && handlers.loadData(true, true)}
-                onBack={() => props.navigation.goBack()} 
+                onBack={handlers.onBack} 
                 isUsingCloud={handlers.isUsingCloud}
                 onToggleCloud={handlers.onToggleCloud}
               />

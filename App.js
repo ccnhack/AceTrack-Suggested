@@ -28,6 +28,8 @@ import { io } from 'socket.io-client';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import ErrorBoundary from './components/ErrorBoundary';
 import OnboardingScreen from './screens/OnboardingScreen';
+import LandingScreen from './screens/LandingScreen';
+import SignupScreen from './screens/SignupScreen';
 import { initializeFirebase } from './utils/firebaseAuth';
 
 if (Platform.OS === 'web') {
@@ -66,10 +68,13 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isUploadingLogs, setIsUploadingLogs] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingInitialStep, setOnboardingInitialStep] = useState(0);
   const [appVersion, setAppVersion] = useState(APP_VERSION);
   const [latestAppVersion, setLatestAppVersion] = useState(APP_VERSION);
   const [showForceUpdate, setShowForceUpdate] = useState(false);
   const [isUpdatingFromModal, setIsUpdatingFromModal] = useState(false);
+  const [viewingLanding, setViewingLanding] = useState(true); // Default to landing for new users
+  const [showSignup, setShowSignup] = useState(false);
   
   const localDeviceIdRef = useRef(null);
   const [isProfileEditActive, setIsProfileEditActive] = useState(false); // New state to track if profile edit is open
@@ -1900,8 +1905,16 @@ export default function App() {
       }
     },
     isUploadingLogs
-    // ... add other handlers as needed by screens
   };
+
+  console.log("🛠️ App Render Check:", { 
+    isLoading, 
+    hasUser: !!currentUser, 
+    viewingLanding, 
+    showSignup, 
+    showOnboarding 
+  });
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -1909,6 +1922,69 @@ export default function App() {
       </View>
     );
   }
+
+  // FINAL RENDER LOGIC: Mutually Exclusive Branches
+  if (showSignup) {
+    console.log("📝 App: Rendering SignupScreen");
+    return (
+      <SignupScreen 
+        players={players}
+        isUsingCloud={isUsingCloud}
+        onToggleCloud={() => {
+          const newValue = !isUsingCloud;
+          setIsUsingCloud(newValue);
+          storage.setItem('isUsingCloud', newValue);
+          loadData(true, true);
+        }}
+        onBack={() => {
+          console.log("📝 App: Signup back pressed - returning to landing");
+          setShowSignup(false);
+          setViewingLanding(true);
+        }}
+        onSignupSuccess={(newUser) => {
+          console.log("📝 App: Signup success - registering user:", newUser.id);
+          setShowSignup(false);
+          handleRegisterUser(newUser);
+          setViewingLanding(false);
+        }}
+        Sport={{ badminton: 'Badminton', tennis: 'Tennis', tableTennis: 'Table Tennis', cricket: 'Cricket' }}
+      />
+    );
+  }
+
+  if (showOnboarding) {
+    return (
+      <OnboardingScreen 
+        initialStep={onboardingInitialStep}
+        onFinish={() => {
+          setShowOnboarding(false);
+          setViewingLanding(false);
+        }} 
+      />
+    );
+  }
+
+  if (!currentUser && viewingLanding) {
+    console.log("🏠 App: Rendering LandingScreen", { showSignup, viewingLanding });
+    return (
+      <LandingScreen 
+        onLogin={() => {
+          console.log("🏠 App: onLogin -> Transitioning to Login Flow");
+          setShowSignup(false);
+          setShowOnboarding(false);
+          setViewingLanding(false);
+        }} 
+        onJoinCircle={() => {
+          console.log("🏠 App: onJoinCircle -> Transitioning to Signup");
+          setViewingLanding(false);
+          setShowOnboarding(false);
+          setShowSignup(true);
+        }} 
+      />
+    );
+  }
+
+  console.log("🎯 App: Falling through to Parent Navigation Container (Login Flow)");
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -1956,7 +2032,19 @@ export default function App() {
           reschedulingFrom={reschedulingFrom}
           auditLogs={auditLogs} 
           onLogout={handleLogout} 
-          handlers={handlers}
+          handlers={{
+            ...handlers,
+            onSignup: () => {
+              console.log("➡️ App Navigator: onSignup requested from screen");
+              setShowSignup(true);
+            },
+            onBack: () => {
+              console.log("🔙 AppNavigator: onBack triggered - returning to landing");
+              setViewingLanding(true);
+              setShowSignup(false);
+              setShowOnboarding(false);
+            }
+          }}
           socketRef={socketRef}
         />
         {currentUser && (

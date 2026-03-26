@@ -446,12 +446,7 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, Sport, isUsingCloud, o
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
         
-        {__DEV__ && (
-          <View style={styles.cloudBadge}>
-            <Ionicons name="shield-checkmark" size={14} color="#059669" />
-            <Text style={styles.cloudBadgeText}>Production Cloud Protected</Text>
-          </View>
-        )}
+
 
         <TouchableOpacity 
           onPress={handleSignup} 
@@ -518,9 +513,10 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   stepOneContent: {
-    flex: 1,
-    padding: 32,
-    justifyContent: 'center',
+    paddingHorizontal: 32,
+    paddingTop: 10,
+    paddingBottom: 40,
+    justifyContent: 'flex-start',
     gap: 16,
   },
   stepOneSubtitle: {

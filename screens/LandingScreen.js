@@ -1,154 +1,180 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { 
+  View, Text, TouchableOpacity, Image, StyleSheet, 
+  SafeAreaView, Dimensions, ScrollView, StatusBar, Platform
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
-const { height } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
-const LandingScreen = ({ onLogin, onSignup }) => (
-  <View style={styles.container}>
-    <View style={styles.imageContainer}>
-      <Image 
-        source={{ uri: "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?q=80&w=1000&auto=format&fit=crop" }} 
-        style={styles.image} 
-      />
-      <View style={styles.logoContainer}>
-        <View style={styles.logoIcon}>
-          <Text style={styles.logoIconText}>T</Text>
+const LandingScreen = ({ onLogin = () => {}, onJoinCircle = () => {} }) => {
+  console.log("🎨 LandingScreen Render:", { 
+    hasOnLogin: typeof onLogin, 
+    hasOnJoinCircle: typeof onJoinCircle 
+  });
+  const sportIcons = [
+    { name: 'badminton', icon: 'shuttlecock', color: '#FFFFFF' }, // Custom icons would be ideal, using Ionicons as fallback
+    { name: 'tennis', icon: 'tennisball-outline', color: '#4ADE80' },
+    { name: 'soccer', icon: 'football', color: '#22C55E' },
+    { name: 'track', icon: 'stats-chart', color: '#EF4444' },
+    { name: 'cricket', icon: 'baseball-outline', color: '#94A3B8' },
+    { name: 'basketball', icon: 'basketball', color: '#F97316' },
+    { name: 'tennis-ball', icon: 'disc-outline', color: '#84CC16' },
+    { name: 'running', icon: 'walk', color: '#3B82F6' },
+    { name: 'jumping', icon: 'trending-up', color: '#B91C1C' },
+    { name: 'hockey', icon: 'analytics', color: '#FFFFFF' },
+  ];
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      <View style={styles.fullscreenContainer}>
+        {/* Full Composite Image Section */}
+        <Image 
+          source={require('../assets/landing_full.png')}
+          style={styles.fullImage}
+          resizeMode="cover"
+        />
+        
+        {/* Logo Overlay - Explicitly re-added for branding */}
+        <SafeAreaView style={styles.logoOverlay}>
+          <View style={styles.logoRow}>
+            <View style={styles.logoIcon}>
+              <Text style={styles.logoLetter}>T</Text>
+            </View>
+            <Text style={styles.logoText}>AceTrack</Text>
+          </View>
+        </SafeAreaView>
+
+        <View style={styles.buttonOverlay}>
+          <SafeAreaView>
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity 
+                style={styles.primaryButton} 
+                onPress={() => {
+                  console.log("🔵 LandingScreen: LOGIN pressed");
+                  if (typeof onLogin === 'function') onLogin();
+                }}
+              >
+                <Text style={styles.primaryButtonText}>LOGIN</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.secondaryButton} 
+                onPress={() => {
+                  console.log("🟢 LandingScreen: JOIN press detected. Calling onJoinCircle prop...");
+                  if (typeof onJoinCircle === 'function') {
+                    onJoinCircle();
+                  } else {
+                    console.error("❌ LandingScreen: onJoinCircle is not a function!", typeof onJoinCircle);
+                  }
+                }}
+              >
+                <View style={styles.secondaryContent}>
+                  <Ionicons name="business" size={18} color="#FFFFFF" />
+                  <Text style={styles.secondaryButtonText}>JOIN AN ELITE CIRCLE</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </SafeAreaView>
         </View>
-        <Text style={styles.logoText}>AceTrack</Text>
       </View>
-    </View>
-    
-    <View style={styles.content}>
-      <Text style={styles.headline}>
-        STAY UPTO DATE WITH THE <Text style={styles.highlight}>UPCOMING MATCHES</Text> & TOURNAMENTS
-      </Text>
-      <Text style={styles.description}>
-        Join the elite circle of amateur athletes. Track your progress, find matches, and climb the leaderboards.
-      </Text>
-      
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity 
-          onPress={onLogin}
-          style={styles.loginButton}
-        >
-          <Text style={styles.loginButtonText}>Login</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          onPress={onSignup}
-          style={styles.signupButton}
-        >
-          <Text style={styles.signupButtonText}>Create Account</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  </View>
-);
+    </SafeAreaView>
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#000000', // True black to match reference
   },
-  imageContainer: {
-    height: height * 0.35,
-    minHeight: 220,
-    backgroundColor: '#000',
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
-    overflow: 'hidden',
+  fullscreenContainer: {
+    flex: 1,
+    width: width,
+    height: height,
   },
-  image: {
+  fullImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
     width: '100%',
     height: '100%',
-    opacity: 0.8,
   },
-  logoContainer: {
+  logoOverlay: {
     position: 'absolute',
     top: 60,
-    left: 32,
+    left: 24,
+    zIndex: 100,
+  },
+  logoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   logoIcon: {
     width: 32,
     height: 32,
-    backgroundColor: '#EF4444',
     borderRadius: 16,
-    alignItems: 'center',
+    backgroundColor: '#D12621',
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  logoIconText: {
+  logoLetter: {
     color: '#FFFFFF',
-    fontWeight: 'bold',
+    fontWeight: '900',
+    fontSize: 18,
   },
   logoText: {
-    fontSize: 20,
-    fontWeight: 'bold',
     color: '#FFFFFF',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
-  content: {
-    flex: 1,
-    paddingHorizontal: 32,
-    paddingTop: 24,
-    paddingBottom: 32,
-    justifyContent: 'center',
-  },
-  headline: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#0F172A',
-    lineHeight: 28,
-    marginBottom: 12,
-    textTransform: 'uppercase',
-  },
-  highlight: {
-    color: '#EF4444',
-    textDecorationLine: 'underline',
-  },
-  description: {
-    color: '#64748B',
-    fontSize: 13,
-    lineHeight: 20,
-    marginBottom: 24,
+  buttonOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 60,
   },
   buttonContainer: {
     gap: 12,
-    paddingBottom: 16,
   },
-  loginButton: {
-    width: '100%',
-    paddingVertical: 16,
-    backgroundColor: '#EF4444',
-    borderRadius: 16,
-    alignItems: 'center',
+  primaryButton: {
+    backgroundColor: '#D12621', // Specific AceTrack Red
+    height: 54,
+    borderRadius: 10,
     justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#EF4444',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  loginButtonText: {
+  primaryButtonText: {
     color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 17,
+    fontWeight: '700',
   },
-  signupButton: {
-    width: '100%',
-    paddingVertical: 16,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 16,
-    alignItems: 'center',
+  secondaryButton: {
+    backgroundColor: '#333333', // Charcoal grey
+    height: 54,
+    borderRadius: 10,
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  signupButtonText: {
-    color: '#334155',
-    fontWeight: 'bold',
-    fontSize: 16,
+  secondaryContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  secondaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });
 

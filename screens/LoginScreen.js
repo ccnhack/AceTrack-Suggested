@@ -340,7 +340,11 @@ const LoginScreen = ({
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Don't have an account? </Text>
-          <TouchableOpacity onPress={onSignup || onBack}>
+          <TouchableOpacity onPress={() => {
+            console.log("🔑 LoginScreen: Sign Up pressed");
+            if (onSignup) onSignup();
+            else if (onBack) onBack();
+          }}>
             <Text style={styles.signUpText}>Sign Up</Text>
           </TouchableOpacity>
         </View>

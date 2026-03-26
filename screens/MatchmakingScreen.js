@@ -55,7 +55,8 @@ export default function MatchmakingScreen({ user }) {
     }
   ]);
   const [receivedRequests, setReceivedRequests] = useState([
-    { id: 'r1', academyId: 'a1', name: 'Aaryan Sharma', sport: 'Tennis', time: 'Mar 26, 12:00 PM', status: 'Pending' }
+    { id: 'r1', academyId: 'a1', name: 'Aaryan Sharma', sport: 'Tennis', time: 'Mar 26, 12:00 PM', status: 'Pending' },
+    { id: 'r2', academyId: 'a2', name: 'riyaplay', sport: 'Badminton', proposedDate: '2026-03-29', proposedTime: '03:00 PM', status: 'Pending' }
   ]);
   const [acceptedMatches, setAcceptedMatches] = useState([
     { id: 'm1', name: 'Rohan G.', sport: 'Cricket', time: 'Mar 28, 4:00 PM', location: 'Active Stadium' }
@@ -78,6 +79,7 @@ export default function MatchmakingScreen({ user }) {
   const [selectedAcademyForVenue, setSelectedAcademyForVenue] = useState(null);
   const [negotiatedVenue, setNegotiatedVenue] = useState('opponent');
   const [expandedSlot, setExpandedSlot] = useState(null);
+  const [counterComment, setCounterComment] = useState('');
 
   const parseTime = (timeStr) => {
     const [time, modifier] = timeStr.split(' ');
@@ -147,6 +149,59 @@ export default function MatchmakingScreen({ user }) {
     Alert.alert("Match Accepted", `You have confirmed the match with ${req.name}.`);
   };
 
+  const handleAcceptCountered = (req) => {
+    // Check if the other party has responded to the counter
+    if (!req.hasUserResponse) {
+      // Other user hasn't responded — confirm with original challenger's slot
+      const origDate = req.originalChallengerDate || req.proposedDate;
+      const origTime = req.originalChallengerTime || req.proposedTime;
+      const myDate = req.myCounterDate || req.proposedDate;
+      const myTime = req.myCounterTime || req.proposedTime;
+      Alert.alert(
+        "Accept Original Challenge?",
+        `The other player hasn't responded to your counter yet.\n\n` +
+        `🗓️ Original Challenger's Slot:\n${origDate} at ${origTime}\n\n` +
+        `🔄 Your Last Counter:\n${myDate} at ${myTime}\n\n` +
+        `Are you sure you want to accept as per their preferred slot? Your counter will be invalid.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Yes, Accept",
+            onPress: () => {
+              setSentRequests(prev => prev.filter(r => r.id !== req.id));
+              setAcceptedMatches(prev => [...prev, {
+                ...req,
+                status: 'Accepted',
+                hasUserResponse: false,
+                proposedDate: origDate,
+                proposedTime: origTime,
+                time: `${origDate}, ${origTime}`,
+                location: req.location || 'Local Arena'
+              }]);
+              Alert.alert("Challenge Accepted!", `Match confirmed for ${origDate} at ${origTime} with ${req.name}.`);
+            }
+          }
+        ]
+      );
+      return;
+    }
+
+    // Other user has responded — accept with latest proposed slot
+    const finalDate = req.proposedDate;
+    const finalTime = req.proposedTime;
+    setSentRequests(prev => prev.filter(r => r.id !== req.id));
+    setAcceptedMatches(prev => [...prev, {
+      ...req,
+      status: 'Accepted',
+      hasUserResponse: false,
+      proposedDate: finalDate,
+      proposedTime: finalTime,
+      time: `${finalDate}, ${finalTime}`,
+      location: req.location || 'Local Arena'
+    }]);
+    Alert.alert("Challenge Accepted!", `Match confirmed for ${finalDate} at ${finalTime} with ${req.name}.`);
+  };
+
   const openDetails = (challenge) => {
     setSelectedChallenge(challenge);
     setIsDetailsModalVisible(true);
@@ -159,6 +214,7 @@ export default function MatchmakingScreen({ user }) {
     setVenueSearchQuery('');
     setSelectedAcademyForVenue(null);
     setNegotiatedVenue('opponent');
+    setCounterComment(req.counterComment || '');
     setIsCounterModalVisible(true);
     setIsDetailsModalVisible(false);
   };
@@ -185,11 +241,14 @@ export default function MatchmakingScreen({ user }) {
     
     const counteredItem = {
       ...selectedChallenge,
+      originalChallengerDate: selectedChallenge.originalChallengerDate || selectedChallenge.proposedDate || selectedChallenge.time?.split(',')[0]?.trim(),
+      originalChallengerTime: selectedChallenge.originalChallengerTime || selectedChallenge.proposedTime || selectedChallenge.time?.split(',')[1]?.trim(),
       proposedDate: counterDate,
       proposedTime: counterTime,
       location: venueLabel,
-      coachLastProposedDate: counterDate,
-      coachLastProposedTime: counterTime,
+      myCounterDate: counterDate,
+      myCounterTime: counterTime,
+      counterComment: counterComment.trim() || null,
       status: 'Countered',
       hasUserResponse: false
     };
@@ -203,7 +262,14 @@ export default function MatchmakingScreen({ user }) {
           setSentRequests(prev => [...prev, counteredItem]);
       }
     } else {
-      setReceivedRequests(prev => prev.map(r => r.id === selectedChallenge.id ? counteredItem : r));
+      // For users: move from received to sent (Countered subsection) or update if already there
+      const isAlreadyInSent = sentRequests.some(r => r.id === selectedChallenge.id);
+      if (isAlreadyInSent) {
+        setSentRequests(prev => prev.map(r => r.id === selectedChallenge.id ? counteredItem : r));
+      } else {
+        setReceivedRequests(prev => prev.filter(r => r.id !== selectedChallenge.id));
+        setSentRequests(prev => [...prev, counteredItem]);
+      }
     }
 
     setIsCounterModalVisible(false);
@@ -272,11 +338,10 @@ export default function MatchmakingScreen({ user }) {
 
     return (
       <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-        {(role === 'coach' || receivedRequests.length > 0) && (
-          <View style={styles.section}>
+        <View style={styles.section}>
             <Text style={styles.sectionTitle}>{role === 'coach' ? 'Booking Requests' : 'Received Challenges'}</Text>
             {receivedRequests.length === 0 ? (
-                <Text style={[styles.emptyText, { textAlign: 'center', marginTop: 30, marginBottom: 20, fontSize: 13 }]}>No Requests Received</Text>
+                <Text style={[styles.emptyText, { textAlign: 'center', marginTop: 10, marginBottom: 10, fontSize: 13 }]}>No Requests Received</Text>
             ) : (
               receivedRequests.map(req => (
                 <TouchableOpacity key={req.id} style={styles.requestCard} onPress={() => openDetails(req)}>
@@ -298,12 +363,10 @@ export default function MatchmakingScreen({ user }) {
                 </TouchableOpacity>
               ))
             )}
-          </View>
-        )}
+        </View>
 
-        {/* Dedicated Countered Section */}
-        {counteredRequests.length > 0 && (
-          <View style={[styles.section, { marginTop: 20 }]}>
+        {/* Dedicated Countered Section - Always visible */}
+        <View style={[styles.section, { marginTop: 20 }]}>
             <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Countered</Text>
                 {role === 'coach' && counteredRequests.some(r => r.hasUserResponse) && (
@@ -312,6 +375,9 @@ export default function MatchmakingScreen({ user }) {
                     </View>
                 )}
             </View>
+            {counteredRequests.length === 0 && (
+              <Text style={[styles.emptyText, { textAlign: 'center', marginTop: 10, marginBottom: 10, fontSize: 13 }]}>No countered challenges</Text>
+            )}
             {counteredRequests.map(req => (
               <TouchableOpacity key={req.id} style={[styles.requestCard, { borderLeftColor: '#F59E0B' }]} onPress={() => openDetails(req)}>
                 <View style={styles.info}>
@@ -330,20 +396,19 @@ export default function MatchmakingScreen({ user }) {
                     <Text style={styles.smallBtnText}>Counter</Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
-                      style={[styles.smallBtn, { backgroundColor: (role === 'coach' ? (req.hasUserResponse ? '#22C55E' : '#E2E8F0') : '#F1F5F9') }]} 
-                      onPress={() => role === 'coach' ? (req.hasUserResponse ? handleConfirmBooking(req) : null) : handleCounter(req)}
+                      style={[styles.smallBtn, { backgroundColor: (role === 'coach' ? (req.hasUserResponse ? '#22C55E' : '#E2E8F0') : '#22C55E') }]} 
+                      onPress={() => role === 'coach' ? (req.hasUserResponse ? handleConfirmBooking(req) : null) : handleAcceptCountered(req)}
                   >
-                      <Text style={[styles.smallBtnText, { color: (role === 'coach' ? (req.hasUserResponse ? '#fff' : '#94A3B8') : '#333') }]}>
+                      <Text style={[styles.smallBtnText, { color: (role === 'coach' ? (req.hasUserResponse ? '#fff' : '#94A3B8') : '#fff') }]}>
                         {role === 'coach' ? 'Confirm' : 'Accept'}
                       </Text>
                   </TouchableOpacity>
                 </View>
               </TouchableOpacity>
             ))}
-          </View>
-        )}
+        </View>
 
-        <View style={[styles.section, { marginTop: counteredRequests.length > 0 ? 20 : 0 }]}>
+        <View style={[styles.section, { marginTop: 20 }]}>
           <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Sent Requests</Text>
           </View>
@@ -495,7 +560,9 @@ export default function MatchmakingScreen({ user }) {
                   {TIME_SLOTS.map(slot => {
                     const isBlocked = isTimeSlotBlocked(challengeDate, slot, selectedOpponent?.id);
                     const isExpanded = expandedSlot === slot;
-                    const isSelBase = (challengeTime.startsWith(slot.substring(0, 2)) && challengeTime.endsWith(slot.substring(5)));
+                    const slotHour = slot.split(':')[0];
+                    const slotAmPm = slot.slice(-2);
+                    const isSelBase = challengeTime && challengeTime.split(':')[0] === slotHour && challengeTime.slice(-2) === slotAmPm;
                     
                     return (
                       <View key={slot} style={[styles.slotWrapper, { zIndex: isExpanded ? 100 : 1 }]}>
@@ -512,7 +579,7 @@ export default function MatchmakingScreen({ user }) {
                             styles.slotText, 
                             isSelBase && styles.slotTextActive,
                             isBlocked && { color: '#94A3B8' }
-                          ]}>{slot}</Text>
+                          ]}>{isSelBase ? challengeTime : slot}</Text>
                         </TouchableOpacity>
 
                         {isExpanded && !isBlocked && (
@@ -609,7 +676,7 @@ export default function MatchmakingScreen({ user }) {
                                 <Ionicons name="chatbubble-ellipses-outline" size={20} color="#6366F1" />
                                 <View>
                                     <Text style={[styles.detailLabel, { color: '#6366F1' }]}>
-                                        {selectedChallenge?.userResponseStatus === 'Accepted' ? 'Response Status' : "User's Preferred Slot"}
+                                        {selectedChallenge?.userResponseStatus === 'Accepted' ? 'Response Status' : "Opponent's Preferred Slot"}
                                     </Text>
                                     <Text style={styles.detailValue}>
                                         {selectedChallenge?.userResponseStatus === 'Accepted' 
@@ -619,16 +686,36 @@ export default function MatchmakingScreen({ user }) {
                                 </View>
                             </View>
                         )}
-                       {selectedChallenge?.status === 'Countered' && (
-                            <View style={[styles.detailItem, { width: '100%', backgroundColor: '#F0FDF4', borderColor: '#22C55E', borderWidth: 1, marginTop: 10 }]}>
-                                <Ionicons name="send-outline" size={20} color="#16A34A" />
-                                <View>
-                                    <Text style={[styles.detailLabel, { color: '#16A34A' }]}>Your Last Counter</Text>
-                                    <Text style={styles.detailValue}>
-                                        {selectedChallenge.coachLastProposedDate || selectedChallenge.proposedDate} at {selectedChallenge.coachLastProposedTime || selectedChallenge.proposedTime} • {selectedChallenge.location}
-                                    </Text>
+                        {selectedChallenge?.status === 'Countered' && (
+                            <>
+                                <View style={[styles.detailItem, { width: '100%', backgroundColor: '#FFFBEB', borderColor: '#F59E0B', borderWidth: 1, marginTop: 10 }]}>
+                                    <Ionicons name="calendar-outline" size={20} color="#D97706" />
+                                    <View>
+                                        <Text style={[styles.detailLabel, { color: '#D97706' }]}>Original Challenger's Slot</Text>
+                                        <Text style={styles.detailValue}>
+                                            {selectedChallenge.originalChallengerDate || selectedChallenge.proposedDate} at {selectedChallenge.originalChallengerTime || selectedChallenge.proposedTime}
+                                        </Text>
+                                    </View>
                                 </View>
-                            </View>
+                                <View style={[styles.detailItem, { width: '100%', backgroundColor: '#F0FDF4', borderColor: '#22C55E', borderWidth: 1, marginTop: 10 }]}>
+                                    <Ionicons name="send-outline" size={20} color="#16A34A" />
+                                    <View>
+                                        <Text style={[styles.detailLabel, { color: '#16A34A' }]}>Your Last Counter</Text>
+                                        <Text style={styles.detailValue}>
+                                            {selectedChallenge.myCounterDate || selectedChallenge.proposedDate} at {selectedChallenge.myCounterTime || selectedChallenge.proposedTime} • {selectedChallenge.location}
+                                        </Text>
+                                    </View>
+                                </View>
+                                {selectedChallenge.counterComment && (
+                                    <View style={[styles.detailItem, { width: '100%', backgroundColor: '#F8FAFC', borderColor: '#CBD5E1', borderWidth: 1, marginTop: 10 }]}>
+                                        <Ionicons name="chatbox-outline" size={20} color="#64748B" />
+                                        <View>
+                                            <Text style={[styles.detailLabel, { color: '#64748B' }]}>Counter Note</Text>
+                                            <Text style={styles.detailValue}>{selectedChallenge.counterComment}</Text>
+                                        </View>
+                                    </View>
+                                )}
+                            </>
                         )}
                     </>
                 )}
@@ -651,6 +738,25 @@ export default function MatchmakingScreen({ user }) {
                     }}
                   >
                     <Text style={styles.actionBtnText}>{role === 'coach' ? 'Confirm' : 'Accept Match'}</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+              {role !== 'coach' && sentRequests.some(r => r.id === selectedChallenge?.id && r.status === 'Countered') && (
+                <>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, { backgroundColor: '#F1F5F9' }]}
+                    onPress={() => handleCounter(selectedChallenge)}
+                  >
+                    <Text style={[styles.actionBtnText, { color: '#0F172A' }]}>Counter Again</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, { backgroundColor: '#22C55E' }]}
+                    onPress={() => {
+                      handleAcceptCountered(selectedChallenge);
+                      setIsDetailsModalVisible(false);
+                    }}
+                  >
+                    <Text style={styles.actionBtnText}>Accept Match</Text>
                   </TouchableOpacity>
                 </>
               )}
@@ -729,7 +835,9 @@ export default function MatchmakingScreen({ user }) {
                  {TIME_SLOTS.map(slot => {
                     const isBlocked = isTimeSlotBlocked(counterDate, slot, selectedChallenge?.academyId);
                     const isExpanded = expandedSlot === slot;
-                    const isSelBase = (counterTime.startsWith(slot.substring(0, 2)) && counterTime.endsWith(slot.substring(5)));
+                    const slotHour = slot.split(':')[0];
+                    const slotAmPm = slot.slice(-2);
+                    const isSelBase = counterTime && counterTime.split(':')[0] === slotHour && counterTime.slice(-2) === slotAmPm;
                     
                     return (
                       <View key={slot} style={[styles.slotWrapper, { zIndex: isExpanded ? 100 : 1 }]}>
@@ -746,7 +854,7 @@ export default function MatchmakingScreen({ user }) {
                             styles.slotText,
                             isSelBase && styles.slotTextActive,
                             isBlocked && { color: '#94A3B8' }
-                          ]}>{slot}</Text>
+                          ]}>{isSelBase ? counterTime : slot}</Text>
                         </TouchableOpacity>
 
                         {isExpanded && !isBlocked && (
@@ -835,6 +943,17 @@ export default function MatchmakingScreen({ user }) {
                   </TouchableOpacity>
                 </View>
               )}
+
+              <Text style={styles.sectionLabel}>Comment (Optional)</Text>
+              <TextInput
+                style={[styles.searchInput, { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 14, minHeight: 80, textAlignVertical: 'top', backgroundColor: '#F8FAFC', fontSize: 14, color: '#0F172A' }]}
+                placeholder="Add any details or requests for your counter..."
+                placeholderTextColor="#94A3B8"
+                value={counterComment}
+                onChangeText={setCounterComment}
+                multiline
+                numberOfLines={3}
+              />
 
               <TouchableOpacity style={styles.confirmBtn} onPress={submitCounterProposal}>
                 <Text style={styles.confirmBtnText}>Submit Counter proposal</Text>
