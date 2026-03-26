@@ -34,7 +34,7 @@ const LandingScreen = ({ onLogin = () => {}, onJoinCircle = () => {} }) => {
         <Image 
           source={require('../assets/landing_full.png')}
           style={styles.fullImage}
-          resizeMode="contain"
+          resizeMode="cover"
         />
         
         {/* Logo Overlay - Explicitly re-added for branding */}
@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
   },
   fullImage: {
     position: 'absolute',
-    top: 0,
+    bottom: 0,
     left: 0,
     width: '100%',
     height: '100%',
