@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
   },
   logoOverlay: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 60 : (height < 750 ? 25 : 40),
+    top: Platform.OS === 'ios' ? 60 : (height < 750 ? 20 : 40),
     left: 24,
     zIndex: 100,
   },
@@ -131,14 +131,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : (height < 750 ? 25 : 60),
+    paddingBottom: Platform.OS === 'ios' ? 40 : (height < 750 ? 15 : 60),
   },
   buttonContainer: {
-    gap: height < 750 ? 8 : 12,
+    gap: height < 750 ? 6 : 12,
   },
   primaryButton: {
     backgroundColor: '#D12621',
-    height: 54,
+    height: height < 750 ? 46 : 54,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     backgroundColor: '#333333',
-    height: 54,
+    height: height < 750 ? 46 : 54,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
