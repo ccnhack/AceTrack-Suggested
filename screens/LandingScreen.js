@@ -1,111 +1,137 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { 
   View, Text, TouchableOpacity, Image, StyleSheet, 
-  SafeAreaView, Dimensions, ScrollView, StatusBar, Platform
+  SafeAreaView, Dimensions, StatusBar, Platform, PixelRatio
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width, height } = Dimensions.get('window');
+const { width: screenWidth, height: screenHeight } = Dimensions.get('screen');
 
 const LandingScreen = ({ onLogin = () => {}, onJoinCircle = () => {} }) => {
-  console.log("🎨 LandingScreen Render:", { 
-    hasOnLogin: typeof onLogin, 
-    hasOnJoinCircle: typeof onJoinCircle 
-  });
-  const sportIcons = [
-    { name: 'badminton', icon: 'shuttlecock', color: '#FFFFFF' }, // Custom icons would be ideal, using Ionicons as fallback
-    { name: 'tennis', icon: 'tennisball-outline', color: '#4ADE80' },
-    { name: 'soccer', icon: 'football', color: '#22C55E' },
-    { name: 'track', icon: 'stats-chart', color: '#EF4444' },
-    { name: 'cricket', icon: 'baseball-outline', color: '#94A3B8' },
-    { name: 'basketball', icon: 'basketball', color: '#F97316' },
-    { name: 'tennis-ball', icon: 'disc-outline', color: '#84CC16' },
-    { name: 'running', icon: 'walk', color: '#3B82F6' },
-    { name: 'jumping', icon: 'trending-up', color: '#B91C1C' },
-    { name: 'hockey', icon: 'analytics', color: '#FFFFFF' },
-  ];
+  
+  useEffect(() => {
+    // DIAGNOSTIC LOGGING
+    console.log("📱 [DIAGNOSTIC] LandingScreen Dimensions:", {
+      window: { width, height },
+      screen: { screenWidth, screenHeight },
+      pixelRatio: PixelRatio.get(),
+      fontScale: PixelRatio.getFontScale(),
+      platform: Platform.OS,
+      osVersion: Platform.Version,
+      isTallScreen: height > 800,
+      isShortScreen: height < 700
+    });
+  }, []);
+
+  const sportEmojis = ['🏸', '🎾', '⚽', '🏃', '🏏', '🏀', '🏒', '🥊', '🏊', '⛳'];
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
-      <View style={styles.fullscreenContainer}>
-        {/* Full Composite Image Section */}
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      
+      {/* BACKGROUND IMAGE - Using Final2.png athletes-only zone */}
+      <View style={styles.backgroundContainer}>
         <Image 
           source={require('../assets/landing_full.png')}
-          style={styles.fullImage}
+          style={styles.backgroundImage}
           resizeMode="cover"
         />
-        
-        {/* Logo Overlay - Explicitly re-added for branding */}
-        <SafeAreaView style={styles.logoOverlay}>
-          <View style={styles.logoRow}>
-            <View style={styles.logoIcon}>
-              <Text style={styles.logoLetter}>T</Text>
-            </View>
-            <Text style={styles.logoText}>AceTrack</Text>
-          </View>
-        </SafeAreaView>
-
-        <View style={styles.buttonOverlay}>
-          <SafeAreaView>
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity 
-                style={styles.primaryButton} 
-                onPress={() => {
-                  console.log("🔵 LandingScreen: LOGIN pressed");
-                  if (typeof onLogin === 'function') onLogin();
-                }}
-              >
-                <Text style={styles.primaryButtonText}>LOGIN</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={styles.secondaryButton} 
-                onPress={() => {
-                  console.log("🟢 LandingScreen: JOIN press detected. Calling onJoinCircle prop...");
-                  if (typeof onJoinCircle === 'function') {
-                    onJoinCircle();
-                  } else {
-                    console.error("❌ LandingScreen: onJoinCircle is not a function!", typeof onJoinCircle);
-                  }
-                }}
-              >
-                <View style={styles.secondaryContent}>
-                  <Ionicons name="business" size={18} color="#FFFFFF" />
-                  <Text style={styles.secondaryButtonText}>JOIN AN ELITE CIRCLE</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-          </SafeAreaView>
-        </View>
+        {/* Dark overlay to ensure text readability and blend with bottom */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.7)', '#000000']}
+          locations={[0, 0.4, 0.7]}
+          style={StyleSheet.absoluteFill}
+        />
       </View>
-    </SafeAreaView>
+
+      {/* TOP BRANDING */}
+      <SafeAreaView style={styles.logoContainer}>
+        <View style={styles.logoRow}>
+          <View style={styles.logoIcon}>
+            <Text style={styles.logoLetter}>T</Text>
+          </View>
+          <Text style={styles.logoText}>AceTrack</Text>
+        </View>
+      </SafeAreaView>
+
+      {/* NATIVE CONTENT AREA - Ensuring responsiveness */}
+      <View style={styles.contentOverlay}>
+        <SafeAreaView style={styles.safeContent}>
+          
+          <View style={styles.textSection}>
+            <Text style={styles.headline}>
+              STAY AHEAD. ACHIEVE{'\n'}EXCELLENCE.{'\n'}UPCOMING MATCHES &{'\n'}GLOBAL TOURNAMENTS
+            </Text>
+            
+            <Text style={styles.subtitle}>
+              AceTrack: The ultimate platform for ambitious athletes. Track results, discover multi-sport events, and compete on international leaderboards.
+            </Text>
+
+            {/* SPORT ICONS ROW - Native rebuild */}
+            <View style={styles.sportIconsRow}>
+              {sportEmojis.map((emoji, index) => (
+                <Text key={index} style={styles.sportEmoji}>{emoji}</Text>
+              ))}
+            </View>
+          </View>
+
+          {/* BUTTONS SECTION */}
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity 
+              style={styles.primaryButton} 
+              onPress={() => {
+                console.log("🔵 LandingScreen: LOGIN pressed");
+                if (typeof onLogin === 'function') onLogin();
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.primaryButtonText}>LOGIN</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.secondaryButton} 
+              onPress={() => {
+                console.log("🟢 LandingScreen: JOIN pressed");
+                if (typeof onJoinCircle === 'function') onJoinCircle();
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={styles.secondaryContent}>
+                <Ionicons name="business" size={20} color="#FFFFFF" />
+                <Text style={styles.secondaryButtonText}>JOIN AN ELITE CIRCLE</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+        </SafeAreaView>
+      </View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000', // True black to match reference
+    backgroundColor: '#000000',
   },
-  fullscreenContainer: {
-    flex: 1,
-    width: width,
-    height: height,
-  },
-  fullImage: {
+  backgroundContainer: {
     position: 'absolute',
-    bottom: 0,
+    top: 0,
     left: 0,
+    right: 0,
+    height: '70%', // Background image only takes top 70% to avoid cluttering bottom
+  },
+  backgroundImage: {
     width: '100%',
     height: '100%',
   },
-  logoOverlay: {
+  logoContainer: {
     position: 'absolute',
-    top: 60,
+    top: Platform.OS === 'ios' ? 10 : 40,
     left: 24,
-    zIndex: 100,
+    zIndex: 10,
   },
   logoRow: {
     flexDirection: 'row',
@@ -131,19 +157,44 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.5,
   },
-  buttonOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+  contentOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  safeContent: {
     paddingHorizontal: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 60,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 40,
+  },
+  textSection: {
+    marginBottom: 24,
+  },
+  headline: {
+    color: '#FFFFFF',
+    fontSize: height < 700 ? 18 : 22,
+    fontWeight: '800',
+    lineHeight: height < 700 ? 24 : 30,
+    letterSpacing: 0.5,
+    marginBottom: 10,
+  },
+  subtitle: {
+    color: '#94A3B8',
+    fontSize: height < 700 ? 12 : 13,
+    lineHeight: height < 700 ? 17 : 20,
+    marginBottom: 16,
+  },
+  sportIconsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: height < 700 ? 8 : 12,
+  },
+  sportEmoji: {
+    fontSize: height < 700 ? 20 : 26,
   },
   buttonContainer: {
     gap: 12,
   },
   primaryButton: {
-    backgroundColor: '#D12621', // Specific AceTrack Red
+    backgroundColor: '#D12621',
     height: 54,
     borderRadius: 10,
     justifyContent: 'center',
@@ -160,11 +211,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   secondaryButton: {
-    backgroundColor: '#333333', // Charcoal grey
+    backgroundColor: '#1E293B',
     height: 54,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#334155',
   },
   secondaryContent: {
     flexDirection: 'row',
