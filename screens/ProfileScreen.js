@@ -158,7 +158,25 @@ const ProfileScreen = ({
             setLatestVersion(data.latestAppVersion);
             // Local appVersion comes from props
             if (appVersion && data.latestAppVersion !== appVersion) {
-              setUpdateAvailable(true);
+              const localParts = appVersion.split('-')[0].split('.').map(Number);
+              const remoteParts = data.latestAppVersion.split('-')[0].split('.').map(Number);
+              
+              let isNewer = false;
+              for (let i = 0; i < 3; i++) {
+                if ((remoteParts[i] || 0) > (localParts[i] || 0)) {
+                  isNewer = true;
+                  break;
+                }
+                if ((remoteParts[i] || 0) < (localParts[i] || 0)) {
+                  break;
+                }
+              }
+              
+              if (isNewer) {
+                setUpdateAvailable(true);
+              } else {
+                setUpdateAvailable(false);
+              }
             }
         }
       } catch (err) {

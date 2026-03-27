@@ -58,7 +58,7 @@ try {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
 
-const APP_VERSION = '2.2.1'; // AceTrack Suggested — Stable Sync Fix
+const APP_VERSION = '2.2.2'; // AceTrack Suggested — Stable Sync Fix
 
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: CORS Whitelist (SEC Fix #3)
@@ -358,7 +358,7 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
       changedCollections,
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
-      version: "2.2.1",
+      version: "2.2.2",
       details
     });
   } catch (e) {
