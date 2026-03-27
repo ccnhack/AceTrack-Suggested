@@ -48,32 +48,30 @@ const LandingScreen = ({ onLogin = () => {}, onJoinCircle = () => {} }) => {
         </SafeAreaView>
 
         <View style={styles.buttonOverlay}>
-          <SafeAreaView>
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity 
-                style={styles.primaryButton} 
-                onPress={() => {
-                  console.log("🔵 LandingScreen: LOGIN pressed");
-                  onLogin();
-                }}
-              >
-                <Text style={styles.primaryButtonText}>LOGIN</Text>
-              </TouchableOpacity>
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity 
+              style={styles.primaryButton} 
+              onPress={() => {
+                console.log("🔵 LandingScreen: LOGIN pressed");
+                onLogin();
+              }}
+            >
+              <Text style={styles.primaryButtonText}>LOGIN</Text>
+            </TouchableOpacity>
 
-              <TouchableOpacity 
-                style={styles.secondaryButton} 
-                onPress={() => {
-                  console.log("🟢 LandingScreen: JOIN pressed");
-                  onJoinCircle();
-                }}
-              >
-                <View style={styles.secondaryContent}>
-                  <Ionicons name="business" size={18} color="#FFFFFF" />
-                  <Text style={styles.secondaryButtonText}>JOIN AN ELITE CIRCLE</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-          </SafeAreaView>
+            <TouchableOpacity 
+              style={styles.secondaryButton} 
+              onPress={() => {
+                console.log("🟢 LandingScreen: JOIN pressed");
+                onJoinCircle();
+              }}
+            >
+              <View style={styles.secondaryContent}>
+                <Ionicons name="business" size={18} color="#FFFFFF" />
+                <Text style={styles.secondaryButtonText}>JOIN AN ELITE CIRCLE</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </SafeAreaView>
@@ -90,7 +88,7 @@ const styles = StyleSheet.create({
   },
   fullImage: {
     position: 'absolute',
-    bottom: 0,
+    bottom: height < 750 ? 30 : 0, // Shift image UP to clear icons from buttons
     left: 0,
     width: '100%',
     height: '100%',
@@ -131,7 +129,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : (height < 750 ? 15 : 60),
+    paddingBottom: Platform.OS === 'ios' ? 40 : (height < 750 ? 10 : 60),
   },
   buttonContainer: {
     gap: height < 750 ? 6 : 12,
