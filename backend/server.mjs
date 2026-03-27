@@ -404,7 +404,7 @@ router.get('/data', apiKeyGuard, async (req, res) => {
 });
 
 // GET /api/v1/status
-router.get('/status', apiKeyGuard, async (req, res) => {
+router.get('/status', async (req, res) => {
   try {
     const state = await AppState.findOne().sort({ lastUpdated: -1 }).select('lastUpdated');
     res.json({ 
