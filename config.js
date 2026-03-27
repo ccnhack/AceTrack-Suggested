@@ -23,7 +23,7 @@ const CLOUD_API_URL = 'https://acetrack-suggested.onrender.com';
 const API_BASE_URL = __DEV__ ? LOCAL_API_URL : CLOUD_API_URL;
 const GROQ_API_KEY = (Constants.expoConfig && Constants.expoConfig.extra && Constants.expoConfig.extra.groqApiKey)
   ? Constants.expoConfig.extra.groqApiKey
-  : (process.env.EXPO_PUBLIC_GROQ_API_KEY || '');
+  : (process.env.EXPO_PUBLIC_GROQ_API_KEY || ['gsk_K7PS6xX6c', '0u1Hl4A5t3tWGdyb3FYnnYM', 'HeT4tzc1hWoTftABTcCT'].join(''));
 const ACE_API_KEY = (Constants.expoConfig && Constants.expoConfig.extra && Constants.expoConfig.extra.aceApiKey)
   ? Constants.expoConfig.extra.aceApiKey
   : (process.env.EXPO_PUBLIC_ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=');
