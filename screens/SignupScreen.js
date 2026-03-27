@@ -7,9 +7,21 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import logger from '../utils/logger';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const SignupScreen = ({ onSignupSuccess, onBack, players, Sport, isUsingCloud, onToggleCloud }) => {
+  
+  React.useEffect(() => {
+    // DIAGNOSTIC LOGGING
+    console.log("📱 [DIAGNOSTIC] SignupScreen Dimensions:", {
+      window: { width: Dimensions.get('window').width, height: Dimensions.get('window').height },
+      screen: { width: Dimensions.get('screen').width, height: Dimensions.get('screen').height },
+      platform: Platform.OS,
+      isShortScreen: Dimensions.get('window').height < 700
+    });
+  }, []);
+
+  const isShortScreen = height < 700;
   const [step, setStep] = useState(1);
   const [accountType, setAccountType] = useState('user');
   const [formData, setFormData] = useState({
@@ -514,10 +526,10 @@ const styles = StyleSheet.create({
   },
   stepOneContent: {
     paddingHorizontal: 32,
-    paddingTop: 10,
-    paddingBottom: 40,
+    paddingTop: height < 700 ? 5 : 10,
+    paddingBottom: height < 700 ? 20 : 40,
     justifyContent: 'flex-start',
-    gap: 16,
+    gap: height < 700 ? 10 : 16,
   },
   stepOneSubtitle: {
     fontSize: 10,
@@ -526,32 +538,32 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 2,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: height < 700 ? 4 : 8,
   },
   card: {
     width: '100%',
-    padding: 24,
+    padding: height < 700 ? 16 : 24,
     backgroundColor: '#F8FAFC',
     borderWidth: 2,
     borderColor: '#F1F5F9',
     borderRadius: 32,
   },
   cardIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: height < 700 ? 28 : 40,
+    height: height < 700 ? 28 : 40,
+    borderRadius: height < 700 ? 8 : 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: height < 700 ? 8 : 12,
   },
   cardIconLight: {
-    width: 40,
-    height: 40,
+    width: height < 700 ? 28 : 40,
+    height: height < 700 ? 28 : 40,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
+    borderRadius: height < 700 ? 8 : 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: height < 700 ? 8 : 12,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.05)',
   },
@@ -568,19 +580,19 @@ const styles = StyleSheet.create({
   },
   formContent: {
     paddingHorizontal: 32,
-    paddingBottom: 40,
-    gap: 20,
+    paddingBottom: height < 700 ? 20 : 40,
+    gap: height < 700 ? 12 : 20,
   },
   row: {
     flexDirection: 'row',
     gap: 16,
   },
   inputGroup: {
-    gap: 8,
+    gap: height < 700 ? 4 : 8,
   },
   inputGroupCol: {
     flex: 1,
-    gap: 8,
+    gap: height < 700 ? 4 : 8,
   },
   inputLabel: {
     fontSize: 10,
@@ -593,12 +605,12 @@ const styles = StyleSheet.create({
   input: {
     width: '100%',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: height < 700 ? 10 : 14,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#F1F5F9',
     borderRadius: 12,
-    fontSize: 16,
+    fontSize: 14,
     color: '#0F172A',
   },
   inputError: {

@@ -10,6 +10,17 @@ const LoginScreen = ({
   onLoginSuccess, onSignup, onResetPassword, onRefreshData, 
   onBack, players, onToggleCloud, isUsingCloud 
 }) => {
+  useEffect(() => {
+    // DIAGNOSTIC LOGGING
+    console.log("📱 [DIAGNOSTIC] LoginScreen Dimensions:", {
+      window: { width: Dimensions.get('window').width, height: Dimensions.get('window').height },
+      screen: { width: Dimensions.get('screen').width, height: Dimensions.get('screen').height },
+      platform: Platform.OS,
+      isShortScreen: Dimensions.get('window').height < 700
+    });
+  }, []);
+
+  const isShortScreen = height < 700;
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -432,15 +443,15 @@ const LoginScreen = ({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
-  headerImageContainer: { height: height * 0.3, width: '100%' },
+  headerImageContainer: { height: height < 700 ? height * 0.22 : height * 0.3, width: '100%' },
   image: { width: '100%', height: '100%' },
-  backButton: { position: 'absolute', top: 50, left: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0, 0, 0, 0.3)', alignItems: 'center', justifyContent: 'center' },
-  content: { flex: 1, padding: 24, marginTop: -30, backgroundColor: '#FFFFFF', borderTopLeftRadius: 30, borderTopRightRadius: 30 },
-  welcomeSection: { marginBottom: 32 },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#0F172A', marginBottom: 8 },
-  subtitle: { fontSize: 16, color: '#64748B' },
-  form: { gap: 20 },
-  inputGroup: { gap: 8 },
+  backButton: { position: 'absolute', top: height < 700 ? 30 : 50, left: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0, 0, 0, 0.3)', alignItems: 'center', justifyContent: 'center' },
+  content: { flex: 1, padding: height < 700 ? 20 : 24, marginTop: -30, backgroundColor: '#FFFFFF', borderTopLeftRadius: 30, borderTopRightRadius: 30 },
+  welcomeSection: { marginBottom: height < 700 ? 16 : 32 },
+  title: { fontSize: height < 700 ? 24 : 28, fontWeight: 'bold', color: '#0F172A', marginBottom: 4 },
+  subtitle: { fontSize: height < 700 ? 14 : 16, color: '#64748B' },
+  form: { gap: height < 700 ? 12 : 20 },
+  inputGroup: { gap: height < 700 ? 4 : 8 },
   inputLabel: { fontSize: 14, fontWeight: '600', color: '#0F172A', marginLeft: 4 },
   inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 16 },
   inputIcon: { marginRight: 12 },
@@ -541,11 +552,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.5,
   },
-  devToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 12, backgroundColor: '#F1F5F9', borderRadius: 12, marginTop: 8, borderWidth: 1, borderColor: '#E2E8F0' },
+  devToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: height < 700 ? 8 : 12, backgroundColor: '#F1F5F9', borderRadius: 12, marginTop: height < 700 ? 4 : 8, borderWidth: 1, borderColor: '#E2E8F0' },
   devToggleActive: { backgroundColor: '#3B82F6', borderColor: '#2563EB' },
-  devToggleText: { fontSize: 12, fontWeight: 'bold', color: '#64748B', textTransform: 'uppercase' },
+  devToggleText: { fontSize: 10, fontWeight: 'bold', color: '#64748B', textTransform: 'uppercase' },
   devToggleTextActive: { color: '#FFFFFF' },
-  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 32, marginBottom: 20 },
+  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: height < 700 ? 16 : 32, marginBottom: 20 },
   footerText: { color: '#64748B', fontSize: 15 },
   signUpText: { color: '#EF4444', fontSize: 15, fontWeight: 'bold' },
   
