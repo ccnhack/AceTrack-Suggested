@@ -32,35 +32,16 @@ const MOCK_ACADEMIES = [
   { id: 'a3', name: 'Victory Arena', managedSports: ['Badminton', 'Table Tennis'], level: 'Top Rated', dist: '8 km', phone: '+91 76543 21098', image: 'https://i.pravatar.cc/150?u=victory' },
 ];
 
-export default function MatchmakingScreen({ user }) {
+export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatchmaking, players = [] }) {
   const role = user?.role || 'user';
   const [activeTab, setActiveTab] = useState(role === 'coach' ? 'New Bookings' : 'Challenge'); // Challenge, Requested, Accepted, History
-  const [sentRequests, setSentRequests] = useState([
-    { 
-        id: 'sent_mock_1', 
-        name: 'Kabir L. (Elite Smashers)', 
-        sport: 'Badminton', 
-        // Main fields reflect the LATEST proposal (from user)
-        proposedDate: '2026-03-30', // User responded with 30th March
-        proposedTime: '01:00 PM', 
-        location: 'Elite Smashers',
-        status: 'Countered', 
-        hasUserResponse: true,
-        userResponseStatus: 'CounterProposed', // User suggested new slot
-        userProposedDate: '2026-03-30', 
-        userProposedTime: '01:00 PM',
-        // Coach's last proposal tracked separately
-        coachLastProposedDate: '2026-03-27', 
-        coachLastProposedTime: '11:00 AM'
-    }
-  ]);
-  const [receivedRequests, setReceivedRequests] = useState([
-    { id: 'r1', academyId: 'a1', name: 'Aaryan Sharma', sport: 'Tennis', time: 'Mar 26, 12:00 PM', status: 'Pending' },
-    { id: 'r2', academyId: 'a2', name: 'riyaplay', sport: 'Badminton', proposedDate: '2026-03-29', proposedTime: '03:00 PM', status: 'Pending' }
-  ]);
-  const [acceptedMatches, setAcceptedMatches] = useState([
-    { id: 'm1', name: 'Rohan G.', sport: 'Cricket', time: 'Mar 28, 4:00 PM', location: 'Active Stadium' }
-  ]);
+
+  // Derived states from global matchmaking prop
+  const sentRequests = matchmaking.filter(m => m.senderId === user?.id && m.status !== 'Accepted');
+  const receivedRequests = matchmaking.filter(m => m.receiverId === user?.id && m.status === 'Pending');
+  const acceptedMatches = matchmaking.filter(m => 
+    (m.senderId === user?.id || m.receiverId === user?.id) && m.status === 'Accepted'
+  );
   const [history, setHistory] = useState([
     { id: 'h1', name: 'Sameer P.', sport: 'Badminton', result: 'Won 21-18, 21-15', date: 'Mar 20, 2024' }
   ]);
@@ -80,6 +61,7 @@ export default function MatchmakingScreen({ user }) {
   const [negotiatedVenue, setNegotiatedVenue] = useState('opponent');
   const [expandedSlot, setExpandedSlot] = useState(null);
   const [counterComment, setCounterComment] = useState('');
+  const [playerSearchQuery, setPlayerSearchQuery] = useState('');
 
   const parseTime = (timeStr) => {
     const [time, modifier] = timeStr.split(' ');
@@ -124,13 +106,21 @@ export default function MatchmakingScreen({ user }) {
       Alert.alert("Error", "Please fill all details");
       return;
     }
-    setSentRequests([...sentRequests, {
-      id: `sent_${Date.now()}`,
-      ...selectedOpponent,
+    const newChallenge = {
+      id: `match_${Date.now()}`,
+      senderId: user.id,
+      senderName: user.name,
+      receiverId: selectedOpponent.id,
+      receiverName: selectedOpponent.name,
+      name: selectedOpponent.name, // for display compatibility
+      image: selectedOpponent.image,
       proposedDate: challengeDate,
       proposedTime: challengeTime,
-      sport: selectedSport
-    }]);
+      sport: selectedSport,
+      status: 'Pending',
+      timestamp: new Date().toISOString()
+    };
+    onUpdateMatchmaking([...matchmaking, newChallenge]);
     setIsChallengeModalVisible(false);
     setChallengeDate('');
     setChallengeTime('');
@@ -138,14 +128,15 @@ export default function MatchmakingScreen({ user }) {
   };
 
   const handleAcceptChallenge = (req) => {
-    setReceivedRequests(prev => prev.filter(r => r.id !== req.id));
-    setAcceptedMatches(prev => [...prev, {
-      ...req,
+    const updated = matchmaking.map(m => m.id === req.id ? {
+      ...m,
       status: 'Accepted',
-      hasUserResponse: false,
-      time: req.time || `${req.proposedDate}, ${req.proposedTime}`,
-      location: req.location || 'Academy Grounds'
-    }]);
+      lastUpdatedBy: user.id,
+      lastUpdatedByName: user.name,
+      time: m.time || `${m.proposedDate}, ${m.proposedTime}`,
+      location: m.location || 'Academy Grounds'
+    } : m);
+    onUpdateMatchmaking(updated);
     Alert.alert("Match Accepted", `You have confirmed the match with ${req.name}.`);
   };
 
@@ -168,16 +159,17 @@ export default function MatchmakingScreen({ user }) {
           {
             text: "Yes, Accept",
             onPress: () => {
-              setSentRequests(prev => prev.filter(r => r.id !== req.id));
-              setAcceptedMatches(prev => [...prev, {
-                ...req,
+              const updated = matchmaking.map(m => m.id === req.id ? {
+                ...m,
                 status: 'Accepted',
-                hasUserResponse: false,
+                lastUpdatedBy: user.id,
+                lastUpdatedByName: user.name,
                 proposedDate: origDate,
                 proposedTime: origTime,
                 time: `${origDate}, ${origTime}`,
                 location: req.location || 'Local Arena'
-              }]);
+              } : m);
+              onUpdateMatchmaking(updated);
               Alert.alert("Challenge Accepted!", `Match confirmed for ${origDate} at ${origTime} with ${req.name}.`);
             }
           }
@@ -189,16 +181,17 @@ export default function MatchmakingScreen({ user }) {
     // Other user has responded — accept with latest proposed slot
     const finalDate = req.proposedDate;
     const finalTime = req.proposedTime;
-    setSentRequests(prev => prev.filter(r => r.id !== req.id));
-    setAcceptedMatches(prev => [...prev, {
-      ...req,
+    const updated = matchmaking.map(m => m.id === req.id ? {
+      ...m,
       status: 'Accepted',
-      hasUserResponse: false,
+      lastUpdatedBy: user.id,
+      lastUpdatedByName: user.name,
       proposedDate: finalDate,
       proposedTime: finalTime,
       time: `${finalDate}, ${finalTime}`,
       location: req.location || 'Local Arena'
-    }]);
+    } : m);
+    onUpdateMatchmaking(updated);
     Alert.alert("Challenge Accepted!", `Match confirmed for ${finalDate} at ${finalTime} with ${req.name}.`);
   };
 
@@ -250,44 +243,30 @@ export default function MatchmakingScreen({ user }) {
       myCounterTime: counterTime,
       counterComment: counterComment.trim() || null,
       status: 'Countered',
+      lastUpdatedBy: user.id,
+      lastUpdatedByName: user.name,
       hasUserResponse: false
     };
 
-    if (role === 'coach') {
-      const isAlreadyInSent = sentRequests.some(r => r.id === selectedChallenge.id);
-      if (isAlreadyInSent) {
-          setSentRequests(prev => prev.map(r => r.id === selectedChallenge.id ? counteredItem : r));
-      } else {
-          setReceivedRequests(prev => prev.filter(r => r.id !== selectedChallenge.id));
-          setSentRequests(prev => [...prev, counteredItem]);
-      }
-    } else {
-      // For users: move from received to sent (Countered subsection) or update if already there
-      const isAlreadyInSent = sentRequests.some(r => r.id === selectedChallenge.id);
-      if (isAlreadyInSent) {
-        setSentRequests(prev => prev.map(r => r.id === selectedChallenge.id ? counteredItem : r));
-      } else {
-        setReceivedRequests(prev => prev.filter(r => r.id !== selectedChallenge.id));
-        setSentRequests(prev => [...prev, counteredItem]);
-      }
-    }
+    const updated = matchmaking.map(m => m.id === counteredItem.id ? counteredItem : m);
+    onUpdateMatchmaking(updated);
 
     setIsCounterModalVisible(false);
     Alert.alert("Counter Proposal Sent", `You suggested ${counterDate} at ${counterTime} at ${venueLabel}.`);
   };
 
   const handleConfirmBooking = (req) => {
-    setSentRequests(prev => prev.filter(r => r.id !== req.id));
-    setAcceptedMatches(prev => [...prev, {
-      ...req,
+    const updated = matchmaking.map(m => m.id === req.id ? {
+      ...m,
       status: 'Accepted',
-      hasUserResponse: false,
-      // Overwrite the base details with those agreed during negotiation
+      lastUpdatedBy: user.id,
+      lastUpdatedByName: user.name,
       proposedDate: req.userProposedDate || req.proposedDate,
       proposedTime: req.userProposedTime || req.proposedTime,
       location: req.location || 'Academy Grounds',
       time: `${req.userProposedDate || req.proposedDate}, ${req.userProposedTime || req.proposedTime}`
-    }]);
+    } : m);
+    onUpdateMatchmaking(updated);
     Alert.alert("Booking Confirmed", `You have finalized the booking with ${req.name}.`);
   };
 
@@ -301,7 +280,8 @@ export default function MatchmakingScreen({ user }) {
           text: "Yes, Cancel", 
           style: "destructive",
           onPress: () => {
-            setAcceptedMatches(prev => prev.filter(m => m.id !== req.id));
+            const updated = matchmaking.filter(m => m.id !== req.id);
+            onUpdateMatchmaking(updated);
             setIsDetailsModalVisible(false);
             Alert.alert("Booking Cancelled", "The booking has been successfully removed.");
           }
@@ -314,13 +294,17 @@ export default function MatchmakingScreen({ user }) {
     const isAcademy = role === 'academy';
     const isSent = sentRequests.some(r => r.id === item.id);
 
+    const imageUri = item.image || item.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name || 'User')}&background=random`;
+
     return (
       <View style={styles.card}>
-        <Image source={{ uri: item.image }} style={styles.avatar} />
+        <Image source={{ uri: imageUri }} style={styles.avatar} />
         <View style={styles.info}>
           <Text style={styles.name}>{item.name}</Text>
-          <Text style={styles.details}>{isAcademy ? (item.managedSports?.join(', ')) : item.sport} • {item.level}</Text>
-          <Text style={styles.dist}><Ionicons name="location" size={12} /> {item.dist}</Text>
+          <Text style={styles.details}>
+            {isAcademy ? (item.managedSports?.join(', ')) : (item.sport || item.certifiedSports?.[0] || 'Badminton')} • {item.skillLevel || item.level || 'Intermediate'}
+          </Text>
+          <Text style={styles.dist}><Ionicons name="location" size={12} /> {item.city || 'Near You'}</Text>
         </View>
         <TouchableOpacity
           style={[styles.btn, isSent && styles.btnSent]}
@@ -425,7 +409,10 @@ export default function MatchmakingScreen({ user }) {
                   </TouchableOpacity>
                   <TouchableOpacity 
                     style={[styles.smallBtn, { backgroundColor: '#FEE2E2' }]} 
-                    onPress={() => setSentRequests(sentRequests.filter(r => r.id !== req.id))}
+                    onPress={() => {
+                      const updated = matchmaking.filter(m => m.id !== req.id);
+                      onUpdateMatchmaking(updated);
+                    }}
                   >
                     <Text style={[styles.smallBtnText, { color: '#EF4444' }]}>Cancel</Text>
                   </TouchableOpacity>
@@ -468,9 +455,20 @@ export default function MatchmakingScreen({ user }) {
     </View>
   );
 
-  const filteredOpponents = role === 'academy'
+  const allPlayers = Array.isArray(players) ? players : [];
+  
+  const filteredOpponents = (role === 'academy'
     ? MOCK_ACADEMIES.filter(a => a.id !== user?.id && a.managedSports.some(s => mySports.includes(s)))
-    : MOCK_PLAYERS;
+    : allPlayers.filter(p => p.id !== user?.id && p.role !== 'coach')
+  ).filter(item => {
+    if (!playerSearchQuery) return true;
+    const query = playerSearchQuery.toLowerCase();
+    return (
+      item.name?.toLowerCase().includes(query) || 
+      item.username?.toLowerCase().includes(query) ||
+      item.email?.toLowerCase().includes(query)
+    );
+  });
 
   return (
     <View style={styles.container}>
@@ -490,6 +488,24 @@ export default function MatchmakingScreen({ user }) {
            ))}
         </View>
       </View>
+      
+      {activeTab === 'Challenge' && role !== 'coach' && (
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={20} color="#94A3B8" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search players by name or username..."
+            value={playerSearchQuery}
+            onChangeText={setPlayerSearchQuery}
+            placeholderTextColor="#94A3B8"
+          />
+          {playerSearchQuery !== '' && (
+            <TouchableOpacity onPress={() => setPlayerSearchQuery('')}>
+              <Ionicons name="close-circle" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       {(activeTab === 'Challenge' && role !== 'coach') && (
         <FlatList
@@ -990,6 +1006,23 @@ const styles = StyleSheet.create({
   venueName: { fontSize: 14, fontWeight: '700', color: '#1E293B' },
   venueLoc: { fontSize: 12, color: '#64748B', marginTop: 2 },
   busyLabel: { fontSize: 11, fontWeight: '700', color: '#EF4444', marginTop: 4 },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    marginHorizontal: 15,
+    marginVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 12,
+    height: 50,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  searchIcon: { marginRight: 10 },
+  searchInput: { flex: 1, fontSize: 14, color: '#1E293B', fontWeight: '500' },
   list: { padding: 15 },
   card: { 
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', 

@@ -1,0 +1,99 @@
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
+import config from '../config';
+
+/**
+ * Configure how notifications should be handled when the app is in the foreground.
+ */
+if (Platform.OS !== 'web') {
+  try {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  } catch (e) {
+    console.warn('Notification handler could not be set:', e.message);
+  }
+}
+
+/**
+ * Request permissions and register for push notifications.
+ * Returns the Expo Push Token.
+ */
+export async function registerForPushNotificationsAsync(): Promise<string | null> {
+  let token;
+
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'default',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#FF231F7C',
+    });
+  }
+
+  if (Device.isDevice) {
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== 'granted') {
+      console.log('Failed to get push token for push notification!');
+      return null;
+    }
+
+    // Use the EAS project ID from constants
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId || Constants.easConfig?.projectId;
+    if (!projectId) {
+      console.log('Project ID not found in Constants. Ensure EAS is configured.');
+      return null;
+    }
+
+    try {
+      token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+      console.log('Expo Push Token generated successfully.');
+    } catch (e) {
+      console.warn('Error getting push token. Is the native module missing?', e.message);
+      return null;
+    }
+  } else {
+    console.log('Must use physical device for Push Notifications');
+    return null;
+  }
+
+  return token;
+}
+
+/**
+ * Send the generated push token to the backend to associate it with the current player.
+ */
+export async function sendTokenToBackend(userId: string, token: string) {
+  try {
+    const response = await fetch(`${config.API_BASE_URL}/api/register-push-token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-ace-api-key': config.ACE_API_KEY,
+      },
+      body: JSON.stringify({ userId, pushToken: token }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.log('Failed to register push token on backend:', errorData.message);
+    } else {
+      console.log('Push token successfully registered on backend.');
+    }
+  } catch (error) {
+    console.log('Error sending push token to backend:', error);
+  }
+}

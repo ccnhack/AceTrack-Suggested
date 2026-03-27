@@ -31,6 +31,7 @@ import OnboardingScreen from './screens/OnboardingScreen';
 import LandingScreen from './screens/LandingScreen';
 import SignupScreen from './screens/SignupScreen';
 import { initializeFirebase } from './utils/firebaseAuth';
+import { registerForPushNotificationsAsync, sendTokenToBackend } from './services/notificationService';
 
 if (Platform.OS === 'web') {
   const iconFontStyles = `@font-face {
@@ -57,6 +58,7 @@ export default function App() {
   const [supportTickets, setSupportTickets] = useState(SUPPORT_TICKETS);
   const [matches, setMatches] = useState(MATCHES);
   const [evaluations, setEvaluations] = useState([]);
+  const [matchmaking, setMatchmaking] = useState([]);
   const [seenAdminActionIds, setSeenAdminActionIds] = useState(new Set());
   const [reschedulingFrom, setReschedulingFrom] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
@@ -214,6 +216,18 @@ export default function App() {
           await AsyncStorage.setItem('acetrack_device_id', hardwareId);
         }
         localDeviceIdRef.current = hardwareId;
+
+        // Register for Push Notifications
+        if (Platform.OS !== 'web') {
+          registerForPushNotificationsAsync().then(token => {
+            if (token) {
+              storage.setItem('push_token', token);
+              if (currentUserRef.current) {
+                sendTokenToBackend(currentUserRef.current.id, token);
+              }
+            }
+          });
+        }
         
         // Use "admin" or "samsung" or currentUser.id for label
         const getLabel = () => {
@@ -344,6 +358,7 @@ export default function App() {
       if (ev) setEvaluations(ev);
       if (al) setAuditLogs(al);
       if (cm) setChatbotMessages(cm);
+      if (storage.getItem('matchmaking')) setMatchmaking(await storage.getItem('matchmaking') || []);
       if (ps && Array.isArray(ps)) {
         setPendingSync(ps);
         pendingSyncRef.current = ps;
@@ -567,6 +582,10 @@ export default function App() {
         setChatbotMessages(cloudData.chatbotMessages);
         storage.setItem('chatbotMessages', cloudData.chatbotMessages);
       }
+      if (cloudData.matchmaking) {
+        setMatchmaking(cloudData.matchmaking);
+        storage.setItem('matchmaking', cloudData.matchmaking);
+      }
 
       console.log(`✅ [v${versionAtStart}] loadData completed successfully`);
       return cloudData;
@@ -738,6 +757,12 @@ export default function App() {
     // Use 30s timeout for Render.com cold starts.
     await loadData(true, true);
     console.log('✅ Login sync complete.');
+
+    // Register Push Token if available
+    const pushToken = await storage.getItem('push_token');
+    if (pushToken && user?.id) {
+      sendTokenToBackend(user.id, pushToken);
+    }
 
     // STEP 3: Check for verification status
     // This is now handled by a useEffect hook to ensure it triggers consistently
@@ -1836,6 +1861,10 @@ export default function App() {
       };
       setChatbotMessages(updated);
       syncAndSaveData({ chatbotMessages: updated });
+    },
+    onUpdateMatchmaking: (newMatchmaking) => {
+      setMatchmaking(newMatchmaking);
+      syncAndSaveData({ matchmaking: newMatchmaking });
     },
     onUploadLogs: async () => {
       const activeUser = currentUserRef.current || currentUser; // Fallback to state

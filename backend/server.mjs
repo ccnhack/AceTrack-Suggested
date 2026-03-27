@@ -15,6 +15,8 @@ import bcrypt from 'bcryptjs';
 import mongoSanitize from 'express-mongo-sanitize';
 import helmet from 'helmet';
 import admin from 'firebase-admin';
+import { sendPushNotification } from './notifications.js';
+import './reminders.mjs'; // Initialize cron jobs
 
 dotenv.config();
 
@@ -541,6 +543,88 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
       {}, { $set: updateObj }, { upsert: true, new: true }
     );
 
+    // 🔔 Trigger Notifications based on changes
+    try {
+      const newData = updatedState.data;
+      const oldData = currentData;
+
+      // 1. Support Ticket Reply Trigger
+      if (req.body.supportTickets) {
+        req.body.supportTickets.forEach(incomingTicket => {
+          const oldTicket = (oldData.supportTickets || []).find(t => t.id === incomingTicket.id);
+          if (oldTicket && incomingTicket.messages?.length > oldTicket.messages?.length) {
+            const lastMsg = incomingTicket.messages[incomingTicket.messages.length - 1];
+            if (lastMsg.role === 'admin') {
+              const player = (newData.players || []).find(p => p.id === incomingTicket.userId);
+              if (player && player.pushToken) {
+                sendPushNotification([player.pushToken], 'Support Update 💬', 'You have a new reply to your support ticket.');
+              }
+            }
+          }
+        });
+      }
+
+      // 2. Recording Available Trigger
+      if (req.body.matchVideos) {
+        const newVideos = req.body.matchVideos.filter(v => !(oldData.matchVideos || []).find(ov => ov.id === v.id));
+        newVideos.forEach(v => {
+          const participants = (newData.players || []).filter(p => (p.id === v.player1Id || p.id === v.player2Id) && p.pushToken);
+          if (participants.length > 0) {
+            sendPushNotification(participants.map(p => p.pushToken), 'New Recording! 🎾', 'A video recording of your match is now available.');
+          }
+        });
+      }
+
+      // 3. Payment Confirmation Trigger
+      if (req.body.tournaments) {
+        req.body.tournaments.forEach(t => {
+          const oldT = (oldData.tournaments || []).find(ot => ot.id === t.id);
+          const newPlayers = (t.registeredPlayerIds || []).filter(id => !(oldT?.registeredPlayerIds || []).includes(id));
+          newPlayers.forEach(pid => {
+            const player = (newData.players || []).find(p => p.id === pid);
+            if (player && player.pushToken) {
+              sendPushNotification([player.pushToken], 'Registration Confirmed! ✅', `Your entry for ${t.title} has been finalized.`);
+            }
+          });
+        });
+      }
+
+      // 4. Matchmaking Triggers (Challenge, Counter, Acceptance)
+      if (req.body.matchmaking) {
+        req.body.matchmaking.forEach(challenge => {
+          const oldChallenge = (oldData.matchmaking || []).find(c => c.id === challenge.id);
+          
+          // Trigger: Challenge Received
+          if (!oldChallenge && challenge.status === 'Pending') {
+            const receiver = (newData.players || []).find(p => p.id === challenge.receiverId);
+            if (receiver && receiver.pushToken) {
+              sendPushNotification([receiver.pushToken], 'New Challenge! 🎾', `${challenge.senderName} has challenged you to a match.`);
+            }
+          }
+          
+          // Trigger: Counter Offer Received
+          if (oldChallenge && challenge.status === 'Countered' && challenge.lastUpdatedBy !== oldChallenge.lastUpdatedBy) {
+            const receiverId = challenge.lastUpdatedBy === challenge.senderId ? challenge.receiverId : challenge.senderId;
+            const receiver = (newData.players || []).find(p => p.id === receiverId);
+            if (receiver && receiver.pushToken) {
+              sendPushNotification([receiver.pushToken], 'Counter Offer Received 🔄', `${challenge.lastUpdatedByName} has suggested a new slot.`);
+            }
+          }
+
+          // Trigger: Challenge Accepted
+          if (oldChallenge && challenge.status === 'Accepted' && oldChallenge.status !== 'Accepted') {
+            const receiverId = challenge.lastUpdatedBy === challenge.senderId ? challenge.receiverId : challenge.senderId;
+            const receiver = (newData.players || []).find(p => p.id === receiverId);
+            if (receiver && receiver.pushToken) {
+              sendPushNotification([receiver.pushToken], 'Challenge Accepted! ✅', `${challenge.lastUpdatedByName} has accepted the match!`);
+            }
+          }
+        });
+      }
+    } catch (notifErr) {
+      console.warn('⚠️ Push notification trigger error:', notifErr.message);
+    }
+
     io.emit('data_updated', { lastUpdated: updatedState.lastUpdated, keys: Object.keys(req.body) });
     logServerEvent('DATA_SAVE_SUCCESS', { lastUpdated: updatedState.lastUpdated });
     res.json({ success: true, lastUpdated: updatedState.lastUpdated });
@@ -587,6 +671,46 @@ router.post('/upload', apiKeyGuard, upload.single('video'), async (req, res) => 
     stream.end(req.file.buffer);
   } catch (error) {
     console.error('Upload Process Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * 📲 POST /api/register-push-token
+ * Registers an Expo Push Token for a specific user.
+ */
+router.post('/register-push-token', apiKeyGuard, async (req, res) => {
+  try {
+    const { userId, pushToken } = req.body;
+    if (!userId || !pushToken) {
+      return res.status(400).json({ error: 'Missing userId or pushToken' });
+    }
+
+    const state = await AppState.findOne().sort({ lastUpdated: -1 });
+    if (!state || !state.data || !state.data.players) {
+      return res.status(404).json({ error: 'No players found to update' });
+    }
+
+    const players = [...state.data.players];
+    const playerIndex = players.findIndex(p => p.id === userId);
+
+    if (playerIndex === -1) {
+      return res.status(404).json({ error: 'User not found in system' });
+    }
+
+    // Update the player with the new token
+    players[playerIndex] = { ...players[playerIndex], pushToken };
+    
+    await AppState.findOneAndUpdate(
+      {}, 
+      { $set: { 'data.players': players, lastUpdated: Date.now() } },
+      { upsert: true }
+    );
+
+    console.log(`📲 Token registered for user ${userId}`);
+    res.json({ success: true, message: 'Push token registered successfully' });
+  } catch (error) {
+    console.error('Push Token Registration Error:', error);
     res.status(500).json({ error: error.message });
   }
 });

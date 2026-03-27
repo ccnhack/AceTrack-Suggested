@@ -41,7 +41,8 @@ const MainTabs = ({
   onSaveCoachComment, onRegister, onReschedule, onCancelReschedule,
   onOptOut, onLogFailedOtp, onLogTrace, setPlayers, onToggleFavourite,
   onManualSync, isCloudOnline, lastSyncTime, onBatchUpdate, onUploadLogs, isUploadingLogs,
-  onVerifyAccount, isUsingCloud, onToggleCloud, setIsProfileEditActive, socketRef
+  onVerifyAccount, isUsingCloud, onToggleCloud, setIsProfileEditActive, socketRef,
+  matchmaking, onUpdateMatchmaking
 }) => {
   const params = { 
     user, role, players, tournaments, matchVideos, matches, supportTickets, evaluations, 
@@ -58,7 +59,8 @@ const MainTabs = ({
     onOptOut, onLogFailedOtp, onLogTrace, setPlayers, onToggleFavourite,
     onManualSync, isCloudOnline, lastSyncTime, onBatchUpdate, onUploadLogs, isUploadingLogs,
     onVerifyAccount, isUsingCloud, onToggleCloud, setIsProfileEditActive,
-    visitedAdminSubTabs, setVisitedAdminSubTabs, appVersion, socketRef
+    visitedAdminSubTabs, setVisitedAdminSubTabs, appVersion, socketRef,
+    matchmaking, onUpdateMatchmaking
   };
   
   const typeProps = { Sport, SkillLevel, TournamentStructure, TournamentFormat };
@@ -192,7 +194,8 @@ const MainTabs = ({
 export default function AppNavigator({ 
   user, role, players, tournaments, matchVideos, matches, tickets, evaluations, 
   seenAdminActionIds, visitedAdminSubTabs, setVisitedAdminSubTabs, 
-  reschedulingFrom, auditLogs, onLogout, handlers, appVersion, socketRef 
+  reschedulingFrom, auditLogs, onLogout, handlers, appVersion, socketRef,
+  matchmaking, onUpdateMatchmaking
 }) {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -255,6 +258,8 @@ export default function AppNavigator({
               onLogout={onLogout}
               appVersion={appVersion}
               socketRef={socketRef}
+              matchmaking={matchmaking}
+              onUpdateMatchmaking={onUpdateMatchmaking}
               {...handlers}
             />
           )}
