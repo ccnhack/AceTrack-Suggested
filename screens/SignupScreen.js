@@ -13,12 +13,12 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, Sport, isUsingCloud, o
   
   React.useEffect(() => {
     // DIAGNOSTIC LOGGING
-    console.log("📱 [DIAGNOSTIC] SignupScreen Dimensions:", {
+    console.log(`📱 [DIAGNOSTIC] SignupScreen Dimensions: ${JSON.stringify({
       window: { width: Dimensions.get('window').width, height: Dimensions.get('window').height },
       screen: { width: Dimensions.get('screen').width, height: Dimensions.get('screen').height },
       platform: Platform.OS,
-      isShortScreen: Dimensions.get('window').height < 700
-    });
+      isShortScreen: Dimensions.get('window').height < 750
+    })}`);
   }, []);
 
   const isShortScreen = height < 700;

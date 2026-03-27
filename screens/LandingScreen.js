@@ -11,7 +11,7 @@ const LandingScreen = ({ onLogin = () => {}, onJoinCircle = () => {} }) => {
   
   useEffect(() => {
     // DIAGNOSTIC LOGGING - To help find the ratio issue
-    console.log("📱 [DIAGNOSTIC] LandingScreen Dimensions:", {
+    console.log(`📱 [DIAGNOSTIC] LandingScreen Dimensions: ${JSON.stringify({
       window: { width, height },
       screen: { 
         width: Dimensions.get('screen').width, 
@@ -21,8 +21,10 @@ const LandingScreen = ({ onLogin = () => {}, onJoinCircle = () => {} }) => {
       platform: Platform.OS,
       isTallScreen: height > 800,
       isShortScreen: height < 700
-    });
+    })}`);
   }, []);
+
+  const isShortScreen = height < 750; // Increased threshold for better coverage
 
   return (
     <SafeAreaView style={styles.container}>
@@ -95,7 +97,7 @@ const styles = StyleSheet.create({
   },
   logoOverlay: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 60 : 40,
+    top: Platform.OS === 'ios' ? 60 : (height < 750 ? 25 : 40),
     left: 24,
     zIndex: 100,
   },
@@ -129,10 +131,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 60,
+    paddingBottom: Platform.OS === 'ios' ? 40 : (height < 750 ? 25 : 60),
   },
   buttonContainer: {
-    gap: 12,
+    gap: height < 750 ? 8 : 12,
   },
   primaryButton: {
     backgroundColor: '#D12621',
