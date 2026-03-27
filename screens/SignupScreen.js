@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, TextInput, 
-  StyleSheet, SafeAreaView, Dimensions, Alert, Image, Modal
+  StyleSheet, SafeAreaView, Dimensions, Alert, Image, Modal, Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
