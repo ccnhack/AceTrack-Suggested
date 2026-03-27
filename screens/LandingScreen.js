@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
   },
   fullImage: {
     position: 'absolute',
-    bottom: height < 750 ? 30 : 0, // Shift image UP to clear icons from buttons
+    bottom: height < 750 ? 30 : 20, // Universal shift UP to clear icons from buttons
     left: 0,
     width: '100%',
     height: '100%',
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : (height < 750 ? 10 : 60),
+    paddingBottom: Platform.OS === 'ios' ? 40 : (height < 750 ? 10 : 25),
   },
   buttonContainer: {
     gap: height < 750 ? 6 : 12,
