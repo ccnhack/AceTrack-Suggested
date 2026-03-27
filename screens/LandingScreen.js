@@ -30,12 +30,23 @@ const LandingScreen = ({ onLogin = () => {}, onJoinCircle = () => {} }) => {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={styles.fullscreenContainer}>
-        {/* Full Composite Image Section */}
         <Image 
-          source={require('../assets/landing_full.png')}
+          source={require('../assets/ChatGPT.png')}
           style={styles.fullImage}
           resizeMode="cover"
         />
+        
+        {/* Live Text Overlay - HD and Responsive */}
+        <View style={styles.textOverlay}>
+          <Text style={styles.headingText}>
+            STAY AHEAD. ACHIEVE EXCELLENCE.{"\n"}
+            UPCOMING MATCHES &{"\n"}
+            GLOBAL TOURNAMENTS
+          </Text>
+          <Text style={styles.subHeadingText}>
+            The ultimate platform for ambitious athletes. Track results, discover multi-sport events, and compete on international leaderboards.
+          </Text>
+        </View>
         
         {/* Logo Overlay */}
         <SafeAreaView style={styles.logoOverlay}>
@@ -163,6 +174,29 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
+  },
+  textOverlay: {
+    position: 'absolute',
+    left: 24,
+    right: 24,
+    // Using TOP anchor to ensure text stays in the dark zone between athletes and icons
+    top: height < 750 ? (height * 0.38) : (height * 0.45), 
+    zIndex: 10,
+  },
+  headingText: {
+    color: '#FFFFFF',
+    fontSize: height < 750 ? 24 : 32,
+    fontWeight: '900',
+    lineHeight: height < 750 ? 30 : 38,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  subHeadingText: {
+    color: '#FFFFFF',
+    fontSize: height < 750 ? 13 : 15,
+    fontWeight: '400',
+    lineHeight: 20,
+    opacity: 0.9,
   },
 });
 
