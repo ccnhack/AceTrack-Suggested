@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, Image, 
   StyleSheet, SafeAreaView, Dimensions, FlatList, Modal, Alert, ActivityIndicator, TextInput 
@@ -76,7 +76,9 @@ const ExploreScreen = (props) => {
     try {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        logger.addLog('Location permission denied', 'warn', 'console');
+        if (logger?.addLog) {
+          logger.addLog('Location permission denied', 'warn', 'console');
+        }
         Alert.alert('Permission Denied', 'Please enable location services in your settings to find nearby tournaments.');
         setIsFetchingLoc(false);
         return;
@@ -89,7 +91,9 @@ const ExploreScreen = (props) => {
       setUserLocation(location.coords);
       setSelectedHub('Current Location');
       setCityFilter('All'); // Priority: proximity mode
-      logger.addLog(`Location fetched: ${location.coords.latitude}, ${location.coords.longitude}`, 'info', 'console');
+      if (logger?.addLog) {
+        logger.addLog(`Location fetched: ${location.coords.latitude}, ${location.coords.longitude}`, 'info', 'console');
+      }
 
       // Find identifying name for the header
       let closestCity = 'All';
@@ -113,10 +117,12 @@ const ExploreScreen = (props) => {
         setSelectedHub(`Current Location (${closestCity})`);
       }
 
-      logger.logAction('LOCATION_DETECT_SUCCESS', { 
-        coords: location.coords,
-        selectedHub: closestCity !== 'All' ? `Current Location (${closestCity})` : 'Current Location'
-      });
+      if (logger?.logAction) {
+        logger.logAction('LOCATION_DETECT_SUCCESS', { 
+          coords: location.coords,
+          selectedHub: closestCity !== 'All' ? `Current Location (${closestCity})` : 'Current Location'
+        });
+      }
       setIsFetchingLoc(false);
     } catch (e) {
       Alert.alert('Error', 'Could not detect location.');
@@ -162,14 +168,15 @@ const ExploreScreen = (props) => {
             if (closestCity !== 'All') {
               setCityFilter(closestCity);
               setSelectedHub(closestCity);
-              logger.logAction('LOCATION_AUTO_SELECT', { closestCity, minDistance });
+              if (logger?.logAction) {
+                logger.logAction('LOCATION_AUTO_SELECT', { closestCity, minDistance });
+              }
               console.log(`📍 Auto-selected hub: ${closestCity} (${minDistance}km away)`);
             }
           }
         }
       } catch (err) {
         console.warn('Location module error:', err.message);
-        // Fallback or silent failure to prevent app crash
       }
     })();
   }, []);
@@ -203,97 +210,105 @@ const ExploreScreen = (props) => {
   const currentUser = userId ? players.find(p => p.id === userId) : null;
   const isBeginnerProtected = currentUser?.isBeginnerProtected || false;
 
-  const processedTournaments = tournaments
-    .filter(t => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+  const processedTournaments = useMemo(() => {
+    return tournaments
+      .filter(t => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-      const tournamentDate = parseDate(t.date);
-      if (!tournamentDate) return false;
+        const tournamentDate = parseDate(t.date);
+        if (!tournamentDate) return false;
 
-      const regDeadline = parseDate(t.registrationDeadline);
-      if (regDeadline) regDeadline.setHours(23, 59, 59, 999);
-      
-      const isDeadlinePassed = regDeadline && (regDeadline.getTime() < today.getTime());
-      const deadlineOpen = !regDeadline || !isDeadlinePassed || userRole?.toLowerCase() === 'admin' || t.status === 'ongoing';
-      
-      const statusOpen = (t.status === 'upcoming' || t.status === 'ongoing') && t.status !== 'completed';
-      const isPast = isTournamentPast(t);
-      const isOpen = statusOpen && deadlineOpen && (!isPast || t.status === 'ongoing');
+        const regDeadline = parseDate(t.registrationDeadline);
+        if (regDeadline) regDeadline.setHours(23, 59, 59, 999);
+        
+        const isDeadlinePassed = regDeadline && (regDeadline.getTime() < today.getTime());
+        const deadlineOpen = !regDeadline || !isDeadlinePassed || userRole?.toLowerCase() === 'admin' || t.status === 'ongoing';
+        
+        const statusOpen = (t.status === 'upcoming' || t.status === 'ongoing') && t.status !== 'completed';
+        const isPast = isTournamentPast(t);
+        const isOpen = statusOpen && deadlineOpen && (!isPast || t.status === 'ongoing');
 
-      if (!isOpen) return false;
+        if (!isOpen) return false;
 
-      // Admin bypasses all other filters (City, Gender, Skill Level, Sport)
-      if (userRole?.toLowerCase() === 'admin') return true;
+        // Admin bypasses all other filters (City, Gender, Skill Level, Sport)
+        if (userRole?.toLowerCase() === 'admin') return true;
 
-      // Role-specific filters
-      if (userRole === 'coach' && userSports && !userSports.includes(t.sport)) return false;
-      if (reschedulingFrom && t.id === reschedulingFrom) return false;
-      
-      // Location Filtering
-      if (selectedHub === 'Current Location') {
-        // In Current Location mode, we show everything but sorted by distance
-        // You could add a distance threshold here if desired:
-        // const distance = userLocation && t.lat && t.lng ? calculateDistance(userLocation.latitude, userLocation.longitude, t.lat, t.lng) : null;
-        // if (distance && parseFloat(distance) > 50) return false;
-      } else if (cityFilter !== 'All') {
-        const inLocation = t.location?.toLowerCase().includes(cityFilter.toLowerCase());
-        const inCity = t.city?.toLowerCase().includes(cityFilter.toLowerCase());
-        if (!inLocation && !inCity) return false;
-      }
+        // Role-specific filters
+        if (userRole === 'coach' && userSports && !userSports.includes(t.sport)) return false;
+        if (reschedulingFrom && t.id === reschedulingFrom) return false;
+        
+        // Location Filtering
+        if (selectedHub === 'Current Location') {
+          // In Current Location mode, we show everything but sorted by distance
+        } else if (cityFilter !== 'All') {
+          const inLocation = t.location?.toLowerCase().includes(cityFilter.toLowerCase());
+          const inCity = t.city?.toLowerCase().includes(cityFilter.toLowerCase());
+          if (!inLocation && !inCity) return false;
+        }
 
-      // Gender-based filtering for Individual/Player users ONLY
-      if (userRole === 'user') {
-        const format = t.format || "";
-        const gender = user?.gender; 
-        if (format.includes("Men's") && gender && gender !== 'Male') return false;
-        if (format.includes("Women's") && gender && gender !== 'Female') return false;
-      }
+        // Gender-based filtering for Individual/Player users ONLY
+        if (userRole === 'user') {
+          const format = t.format || "";
+          const gender = user?.gender; 
+          if (format.includes("Men's") && gender && gender !== 'Male') return false;
+          if (format.includes("Women's") && gender && gender !== 'Female') return false;
+        }
 
-      // Sport Filter
-      if (sportFilter !== 'All' && t.sport !== sportFilter) return false;
+        // Sport Filter
+        if (sportFilter !== 'All' && t.sport !== sportFilter) return false;
 
-      return true;
-    })
-    .map(t => {
-      const distance = userLocation && t.lat && t.lng ? calculateDistance(userLocation.latitude, userLocation.longitude, t.lat, t.lng) : null;
-      return { ...t, distance: distance ? parseFloat(distance) : 99999 };
-    });
+        return true;
+      })
+      .map(t => {
+        const distance = userLocation && t.lat && t.lng ? calculateDistance(userLocation.latitude, userLocation.longitude, t.lat, t.lng) : null;
+        return { ...t, distance: distance ? parseFloat(distance) : 99999 };
+      });
+  }, [tournaments, userRole, userSports, reschedulingFrom, selectedHub, cityFilter, user, sportFilter, userLocation]);
+
   const filteredTournaments = processedTournaments;
 
   // Admin Trace: Log filter results for troubleshooting via useEffect to avoid re-render loops
   React.useEffect(() => {
     if (userRole?.toLowerCase() === 'admin' && tournaments?.length > 0) {
-      logger.addLog(`🔍 [Explore] Role: ${userRole}, Hub: ${cityFilter}, Matches: ${filteredTournaments.length} / Total: ${tournaments.length}`, 'info', 'console');
-      if (filteredTournaments.length === 0) {
-        const sample = tournaments[0];
-        logger.addLog(`⚠️ Explore filter trace (T1): ID=${sample.id}, Status=${sample.status}, Date=${sample.date}, Started=${sample.tournamentStarted}`, 'warn', 'console');
+      if (logger?.addLog) {
+        logger.addLog(`🔍 [Explore] Role: ${userRole}, Hub: ${cityFilter}, Matches: ${filteredTournaments.length} / Total: ${tournaments.length}`, 'info', 'console');
+        if (filteredTournaments.length === 0) {
+          const sample = tournaments[0];
+          logger.addLog(`⚠️ Explore filter trace (T1): ID=${sample.id}, Status=${sample.status}, Date=${sample.date}, Started=${sample.tournamentStarted}`, 'warn', 'console');
+        }
       }
     }
-  }, [tournaments, filteredTournaments.length, userRole, cityFilter]);
+  }, [userRole, cityFilter, filteredTournaments.length]); // Optimized dependencies
 
-  const displayTournaments = (isBeginnerProtected && userRole !== 'admin') 
-    ? filteredTournaments.filter(t => t.skillLevel === 'Beginner')
-    : filteredTournaments;
+  const displayTournaments = useMemo(() => {
+    return (isBeginnerProtected && userRole !== 'admin') 
+      ? filteredTournaments.filter(t => t.skillLevel === 'Beginner')
+      : filteredTournaments;
+  }, [filteredTournaments, isBeginnerProtected, userRole]);
 
-  const sortedTournaments = [...displayTournaments].sort((a, b) => {
-    // Priority sort by distance if user location is available
-    if (userLocation && a.distance !== b.distance) {
-      return a.distance - b.distance;
-    }
-    // Fallback: stay consistent with distance but add secondary sorting (e.g. date)
-    const dateA = parseDate(a.date)?.getTime() || 0;
-    const dateB = parseDate(b.date)?.getTime() || 0;
-    return dateA - dateB;
-  });
+  const sortedTournaments = useMemo(() => {
+    return [...displayTournaments].sort((a, b) => {
+      // Priority sort by distance if user location is available
+      if (userLocation && a.distance !== b.distance) {
+        return a.distance - b.distance;
+      }
+      // Fallback: stay consistent with distance but add secondary sorting (e.g. date)
+      const dateA = parseDate(a.date)?.getTime() || 0;
+      const dateB = parseDate(b.date)?.getTime() || 0;
+      return dateA - dateB;
+    });
+  }, [displayTournaments, userLocation]);
 
-  const recommendedTournaments = sortedTournaments
-    .filter(t => {
-        if (userRole === 'user' && currentUser?.trueSkillRating) {
-           if (t.skillRange) return currentUser.trueSkillRating >= t.skillRange.min && currentUser.trueSkillRating <= t.skillRange.max;
-        }
-        return false;
-    }).slice(0, 2);
+  const recommendedTournaments = useMemo(() => {
+    return sortedTournaments
+      .filter(t => {
+          if (userRole === 'user' && currentUser?.trueSkillRating) {
+             if (t.skillRange) return currentUser.trueSkillRating >= t.skillRange.min && currentUser.trueSkillRating <= t.skillRange.max;
+          }
+          return false;
+      }).slice(0, 2);
+  }, [sortedTournaments, userRole, currentUser]);
 
   const renderTournamentCard = ({ item: t, isRec = false }) => {
     const isRegistered = userId && t.registeredPlayerIds?.some(id => String(id).toLowerCase() === String(userId).toLowerCase());
