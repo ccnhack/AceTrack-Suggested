@@ -8,7 +8,7 @@ import * as Location from 'expo-location';
 import logger from '../utils/logger';
 import TournamentDetailModal from '../components/TournamentDetailModal';
 import designSystem from '../theme/designSystem';
-import { isTournamentPast } from '../utils/tournamentUtils';
+import { isTournamentPast, getVisibleTournaments } from '../utils/tournamentUtils';
 
 const { width } = Dimensions.get('window');
 
@@ -211,60 +211,22 @@ const ExploreScreen = (props) => {
   const isBeginnerProtected = currentUser?.isBeginnerProtected || false;
 
   const processedTournaments = useMemo(() => {
-    return tournaments
-      .filter(t => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+    const visible = getVisibleTournaments({
+      tournaments,
+      userRole,
+      userGender: user?.gender,
+      userSports,
+      isBeginnerProtected,
+      cityFilter,
+      sportFilter,
+      reschedulingFrom,
+    });
 
-        const tournamentDate = parseDate(t.date);
-        if (!tournamentDate) return false;
-
-        const regDeadline = parseDate(t.registrationDeadline);
-        if (regDeadline) regDeadline.setHours(23, 59, 59, 999);
-        
-        const isDeadlinePassed = regDeadline && (regDeadline.getTime() < today.getTime());
-        const deadlineOpen = !regDeadline || !isDeadlinePassed || userRole?.toLowerCase() === 'admin' || t.status === 'ongoing';
-        
-        const statusOpen = (t.status === 'upcoming' || t.status === 'ongoing') && t.status !== 'completed';
-        const isPast = isTournamentPast(t);
-        const isOpen = statusOpen && deadlineOpen && (!isPast || t.status === 'ongoing');
-
-        if (!isOpen) return false;
-
-        // Admin bypasses all other filters (City, Gender, Skill Level, Sport)
-        if (userRole?.toLowerCase() === 'admin') return true;
-
-        // Role-specific filters
-        if (userRole === 'coach' && userSports && !userSports.includes(t.sport)) return false;
-        if (reschedulingFrom && t.id === reschedulingFrom) return false;
-        
-        // Location Filtering
-        if (selectedHub === 'Current Location') {
-          // In Current Location mode, we show everything but sorted by distance
-        } else if (cityFilter !== 'All') {
-          const inLocation = t.location?.toLowerCase().includes(cityFilter.toLowerCase());
-          const inCity = t.city?.toLowerCase().includes(cityFilter.toLowerCase());
-          if (!inLocation && !inCity) return false;
-        }
-
-        // Gender-based filtering for Individual/Player users ONLY
-        if (userRole === 'user') {
-          const format = t.format || "";
-          const gender = user?.gender; 
-          if (format.includes("Men's") && gender && gender !== 'Male') return false;
-          if (format.includes("Women's") && gender && gender !== 'Female') return false;
-        }
-
-        // Sport Filter
-        if (sportFilter !== 'All' && t.sport !== sportFilter) return false;
-
-        return true;
-      })
-      .map(t => {
-        const distance = userLocation && t.lat && t.lng ? calculateDistance(userLocation.latitude, userLocation.longitude, t.lat, t.lng) : null;
-        return { ...t, distance: distance ? parseFloat(distance) : 99999 };
-      });
-  }, [tournaments, userRole, userSports, reschedulingFrom, selectedHub, cityFilter, user, sportFilter, userLocation]);
+    return visible.map(t => {
+      const distance = userLocation && t.lat && t.lng ? calculateDistance(userLocation.latitude, userLocation.longitude, t.lat, t.lng) : null;
+      return { ...t, distance: distance ? parseFloat(distance) : 99999 };
+    });
+  }, [tournaments, userRole, userSports, reschedulingFrom, cityFilter, user, sportFilter, userLocation, isBeginnerProtected]);
 
   const filteredTournaments = processedTournaments;
 
@@ -659,16 +621,47 @@ const ExploreScreen = (props) => {
                 </React.Fragment>
               ))
             ) : (
-              <View style={styles.empty}>
-                {isSyncing ? (
-                  <ActivityIndicator size="large" color="#3B82F6" />
-                ) : (
-                  <>
-                    <Ionicons name="alert-circle-outline" size={48} color="#94A3B8" />
-                    <Text style={styles.emptyText}>No active arenas found</Text>
-                  </>
-                )}
-              </View>
+                  <View style={styles.emptyContainer}>
+                    <View style={styles.emptyIconCircle}>
+                      <Ionicons name="search" size={40} color="#EF4444" />
+                    </View>
+                    <Text style={styles.emptySubtext}>
+                      We couldn't find any active tournaments matching your current filters.
+                    </Text>
+                    
+                    
+                    <View style={styles.emptyFilterFeedback}>
+                      {cityFilter !== 'All' && (
+                        <View style={styles.filterFeedbackChip}>
+                          <Ionicons name="location-outline" size={12} color="#64748B" />
+                          <Text style={styles.filterFeedbackText}>City: {cityFilter}</Text>
+                        </View>
+                      )}
+                      {sportFilter !== 'All' && (
+                        <View style={styles.filterFeedbackChip}>
+                          <Ionicons name="trophy-outline" size={12} color="#64748B" />
+                          <Text style={styles.filterFeedbackText}>Sport: {sportFilter}</Text>
+                        </View>
+                      )}
+                      {isBeginnerProtected && (
+                        <View style={[styles.filterFeedbackChip, { backgroundColor: '#EFF6FF' }]}>
+                          <Ionicons name="shield-checkmark" size={12} color="#3B82F6" />
+                          <Text style={[styles.filterFeedbackText, { color: '#3B82F6' }]}>Beginner Protection Active</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <TouchableOpacity 
+                      style={styles.resetButton}
+                      onPress={() => {
+                        setCityFilter('All');
+                        setSportFilter('All');
+                        setSelectedHub('All');
+                      }}
+                    >
+                      <Text style={styles.resetButtonText}>Clear All Filters</Text>
+                    </TouchableOpacity>
+                  </View>
             )}
           </View>
         </View>
@@ -1096,18 +1089,85 @@ const styles = StyleSheet.create({
     color: '#B91C1C',
     textTransform: 'uppercase',
   },
-  empty: {
+  emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 64,
+    paddingVertical: 60,
+    paddingHorizontal: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 32,
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  emptyText: {
-    marginTop: 16,
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(239, 68, 68, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0F172A',
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 20,
+    marginBottom: 24,
+  },
+  emptyFilterFeedback: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 32,
+  },
+  filterFeedbackChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
+  },
+  filterFeedbackText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+    textTransform: 'uppercase',
+  },
+  resetButton: {
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  resetButtonText: {
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '900',
-    color: '#94A3B8',
     textTransform: 'uppercase',
-    letterSpacing: 2,
+    letterSpacing: 1,
   },
   modalOverlay: {
     flex: 1,

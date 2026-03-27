@@ -1162,6 +1162,15 @@ const ProfileScreen = ({
             onUpdateUser({ ...user, notifications: updated });
             setShowNotifications(false);
             
+            // LOG: Logging in-app notification click
+            logger.logAction('IN_APP_NOTIFICATION_CLICKED', {
+                id: notif.id,
+                type: notif.type,
+                title: notif.title,
+                timestamp: new Date().toISOString()
+            });
+
+            
             // Navigate based on type
             if (notif.type === 'video') {
                 navigation.navigate('Recordings');
@@ -1169,6 +1178,10 @@ const ProfileScreen = ({
                 setShowSupport(true);
             } else if (notif.type === 'tournament' || notif.type === 'tournament_invite') {
                 navigation.navigate('Matches');
+            } else if (notif.type === 'challenge') {
+                navigation.navigate('Matchmaking');
+            } else if (notif.type === 'booking') {
+                navigation.navigate('CoachDiscovery');
             } else if (notif.type === 'general') {
                 // If it's a general invite without specific type
                 if (notif.title === 'Tournament Invitation') navigation.navigate('Matches');
@@ -1185,49 +1198,56 @@ const ProfileScreen = ({
                                 <Ionicons name="close" size={28} color="#333" />
                             </TouchableOpacity>
                         </View>
-                        <Calendar 
-                          onMonthChange={(month) => setCurrentMonth(month.dateString.substring(0, 7))}
-                          theme={{
-                            todayTextColor: designSystem.colors.primary,
-                            arrowColor: designSystem.colors.primary,
-                            dotColor: designSystem.colors.primary,
-                            selectedDayBackgroundColor: designSystem.colors.primary,
-                          }}
-                          markedDates={markedDates}
-                        />
-                        <View style={styles.eventsSection}>
-                          <Text style={styles.calendarSectionTitle}>Upcoming Events</Text>
-                          <FlatList
-                            data={filteredEvents}
-                            keyExtractor={item => item.id}
-                            renderItem={({ item }) => {
-                              const eventDate = new Date(item.date);
-                              const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-                              return (
-                                <View style={styles.eventCard}>
-                                  <View style={styles.dateBox}>
-                                    <Text style={styles.dateDay}>{item.date.split('-')[2]}</Text>
-                                    <Text style={styles.dateMonth}>{monthNames[eventDate.getMonth()]}</Text>
-                                  </View>
-                                  <View style={styles.eventInfo}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                        <Text style={styles.eventTitle}>{item.title}</Text>
-                                        {item.type === 'booking' && (
-                                            <View style={{ backgroundColor: '#F0FDF4', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#BBF7D0' }}>
-                                                <Text style={{ fontSize: 8, fontWeight: '900', color: '#16A34A' }}>CONFIRMED BOOKING</Text>
-                                            </View>
-                                        )}
+                        
+                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+                            <Calendar 
+                              onMonthChange={(month) => setCurrentMonth(month.dateString.substring(0, 7))}
+                              theme={{
+                                todayTextColor: designSystem.colors.primary,
+                                arrowColor: designSystem.colors.primary,
+                                dotColor: designSystem.colors.primary,
+                                selectedDayBackgroundColor: designSystem.colors.primary,
+                              }}
+                              markedDates={markedDates}
+                            />
+                            
+                            <View style={styles.eventsSection}>
+                              <Text style={styles.calendarSectionTitle}>Upcoming Events</Text>
+                              {filteredEvents && filteredEvents.length > 0 ? (
+                                filteredEvents.map(item => {
+                                  const eventDate = new Date(item.date);
+                                  const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+                                  return (
+                                    <View key={item.id} style={styles.eventCard}>
+                                      <View style={styles.dateBox}>
+                                        <Text style={styles.dateDay}>{item.date.split('-')[2]}</Text>
+                                        <Text style={styles.dateMonth}>{monthNames[eventDate.getMonth()]}</Text>
+                                      </View>
+                                      <View style={styles.eventInfo}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <Text style={styles.eventTitle}>{item.title}</Text>
+                                            {item.type === 'booking' && (
+                                                <View style={{ backgroundColor: '#F0FDF4', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#BBF7D0' }}>
+                                                    <Text style={{ fontSize: 8, fontWeight: '900', color: '#16A34A' }}>CONFIRMED BOOKING</Text>
+                                                </View>
+                                            )}
+                                        </View>
+                                        <Text style={styles.eventSport}>{item.sport}</Text>
+                                      </View>
                                     </View>
-                                    <Text style={styles.eventSport}>{item.sport}</Text>
-                                  </View>
+                                  );
+                                })
+                              ) : (
+                                <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                                  <Text style={{ color: '#94A3B8', fontSize: 13, fontWeight: '600' }}>No events for this month</Text>
                                 </View>
-                              );
-                            }}
-                          />
-                        </View>
-                        <TouchableOpacity style={styles.calendarCloseBtnLarge} onPress={() => setIsCalendarModalVisible(false)}>
-                            <Text style={styles.calendarCloseBtnText}>Close</Text>
-                        </TouchableOpacity>
+                              )}
+                            </View>
+
+                            <TouchableOpacity style={styles.calendarCloseBtnLarge} onPress={() => setIsCalendarModalVisible(false)}>
+                                <Text style={styles.calendarCloseBtnText}>Close</Text>
+                            </TouchableOpacity>
+                        </ScrollView>
                     </View>
                 </View>
             </Modal>
@@ -1619,14 +1639,15 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     padding: 24,
-    height: '80%',
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    maxHeight: '90%',
     width: '100%',
     position: 'absolute',
     bottom: 0,
   },
   eventsSection: {
     marginTop: 25,
-    flex: 1,
+    marginBottom: 10,
   },
   eventCard: {
     flexDirection: 'row',

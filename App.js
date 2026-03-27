@@ -227,6 +227,32 @@ export default function App() {
               }
             }
           });
+
+          // PUSH NOTIFICATION LISTENERS & LOGGING
+          const receivedSubscription = Notifications.addNotificationReceivedListener(notification => {
+            logger.logAction('PUSH_NOTIFICATION_RECEIVED', {
+              title: notification.request.content.title,
+              message: notification.request.content.body,
+              data: notification.request.content.data,
+              timestamp: new Date().toISOString()
+            });
+            console.log("🔔 Push Notification Received (Foreground):", notification.request.content.title);
+          });
+
+          const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
+            logger.logAction('PUSH_NOTIFICATION_OPENED', {
+              actionIdentifier: response.actionIdentifier,
+              title: response.notification.request.content.title,
+              data: response.notification.request.content.data,
+              timestamp: new Date().toISOString()
+            });
+            console.log("🔔 Push Notification Opened:", response.notification.request.content.title);
+          });
+
+          return () => {
+            receivedSubscription.remove();
+            responseSubscription.remove();
+          };
         }
         
         // Use "admin" or "samsung" or currentUser.id for label
@@ -1004,6 +1030,44 @@ export default function App() {
       setPlayers(updatedPlayers);
       await storage.setItem('players', updatedPlayers);
       return await pushStateToCloud({ players: updatedPlayers }, true);
+    },
+    sendUserNotification: (targetUserId, notification) => {
+      const currentP = playersRef.current || players;
+      const updatedPlayers = currentP.map(p => {
+        if (String(p.id).toLowerCase() === String(targetUserId).toLowerCase()) {
+          return {
+            ...p,
+            notifications: [
+              {
+                id: `notif-${Date.now()}`,
+                read: false,
+                date: new Date().toISOString(),
+                ...notification
+              },
+              ...(p.notifications || [])
+            ]
+          };
+        }
+        return p;
+      });
+      
+      // LOG: Logging notification sent
+      logger.logAction('NOTIFICATION_SENT', {
+        targetUserId,
+        type: notification.type,
+        title: notification.title,
+        timestamp: new Date().toISOString()
+      });
+
+      const isMe = currentUserRef.current && String(targetUserId).toLowerCase() === String(currentUserRef.current.id).toLowerCase();
+      if (isMe) {
+        const updatedUser = updatedPlayers.find(p => String(p.id).toLowerCase() === String(targetUserId).toLowerCase());
+        setCurrentUser(updatedUser);
+        handleSyncUpdate({ currentUser: updatedUser, players: updatedPlayers });
+      } else {
+        setPlayers(updatedPlayers);
+        handleSyncUpdate({ players: updatedPlayers });
+      }
     },
     loadData: loadData,
     onToggleCloud: () => {

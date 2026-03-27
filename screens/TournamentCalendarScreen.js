@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import designSystem from '../theme/designSystem';
 
@@ -15,23 +15,21 @@ export default function TournamentCalendarScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Calendar 
-        theme={{
-          todayTextColor: designSystem.colors.primary,
-          arrowColor: designSystem.colors.primary,
-          dotColor: designSystem.colors.primary,
-          selectedDayBackgroundColor: designSystem.colors.primary,
-        }}
-        markedDates={markedDates}
-      />
-      <View style={styles.eventsSection}>
-        <Text style={styles.sectionTitle}>Upcoming Events</Text>
-        <FlatList
-          data={MOCK_EVENTS}
-          keyExtractor={item => item.id}
-          renderItem={({ item }) => (
-            <View style={styles.eventCard}>
+    <SafeAreaView style={styles.container}>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <Calendar 
+          theme={{
+            todayTextColor: designSystem.colors.primary,
+            arrowColor: designSystem.colors.primary,
+            dotColor: designSystem.colors.primary,
+            selectedDayBackgroundColor: designSystem.colors.primary,
+          }}
+          markedDates={markedDates}
+        />
+        <View style={styles.eventsSection}>
+          <Text style={styles.sectionTitle}>Upcoming Events</Text>
+          {MOCK_EVENTS.map(item => (
+            <View key={item.id} style={styles.eventCard}>
               <View style={styles.dateBox}>
                 <Text style={styles.dateDay}>{item.date.split('-')[2]}</Text>
                 <Text style={styles.dateMonth}>MAR</Text>
@@ -41,16 +39,16 @@ export default function TournamentCalendarScreen() {
                 <Text style={styles.eventSport}>{item.sport}</Text>
               </View>
             </View>
-          )}
-        />
-      </View>
-    </View>
+          ))}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-  eventsSection: { flex: 1, backgroundColor: '#f8f9fa', padding: 20 },
+  eventsSection: { backgroundColor: '#f8f9fa', padding: 20 },
   sectionTitle: { fontSize: 18, fontWeight: '800', color: '#333', marginBottom: 15 },
   eventCard: { 
     flexDirection: 'row', 

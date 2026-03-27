@@ -66,6 +66,7 @@ export interface Player {
   email: string;
   phone: string; 
   gender?: 'Male' | 'Female';
+  sport?: Sport;
   role?: UserRole;
   skillLevel: SkillLevel;
   rating: number;

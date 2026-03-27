@@ -32,7 +32,7 @@ const MOCK_ACADEMIES = [
   { id: 'a3', name: 'Victory Arena', managedSports: ['Badminton', 'Table Tennis'], level: 'Top Rated', dist: '8 km', phone: '+91 76543 21098', image: 'https://i.pravatar.cc/150?u=victory' },
 ];
 
-export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatchmaking, players = [] }) {
+export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatchmaking, players = [], sendUserNotification }) {
   const role = user?.role || 'user';
   const [activeTab, setActiveTab] = useState(role === 'coach' ? 'New Bookings' : 'Challenge'); // Challenge, Requested, Accepted, History
 
@@ -85,19 +85,33 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   const mySports = user?.managedSports || (user?.certifiedSports) || [Sport.BADMINTON];
 
   const getCommonSports = (opponent) => {
-    if (role !== 'academy') return [opponent.sport];
-    const opponentSports = opponent.managedSports || [];
-    return mySports.filter(s => opponentSports.includes(s));
+    if (!opponent) return [];
+    if (role === 'academy') {
+      const opponentSports = opponent.managedSports || [];
+      return mySports.filter(s => opponentSports.includes(s));
+    }
+    // For users, show their primary sport or any certified sports
+    const opponentSports = [];
+    if (opponent.sport) opponentSports.push(opponent.sport);
+    if (opponent.certifiedSports && opponent.certifiedSports.length > 0) {
+      opponent.certifiedSports.forEach(s => {
+        if (!opponentSports.includes(s)) opponentSports.push(s);
+      });
+    }
+    // Final fallback to Badminton if nothing found
+    return opponentSports.length > 0 ? opponentSports : [Sport.BADMINTON];
   };
 
   const handleChallenge = (opponent) => {
     const common = getCommonSports(opponent);
     if (common.length === 0) {
-      Alert.alert("No Matching Sports", "You and this academy don't share any managed sports.");
+      Alert.alert("No Matching Sports", "You and this opponent don't share any sports.");
       return;
     }
     setSelectedOpponent(opponent);
-    setSelectedSport(common[0]);
+    setSelectedSport(common[0]); // Auto-select first available sport
+    setChallengeDate('');
+    setChallengeTime('');
     setIsChallengeModalVisible(true);
   };
 
@@ -124,7 +138,45 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
     setIsChallengeModalVisible(false);
     setChallengeDate('');
     setChallengeTime('');
+    
+    // Send Notification to recipient
+    if (sendUserNotification) {
+      sendUserNotification(selectedOpponent.id, {
+        type: 'challenge',
+        title: 'New Match Challenge',
+        message: `${user.name} has challenged you to a game of ${selectedSport} on ${challengeDate} at ${challengeTime}.`,
+      });
+    }
+
     Alert.alert("Challenge Sent!", `Your request to ${selectedOpponent.name} has been sent.`);
+  };
+
+  const handleDeclineChallenge = (req) => {
+    Alert.alert(
+      "Decline Challenge",
+      `Are you sure you want to decline the challenge from ${req.name}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Decline", 
+          style: "destructive",
+          onPress: () => {
+            const updated = matchmaking.filter(m => m.id !== req.id);
+            onUpdateMatchmaking(updated);
+            
+            // Send Notification to sender
+            if (sendUserNotification) {
+              sendUserNotification(req.senderId, {
+                type: 'challenge',
+                title: 'Challenge Declined',
+                message: `${user.name} has declined your match challenge for ${req.sport}.`,
+              });
+            }
+            Alert.alert("Challenge Declined", "The request has been removed.");
+          }
+        }
+      ]
+    );
   };
 
   const handleAcceptChallenge = (req) => {
@@ -137,6 +189,16 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
       location: m.location || 'Academy Grounds'
     } : m);
     onUpdateMatchmaking(updated);
+    
+    // Send Notification to sender
+    if (sendUserNotification) {
+      sendUserNotification(req.senderId, {
+        type: 'challenge',
+        title: 'Challenge Accepted',
+        message: `${user.name} has accepted your match challenge for ${req.sport}!`,
+      });
+    }
+
     Alert.alert("Match Accepted", `You have confirmed the match with ${req.name}.`);
   };
 
@@ -337,6 +399,9 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                     </Text>
                   </View>
                   <View style={styles.actionRow}>
+                    <TouchableOpacity style={[styles.smallBtn, { backgroundColor: '#F1F5F9' }]} onPress={() => handleDeclineChallenge(req)}>
+                      <Text style={[styles.smallBtnText, { color: '#64748B' }]}>Decline</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity style={styles.smallBtn} onPress={() => handleCounter(req)}>
                       <Text style={styles.smallBtnText}>Counter</Text>
                     </TouchableOpacity>

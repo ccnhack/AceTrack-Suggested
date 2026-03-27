@@ -209,8 +209,8 @@ export const createRefundPolicy = (tournamentDate, daysBeforeDeadline = 3, fullR
 export const isTournamentPast = (tournament, now = new Date()) => {
   if (!tournament || !tournament.date) return true;
   
-  const [year, month, day] = tournament.date.split('-').map(Number);
-  const tDate = new Date(year, month - 1, day);
+  const tDate = parseTournamentDate(tournament.date);
+  if (!tDate) return true;
   
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
@@ -242,6 +242,106 @@ export const isTournamentPast = (tournament, now = new Date()) => {
   }
 };
 
+/**
+ * Robustly parse various tournament date formats
+ * @param {string} d - Date string (YYYY-MM-DD or DD-MM-YYYY)
+ * @returns {Date|null}
+ */
+export const parseTournamentDate = (d) => {
+  if (!d) return null;
+  
+  // Try standard ISO parsing first
+  let date = new Date(d);
+  if (!isNaN(date.getTime())) {
+    // Check if it's YYYY-MM-DD (preferred)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return date;
+  }
+
+  // Handle DD-MM-YYYY or other hyphenated formats
+  const parts = d.split('-');
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      // YYYY-MM-DD
+      return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    } else if (parts[2].length === 4) {
+      // DD-MM-YYYY
+      return new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+    }
+  }
+
+  return isNaN(date.getTime()) ? null : date;
+};
+
+/**
+ * Centralized filter for tournament visibility
+ * @param {Object} options 
+ * @returns {Array} Filtered tournaments
+ */
+export const getVisibleTournaments = ({
+  tournaments = [],
+  userRole = 'user',
+  userGender = null,
+  userSports = null,
+  isBeginnerProtected = false,
+  cityFilter = 'All',
+  sportFilter = 'All',
+  reschedulingFrom = null,
+  now = new Date()
+}) => {
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+
+  return tournaments.filter(t => {
+    // 1. Basic Status Check
+    const isOngoingOrUpcoming = t.status === 'upcoming' || t.status === 'ongoing';
+    const isNotCompleted = t.status !== 'completed';
+    if (!isOngoingOrUpcoming || !isNotCompleted) return false;
+
+    // 2. Date/Time Check
+    const isPast = isTournamentPast(t, now);
+    const tournamentDate = parseTournamentDate(t.date);
+    if (!tournamentDate) return false;
+
+    const regDeadline = parseTournamentDate(t.registrationDeadline);
+    if (regDeadline) regDeadline.setHours(23, 59, 59, 999);
+    
+    const isDeadlinePassed = regDeadline && (regDeadline.getTime() < today.getTime());
+    const deadlineOpen = !regDeadline || !isDeadlinePassed || userRole?.toLowerCase() === 'admin' || t.status === 'ongoing';
+    const isOpen = deadlineOpen && (!isPast || t.status === 'ongoing');
+
+    if (!isOpen) return false;
+
+    // Admin bypasses all other filters
+    if (userRole?.toLowerCase() === 'admin') return true;
+
+    // 3. Role-specific filters
+    if (userRole === 'coach' && userSports && !userSports.includes(t.sport)) return false;
+    if (reschedulingFrom && t.id === reschedulingFrom) return false;
+
+    // 4. Location Filtering (Skip if 'All' or 'Current Location' mode handled externally)
+    if (cityFilter !== 'All' && cityFilter !== 'Current Location') {
+      const inLocation = t.location?.toLowerCase().includes(cityFilter.toLowerCase());
+      const inCity = t.city?.toLowerCase().includes(cityFilter.toLowerCase());
+      if (!inLocation && !inCity) return false;
+    }
+
+    // 5. Gender-based filtering
+    if (userRole === 'user' && userGender) {
+      const format = t.format || "";
+      if (format.includes("Men's") && userGender !== 'Male') return false;
+      if (format.includes("Women's") && userGender !== 'Female') return false;
+    }
+
+    // 6. Beginner Protection
+    if (isBeginnerProtected && t.skillLevel !== 'Beginner') return false;
+
+    // 7. Sport Filter
+    if (sportFilter !== 'All' && t.sport !== sportFilter) return false;
+
+    return true;
+  });
+};
+
 export default {
   cloneTournament,
   addToWaitlist,
@@ -251,4 +351,6 @@ export default {
   getTournamentAnalytics,
   createRefundPolicy,
   isTournamentPast,
+  parseTournamentDate,
+  getVisibleTournaments,
 };

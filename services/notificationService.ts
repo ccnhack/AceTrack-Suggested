@@ -3,6 +3,7 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import config from '../config';
+import logger from '../utils/logger';
 
 /**
  * Configure how notifications should be handled when the app is in the foreground.
@@ -29,6 +30,8 @@ if (Platform.OS !== 'web') {
  */
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
   let token;
+  
+  logger.logAction('PUSH_TOKEN_REQUEST_INITIATED');
 
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {
@@ -61,6 +64,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     try {
       token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
       console.log('Expo Push Token generated successfully.');
+      logger.logAction('PUSH_TOKEN_GENERATED', { token });
     } catch (e) {
       console.warn('Error getting push token. Is the native module missing?', e.message);
       return null;
@@ -90,8 +94,10 @@ export async function sendTokenToBackend(userId: string, token: string) {
     if (!response.ok) {
       const errorData = await response.json();
       console.log('Failed to register push token on backend:', errorData.message);
+      logger.logAction('PUSH_TOKEN_BACKEND_SYNC_FAIL', { status: response.status, error: errorData.message });
     } else {
       console.log('Push token successfully registered on backend.');
+      logger.logAction('PUSH_TOKEN_BACKEND_SYNC_SUCCESS');
     }
   } catch (error) {
     console.log('Error sending push token to backend:', error);

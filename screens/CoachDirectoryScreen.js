@@ -7,12 +7,13 @@ import { Ionicons } from '@expo/vector-icons';
 import designSystem from '../theme/designSystem';
 import { Calendar } from 'react-native-calendars';
 
-export default function CoachDirectoryScreen({ user, role, players = [], onUpdateUser, onBatchUpdate, navigation }) {
+export default function CoachDirectoryScreen({ user, role, players = [], onUpdateUser, onBatchUpdate, navigation, sendUserNotification }) {
   const [search, setSearch] = useState('');
   const [selectedCoach, setSelectedCoach] = useState(null);
   const [bookingModalVisible, setBookingModalVisible] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState(null);
+  const [expandedSlot, setExpandedSlot] = useState(null);
   
   const coaches = useMemo(() => {
     return players.filter(p => p.role === 'coach')
@@ -52,6 +53,16 @@ export default function CoachDirectoryScreen({ user, role, players = [], onUpdat
 
     if (onUpdateUser) {
       onUpdateUser(updatedUser);
+      
+      // Send Notification to Coach
+      if (sendUserNotification) {
+        sendUserNotification(selectedCoach.id, {
+          type: 'booking',
+          title: 'New Booking Request',
+          message: `${user.name} has requested a session on ${selectedDate} at ${selectedTime}.`,
+        });
+      }
+
       Alert.alert("Request Sent", `Booking request sent to ${selectedCoach.name}. You will be notified of the confirmation.`);
     }
     setBookingModalVisible(false);
@@ -62,7 +73,19 @@ export default function CoachDirectoryScreen({ user, role, players = [], onUpdat
       ...user,
       bookings: (user.bookings || []).map(b => b.id === bookingId ? { ...b, status: newStatus } : b)
     };
-    if (onUpdateUser) onUpdateUser(updatedUser);
+    if (onUpdateUser) {
+      onUpdateUser(updatedUser);
+      
+      // Find the booking to get the userId for notification
+      const booking = (user.bookings || []).find(b => b.id === bookingId);
+      if (booking && sendUserNotification) {
+        sendUserNotification(booking.userId, {
+          type: 'booking',
+          title: `Booking ${newStatus}`,
+          message: `Your booking with ${user.name} for ${booking.date} has been ${newStatus.toLowerCase()}.`,
+        });
+      }
+    }
   };
 
   const renderCoachCard = ({ item }) => (
@@ -263,15 +286,46 @@ export default function CoachDirectoryScreen({ user, role, players = [], onUpdat
 
               <Text style={styles.calLabel}>Select Time Slot</Text>
               <View style={styles.timeSlots}>
-                 {['09:00 AM', '10:00 AM', '11:00 AM', '04:00 PM', '05:00 PM', '06:00 PM'].map(slot => (
-                   <TouchableOpacity 
-                     key={slot}
-                     style={[styles.slotBtn, selectedTime === slot && styles.slotBtnActive]}
-                     onPress={() => setSelectedTime(slot)}
-                   >
-                     <Text style={[styles.slotText, selectedTime === slot && styles.slotTextActive]}>{slot}</Text>
-                   </TouchableOpacity>
-                 ))}
+                 {['09:00 AM', '10:00 AM', '11:00 AM', '04:00 PM', '05:00 PM', '06:00 PM'].map((slot, index) => {
+                   const isExpanded = expandedSlot === slot;
+                   const slotHour = slot.split(':')[0];
+                   const slotAmPm = slot.slice(-2);
+                   const isSelBase = selectedTime && selectedTime.split(':')[0] === slotHour && selectedTime.slice(-2) === slotAmPm;
+
+                   return (
+                     <View key={`slot-${index}`} style={[styles.slotWrapper, { zIndex: isExpanded ? 100 : 1 }]}>
+                       <TouchableOpacity 
+                         style={[styles.slotBtn, isSelBase && styles.slotBtnActive]}
+                         onPress={() => setExpandedSlot(isExpanded ? null : slot)}
+                       >
+                         <Text style={[styles.slotText, isSelBase && styles.slotTextActive]}>
+                           {isSelBase ? selectedTime : slot}
+                         </Text>
+                       </TouchableOpacity>
+
+                       {isExpanded && (
+                         <View style={styles.subIntervalsPopup}>
+                           {[':00', ':15', ':30', ':45'].map((mins, subIndex) => {
+                             const fullTime = slot.replace(':00', mins);
+                             const isSel = selectedTime === fullTime;
+                             return (
+                               <TouchableOpacity 
+                                 key={`sub-${subIndex}`}
+                                 style={[styles.subBtn, isSel && styles.subBtnActive]}
+                                 onPress={() => {
+                                   setSelectedTime(fullTime);
+                                   setExpandedSlot(null);
+                                 }}
+                               >
+                                 <Text style={[styles.subBtnText, isSel && styles.subBtnTextActive]}>{fullTime}</Text>
+                               </TouchableOpacity>
+                             );
+                           })}
+                         </View>
+                       )}
+                     </View>
+                   );
+                 })}
               </View>
 
               <TouchableOpacity style={styles.confirmBtn} onPress={confirmBookingRequest}>
@@ -319,10 +373,47 @@ const styles = StyleSheet.create({
   calendarBox: { marginBottom: 24 },
   calLabel: { fontSize: 12, fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 },
   timeSlots: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 30 },
-  slotBtn: { backgroundColor: '#F1F5F9', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 14, width: '31%', alignItems: 'center' },
-  slotBtnActive: { backgroundColor: '#6366F1' },
+  slotWrapper: { width: '31%', position: 'relative' },
+  slotBtn: { backgroundColor: '#F1F5F9', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 14, width: '100%', alignItems: 'center' },
+  slotBtnActive: { backgroundColor: '#EEF2FF', borderColor: '#6366F1', borderWidth: 1 },
   slotText: { fontSize: 12, fontWeight: '900', color: '#64748B' },
-  slotTextActive: { color: '#FFFFFF' },
+  slotTextActive: { color: '#6366F1' },
+  subIntervalsPopup: {
+    position: 'absolute',
+    top: 55,
+    left: 0,
+    width: 140,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 10,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    zIndex: 1000,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  subBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 6,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+  },
+  subBtnActive: {
+    backgroundColor: '#6366F1',
+  },
+  subBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  subBtnTextActive: {
+    color: '#FFF',
+  },
   confirmBtn: { backgroundColor: '#0F172A', paddingVertical: 18, borderRadius: 20, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
   confirmBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900', textTransform: 'uppercase' },
   disclaimer: { textAlign: 'center', color: '#94A3B8', fontSize: 11, marginTop: 12, fontWeight: '600' },

@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { generateAIResponse } from '../services/aiService';
 import config from '../config';
-import { isTournamentPast } from '../utils/tournamentUtils';
+import { isTournamentPast, getVisibleTournaments, parseTournamentDate } from '../utils/tournamentUtils';
 
 const { width } = Dimensions.get('window');
 
@@ -182,7 +182,18 @@ const ChatBot = ({
     if (!matches || !tournaments) return [];
 
     const ids = matches.map(m => m.split('ID:').pop());
-    return tournaments.filter(t => ids.includes(String(t.id)));
+    const selected = tournaments.filter(t => ids.includes(String(t.id)));
+    
+    // Consistency check: only show cards for tournaments that would be visible in Explore
+    const currentUser = userId ? players.find(p => p.id === userId) : null;
+    return getVisibleTournaments({
+      tournaments: selected,
+      userRole,
+      userGender: user?.gender,
+      userSports,
+      isBeginnerProtected: currentUser?.isBeginnerProtected || false,
+      now: new Date()
+    });
   };
 
   const handleSend = async () => {
@@ -194,49 +205,17 @@ const ChatBot = ({
     onSendChatMessage(newMessages); // Pushes to cloud global state
     setIsLoading(true);
 
-    const parseDate = (d) => {
-      if (!d) return null;
-      const date = new Date(d);
-      if (isNaN(date.getTime())) {
-        const parts = d.split('-');
-        if (parts.length === 3) {
-          return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
-        }
-      }
-      return date;
-    };
-
       try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const currentUser = userId ? players.find(p => p.id === userId) : null;
+        const isBeginnerProtected = currentUser?.isBeginnerProtected || false;
 
-        const openTournaments = (tournaments || []).filter(t => {
-          // Use the more granular time-based filter
-          const isPast = isTournamentPast(t);
-          
-          const regDeadline = parseDate(t.registrationDeadline);
-          if (regDeadline) regDeadline.setHours(23, 59, 59, 999);
-
-          // Inclusion criteria:
-          // 1. Must be upcoming or ongoing (not completed)
-          // 2. Must not be past its scheduled start time (unless ongoing)
-          const isOngoingOrUpcoming = t.status === 'upcoming' || t.status === 'ongoing';
-          const isNotCompleted = t.status !== 'completed';
-          const isTimeOpen = !isPast || t.status === 'ongoing';
-
-          if (!isOngoingOrUpcoming || !isNotCompleted || !isTimeOpen) {
-            return false;
-          }
-
-          // Gender-based filtering for Individual/Player users ONLY
-          if (userRole?.toLowerCase() === 'user') {
-            const format = t.format || "";
-            const gender = user?.gender;
-            if (format.includes("Men's") && gender && gender !== 'Male') return false;
-            if (format.includes("Women's") && gender && gender !== 'Female') return false;
-          }
-
-          return true;
+        const openTournaments = getVisibleTournaments({
+          tournaments,
+          userRole,
+          userGender: user?.gender,
+          userSports,
+          isBeginnerProtected,
+          now: new Date()
         });
 
         console.log(`🤖 [ChatBot] Context: ${openTournaments.length} open/relevant tournaments found out of ${tournaments?.length || 0} total.`);
