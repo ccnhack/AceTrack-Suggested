@@ -327,8 +327,8 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
             {receivedRequests.length === 0 ? (
                 <Text style={[styles.emptyText, { textAlign: 'center', marginTop: 10, marginBottom: 10, fontSize: 13 }]}>No Requests Received</Text>
             ) : (
-              receivedRequests.map(req => (
-                <TouchableOpacity key={req.id} style={styles.requestCard} onPress={() => openDetails(req)}>
+              receivedRequests.map((req, index) => (
+                <TouchableOpacity key={req.id || `received-${index}`} style={styles.requestCard} onPress={() => openDetails(req)}>
                   <View style={styles.info}>
                     <Text style={styles.name}>{req.name}</Text>
                     <Text style={[styles.details, req.status === 'Counter Proposed' && { color: '#D97706' }]}>
@@ -362,8 +362,8 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
             {counteredRequests.length === 0 && (
               <Text style={[styles.emptyText, { textAlign: 'center', marginTop: 10, marginBottom: 10, fontSize: 13 }]}>No countered challenges</Text>
             )}
-            {counteredRequests.map(req => (
-              <TouchableOpacity key={req.id} style={[styles.requestCard, { borderLeftColor: '#F59E0B' }]} onPress={() => openDetails(req)}>
+            {counteredRequests.map((req, index) => (
+              <TouchableOpacity key={req.id || `countered-${index}`} style={[styles.requestCard, { borderLeftColor: '#F59E0B' }]} onPress={() => openDetails(req)}>
                 <View style={styles.info}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                       <Text style={[styles.name, { flex: 1 }]} numberOfLines={1}>{req.name}</Text>
@@ -397,8 +397,8 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
               <Text style={styles.sectionTitle}>Sent Requests</Text>
           </View>
           {actualSentRequests.length === 0 && <Text style={styles.emptyText}>No pending requests sent.</Text>}
-          {actualSentRequests.map(req => (
-            <TouchableOpacity key={req.id} style={styles.requestCard} onPress={() => openDetails(req)}>
+          {actualSentRequests.map((req, index) => (
+            <TouchableOpacity key={req.id || `sent-${index}`} style={styles.requestCard} onPress={() => openDetails(req)}>
                <View style={styles.info}>
                   <Text style={styles.name} numberOfLines={1}>{req.name}</Text>
                   <Text style={styles.details}>{req.sport} • {req.proposedDate} at {req.proposedTime} • {req.status || 'Pending'}</Text>
@@ -427,8 +427,8 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   const renderAccepted = () => (
     <View style={styles.tabContent}>
       {acceptedMatches.length === 0 && <Text style={styles.emptyText}>No accepted matches yet.</Text>}
-      {acceptedMatches.map(match => (
-        <TouchableOpacity key={match.id} style={styles.acceptedCard} onPress={() => openDetails(match)}>
+      {acceptedMatches.map((match, index) => (
+        <TouchableOpacity key={match.id || `accepted-${index}`} style={styles.acceptedCard} onPress={() => openDetails(match)}>
           <View style={styles.acceptedHeader}>
              <Ionicons name="calendar" size={20} color={designSystem.colors.primary} />
              <Text style={styles.acceptedTime}>{match.time}</Text>
@@ -443,8 +443,8 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   const renderHistory = () => (
     <View style={styles.tabContent}>
       {history.length === 0 && <Text style={styles.emptyText}>No match history found.</Text>}
-      {history.map(item => (
-        <TouchableOpacity key={item.id} style={styles.historyCard} onPress={() => openDetails(item)}>
+      {history.map((item, index) => (
+        <TouchableOpacity key={item.id || `history-${index}`} style={styles.historyCard} onPress={() => openDetails(item)}>
           <View>
             <Text style={styles.historyName}>{item.name}</Text>
             <Text style={styles.historyDetail}>{item.sport} • {item.date}</Text>
@@ -475,9 +475,9 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
       <View style={styles.header}>
         <Text style={styles.title}>{role === 'coach' ? 'Coach Bookings' : (role === 'academy' ? 'Academy Matchmaking' : 'Matchmaking')}</Text>
         <View style={styles.tabs}>
-           {(role === 'coach' ? ['New Bookings', 'Accepted', 'History'] : ['Challenge', 'Requested', 'Accepted', 'History']).map(tab => (
+           {(role === 'coach' ? ['New Bookings', 'Accepted', 'History'] : ['Challenge', 'Requested', 'Accepted', 'History']).map((tab, index) => (
              <TouchableOpacity
-               key={tab}
+               key={`tab-${index}`}
                style={[styles.tab, activeTab === tab && styles.activeTab]}
                onPress={() => {
                  setActiveTab(tab);
@@ -537,9 +537,9 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={styles.sectionLabel}>Select Sport</Text>
               <View style={styles.sportGrid}>
-                {selectedOpponent && getCommonSports(selectedOpponent).map(s => (
+                {selectedOpponent && getCommonSports(selectedOpponent).map((s, index) => (
                   <TouchableOpacity
-                    key={s}
+                    key={`sport-${index}`}
                     style={[styles.sportTag, selectedSport === s && styles.sportTagActive]}
                     onPress={() => setSelectedSport(s)}
                   >
@@ -573,7 +573,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
               </View>
               <Text style={styles.sectionLabel}>Proposed Time</Text>
               <View style={styles.timeSlots}>
-                  {TIME_SLOTS.map(slot => {
+                  {TIME_SLOTS.map((slot, index) => {
                     const isBlocked = isTimeSlotBlocked(challengeDate, slot, selectedOpponent?.id);
                     const isExpanded = expandedSlot === slot;
                     const slotHour = slot.split(':')[0];
@@ -581,7 +581,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                     const isSelBase = challengeTime && challengeTime.split(':')[0] === slotHour && challengeTime.slice(-2) === slotAmPm;
                     
                     return (
-                      <View key={slot} style={[styles.slotWrapper, { zIndex: isExpanded ? 100 : 1 }]}>
+                      <View key={`slot-prop-${index}`} style={[styles.slotWrapper, { zIndex: isExpanded ? 100 : 1 }]}>
                         <TouchableOpacity 
                           disabled={isBlocked}
                           style={[
@@ -600,12 +600,12 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
 
                         {isExpanded && !isBlocked && (
                           <View style={styles.subIntervalsPopup}>
-                             {[':00', ':15', ':30', ':45'].map(mins => {
+                             {[':00', ':15', ':30', ':45'].map((mins, subIndex) => {
                                const fullTime = slot.replace(':00', mins);
                                const isSel = challengeTime === fullTime;
                                return (
                                  <TouchableOpacity 
-                                   key={mins}
+                                   key={`mins-prop-${subIndex}`}
                                    style={[styles.subBtn, isSel && styles.subBtnActive]}
                                    onPress={() => {
                                      setChallengeTime(fullTime);
@@ -848,7 +848,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
 
               <Text style={styles.sectionLabel}>Proposed Time</Text>
               <View style={styles.timeSlots}>
-                 {TIME_SLOTS.map(slot => {
+                 {TIME_SLOTS.map((slot, index) => {
                     const isBlocked = isTimeSlotBlocked(counterDate, slot, selectedChallenge?.academyId);
                     const isExpanded = expandedSlot === slot;
                     const slotHour = slot.split(':')[0];
@@ -856,7 +856,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                     const isSelBase = counterTime && counterTime.split(':')[0] === slotHour && counterTime.slice(-2) === slotAmPm;
                     
                     return (
-                      <View key={slot} style={[styles.slotWrapper, { zIndex: isExpanded ? 100 : 1 }]}>
+                      <View key={`slot-counter-${index}`} style={[styles.slotWrapper, { zIndex: isExpanded ? 100 : 1 }]}>
                         <TouchableOpacity
                           disabled={isBlocked}
                           style={[
@@ -875,12 +875,12 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
 
                         {isExpanded && !isBlocked && (
                           <View style={styles.subIntervalsPopup}>
-                             {[':00', ':15', ':30', ':45'].map(mins => {
+                             {[':00', ':15', ':30', ':45'].map((mins, subIndex) => {
                                const fullTime = slot.replace(':00', mins);
                                const isSel = counterTime === fullTime;
                                return (
                                  <TouchableOpacity 
-                                   key={mins}
+                                   key={`mins-counter-${subIndex}`}
                                    style={[styles.subBtn, isSel && styles.subBtnActive]}
                                    onPress={() => {
                                      setCounterTime(fullTime);
@@ -911,7 +911,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                       />
                     </View>
                     <ScrollView style={styles.venueResults} nestedScrollEnabled>
-                        {MOCK_ACADEMIES.filter(a => a.name.toLowerCase().includes(venueSearchQuery.toLowerCase())).map(academy => {
+                        {MOCK_ACADEMIES.filter(a => a.name.toLowerCase().includes(venueSearchQuery.toLowerCase())).map((academy, index) => {
                             const isBusy = isTimeSlotBlocked(counterDate, counterTime, academy.id);
                             const isSelected = selectedAcademyForVenue?.id === academy.id;
                             const nextSlot = isBusy ? getNextAvailableSlot(counterDate, counterTime, academy.id) : null;
