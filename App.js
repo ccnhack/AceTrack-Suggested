@@ -43,7 +43,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = Platform.OS === 'web' ? '2.2.5-web' : '2.2.5';
+const APP_VERSION = Platform.OS === 'web' ? '2.2.6-web' : '2.2.6';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -405,6 +405,9 @@ export default function App() {
         logger.logAction('BADGE_HYDRATION_LOCAL', { key: 'visitedAdminSubTabs', count: vats.length });
       }
 
+      const rawUser = await storage.getItem('currentUser');
+      logger.logAction('HYDRATION_RAW_USER', { data: rawUser ? (typeof rawUser === 'string' ? rawUser.substring(0, 100) : 'object') : 'null' });
+
       if (u) {
         setCurrentUser(u);
         currentUserRef.current = u;
@@ -428,7 +431,7 @@ export default function App() {
           }
         }
       } else {
-        logger.logAction('HYDRATION_USER_MISSING');
+        logger.logAction('HYDRATION_USER_MISSING', { rawFound: !!rawUser });
       }
       return true;
     } catch (e) {
@@ -635,6 +638,7 @@ export default function App() {
     try {
       setSyncingState(true);
       logger.logAction('PUSH_DATA_START', { keys: Object.keys(updates), version: thisVersion });
+      logger.logAction('PUSH_DATA_PAYLOAD', { updatesPreview: JSON.stringify(updates).substring(0, 500) });
       
       const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
       const response = await fetch(`${activeApiUrl}/api/save`, {
@@ -646,7 +650,10 @@ export default function App() {
         body: JSON.stringify(updates)
       });
 
-      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Server returned ${response.status}: ${errorText}`);
+      }
       const result = await response.json();
       
       if (thisVersion === syncVersion.current) {
@@ -796,6 +803,7 @@ export default function App() {
 
   const handleLogout = async () => {
     // 1. Clear auth state FIRST so polling guard stops immediately
+    logger.logAction('USER_LOGOUT_START', { userId: currentUserRef.current?.id });
     currentUserRef.current = null;
     setCurrentUser(null);
     setUserRole(null);
@@ -1999,12 +2007,13 @@ export default function App() {
     isUploadingLogs
   };
 
-  console.log("🛠️ App Render Check:", { 
+  logger.logAction('APP_RENDER_STATE', { 
     isLoading, 
     hasUser: !!currentUser, 
     viewingLanding, 
     showSignup, 
-    showOnboarding 
+    showOnboarding,
+    timestamp: new Date().toISOString()
   });
 
   if (isLoading) {
