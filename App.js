@@ -43,7 +43,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = Platform.OS === 'web' ? '2.2.3-web' : '2.2.3';
+const APP_VERSION = Platform.OS === 'web' ? '2.2.5-web' : '2.2.5';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -360,7 +360,7 @@ export default function App() {
   const hydrateFromStorage = async () => {
     console.log("📦 Hydrating app state from local storage...");
     try {
-      const [p, t, v, m, st, ev, al, cm, ps, u, iuc, saids, vats] = await Promise.all([
+      const [p, t, v, m, st, ev, al, cm, ps, u, iuc, saids, vats, matchmakingFromStorage] = await Promise.all([
         storage.getItem('players'),
         storage.getItem('tournaments'),
         storage.getItem('matchVideos'),
@@ -373,7 +373,8 @@ export default function App() {
         storage.getItem('currentUser'),
         storage.getItem('isUsingCloud'),
         storage.getItem('seenAdminActionIds'),
-        storage.getItem('visitedAdminSubTabs')
+        storage.getItem('visitedAdminSubTabs'),
+        storage.getItem('matchmaking')
       ]);
 
       if (p) setPlayers(p);
@@ -384,7 +385,7 @@ export default function App() {
       if (ev) setEvaluations(ev);
       if (al) setAuditLogs(al);
       if (cm) setChatbotMessages(cm);
-      if (storage.getItem('matchmaking')) setMatchmaking(await storage.getItem('matchmaking') || []);
+      if (matchmakingFromStorage) setMatchmaking(matchmakingFromStorage);
       if (ps && Array.isArray(ps)) {
         setPendingSync(ps);
         pendingSyncRef.current = ps;
@@ -409,8 +410,6 @@ export default function App() {
         currentUserRef.current = u;
         logger.logAction('HYDRATION_USER_RESTORED', { userId: u.id, role: u.role });
         
-        // IMMEDIATE SYNC: Update device footprint upon startup restore
-        syncAndSaveData({ currentUser: u });
         // Extra check to ensure state is set
         setTimeout(() => {
           logger.logAction('HYDRATION_USER_STABILITY_CHECK', { 
@@ -715,7 +714,7 @@ export default function App() {
       }
 
       // 2. Identify syncable keys
-      const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser'];
+      const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser', 'matchmaking'];
       const syncUpdates = {};
       let hasSyncable = false;
 
@@ -2139,6 +2138,9 @@ export default function App() {
             }
           }}
           socketRef={socketRef}
+          matchmaking={matchmaking}
+          onUpdateMatchmaking={handlers.onUpdateMatchmaking}
+          sendUserNotification={handlers.sendUserNotification}
         />
         {currentUser && (
           <ChatBot 

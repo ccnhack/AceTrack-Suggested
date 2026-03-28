@@ -34,7 +34,7 @@ const MOCK_ACADEMIES = [
 
 export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatchmaking, players = [], sendUserNotification }) {
   const role = user?.role || 'user';
-  const [activeTab, setActiveTab] = useState(role === 'coach' ? 'New Bookings' : 'Challenge'); // Challenge, Requested, Accepted, History
+  const [activeTab, setActiveTab] = useState(role === 'coach' ? 'New Bookings' : 'Challenge'); // Challenge, Requested/Sent, Accepted, History
 
   // Derived states from global matchmaking prop
   const sentRequests = matchmaking.filter(m => m.senderId === user?.id && m.status !== 'Accepted');
@@ -69,6 +69,19 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
     if (hours === '12') hours = '00';
     if (modifier === 'PM') hours = parseInt(hours, 10) + 12;
     return parseInt(hours, 10) * 60 + parseInt(minutes, 10);
+  };
+
+  const isTimeInPast = (date, timeSlot) => {
+    if (!date) return false;
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    if (date < todayStr) return true;
+    if (date > todayStr) return false;
+
+    // Same day, check time
+    const slotMinutes = parseTime(timeSlot);
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    return slotMinutes <= nowMinutes;
   };
 
   const isTimeSlotBlocked = (date, timeSlot, academyId) => {
@@ -372,7 +385,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
           style={[styles.btn, isSent && styles.btnSent]}
           onPress={() => isSent ? null : handleChallenge(item)}
         >
-          <Text style={styles.btnText}>{isSent ? 'Requested' : 'Challenge'}</Text>
+          <Text style={styles.btnText}>{isSent ? 'Requested/Sent' : 'Challenge'}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -540,7 +553,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
       <View style={styles.header}>
         <Text style={styles.title}>{role === 'coach' ? 'Coach Bookings' : (role === 'academy' ? 'Academy Matchmaking' : 'Matchmaking')}</Text>
         <View style={styles.tabs}>
-           {(role === 'coach' ? ['New Bookings', 'Accepted', 'History'] : ['Challenge', 'Requested', 'Accepted', 'History']).map((tab, index) => (
+           {(role === 'coach' ? ['New Bookings', 'Accepted', 'History'] : ['Challenge', 'Requested/Sent', 'Accepted', 'History']).map((tab, index) => (
              <TouchableOpacity
                key={`tab-${index}`}
                style={[styles.tab, activeTab === tab && styles.activeTab]}
@@ -581,7 +594,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
           ListEmptyComponent={<Text style={styles.emptyText}>No matching {role === 'academy' ? 'academies' : 'players'} found near you.</Text>}
         />
       )}
-      {(activeTab === 'Requested' || (role === 'coach' && activeTab === 'New Bookings')) && renderRequested()}
+      {(activeTab === 'Requested/Sent' || (role === 'coach' && activeTab === 'New Bookings')) && renderRequested()}
       {activeTab === 'Accepted' && renderAccepted()}
       {activeTab === 'History' && renderHistory()}
 
@@ -616,6 +629,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
               <Text style={styles.sectionLabel}>Select Date</Text>
               <View style={styles.calendarContainer}>
                  <Calendar
+                   minDate={new Date().toISOString().split('T')[0]}
                    onDayPress={(day) => setChallengeDate(day.dateString)}
                    markedDates={{ 
                      ...MOCK_ACADEMY_TOURNAMENTS.reduce((acc, t) => {
@@ -640,6 +654,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
               <View style={styles.timeSlots}>
                   {TIME_SLOTS.map((slot, index) => {
                     const isBlocked = isTimeSlotBlocked(challengeDate, slot, selectedOpponent?.id);
+                    const isInPast = isTimeInPast(challengeDate, slot);
                     const isExpanded = expandedSlot === slot;
                     const slotHour = slot.split(':')[0];
                     const slotAmPm = slot.slice(-2);
@@ -648,11 +663,11 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                     return (
                       <View key={`slot-prop-${index}`} style={[styles.slotWrapper, { zIndex: isExpanded ? 100 : 1 }]}>
                         <TouchableOpacity 
-                          disabled={isBlocked}
+                          disabled={isBlocked || isInPast}
                           style={[
                             styles.slotBtn, 
                             isSelBase && styles.slotBtnActive,
-                            isBlocked && { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0', opacity: 0.5 }
+                            (isBlocked || isInPast) && { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0', opacity: 0.5 }
                           ]}
                           onPress={() => setExpandedSlot(isExpanded ? null : slot)}
                         >
@@ -897,6 +912,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
               <Text style={styles.sectionLabel}>Proposed Date</Text>
               <View style={styles.calendarContainer}>
                  <Calendar
+                   minDate={new Date().toISOString().split('T')[0]}
                    onDayPress={(day) => setCounterDate(day.dateString)}
                    markedDates={{ 
                      ...MOCK_ACADEMY_TOURNAMENTS.reduce((acc, t) => {
@@ -915,6 +931,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
               <View style={styles.timeSlots}>
                  {TIME_SLOTS.map((slot, index) => {
                     const isBlocked = isTimeSlotBlocked(counterDate, slot, selectedChallenge?.academyId);
+                    const isInPast = isTimeInPast(counterDate, slot);
                     const isExpanded = expandedSlot === slot;
                     const slotHour = slot.split(':')[0];
                     const slotAmPm = slot.slice(-2);
@@ -923,11 +940,11 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                     return (
                       <View key={`slot-counter-${index}`} style={[styles.slotWrapper, { zIndex: isExpanded ? 100 : 1 }]}>
                         <TouchableOpacity
-                          disabled={isBlocked}
+                          disabled={isBlocked || isInPast}
                           style={[
                             styles.slotBtn,
                             isSelBase && styles.slotBtnActive,
-                            isBlocked && { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0', opacity: 0.5 }
+                            (isBlocked || isInPast) && { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0', opacity: 0.5 }
                           ]}
                           onPress={() => setExpandedSlot(isExpanded ? null : slot)}
                         >

@@ -58,7 +58,7 @@ try {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
 
-const APP_VERSION = '2.2.2'; // AceTrack Suggested — Stable Sync Fix
+const APP_VERSION = '2.2.5'; // AceTrack Suggested — Stable Sync, Matchmaking & Session Fix
 
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: CORS Whitelist (SEC Fix #3)
@@ -304,9 +304,10 @@ const SaveDataSchema = z.object({
   auditLogs: z.array(z.any()).optional(),
   chatbotMessages: z.any().optional(),
   currentUser: z.any().optional(),
+  matchmaking: z.array(z.any()).optional(),
   overwrite: z.boolean().optional()
 }).refine(data => {
-  const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser'];
+  const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser', 'matchmaking'];
   return Object.keys(data).some(key => syncableKeys.includes(key));
 }, { message: 'No syncable context found' });
 
@@ -493,7 +494,7 @@ router.get('/diagnostics/:filename', apiKeyGuard, async (req, res) => {
 // POST /api/v1/save
 router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => {
   try {
-    const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser'];
+    const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser', 'matchmaking'];
     
     const state = await AppState.findOne().sort({ lastUpdated: -1 });
     const currentData = (state && state.data) ? state.data : {};
