@@ -32,6 +32,7 @@ import LandingScreen from './screens/LandingScreen';
 import SignupScreen from './screens/SignupScreen';
 import { initializeFirebase } from './utils/firebaseAuth';
 import { registerForPushNotificationsAsync, sendTokenToBackend } from './services/notificationService';
+import * as Notifications from 'expo-notifications';
 
 if (Platform.OS === 'web') {
   const iconFontStyles = `@font-face {
@@ -43,7 +44,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = Platform.OS === 'web' ? '2.2.6-web' : '2.2.6';
+const APP_VERSION = Platform.OS === 'web' ? '2.2.7-web' : '2.2.7';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -229,29 +230,35 @@ export default function App() {
           });
 
           // PUSH NOTIFICATION LISTENERS & LOGGING
-          const receivedSubscription = Notifications.addNotificationReceivedListener(notification => {
-            logger.logAction('PUSH_NOTIFICATION_RECEIVED', {
-              title: notification.request.content.title,
-              message: notification.request.content.body,
-              data: notification.request.content.data,
-              timestamp: new Date().toISOString()
+          let receivedSubscription;
+          if (typeof Notifications !== 'undefined' && Notifications.addNotificationReceivedListener) {
+            receivedSubscription = Notifications.addNotificationReceivedListener(notification => {
+              logger.logAction('PUSH_NOTIFICATION_RECEIVED', {
+                title: notification.request.content.title,
+                message: notification.request.content.body,
+                data: notification.request.content.data,
+                timestamp: new Date().toISOString()
+              });
+              console.log("🔔 Push Notification Received (Foreground):", notification.request.content.title);
             });
-            console.log("🔔 Push Notification Received (Foreground):", notification.request.content.title);
-          });
+          }
 
-          const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
-            logger.logAction('PUSH_NOTIFICATION_OPENED', {
-              actionIdentifier: response.actionIdentifier,
-              title: response.notification.request.content.title,
-              data: response.notification.request.content.data,
-              timestamp: new Date().toISOString()
+          let responseSubscription;
+          if (typeof Notifications !== 'undefined' && Notifications.addNotificationResponseReceivedListener) {
+            responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
+              logger.logAction('PUSH_NOTIFICATION_OPENED', {
+                actionIdentifier: response.actionIdentifier,
+                title: response.notification.request.content.title,
+                data: response.notification.request.content.data,
+                timestamp: new Date().toISOString()
+              });
+              console.log("🔔 Push Notification Opened:", response.notification.request.content.title);
             });
-            console.log("🔔 Push Notification Opened:", response.notification.request.content.title);
-          });
+          }
 
           return () => {
-            receivedSubscription.remove();
-            responseSubscription.remove();
+            if (receivedSubscription) receivedSubscription.remove();
+            if (responseSubscription) responseSubscription.remove();
           };
         }
         
