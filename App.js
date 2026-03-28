@@ -83,7 +83,8 @@ export default function App() {
   const [isProfileEditActive, setIsProfileEditActive] = useState(false); // New state to track if profile edit is open
   const [pendingSync, setPendingSync] = useState([]); // Keys that need to be pushed to cloud
   const [visitedAdminSubTabs, setVisitedAdminSubTabs] = useState(new Set());
-  const isSyncingRef = React.useRef(false);
+  const isSyncingRef = useRef(false);
+  const isStartupCompleteRef = useRef(false);
   const pendingSyncRef = React.useRef([]);
   const lastServerUpdateRef = React.useRef(null);
   const syncVersion = React.useRef(0);
@@ -191,8 +192,13 @@ export default function App() {
     // 2. AppState: Refresh when app returns from background to foreground
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState === 'active' && !isSyncingRef.current) {
+        if (!isStartupCompleteRef.current) {
+          console.log("⏳ App returned to foreground, but startup is not yet complete. Skipping loadData.");
+          logger.logAction('FOREGROUND_SKIP_STARTUP_INCOMPLETE');
+          return;
+        }
         console.log("📱 App returned to foreground, checking for cloud updates...");
-        loadData(true); // Don't show loading spinner for foreground return
+        loadData(true); 
       }
     });
 
@@ -289,6 +295,13 @@ export default function App() {
         
         // STEP 2: Tiny wait to ensure React state batching has committed the user
         await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Mark startup as complete BEFORE loadData so that any background attempts are allowed or known
+        isStartupCompleteRef.current = true;
+        logger.logAction('STARTUP_COMPLETE', { 
+          hasUser: !!currentUserRef.current,
+          userId: currentUserRef.current?.id 
+        });
 
         // Only after local data is visible do we attempt a cloud pull
         // We pass 'true' to loadData here to avoid redundant setIsLoading calls
