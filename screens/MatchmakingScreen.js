@@ -638,6 +638,19 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                         }
                         return acc;
                      }, {}),
+                     ...matchmaking.filter(m => 
+                       (m.senderId === user?.id && m.receiverId === selectedOpponent?.id) ||
+                       (m.senderId === selectedOpponent?.id && m.receiverId === user?.id)
+                     ).reduce((acc, m) => {
+                       const mDate = m.proposedDate || m.time?.split(',')[0]?.trim();
+                       if (mDate) {
+                         acc[mDate] = { 
+                           marked: true, 
+                           dotColor: designSystem.colors.primary 
+                         };
+                       }
+                       return acc;
+                     }, {}),
                      [challengeDate]: { selected: true, selectedColor: '#6366F1' } 
                    }}
                    theme={{
@@ -650,6 +663,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                    }}
                  />
               </View>
+
               <Text style={styles.sectionLabel}>Proposed Time</Text>
               <View style={styles.timeSlots}>
                   {TIME_SLOTS.map((slot, index) => {
@@ -701,6 +715,49 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                       </View>
                     );
                   })}
+              </View>
+
+              <View style={styles.upcomingChallengesSection}>
+                <Text style={styles.sectionLabel}>Upcoming Challenges</Text>
+                {matchmaking.filter(m => 
+                  ((m.senderId === user?.id && m.receiverId === selectedOpponent?.id) ||
+                   (m.senderId === selectedOpponent?.id && m.receiverId === user?.id)) &&
+                  (!challengeDate || (m.proposedDate || m.time?.split(',')[0]?.trim()) === challengeDate)
+                ).length === 0 ? (
+                  <Text style={styles.emptyUpcomingText}>
+                    {challengeDate ? `No challenges for ${challengeDate}` : 'No upcoming challenges with this player'}
+                  </Text>
+                ) : (
+                  matchmaking.filter(m => 
+                    ((m.senderId === user?.id && m.receiverId === selectedOpponent?.id) ||
+                     (m.senderId === selectedOpponent?.id && m.receiverId === user?.id)) &&
+                    (!challengeDate || (m.proposedDate || m.time?.split(',')[0]?.trim()) === challengeDate)
+                  ).sort((a, b) => new Date(a.proposedDate || a.time?.split(',')[0]) - new Date(b.proposedDate || b.time?.split(',')[0]))
+                   .map((m, idx) => (
+                    <View key={`upcoming-${idx}`} style={styles.upcomingChallengeRow}>
+                      <View style={styles.challengeMeta}>
+                        <Text style={styles.challengeTimeText}>
+                          {m.proposedTime || m.time?.split(',')[1]?.trim() || 'TBD'}
+                        </Text>
+                        <Text style={styles.challengeDateText}>
+                          {m.proposedDate || m.time?.split(',')[0]?.trim()}
+                        </Text>
+                      </View>
+                      <View style={styles.challengeInfoMain}>
+                        <Text style={styles.challengeSportText}>{m.sport}</Text>
+                        <View style={[
+                          styles.statusBadge, 
+                          { backgroundColor: m.status === 'Accepted' ? '#DCFCE7' : '#FEF3C7' }
+                        ]}>
+                          <Text style={[
+                            styles.statusBadgeText, 
+                            { color: m.status === 'Accepted' ? '#16A34A' : '#D97706' }
+                          ]}>{m.status}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  ))
+                )}
               </View>
 
               <TouchableOpacity style={styles.confirmBtn} onPress={confirmChallenge}>
@@ -1207,5 +1264,62 @@ const styles = StyleSheet.create({
   venueBtn: { flexDirection: 'row', alignItems: 'center', padding: 15, borderRadius: 16, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#F1F5F9', gap: 12 },
   venueBtnActive: { backgroundColor: '#EEF2FF', borderColor: '#6366F1' },
   venueText: { fontSize: 14, fontWeight: '700', color: '#64748B' },
-  venueTextActive: { color: '#0F172A' }
+  venueTextActive: { color: '#0F172A' },
+  upcomingChallengesSection: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  emptyUpcomingText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginVertical: 8,
+  },
+  upcomingChallengeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  challengeMeta: {
+    width: 80,
+  },
+  challengeTimeText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  challengeDateText: {
+    fontSize: 10,
+    color: '#64748B',
+  },
+  challengeInfoMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: 12,
+  },
+  challengeSportText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  statusBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
 });

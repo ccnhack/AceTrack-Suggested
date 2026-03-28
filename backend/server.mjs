@@ -58,7 +58,7 @@ try {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
 
-const APP_VERSION = '2.2.8'; // AceTrack Suggested — Stable Sync, Matchmaking & Session Fix (Stable Session Patch)
+const APP_VERSION = '2.2.9'; // AceTrack Suggested — Stable Sync, Matchmaking & Session Fix (Stable Session Patch)
 // Deployment Trigger: 2026-03-28 15:30 PM (Final Sync)
 
 // ═══════════════════════════════════════════════════════════════
