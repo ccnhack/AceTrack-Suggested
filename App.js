@@ -44,7 +44,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = Platform.OS === 'web' ? '2.2.9-web' : '2.2.9';
+const APP_VERSION = Platform.OS === 'web' ? '2.3.0-web' : '2.3.0';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -266,11 +266,6 @@ export default function App() {
             logger.logAction('NOTIFICATION_LISTENER_SETUP_FAILED', { error: notifErr.message });
             console.warn('⚠️ Push notification listeners failed to initialize:', notifErr.message);
           }
-
-          return () => {
-            if (receivedSubscription) receivedSubscription.remove();
-            if (responseSubscription) responseSubscription.remove();
-          };
         }
         
         // Use "admin" or "samsung" or currentUser.id for label
@@ -554,13 +549,14 @@ export default function App() {
       if (cloudData.players) {
         // CLEANUP: Filter out ghost players (ID: test) and nulls
         cloudData.players = cloudData.players.filter(p => p && p.id && String(p.id).toLowerCase() !== 'test');
-        console.log(`👥 Cloud Sync: Received ${cloudData.players.length} players.`);
-        logger.logAction('CLOUD_PLAYERS_SYNC', { 
-          count: cloudData.players.length, 
-          players: cloudData.players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar })) 
-        });
-        setPlayers(cloudData.players);
-        storage.setItem('players', cloudData.players);
+        
+        // Deep compare players to avoid redundant re-renders
+        const playersChanged = JSON.stringify(cloudData.players) !== JSON.stringify(playersRef.current || players);
+        if (playersChanged) {
+          console.log(`👥 [v${versionAtStart}] Cloud Sync: Updating ${cloudData.players.length} players.`);
+          setPlayers(cloudData.players);
+          storage.setItem('players', cloudData.players);
+        }
 
         // Refresh local user from cloud list if logged in
         const currentU = currentUserRef.current;
@@ -574,7 +570,13 @@ export default function App() {
               });
             }
             // ONLY update if data actually changed to prevent render loops
-            const hasChanged = JSON.stringify(cloudUser) !== JSON.stringify(currentU);
+            // IDENTITY STABILITY: Ignore volatile fields like 'devices' and 'lastActive' during comparison
+            const sanitizeUser = (u) => {
+              const { devices, lastActive, ...rest } = u;
+              return rest;
+            };
+            const hasChanged = JSON.stringify(sanitizeUser(cloudUser)) !== JSON.stringify(sanitizeUser(currentU));
+            
             if (hasChanged) {
               console.log("🔄 Cloud user data differ from local. Updating state.");
               setCurrentUser(cloudUser);
@@ -587,14 +589,20 @@ export default function App() {
             if (cloudUser.role === 'admin') {
               if (cloudUser.seenAdminActionIds) {
                 const normalized = new Set(cloudUser.seenAdminActionIds.map(id => String(id)));
-                setSeenAdminActionIds(normalized);
-                storage.setItem('seenAdminActionIds', Array.from(normalized));
-                logger.logAction('BADGE_HYDRATION_CLOUD', { count: normalized.size, sample: Array.from(normalized).slice(0, 3) });
+                const currentSeen = seenAdminActionIdsRef.current || seenAdminActionIds;
+                if (normalized.size !== currentSeen.size || [...normalized].some(id => !currentSeen.has(id))) {
+                  setSeenAdminActionIds(normalized);
+                  storage.setItem('seenAdminActionIds', Array.from(normalized));
+                  logger.logAction('BADGE_HYDRATION_CLOUD', { count: normalized.size, sample: Array.from(normalized).slice(0, 3) });
+                }
               }
               if (cloudUser.visitedAdminSubTabs) {
                 const vats = new Set(cloudUser.visitedAdminSubTabs);
-                setVisitedAdminSubTabs(vats);
-                storage.setItem('visitedAdminSubTabs', Array.from(vats));
+                const currentVats = visitedAdminSubTabsRef.current || visitedAdminSubTabs;
+                if (vats.size !== currentVats.size || [...vats].some(v => !currentVats.has(v))) {
+                  setVisitedAdminSubTabs(vats);
+                  storage.setItem('visitedAdminSubTabs', Array.from(vats));
+                }
               }
             }
           }
@@ -701,29 +709,45 @@ export default function App() {
   };
 
 
+  const lastActiveUpdateRef = useRef(0);
   const syncAndSaveData = async (updates) => {
     // 0. Transparently inject this device hardware footprint into the cloud update
     if (updates.currentUser && localDeviceIdRef.current) {
-      const myTracker = {
-        id: localDeviceIdRef.current,
-        name: Constants.deviceName || Platform.OS,
-        appVersion: APP_VERSION,
-        platformVersion: `${Platform.OS === 'ios' ? 'iOS' : 'Android'} ${Platform.Version}`,
-        lastActive: Date.now()
-      };
-      updates.currentUser.devices = updates.currentUser.devices || [];
-      const dIndex = updates.currentUser.devices.findIndex(d => d.id === localDeviceIdRef.current);
-      if (dIndex >= 0) updates.currentUser.devices[dIndex] = myTracker;
-      else updates.currentUser.devices.push(myTracker);
+      const now = Date.now();
+      const needsTimestampUpdate = now - lastActiveUpdateRef.current > 5 * 60 * 1000; // 5 minute throttle
       
-      // MIRROR TO GLOBAL PLAYERS ARRAY FOR PERMANENT ANCHORING
-      if (!updates.players) {
-        updates.players = [...playersRef.current];
-      }
-      const pIndex = updates.players.findIndex(p => p.id === updates.currentUser.id);
-      if (pIndex >= 0) {
-        updates.players[pIndex] = { ...updates.players[pIndex], devices: updates.currentUser.devices };
-        setPlayers(updates.players);
+      const sanitizeUser = (u) => {
+        const { devices, lastActive, ...rest } = u || {};
+        return rest;
+      };
+      const otherDataChanged = JSON.stringify(sanitizeUser(updates.currentUser)) !== JSON.stringify(sanitizeUser(currentUserRef.current));
+
+      if (needsTimestampUpdate || otherDataChanged) {
+        lastActiveUpdateRef.current = now;
+        const myTracker = {
+          id: localDeviceIdRef.current,
+          name: Constants.deviceName || Platform.OS,
+          appVersion: APP_VERSION,
+          platformVersion: `${Platform.OS === 'ios' ? 'iOS' : 'Android'} ${Platform.Version}`,
+          lastActive: now
+        };
+        updates.currentUser.devices = updates.currentUser.devices || [];
+        const dIndex = updates.currentUser.devices.findIndex(d => d.id === localDeviceIdRef.current);
+        if (dIndex >= 0) updates.currentUser.devices[dIndex] = myTracker;
+        else updates.currentUser.devices.push(myTracker);
+        
+        // MIRROR TO GLOBAL PLAYERS ARRAY FOR PERMANENT ANCHORING
+        if (!updates.players) {
+          updates.players = [...playersRef.current];
+        }
+        const pIndex = updates.players.findIndex(p => p.id === updates.currentUser.id);
+        if (pIndex >= 0) {
+          updates.players[pIndex] = { ...updates.players[pIndex], devices: updates.currentUser.devices };
+          // setPlayers(updates.players); // Optimization: avoid redundant state set if not needed
+        }
+      } else {
+        // If only timestamp would have changed and we are throttled, don't force a user update
+        // but keep the rest of the updates (tournaments etc)
       }
     }
 

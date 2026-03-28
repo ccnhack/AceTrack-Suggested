@@ -631,7 +631,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                  <Calendar
                    minDate={new Date().toISOString().split('T')[0]}
                    onDayPress={(day) => setChallengeDate(day.dateString)}
-                   markedDates={{ 
+                   markedDates={React.useMemo(() => ({ 
                      ...MOCK_ACADEMY_TOURNAMENTS.reduce((acc, t) => {
                         if (t.academyId === selectedOpponent?.id) {
                           acc[t.date] = { marked: true, dotColor: '#EF4444' };
@@ -652,7 +652,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                        return acc;
                      }, {}),
                      [challengeDate]: { selected: true, selectedColor: '#6366F1' } 
-                   }}
+                   }), [selectedOpponent?.id, matchmaking, challengeDate])}
                    theme={{
                      todayTextColor: '#6366F1',
                      selectedDayBackgroundColor: '#6366F1',

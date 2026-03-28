@@ -230,27 +230,29 @@ const ExploreScreen = (props) => {
 
   const filteredTournaments = processedTournaments;
 
-  // Admin Trace: Log filter results for troubleshooting via useEffect to avoid re-render loops
-  React.useEffect(() => {
-    if (userRole?.toLowerCase() === 'admin' && tournaments?.length > 0) {
-      if (logger?.addLog) {
-        logger.addLog(`🔍 [Explore] Role: ${userRole}, Hub: ${cityFilter}, Matches: ${filteredTournaments.length} / Total: ${tournaments.length}`, 'info', 'console');
-        if (filteredTournaments.length === 0) {
-          const sample = tournaments[0];
-          logger.addLog(`⚠️ Explore filter trace (T1): ID=${sample.id}, Status=${sample.status}, Date=${sample.date}, Started=${sample.tournamentStarted}`, 'warn', 'console');
-        }
-      }
-    }
-  }, [userRole, cityFilter, filteredTournaments.length]); // Optimized dependencies
-
   const displayTournaments = useMemo(() => {
     return (isBeginnerProtected && userRole !== 'admin') 
       ? filteredTournaments.filter(t => t.skillLevel === 'Beginner')
       : filteredTournaments;
   }, [filteredTournaments, isBeginnerProtected, userRole]);
 
+  // Admin Trace: Log filter results for troubleshooting - STRICTLY THROTTLED
+  const lastLoggedRef = React.useRef(null);
+  React.useEffect(() => {
+    if (userRole?.toLowerCase() === 'admin' && tournaments?.length > 0) {
+      const currentConfig = `${userRole}-${cityFilter}-${sportFilter}-${displayTournaments.length}`;
+      if (lastLoggedRef.current !== currentConfig) {
+        lastLoggedRef.current = currentConfig;
+        if (logger?.addLog) {
+          logger.addLog(`🔍 [Explore] Filter Change -> Hub: ${cityFilter}, Sport: ${sportFilter}, Results: ${displayTournaments.length}`, 'info', 'console');
+        }
+      }
+    }
+  }, [userRole, cityFilter, sportFilter, displayTournaments.length]);
+
   const sortedTournaments = useMemo(() => {
-    return [...displayTournaments].sort((a, b) => {
+    const list = [...displayTournaments];
+    return list.sort((a, b) => {
       // Priority sort by distance if user location is available
       if (userLocation && a.distance !== b.distance) {
         return a.distance - b.distance;
