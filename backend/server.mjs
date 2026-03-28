@@ -58,8 +58,8 @@ try {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
 
-const APP_VERSION = '2.2.7'; // AceTrack Suggested — Stable Sync, Matchmaking & Session Fix
-// Deployment Trigger: 2026-03-28 10:35 AM
+const APP_VERSION = '2.2.8'; // AceTrack Suggested — Stable Sync, Matchmaking & Session Fix (Stable Session Patch)
+// Deployment Trigger: 2026-03-28 15:30 PM (Final Sync)
 
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: CORS Whitelist (SEC Fix #3)
