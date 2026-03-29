@@ -204,9 +204,9 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
             address: address,
             lat: props.lat,
             lon: props.lon,
-            distance: getDistance(lat, lng, props.lat, props.lon)
+            distance: d
           };
-        }).filter(v => v.venueName && v.venueName.trim() !== "");
+        }).filter(v => v.venueName && v.venueName.trim() !== "" && parseFloat(v.distance) <= 30);
 
         setNearbyVenues(prev => {
           const combined = [...prev, ...newVenues];
@@ -215,12 +215,15 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
           for (const v of combined) {
             const key = (v.venueName + (v.area || "")).toLowerCase();
             if (!seen.has(key)) {
-              unique.push(v);
-              seen.add(key);
+              if (parseFloat(v.distance) <= 30) {
+                unique.push(v);
+                seen.add(key);
+              }
             }
           }
           return unique.sort((a, b) => (parseFloat(a.distance) || 999) - (parseFloat(b.distance) || 999));
         });
+        setIsFetchingVenues(false);
       }
     } catch (error) {
       console.error('Error fetching Geoapify fallback:', error);
@@ -246,15 +249,15 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
       distance: getDistance(lat, lng, v.lat, v.lon)
     }));
 
-    // Filter for reasonably close ones (e.g. 50km) to see if we have enough
-    const withinReason = processedVenues.filter(v => parseFloat(v.distance) < 50);
-    const sortedVenues = processedVenues.sort((a, b) => (parseFloat(a.distance) || 999) - (parseFloat(b.distance) || 999));
+    // Filter strictly for ones within 30km as requested
+    const within30km = processedVenues.filter(v => v.distance !== null && parseFloat(v.distance) <= 30);
+    const sortedVenues = within30km.sort((a, b) => (parseFloat(a.distance) || 999) - (parseFloat(b.distance) || 999));
     
     setNearbyVenues(sortedVenues);
     setIsFetchingVenues(false);
 
-    // TRIGGER FALLBACK IF LESS THAN 5 RESULTS WITHIN 50KM
-    if (withinReason.length < 5 && lat && lng) {
+    // TRIGGER FALLBACK IF LESS THAN 5 RESULTS WITHIN 30KM
+    if (within30km.length < 5 && lat && lng) {
       fetchGeoapifyFallback(lat, lng);
     }
   };
@@ -873,6 +876,9 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
           style={{ flex: 1 }}
           contentContainerStyle={styles.list}
           ListEmptyComponent={<Text style={styles.emptyText}>No matching {role === 'academy' ? 'academies' : 'players'} found near you.</Text>}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
         />
       )}
       {(activeTab === 'Requested/Sent' || (role === 'coach' && activeTab === 'New Bookings')) && renderRequested()}

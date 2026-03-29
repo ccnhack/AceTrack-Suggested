@@ -14,9 +14,10 @@ const IST_OPTIONS = {
   hour12: false,
 };
 
+const formatter = new Intl.DateTimeFormat('en-IN', IST_OPTIONS);
+
 const formatIST = (date) => {
   try {
-    const formatter = new Intl.DateTimeFormat('en-IN', IST_OPTIONS);
     const parts = formatter.formatToParts(date);
     const d = parts.find(p => p.type === 'day').value;
     const m = parts.find(p => p.type === 'month').value;

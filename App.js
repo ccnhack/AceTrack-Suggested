@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = "2.3.5";
+const APP_VERSION = "2.3.6";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -1353,14 +1353,6 @@ export default function App() {
     }
   }), [handleLogin, handleLogout, handleSendUserNotification, loadData, handleUpdateMatchmaking, handleRegisterUser, handleSaveTournament, handleSaveVideo, handleSyncUpdate, handleLogTrace, handleSaveTicket, handleConfirmCoachRequest, handleUploadLogs, isUploadingLogs, isCloudOnline, isSyncing, lastSyncTime, isUsingCloud, seenAdminActionIds, visitedAdminSubTabs, tournaments, matchVideos, matches, players, userRole, supportTickets, evaluations, chatbotMessages]);
 
-  logger.logAction('APP_RENDER_STATE', { 
-    isLoading, 
-    hasUser: !!currentUser, 
-    viewingLanding, 
-    showSignup, 
-    showOnboarding,
-    timestamp: new Date().toISOString()
-  });
 
   if (isLoading) {
     return (
@@ -1433,13 +1425,6 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <TouchableOpacity 
-          activeOpacity={1} 
-          style={{ flex: 1 }} 
-          onPress={() => {
-            return false;
-          }}
-        >
         <NavigationContainer 
           ref={navigationRef}
           onStateChange={(state) => {
@@ -1570,8 +1555,7 @@ export default function App() {
           </View>
         </Modal>
 
-      </NavigationContainer>
-        </TouchableOpacity>
+        </NavigationContainer>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
