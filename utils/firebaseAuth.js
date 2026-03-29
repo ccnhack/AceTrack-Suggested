@@ -1,6 +1,8 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
-  getAuth, 
+  getAuth,
+  initializeAuth, 
+  getReactNativePersistence,
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
   signOut as firebaseSignOut, 
@@ -8,6 +10,7 @@ import {
   GoogleAuthProvider,
   signInWithCredential
 } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -27,10 +30,22 @@ let auth;
  * Initialize Firebase (call once at app startup)
  */
 export const initializeFirebase = () => {
-  if (!app) {
+  if (getApps().length > 0) {
+    app = getApp();
+    try {
+      auth = getAuth(app);
+    } catch (e) {
+      // If getAuth fails, it might mean it was never initialized for this app
+      auth = initializeAuth(app, {
+        persistence: getReactNativePersistence(AsyncStorage)
+      });
+    }
+  } else {
     app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    console.log('🔥 Firebase initialized');
+    auth = initializeAuth(app, {
+      persistence: getReactNativePersistence(AsyncStorage)
+    });
+    console.log('🔥 Firebase initialized with AsyncStorage persistence');
   }
   return { app, auth };
 };

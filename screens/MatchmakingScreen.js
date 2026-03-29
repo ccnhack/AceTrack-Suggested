@@ -35,12 +35,19 @@ const MOCK_ACADEMIES = [
 
 export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatchmaking, players = [], sendUserNotification, onManualSync }) {
   
+  const lastSyncRef = React.useRef(0);
+
   // REAL-TIME SYNC: Refresh data when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      if (onManualSync) {
+      const now = Date.now();
+      // Throttle sync to once every 2 seconds to break potential infinite refocus loops
+      if (onManualSync && now - lastSyncRef.current > 2000) {
         console.log("🔄 Matchmaking Screen focused, triggering background sync...");
+        lastSyncRef.current = now;
         onManualSync(true); // true = force background sync
+      } else if (onManualSync) {
+        console.log("⏳ Matchmaking sync throttled (last sync < 2s ago)");
       }
     }, [onManualSync])
   );
@@ -48,11 +55,24 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   const [activeTab, setActiveTab] = useState(role === 'coach' ? 'New Bookings' : 'Challenge'); // Challenge, Requested/Sent, Accepted, History
 
   // Derived states from global matchmaking prop
-  const sentRequests = matchmaking.filter(m => m.senderId === user?.id && m.status !== 'Accepted');
-  const receivedRequests = matchmaking.filter(m => m.receiverId === user?.id && m.status === 'Pending');
-  const acceptedMatches = matchmaking.filter(m => 
-    (m.senderId === user?.id || m.receiverId === user?.id) && m.status === 'Accepted'
+  // Derived states from global matchmaking prop - MEMOIZED
+  const sentRequests = React.useMemo(() => 
+    matchmaking.filter(m => m.senderId === user?.id && m.status !== 'Accepted'),
+    [matchmaking, user?.id]
   );
+  
+  const receivedRequests = React.useMemo(() => 
+    matchmaking.filter(m => m.receiverId === user?.id && m.status === 'Pending'),
+    [matchmaking, user?.id]
+  );
+  
+  const acceptedMatches = React.useMemo(() => 
+    matchmaking.filter(m => 
+      (m.senderId === user?.id || m.receiverId === user?.id) && m.status === 'Accepted'
+    ),
+    [matchmaking, user?.id]
+  );
+
   const [history, setHistory] = useState([
     { id: 'h1', name: 'Sameer P.', sport: 'Badminton', result: 'Won 21-18, 21-15', date: 'Mar 20, 2024' }
   ]);
@@ -73,6 +93,53 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   const [expandedSlot, setExpandedSlot] = useState(null);
   const [counterComment, setCounterComment] = useState('');
   const [playerSearchQuery, setPlayerSearchQuery] = useState('');
+
+  // MEMOIZED CALENDAR MARKING - CHALLENGE MODAL
+  const challengeMarkedDates = React.useMemo(() => {
+    if (!isChallengeModalVisible) return {};
+    const marks = {};
+    
+    // Mark Mock Tournament Dates
+    MOCK_ACADEMY_TOURNAMENTS.forEach(t => {
+      if (t.academyId === selectedOpponent?.id) {
+        marks[t.date] = { marked: true, dotColor: '#EF4444' };
+      }
+    });
+
+    // Mark Existing Matchmaking Dates
+    matchmaking.forEach(m => {
+       if ((m.senderId === user?.id && m.receiverId === selectedOpponent?.id) ||
+           (m.senderId === selectedOpponent?.id && m.receiverId === user?.id)) {
+         const mDate = m.proposedDate || m.time?.split(',')[0]?.trim();
+         if (mDate) {
+           marks[mDate] = { marked: true, dotColor: designSystem.colors.primary };
+         }
+       }
+    });
+
+    // Mark Selected Date
+    if (challengeDate) {
+      marks[challengeDate] = { ...marks[challengeDate], selected: true, selectedColor: '#6366F1' };
+    }
+    return marks;
+  }, [isChallengeModalVisible, selectedOpponent?.id, matchmaking, challengeDate, user?.id]);
+
+  // MEMOIZED CALENDAR MARKING - COUNTER MODAL
+  const counterMarkedDates = React.useMemo(() => {
+    if (!isCounterModalVisible) return {};
+    const marks = {};
+    
+    MOCK_ACADEMY_TOURNAMENTS.forEach(t => {
+       if (t.academyId === selectedChallenge?.academyId) {
+         marks[t.date] = { marked: true, dotColor: '#EF4444' };
+       }
+    });
+
+    if (counterDate) {
+      marks[counterDate] = { selected: true, selectedColor: '#6366F1' };
+    }
+    return marks;
+  }, [isCounterModalVisible, selectedChallenge?.academyId, counterDate]);
 
   const parseTime = (timeStr) => {
     const [time, modifier] = timeStr.split(' ');
@@ -392,7 +459,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
     );
   };
 
-  const renderOpponent = ({ item }) => {
+  const renderOpponent = useCallback(({ item }) => {
     const isAcademy = role === 'academy';
     const isSent = sentRequests.some(r => r.id === item.id);
 
@@ -416,7 +483,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
         </TouchableOpacity>
       </View>
     );
-  };
+  }, [role, sentRequests, handleChallenge]);
 
   const renderRequested = () => {
     const counteredRequests = sentRequests.filter(req => req.status === 'Countered');
@@ -530,7 +597,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   };
 
   const renderAccepted = () => (
-    <View style={styles.tabContent}>
+    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
       {acceptedMatches.length === 0 && <Text style={styles.emptyText}>No accepted matches yet.</Text>}
       {acceptedMatches.map((match, index) => (
         <TouchableOpacity key={match.id || `accepted-${index}`} style={styles.acceptedCard} onPress={() => openDetails(match)}>
@@ -542,11 +609,11 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
           <Text style={styles.acceptedDetail}>{match.sport} • {match.location}</Text>
         </TouchableOpacity>
       ))}
-    </View>
+    </ScrollView>
   );
 
   const renderHistory = () => (
-    <View style={styles.tabContent}>
+    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
       {history.length === 0 && <Text style={styles.emptyText}>No match history found.</Text>}
       {history.map((item, index) => (
         <TouchableOpacity key={item.id || `history-${index}`} style={styles.historyCard} onPress={() => openDetails(item)}>
@@ -557,23 +624,25 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
           <Text style={styles.historyResult}>{item.result}</Text>
         </TouchableOpacity>
       ))}
-    </View>
+    </ScrollView>
   );
 
-  const allPlayers = Array.isArray(players) ? players : [];
+  const allPlayers = React.useMemo(() => Array.isArray(players) ? players : [], [players]);
   
-  const filteredOpponents = (role === 'academy'
-    ? MOCK_ACADEMIES.filter(a => a.id !== user?.id && a.managedSports.some(s => mySports.includes(s)))
-    : allPlayers.filter(p => p.id !== user?.id && p.role !== 'coach')
-  ).filter(item => {
-    if (!playerSearchQuery) return true;
+  const filteredOpponents = React.useMemo(() => {
+    const base = (role === 'academy'
+      ? MOCK_ACADEMIES.filter(a => a.id !== user?.id && a.managedSports.some(s => mySports.includes(s)))
+      : allPlayers.filter(p => p.id !== user?.id && p.role === 'user')
+    );
+    
+    if (!playerSearchQuery) return base;
     const query = playerSearchQuery.toLowerCase();
-    return (
+    return base.filter(item => 
       item.name?.toLowerCase().includes(query) || 
       item.username?.toLowerCase().includes(query) ||
       item.email?.toLowerCase().includes(query)
     );
-  });
+  }, [role, user?.id, mySports, allPlayers, playerSearchQuery]);
 
   return (
     <View style={styles.container}>
@@ -617,6 +686,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
           data={filteredOpponents}
           renderItem={renderOpponent}
           keyExtractor={item => item.id}
+          style={{ flex: 1 }}
           contentContainerStyle={styles.list}
           ListEmptyComponent={<Text style={styles.emptyText}>No matching {role === 'academy' ? 'academies' : 'players'} found near you.</Text>}
         />
@@ -657,29 +727,10 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
               <View style={styles.calendarContainer}>
                  <Calendar
                    minDate={new Date().toISOString().split('T')[0]}
-                   onDayPress={(day) => setChallengeDate(day.dateString)}
-                   markedDates={React.useMemo(() => ({ 
-                     ...MOCK_ACADEMY_TOURNAMENTS.reduce((acc, t) => {
-                        if (t.academyId === selectedOpponent?.id) {
-                          acc[t.date] = { marked: true, dotColor: '#EF4444' };
-                        }
-                        return acc;
-                     }, {}),
-                     ...matchmaking.filter(m => 
-                       (m.senderId === user?.id && m.receiverId === selectedOpponent?.id) ||
-                       (m.senderId === selectedOpponent?.id && m.receiverId === user?.id)
-                     ).reduce((acc, m) => {
-                       const mDate = m.proposedDate || m.time?.split(',')[0]?.trim();
-                       if (mDate) {
-                         acc[mDate] = { 
-                           marked: true, 
-                           dotColor: designSystem.colors.primary 
-                         };
-                       }
-                       return acc;
-                     }, {}),
-                     [challengeDate]: { selected: true, selectedColor: '#6366F1' } 
-                   }), [selectedOpponent?.id, matchmaking, challengeDate])}
+                   onDayPress={(day) => {
+                      setChallengeDate(day.dateString);
+                    }}
+                   markedDates={challengeMarkedDates}
                    theme={{
                      todayTextColor: '#6366F1',
                      selectedDayBackgroundColor: '#6366F1',
@@ -1000,16 +1051,10 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
               <View style={styles.calendarContainer}>
                  <Calendar
                    minDate={new Date().toISOString().split('T')[0]}
-                   onDayPress={(day) => setCounterDate(day.dateString)}
-                   markedDates={{ 
-                     ...MOCK_ACADEMY_TOURNAMENTS.reduce((acc, t) => {
-                        if (t.academyId === selectedChallenge?.academyId) {
-                          acc[t.date] = { marked: true, dotColor: '#EF4444' };
-                        }
-                        return acc;
-                     }, {}),
-                     [counterDate]: { selected: true, selectedColor: '#6366F1' } 
-                   }}
+                   onDayPress={(day) => {
+                      setCounterDate(day.dateString);
+                    }}
+                   markedDates={counterMarkedDates}
                     theme={{ todayTextColor: '#6366F1', selectedDayBackgroundColor: '#6366F1', textDayFontSize: 13 }}
                  />
               </View>

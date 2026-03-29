@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, 
   SafeAreaView, Alert, Platform, Modal, Image, KeyboardAvoidingView, ActivityIndicator, AppState, PanResponder, StatusBar 
@@ -29,6 +29,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import ErrorBoundary from './components/ErrorBoundary';
 import OnboardingScreen from './screens/OnboardingScreen';
 import LandingScreen from './screens/LandingScreen';
+import LoginScreen from './screens/LoginScreen';
 import SignupScreen from './screens/SignupScreen';
 import { initializeFirebase } from './utils/firebaseAuth';
 import { registerForPushNotificationsAsync, sendTokenToBackend } from './services/notificationService';
@@ -44,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = Platform.OS === 'web' ? '2.3.2-web' : '2.3.2';
+const APP_VERSION = "2.3.3";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -353,7 +354,7 @@ export default function App() {
     }
   };
 
-  const checkForUpdates = async () => {
+  const checkForUpdates = useCallback(async () => {
     try {
       if (isSyncingRef.current) return;
 
@@ -380,7 +381,7 @@ export default function App() {
       console.log("⚠️ Update check failed (silent):", error.message);
       logger.logAction('CHECK_UPDATES_FAILED', { error: error.message });
     }
-  };
+  }, []); // Status check is safe to memoize broadly as it uses refs for latest values
 
   const hydrateFromStorage = async () => {
     console.log("📦 Hydrating app state from local storage...");
@@ -465,7 +466,7 @@ export default function App() {
     }
   };
 
-  const syncPendingData = async () => {
+  const syncPendingData = useCallback(async () => {
     // Read directly from storage to ensure we have the absolute latest pending list
     const latestPending = await storage.getItem('pendingSync') || [];
     if (latestPending.length === 0) return true;
@@ -483,21 +484,17 @@ export default function App() {
       pendingSyncRef.current = [];
       await storage.setItem('pendingSync', []);
       console.log("✅ [Sync] Pending data synced successfully");
-      // Note: We don't call loadData() here because syncPendingData
-      // is usually called FROM loadData() which will continue its fetch.
     }
     return success;
-  };
+  }, []);
 
-  const loadData = async (forceNoLoading = false, forceSync = false) => {
+  const loadData = useCallback(async (forceNoLoading = false, forceSync = false) => {
     if (isSyncingRef.current && !forceSync) {
       console.log("📡 Sync already in progress, skipping background loadData");
       return;
     }
 
     // First, try to sync any local changes.
-    // If we have pending data and sync fails, we MUST NOT pull from cloud
-    // because cloud data is now "stale" compared to our local offline work.
     const syncSuccess = await syncPendingData();
     if (pendingSyncRef.current.length > 0 && !syncSuccess) {
       console.log("⏳ Local changes pending sync. Skipping cloud pull to prevent overwrite.");
@@ -530,8 +527,6 @@ export default function App() {
 
       const cloudData = await response.json();
       console.log(`✅ [v${versionAtStart}] Data fetched successfully [Keys: ${Object.keys(cloudData).join(', ')}]`);
-      console.log("✅ Cloud data received. Keys:", Object.keys(cloudData));
-      if (cloudData.tournaments) console.log(`🏆 Cloud Tournaments: ${cloudData.tournaments.length}`);
 
       // DO NOT proceed if a newer sync has already started
       if (versionAtStart !== syncVersion.current && !forceSync) {
@@ -539,43 +534,26 @@ export default function App() {
         return false;
       }
 
-      console.log("✅ Cloud data received. Applying updates...");
       setIsCloudOnline(true);
       setLastSyncTime(new Date().toLocaleTimeString());
 
       if (cloudData.lastUpdated) {
         lastServerUpdateRef.current = cloudData.lastUpdated;
         logger.logAction('LOAD_DATA_SUCCESS', { lastUpdated: cloudData.lastUpdated });
-      } else {
-        logger.logAction('LOAD_DATA_LOCAL_ONLY');
       }
 
-      // Update states and storage simultaneously
       if (cloudData.players) {
-        // CLEANUP: Filter out ghost players (ID: test) and nulls
         cloudData.players = cloudData.players.filter(p => p && p.id && String(p.id).toLowerCase() !== 'test');
-        
-        // Deep compare players to avoid redundant re-renders
-        const playersChanged = JSON.stringify(cloudData.players) !== JSON.stringify(playersRef.current || players);
+        const playersChanged = JSON.stringify(cloudData.players) !== JSON.stringify(playersRef.current);
         if (playersChanged) {
-          console.log(`👥 [v${versionAtStart}] Cloud Sync: Updating ${cloudData.players.length} players.`);
           setPlayers(cloudData.players);
           storage.setItem('players', cloudData.players);
         }
 
-        // Refresh local user from cloud list if logged in
         const currentU = currentUserRef.current;
         if (currentU) {
           const cloudUser = cloudData.players.find(p => String(p.id).toLowerCase() === String(currentU.id).toLowerCase());
           if (cloudUser) {
-            if (cloudUser.avatar !== currentU.avatar) {
-              logger.logAction('USER_AVATAR_CLOUD_OVERWRITE', { 
-                 old: currentU.avatar, 
-                 new: cloudUser.avatar 
-              });
-            }
-            // ONLY update if data actually changed to prevent render loops
-            // IDENTITY STABILITY: Ignore volatile fields like 'devices' and 'lastActive' during comparison
             const sanitizeUser = (u) => {
               const { devices, lastActive, ...rest } = u;
               return rest;
@@ -583,46 +561,23 @@ export default function App() {
             const hasChanged = JSON.stringify(sanitizeUser(cloudUser)) !== JSON.stringify(sanitizeUser(currentU));
             
             if (hasChanged) {
-              console.log("🔄 Cloud user data differ from local. Updating state.");
               setCurrentUser(cloudUser);
               currentUserRef.current = cloudUser;
               setUserRole(cloudUser.role || 'user');
               storage.setItem('currentUser', cloudUser);
-            }
-            
-            // CRITICAL FIX: Update independent admin states and their storage keys from the cloud profile
-            if (cloudUser.role === 'admin') {
-              if (cloudUser.seenAdminActionIds) {
-                const normalized = new Set(cloudUser.seenAdminActionIds.map(id => String(id)));
-                const currentSeen = seenAdminActionIdsRef.current || seenAdminActionIds;
-                if (normalized.size !== currentSeen.size || [...normalized].some(id => !currentSeen.has(id))) {
-                  setSeenAdminActionIds(normalized);
-                  storage.setItem('seenAdminActionIds', Array.from(normalized));
-                  logger.logAction('BADGE_HYDRATION_CLOUD', { count: normalized.size, sample: Array.from(normalized).slice(0, 3) });
-                }
-              }
-              if (cloudUser.visitedAdminSubTabs) {
-                const vats = new Set(cloudUser.visitedAdminSubTabs);
-                const currentVats = visitedAdminSubTabsRef.current || visitedAdminSubTabs;
-                if (vats.size !== currentVats.size || [...vats].some(v => !currentVats.has(v))) {
-                  setVisitedAdminSubTabs(vats);
-                  storage.setItem('visitedAdminSubTabs', Array.from(vats));
-                }
-              }
             }
           }
         }
       }
 
       if (cloudData.tournaments) {
-        // CLEANUP: Filter out 'test' from all player lists
-        cloudData.tournaments = cloudData.tournaments.map(t => ({
+        const cleaned = cloudData.tournaments.map(t => ({
           ...t,
           registeredPlayerIds: (t.registeredPlayerIds || []).filter(pid => pid && String(pid).toLowerCase() !== 'test'),
           pendingPaymentPlayerIds: (t.pendingPaymentPlayerIds || []).filter(pid => pid && String(pid).toLowerCase() !== 'test')
         }));
-        setTournaments(cloudData.tournaments);
-        storage.setItem('tournaments', cloudData.tournaments);
+        setTournaments(cleaned);
+        storage.setItem('tournaments', cleaned);
       }
       if (cloudData.matchVideos) {
         setMatchVideos(cloudData.matchVideos);
@@ -632,13 +587,9 @@ export default function App() {
         setMatches(cloudData.matches);
         storage.setItem('matches', cloudData.matches);
       }
-      if (cloudData.supportTickets) {
-        setSupportTickets(cloudData.supportTickets);
-        storage.setItem('supportTickets', cloudData.supportTickets);
-      }
-      if (cloudData.evaluations) {
-        setEvaluations(cloudData.evaluations);
-        storage.setItem('evaluations', cloudData.evaluations);
+      if (cloudData.matchmaking) {
+        setMatchmaking(cloudData.matchmaking);
+        storage.setItem('matchmaking', cloudData.matchmaking);
       }
       if (cloudData.auditLogs) {
         setAuditLogs(cloudData.auditLogs);
@@ -648,42 +599,31 @@ export default function App() {
         setChatbotMessages(cloudData.chatbotMessages);
         storage.setItem('chatbotMessages', cloudData.chatbotMessages);
       }
-      if (cloudData.matchmaking) {
-        setMatchmaking(cloudData.matchmaking);
-        storage.setItem('matchmaking', cloudData.matchmaking);
-      }
 
-      console.log(`✅ [v${versionAtStart}] loadData completed successfully`);
       return cloudData;
     } catch (e) {
       console.log("📡 Cloud unreachable or error:", e.message);
       setIsCloudOnline(false);
-      await hydrateFromStorage();
       return false;
     } finally {
       if (versionAtStart === syncVersion.current) {
         setSyncingState(false);
-        // Only hide loading if this was a blocking load (sync version matches)
         if (!forceNoLoading) setIsLoading(false);
-        
-        // POST-SYNC: Check if we missed any WebSocket updates during this pull
         if (pendingUpdateCheckRef.current) {
-           console.log("🚀 Sync finished. Triggering queued update check...");
            pendingUpdateCheckRef.current = false;
            checkForUpdates();
         }
       }
     }
-  };
+  }, [syncPendingData, checkForUpdates]);
 
-  const pushStateToCloud = async (updates) => {
+  const pushStateToCloud = useCallback(async (updates) => {
     if (!isUsingCloudRef.current) return;
     
     const thisVersion = ++syncVersion.current;
     try {
       setSyncingState(true);
       logger.logAction('PUSH_DATA_START', { keys: Object.keys(updates), version: thisVersion });
-      logger.logAction('PUSH_DATA_PAYLOAD', { updatesPreview: JSON.stringify(updates).substring(0, 500) });
       
       const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
       const response = await fetch(`${activeApiUrl}/api/save`, {
@@ -704,8 +644,6 @@ export default function App() {
       if (thisVersion === syncVersion.current) {
         lastServerUpdateRef.current = result.lastUpdated;
         logger.logAction('PUSH_DATA_SUCCESS', { lastUpdated: result.lastUpdated });
-      } else {
-        console.log(`☁️ [v${thisVersion}] finished, but v${syncVersion.current} is now active.`);
       }
       return true;
     } catch (error) {
@@ -713,27 +651,22 @@ export default function App() {
       logger.logAction('PUSH_DATA_ERROR', { error: error.message, version: thisVersion });
       return false;
     } finally {
-      // Failsafe: only clear syncing if this was the latest intended push
       if (thisVersion === syncVersion.current) {
         setSyncingState(false);
-        
-        // POST-SYNC: Check if we missed any WebSocket updates during this push
         if (pendingUpdateCheckRef.current) {
-           console.log("🚀 Push finished. Triggering queued update check...");
            pendingUpdateCheckRef.current = false;
            checkForUpdates();
         }
       }
     }
-  };
+  }, [checkForUpdates]);
 
 
   const lastActiveUpdateRef = useRef(0);
-  const syncAndSaveData = async (updates) => {
-    // 0. Transparently inject this device hardware footprint into the cloud update
+  const syncAndSaveData = useCallback(async (updates) => {
     if (updates.currentUser && localDeviceIdRef.current) {
       const now = Date.now();
-      const needsTimestampUpdate = now - lastActiveUpdateRef.current > 5 * 60 * 1000; // 5 minute throttle
+      const needsTimestampUpdate = now - lastActiveUpdateRef.current > 5 * 60 * 1000;
       
       const sanitizeUser = (u) => {
         const { devices, lastActive, ...rest } = u || {};
@@ -755,26 +688,19 @@ export default function App() {
         if (dIndex >= 0) updates.currentUser.devices[dIndex] = myTracker;
         else updates.currentUser.devices.push(myTracker);
         
-        // MIRROR TO GLOBAL PLAYERS ARRAY FOR PERMANENT ANCHORING
         if (!updates.players) {
           updates.players = [...playersRef.current];
         }
         const pIndex = updates.players.findIndex(p => p.id === updates.currentUser.id);
         if (pIndex >= 0) {
           updates.players[pIndex] = { ...updates.players[pIndex], devices: updates.currentUser.devices };
-          // setPlayers(updates.players); // Optimization: avoid redundant state set if not needed
         }
-      } else {
-        // If only timestamp would have changed and we are throttled, don't force a user update
-        // but keep the rest of the updates (tournaments etc)
       }
     }
 
     try {
-      // 1. Save all keys to local storage for offline support
       for (const key in updates) {
         let val = updates[key];
-        // SAFETY: Filter out ghost data during sync
         if (key === 'players' && Array.isArray(val)) {
           val = val.filter(p => p && p.id && String(p.id).toLowerCase() !== 'test');
         }
@@ -788,7 +714,6 @@ export default function App() {
         await storage.setItem(key, val);
       }
 
-      // 2. Identify syncable keys
       const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser', 'matchmaking'];
       const syncUpdates = {};
       let hasSyncable = false;
@@ -802,12 +727,9 @@ export default function App() {
 
       if (!hasSyncable) return;
 
-      // 3. IMMEDIATE SYNC: Always push if there's a synced key. 
-      // pushStateToCloud increments versioning to handle stale background pulls.
       if (isUsingCloudRef.current && isCloudOnline) {
         const success = await pushStateToCloud(syncUpdates);
         if (!success) {
-          // If push failed, mark all syncable keys as "dirty" for later retry
           setPendingSync(prev => {
             let next = [...prev];
             let changed = false;
@@ -822,68 +744,46 @@ export default function App() {
             }
             return next;
           });
-          console.log(`⚠️ Updates for ${Object.keys(syncUpdates).join(', ')} marked as pending sync (offline)`);
         }
       }
     } catch (e) {
       console.error(`Failed to sync and save data`, e);
     }
-  };
+  }, [pushStateToCloud, isCloudOnline]);
 
   // Handlers
-  const handleLogin = async (role, user) => {
+  const handleLogin = useCallback(async (role, user) => {
     setCurrentUser(user);
     currentUserRef.current = user;
     setUserRole(role);
     await storage.setItem('currentUser', user);
 
-    // IMMEDIATE SYNC: Update device footprint upon login
     syncAndSaveData({ currentUser: user });
     
-    // Ensure logged in user is in players list (case-insensitive check)
-    const isNew = !players.some(p => String(p.id).toLowerCase() === String(user.id).toLowerCase());
+    const isNew = !playersRef.current.some(p => String(p.id).toLowerCase() === String(user.id).toLowerCase());
     if (user && isNew) {
-      const updated = [user, ...players];
+      const updated = [user, ...playersRef.current];
       setPlayers(updated);
       await storage.setItem('players', updated);
       await pushStateToCloud({ players: updated });
     }
     
-    // STEP 1: Immediately hydrate from local storage for instant UI.
-    // This gives users data right away, even if cloud is slow.
     await hydrateFromStorage();
-    
-    // STEP 2: Then attempt cloud pull to get the absolute latest data.
-    // Use 30s timeout for Render.com cold starts.
     await loadData(true, true);
-    console.log('✅ Login sync complete.');
-
-    // Register Push Token if available
+    
     const pushToken = await storage.getItem('push_token');
     if (pushToken && user?.id) {
       sendTokenToBackend(user.id, pushToken);
     }
+  }, [hydrateFromStorage, loadData, pushStateToCloud, syncAndSaveData]);
 
-    // STEP 3: Check for verification status
-    // This is now handled by a useEffect hook to ensure it triggers consistently
-    // after all data is loaded and currentUser is stable.
-  };
-
-  const handleLogout = async () => {
-    // 1. Clear auth state FIRST so polling guard stops immediately
+  const handleLogout = useCallback(async () => {
     logger.logAction('USER_LOGOUT_START', { userId: currentUserRef.current?.id });
     currentUserRef.current = null;
     setCurrentUser(null);
     setUserRole(null);
-    
-    // 2. Reset sync state to prevent any stuck locks
     setSyncingState(false);
     
-    // 3. Reset state to mock data so LoginScreen can still validate credentials.
-    //    We do NOT clear shared data from storage — tournaments, players, etc. are
-    //    GLOBAL shared data (not per-user). Keeping them in storage means the next
-    //    login will show data instantly via hydrateFromStorage(), even if the cloud
-    //    is slow or unreachable (Render cold start).
     setPlayers([CURRENT_PLAYER, ...OTHER_PLAYERS]);
     setTournaments(TOURNAMENTS);
     setMatchVideos(MATCH_VIDEOS);
@@ -894,23 +794,15 @@ export default function App() {
     setPendingSync([]);
     pendingSyncRef.current = [];
     
-    // 4. Only clear user-specific storage key. Shared data stays for next login.
     await storage.removeItem('currentUser');
     await storage.removeItem('pendingSync');
-    console.log("🧹 Auth state cleared on logout (shared data preserved in storage)");
-  };
+  }, []);
 
-  const handleRegisterUser = async (newPlayer) => {
-    // 1. Update local state
-    const updatedPlayers = [newPlayer, ...players];
+  const handleRegisterUser = useCallback(async (newPlayer) => {
+    const updatedPlayers = [newPlayer, ...playersRef.current];
     setPlayers(updatedPlayers);
-    
-    // 2. Persist to storage
     await storage.setItem('players', updatedPlayers);
-    
-    // 3. Sync to cloud IMMEDIATELY and wait for it
-    console.log(`📝 Registering new user to CLOUD: ${newPlayer.id}`);
-    const success = await pushStateToCloud({ players: updatedPlayers }, true); // FORCE CLOUD for registration
+    const success = await pushStateToCloud({ players: updatedPlayers }, true);
     
     logger.logAction('USER_SIGNUP', { 
       id: newPlayer.id, 
@@ -920,7 +812,6 @@ export default function App() {
     });
     
     if (!success) {
-      // If sync fails, mark as pending
       setPendingSync(prev => {
         const next = [...prev];
         if (!next.includes('players')) next.push('players');
@@ -929,21 +820,23 @@ export default function App() {
       });
     }
     return success;
-  };
+  }, [pushStateToCloud]);
 
-  const handleSaveTournament = (t) => {
-    const updated = tournaments.map(item => item.id === t.id ? t : item);
-    if (!tournaments.find(item => item.id === t.id)) updated.unshift(t);
-    setTournaments(updated);
-    syncAndSaveData({ tournaments: updated });
-  };
+  const handleSaveTournament = useCallback((t) => {
+    setTournaments(prev => {
+      const updated = prev.map(item => item.id === t.id ? t : item);
+      if (!prev.find(item => item.id === t.id)) updated.unshift(t);
+      syncAndSaveData({ tournaments: updated });
+      return updated;
+    });
+  }, [syncAndSaveData]);
 
-  const handleSaveVideo = (v) => {
+  const handleSaveVideo = useCallback((v) => {
     const isNew = !matchVideos.find(item => item.id === v.id);
     const updatedVideos = matchVideos.map(item => item.id === v.id ? v : item);
     if (isNew) updatedVideos.unshift(v);
     
-    let updatedPlayers = players;
+    let updatedPlayers = playersRef.current;
     const recipientIds = new Set();
 
     if (isNew) {
@@ -956,7 +849,7 @@ export default function App() {
         ...(tournament?.assignedCoachId ? [tournament.assignedCoachId] : [])
       ].forEach(id => recipientIds.add(id));
 
-      updatedPlayers = players.map(p => {
+      updatedPlayers = updatedPlayers.map(p => {
         if (recipientIds.has(p.id)) {
             const notif = {
                 id: `notif-${Date.now()}-${p.id}`,
@@ -976,27 +869,16 @@ export default function App() {
     setMatchVideos(updatedVideos);
     setPlayers(updatedPlayers);
 
-    const updates = {
-      matchVideos: updatedVideos,
-      players: updatedPlayers
-    };
+    const updates = { matchVideos: updatedVideos, players: updatedPlayers };
 
-    if (isNew && currentUser && recipientIds.has(currentUser.id)) {
-      const updatedUser = updatedPlayers.find(p => p.id === currentUser.id);
+    if (isNew && currentUserRef.current && recipientIds.has(currentUserRef.current.id)) {
+      const updatedUser = updatedPlayers.find(p => p.id === currentUserRef.current.id);
       setCurrentUser(updatedUser);
       updates.currentUser = updatedUser;
     }
 
     syncAndSaveData(updates);
 
-    if (isNew && recipientIds.size > 0) {
-      Alert.alert(
-        "Video Uploaded",
-        `Notifications sent to ${recipientIds.size} participants for match ${v.matchId}.`
-      );
-    }
-
-    // Processing simulation (remains local-only until finished)
     if (isNew) {
       setTimeout(() => {
         setMatchVideos(prev => {
@@ -1016,12 +898,11 @@ export default function App() {
           storage.setItem('matchVideos', final);
           return final;
         });
-        console.log(`--- VIDEO ${v.id} PROCESSING COMPLETE ---`);
       }, 5000);
     }
-  };
+  }, [matchVideos, matches, tournaments, pushStateToCloud, syncAndSaveData]);
 
-  const handleSyncUpdate = async (updates) => {
+  const handleSyncUpdate = useCallback(async (updates) => {
     const currentU = currentUserRef.current;
     const currentP = playersRef.current;
     
@@ -1070,9 +951,9 @@ export default function App() {
     const success = await syncAndSaveData(updates);
     logger.logAction('SYNC_UPDATE_FINISH', { success });
     return success;
-  };
+  }, [syncAndSaveData]);
 
-  const handleLogTrace = (action, targetType, targetId, details, adminId = 'system') => {
+  const handleLogTrace = useCallback((action, targetType, targetId, details, adminId = 'system') => {
     const newLog = {
       id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       action,
@@ -1087,74 +968,114 @@ export default function App() {
       syncAndSaveData({ auditLogs: updated });
       return updated;
     });
-  };
+  }, [syncAndSaveData]);
 
-  const handlers = {
-    onLogin: (role, user) => {
-      logger.logAction('USER_LOGIN', { id: user.id, email: user.email, role: role });
-      handleLogin(role, user);
-    },
-    onLogout: () => {
-      if (currentUser) logger.logAction('USER_LOGOUT', { id: currentUser.id });
-      handleLogout();
-    },
+  const handleUpdateMatchmaking = useCallback((newMatchmaking) => {
+    setMatchmaking(newMatchmaking);
+    syncAndSaveData({ matchmaking: newMatchmaking });
+  }, [syncAndSaveData]);
+
+  const handleSendUserNotification = useCallback((targetUserId, notification) => {
+    const currentP = playersRef.current || players;
+    const updatedPlayers = currentP.map(p => {
+      if (String(p.id).toLowerCase() === String(targetUserId).toLowerCase()) {
+        return {
+          ...p,
+          notifications: [
+            {
+              id: `notif-${Date.now()}`,
+              read: false,
+              date: new Date().toISOString(),
+              ...notification
+            },
+            ...(p.notifications || [])
+          ]
+        };
+      }
+      return p;
+    });
+    
+    logger.logAction('NOTIFICATION_SENT', {
+      targetUserId,
+      type: notification.type,
+      title: notification.title,
+      timestamp: new Date().toISOString()
+    });
+
+    const isMe = currentUserRef.current && String(targetUserId).toLowerCase() === String(currentUserRef.current.id).toLowerCase();
+    if (isMe) {
+      const updatedUser = updatedPlayers.find(p => String(p.id).toLowerCase() === String(targetUserId).toLowerCase());
+      setCurrentUser(updatedUser);
+      handleSyncUpdate({ currentUser: updatedUser, players: updatedPlayers });
+    } else {
+      setPlayers(updatedPlayers);
+      handleSyncUpdate({ players: updatedPlayers });
+    }
+  }, [handleSyncUpdate]);
+
+  const handleSaveTicket = useCallback((ticket) => {
+    setSupportTickets(prev => {
+      const updated = prev.map(t => t.id === ticket.id ? ticket : t);
+      if (!prev.find(t => t.id === ticket.id)) updated.unshift(ticket);
+      syncAndSaveData({ supportTickets: updated });
+      return updated;
+    });
+  }, [syncAndSaveData]);
+
+  const handleConfirmCoachRequest = useCallback((t) => {
+    const updated = tournaments.map(item => item.id === t.id ? { ...item, coachStatus: 'Coach Confirmed' } : item);
+    setTournaments(updated);
+    syncAndSaveData({ tournaments: updated });
+  }, [syncAndSaveData, tournaments]);
+
+  const handleUploadLogs = useCallback(async () => {
+    setIsUploadingLogs(true);
+    try {
+      const logs = logger.getLogs();
+      const cloudUrl = isUsingCloudRef.current ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
+      const response = await fetch(`${cloudUrl}/api/diagnostics`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-ace-api-key': config.ACE_API_KEY
+        },
+        body: JSON.stringify({
+          username: currentUserRef.current?.name || 'unknown',
+          logs,
+          prefix: 'manual_upload',
+          deviceId: localDeviceIdRef.current
+        })
+      });
+      if (!response.ok) throw new Error("Upload failed");
+      Alert.alert("Success", "Logs uploaded successfully.");
+    } catch (e) {
+      Alert.alert("Error", "Failed to upload logs: " + e.message);
+    } finally {
+      setIsUploadingLogs(false);
+    }
+  }, []);
+
+
+  const memoizedHandlers = useMemo(() => ({
+    onLogin: handleLogin,
+    onLogout: handleLogout,
     onResetPassword: async (userId, newPassword) => {
-      const updatedPlayers = players.map(p => 
-        p.id === userId ? { ...p, password: newPassword } : p
-      );
+      const updatedPlayers = playersRef.current.map(p => p.id === userId ? { ...p, password: newPassword } : p);
       setPlayers(updatedPlayers);
       await storage.setItem('players', updatedPlayers);
       return await pushStateToCloud({ players: updatedPlayers }, true);
     },
-    sendUserNotification: (targetUserId, notification) => {
-      const currentP = playersRef.current || players;
-      const updatedPlayers = currentP.map(p => {
-        if (String(p.id).toLowerCase() === String(targetUserId).toLowerCase()) {
-          return {
-            ...p,
-            notifications: [
-              {
-                id: `notif-${Date.now()}`,
-                read: false,
-                date: new Date().toISOString(),
-                ...notification
-              },
-              ...(p.notifications || [])
-            ]
-          };
-        }
-        return p;
-      });
-      
-      // LOG: Logging notification sent
-      logger.logAction('NOTIFICATION_SENT', {
-        targetUserId,
-        type: notification.type,
-        title: notification.title,
-        timestamp: new Date().toISOString()
-      });
-
-      const isMe = currentUserRef.current && String(targetUserId).toLowerCase() === String(currentUserRef.current.id).toLowerCase();
-      if (isMe) {
-        const updatedUser = updatedPlayers.find(p => String(p.id).toLowerCase() === String(targetUserId).toLowerCase());
-        setCurrentUser(updatedUser);
-        handleSyncUpdate({ currentUser: updatedUser, players: updatedPlayers });
-      } else {
-        setPlayers(updatedPlayers);
-        handleSyncUpdate({ players: updatedPlayers });
-      }
-    },
+    sendUserNotification: handleSendUserNotification,
     loadData: loadData,
+    onManualSync: loadData,
+    onRegisterUser: handleRegisterUser,
     onToggleCloud: () => {
-      const newValue = !isUsingCloud;
-      setIsUsingCloud(newValue);
-      storage.setItem('isUsingCloud', newValue);
-      logger.logAction('ENV_SWITCH', { isUsingCloud: newValue });
-      // Give state a moment to settle then reload
-      setTimeout(() => {
-        setIsLoading(true);
-        loadData(true, true);
-      }, 100);
+      setIsUsingCloud(prev => {
+        const next = !prev;
+        storage.setItem('isUsingCloud', next);
+        setTimeout(() => { setIsLoading(true); loadData(true, true); }, 100);
+        return next;
+      });
     },
     isUsingCloud,
     seenAdminActionIds,
@@ -1163,9 +1084,7 @@ export default function App() {
       setSeenAdminActionIds(normalized);
       storage.setItem('seenAdminActionIds', Array.from(normalized));
       if (currentUserRef.current?.role === 'admin') {
-        handleSyncUpdate({ 
-          currentUser: { ...currentUserRef.current, seenAdminActionIds: Array.from(normalized) } 
-        });
+        handleSyncUpdate({ currentUser: { ...currentUserRef.current, seenAdminActionIds: Array.from(normalized) } });
       }
     },
     visitedAdminSubTabs,
@@ -1173,95 +1092,47 @@ export default function App() {
       setVisitedAdminSubTabs(tabs);
       storage.setItem('visitedAdminSubTabs', Array.from(tabs));
       if (currentUserRef.current?.role === 'admin') {
-        handleSyncUpdate({ 
-          currentUser: { ...currentUserRef.current, visitedAdminSubTabs: Array.from(tabs) } 
-        });
+        handleSyncUpdate({ currentUser: { ...currentUserRef.current, visitedAdminSubTabs: Array.from(tabs) } });
       }
     },
-    setIsProfileEditActive, // Pass setter to ProfileScreen
+    setIsProfileEditActive,
     onSaveTournament: handleSaveTournament,
     onSaveVideo: handleSaveVideo,
     onUpdateUser: (u) => { 
-       // Required for new Session Sandbox: mutating local currentUser requires explicitly matching the global players array
-       const currentP = playersRef.current;
-       const updatedPlayers = currentP.map(p => 
-          String(p.id).toLowerCase() === String(u.id).toLowerCase() ? u : p
-       );
+       const updatedPlayers = playersRef.current.map(p => String(p.id).toLowerCase() === String(u.id).toLowerCase() ? u : p);
        handleSyncUpdate({ currentUser: u, players: updatedPlayers });
     },
     onLogTrace: handleLogTrace,
-    onManualSync: () => {
-      logger.logAction('Manual Sync Clicked');
-      loadData(true, true); // Don't show full-screen loader for force sync
-    },
-    onRegisterUser: handleRegisterUser,
     onVerifyAccount: (type) => {
       const currentU = currentUserRef.current;
-      const currentP = playersRef.current;
       if (!currentU) return;
-      
-      const updatedUser = {
-        ...currentU,
-        [type === 'email' ? 'isEmailVerified' : 'isPhoneVerified']: true
-      };
-      
-      const updatedPlayers = currentP.map(p => 
-        String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p
-      );
-      
+      const updatedUser = { ...currentU, [type === 'email' ? 'isEmailVerified' : 'isPhoneVerified']: true };
+      const updatedPlayers = playersRef.current.map(p => String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p);
       handleSyncUpdate({ currentUser: updatedUser, players: updatedPlayers });
-      console.log(`✅ ${type} verification synchronized for user ${updatedUser.id}`);
     },
-    onBatchUpdate: (updates) => {
-        handleSyncUpdate(updates);
-    },
+    onBatchUpdate: (updates) => handleSyncUpdate(updates),
     isCloudOnline,
     isSyncing,
     lastSyncTime,
     onTopUp: (amount) => {
-      if (!currentUser) return;
+      if (!currentUserRef.current) return;
       const updatedUser = {
-        ...currentUser,
-        credits: (currentUser.credits || 0) + amount,
-        walletHistory: [
-          {
-            id: Date.now().toString(),
-            type: 'credit',
-            amount: amount,
-            description: 'Wallet Top Up',
-            date: new Date().toISOString()
-          },
-          ...(currentUser.walletHistory || [])
-        ]
+        ...currentUserRef.current,
+        credits: (currentUserRef.current.credits || 0) + amount,
+        walletHistory: [{ id: Date.now().toString(), type: 'credit', amount, description: 'Wallet Top Up', date: new Date().toISOString() }, ...(currentUserRef.current.walletHistory || [])]
       };
-      const isMe = currentUserRef.current && String(updatedUser.id).toLowerCase() === String(currentUserRef.current.id).toLowerCase();
-      if (isMe) {
-        setCurrentUser(updatedUser);
-        currentUserRef.current = updatedUser;
-      }
-
-      const updatedPlayers = players.map(p => 
-        String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p
-      );
+      const updatedPlayers = playersRef.current.map(p => String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p);
       setPlayers(updatedPlayers);
-      
-      // Unified Sync & Save
-      const updates = { players: updatedPlayers };
-      if (isMe) updates.currentUser = updatedUser;
-      syncAndSaveData(updates);
-      
-      Alert.alert("Success", `₹${amount} added to your AceTrack wallet!`);
+      setCurrentUser(updatedUser);
+      currentUserRef.current = updatedUser;
+      syncAndSaveData({ players: updatedPlayers, currentUser: updatedUser });
+      Alert.alert("Success", `₹${amount} added!`);
     },
     onReplyTicket: (id, text, image, replyToMsg) => {
       const msgText = typeof text === 'string' ? text : (text?.text || String(text || ''));
-      const msg = {
-        senderId: currentUserRef.current?.id || 'admin',
-        text: msgText,
-        timestamp: new Date().toISOString()
-      };
+      const msg = { senderId: currentUserRef.current?.id || 'admin', text: msgText, timestamp: new Date().toISOString() };
       if (image) msg.image = image;
       if (replyToMsg) msg.replyTo = { text: replyToMsg.text || '', senderId: replyToMsg.senderId || '' };
-      logger.logAction('SUPPORT_MSG_SENT', { ticketId: id, hasImage: !!image, hasReply: !!replyToMsg, textLen: msgText.length });
       const updated = supportTickets.map(t => t.id === id ? { ...t, messages: [...t.messages, msg] } : t);
       setSupportTickets(updated);
       syncAndSaveData({ supportTickets: updated });
@@ -1270,810 +1141,216 @@ export default function App() {
       const updated = supportTickets.map(t => t.id === id ? { ...t, status } : t);
       setSupportTickets(updated);
       syncAndSaveData({ supportTickets: updated });
-
-      if (currentUser) {
+      if (currentUserRef.current) {
           const ticket = updated.find(t => t.id === id);
-          if (ticket && ticket.userId === currentUser.id) {
-            const notif = {
-                id: `notif-${Date.now()}`,
-                title: 'Ticket Status Updated',
-                message: `Your ticket "${ticket.title}" is now ${status}.`,
-                date: new Date().toISOString(),
-                read: false,
-                type: 'support'
-            };
-            const updatedUser = { ...currentUser, notifications: [notif, ...(currentUser.notifications || [])] };
-            const isMe = currentUserRef.current && String(updatedUser.id).toLowerCase() === String(currentUserRef.current.id).toLowerCase();
-            if (isMe) {
-              setCurrentUser(updatedUser);
-              currentUserRef.current = updatedUser;
-            }
-            
-            const updatedPlayers = players.map(p => 
-              String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p
-            );
-            setPlayers(updatedPlayers);
-            
-            // Unified Sync & Save
-            const userUpdates = { players: updatedPlayers };
-            if (isMe) userUpdates.currentUser = updatedUser;
-            syncAndSaveData(userUpdates);
-          }
-      }
-    },
-    onSaveTicket: (ticket) => {
-      const newTicket = {
-        ...ticket,
-        id: `ticket-${Date.now()}`,
-        status: 'Open',
-        createdAt: new Date().toISOString(),
-      };
-      const updated = [newTicket, ...supportTickets];
-      setSupportTickets(updated);
-      syncAndSaveData({ supportTickets: updated });
-
-      if (currentUser) {
-          const notif = {
-              id: `notif-${Date.now()}`,
-              title: 'Support Ticket Raised',
-              message: `Your ticket "${ticket.title}" has been created successfully.`,
-              date: new Date().toISOString(),
-              read: false,
-              type: 'support'
-          };
-          const updatedUser = { ...currentUser, notifications: [notif, ...(currentUser.notifications || [])] };
-          const isMe = currentUserRef.current && String(updatedUser.id).toLowerCase() === String(currentUserRef.current.id).toLowerCase();
-          if (isMe) {
+          if (ticket && ticket.userId === currentUserRef.current.id) {
+            const notif = { id: `notif-${Date.now()}`, title: 'Ticket Status Updated', message: `Ticket "${ticket.title}" is ${status}.`, date: new Date().toISOString(), read: false, type: 'support' };
+            const updatedUser = { ...currentUserRef.current, notifications: [notif, ...(currentUserRef.current.notifications || [])] };
             setCurrentUser(updatedUser);
             currentUserRef.current = updatedUser;
-            storage.setItem('currentUser', updatedUser);
+            const updatedPlayers = playersRef.current.map(p => String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p);
+            setPlayers(updatedPlayers);
+            syncAndSaveData({ players: updatedPlayers, currentUser: updatedUser });
           }
-          
-          const updatedPlayers = players.map(p => 
-            String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p
-          );
-          setPlayers(updatedPlayers);
-          storage.setItem('players', updatedPlayers);
-          
-          // IMMEDIATE SYNC
-          const saveUpdates = { players: updatedPlayers };
-          if (isMe) saveUpdates.currentUser = updatedUser;
-          pushStateToCloud(saveUpdates);
       }
     },
+    onSaveTicket: handleSaveTicket,
     onSaveEvaluation: (e) => {
-      const updated = evaluations.map(item => item.id === e.id ? e : item);
-      if (!evaluations.find(item => item.id === e.id)) updated.unshift(e);
-      setEvaluations(updated);
-      pushStateToCloud({ evaluations: updated });
-      storage.setItem('evaluations', updated);
+      setEvaluations(prev => {
+        const updated = prev.map(item => item.id === e.id ? e : item);
+        if (!prev.find(item => item.id === e.id)) updated.unshift(e);
+        syncAndSaveData({ evaluations: updated });
+        return updated;
+      });
     },
-    onConfirmCoachRequest: (t) => {
-      if (!currentUser) return;
-
-      Alert.alert(
-        "Confirm Assignment",
-        "Are you sure you want to accept this coaching assignment?",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Accept",
-            onPress: () => {
-              const startOtp = Math.floor(100000 + Math.random() * 900000).toString();
-              const endOtp = Math.floor(100000 + Math.random() * 900000).toString();
-
-              const updatedTournament = {
-                ...t,
-                coachStatus: 'Coach Assigned',
-                assignedCoachId: currentUser.id,
-                assignedCoachIds: [...(t.assignedCoachIds || []), currentUser.id],
-                startOtp,
-                endOtp,
-                tournamentStarted: false,
-                ratingsModified: false
-              };
-
-              const updatedTournaments = tournaments.map(item => item.id === t.id ? updatedTournament : item);
-              setTournaments(updatedTournaments);
-              pushStateToCloud({ tournaments: updatedTournaments });
-              storage.setItem('tournaments', updatedTournaments);
-              Alert.alert("Success", "Successfully assigned as coach!");
-            }
-          }
-        ]
-      );
+    onConfirmCoachRequest: handleConfirmCoachRequest,
+    setPlayers: (updater) => {
+      setPlayers(prev => {
+        const next = typeof updater === 'function' ? updater(prev) : updater;
+        syncAndSaveData({ players: next });
+        return next;
+      });
     },
+    onSendChatMessage: (messages) => {
+      if (!currentUserRef.current) return;
+      setChatbotMessages(prev => {
+        const updated = { ...prev, [currentUserRef.current.id]: messages };
+        syncAndSaveData({ chatbotMessages: updated });
+        return updated;
+      });
+    },
+    onUpdateMatchmaking: handleUpdateMatchmaking,
+    onUploadLogs: handleUploadLogs,
+    isUploadingLogs,
     onDeclineCoachRequest: (t) => {
-      if (!currentUser) return;
-      const updated = tournaments.map(item => {
-        if (item.id === t.id) {
-          return {
-            ...item,
-            declinedCoachIds: [...(item.declinedCoachIds || []), currentUser.id]
-          };
-        }
-        return item;
+      const updated = tournaments.map(item => item.id === t.id ? { ...item, coachStatus: 'Declined' } : item);
+      setTournaments(updated);
+      syncAndSaveData({ tournaments: updated });
+    },
+    onStartTournament: (tid) => {
+      const updated = tournaments.map(t => t.id === tid ? { ...t, tournamentStarted: true } : t);
+      setTournaments(updated);
+      syncAndSaveData({ tournaments: updated });
+    },
+    onEndTournament: (tid) => {
+      const updated = tournaments.map(t => t.id === tid ? { ...t, status: 'completed', tournamentConcluded: true } : t);
+      setTournaments(updated);
+      syncAndSaveData({ tournaments: updated });
+    },
+    onLogFailedOtp: (tid, cid, otp) => {
+      setTournaments(prev => {
+        const updated = prev.map(t => t.id === tid ? { ...t, failedOtps: [...(t.failedOtps || []), { coachId: cid, otp, timestamp: new Date().toISOString() }] } : t);
+        syncAndSaveData({ tournaments: updated });
+        return updated;
       });
-      setTournaments(updated);
-      pushStateToCloud({ tournaments: updated });
-      storage.setItem('tournaments', updated);
-      Alert.alert("Declined", "You have declined this coaching request.");
     },
-    onStartTournament: (t) => {
-      const updated = tournaments.map(item => item.id === t.id ? { ...item, tournamentStarted: true, status: 'ongoing', currentRound: item.currentRound || 1 } : item);
-      setTournaments(updated);
-      pushStateToCloud({ tournaments: updated });
-      storage.setItem('tournaments', updated);
-      Alert.alert("Success", "Tournament started!");
-    },
-    onEndTournament: (t) => {
-      // Aggregate evaluations for final rating
-      const tournamentEvals = evaluations.filter(e => e.tournamentId === t.id);
-      const playerFinalRatings = {};
-
-      tournamentEvals.forEach(e => {
-        if (!playerFinalRatings[e.playerId]) playerFinalRatings[e.playerId] = [];
-        playerFinalRatings[e.playerId].push(e.averageScore);
+    onApproveCoach: (cid) => {
+      setPlayers(prev => {
+        const updated = prev.map(p => p.id === cid ? { ...p, coachStatus: 'approved' } : p);
+        syncAndSaveData({ players: updated });
+        return updated;
       });
-
-      // Update player ratings in state if we have evaluations
-      let updatedPlayers = players;
-      if (Object.keys(playerFinalRatings).length > 0) {
-        updatedPlayers = players.map(p => {
-          if (playerFinalRatings[p.id]) {
-            const avg = playerFinalRatings[p.id].reduce((a, b) => a + b, 0) / playerFinalRatings[p.id].length;
-            return { ...p, rating: 1000 + Math.round(avg) };
-          }
-          return p;
-        });
-        setPlayers(updatedPlayers);
-      }
-
-      const updated = tournaments.map(item => item.id === t.id ? { ...item, tournamentStarted: false, tournamentConcluded: true, status: 'completed' } : item);
-      setTournaments(updated);
-      
-      const updatePayload = { tournaments: updated };
-      if (Object.keys(playerFinalRatings).length > 0) {
-        updatePayload.players = updatedPlayers;
-      }
-      
-      pushStateToCloud(updatePayload);
-      storage.setItem('tournaments', updated);
-      if (updatePayload.players) storage.setItem('players', updatedPlayers);
-      
-      Alert.alert("Success", "Tournament concluded successfully!");
-    },
-    onApproveCoach: (id, status, reason) => {
-      const updated = players.map(p => 
-        p.id === id 
-          ? { ...p, coachStatus: status, coachRejectReason: reason, isApprovedCoach: status === 'approved' } 
-          : p
-      );
-      setPlayers(updated);
-      pushStateToCloud({ players: updated });
-      storage.setItem('players', updated);
     },
     onAssignCoach: (tid, cid) => {
-      const updated = tournaments.map(t => t.id === tid ? { ...t, assignedCoachId: cid, coachStatus: 'Coach Assigned' } : t);
-      setTournaments(updated);
-      pushStateToCloud({ tournaments: updated });
-      storage.setItem('tournaments', updated);
+      setTournaments(prev => {
+        const updated = prev.map(t => t.id === tid ? { ...t, assignedCoachId: cid, coachStatus: 'Coach Assigned' } : t);
+        syncAndSaveData({ tournaments: updated });
+        return updated;
+      });
     },
-    onRemoveCoach: (tid) => {
-      const updated = tournaments.map(t => t.id === tid ? { ...t, assignedCoachId: null, coachStatus: 'Awaiting Assignment' } : t);
-      setTournaments(updated);
-      pushStateToCloud({ tournaments: updated });
-      storage.setItem('tournaments', updated);
+    onRemoveCoach: (tid, cid) => {
+      setTournaments(prev => {
+        const updated = prev.map(t => t.id === tid ? { ...t, assignedCoachId: null, coachStatus: 'Awaiting Coach Confirmation' } : t);
+        syncAndSaveData({ tournaments: updated });
+        return updated;
+      });
     },
-    onUpdateVideoStatus: (id, status) => {
-      const updated = matchVideos.map(v => v.id === id ? { ...v, adminStatus: status } : v);
-      setMatchVideos(updated);
-      pushStateToCloud({ matchVideos: updated });
-      storage.setItem('matchVideos', updated);
+    onUpdateVideoStatus: (vid, status) => {
+      setMatchVideos(prev => {
+        const updated = prev.map(v => v.id === vid ? { ...v, status } : v);
+        syncAndSaveData({ matchVideos: updated });
+        return updated;
+      });
     },
     onBulkUpdateVideoStatus: (ids, status) => {
-      const updated = matchVideos.map(v => ids.includes(v.id) ? { ...v, adminStatus: status } : v);
-      setMatchVideos(updated);
-      pushStateToCloud({ matchVideos: updated });
-      storage.setItem('matchVideos', updated);
+      setMatchVideos(prev => {
+        const updated = prev.map(v => ids.includes(v.id) ? { ...v, status } : v);
+        syncAndSaveData({ matchVideos: updated });
+        return updated;
+      });
     },
     onForceRefundVideo: (id) => {
-      const updated = matchVideos.map(v => v.id === id ? { ...v, refundsIssued: (v.refundsIssued || 0) + 1 } : v);
-      setMatchVideos(updated);
-      pushStateToCloud({ matchVideos: updated });
-      storage.setItem('matchVideos', updated);
+      setMatchVideos(prev => {
+        const updated = prev.map(v => v.id === id ? { ...v, refundsIssued: (v.refundsIssued || 0) + 1 } : v);
+        syncAndSaveData({ matchVideos: updated });
+        return updated;
+      });
     },
     onApproveDeleteVideo: (id) => {
       const video = matchVideos.find(v => v.id === id);
       if (!video) return;
-
-      // 1. Move to Removed status in matchVideos
       const updatedVideos = matchVideos.map(v => v.id === id ? { ...v, adminStatus: 'Removed' } : v);
-
-      // 2. Process refunds for ALL players
       const updatedPlayers = players.map(player => {
         let credits = player.credits || 0;
         let pVideos = player.purchasedVideos || [];
-        let pHighlights = player.purchasedHighlights || [];
-        let history = player.walletHistory || [];
-        let notifs = player.notifications || [];
-        let modified = false;
-
-        // Refund for Full Video
-        if (pVideos.includes(id)) {
-          const amount = video.price || 0;
-          credits += amount;
-          pVideos = pVideos.filter(vid => vid !== id);
-          history = [{
-            id: `ref-${Date.now()}-${Math.random()}`,
-            type: 'credit',
-            amount: amount,
-            description: `Refund: Match Deletion (${video.matchId})`,
-            date: new Date().toISOString()
-          }, ...history];
-          notifs = [{
-            id: `notif-${Date.now()}`,
-            title: 'Refund Issued',
-            message: `Video #${video.matchId} was removed. ₹${amount} refunded to wallet.`,
-            date: new Date().toISOString(),
-            read: false,
-            type: 'system'
-          }, ...notifs];
-          modified = true;
-        }
-
-        // Refund for Highlights
-        if (pHighlights.includes(id)) {
-          const hAmount = 20; // Standard highlight price
-          credits += hAmount;
-          pHighlights = pHighlights.filter(vid => vid !== id);
-          history = [{
-            id: `refh-${Date.now()}-${Math.random()}`,
-            type: 'credit',
-            amount: hAmount,
-            description: `Refund: AI Highlights (${video.matchId})`,
-            date: new Date().toISOString()
-          }, ...history];
-          modified = true;
-        }
-
-        if (modified) {
-          return {
-            ...player,
-            credits,
-            purchasedVideos: pVideos,
-            purchasedHighlights: pHighlights,
-            walletHistory: history,
-            notifications: notifs
-          };
-        }
-        return player;
+        if (pVideos.includes(id)) { credits += (video.price || 0); pVideos = pVideos.filter(vid => vid !== id); }
+        return { ...player, credits, purchasedVideos: pVideos };
       });
-
-      setMatchVideos(updatedVideos);
-      setPlayers(updatedPlayers);
-
-      pushStateToCloud({
-        matchVideos: updatedVideos,
-        players: updatedPlayers
-      });
-
-      storage.setItem('matchVideos', updatedVideos);
-      storage.setItem('players', updatedPlayers);
-      
-      Alert.alert("Deletion Approved", "Video moved to trash and refunds issued to all purchasers.");
+      setMatchVideos(updatedVideos); setPlayers(updatedPlayers);
+      syncAndSaveData({ matchVideos: updatedVideos, players: updatedPlayers });
     },
     onRejectDeleteVideo: (id) => {
-      const updated = matchVideos.map(v => v.id === id ? { ...v, adminStatus: 'Active' } : v);
-      setMatchVideos(updated);
-      pushStateToCloud({ matchVideos: updated });
-      storage.setItem('matchVideos', updated);
+      setMatchVideos(prev => {
+        const updated = prev.map(v => v.id === id ? { ...v, adminStatus: 'Active' } : v);
+        syncAndSaveData({ matchVideos: updated });
+        return updated;
+      });
     },
     onPermanentDeleteVideo: (id) => {
-      const updated = matchVideos.filter(v => v.id !== id);
-      setMatchVideos(updated);
-      pushStateToCloud({ matchVideos: updated });
-      storage.setItem('matchVideos', updated);
+      setMatchVideos(prev => {
+        const updated = prev.filter(v => v.id !== id);
+        syncAndSaveData({ matchVideos: updated });
+        return updated;
+      });
     },
     onCancelVideo: (id) => {
-      const updated = matchVideos.filter(v => v.id !== id);
-      setMatchVideos(updated);
-      pushStateToCloud({ matchVideos: updated });
-      storage.setItem('matchVideos', updated);
+      setMatchVideos(prev => {
+        const updated = prev.filter(v => v.id !== id);
+        syncAndSaveData({ matchVideos: updated });
+        return updated;
+      });
     },
     onRequestDeletion: (id, reason) => {
-      const updated = matchVideos.map(v => v.id === id ? { ...v, adminStatus: 'Deletion Requested', deletionReason: reason } : v);
-      setMatchVideos(updated);
-      pushStateToCloud({ matchVideos: updated });
-      storage.setItem('matchVideos', updated);
+      setMatchVideos(prev => {
+        const updated = prev.map(v => v.id === id ? { ...v, adminStatus: 'Deletion Requested', deletionReason: reason } : v);
+        syncAndSaveData({ matchVideos: updated });
+        return updated;
+      });
     },
     onUnlockVideo: (vid, price, method) => {
-      if (!currentUser) return;
-      const notif = {
-        id: `notif-${Date.now()}`,
-        title: 'Video Unlocked',
-        message: `You have successfully unlocked a match recording.`,
-        date: new Date().toISOString(),
-        read: false,
-        type: 'video'
-      };
-      const updatedUser = {
-        ...currentUser,
-        credits: method === 'wallet' ? (currentUser.credits || 0) - price : (currentUser.credits || 0),
-        purchasedVideos: [...(currentUser.purchasedVideos || []), vid],
-        notifications: [notif, ...(currentUser.notifications || [])],
-        walletHistory: method === 'wallet' ? [
-          {
-            id: Date.now().toString(),
-            type: 'debit',
-            amount: price,
-            description: `Unlocked Match Recording`,
-            date: new Date().toISOString()
-          },
-          ...(currentUser.walletHistory || [])
-        ] : (currentUser.walletHistory || [])
-      };
-      const updatedMatchVideos = matchVideos.map(v => 
-        v.id === vid ? { 
-          ...v, 
-          purchases: (v.purchases || 0) + 1, 
-          revenue: (v.revenue || 0) + price 
-        } : v
-      );
-      setMatchVideos(updatedMatchVideos);
-      
-      const updatedPlayers = players.map(p => p.id === currentUser.id ? updatedUser : p);
-      setPlayers(updatedPlayers);
-
-      syncAndSaveData({
-        currentUser: updatedUser,
-        players: updatedPlayers,
-        matchVideos: updatedMatchVideos
-      });
-
-      Alert.alert("Success", "Match recording unlocked successfully!");
+      if (!currentUserRef.current) return;
+      const updatedUser = { ...currentUserRef.current, credits: method === 'wallet' ? (currentUserRef.current.credits || 0) - price : (currentUserRef.current.credits || 0), purchasedVideos: [...(currentUserRef.current.purchasedVideos || []), vid] };
+      const updatedMatchVideos = matchVideos.map(v => v.id === vid ? { ...v, purchases: (v.purchases || 0) + 1 } : v);
+      const updatedPlayers = players.map(p => p.id === currentUserRef.current.id ? updatedUser : p);
+      setMatchVideos(updatedMatchVideos); setPlayers(updatedPlayers); setCurrentUser(updatedUser); currentUserRef.current = updatedUser;
+      syncAndSaveData({ currentUser: updatedUser, players: updatedPlayers, matchVideos: updatedMatchVideos });
     },
     onPurchaseAiHighlights: (vid, uid, method) => {
-      if (!currentUser) return;
-      const price = 20;
-      const notif = {
-        id: `notif-${Date.now()}`,
-        title: 'AI Highlights Ready',
-        message: `Your AI highlights for video ${vid} have been generated.`,
-        date: new Date().toISOString(),
-        read: false,
-        type: 'video'
-      };
-      const updatedUser = {
-        ...currentUser,
-        credits: method === 'wallet' ? (currentUser.credits || 0) - price : (currentUser.credits || 0),
-        purchasedHighlights: [...(currentUser.purchasedHighlights || []), vid],
-        notifications: [notif, ...(currentUser.notifications || [])],
-        walletHistory: method === 'wallet' ? [
-          {
-            id: Date.now().toString(),
-            type: 'debit',
-            amount: price,
-            description: `AI Highlights Unlock`,
-            date: new Date().toISOString()
-          },
-          ...(currentUser.walletHistory || [])
-        ] : (currentUser.walletHistory || [])
-      };
-      const updatedMatchVideos = matchVideos.map(v => 
-        v.id === vid ? { 
-          ...v, 
-          revenue: (v.revenue || 0) + price 
-        } : v
-      );
-      setMatchVideos(updatedMatchVideos);
-
-      const updatedPlayers = players.map(p => p.id === currentUser.id ? updatedUser : p);
-      setPlayers(updatedPlayers);
-
-      syncAndSaveData({
-        currentUser: updatedUser,
-        players: updatedPlayers,
-        matchVideos: updatedMatchVideos
-      });
-      Alert.alert("Success", "AI Highlights generated successfully!");
+      if (!currentUserRef.current) return;
+      const updatedUser = { ...currentUserRef.current, credits: method === 'wallet' ? (currentUserRef.current.credits || 0) - 20 : (currentUserRef.current.credits || 0), purchasedHighlights: [...(currentUserRef.current.purchasedHighlights || []), vid] };
+      const updatedPlayers = players.map(p => p.id === currentUserRef.current.id ? updatedUser : p);
+      setPlayers(updatedPlayers); setCurrentUser(updatedUser); currentUserRef.current = updatedUser;
+      syncAndSaveData({ currentUser: updatedUser, players: updatedPlayers });
     },
     onVideoPlay: (vid, uid) => {
-      const updated = matchVideos.map(v => {
-        if (v.id === vid) {
-          const currentViewers = v.viewerIds || [];
-          if (!uid || currentViewers.includes(uid)) return v;
-          return { ...v, viewerIds: [...currentViewers, uid] };
-        }
-        return v;
+      setMatchVideos(prev => {
+        const updated = prev.map(v => {
+          if (v.id === vid) { const currentViewers = v.viewerIds || []; if (!uid || currentViewers.includes(uid)) return v; return { ...v, viewerIds: [...currentViewers, uid] }; }
+          return v;
+        });
+        syncAndSaveData({ matchVideos: updated });
+        return updated;
       });
-      setMatchVideos(updated);
-      syncAndSaveData({ matchVideos: updated });
     },
     onToggleFavourite: (vid) => {
-      if (!currentUser) return;
-      const isFav = (currentUser.favouritedVideos || []).includes(vid);
-      const updatedFavs = isFav 
-        ? (currentUser.favouritedVideos || []).filter(id => id !== vid)
-        : [...(currentUser.favouritedVideos || []), vid];
-      
-      const updatedUser = { ...currentUser, favouritedVideos: updatedFavs };
-      setCurrentUser(updatedUser);
-      const updatedPlayers = players.map(p => p.id === currentUser.id ? updatedUser : p);
+      if (!currentUserRef.current) return;
+      const isFav = (currentUserRef.current.favouritedVideos || []).includes(vid);
+      const updatedFavs = isFav ? (currentUserRef.current.favouritedVideos || []).filter(id => id !== vid) : [...(currentUserRef.current.favouritedVideos || []), vid];
+      const updatedUser = { ...currentUserRef.current, favouritedVideos: updatedFavs };
+      setCurrentUser(updatedUser); currentUserRef.current = updatedUser;
+      const updatedPlayers = players.map(p => p.id === currentUserRef.current.id ? updatedUser : p);
       setPlayers(updatedPlayers);
-      syncAndSaveData({ 
-        players: updatedPlayers,
-        currentUser: updatedUser 
-      });
+      syncAndSaveData({ players: updatedPlayers, currentUser: updatedUser });
     },
-    onUpdateTournament: (t) => {
-      handleSaveTournament(t);
-    },
+    onUpdateTournament: (t) => handleSaveTournament(t),
     onSaveCoachComment: (tid, comment) => {
-      const updated = tournaments.map(t => {
-        if (t.id === tid) {
-          return {
-            ...t,
-            coachComments: [...(t.coachComments || []), {
-              id: Date.now(),
-              coachId: currentUser.id,
-              text: comment,
-              timestamp: new Date().toISOString()
-            }]
-          };
-        }
-        return t;
+      setTournaments(prev => {
+        const updated = prev.map(t => t.id === tid ? { ...t, coachComments: [...(t.coachComments || []), { id: Date.now(), coachId: currentUserRef.current.id, text: comment, timestamp: new Date().toISOString() }] } : t);
+        syncAndSaveData({ tournaments: updated });
+        return updated;
       });
-      setTournaments(updated);
-      syncAndSaveData({ tournaments: updated });
     },
     onRegister: (t, method, totalCost, isRescheduling, reschedulingFrom) => {
-      if (!currentUser) return;
-
-      logger.logAction('TOURNAMENT_ENROLL', { 
-        tournamentId: t.id, 
-        name: t.name, 
-        method, 
-        cost: totalCost,
-        isRescheduling 
-      });
-
-      // 1. Calculate Updated Tournaments
-      const updatedTournaments = tournaments.map(item => {
-        if (isRescheduling && item.id === reschedulingFrom) {
-          return { ...item, registeredPlayerIds: (item.registeredPlayerIds || []).filter(id => id !== currentUser.id) };
-        }
-        if (item.id === t.id) {
-          const updatedStatuses = { ...(item.playerStatuses || {}) };
-          updatedStatuses[currentUser.id] = 'Registered';
-
-          return {
-            ...item,
-            registeredPlayerIds: [...(item.registeredPlayerIds || []), currentUser.id],
-            pendingPaymentPlayerIds: (item.pendingPaymentPlayerIds || []).filter(id => id !== currentUser.id),
-            playerStatuses: updatedStatuses
-          };
-        }
-        return item;
-      });
-
-      // 2. Calculate Updated User
-      let newCredits = currentUser.credits || 0;
-      if (totalCost < 0) {
-        newCredits += Math.abs(totalCost);
-      } else if (totalCost > 0 && method === 'credits') {
-        newCredits -= totalCost;
-      }
-
-      const newRescheduleCounts = { ...(currentUser.rescheduleCounts || {}) };
-      if (isRescheduling) {
-        newRescheduleCounts[t.id] = (newRescheduleCounts[reschedulingFrom] || 0) + 1;
-        delete newRescheduleCounts[reschedulingFrom];
-      }
-
-      const newHistory = [...(currentUser.walletHistory || [])];
-      if (totalCost !== 0 && method === 'credits') {
-        newHistory.unshift({
-          id: Date.now().toString(),
-          type: totalCost < 0 ? 'credit' : 'debit',
-          amount: Math.abs(totalCost),
-          description: isRescheduling ? `Arena Swap: ${t.title}` : `Registration: ${t.title}`,
-          date: new Date().toISOString()
-        });
-      }
-
-      const notif = {
-        id: `notif-${Date.now()}`,
-        title: isRescheduling ? 'Arena Swapped' : 'Registration Confirmed',
-        message: isRescheduling ? `Your registration has been moved to ${t.title}.` : `You are successfully registered for ${t.title}.`,
-        date: new Date().toISOString(),
-        read: false,
-        type: 'general',
-        tournamentId: t.id
-      };
-      const updatedUser = {
-        ...currentUser,
-        credits: newCredits,
-        rescheduleCounts: newRescheduleCounts,
-        walletHistory: newHistory,
-        registeredTournamentIds: [...(currentUser.registeredTournamentIds || []), t.id],
-        notifications: [notif, ...(currentUser.notifications || [])]
-      };
-
-      // 3. Calculate Updated Players list
-      const isExistingPlayer = players.some(p => String(p.id).toLowerCase() === String(currentUser.id).toLowerCase());
-      const updatedPlayers = isExistingPlayer 
-        ? players.map(p => String(p.id).toLowerCase() === String(currentUser.id).toLowerCase() ? updatedUser : p)
-        : [updatedUser, ...players];
-
-      // 4. Apply all State Updates
-      setTournaments(updatedTournaments);
-      setPlayers(updatedPlayers);
-      if (isRescheduling) setReschedulingFrom(null);
-
-      const isMe = currentUserRef.current && String(updatedUser.id).toLowerCase() === String(currentUserRef.current.id).toLowerCase();
-      if (isMe) {
-        setCurrentUser(updatedUser);
-        currentUserRef.current = updatedUser;
-      }
-
-      // 5. Unified Sync & Save
-      const syncUpdates = {
-        tournaments: updatedTournaments,
-        players: updatedPlayers
-      };
-      if (isMe) syncUpdates.currentUser = updatedUser;
-      syncAndSaveData(syncUpdates);
+      if (!currentUserRef.current) return;
+      const updatedUser = { ...currentUserRef.current, registeredTournamentIds: [...(currentUserRef.current.registeredTournamentIds || []), t.id] };
+      const updatedTournaments = tournaments.map(item => item.id === t.id ? { ...item, registeredPlayerIds: [...(item.registeredPlayerIds || []), currentUserRef.current.id] } : item);
+      setTournaments(updatedTournaments); setPlayers(players.map(p => p.id === currentUserRef.current.id ? updatedUser : p)); setCurrentUser(updatedUser);
+      syncAndSaveData({ tournaments: updatedTournaments, players: playersRef.current, currentUser: updatedUser });
     },
-    onReschedule: (t) => {
-      setReschedulingFrom(t.id);
-    },
+    onReschedule: (t) => setReschedulingFrom(t.id),
     onCancelReschedule: () => setReschedulingFrom(null),
     onOptOut: (t) => {
-      if (!currentUser) return;
-
-      const confirmCancel = () => {
-        if (currentUser.role === 'coach') {
-          const updatedTournaments = tournaments.map(item => {
-            if (item.id === t.id) {
-              const newCoachOtps = { ...(item.coachOtps || {}) };
-              delete newCoachOtps[currentUser.id];
-              return {
-                ...item,
-                assignedCoachId: item.assignedCoachId === currentUser.id ? undefined : item.assignedCoachId,
-                assignedCoachIds: (item.assignedCoachIds || []).filter(id => id !== currentUser.id),
-                coachOtps: newCoachOtps,
-                coachStatus: 'Awaiting Coach Confirmation'
-              };
-            }
-            return item;
-          });
-          setTournaments(updatedTournaments);
-          syncAndSaveData({ tournaments: updatedTournaments });
-          Alert.alert("Success", "Coach assignment cancelled. Your OTP has been invalidated.");
-          return;
-        }
-
-        const isRegistered = (t.registeredPlayerIds || []).includes(currentUser.id);
-
-        const getUpdatedTournaments = () => {
-          return tournaments.map(item => {
-            if (item.id === t.id) {
-              const isActuallyRegistered = (item.registeredPlayerIds || []).includes(currentUser.id);
-              const updatedStatuses = { ...(item.playerStatuses || {}) };
-              updatedStatuses[currentUser.id] = isActuallyRegistered ? 'Opted-Out' : 'Denied';
-
-              return {
-                ...item,
-                registeredPlayerIds: (item.registeredPlayerIds || []).filter(pid => String(pid).toLowerCase() !== String(currentUser.id).toLowerCase()),
-                pendingPaymentPlayerIds: (item.pendingPaymentPlayerIds || []).filter(pid => String(pid).toLowerCase() !== String(currentUser.id).toLowerCase()),
-                playerStatuses: updatedStatuses
-              };
-            }
-            return item;
-          });
-        };
-
-        if (!isRegistered) {
-          const updatedTournaments = getUpdatedTournaments();
-          setTournaments(updatedTournaments);
-          syncAndSaveData({ tournaments: updatedTournaments });
-          Alert.alert("Success", "Invitation/Request cancelled successfully.");
-          return;
-        }
-
-        // If registered, ask for refund choice
-        Alert.alert(
-          "Refund Method",
-          "How would you like to receive your refund?",
-          [
-            {
-              text: "Refund to Wallet",
-              onPress: () => {
-                const updatedTournaments = getUpdatedTournaments();
-                const updatedUser = {
-                  ...currentUser,
-                  credits: (currentUser.credits || 0) + (t.entryFee || 0),
-                  cancelledTournamentIds: [...(currentUser.cancelledTournamentIds || []), t.id],
-                  walletHistory: [
-                    {
-                      id: Date.now().toString(),
-                      type: 'credit',
-                      amount: t.entryFee,
-                      description: `Refund: ${t.title}`,
-                      date: new Date().toISOString()
-                    },
-                    ...(currentUser.walletHistory || [])
-                  ]
-                };
-                const updatedPlayers = players.map(p => p.id === currentUser.id ? updatedUser : p);
-                
-                setTournaments(updatedTournaments);
-                setPlayers(updatedPlayers);
-                
-                const isMe = currentUserRef.current && String(updatedUser.id).toLowerCase() === String(currentUserRef.current.id).toLowerCase();
-                if (isMe) {
-                  setCurrentUser(updatedUser);
-                  currentUserRef.current = updatedUser;
-                }
-
-                const syncUpdates = { 
-                  tournaments: updatedTournaments, 
-                  players: updatedPlayers
-                };
-                if (isMe) syncUpdates.currentUser = updatedUser;
-                syncAndSaveData(syncUpdates);
-                
-                Alert.alert("Success", `₹${t.entryFee} credited to your AceTrack wallet.`);
-              }
-            },
-            {
-              text: "Refund to Source Account",
-              onPress: () => {
-                const updatedTournaments = getUpdatedTournaments();
-                const updatedUser = {
-                  ...currentUser,
-                  cancelledTournamentIds: [...(currentUser.cancelledTournamentIds || []), t.id]
-                };
-                const updatedPlayers = players.map(p => p.id === currentUser.id ? updatedUser : p);
-                
-                setTournaments(updatedTournaments);
-                setPlayers(updatedPlayers);
-                
-                const isMe = currentUserRef.current && String(updatedUser.id).toLowerCase() === String(currentUserRef.current.id).toLowerCase();
-                if (isMe) {
-                  setCurrentUser(updatedUser);
-                  currentUserRef.current = updatedUser;
-                }
-
-                const syncUpdates = { 
-                  tournaments: updatedTournaments, 
-                  players: updatedPlayers
-                };
-                if (isMe) syncUpdates.currentUser = updatedUser;
-                syncAndSaveData(syncUpdates);
-                
-                Alert.alert("Refund Initiated", "Refund will be processed to your source account within 5-7 working days.");
-              }
-            },
-            { text: "Keep Registration", style: "cancel" }
-          ]
-        );
-      };
-
-      Alert.alert(
-        "Confirm Opt-out",
-        currentUser.role === 'coach' ? "Are you sure you want to cancel this coaching assignment?" : "Are you sure you want to opt-out of this tournament?",
-        [
-          { text: "No, Keep it", style: "cancel" },
-          { text: "Yes, Proceed", onPress: confirmCancel }
-        ]
-      );
+      if (!currentUserRef.current) return;
+      const updatedTournaments = tournaments.map(item => item.id === t.id ? { ...item, registeredPlayerIds: (item.registeredPlayerIds || []).filter(pid => pid !== currentUserRef.current.id) } : item);
+      setTournaments(updatedTournaments);
+      syncAndSaveData({ tournaments: updatedTournaments });
     },
-    onLogFailedOtp: (tid, cid, otp) => {
-      const updated = tournaments.map(t => {
-        if (t.id === tid) {
-          return {
-            ...t,
-            failedOtpAttempts: [
-              ...(t.failedOtpAttempts || []),
-              { coachId: cid, otp, timestamp: new Date().toISOString() }
-            ]
-          };
-        }
-        return t;
-      });
-      setTournaments(updated);
-      syncAndSaveData({ tournaments: updated });
-      console.log(`Failed OTP logged for tournament ${tid}, coach ${cid}`);
-    },
-    setPlayers: (updater) => {
-      const updated = typeof updater === 'function' ? updater(players) : updater;
-      setPlayers(updated);
-      syncAndSaveData({ players: updated });
-    },
-    onSendChatMessage: (messages) => {
-      if (!currentUser) return;
-      const updated = {
-        ...chatbotMessages,
-        [currentUser.id]: messages
-      };
-      setChatbotMessages(updated);
-      syncAndSaveData({ chatbotMessages: updated });
-    },
-    onUpdateMatchmaking: (newMatchmaking) => {
-      setMatchmaking(newMatchmaking);
-      syncAndSaveData({ matchmaking: newMatchmaking });
-    },
-    onUploadLogs: async () => {
-      const activeUser = currentUserRef.current || currentUser; // Fallback to state
-      
-      logger.logAction('DIAGNOSTICS_UPLOAD_CLICK', { 
-        hasRef: !!currentUserRef.current, 
-        hasState: !!currentUser,
-        userId: activeUser?.id 
-      });
-
-      console.log("📤 Attempting to upload diagnostics...");
-      
-      if (!activeUser) {
-        console.warn("🛑 No user detected in Ref or State during upload.");
-        logger.logAction('DIAGNOSTICS_UPLOAD_ABORT', { error: 'No user detected' });
-        Alert.alert("Error", "No user logged in. Please log in again to send diagnostics.");
-        return;
-      }
-      
-      setIsUploadingLogs(true);
-      try {
-        const logs = logger.getLogs();
-        console.log(`📋 Sending ${logs.length} log entries...`);
-        
-        const targetCloudUrl = 'https://acetrack-suggested.onrender.com';
-        const activeApiUrl = isUsingCloud ? targetCloudUrl : config.API_BASE_URL;
-        
-        const response = await fetch(`${activeApiUrl}/api/diagnostics`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-ace-api-key': config.ACE_API_KEY
-          },
-          body: JSON.stringify({
-            username: activeUser.name || activeUser.email || 'Unknown User',
-            logs: logs,
-            state: {
-              currentUser: activeUser,
-              tournamentsCount: tournaments.length,
-              matchVideosCount: matchVideos.length,
-              matchesCount: matches.length,
-              role: userRole,
-              isUsingCloud,
-              appVersion: APP_VERSION
-            },
-            prefix: 'user_report',
-            deviceId: localDeviceIdRef.current
-          })
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          logger.logAction('DIAGNOSTICS_UPLOAD_SUCCESS', { filename: result.filename });
-          console.log("✅ Diagnostics uploaded successfully:", result.filename);
-          Alert.alert("Success", "Diagnostic logs have been sent to the cloud.");
-        } else {
-          const errData = await response.text();
-          logger.logAction('DIAGNOSTICS_UPLOAD_FAIL', { status: response.status, error: errData });
-          console.error("❌ Diagnostics upload failed:", errData);
-          throw new Error("Failed to upload logs");
-        }
-      } catch (err) {
-        logger.logAction('DIAGNOSTICS_UPLOAD_ERROR', { error: err.message });
-        Alert.alert("Error", "Could not upload logs. Please check your internet connection.");
-      } finally {
-        setIsUploadingLogs(false);
-      }
-    },
-    isUploadingLogs
-  };
+    onBack: () => { setViewingLanding(true); setShowSignup(false); setShowOnboarding(false); },
+    onSignup: () => {
+      console.log("➡️ App Navigator: onSignup requested");
+      setShowSignup(true);
+    }
+  }), [handleLogin, handleLogout, handleSendUserNotification, loadData, handleUpdateMatchmaking, handleRegisterUser, handleSaveTournament, handleSaveVideo, handleSyncUpdate, handleLogTrace, handleSaveTicket, handleConfirmCoachRequest, handleUploadLogs, isUploadingLogs, isCloudOnline, isSyncing, lastSyncTime, isUsingCloud, seenAdminActionIds, visitedAdminSubTabs, tournaments, matchVideos, matches, players, userRole, supportTickets, evaluations, chatbotMessages]);
 
   logger.logAction('APP_RENDER_STATE', { 
     isLoading, 
@@ -2092,26 +1369,41 @@ export default function App() {
     );
   }
 
-  // FINAL RENDER LOGIC: Mutually Exclusive Branches
+  if (showOnboarding) {
+    return (
+      <OnboardingScreen 
+        initialStep={onboardingInitialStep}
+        onFinish={() => {
+          setShowOnboarding(false);
+          storage.setItem('hasCompletedOnboarding', 'true');
+        }}
+      />
+    );
+  }
+
+  if (viewingLanding) {
+    return (
+      <LandingScreen 
+        onLogin={() => {
+          setViewingLanding(false);
+          setShowSignup(false);
+        }}
+        onJoinCircle={() => {
+          setViewingLanding(false);
+          setShowSignup(true);
+        }}
+      />
+    );
+  }
+
   if (showSignup) {
-    console.log("📝 App: Rendering SignupScreen");
     return (
       <SignupScreen 
         players={players}
         isUsingCloud={isUsingCloud}
-        onToggleCloud={() => {
-          const newValue = !isUsingCloud;
-          setIsUsingCloud(newValue);
-          storage.setItem('isUsingCloud', newValue);
-          loadData(true, true);
-        }}
-        onBack={() => {
-          console.log("📝 App: Signup back pressed - returning to landing");
-          setShowSignup(false);
-          setViewingLanding(true);
-        }}
+        onToggleCloud={memoizedHandlers.onToggleCloud}
+        onBack={memoizedHandlers.onBack}
         onSignupSuccess={(newUser) => {
-          console.log("📝 App: Signup success - registering user:", newUser.id);
           setShowSignup(false);
           handleRegisterUser(newUser);
           setViewingLanding(false);
@@ -2121,56 +1413,28 @@ export default function App() {
     );
   }
 
-  if (showOnboarding) {
+  if (!currentUser) {
     return (
-      <OnboardingScreen 
-        initialStep={onboardingInitialStep}
-        onFinish={() => {
-          setShowOnboarding(false);
-          setViewingLanding(false);
-        }} 
+      <LoginScreen 
+        onLoginSuccess={handleLogin}
+        onBack={memoizedHandlers.onBack}
+        onToggleCloud={memoizedHandlers.onToggleCloud}
+        isUsingCloud={isUsingCloud}
+        isLoading={isLoading}
       />
     );
   }
-
-  if (!currentUser && viewingLanding) {
-    console.log("🏠 App: Rendering LandingScreen", { showSignup, viewingLanding });
-    return (
-      <LandingScreen 
-        onLogin={() => {
-          console.log("🏠 App: onLogin -> Transitioning to Login Flow");
-          setShowSignup(false);
-          setShowOnboarding(false);
-          setViewingLanding(false);
-        }} 
-        onJoinCircle={() => {
-          console.log("🏠 App: onJoinCircle -> Transitioning to Signup");
-          setViewingLanding(false);
-          setShowOnboarding(false);
-          setShowSignup(true);
-        }} 
-      />
-    );
-  }
-
-  console.log("🎯 App: Falling through to Parent Navigation Container (Login Flow)");
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-      <View 
-        style={{ flex: 1 }}
-        onStartShouldSetResponderCapture={(evt) => {
-          try {
-            const { pageX, pageY } = evt.nativeEvent;
-            logger.logAction('USER_TAP', { 
-              x: Math.round(pageX), 
-              y: Math.round(pageY)
-            });
-          } catch(e) {}
-          return false; // Do not block actual interactions
-        }}
-      >
+        <TouchableOpacity 
+          activeOpacity={1} 
+          style={{ flex: 1 }} 
+          onPress={() => {
+            return false;
+          }}
+        >
         <NavigationContainer 
           ref={navigationRef}
           onStateChange={(state) => {
@@ -2178,7 +1442,6 @@ export default function App() {
               const route = state.routes[state.index];
               logger.logAction('NAVIGATION', { 
                 screen: route.name, 
-                // Omitting full params to save log space if they are huge, but let's log keys
                 paramKeys: route.params ? Object.keys(route.params) : [] 
               });
             }
@@ -2201,23 +1464,12 @@ export default function App() {
           reschedulingFrom={reschedulingFrom}
           auditLogs={auditLogs} 
           onLogout={handleLogout} 
-          handlers={{
-            ...handlers,
-            onSignup: () => {
-              console.log("➡️ App Navigator: onSignup requested from screen");
-              setShowSignup(true);
-            },
-            onBack: () => {
-              console.log("🔙 AppNavigator: onBack triggered - returning to landing");
-              setViewingLanding(true);
-              setShowSignup(false);
-              setShowOnboarding(false);
-            }
-          }}
+          handlers={memoizedHandlers}
           socketRef={socketRef}
           matchmaking={matchmaking}
-          onUpdateMatchmaking={handlers.onUpdateMatchmaking}
-          sendUserNotification={handlers.sendUserNotification}
+          onUpdateMatchmaking={memoizedHandlers.onUpdateMatchmaking}
+          sendUserNotification={memoizedHandlers.sendUserNotification}
+          onManualSync={loadData}
         />
         {currentUser && (
           <ChatBot 
@@ -2227,9 +1479,9 @@ export default function App() {
             players={players}
             evaluations={evaluations} 
             chatbotMessages={chatbotMessages}
-            onSendChatMessage={handlers.onSendChatMessage}
+            onSendChatMessage={memoizedHandlers.onSendChatMessage}
             tournaments={tournaments}
-            onSaveTicket={handlers.onSaveTicket}
+            onSaveTicket={memoizedHandlers.onSaveTicket}
           />
         )}
 
@@ -2314,7 +1566,7 @@ export default function App() {
         </Modal>
 
       </NavigationContainer>
-      </View>
+        </TouchableOpacity>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

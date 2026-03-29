@@ -112,6 +112,17 @@ const originalFetch = global.fetch;
 
 let isInterceptionEnabled = false;
 
+let saveTimeout = null;
+const DEBOUNCE_DELAY = 2000; // 2 seconds
+
+const saveLogsToStorage = async () => {
+    try {
+        await storage.setItem('persistent_logs', logs);
+    } catch (e) {
+        originalError("Failed to persist logs:", e.message);
+    }
+};
+
 const addLog = (level, type, message) => {
   const now = new Date();
   const timestamp = formatIST(now);
@@ -126,14 +137,16 @@ const addLog = (level, type, message) => {
   logs.push(logEntry);
   
   if (logs.length >= MAX_LOG_COUNT) {
-    // Auto-flush trigger: copy payload, reset logs, save empty array, send payload.
     const payload = [...logs];
     logs = [];
-    storage.setItem('persistent_logs', logs).catch(() => {});
+    // Immediate save on overflow
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveLogsToStorage();
     triggerAutoFlush(payload);
   } else {
-    // Persist to storage (async non-blocking) normally
-    storage.setItem('persistent_logs', logs).catch(() => {});
+    // Debounced save for normal logs
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(saveLogsToStorage, DEBOUNCE_DELAY);
   }
 };
 
