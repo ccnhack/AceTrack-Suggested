@@ -44,7 +44,7 @@ const ExploreScreen = (props) => {
   const { 
     tournaments, onSelect, reschedulingFrom, onCancelReschedule, userId, 
     userRole, userSports, players = [], Sport, SkillLevel, user,
-    onRegister, onAssignCoach, isSyncing
+    onRegister, onAssignCoach, isSyncing, onUpdateTournament
   } = props;
   const [sportFilter, setSportFilter] = useState('All');
   const [cityFilter, setCityFilter] = useState('All');
@@ -69,6 +69,16 @@ const ExploreScreen = (props) => {
       }
     }
   }, [props.route?.params?.selectedTournamentId, tournaments]);
+  
+  // Keep selectedTournament in sync with incoming prop updates (real-time reactivity)
+  useEffect(() => {
+    if (selectedTournament) {
+      const updated = tournaments.find(t => t.id === selectedTournament.id);
+      if (updated && JSON.stringify(updated) !== JSON.stringify(selectedTournament)) {
+        setSelectedTournament(updated);
+      }
+    }
+  }, [tournaments, selectedTournament]);
 
   const handleDetectLocation = async () => {
     setIsCityDropdownVisible(false);
@@ -208,7 +218,6 @@ const ExploreScreen = (props) => {
 
   const availableSports = userRole === 'coach' && userSports ? userSports : Object.values(Sport);
   const currentUser = userId ? players.find(p => p.id === userId) : null;
-  const isBeginnerProtected = currentUser?.isBeginnerProtected || false;
 
   const processedTournaments = useMemo(() => {
     const visible = getVisibleTournaments({
@@ -216,7 +225,6 @@ const ExploreScreen = (props) => {
       userRole,
       userGender: user?.gender,
       userSports,
-      isBeginnerProtected,
       cityFilter,
       sportFilter,
       reschedulingFrom,
@@ -226,15 +234,11 @@ const ExploreScreen = (props) => {
       const distance = userLocation && t.lat && t.lng ? calculateDistance(userLocation.latitude, userLocation.longitude, t.lat, t.lng) : null;
       return { ...t, distance: distance ? parseFloat(distance) : 99999 };
     });
-  }, [tournaments, userRole, userSports, reschedulingFrom, cityFilter, user, sportFilter, userLocation, isBeginnerProtected]);
+  }, [tournaments, userRole, userSports, reschedulingFrom, cityFilter, user, sportFilter, userLocation]);
 
   const filteredTournaments = processedTournaments;
 
-  const displayTournaments = useMemo(() => {
-    return (isBeginnerProtected && userRole !== 'admin') 
-      ? filteredTournaments.filter(t => t.skillLevel === 'Beginner')
-      : filteredTournaments;
-  }, [filteredTournaments, isBeginnerProtected, userRole]);
+  const displayTournaments = filteredTournaments;
 
   // Admin Trace: Log filter results for troubleshooting - STRICTLY THROTTLED
   const lastLoggedRef = React.useRef(null);
@@ -590,21 +594,14 @@ const ExploreScreen = (props) => {
             </View>
           )}
 
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              {reschedulingFrom ? 'Pick a new arena' : userRole === 'coach' ? 'Coaching Opportunities' : 'Upcoming Arenas'}
-            </Text>
-            <View style={styles.liveBadge}>
-              <Text style={styles.liveBadgeText}>Live Slots</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>
+                {reschedulingFrom ? 'Pick a new arena' : userRole === 'coach' ? 'Coaching Opportunities' : 'Upcoming Arenas'}
+              </Text>
+              <View style={styles.liveBadge}>
+                <Text style={styles.liveBadgeText}>Live Slots</Text>
+              </View>
             </View>
-          </View>
-
-          {isBeginnerProtected && (
-            <View style={styles.alert}>
-              <Ionicons name="shield-checkmark" size={16} color="#3B82F6" />
-              <Text style={styles.alertText}>Beginner Protection Active. Showing only Beginner tournaments.</Text>
-            </View>
-          )}
 
           {reschedulingFrom && (
             <View style={styles.rescheduleAlert}>
@@ -645,12 +642,6 @@ const ExploreScreen = (props) => {
                           <Text style={styles.filterFeedbackText}>Sport: {sportFilter}</Text>
                         </View>
                       )}
-                      {isBeginnerProtected && (
-                        <View style={[styles.filterFeedbackChip, { backgroundColor: '#EFF6FF' }]}>
-                          <Ionicons name="shield-checkmark" size={12} color="#3B82F6" />
-                          <Text style={[styles.filterFeedbackText, { color: '#3B82F6' }]}>Beginner Protection Active</Text>
-                        </View>
-                      )}
                     </View>
 
                     <TouchableOpacity 
@@ -680,6 +671,7 @@ const ExploreScreen = (props) => {
         players={players}
         onRegister={(t) => setRegPaymentTarget(t)}
         onCoachOptIn={(t) => onAssignCoach(t.id, userId)}
+        onUpdateTournament={onUpdateTournament}
       />
 
     {renderPaymentModal()}

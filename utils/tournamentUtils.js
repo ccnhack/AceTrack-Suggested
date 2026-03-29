@@ -282,7 +282,6 @@ export const getVisibleTournaments = ({
   userRole = 'user',
   userGender = null,
   userSports = null,
-  isBeginnerProtected = false,
   cityFilter = 'All',
   sportFilter = 'All',
   reschedulingFrom = null,
@@ -332,10 +331,7 @@ export const getVisibleTournaments = ({
       if (format.includes("Women's") && userGender !== 'Female') return false;
     }
 
-    // 6. Beginner Protection
-    if (isBeginnerProtected && t.skillLevel !== 'Beginner') return false;
-
-    // 7. Sport Filter
+    // 6. Sport Filter
     if (sportFilter !== 'All' && t.sport !== sportFilter) return false;
 
     return true;

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, Modal, ScrollView,
   StyleSheet, Alert
@@ -14,7 +14,10 @@ const TournamentDetailModal = ({
   players = [],
   onRegister,
   onCoachOptIn,
+  onUpdateTournament,
 }) => {
+  const [showAcademyDetails, setShowAcademyDetails] = useState(false);
+
   if (!tournament) return null;
 
   const isAdminUser = role === 'admin';
@@ -22,8 +25,46 @@ const TournamentDetailModal = ({
   const isCoach = role === 'coach';
   const isRegularUser = role === 'user';
 
+  const isRegistered = user && (tournament.registeredPlayerIds || []).includes(user.id);
+  const isPendingPayment = user && (tournament.pendingPaymentPlayerIds || []).includes(user.id);
+  const isInterested = user && (tournament.interestedPlayerIds || []).includes(user.id);
+  const isRejected = user && (tournament.rejectedPlayerIds || []).includes(user.id);
+
+  const handleInterestPress = () => {
+    if (!user || user.role !== 'user') return;
+
+    if (isInterested) {
+      Alert.alert(
+        "Changed your mind?",
+        "Do you want to mark yourself as not interested?",
+        [
+          { text: "No", style: "cancel" },
+          { 
+            text: "Yes, Remove", 
+            onPress: () => {
+              const updated = {
+                ...tournament,
+                interestedPlayerIds: (tournament.interestedPlayerIds || []).filter(id => id !== user.id)
+              };
+              onUpdateTournament(updated);
+            }
+          }
+        ]
+      );
+    } else {
+      const updated = {
+        ...tournament,
+        interestedPlayerIds: [...(tournament.interestedPlayerIds || []), user.id]
+      };
+      onUpdateTournament(updated);
+      Alert.alert(
+        "Interest Submitted",
+        "Thank you for showing your interest, your details has been sent to the academy for confirmation."
+      );
+    }
+  };
+
   const isAlreadyRegistered = user && (tournament.registeredPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
-  const isPendingPayment = user && (tournament.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
   const isAssignedCoach = user && String(tournament.assignedCoachId).toLowerCase() === String(user.id).toLowerCase();
   const isFull = tournament.registeredPlayerIds?.length >= tournament.maxPlayers;
   
@@ -156,9 +197,56 @@ const TournamentDetailModal = ({
                   <Text style={styles.alreadyRegistered}>You are already registered</Text>
                 )}
                 {isClosed && !isAlreadyRegistered && !isPendingPayment && (
-                  <Text style={styles.alreadyRegistered}>Registration Closed</Text>
+                  <View style={styles.closedContactContainer}>
+                    <Text style={styles.closedMessageTitle}>Registration Closed.</Text>
+                    <Text style={styles.closedMessageSub}>Kindly get in touch with the academy to register for the tournament</Text>
+                    
+                    {isRejected ? (
+                      <View style={styles.rejectionBlock}>
+                        <Ionicons name="information-circle-outline" size={20} color="#EF4444" />
+                        <Text style={styles.rejectionText}>
+                          Academy has declined the registration and are no longer accepting responses, Kindly check other tournaments
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={styles.interestActions}>
+                        <TouchableOpacity 
+                           style={[styles.interestBtn, isInterested && styles.interestedBtnActive]}
+                           onPress={handleInterestPress}
+                        >
+                          <Text style={[styles.interestBtnText, isInterested && styles.interestedBtnTextActive]}>
+                            {isInterested ? 'Interested' : 'Interested'}
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity 
+                          style={styles.detailsBtn}
+                          onPress={() => setShowAcademyDetails(!showAcademyDetails)}
+                        >
+                          <Text style={styles.detailsBtnText}>
+                            {showAcademyDetails ? 'Hide Details' : 'Academy Details'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {showAcademyDetails && creator && (
+                      <View style={styles.academyContactInfo}>
+                        <View style={styles.academyContactRow}>
+                          <Ionicons name="business" size={14} color="#64748B" />
+                          <Text style={styles.academyContactLabel}>Academy:</Text>
+                          <Text style={styles.academyContactValue}>{creator.name}</Text>
+                        </View>
+                        <View style={styles.academyContactRow}>
+                          <Ionicons name="call" size={14} color="#3B82F6" />
+                          <Text style={styles.academyContactLabel}>Contact:</Text>
+                          <Text style={styles.academyContactValue}>{creator.phone || 'N/A'}</Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
                 )}
-                {isFull && !isAlreadyRegistered && !isPendingPayment && (
+                {isFull && !isAlreadyRegistered && !isPendingPayment && !isClosed && (
                   <Text style={styles.alreadyRegistered}>Slots Full</Text>
                 )}
                 <TouchableOpacity
@@ -471,6 +559,89 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 4,
     textAlign: 'center',
+  },
+  closedContactContainer: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 8,
+  },
+  closedMessageTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0F172A',
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  closedMessageSub: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  interestActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  interestBtn: {
+    flex: 1,
+    height: 44,
+    backgroundColor: '#3B82F6',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  interestBtnText: { color: '#FFFFFF', fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.5 },
+  interestedBtnActive: { backgroundColor: '#E2E8F0', borderColor: '#CBD5E1' },
+  interestedBtnTextActive: { color: '#64748B' },
+  detailsBtn: { flex: 1, height: 44, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
+  detailsBtnText: { color: '#475569', fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.5 },
+  rejectionBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    gap: 10,
+    marginTop: 8
+  },
+  rejectionText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#991B1B',
+    fontWeight: '600',
+    lineHeight: 18
+  },
+  academyContactInfo: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    gap: 8,
+  },
+  academyContactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  academyContactLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    width: 70,
+  },
+  academyContactValue: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#0F172A',
   },
 });
 

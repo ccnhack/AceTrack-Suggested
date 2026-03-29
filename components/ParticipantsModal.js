@@ -10,7 +10,7 @@ import { getReliabilityVerdict } from '../utils/verdict';
 const { width } = Dimensions.get('window');
 
 const ParticipantsModal = ({ 
-  tournament, players, evaluations = [], onClose, onAddPlayer, onRemovePendingPlayer, user, onRequireVerification 
+  tournament, players, evaluations = [], onClose, onAddPlayer, onRemovePendingPlayer, user, onRequireVerification, onManageInterested
 }) => {
   const [tab, setTab] = useState('roster');
   const [isAddingPlayer, setIsAddingPlayer] = useState(false);
@@ -198,6 +198,7 @@ const ParticipantsModal = ({
                 const combinedIds = Array.from(new Set([
                   ...(tournament.registeredPlayerIds || []),
                   ...(tournament.pendingPaymentPlayerIds || []),
+                  ...(tournament.interestedPlayerIds || []),
                   ...Object.keys(tournament.playerStatuses || {})
                 ])).filter(pid => pid && String(pid).toLowerCase() !== 'test');
 
@@ -215,6 +216,7 @@ const ParticipantsModal = ({
                   const status = tournament.playerStatuses?.[pid];
                   const isRegistered = (tournament.registeredPlayerIds || []).includes(pid);
                   const isPending = (tournament.pendingPaymentPlayerIds || []).includes(pid);
+                  const isInterested = (tournament.interestedPlayerIds || []).includes(pid);
 
                   if (!p) {
                     return (
@@ -254,7 +256,7 @@ const ParticipantsModal = ({
                                   <View style={[styles.verdictTag, { backgroundColor: verdict.bg }]}>
                                       <Text style={[styles.verdictText, { color: verdict.color }]}>{verdict.label}</Text>
                                   </View>
-                                  {(status || isRegistered || isPending) && (
+                                  {(status || isRegistered || isPending || isInterested) && (
                                       <View style={[
                                           styles.verdictTag, 
                                           { 
@@ -262,7 +264,8 @@ const ParticipantsModal = ({
                                                   status === 'Registered' || isRegistered ? '#DCFCE7' : 
                                                   status === 'Denied' ? '#FEE2E2' : 
                                                   status === 'Opted-Out' ? '#F1F5F9' : 
-                                                  isPending ? '#FEF3C7' : '#F1F5F9'
+                                                  isPending ? '#FEF3C7' : 
+                                                  isInterested ? '#FFEDD5' : '#F1F5F9'
                                           }
                                       ]}>
                                           <Text style={[
@@ -272,10 +275,11 @@ const ParticipantsModal = ({
                                                       status === 'Registered' || isRegistered ? '#16A34A' : 
                                                       status === 'Denied' ? '#DC2626' : 
                                                       status === 'Opted-Out' ? '#64748B' : 
-                                                      isPending ? '#D97706' : '#64748B'
+                                                      isPending ? '#D97706' : 
+                                                      isInterested ? '#EA580C' : '#64748B'
                                               }
                                           ]}>
-                                              {status || (isRegistered ? 'Registered' : isPending ? 'Pending' : '')}
+                                              {status || (isRegistered ? 'Registered' : isPending ? 'Pending' : isInterested ? 'Interested' : '')}
                                           </Text>
                                       </View>
                                   )}
@@ -298,6 +302,25 @@ const ParticipantsModal = ({
                                   <Ionicons name="mail" size={14} color="#64748B" />
                                   <Text style={styles.contactText}>{p.email}</Text>
                               </View>
+
+                              {isInterested && onManageInterested && (
+                                  <View style={styles.actionRow}>
+                                      <TouchableOpacity 
+                                          style={[styles.actionBtn, styles.confirmBtn]}
+                                          onPress={() => onManageInterested(pid, 'confirm')}
+                                      >
+                                          <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
+                                          <Text style={styles.actionBtnText}>Confirm</Text>
+                                      </TouchableOpacity>
+                                      <TouchableOpacity 
+                                          style={[styles.actionBtn, styles.rejectBtn]}
+                                          onPress={() => onManageInterested(pid, 'reject')}
+                                      >
+                                          <Ionicons name="close-circle" size={16} color="#FFFFFF" />
+                                          <Text style={styles.actionBtnText}>Reject</Text>
+                                      </TouchableOpacity>
+                                  </View>
+                              )}
                           </View>
                       )}
                     </TouchableOpacity>
@@ -643,6 +666,35 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '900',
     color: '#94A3B8',
+    textTransform: 'uppercase',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 6,
+  },
+  confirmBtn: {
+    backgroundColor: '#16A34A',
+  },
+  rejectBtn: {
+    backgroundColor: '#EF4444',
+  },
+  actionBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '900',
     textTransform: 'uppercase',
   },
 });

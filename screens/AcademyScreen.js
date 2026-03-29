@@ -673,6 +673,11 @@ export const AcademyScreen = ({
                         style={styles.premiumPrimaryBtn}
                     >
                         <Text style={styles.premiumPrimaryBtnText}>Manage Roster</Text>
+                        {t.interestedPlayerIds?.length > 0 && (
+                          <View style={styles.interestBadge}>
+                            <Text style={styles.interestBadgeText}>{t.interestedPlayerIds.length}</Text>
+                          </View>
+                        )}
                         <Ionicons name="chevron-forward" size={14} color="#FFFFFF" />
                     </TouchableOpacity>
                     
@@ -744,67 +749,111 @@ export const AcademyScreen = ({
             onClose={() => setViewingTournamentId(null)} 
             onAddPlayer={(name, phone) => {
               if (!viewingPlayersFor) return;
-          const player = players.find(p => p.name.toLowerCase() === name.toLowerCase() && p.phone === phone);
-          if (!player) {
-            Alert.alert("Error", 'Player not found in the app.');
-            return;
-          }
-          const pid = String(player.id).toLowerCase();
-          const isReg = (viewingPlayersFor.registeredPlayerIds || []).some(id => String(id).toLowerCase() === pid);
-          const isPending = (viewingPlayersFor.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === pid);
-          const currentStatus = viewingPlayersFor.playerStatuses?.[player.id];
+              const player = players.find(p => p.name.toLowerCase() === name.toLowerCase() && p.phone === phone);
+              if (!player) {
+                Alert.alert("Error", 'Player not found in the app.');
+                return;
+              }
+              const pid = String(player.id).toLowerCase();
+              const isReg = (viewingPlayersFor.registeredPlayerIds || []).some(id => String(id).toLowerCase() === pid);
+              const isPending = (viewingPlayersFor.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === pid);
+              const currentStatus = viewingPlayersFor.playerStatuses?.[player.id];
 
-          if ((isReg || isPending) && currentStatus !== 'Opted-Out' && currentStatus !== 'Denied') {
-            Alert.alert("Info", 'Player is already registered.');
-            return;
-          }
-          const currentCount = (viewingPlayersFor.registeredPlayerIds || []).filter(Boolean).length;
-          if (currentCount >= viewingPlayersFor.maxPlayers) {
-            Alert.alert("Error", 'Tournament is full.');
-            return;
-          }
+              if ((isReg || isPending) && currentStatus !== 'Opted-Out' && currentStatus !== 'Denied') {
+                Alert.alert("Info", 'Player is already registered.');
+                return;
+              }
+              const currentCount = (viewingPlayersFor.registeredPlayerIds || []).filter(Boolean).length;
+              if (currentCount >= viewingPlayersFor.maxPlayers) {
+                Alert.alert("Error", 'Tournament is full.');
+                return;
+              }
 
-          const updatedStatuses = { ...(viewingPlayersFor.playerStatuses || {}) };
-          delete updatedStatuses[player.id]; // Reset status so it shows "Pending" instead of "Opted-Out"
+              const updatedStatuses = { ...(viewingPlayersFor.playerStatuses || {}) };
+              delete updatedStatuses[player.id];
 
-          const updatedTournament = {
-            ...viewingPlayersFor,
-            pendingPaymentPlayerIds: [...(viewingPlayersFor.pendingPaymentPlayerIds || []).filter(id => String(id).toLowerCase() !== pid), player.id],
-            registeredPlayerIds: (viewingPlayersFor.registeredPlayerIds || []).filter(id => String(id).toLowerCase() !== pid),
-            optedOutPlayerIds: (viewingPlayersFor.optedOutPlayerIds || []).filter(id => String(id).toLowerCase() !== pid),
-            deniedPlayerIds: (viewingPlayersFor.deniedPlayerIds || []).filter(id => String(id).toLowerCase() !== pid),
-            playerStatuses: updatedStatuses
-          };
-          
-          // Notification logic
-          const notification = {
-            id: `notif_${Date.now()}`,
-            title: 'Tournament Invitation',
-            message: `${user?.name || 'Academy'} has successfully added you to ${viewingPlayersFor.title}. Please Complete the payment to join.`,
-            date: new Date().toISOString(),
-            read: false,
-            type: 'tournament_invite',
-            tournamentId: viewingPlayersFor.id
-          };
-          const updatedPlayer = { 
-            ...player, 
-            notifications: [notification, ...(player.notifications || [])] 
-          };
+              const updatedTournament = {
+                ...viewingPlayersFor,
+                pendingPaymentPlayerIds: [...(viewingPlayersFor.pendingPaymentPlayerIds || []).filter(id => String(id).toLowerCase() !== pid), player.id],
+                registeredPlayerIds: (viewingPlayersFor.registeredPlayerIds || []).filter(id => String(id).toLowerCase() !== pid),
+                optedOutPlayerIds: (viewingPlayersFor.optedOutPlayerIds || []).filter(id => String(id).toLowerCase() !== pid),
+                deniedPlayerIds: (viewingPlayersFor.deniedPlayerIds || []).filter(id => String(id).toLowerCase() !== pid),
+                playerStatuses: updatedStatuses
+              };
+              
+              const notification = {
+                id: `notif_${Date.now()}`,
+                title: 'Tournament Invitation',
+                message: `${user?.name || 'Academy'} has successfully added you to ${viewingPlayersFor.title}. Please Complete the payment to join.`,
+                date: new Date().toISOString(),
+                read: false,
+                type: 'tournament_invite',
+                tournamentId: viewingPlayersFor.id
+              };
+              const updatedPlayer = { 
+                ...player, 
+                notifications: [notification, ...(player.notifications || [])] 
+              };
 
-          // Use BATCH UPDATE to send both changes in one cloud sync
-          // This prevents race conditions and ensures atomic visibility on server
-          logger.logAction('Adding Player to Tournament (Batch)', { player: player.name, tournament: viewingPlayersFor.title });
-          
-          const updatedTournaments = tournaments.map(t => t.id === updatedTournament.id ? updatedTournament : t);
-          const updatedPlayers = players.map(p => String(p.id).toLowerCase() === String(updatedPlayer.id).toLowerCase() ? updatedPlayer : p);
-          
-          onBatchUpdate({
-            tournaments: updatedTournaments,
-            players: updatedPlayers
-          });
-          Alert.alert("Success", `Player ${player.name} added. They must complete payment to confirm registration.`);
-        }}
-      />
+              logger.logAction('Adding Player to Tournament (Batch)', { player: player.name, tournament: viewingPlayersFor.title });
+              
+              const updatedTournaments = tournaments.map(t => t.id === updatedTournament.id ? updatedTournament : t);
+              const updatedPlayers = players.map(p => String(p.id).toLowerCase() === String(updatedPlayer.id).toLowerCase() ? updatedPlayer : p);
+              
+              onBatchUpdate({
+                tournaments: updatedTournaments,
+                players: updatedPlayers
+              });
+              Alert.alert("Success", `Player ${player.name} added. They must complete payment to confirm registration.`);
+            }}
+            onManageInterested={(playerId, action) => {
+              if (!viewingPlayersFor) return;
+              const player = players.find(p => p.id === playerId);
+              if (!player) return;
+
+              const pid = String(playerId).toLowerCase();
+              let updatedTournament = { ...viewingPlayersFor };
+              let updatedPlayer = { ...player };
+
+              if (action === 'confirm') {
+                updatedTournament = {
+                  ...viewingPlayersFor,
+                  interestedPlayerIds: (viewingPlayersFor.interestedPlayerIds || []).filter(id => String(id).toLowerCase() !== pid),
+                  pendingPaymentPlayerIds: [...(viewingPlayersFor.pendingPaymentPlayerIds || []).filter(id => String(id).toLowerCase() !== pid), playerId]
+                };
+
+                const notification = {
+                  id: `notif_${Date.now()}`,
+                  title: 'Interest Confirmed!',
+                  message: `${user?.name || 'Academy'} has confirmed your interest for ${viewingPlayersFor.title}. Please complete the payment to join.`,
+                  date: new Date().toISOString(),
+                  read: false,
+                  type: 'tournament_invite',
+                  tournamentId: viewingPlayersFor.id
+                };
+                updatedPlayer = {
+                  ...player,
+                  notifications: [notification, ...(player.notifications || [])]
+                };
+
+                onBatchUpdate({
+                  tournaments: tournaments.map(t => t.id === updatedTournament.id ? updatedTournament : t),
+                  players: players.map(p => String(p.id).toLowerCase() === pid ? updatedPlayer : p)
+                });
+                Alert.alert("Success", `${player.name} has been confirmed and notified to complete payment.`);
+              } else if (action === 'reject') {
+                updatedTournament = {
+                  ...viewingPlayersFor,
+                  interestedPlayerIds: (viewingPlayersFor.interestedPlayerIds || []).filter(id => String(id).toLowerCase() !== pid),
+                  rejectedPlayerIds: [...(viewingPlayersFor.rejectedPlayerIds || []).filter(id => String(id).toLowerCase() !== pid), playerId]
+                };
+                onBatchUpdate({
+                  tournaments: tournaments.map(t => t.id === updatedTournament.id ? updatedTournament : t)
+                });
+                Alert.alert("Response Recorded", "Player has been moved to the rejected list.");
+              }
+            }}
+          />
         );
       })()}
 
@@ -1371,11 +1420,27 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
   },
-  statusPillActive: {
-    backgroundColor: '#FEF2F2',
+  statusPillActive: { backgroundColor: '#FEF2F2', borderColor: '#FEE2E2' },
+  statusPillPast: { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' },
+  interestBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#F59E0B',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    zIndex: 10
   },
-  statusPillPast: {
-    backgroundColor: '#F1F5F9',
+  interestBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '900'
   },
   statusDot: {
     width: 6,

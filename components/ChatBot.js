@@ -191,7 +191,6 @@ const ChatBot = ({
       userRole,
       userGender: user?.gender,
       userSports,
-      isBeginnerProtected: currentUser?.isBeginnerProtected || false,
       now: new Date()
     });
   };
@@ -206,15 +205,10 @@ const ChatBot = ({
     setIsLoading(true);
 
       try {
-        const currentUser = userId ? players.find(p => p.id === userId) : null;
-        const isBeginnerProtected = currentUser?.isBeginnerProtected || false;
-
         const openTournaments = getVisibleTournaments({
-          tournaments,
           userRole,
           userGender: user?.gender,
           userSports,
-          isBeginnerProtected,
           now: new Date()
         });
 

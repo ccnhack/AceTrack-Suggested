@@ -156,7 +156,6 @@
       "credits": 138,
       "cancelledTournamentIds": [],
       "trueSkillRating": 1000,
-      "isBeginnerProtected": true,
       "isEmailVerified": true,
       "isPhoneVerified": true,
       "gender": "Male",
@@ -484,8 +483,7 @@
       "role": "user",
       "credits": 100,
       "cancelledTournamentIds": [],
-      "trueSkillRating": 1050,
-      "isBeginnerProtected": true
+      "trueSkillRating": 1050
     },
     {
       "id": "rahul",
@@ -505,8 +503,7 @@
       "role": "user",
       "credits": 100,
       "cancelledTournamentIds": [],
-      "trueSkillRating": 1020,
-      "isBeginnerProtected": true
+      "trueSkillRating": 1020
     },
     {
       "id": "coach_1",

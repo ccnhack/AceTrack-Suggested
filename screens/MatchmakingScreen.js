@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Image, Modal, TextInput, Alert, ScrollView
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import designSystem from '../theme/designSystem';
 import { Sport } from '../types';
@@ -32,7 +33,17 @@ const MOCK_ACADEMIES = [
   { id: 'a3', name: 'Victory Arena', managedSports: ['Badminton', 'Table Tennis'], level: 'Top Rated', dist: '8 km', phone: '+91 76543 21098', image: 'https://i.pravatar.cc/150?u=victory' },
 ];
 
-export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatchmaking, players = [], sendUserNotification }) {
+export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatchmaking, players = [], sendUserNotification, onManualSync }) {
+  
+  // REAL-TIME SYNC: Refresh data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (onManualSync) {
+        console.log("🔄 Matchmaking Screen focused, triggering background sync...");
+        onManualSync(true); // true = force background sync
+      }
+    }, [onManualSync])
+  );
   const role = user?.role || 'user';
   const [activeTab, setActiveTab] = useState(role === 'coach' ? 'New Bookings' : 'Challenge'); // Challenge, Requested/Sent, Accepted, History
 
@@ -164,10 +175,21 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
     Alert.alert("Challenge Sent!", `Your request to ${selectedOpponent.name} has been sent.`);
   };
 
+  const getOpponentName = (item) => {
+    if (!item) return 'Opponent';
+    // If current user is the sender, show receiver's name
+    if (item.senderId === user?.id) return item.receiverName || item.name;
+    // If current user is the receiver, show sender's name
+    if (item.receiverId === user?.id) return item.senderName || item.name;
+    // Fallback for mock data without IDs
+    return item.name || 'Opponent';
+  };
+
   const handleDeclineChallenge = (req) => {
+    const oppName = getOpponentName(req);
     Alert.alert(
       "Decline Challenge",
-      `Are you sure you want to decline the challenge from ${req.name}?`,
+      `Are you sure you want to decline the challenge from ${oppName}?`,
       [
         { text: "Cancel", style: "cancel" },
         { 
@@ -193,6 +215,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   };
 
   const handleAcceptChallenge = (req) => {
+    const oppName = getOpponentName(req);
     const updated = matchmaking.map(m => m.id === req.id ? {
       ...m,
       status: 'Accepted',
@@ -212,10 +235,11 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
       });
     }
 
-    Alert.alert("Match Accepted", `You have confirmed the match with ${req.name}.`);
+    Alert.alert("Match Accepted", `You have confirmed the match with ${oppName}.`);
   };
 
   const handleAcceptCountered = (req) => {
+    const oppName = getOpponentName(req);
     // Check if the other party has responded to the counter
     if (!req.hasUserResponse) {
       // Other user hasn't responded — confirm with original challenger's slot
@@ -245,7 +269,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                 location: req.location || 'Local Arena'
               } : m);
               onUpdateMatchmaking(updated);
-              Alert.alert("Challenge Accepted!", `Match confirmed for ${origDate} at ${origTime} with ${req.name}.`);
+              Alert.alert("Challenge Accepted!", `Match confirmed for ${origDate} at ${origTime} with ${oppName}.`);
             }
           }
         ]
@@ -267,7 +291,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
       location: req.location || 'Local Arena'
     } : m);
     onUpdateMatchmaking(updated);
-    Alert.alert("Challenge Accepted!", `Match confirmed for ${finalDate} at ${finalTime} with ${req.name}.`);
+    Alert.alert("Challenge Accepted!", `Match confirmed for ${finalDate} at ${finalTime} with ${oppName}.`);
   };
 
   const openDetails = (challenge) => {
@@ -303,9 +327,10 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
       Alert.alert("Error", "Please select date and time");
       return;
     }
+    const oppName = getOpponentName(selectedChallenge);
     const venueLabel = role === 'coach' 
         ? (selectedAcademyForVenue ? selectedAcademyForVenue.name : 'Coach-suggested Venue')
-        : (negotiatedVenue === 'own' ? 'Our Academy Grounds' : ((selectedChallenge?.name || 'Opponent') + ' Grounds'));
+        : (negotiatedVenue === 'own' ? 'Our Academy Grounds' : (oppName + ' Grounds'));
     
     const counteredItem = {
       ...selectedChallenge,
@@ -331,6 +356,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   };
 
   const handleConfirmBooking = (req) => {
+    const oppName = getOpponentName(req);
     const updated = matchmaking.map(m => m.id === req.id ? {
       ...m,
       status: 'Accepted',
@@ -342,13 +368,14 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
       time: `${req.userProposedDate || req.proposedDate}, ${req.userProposedTime || req.proposedTime}`
     } : m);
     onUpdateMatchmaking(updated);
-    Alert.alert("Booking Confirmed", `You have finalized the booking with ${req.name}.`);
+    Alert.alert("Booking Confirmed", `You have finalized the booking with ${oppName}.`);
   };
 
   const handleCancelBooking = (req) => {
+    const oppName = getOpponentName(req);
     Alert.alert(
       "Cancel Booking",
-      `Are you sure you want to cancel the booking with ${req.name}? This action cannot be undone.`,
+      `Are you sure you want to cancel the booking with ${oppName}? This action cannot be undone.`,
       [
         { text: "No", style: "cancel" },
         { 
@@ -405,7 +432,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
               receivedRequests.map((req, index) => (
                 <TouchableOpacity key={req.id || `received-${index}`} style={styles.requestCard} onPress={() => openDetails(req)}>
                   <View style={styles.info}>
-                    <Text style={styles.name}>{req.name}</Text>
+                    <Text style={styles.name}>{getOpponentName(req)}</Text>
                     <Text style={[styles.details, req.status === 'Counter Proposed' && { color: '#D97706' }]}>
                       {req.sport} • {req.time || (req.proposedDate + ' @ ' + req.proposedTime)}
                       {req.status === 'Counter Proposed' ? ' (Negotiating)' : ''}
@@ -444,7 +471,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
               <TouchableOpacity key={req.id || `countered-${index}`} style={[styles.requestCard, { borderLeftColor: '#F59E0B' }]} onPress={() => openDetails(req)}>
                 <View style={styles.info}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                      <Text style={[styles.name, { flex: 1 }]} numberOfLines={1}>{req.name}</Text>
+                      <Text style={[styles.name, { flex: 1 }]} numberOfLines={1}>{getOpponentName(req)}</Text>
                       {req.hasUserResponse && (
                           <View style={styles.responseTag}>
                               <Text style={styles.responseTagText}>USER RESPONDED</Text>
@@ -478,7 +505,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
           {actualSentRequests.map((req, index) => (
             <TouchableOpacity key={req.id || `sent-${index}`} style={styles.requestCard} onPress={() => openDetails(req)}>
                <View style={styles.info}>
-                  <Text style={styles.name} numberOfLines={1}>{req.name}</Text>
+                  <Text style={styles.name} numberOfLines={1}>{getOpponentName(req)}</Text>
                   <Text style={styles.details}>{req.sport} • {req.proposedDate} at {req.proposedTime} • {req.status || 'Pending'}</Text>
                 </View>
                 <View style={styles.actionRow}>
@@ -511,7 +538,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
              <Ionicons name="calendar" size={20} color={designSystem.colors.primary} />
              <Text style={styles.acceptedTime}>{match.time}</Text>
           </View>
-          <Text style={styles.acceptedTitle}>{role === 'coach' ? 'Booked by ' : 'vs '}{match.name}</Text>
+          <Text style={styles.acceptedTitle}>{role === 'coach' ? 'Booked by ' : 'vs '}{getOpponentName(match)}</Text>
           <Text style={styles.acceptedDetail}>{match.sport} • {match.location}</Text>
         </TouchableOpacity>
       ))}
@@ -524,7 +551,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
       {history.map((item, index) => (
         <TouchableOpacity key={item.id || `history-${index}`} style={styles.historyCard} onPress={() => openDetails(item)}>
           <View>
-            <Text style={styles.historyName}>{item.name}</Text>
+            <Text style={styles.historyName}>{getOpponentName(item)}</Text>
             <Text style={styles.historyDetail}>{item.sport} • {item.date}</Text>
           </View>
           <Text style={styles.historyResult}>{item.result}</Text>
@@ -744,7 +771,10 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                         </Text>
                       </View>
                       <View style={styles.challengeInfoMain}>
-                        <Text style={styles.challengeSportText}>{m.sport}</Text>
+                        <View>
+                          <Text style={styles.challengeOpponentText}>{role === 'coach' ? 'Booked by ' : 'vs '}{getOpponentName(m)}</Text>
+                          <Text style={styles.challengeSportText}>{m.sport}</Text>
+                        </View>
                         <View style={[
                           styles.statusBadge, 
                           { backgroundColor: m.status === 'Accepted' ? '#DCFCE7' : '#FEF3C7' }
@@ -777,7 +807,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalLabel}>{role === 'coach' ? 'BOOKING DETAILS' : 'CHALLENGE DETAILS'}</Text>
-                <Text style={styles.modalTitle}>{selectedChallenge?.name}</Text>
+                <Text style={styles.modalTitle}>{getOpponentName(selectedChallenge)}</Text>
               </View>
               <TouchableOpacity onPress={() => setIsDetailsModalVisible(false)} style={styles.modalClose}>
                 <Ionicons name="close" size={28} color="#0F172A" />
@@ -1087,7 +1117,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                     onPress={() => setNegotiatedVenue('opponent')}
                   >
                     <Ionicons name="business" size={20} color={negotiatedVenue === 'opponent' ? '#6366F1' : '#94A3B8'} />
-                    <Text style={[styles.venueText, negotiatedVenue === 'opponent' && styles.venueTextActive]}>{selectedChallenge?.name}</Text>
+                    <Text style={[styles.venueText, negotiatedVenue === 'opponent' && styles.venueTextActive]}>{getOpponentName(selectedChallenge)}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
                     style={[styles.venueBtn, negotiatedVenue === 'own' && styles.venueBtnActive]}
@@ -1307,10 +1337,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingLeft: 12,
   },
-  challengeSportText: {
+  challengeOpponentText: {
     fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  challengeSportText: {
+    fontSize: 12,
     fontWeight: '600',
-    color: '#334155',
+    color: '#64748B',
   },
   statusBadge: {
     paddingHorizontal: 8,

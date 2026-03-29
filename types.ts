@@ -101,7 +101,6 @@ export interface Player {
   trueSkillRating?: number;
   trueSkillHistory?: TrueSkillHistory[];
   performanceAnalytics?: PlayerPerformance;
-  isBeginnerProtected?: boolean;
   notifications?: { id: string; title: string; message: string; read: boolean; date: string; type: 'video' | 'general' | 'support'; tournamentId?: string }[];
   purchasedVideos?: string[];
   purchasedHighlights?: string[];
@@ -140,6 +139,8 @@ export interface Tournament {
   maxPlayers: number;
   registeredPlayerIds: string[];
   pendingPaymentPlayerIds?: string[];
+  interestedPlayerIds?: string[];
+  rejectedPlayerIds?: string[];
   status: 'upcoming' | 'ongoing' | 'completed';
   description: string;
   city?: string;

@@ -44,7 +44,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = Platform.OS === 'web' ? '2.3.0-web' : '2.3.0';
+const APP_VERSION = Platform.OS === 'web' ? '2.3.1-web' : '2.3.1';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -86,6 +86,7 @@ export default function App() {
   const isSyncingRef = useRef(false);
   const isStartupCompleteRef = useRef(false);
   const pendingSyncRef = React.useRef([]);
+  const pendingUpdateCheckRef = React.useRef(false); // New: Track missed WebSocket signals
   const lastServerUpdateRef = React.useRef(null);
   const syncVersion = React.useRef(0);
   const navigationRef = React.useRef();
@@ -139,6 +140,10 @@ export default function App() {
       // If not currently pushing data themselves, pull the updates
       if (!isSyncingRef.current) {
         checkForUpdates(); 
+      } else {
+        console.log("⏳ Sync in progress, queueing update check...");
+        pendingUpdateCheckRef.current = true;
+        logger.logAction('WS_UPDATE_QUEUED');
       }
     });
 
@@ -660,6 +665,13 @@ export default function App() {
         setSyncingState(false);
         // Only hide loading if this was a blocking load (sync version matches)
         if (!forceNoLoading) setIsLoading(false);
+        
+        // POST-SYNC: Check if we missed any WebSocket updates during this pull
+        if (pendingUpdateCheckRef.current) {
+           console.log("🚀 Sync finished. Triggering queued update check...");
+           pendingUpdateCheckRef.current = false;
+           checkForUpdates();
+        }
       }
     }
   };
@@ -704,6 +716,13 @@ export default function App() {
       // Failsafe: only clear syncing if this was the latest intended push
       if (thisVersion === syncVersion.current) {
         setSyncingState(false);
+        
+        // POST-SYNC: Check if we missed any WebSocket updates during this push
+        if (pendingUpdateCheckRef.current) {
+           console.log("🚀 Push finished. Triggering queued update check...");
+           pendingUpdateCheckRef.current = false;
+           checkForUpdates();
+        }
       }
     }
   };
