@@ -1,4 +1,5 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
+import * as Location from 'expo-location';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Image, Modal, TextInput, Alert, ScrollView
@@ -93,6 +94,9 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   const [expandedSlot, setExpandedSlot] = useState(null);
   const [counterComment, setCounterComment] = useState('');
   const [playerSearchQuery, setPlayerSearchQuery] = useState('');
+  const [userLocation, setUserLocation] = useState(null);
+  const [nearbyVenues, setNearbyVenues] = useState([]);
+  const [isFetchingVenues, setIsFetchingVenues] = useState(false);
 
   // MEMOIZED CALENDAR MARKING - CHALLENGE MODAL
   const challengeMarkedDates = React.useMemo(() => {
@@ -149,6 +153,83 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
     return parseInt(hours, 10) * 60 + parseInt(minutes, 10);
   };
 
+  const fetchPlayoVenues = useCallback(async (sport, loc) => {
+    const lat = loc?.latitude || 12.9716;
+    const lng = loc?.longitude || 77.5946;
+    
+    const sportMap = {
+      'badminton': 2,
+      'cricket': 1,
+      'table tennis': 5,
+      'ping pong': 5
+    };
+    const s = String(sport || 'badminton').toLowerCase();
+    const sportId = Object.keys(sportMap).find(k => s.includes(k)) ? sportMap[Object.keys(sportMap).find(k => s.includes(k))] : 2;
+
+    setIsFetchingVenues(true);
+    try {
+      const response = await fetch('https://api.playo.io/activity-public/list/location', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'app-version': '6.3.1',
+          'platform': 'android',
+          'device-id': '9f3a7c21-' + Math.random().toString(36).substr(2, 6),
+          'user-agent': 'okhttp/4.9.3',
+          'x-request-id': 'req-' + Date.now(),
+          'x-device-os': 'Android 13',
+          'x-app-build': '60301'
+        },
+        body: JSON.stringify({
+          lat, lng,
+          radius: 10000,
+          sportId,
+          page: 1,
+          size: 20
+        })
+      });
+      const json = await response.json();
+      if (json.data && json.data.activities) {
+        const uniqueVenues = [...new Set(
+          json.data.activities
+            .map(a => a.venueName)
+            .filter(name => name && name.trim() !== "")
+        )];
+        setNearbyVenues(uniqueVenues.map(name => ({ id: name, name, dist: 'Nearby', level: 'Public Activity' })));
+      } else {
+        setNearbyVenues([]);
+      }
+    } catch (error) {
+      console.error('Playo Fetch Error:', error);
+      setNearbyVenues([]);
+    } finally {
+      setIsFetchingVenues(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        let loc = await Location.getCurrentPositionAsync({});
+        setUserLocation(loc.coords);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (isChallengeModalVisible && selectedSport && userLocation) {
+      fetchPlayoVenues(selectedSport, userLocation);
+    }
+  }, [isChallengeModalVisible, selectedSport, userLocation, fetchPlayoVenues]);
+
+  useEffect(() => {
+    if (isCounterModalVisible && selectedChallenge?.sport && userLocation) {
+      fetchPlayoVenues(selectedChallenge.sport, userLocation);
+    }
+  }, [isCounterModalVisible, selectedChallenge?.sport, userLocation, fetchPlayoVenues]);
+
   const isTimeInPast = (date, timeSlot) => {
     if (!date) return false;
     const now = new Date();
@@ -203,6 +284,9 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
     setSelectedSport(common[0]); // Auto-select first available sport
     setChallengeDate('');
     setChallengeTime('');
+    setChallengeVenue(null);
+    setVenueSearchQuery('');
+    setSelectedAcademyForVenue(null);
     setIsChallengeModalVisible(true);
   };
 
@@ -222,6 +306,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
       proposedDate: challengeDate,
       proposedTime: challengeTime,
       sport: selectedSport,
+      location: selectedAcademyForVenue ? selectedAcademyForVenue.name : 'Local Arena',
       status: 'Pending',
       timestamp: new Date().toISOString()
     };
@@ -395,9 +480,12 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
       return;
     }
     const oppName = getOpponentName(selectedChallenge);
-    const venueLabel = role === 'coach' 
-        ? (selectedAcademyForVenue ? selectedAcademyForVenue.name : 'Coach-suggested Venue')
-        : (negotiatedVenue === 'own' ? 'Our Academy Grounds' : (oppName + ' Grounds'));
+    const venueName = selectedAcademyForVenue ? selectedAcademyForVenue.name : (
+        role === 'coach' 
+            ? 'Coach-suggested Venue'
+            : (negotiatedVenue === 'own' ? 'Our Academy Grounds' : (getOpponentName(selectedChallenge) + ' Grounds'))
+    );
+    const venueLabel = venueName;
     
     const counteredItem = {
       ...selectedChallenge,
@@ -795,6 +883,48 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                   })}
               </View>
 
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 15 }}>
+                <Text style={styles.sectionLabel}>Proposed Venue</Text>
+                {isFetchingVenues && <ActivityIndicator size="small" color="#6366F1" />}
+              </View>
+              
+              <View style={styles.venueSearchContainer}>
+                  <View style={styles.searchBox}>
+                    <Ionicons name="search" size={20} color="#94A3B8" />
+                    <TextInput 
+                      style={styles.searchInput}
+                      placeholder="Search nearby venues..."
+                      value={venueSearchQuery}
+                      onChangeText={setVenueSearchQuery}
+                    />
+                  </View>
+                  <ScrollView style={styles.venueResults} nestedScrollEnabled>
+                      {(nearbyVenues.length > 0 ? nearbyVenues : MOCK_ACADEMIES).filter(a => a.name.toLowerCase().includes(venueSearchQuery.toLowerCase())).map((academy, index) => {
+                          const isSelected = challengeVenue === academy.name;
+                          return (
+                              <TouchableOpacity 
+                                key={`challenge-venue-${index}`}
+                                style={[
+                                    styles.venueResultItem, 
+                                    isSelected && styles.venueResultSelected
+                                ]}
+                                onPress={() => {
+                                  setSelectedAcademyForVenue(academy);
+                                  setVenueSearchQuery(academy.name);
+                                }}
+                              >
+                                  <View>
+                                      <Text style={styles.venueName}>{academy.name}</Text>
+                                      <Text style={styles.venueLoc}>{academy.dist}</Text>
+                                  </View>
+                                  {isSelected && <Ionicons name="checkmark-circle" size={20} color="#6366F1" />}
+                              </TouchableOpacity>
+                          );
+                      })}
+                  </ScrollView>
+              </View>
+
+
               <View style={styles.upcomingChallengesSection}>
                 <Text style={styles.sectionLabel}>Upcoming Challenges</Text>
                 {matchmaking.filter(m => 
@@ -1112,27 +1242,31 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                  })}
               </View>
 
-              <Text style={styles.sectionLabel}>{role === 'coach' ? 'Search Venue Academy' : 'Proposed Venue'}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={styles.sectionLabel}>{role === 'coach' ? 'Search Venue Academy' : 'Proposed Venue'}</Text>
+                {isFetchingVenues && <ActivityIndicator size="small" color="#6366F1" />}
+              </View>
+              
               {role === 'coach' ? (
                 <View style={styles.venueSearchContainer}>
                     <View style={styles.searchBox}>
                       <Ionicons name="search" size={20} color="#94A3B8" />
                       <TextInput 
                         style={styles.searchInput}
-                        placeholder="Find an available academy..."
+                        placeholder="Find nearby venues..."
                         value={venueSearchQuery}
                         onChangeText={setVenueSearchQuery}
                       />
                     </View>
                     <ScrollView style={styles.venueResults} nestedScrollEnabled>
-                        {MOCK_ACADEMIES.filter(a => a.name.toLowerCase().includes(venueSearchQuery.toLowerCase())).map((academy, index) => {
+                        {(nearbyVenues.length > 0 ? nearbyVenues : MOCK_ACADEMIES).filter(a => a.name.toLowerCase().includes(venueSearchQuery.toLowerCase())).map((academy, index) => {
                             const isBusy = isTimeSlotBlocked(counterDate, counterTime, academy.id);
                             const isSelected = selectedAcademyForVenue?.id === academy.id;
                             const nextSlot = isBusy ? getNextAvailableSlot(counterDate, counterTime, academy.id) : null;
 
                             return (
                                 <TouchableOpacity 
-                                  key={academy.id}
+                                  key={academy.id || index}
                                   disabled={isBusy}
                                   style={[
                                       styles.venueResultItem, 
@@ -1153,6 +1287,9 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                                 </TouchableOpacity>
                             );
                         })}
+                        {!isFetchingVenues && nearbyVenues.length === 0 && venueSearchQuery === '' && (
+                          <Text style={{ textAlign: 'center', color: '#94A3B8', fontSize: 12, marginTop: 10 }}>No nearby activities found. try searching or using defaults.</Text>
+                        )}
                     </ScrollView>
                 </View>
               ) : (
