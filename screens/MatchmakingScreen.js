@@ -5,9 +5,11 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import designSystem from '../theme/designSystem';
 import { Sport } from '../types';
 import { Calendar } from 'react-native-calendars';
+import venuesData from '../data/venues.json';
 
 // Mock tournament hostings to check for busy slots
 const MOCK_ACADEMY_TOURNAMENTS = [
@@ -93,6 +95,10 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   const [expandedSlot, setExpandedSlot] = useState(null);
   const [counterComment, setCounterComment] = useState('');
   const [playerSearchQuery, setPlayerSearchQuery] = useState('');
+  const [userLocation, setUserLocation] = useState(null);
+  const [nearbyVenues, setNearbyVenues] = useState([]);
+  const [isFetchingVenues, setIsFetchingVenues] = useState(false);
+  const [venueDropdownSearchQuery, setVenueDropdownSearchQuery] = useState('');
 
   // MEMOIZED CALENDAR MARKING - CHALLENGE MODAL
   const challengeMarkedDates = React.useMemo(() => {
@@ -136,10 +142,173 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
     });
 
     if (counterDate) {
-      marks[counterDate] = { selected: true, selectedColor: '#6366F1' };
+      marks[counterDate] = { ...marks[counterDate], selected: true, selectedColor: '#6366F1' };
     }
     return marks;
   }, [isCounterModalVisible, selectedChallenge?.academyId, counterDate]);
+
+  const getDistance = (lat1, lon1, lat2, lon2) => {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+    const R = 6371; // Radius of the Earth in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return (R * c).toFixed(1);
+  };
+
+  const getSportFromText = (text) => {
+    const t = text.toLowerCase();
+    if (t.includes("badminton")) return "Badminton";
+    if (t.includes("cricket")) return "Cricket";
+    if (t.includes("table tennis") || t.includes(" tt")) return "Table Tennis";
+    return "";
+  };
+
+  // LOCATION & VENUE DISCOVERY (LOCAL DATA + FALLBACK)
+  const [hasFetchedFallback, setHasFetchedFallback] = React.useState(false);
+
+  const fetchGeoapifyFallback = async (lat, lng) => {
+    if (hasFetchedFallback) return;
+    setHasFetchedFallback(true);
+    setIsFetchingVenues(true);
+    const apiKey = 'b2c6599a146c41febca8debdc46c55eb';
+    const categories = 'sport.sports_centre,sport.stadium';
+    const url = `https://api.playo.io/activity-public/list/location`; // Wait, user wants geoapify.
+    // Actually the user said geoapify api request. 
+    const geoapifyUrl = `https://api.geoapify.com/v2/places?categories=${categories}&filter=circle:${lng},${lat},20000&limit=20&apiKey=${apiKey}`;
+
+    try {
+      const response = await fetch(geoapifyUrl);
+      const data = await response.json();
+      if (data.features) {
+        const newVenues = data.features.map(f => {
+          const props = f.properties || {};
+          const name = props.name || "";
+          const address = props.formatted || "";
+          
+          let area = "";
+          const parts = address.split(",");
+          if (parts.length > 2) area = parts[parts.length - 3]?.trim();
+          
+          const sport = getSportFromText(name + " " + address);
+          
+          return {
+            label: name + (area ? ` - ${area}` : ''),
+            venueName: name,
+            area: area,
+            sport: sport,
+            value: name,
+            address: address,
+            lat: props.lat,
+            lon: props.lon,
+            distance: getDistance(lat, lng, props.lat, props.lon)
+          };
+        }).filter(v => v.venueName && v.venueName.trim() !== "");
+
+        setNearbyVenues(prev => {
+          const combined = [...prev, ...newVenues];
+          const unique = [];
+          const seen = new Set();
+          for (const v of combined) {
+            const key = (v.venueName + (v.area || "")).toLowerCase();
+            if (!seen.has(key)) {
+              unique.push(v);
+              seen.add(key);
+            }
+          }
+          return unique.sort((a, b) => (parseFloat(a.distance) || 999) - (parseFloat(b.distance) || 999));
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching Geoapify fallback:', error);
+    } finally {
+      setIsFetchingVenues(false);
+    }
+  };
+
+  const loadLocalVenues = (lat, lng) => {
+    setIsFetchingVenues(true);
+    
+    const processedVenues = venuesData.map(v => ({
+      label: v.venueName + (v.area ? ` - ${v.area}` : ''),
+      venueName: v.venueName,
+      area: v.area,
+      sport: v.sport,
+      value: v.venueName,
+      address: v.address || "",
+      lat: v.lat,
+      lon: v.lon,
+      phone: v.phone,
+      email: v.email,
+      distance: getDistance(lat, lng, v.lat, v.lon)
+    }));
+
+    // Filter for reasonably close ones (e.g. 50km) to see if we have enough
+    const withinReason = processedVenues.filter(v => parseFloat(v.distance) < 50);
+    const sortedVenues = processedVenues.sort((a, b) => (parseFloat(a.distance) || 999) - (parseFloat(b.distance) || 999));
+    
+    setNearbyVenues(sortedVenues);
+    setIsFetchingVenues(false);
+
+    // TRIGGER FALLBACK IF LESS THAN 5 RESULTS WITHIN 50KM
+    if (withinReason.length < 5 && lat && lng) {
+      fetchGeoapifyFallback(lat, lng);
+    }
+  };
+
+  React.useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.warn('Permission to access location was denied');
+        // If no location, still show venues but without distance
+        const processedVenues = venuesData.map(v => ({
+            label: v.venueName + (v.area ? ` - ${v.area}` : ''),
+            venueName: v.venueName,
+            area: v.area,
+            sport: v.sport,
+            value: v.venueName,
+            address: v.address,
+            lat: v.lat,
+            lon: v.lon,
+            phone: v.phone,
+            email: v.email,
+            distance: null
+          }));
+        setNearbyVenues(processedVenues);
+        return;
+      }
+      let location = await Location.getCurrentPositionAsync({});
+      setUserLocation(location.coords);
+    })();
+  }, []);
+
+  React.useEffect(() => {
+    if ((isChallengeModalVisible || isCounterModalVisible) && nearbyVenues.length === 0) {
+      if (userLocation) {
+        loadLocalVenues(userLocation.latitude, userLocation.longitude);
+      } else {
+        // Fallback if location not ready
+        const processedVenues = venuesData.map(v => ({
+            label: v.venueName + (v.area ? ` - ${v.area}` : ''),
+            venueName: v.venueName,
+            area: v.area,
+            sport: v.sport,
+            value: v.venueName,
+            address: v.address,
+            lat: v.lat,
+            lon: v.lon,
+            phone: v.phone,
+            email: v.email,
+            distance: null
+          }));
+        setNearbyVenues(processedVenues);
+      }
+    }
+  }, [isChallengeModalVisible, isCounterModalVisible, userLocation]);
 
   const parseTime = (timeStr) => {
     const [time, modifier] = timeStr.split(' ');
@@ -203,12 +372,20 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
     setSelectedSport(common[0]); // Auto-select first available sport
     setChallengeDate('');
     setChallengeTime('');
+    setSelectedAcademyForVenue(null);
+    setVenueDropdownSearchQuery('');
     setIsChallengeModalVisible(true);
   };
 
   const confirmChallenge = () => {
-    if (!challengeDate || !challengeTime || !selectedSport) {
-      Alert.alert("Error", "Please fill all details");
+    if (!challengeDate || !challengeTime || !selectedSport || !selectedAcademyForVenue) {
+      let missingFields = [];
+      if (!challengeDate) missingFields.push("Date");
+      if (!challengeTime) missingFields.push("Time");
+      if (!selectedSport) missingFields.push("Sport");
+      if (!selectedAcademyForVenue) missingFields.push("Venue");
+      
+      Alert.alert("Missing Details", `Please select the following: ${missingFields.join(", ")}`);
       return;
     }
     const newChallenge = {
@@ -222,6 +399,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
       proposedDate: challengeDate,
       proposedTime: challengeTime,
       sport: selectedSport,
+      location: selectedAcademyForVenue ? selectedAcademyForVenue.label : 'Local Arena',
       status: 'Pending',
       timestamp: new Date().toISOString()
     };
@@ -374,6 +552,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
     setSelectedAcademyForVenue(null);
     setNegotiatedVenue('opponent');
     setCounterComment(req.counterComment || '');
+    setVenueDropdownSearchQuery('');
     setIsCounterModalVisible(true);
     setIsDetailsModalVisible(false);
   };
@@ -390,14 +569,19 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   };
 
   const submitCounterProposal = () => {
-    if (!counterDate || !counterTime) {
-      Alert.alert("Error", "Please select date and time");
+    if (!counterDate || !counterTime || (!selectedAcademyForVenue && negotiatedVenue === 'opponent')) {
+      let missingFields = [];
+      if (!counterDate) missingFields.push("Date");
+      if (!counterTime) missingFields.push("Time");
+      if (!selectedAcademyForVenue && negotiatedVenue === 'opponent') missingFields.push("Venue");
+      
+      Alert.alert("Missing Details", `Please select the following: ${missingFields.join(", ")}`);
       return;
     }
-    const oppName = getOpponentName(selectedChallenge);
-    const venueLabel = role === 'coach' 
-        ? (selectedAcademyForVenue ? selectedAcademyForVenue.name : 'Coach-suggested Venue')
-        : (negotiatedVenue === 'own' ? 'Our Academy Grounds' : (oppName + ' Grounds'));
+    const selectedVenueName = selectedAcademyForVenue?.label || selectedAcademyForVenue?.name;
+    const venueLabel = selectedVenueName 
+        ? selectedVenueName 
+        : (role === 'coach' ? 'Coach-suggested Venue' : (negotiatedVenue === 'own' ? 'Our Academy Grounds' : (oppName + ' Grounds')));
     
     const counteredItem = {
       ...selectedChallenge,
@@ -795,6 +979,75 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                   })}
               </View>
 
+              <Text style={styles.sectionLabel}>Proposed Venue</Text>
+              <View style={styles.venueSection}>
+                {isFetchingVenues ? (
+                  <View style={styles.loadingContainer}>
+                    <Text style={styles.loadingText}>Fetching nearby venues...</Text>
+                  </View>
+                ) : nearbyVenues.length > 0 ? (
+                  <View style={styles.venueDropdownContainer}>
+                     <View style={styles.venueDropdownSearchBox}>
+                       <Ionicons name="search" size={16} color="#94A3B8" />
+                       <TextInput 
+                         style={styles.venueDropdownSearchInput}
+                         placeholder="Search fetched venues..."
+                         value={venueDropdownSearchQuery}
+                         onChangeText={setVenueDropdownSearchQuery}
+                         placeholderTextColor="#94A3B8"
+                       />
+                       {venueDropdownSearchQuery !== '' && (
+                         <TouchableOpacity onPress={() => setVenueDropdownSearchQuery('')}>
+                           <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                         </TouchableOpacity>
+                       )}
+                     </View>
+                     <ScrollView style={styles.venueList} nestedScrollEnabled={true}>
+                        {nearbyVenues
+                          .filter(v => {
+                             const q = venueDropdownSearchQuery.toLowerCase();
+                             return (v.venueName?.toLowerCase() || "").includes(q) || 
+                                    (v.area?.toLowerCase() || "").includes(q) || 
+                                    (v.sport?.toLowerCase() || "").includes(q);
+                          })
+                          .map((venue, idx) => (
+                           <TouchableOpacity 
+                             key={`venue-${idx}`}
+                             style={[styles.venueItem, selectedAcademyForVenue?.venueName === venue.venueName && styles.venueItemSelected]}
+                             onPress={() => setSelectedAcademyForVenue(venue)}
+                           >
+                             <View style={{ flex: 1 }}>
+                               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                 <Text style={[styles.venueName, selectedAcademyForVenue?.venueName === venue.venueName && styles.venueNameSelected]}>
+                                   {venue.venueName}{venue.area ? ` - ${venue.area}` : ''}
+                                 </Text>
+                                 <Text style={styles.venueDistance}>{venue.distance ? `${venue.distance} km` : ''}</Text>
+                               </View>
+                               {venue.sport && (
+                                 <Text style={styles.venueSportText}>({venue.sport})</Text>
+                               )}
+                               <Text style={styles.venueAddress} numberOfLines={1}>{venue.address}</Text>
+                                 {(venue.phone || venue.email) && (
+                                   <View style={{ flexDirection: 'row', marginTop: 4, gap: 8 }}>
+                                     {venue.phone && <Text style={styles.venueContactText}>📞 {venue.phone}</Text>}
+                                     {venue.email && <Text style={styles.venueContactText}>✉️ {venue.email}</Text>}
+                                   </View>
+                                 )}
+                               </View>
+                             {selectedAcademyForVenue?.label === venue.label && (
+                               <Ionicons name="checkmark-circle" size={20} color={designSystem.colors.primary} />
+                             )}
+                           </TouchableOpacity>
+                        ))}
+                     </ScrollView>
+                  </View>
+                ) : (
+                  <View style={styles.emptyVenueContainer}>
+                    <Text style={styles.emptyVenueText}>No local venues found matches your search.</Text>
+                  </View>
+                )}
+              </View>
+
               <View style={styles.upcomingChallengesSection}>
                 <Text style={styles.sectionLabel}>Upcoming Challenges</Text>
                 {matchmaking.filter(m => 
@@ -1112,7 +1365,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                  })}
               </View>
 
-              <Text style={styles.sectionLabel}>{role === 'coach' ? 'Search Venue Academy' : 'Proposed Venue'}</Text>
+              <Text style={styles.sectionLabel}>Proposed Venue</Text>
               {role === 'coach' ? (
                 <View style={styles.venueSearchContainer}>
                     <View style={styles.searchBox}>
@@ -1156,21 +1409,72 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                     </ScrollView>
                 </View>
               ) : (
-                <View style={styles.venueRow}>
-                  <TouchableOpacity
-                    style={[styles.venueBtn, negotiatedVenue === 'opponent' && styles.venueBtnActive]}
-                    onPress={() => setNegotiatedVenue('opponent')}
-                  >
-                    <Ionicons name="business" size={20} color={negotiatedVenue === 'opponent' ? '#6366F1' : '#94A3B8'} />
-                    <Text style={[styles.venueText, negotiatedVenue === 'opponent' && styles.venueTextActive]}>{getOpponentName(selectedChallenge)}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.venueBtn, negotiatedVenue === 'own' && styles.venueBtnActive]}
-                    onPress={() => setNegotiatedVenue('own')}
-                  >
-                    <Ionicons name="home" size={20} color={negotiatedVenue === 'own' ? '#6366F1' : '#94A3B8'} />
-                    <Text style={[styles.venueText, negotiatedVenue === 'own' && styles.venueTextActive]}>Our Academy</Text>
-                  </TouchableOpacity>
+                <View style={styles.venueSection}>
+                  {isFetchingVenues ? (
+                    <View style={styles.loadingContainer}>
+                      <Text style={styles.loadingText}>Fetching nearby venues...</Text>
+                    </View>
+                  ) : nearbyVenues.length > 0 ? (
+                    <View style={styles.venueDropdownContainer}>
+                      <View style={styles.venueDropdownSearchBox}>
+                        <Ionicons name="search" size={16} color="#94A3B8" />
+                        <TextInput 
+                          style={styles.venueDropdownSearchInput}
+                          placeholder="Search fetched venues..."
+                          value={venueDropdownSearchQuery}
+                          onChangeText={setVenueDropdownSearchQuery}
+                          placeholderTextColor="#94A3B8"
+                        />
+                        {venueDropdownSearchQuery !== '' && (
+                          <TouchableOpacity onPress={() => setVenueDropdownSearchQuery('')}>
+                            <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      <ScrollView style={styles.venueList} nestedScrollEnabled={true}>
+                          {nearbyVenues
+                            .filter(v => {
+                               const q = venueDropdownSearchQuery.toLowerCase();
+                               return (v.venueName?.toLowerCase() || "").includes(q) || 
+                                      (v.area?.toLowerCase() || "").includes(q) || 
+                                      (v.sport?.toLowerCase() || "").includes(q);
+                            })
+                            .map((venue, idx) => (
+                            <TouchableOpacity 
+                               key={`venue-counter-${idx}`}
+                               style={[styles.venueItem, selectedAcademyForVenue?.venueName === venue.venueName && styles.venueItemSelected]}
+                               onPress={() => setSelectedAcademyForVenue(venue)}
+                            >
+                               <View style={{ flex: 1 }}>
+                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                   <Text style={[styles.venueName, selectedAcademyForVenue?.venueName === venue.venueName && styles.venueNameSelected]}>
+                                     {venue.venueName}{venue.area ? ` - ${venue.area}` : ''}
+                                   </Text>
+                                   <Text style={styles.venueDistance}>{venue.distance ? `${venue.distance} km` : ''}</Text>
+                                 </View>
+                                 {venue.sport && (
+                                   <Text style={styles.venueSportText}>({venue.sport})</Text>
+                                 )}
+                                 <Text style={styles.venueAddress} numberOfLines={1}>{venue.address}</Text>
+                                 {(venue.phone || venue.email) && (
+                                   <View style={{ flexDirection: 'row', marginTop: 4, gap: 8 }}>
+                                     {venue.phone && <Text style={styles.venueContactText}>📞 {venue.phone}</Text>}
+                                     {venue.email && <Text style={styles.venueContactText}>✉️ {venue.email}</Text>}
+                                   </View>
+                                 )}
+                               </View>
+                               {selectedAcademyForVenue?.label === venue.label && (
+                                 <Ionicons name="checkmark-circle" size={20} color={designSystem.colors.primary} />
+                               )}
+                            </TouchableOpacity>
+                          ))}
+                      </ScrollView>
+                    </View>
+                  ) : (
+                    <View style={styles.emptyVenueContainer}>
+                      <Text style={styles.emptyVenueText}>No local venues found matches your search.</Text>
+                    </View>
+                  )}
                 </View>
               )}
 
@@ -1402,5 +1706,116 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
+  },
+  // Geoapify Venue Dropdown Styles
+  venueSection: {
+    marginTop: 10,
+    marginBottom: 5,
+  },
+  venueDropdownContainer: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    maxHeight: 250,
+  },
+  venueList: {
+    padding: 8,
+  },
+  venueItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 6,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  venueItemSelected: {
+    borderColor: '#6366F1',
+    backgroundColor: '#EEF2FF',
+  },
+  venueName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  venueNameSelected: {
+    color: '#6366F1',
+  },
+  venueAddress: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+    maxWidth: 220,
+  },
+  venueDistance: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: designSystem.colors.primary,
+  },
+  venueContactText: {
+    fontSize: 10,
+    color: '#64748B',
+  },
+  venueSportText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontStyle: 'italic',
+    marginTop: 1,
+  },
+  loadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+  },
+  loadingText: {
+    fontSize: 13,
+    color: '#64748B',
+    fontStyle: 'italic',
+  },
+  emptyVenueContainer: {
+    padding: 20,
+    alignItems: 'center',
+    backgroundColor: '#FFF1F2',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+  },
+  emptyVenueText: {
+    fontSize: 13,
+    color: '#E11D48',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  retryText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#E11D48',
+    textDecorationLine: 'underline',
+  },
+  venueDropdownSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    gap: 10,
+  },
+  venueDropdownSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0F172A',
+    padding: 0,
+    fontWeight: '500',
   },
 });
