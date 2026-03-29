@@ -200,7 +200,7 @@ const ParticipantsModal = ({
                   ...(tournament.pendingPaymentPlayerIds || []),
                   ...(tournament.interestedPlayerIds || []),
                   ...Object.keys(tournament.playerStatuses || {})
-                ])).filter(pid => pid && String(pid).toLowerCase() !== 'test');
+                ])).filter(pid => !!pid);
 
                 if (combinedIds.length === 0) {
                   return (

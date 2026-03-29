@@ -54,12 +54,12 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
     }, [onManualSync])
   );
   const role = user?.role || 'user';
-  const [activeTab, setActiveTab] = useState(role === 'coach' ? 'New Bookings' : 'Challenge'); // Challenge, Requested/Sent, Accepted, History
+  const [activeTab, setActiveTab] = useState(role === 'coach' ? 'New Bookings' : 'Challenge'); // Challenge, Requests, Accepted, History
 
   // Derived states from global matchmaking prop
   // Derived states from global matchmaking prop - MEMOIZED
   const sentRequests = React.useMemo(() => 
-    matchmaking.filter(m => m.senderId === user?.id && m.status !== 'Accepted'),
+    matchmaking.filter(m => m.senderId === user?.id && m.status !== 'Accepted' && m.status !== 'Cancelled' && m.status !== 'Declined'),
     [matchmaking, user?.id]
   );
   
@@ -76,7 +76,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   );
 
   const [history, setHistory] = useState([
-    { id: 'h1', name: 'Sameer P.', sport: 'Badminton', result: 'Won 21-18, 21-15', date: 'Mar 20, 2024' }
+    { id: 'h1', name: 'Sameer P.', sport: 'Badminton', date: 'Mar 20, 2024' }
   ]);
 
   const [isChallengeModalVisible, setIsChallengeModalVisible] = useState(false);
@@ -204,7 +204,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
             address: address,
             lat: props.lat,
             lon: props.lon,
-            distance: d
+            distance: getDistance(lat, lng, props.lat, props.lon)
           };
         }).filter(v => v.venueName && v.venueName.trim() !== "" && parseFloat(v.distance) <= 30);
 
@@ -347,22 +347,34 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
 
   const mySports = user?.managedSports || (user?.certifiedSports) || [Sport.BADMINTON];
 
+  const getUserPreferredSport = () => {
+    const counts = { [Sport.BADMINTON]: 0, [Sport.TABLE_TENNIS]: 0, [Sport.CRICKET]: 0 };
+    
+    // Weight declared primary sport heavily
+    if (user?.sport && counts[user.sport] !== undefined) {
+      counts[user.sport] += 5;
+    }
+
+    // Count accepted/completed matches
+    matchmaking.forEach(m => {
+      if ((m.senderId === user?.id || m.receiverId === user?.id) && (m.status === 'Accepted' || m.status === 'Completed')) {
+        if (counts[m.sport] !== undefined) counts[m.sport] += 1;
+      }
+    });
+
+    return Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+  };
+
   const getCommonSports = (opponent) => {
-    if (!opponent) return [];
-    if (role === 'academy') {
-      const opponentSports = opponent.managedSports || [];
-      return mySports.filter(s => opponentSports.includes(s));
-    }
-    // For users, show their primary sport or any certified sports
-    const opponentSports = [];
-    if (opponent.sport) opponentSports.push(opponent.sport);
-    if (opponent.certifiedSports && opponent.certifiedSports.length > 0) {
-      opponent.certifiedSports.forEach(s => {
-        if (!opponentSports.includes(s)) opponentSports.push(s);
-      });
-    }
-    // Final fallback to Badminton if nothing found
-    return opponentSports.length > 0 ? opponentSports : [Sport.BADMINTON];
+    const preferred = getUserPreferredSport();
+    const allSports = [Sport.BADMINTON, Sport.TABLE_TENNIS, Sport.CRICKET];
+    
+    // Sort so preferred is first
+    return allSports.sort((a, b) => {
+      if (a === preferred) return -1;
+      if (b === preferred) return 1;
+      return 0;
+    });
   };
 
   const handleChallenge = (opponent) => {
@@ -433,6 +445,26 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
     return item.name || 'Opponent';
   };
 
+  const handleCancelChallenge = (req) => {
+    const oppName = getOpponentName(req);
+    Alert.alert(
+      "Cancel Request",
+      `Are you sure you want to cancel your challenge to ${oppName}?`,
+      [
+        { text: "No", style: "cancel" },
+        { 
+          text: "Yes, Cancel", 
+          style: "destructive",
+          onPress: () => {
+            const updated = matchmaking.map(m => m.id === req.id ? { ...m, status: 'Cancelled', lastUpdatedBy: user?.id } : m);
+            onUpdateMatchmaking(updated);
+            Alert.alert("Request Cancelled", "Your challenge has been successfully removed.");
+          }
+        }
+      ]
+    );
+  };
+
   const handleDeclineChallenge = (req) => {
     const oppName = getOpponentName(req);
     Alert.alert(
@@ -444,7 +476,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
           text: "Decline", 
           style: "destructive",
           onPress: () => {
-            const updated = matchmaking.filter(m => m.id !== req.id);
+            const updated = matchmaking.map(m => m.id === req.id ? { ...m, status: 'Declined', lastUpdatedBy: user?.id } : m);
             onUpdateMatchmaking(updated);
             
             // Send Notification to sender
@@ -636,7 +668,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
           text: "Yes, Cancel", 
           style: "destructive",
           onPress: () => {
-            const updated = matchmaking.filter(m => m.id !== req.id);
+            const updated = matchmaking.map(m => m.id === req.id ? { ...m, status: 'Cancelled', lastUpdatedBy: user?.id } : m);
             onUpdateMatchmaking(updated);
             setIsDetailsModalVisible(false);
             Alert.alert("Booking Cancelled", "The booking has been successfully removed.");
@@ -666,7 +698,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
           style={[styles.btn, isSent && styles.btnSent]}
           onPress={() => isSent ? null : handleChallenge(item)}
         >
-          <Text style={styles.btnText}>{isSent ? 'Requested/Sent' : 'Challenge'}</Text>
+          <Text style={styles.btnText}>{isSent ? 'Requests' : 'Challenge'}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -679,103 +711,100 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
     return (
       <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{role === 'coach' ? 'Booking Requests' : 'Received Challenges'}</Text>
-            {receivedRequests.length === 0 ? (
-                <Text style={[styles.emptyText, { textAlign: 'center', marginTop: 10, marginBottom: 10, fontSize: 13 }]}>No Requests Received</Text>
-            ) : (
-              receivedRequests.map((req, index) => (
-                <TouchableOpacity key={req.id || `received-${index}`} style={styles.requestCard} onPress={() => openDetails(req)}>
-                  <View style={styles.info}>
-                    <Text style={styles.name}>{getOpponentName(req)}</Text>
-                    <Text style={[styles.details, req.status === 'Counter Proposed' && { color: '#D97706' }]}>
-                      {req.sport} • {req.time || (req.proposedDate + ' @ ' + req.proposedTime)}
-                      {req.status === 'Counter Proposed' ? ' (Negotiating)' : ''}
-                    </Text>
-                  </View>
-                  <View style={styles.actionRow}>
-                    <TouchableOpacity style={[styles.smallBtn, { backgroundColor: '#F1F5F9' }]} onPress={() => handleDeclineChallenge(req)}>
-                      <Text style={[styles.smallBtnText, { color: '#64748B' }]}>Decline</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.smallBtn} onPress={() => handleCounter(req)}>
-                      <Text style={styles.smallBtnText}>Counter</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.smallBtn, { backgroundColor: '#22C55E' }]} onPress={() => handleAcceptChallenge(req)}>
-                      <Text style={styles.smallBtnText}>{role === 'coach' ? 'Confirm' : 'Accept'}</Text>
-                    </TouchableOpacity>
-                  </View>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Sent</Text>
+          </View>
+          {actualSentRequests.length === 0 && <Text style={styles.emptyText}>No Pending Requests Sent</Text>}
+          {actualSentRequests.map((req, index) => (
+            <TouchableOpacity key={req.id || `sent-${index}`} style={styles.requestCard} onPress={() => openDetails(req)}>
+              <View style={styles.info}>
+                <Text style={styles.name} numberOfLines={1}>{getOpponentName(req)}</Text>
+                <Text style={styles.details}>{req.sport} • {req.proposedDate} at {req.proposedTime} • {req.status || 'Pending'}</Text>
+              </View>
+              <View style={styles.actionRow}>
+                <TouchableOpacity style={styles.smallBtn} onPress={() => handleCounter(req)}>
+                  <Text style={styles.smallBtnText}>Counter</Text>
                 </TouchableOpacity>
-              ))
-            )}
+                <TouchableOpacity style={[styles.smallBtn, { backgroundColor: '#FFEEF2' }]} onPress={() => handleCancelChallenge(req)}>
+                  <Text style={[styles.smallBtnText, { color: '#E11D48' }]}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          ))}
         </View>
 
-        {/* Dedicated Countered Section - Always visible */}
-        <View style={[styles.section, { marginTop: 20 }]}>
-            <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Countered</Text>
-                {role === 'coach' && counteredRequests.some(r => r.hasUserResponse) && (
-                    <View style={[styles.badge, { backgroundColor: '#EF4444' }]}>
-                        <Text style={styles.badgeText}>{counteredRequests.filter(r => r.hasUserResponse).length} NEW RESPONSE</Text>
-                    </View>
-                )}
-            </View>
-            {counteredRequests.length === 0 && (
-              <Text style={[styles.emptyText, { textAlign: 'center', marginTop: 10, marginBottom: 10, fontSize: 13 }]}>No countered challenges</Text>
-            )}
-            {counteredRequests.map((req, index) => (
-              <TouchableOpacity key={req.id || `countered-${index}`} style={[styles.requestCard, { borderLeftColor: '#F59E0B' }]} onPress={() => openDetails(req)}>
+        {/* Received Challenges Section */}
+        <View style={[styles.section, { marginTop: 25 }]}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Received</Text>
+          </View>
+          {receivedRequests.length === 0 ? (
+            <Text style={styles.emptyText}>No Requests Received</Text>
+          ) : (
+            receivedRequests.map((req, index) => (
+              <TouchableOpacity key={req.id || `received-${index}`} style={styles.requestCard} onPress={() => openDetails(req)}>
                 <View style={styles.info}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                      <Text style={[styles.name, { flex: 1 }]} numberOfLines={1}>{getOpponentName(req)}</Text>
-                      {req.hasUserResponse && (
-                          <View style={styles.responseTag}>
-                              <Text style={styles.responseTagText}>USER RESPONDED</Text>
-                          </View>
-                      )}
-                  </View>
-                  <Text style={styles.details}>{req.sport} • {req.proposedDate} at {req.proposedTime} • {req.status}</Text>
+                  <Text style={styles.name}>{getOpponentName(req)}</Text>
+                  <Text style={[styles.details, req.status === 'Counter Proposed' && { color: '#D97706' }]}>
+                    {req.sport} • {req.time || (req.proposedDate + ' @ ' + req.proposedTime)}
+                    {req.status === 'Counter Proposed' ? ' (Negotiating)' : ''}
+                  </Text>
                 </View>
                 <View style={styles.actionRow}>
+                  <TouchableOpacity style={[styles.smallBtn, { backgroundColor: '#F1F5F9' }]} onPress={() => handleDeclineChallenge(req)}>
+                    <Text style={[styles.smallBtnText, { color: '#64748B' }]}>Decline</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity style={styles.smallBtn} onPress={() => handleCounter(req)}>
                     <Text style={styles.smallBtnText}>Counter</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity 
-                      style={[styles.smallBtn, { backgroundColor: (role === 'coach' ? (req.hasUserResponse ? '#22C55E' : '#E2E8F0') : '#22C55E') }]} 
-                      onPress={() => role === 'coach' ? (req.hasUserResponse ? handleConfirmBooking(req) : null) : handleAcceptCountered(req)}
-                  >
-                      <Text style={[styles.smallBtnText, { color: (role === 'coach' ? (req.hasUserResponse ? '#fff' : '#94A3B8') : '#fff') }]}>
-                        {role === 'coach' ? 'Confirm' : 'Accept'}
-                      </Text>
+                  <TouchableOpacity style={[styles.smallBtn, { backgroundColor: '#22C55E' }]} onPress={() => handleAcceptChallenge(req)}>
+                    <Text style={styles.smallBtnText}>{role === 'coach' ? 'Confirm' : 'Accept'}</Text>
                   </TouchableOpacity>
                 </View>
               </TouchableOpacity>
-            ))}
+            ))
+          )}
         </View>
 
-        <View style={[styles.section, { marginTop: 20 }]}>
+        {/* Countered Section */}
+        <View style={[styles.section, { marginTop: 25 }]}>
           <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Sent Requests</Text>
+            <Text style={styles.sectionTitle}>Countered</Text>
+            {role === 'coach' && counteredRequests.some(r => r.hasUserResponse) && (
+              <View style={[styles.badge, { backgroundColor: '#EF4444' }]}>
+                <Text style={styles.badgeText}>{counteredRequests.filter(r => r.hasUserResponse).length} NEW RESPONSE</Text>
+              </View>
+            )}
           </View>
-          {actualSentRequests.length === 0 && <Text style={styles.emptyText}>No pending requests sent.</Text>}
-          {actualSentRequests.map((req, index) => (
-            <TouchableOpacity key={req.id || `sent-${index}`} style={styles.requestCard} onPress={() => openDetails(req)}>
-               <View style={styles.info}>
-                  <Text style={styles.name} numberOfLines={1}>{getOpponentName(req)}</Text>
-                  <Text style={styles.details}>{req.sport} • {req.proposedDate} at {req.proposedTime} • {req.status || 'Pending'}</Text>
+          {counteredRequests.length === 0 && (
+            <Text style={styles.emptyText}>No Countered Challenges</Text>
+          )}
+          {counteredRequests.map((req, index) => (
+            <TouchableOpacity key={req.id || `countered-${index}`} style={[styles.requestCard, { borderLeftColor: '#F59E0B' }]} onPress={() => openDetails(req)}>
+              <View style={styles.info}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                  <Text style={[styles.name, { flex: 1 }]} numberOfLines={1}>{getOpponentName(req)}</Text>
+                  {req.hasUserResponse && (
+                    <View style={styles.responseTag}>
+                      <Text style={styles.responseTagText}>USER RESPONDED</Text>
+                    </View>
+                  )}
                 </View>
-                <View style={styles.actionRow}>
-                  <TouchableOpacity style={styles.smallBtn} onPress={() => handleCounter(req)}>
-                    <Text style={styles.smallBtnText}>Counter</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.smallBtn, { backgroundColor: '#FEE2E2' }]} 
-                    onPress={() => {
-                      const updated = matchmaking.filter(m => m.id !== req.id);
-                      onUpdateMatchmaking(updated);
-                    }}
-                  >
-                    <Text style={[styles.smallBtnText, { color: '#EF4444' }]}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
+                <Text style={styles.details}>{req.sport} • {req.proposedDate} at {req.proposedTime} • {req.status}</Text>
+              </View>
+              <View style={styles.actionRow}>
+                <TouchableOpacity style={styles.smallBtn} onPress={() => handleCounter(req)}>
+                  <Text style={styles.smallBtnText}>Counter</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.smallBtn, { backgroundColor: (role === 'coach' ? (req.hasUserResponse ? '#22C55E' : '#E2E8F0') : '#22C55E') }]} 
+                  onPress={() => role === 'coach' ? (req.hasUserResponse ? handleConfirmBooking(req) : null) : handleAcceptCountered(req)}
+                >
+                  <Text style={[styles.smallBtnText, { color: (role === 'coach' ? (req.hasUserResponse ? '#fff' : '#94A3B8') : '#fff') }]}>
+                    {role === 'coach' ? 'Confirm' : 'Accept'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </TouchableOpacity>
           ))}
         </View>
@@ -785,7 +814,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
 
   const renderAccepted = () => (
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-      {acceptedMatches.length === 0 && <Text style={styles.emptyText}>No accepted matches yet.</Text>}
+      {acceptedMatches.length === 0 && <Text style={styles.emptyText}>No Accepted Matches Yet</Text>}
       {acceptedMatches.map((match, index) => (
         <TouchableOpacity key={match.id || `accepted-${index}`} style={styles.acceptedCard} onPress={() => openDetails(match)}>
           <View style={styles.acceptedHeader}>
@@ -801,14 +830,13 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
 
   const renderHistory = () => (
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-      {history.length === 0 && <Text style={styles.emptyText}>No match history found.</Text>}
+      {history.length === 0 && <Text style={styles.emptyText}>No Match History Found</Text>}
       {history.map((item, index) => (
         <TouchableOpacity key={item.id || `history-${index}`} style={styles.historyCard} onPress={() => openDetails(item)}>
           <View>
             <Text style={styles.historyName}>{getOpponentName(item)}</Text>
             <Text style={styles.historyDetail}>{item.sport} • {item.date}</Text>
           </View>
-          <Text style={styles.historyResult}>{item.result}</Text>
         </TouchableOpacity>
       ))}
     </ScrollView>
@@ -836,7 +864,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
       <View style={styles.header}>
         <Text style={styles.title}>{role === 'coach' ? 'Coach Bookings' : (role === 'academy' ? 'Academy Matchmaking' : 'Matchmaking')}</Text>
         <View style={styles.tabs}>
-           {(role === 'coach' ? ['New Bookings', 'Accepted', 'History'] : ['Challenge', 'Requested/Sent', 'Accepted', 'History']).map((tab, index) => (
+           {(role === 'coach' ? ['New Bookings', 'Accepted', 'History'] : ['Challenge', 'Requests', 'Accepted', 'History']).map((tab, index) => (
              <TouchableOpacity
                key={`tab-${index}`}
                style={[styles.tab, activeTab === tab && styles.activeTab]}
@@ -875,13 +903,13 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
           keyExtractor={item => item.id}
           style={{ flex: 1 }}
           contentContainerStyle={styles.list}
-          ListEmptyComponent={<Text style={styles.emptyText}>No matching {role === 'academy' ? 'academies' : 'players'} found near you.</Text>}
+          ListEmptyComponent={<Text style={styles.emptyText}>No Matching {role === 'academy' ? 'Academies' : 'Players'} Found Near You</Text>}
           initialNumToRender={10}
           maxToRenderPerBatch={10}
           windowSize={5}
         />
       )}
-      {(activeTab === 'Requested/Sent' || (role === 'coach' && activeTab === 'New Bookings')) && renderRequested()}
+      {(activeTab === 'Requests' || (role === 'coach' && activeTab === 'New Bookings')) && renderRequested()}
       {activeTab === 'Accepted' && renderAccepted()}
       {activeTab === 'History' && renderHistory()}
 
@@ -902,15 +930,20 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={styles.sectionLabel}>Select Sport</Text>
               <View style={styles.sportGrid}>
-                {selectedOpponent && getCommonSports(selectedOpponent).map((s, index) => (
-                  <TouchableOpacity
-                    key={`sport-${index}`}
-                    style={[styles.sportTag, selectedSport === s && styles.sportTagActive]}
-                    onPress={() => setSelectedSport(s)}
-                  >
-                    <Text style={[styles.sportTagText, selectedSport === s && styles.sportTagTextActive]}>{s}</Text>
-                  </TouchableOpacity>
-                ))}
+                {selectedOpponent && getCommonSports(selectedOpponent).map((s, index) => {
+                  const isPreferred = s === getUserPreferredSport();
+                  return (
+                    <TouchableOpacity
+                      key={`sport-${index}`}
+                      style={[styles.sportTag, selectedSport === s && styles.sportTagActive]}
+                      onPress={() => setSelectedSport(s)}
+                    >
+                      <Text style={[styles.sportTagText, selectedSport === s && styles.sportTagTextActive]}>
+                        {s} {isPreferred ? '⭐' : ''}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
               <Text style={styles.sectionLabel}>Select Date</Text>
@@ -989,7 +1022,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
               <View style={styles.venueSection}>
                 {isFetchingVenues ? (
                   <View style={styles.loadingContainer}>
-                    <Text style={styles.loadingText}>Fetching nearby venues...</Text>
+                    <Text style={styles.loadingText}>Fetching Nearby Venues...</Text>
                   </View>
                 ) : nearbyVenues.length > 0 ? (
                   <View style={styles.venueDropdownContainer}>
@@ -1049,7 +1082,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                   </View>
                 ) : (
                   <View style={styles.emptyVenueContainer}>
-                    <Text style={styles.emptyVenueText}>No local venues found matches your search.</Text>
+                    <Text style={styles.emptyVenueText}>No Local Venues Found Matching Your Search</Text>
                   </View>
                 )}
               </View>
@@ -1059,15 +1092,17 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                 {matchmaking.filter(m => 
                   ((m.senderId === user?.id && m.receiverId === selectedOpponent?.id) ||
                    (m.senderId === selectedOpponent?.id && m.receiverId === user?.id)) &&
+                  (m.status === 'Pending' || m.status === 'Accepted') &&
                   (!challengeDate || (m.proposedDate || m.time?.split(',')[0]?.trim()) === challengeDate)
                 ).length === 0 ? (
                   <Text style={styles.emptyUpcomingText}>
-                    {challengeDate ? `No challenges for ${challengeDate}` : 'No upcoming challenges with this player'}
+                    {challengeDate ? `No Challenges For ${challengeDate}` : 'No Upcoming Challenges With This Player'}
                   </Text>
                 ) : (
                   matchmaking.filter(m => 
                     ((m.senderId === user?.id && m.receiverId === selectedOpponent?.id) ||
                      (m.senderId === selectedOpponent?.id && m.receiverId === user?.id)) &&
+                    (m.status === 'Pending' || m.status === 'Accepted') &&
                     (!challengeDate || (m.proposedDate || m.time?.split(',')[0]?.trim()) === challengeDate)
                   ).sort((a, b) => new Date(a.proposedDate || a.time?.split(',')[0]) - new Date(b.proposedDate || b.time?.split(',')[0]))
                    .map((m, idx) => (
@@ -1418,7 +1453,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                 <View style={styles.venueSection}>
                   {isFetchingVenues ? (
                     <View style={styles.loadingContainer}>
-                      <Text style={styles.loadingText}>Fetching nearby venues...</Text>
+                      <Text style={styles.loadingText}>Fetching Nearby Venues...</Text>
                     </View>
                   ) : nearbyVenues.length > 0 ? (
                     <View style={styles.venueDropdownContainer}>
@@ -1426,7 +1461,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                         <Ionicons name="search" size={16} color="#94A3B8" />
                         <TextInput 
                           style={styles.venueDropdownSearchInput}
-                          placeholder="Search fetched venues..."
+                          placeholder="Search Fetched Venues..."
                           value={venueDropdownSearchQuery}
                           onChangeText={setVenueDropdownSearchQuery}
                           placeholderTextColor="#94A3B8"
@@ -1478,7 +1513,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                     </View>
                   ) : (
                     <View style={styles.emptyVenueContainer}>
-                      <Text style={styles.emptyVenueText}>No local venues found matches your search.</Text>
+                      <Text style={styles.emptyVenueText}>No Local Venues Found Matching Your Search</Text>
                     </View>
                   )}
                 </View>
@@ -1583,7 +1618,7 @@ const styles = StyleSheet.create({
   historyName: { fontSize: 15, fontWeight: '700', color: '#333' },
   historyDetail: { fontSize: 12, color: '#666', marginTop: 2 },
   historyResult: { fontSize: 14, fontWeight: '800', color: '#16A34A' },
-  emptyText: { textAlign: 'center', color: '#999', marginTop: 40, fontSize: 14 },
+  emptyText: { textAlign: 'center', color: '#94A3B8', marginTop: 0, fontSize: 13, paddingVertical: 10 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '80%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },

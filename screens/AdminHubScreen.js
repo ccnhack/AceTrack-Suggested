@@ -35,8 +35,10 @@ const AdminHubScreen = ({
   const activeApiUrl = isUsingCloud ? targetCloudUrl : config.API_BASE_URL;
 
   const [subTab, setSubTab] = useState('individuals');
+  const today = new Date().toISOString().split('T')[0];
   const [search, setSearch] = useState('');
   const [coachSubTab, setCoachSubTab] = useState('pending');
+  const [tournamentSubTab, setTournamentSubTab] = useState('upcoming');
   const [rejectType, setRejectType] = useState(null); // 'rejected' | 'addendum'
   const [rejectingCoachId, setRejectingCoachId] = useState(null);
   const [rejectComment, setRejectComment] = useState('');
@@ -162,6 +164,10 @@ const AdminHubScreen = ({
   const filteredAcademies = filterData(players.filter(p => p.role === 'academy'));
   const filteredCoaches = filterData(players.filter(p => p.role === 'coach'));
   const filteredTournaments = tournaments.filter(t => {
+    const isUpcoming = t.date >= today;
+    if (tournamentSubTab === 'upcoming' && !isUpcoming) return false;
+    if (tournamentSubTab === 'past' && isUpcoming) return false;
+    
     if (!search) return true;
     const s = search.toLowerCase();
     const academy = players.find(p => p.id === t.creatorId);
@@ -339,7 +345,7 @@ const AdminHubScreen = ({
             { id: 'coaches', label: 'Coaches', icon: 'school', count: players.filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !seenAdminActionIds.has(p.id)).length },
             { id: 'security', label: 'Security', icon: 'lock-closed' },
             { id: 'tournaments', label: 'Tournaments', icon: 'trophy' },
-            { id: 'coach_assignments', label: 'Assignments', icon: 'people', count: tournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && !seenAdminActionIds.has(t.id)).length },
+            { id: 'coach_assignments', label: 'Assignments', icon: 'people', count: tournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today) && !seenAdminActionIds.has(t.id)).length },
             { id: 'recordings', label: 'Videos', icon: 'videocam', count: matchVideos.filter(v => v.adminStatus === 'Deletion Requested' && !seenAdminActionIds.has(v.id)).length },
             { id: 'grievances', label: 'Tickets', icon: 'chatbubbles', count: supportTickets.filter(t => t.status === 'Open').length },
             { id: 'audit', label: 'Audit', icon: 'list' },
@@ -372,7 +378,7 @@ const AdminHubScreen = ({
                         if (!newSeenIds.has(vid)) { newSeenIds.add(vid); added = true; }
                       });
                     } else if (tab.id === 'coach_assignments') {
-                      tournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded).forEach(t => {
+                      tournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today)).forEach(t => {
                         const tid = String(t.id);
                         if (!newSeenIds.has(tid)) { newSeenIds.add(tid); added = true; }
                       });
@@ -520,40 +526,62 @@ const AdminHubScreen = ({
           );
         })}
 
-        {subTab === 'tournaments' && filteredTournaments.map(t => {
-          const academy = players.find(p => p.id === t.creatorId);
-          return (
-            <TouchableOpacity 
-              key={t.id} 
-              onPress={() => setViewingPlayersFor(t)}
-              style={styles.adminCard}
-            >
-              <View style={styles.cardHeader}>
-                <View style={styles.flex}>
-                  <Text style={styles.cardTitle}>{t.title}</Text>
-                  <Text style={styles.cardSubtitle}>{t.sport} • {t.date}</Text>
-                  {academy && (
-                    <View style={[styles.row, { marginTop: 4 }]}>
-                      <Ionicons name="business-outline" size={10} color="#6366F1" />
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#6366F1', marginLeft: 4 }}>{academy.name}</Text>
-                    </View>
-                  )}
-                </View>
-                <View style={styles.ratingBox}>
-                  <Text style={styles.ratingValue}>{t.registeredPlayerIds.length}/{t.maxPlayers}</Text>
-                  <Text style={styles.ratingLabel}>Slots</Text>
-                </View>
-                <Ionicons name="people-outline" size={16} color="#6366F1" style={{ marginLeft: 10 }} />
+        {subTab === 'tournaments' && (
+          <View>
+            <View style={styles.coachSubTabs}>
+              {['upcoming', 'past'].map(st => (
+                <TouchableOpacity 
+                  key={st} 
+                  onPress={() => setTournamentSubTab(st)}
+                  style={[styles.coachSubTab, tournamentSubTab === st && styles.coachSubTabActive]}
+                >
+                  <Text style={[styles.coachSubTabText, tournamentSubTab === st && styles.coachSubTabTextActive]}>
+                    {st.charAt(0).toUpperCase() + st.slice(1)} Tournaments
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {filteredTournaments.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No {tournamentSubTab} tournaments found</Text>
               </View>
-            </TouchableOpacity>
-          );
-        })}
+            ) : filteredTournaments.map(t => {
+              const academy = players.find(p => p.id === t.creatorId);
+              return (
+                <TouchableOpacity 
+                  key={t.id} 
+                  onPress={() => setViewingPlayersFor(t)}
+                  style={styles.adminCard}
+                >
+                  <View style={styles.cardHeader}>
+                    <View style={styles.flex}>
+                      <Text style={styles.cardTitle}>{t.title}</Text>
+                      <Text style={styles.cardSubtitle}>{t.sport} • {t.date}</Text>
+                      {academy && (
+                        <View style={[styles.row, { marginTop: 4 }]}>
+                          <Ionicons name="business-outline" size={10} color="#6366F1" />
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#6366F1', marginLeft: 4 }}>{academy.name}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.ratingBox}>
+                      <Text style={styles.ratingValue}>{(t.registeredPlayerIds || []).length}/{t.maxPlayers}</Text>
+                      <Text style={styles.ratingLabel}>Slots</Text>
+                    </View>
+                    <Ionicons name="people-outline" size={16} color="#6366F1" style={{ marginLeft: 10 }} />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
 
         {subTab === 'coach_assignments' && tournaments.filter(t => 
           (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration' || t.coachStatus === 'Awaiting Assignment') && 
           !t.assignedCoachId && 
           t.status !== 'completed' && 
-          !t.tournamentConcluded
+          !t.tournamentConcluded &&
+          (t.date >= today)
         ).map(t => {
           const academy = players.find(p => p.id === t.creatorId);
           return (
@@ -1326,7 +1354,7 @@ const AdminHubScreen = ({
             { id: 'coaches', label: 'Coaches', icon: 'megaphone-outline', count: players.filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !seenAdminActionIds.has(p.id)).length },
             { id: 'security', label: 'Security', icon: 'shield-checkmark-outline' },
             { id: 'tournaments', label: 'Tournaments', icon: 'trophy-outline' },
-            { id: 'coach_assignments', label: 'Coach Assignments', icon: 'clipboard-outline', count: tournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && !seenAdminActionIds.has(t.id)).length },
+            { id: 'coach_assignments', label: 'Coach Assignments', icon: 'clipboard-outline', count: tournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today) && !seenAdminActionIds.has(t.id)).length },
             { id: 'recordings', label: 'Recordings', icon: 'videocam-outline', count: matchVideos.filter(v => v.adminStatus === 'Deletion Requested' && !seenAdminActionIds.has(v.id)).length },
             { id: 'grievances', label: 'Grievances', icon: 'warning-outline', count: supportTickets.filter(t => t.status === 'Open').length },
             { id: 'audit', label: 'Audit Logs', icon: 'book-outline' },

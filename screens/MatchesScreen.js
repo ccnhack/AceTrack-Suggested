@@ -346,7 +346,7 @@ const MatchesScreen = ({
                   style={[styles.detailBox, { borderRightWidth: 0 }]}
                 >
                   <Text style={[styles.detailLabel, isCoach && { color: '#3B82F6' }]}>Players</Text>
-                  <Text style={[styles.detailValue, isCoach && { color: '#3B82F6' }]}>{t.registeredPlayerIds.length}/{t.maxPlayers}</Text>
+                  <Text style={[styles.detailValue, isCoach && { color: '#3B82F6' }]}>{(t.registeredPlayerIds || []).length}/{t.maxPlayers}</Text>
                 </TouchableOpacity>
               </View>
 

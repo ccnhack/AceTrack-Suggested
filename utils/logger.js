@@ -19,12 +19,12 @@ const formatter = new Intl.DateTimeFormat('en-IN', IST_OPTIONS);
 const formatIST = (date) => {
   try {
     const parts = formatter.formatToParts(date);
-    const d = parts.find(p => p.type === 'day').value;
-    const m = parts.find(p => p.type === 'month').value;
-    const y = parts.find(p => p.type === 'year').value;
-    const h = parts.find(p => p.type === 'hour').value;
-    const min = parts.find(p => p.type === 'minute').value;
-    const s = parts.find(p => p.type === 'second').value;
+    const d = parts.find(p => p.type === 'day')?.value || '01';
+    const m = parts.find(p => p.type === 'month')?.value || '01';
+    const y = parts.find(p => p.type === 'year')?.value || '2024';
+    const h = parts.find(p => p.type === 'hour')?.value || '00';
+    const min = parts.find(p => p.type === 'minute')?.value || '00';
+    const s = parts.find(p => p.type === 'second')?.value || '00';
     return `${y}-${m}-${d} ${h}:${min}:${s}`;
   } catch (e) {
     return date.toISOString(); // Fallback
@@ -114,7 +114,7 @@ const originalFetch = global.fetch;
 let isInterceptionEnabled = false;
 
 let saveTimeout = null;
-const DEBOUNCE_DELAY = 2000; // 2 seconds
+const DEBOUNCE_DELAY = 5000; // Increased to 5s to reduce bridge saturation
 
 const saveLogsToStorage = async () => {
     try {

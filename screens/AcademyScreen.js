@@ -162,7 +162,7 @@ export const AcademyScreen = ({
     ...(t.registeredPlayerIds || []), 
     ...(t.pendingPaymentPlayerIds || []),
     ...Object.keys(t.playerStatuses || {})
-  ].filter(pid => pid && String(pid).toLowerCase() !== 'test')));
+  ].filter(pid => !!pid)));
   const myParticipants = players.filter(p => participantIds.has(p.id));
 
   const filteredTournaments = myTournaments.filter(t => {
@@ -321,7 +321,7 @@ export const AcademyScreen = ({
           ...(t.registeredPlayerIds || []),
           ...(t.pendingPaymentPlayerIds || []),
           ...Object.keys(t.playerStatuses || {})
-        ])].filter(pid => pid && String(pid).toLowerCase() !== 'test').length;
+        ])].filter(pid => !!pid).length;
         const revenue = pCount * (t.entryFee || 0);
         csv += `"${t.title}","${t.sport}","${t.date}",${pCount},${revenue}\n`;
       });
@@ -614,13 +614,7 @@ export const AcademyScreen = ({
                     </View>
                     <View style={styles.infoGridItem}>
                         <Text style={styles.infoGridLabel}>Participants</Text>
-                        <Text style={styles.infoGridValue}>
-                          {[...new Set([
-                            ...(t.registeredPlayerIds || []),
-                            ...(t.pendingPaymentPlayerIds || []),
-                            ...Object.keys(t.playerStatuses || {})
-                          ])].filter(pid => pid && String(pid).toLowerCase() !== 'test').length} / {t.maxPlayers}
-                        </Text>
+                        <Text style={styles.infoGridValue}>{(t.registeredPlayerIds || []).length} / {t.maxPlayers}</Text>
                     </View>
                     <View style={styles.infoGridItem}>
                         <Text style={styles.infoGridLabel}>Entry Fee</Text>

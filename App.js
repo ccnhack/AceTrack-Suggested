@@ -86,6 +86,8 @@ export default function App() {
   const [visitedAdminSubTabs, setVisitedAdminSubTabs] = useState(new Set());
   const isSyncingRef = useRef(false);
   const isStartupCompleteRef = useRef(false);
+  const lastSyncRef = React.useRef(0);
+  const lastManualSyncTimeRef = React.useRef(0);
   const pendingSyncRef = React.useRef([]);
   const pendingUpdateCheckRef = React.useRef(false); // New: Track missed WebSocket signals
   const lastServerUpdateRef = React.useRef(null);
@@ -497,6 +499,14 @@ export default function App() {
 
     // First, try to sync any local changes.
     const syncSuccess = await syncPendingData();
+    // THROTTLE: Prevent sync more than once every 10 seconds unless forced
+    const now = Date.now();
+    if (!forceSync && now - lastManualSyncTimeRef.current < 10000) {
+      console.log("⏱️ Sync throttled (last sync was < 10s ago)");
+      return false;
+    }
+    lastManualSyncTimeRef.current = now;
+
     if (pendingSyncRef.current.length > 0 && !syncSuccess) {
       console.log("⏳ Local changes pending sync. Skipping cloud pull to prevent overwrite.");
       setIsCloudOnline(false);
@@ -527,6 +537,9 @@ export default function App() {
       if (!response.ok) throw new Error("Cloud fetch failed");
 
       const cloudData = await response.json();
+      if (!cloudData || typeof cloudData !== 'object') {
+        throw new Error("Invalid data format received from cloud");
+      }
       console.log(`✅ [v${versionAtStart}] Data fetched successfully [Keys: ${Object.keys(cloudData).join(', ')}]`);
 
       // DO NOT proceed if a newer sync has already started
@@ -543,12 +556,15 @@ export default function App() {
         logger.logAction('LOAD_DATA_SUCCESS', { lastUpdated: cloudData.lastUpdated });
       }
 
-      if (cloudData.players) {
-        cloudData.players = cloudData.players.filter(p => p && p.id && String(p.id).toLowerCase() !== 'test');
-        const playersChanged = JSON.stringify(cloudData.players) !== JSON.stringify(playersRef.current);
-        if (playersChanged) {
-          setPlayers(cloudData.players);
-          storage.setItem('players', cloudData.players);
+      if (Array.isArray(cloudData.players)) {
+        const cleanedPlayers = cloudData.players.filter(p => !!(p && p.id));
+        // Optimization: Use stringify on the cleaned array only once and compare to ref
+        const newPlayersJson = JSON.stringify(cleanedPlayers);
+        const oldPlayersJson = JSON.stringify(playersRef.current);
+        
+        if (newPlayersJson !== oldPlayersJson) {
+          setPlayers(cleanedPlayers);
+          storage.setItem('players', cleanedPlayers);
         }
 
         const currentU = currentUserRef.current;
@@ -571,11 +587,11 @@ export default function App() {
         }
       }
 
-      if (cloudData.tournaments) {
+      if (Array.isArray(cloudData.tournaments)) {
         const cleaned = cloudData.tournaments.map(t => ({
           ...t,
-          registeredPlayerIds: (t.registeredPlayerIds || []).filter(pid => pid && String(pid).toLowerCase() !== 'test'),
-          pendingPaymentPlayerIds: (t.pendingPaymentPlayerIds || []).filter(pid => pid && String(pid).toLowerCase() !== 'test')
+          registeredPlayerIds: Array.isArray(t.registeredPlayerIds) ? t.registeredPlayerIds.filter(pid => !!pid) : [],
+          pendingPaymentPlayerIds: Array.isArray(t.pendingPaymentPlayerIds) ? t.pendingPaymentPlayerIds.filter(pid => !!pid) : []
         }));
         setTournaments(cleaned);
         storage.setItem('tournaments', cleaned);
@@ -703,13 +719,13 @@ export default function App() {
       for (const key in updates) {
         let val = updates[key];
         if (key === 'players' && Array.isArray(val)) {
-          val = val.filter(p => p && p.id && String(p.id).toLowerCase() !== 'test');
+          val = val.filter(p => !!(p && p.id));
         }
         if (key === 'tournaments' && Array.isArray(val)) {
           val = val.map(t => ({
             ...t,
-            registeredPlayerIds: (t.registeredPlayerIds || []).filter(pid => pid && String(pid).toLowerCase() !== 'test'),
-            pendingPaymentPlayerIds: (t.pendingPaymentPlayerIds || []).filter(pid => pid && String(pid).toLowerCase() !== 'test')
+            registeredPlayerIds: (t.registeredPlayerIds || []).filter(pid => !!pid),
+            pendingPaymentPlayerIds: (t.pendingPaymentPlayerIds || []).filter(pid => !!pid)
           }));
         }
         await storage.setItem(key, val);
@@ -1351,7 +1367,7 @@ export default function App() {
       console.log("➡️ App Navigator: onSignup requested");
       setShowSignup(true);
     }
-  }), [handleLogin, handleLogout, handleSendUserNotification, loadData, handleUpdateMatchmaking, handleRegisterUser, handleSaveTournament, handleSaveVideo, handleSyncUpdate, handleLogTrace, handleSaveTicket, handleConfirmCoachRequest, handleUploadLogs, isUploadingLogs, isCloudOnline, isSyncing, lastSyncTime, isUsingCloud, seenAdminActionIds, visitedAdminSubTabs, tournaments, matchVideos, matches, players, userRole, supportTickets, evaluations, chatbotMessages]);
+  }), [handleLogin, handleLogout, handleSendUserNotification, loadData, handleUpdateMatchmaking, handleRegisterUser, handleSaveTournament, handleSaveVideo, handleSyncUpdate, handleLogTrace, handleSaveTicket, handleConfirmCoachRequest, handleUploadLogs, isUploadingLogs, isCloudOnline, isSyncing, lastSyncTime, isUsingCloud]);
 
 
   if (isLoading) {
