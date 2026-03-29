@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = "2.3.3";
+const APP_VERSION = "2.3.4";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -437,6 +437,7 @@ export default function App() {
       if (u) {
         setCurrentUser(u);
         currentUserRef.current = u;
+        setViewingLanding(false);
         logger.logAction('HYDRATION_USER_RESTORED', { userId: u.id, role: u.role });
         
         // Extra check to ensure state is set
@@ -1381,7 +1382,7 @@ export default function App() {
     );
   }
 
-  if (viewingLanding) {
+  if (viewingLanding && !currentUser) {
     return (
       <LandingScreen 
         onLogin={() => {
@@ -1421,6 +1422,10 @@ export default function App() {
         onToggleCloud={memoizedHandlers.onToggleCloud}
         isUsingCloud={isUsingCloud}
         isLoading={isLoading}
+        players={players}
+        onSignup={memoizedHandlers.onSignup}
+        onResetPassword={memoizedHandlers.onResetPassword}
+        onRefreshData={memoizedHandlers.onManualSync}
       />
     );
   }
