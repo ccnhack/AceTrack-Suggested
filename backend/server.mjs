@@ -15,8 +15,6 @@ import bcrypt from 'bcryptjs';
 import mongoSanitize from 'express-mongo-sanitize';
 import helmet from 'helmet';
 import admin from 'firebase-admin';
-import { sendPushNotification } from './notifications.js';
-import './reminders.mjs'; // Initialize cron jobs
 
 dotenv.config();
 
@@ -58,8 +56,7 @@ try {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
 
-const APP_VERSION = '2.2.9'; // AceTrack Suggested — Stable Sync, Matchmaking & Session Fix (Stable Session Patch)
-// Deployment Trigger: 2026-03-28 15:30 PM (Final Sync)
+const APP_VERSION = '2.3.9'; // AceTrack Suggested — Expert Panel Enhanced
 
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: CORS Whitelist (SEC Fix #3)
@@ -134,18 +131,13 @@ app.use((req, res, next) => {
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: Rate Limiting (SEC Fix #4)
 // ═══════════════════════════════════════════════════════════════
+
 const globalLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 100,
-  message: { error: 'Too many requests. Please try again later.' },
+  windowMs: 60 * 1000, 
+  max: 200, 
+  message: { error: 'Too many requests. Please try again after a minute.' },
   standardHeaders: true,
   legacyHeaders: false,
-});
-
-const strictLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 10,
-  message: { error: 'Too many attempts. Please wait before trying again.' }
 });
 
 const otpLimiter = rateLimit({
@@ -305,10 +297,10 @@ const SaveDataSchema = z.object({
   auditLogs: z.array(z.any()).optional(),
   chatbotMessages: z.any().optional(),
   currentUser: z.any().optional(),
-  matchmaking: z.array(z.any()).optional(),
-  overwrite: z.boolean().optional()
+  overwrite: z.boolean().optional(),
+  atomicKeys: z.array(z.string()).optional()
 }).refine(data => {
-  const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser', 'matchmaking'];
+  const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser'];
   return Object.keys(data).some(key => syncableKeys.includes(key));
 }, { message: 'No syncable context found' });
 
@@ -360,7 +352,6 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
       changedCollections,
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
-      version: "2.2.2",
       details
     });
   } catch (e) {
@@ -407,7 +398,7 @@ router.get('/data', apiKeyGuard, async (req, res) => {
 });
 
 // GET /api/v1/status
-router.get('/status', async (req, res) => {
+router.get('/status', apiKeyGuard, async (req, res) => {
   try {
     const state = await AppState.findOne().sort({ lastUpdated: -1 }).select('lastUpdated');
     res.json({ 
@@ -425,18 +416,15 @@ router.get('/diagnostics', apiKeyGuard, async (req, res) => {
     let cloudFiles = [];
     try {
       // Fetch raw files from the 'acetrack/diagnostics' folder
-      // Corrected expression: removed '/*' which can fail in some search contexts
       const result = await cloudinary.search
-        .expression('folder:acetrack/diagnostics')
+        .expression('folder:acetrack/diagnostics/*')
         .sort_by('created_at', 'desc')
         .max_results(500)
         .execute();
         
       cloudFiles = result.resources.map(file => {
         const parts = file.public_id.split('/');
-        const basename = parts[parts.length - 1];
-        // Ensure extension is included if not in basename
-        return basename.endsWith('.' + file.format) ? basename : `${basename}.${file.format}`;
+        return parts[parts.length - 1];
       });
     } catch (e) {
       console.warn('Cloudinary search failed, fetching only local files:', e.message);
@@ -445,7 +433,7 @@ router.get('/diagnostics', apiKeyGuard, async (req, res) => {
     let localFiles = [];
     try {
       if (fs.existsSync(DIAGNOSTICS_DIR)) {
-        localFiles = fs.readdirSync(DIAGNOSTICS_DIR).filter(f => f.endsWith('.json') || f.endsWith('.log'));
+        localFiles = fs.readdirSync(DIAGNOSTICS_DIR);
       }
     } catch (e) {
       console.warn('Local read failed:', e.message);
@@ -495,7 +483,7 @@ router.get('/diagnostics/:filename', apiKeyGuard, async (req, res) => {
 // POST /api/v1/save
 router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => {
   try {
-    const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser', 'matchmaking'];
+    const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser'];
     
     const state = await AppState.findOne().sort({ lastUpdated: -1 });
     const currentData = (state && state.data) ? state.data : {};
@@ -515,13 +503,15 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
       return res.json({ success: true, message: 'Database overwritten successfully', lastUpdated: newState.lastUpdated });
     }
     
+    const atomicKeys = req.body.atomicKeys || [];
     const updateObj = { lastUpdated: Date.now() };
     for (const key of syncableKeys) {
       const incoming = req.body[key];
       const existing = currentData[key];
       
       if (incoming !== undefined) {
-        if (Array.isArray(incoming) && Array.isArray(existing)) {
+        const isAtomic = atomicKeys.includes(key);
+        if (Array.isArray(incoming) && Array.isArray(existing) && !isAtomic) {
           const merged = [...incoming];
           existing.forEach(oldItem => {
             if (oldItem && oldItem.id) {
@@ -532,103 +522,30 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
             }
           });
           updateObj[`data.${key}`] = merged;
-        } else if (incoming && typeof incoming === 'object' && !Array.isArray(incoming)) {
+        } else if (incoming && typeof incoming === 'object' && !Array.isArray(incoming) && !isAtomic) {
           for (const subKey in incoming) {
             updateObj[`data.${key}.${subKey}`] = incoming[subKey];
           }
         } else {
+          // If atomic, or not an object/array, perform full replacement
           updateObj[`data.${key}`] = incoming;
         }
       }
     }
-    
+
+    // For atomic updates, use a special update operation to ensure replacement
     const updatedState = await AppState.findOneAndUpdate(
       {}, { $set: updateObj }, { upsert: true, new: true }
     );
 
-    // 🔔 Trigger Notifications based on changes
-    try {
-      const newData = updatedState.data;
-      const oldData = currentData;
-
-      // 1. Support Ticket Reply Trigger
-      if (req.body.supportTickets) {
-        req.body.supportTickets.forEach(incomingTicket => {
-          const oldTicket = (oldData.supportTickets || []).find(t => t.id === incomingTicket.id);
-          if (oldTicket && incomingTicket.messages?.length > oldTicket.messages?.length) {
-            const lastMsg = incomingTicket.messages[incomingTicket.messages.length - 1];
-            if (lastMsg.role === 'admin') {
-              const player = (newData.players || []).find(p => p.id === incomingTicket.userId);
-              if (player && player.pushToken) {
-                sendPushNotification([player.pushToken], 'Support Update 💬', 'You have a new reply to your support ticket.');
-              }
-            }
-          }
-        });
-      }
-
-      // 2. Recording Available Trigger
-      if (req.body.matchVideos) {
-        const newVideos = req.body.matchVideos.filter(v => !(oldData.matchVideos || []).find(ov => ov.id === v.id));
-        newVideos.forEach(v => {
-          const participants = (newData.players || []).filter(p => (p.id === v.player1Id || p.id === v.player2Id) && p.pushToken);
-          if (participants.length > 0) {
-            sendPushNotification(participants.map(p => p.pushToken), 'New Recording! 🎾', 'A video recording of your match is now available.');
-          }
-        });
-      }
-
-      // 3. Payment Confirmation Trigger
-      if (req.body.tournaments) {
-        req.body.tournaments.forEach(t => {
-          const oldT = (oldData.tournaments || []).find(ot => ot.id === t.id);
-          const newPlayers = (t.registeredPlayerIds || []).filter(id => !(oldT?.registeredPlayerIds || []).includes(id));
-          newPlayers.forEach(pid => {
-            const player = (newData.players || []).find(p => p.id === pid);
-            if (player && player.pushToken) {
-              sendPushNotification([player.pushToken], 'Registration Confirmed! ✅', `Your entry for ${t.title} has been finalized.`);
-            }
-          });
-        });
-      }
-
-      // 4. Matchmaking Triggers (Challenge, Counter, Acceptance)
-      if (req.body.matchmaking) {
-        req.body.matchmaking.forEach(challenge => {
-          const oldChallenge = (oldData.matchmaking || []).find(c => c.id === challenge.id);
-          
-          // Trigger: Challenge Received
-          if (!oldChallenge && challenge.status === 'Pending') {
-            const receiver = (newData.players || []).find(p => p.id === challenge.receiverId);
-            if (receiver && receiver.pushToken) {
-              sendPushNotification([receiver.pushToken], 'New Challenge! 🎾', `${challenge.senderName} has challenged you to a match.`);
-            }
-          }
-          
-          // Trigger: Counter Offer Received
-          if (oldChallenge && challenge.status === 'Countered' && challenge.lastUpdatedBy !== oldChallenge.lastUpdatedBy) {
-            const receiverId = challenge.lastUpdatedBy === challenge.senderId ? challenge.receiverId : challenge.senderId;
-            const receiver = (newData.players || []).find(p => p.id === receiverId);
-            if (receiver && receiver.pushToken) {
-              sendPushNotification([receiver.pushToken], 'Counter Offer Received 🔄', `${challenge.lastUpdatedByName} has suggested a new slot.`);
-            }
-          }
-
-          // Trigger: Challenge Accepted
-          if (oldChallenge && challenge.status === 'Accepted' && oldChallenge.status !== 'Accepted') {
-            const receiverId = challenge.lastUpdatedBy === challenge.senderId ? challenge.receiverId : challenge.senderId;
-            const receiver = (newData.players || []).find(p => p.id === receiverId);
-            if (receiver && receiver.pushToken) {
-              sendPushNotification([receiver.pushToken], 'Challenge Accepted! ✅', `${challenge.lastUpdatedByName} has accepted the match!`);
-            }
-          }
-        });
-      }
-    } catch (notifErr) {
-      console.warn('⚠️ Push notification trigger error:', notifErr.message);
+    const socketId = req.headers['x-socket-id'];
+    if (socketId) {
+      // Exclude the sender from the update event to prevent infinite sync loops
+      io.except(socketId).emit('data_updated', { lastUpdated: updatedState.lastUpdated, keys: Object.keys(req.body) });
+    } else {
+      io.emit('data_updated', { lastUpdated: updatedState.lastUpdated, keys: Object.keys(req.body) });
     }
-
-    io.emit('data_updated', { lastUpdated: updatedState.lastUpdated, keys: Object.keys(req.body) });
+    
     logServerEvent('DATA_SAVE_SUCCESS', { lastUpdated: updatedState.lastUpdated });
     res.json({ success: true, lastUpdated: updatedState.lastUpdated });
   } catch (error) {
@@ -678,47 +595,42 @@ router.post('/upload', apiKeyGuard, upload.single('video'), async (req, res) => 
   }
 });
 
-/**
- * 📲 POST /api/register-push-token
- * Registers an Expo Push Token for a specific user.
- */
-router.post('/register-push-token', apiKeyGuard, async (req, res) => {
+// GET /api/v1/diagnostics
+router.get('/diagnostics', apiKeyGuard, async (req, res) => {
   try {
-    const { userId, pushToken } = req.body;
-    if (!userId || !pushToken) {
-      return res.status(400).json({ error: 'Missing userId or pushToken' });
-    }
-
-    const state = await AppState.findOne().sort({ lastUpdated: -1 });
-    if (!state || !state.data || !state.data.players) {
-      return res.status(404).json({ error: 'No players found to update' });
-    }
-
-    const players = [...state.data.players];
-    const playerIndex = players.findIndex(p => p.id === userId);
-
-    if (playerIndex === -1) {
-      return res.status(404).json({ error: 'User not found in system' });
-    }
-
-    // Update the player with the new token
-    players[playerIndex] = { ...players[playerIndex], pushToken };
+    // Fetch raw files from the 'acetrack/diagnostics' folder
+    const result = await cloudinary.search
+      .expression('folder:acetrack/diagnostics/*')
+      .sort_by('created_at', 'desc')
+      .max_results(500)
+      .execute();
+      
+    // Map to just the filenames to match the old frontend expectation
+    const files = result.resources.map(file => {
+      // Return just the filename part, with extension
+      const parts = file.public_id.split('/');
+      return parts[parts.length - 1] + '.' + file.format;
+    });
     
-    await AppState.findOneAndUpdate(
-      {}, 
-      { $set: { 'data.players': players, lastUpdated: Date.now() } },
-      { upsert: true }
-    );
-
-    console.log(`📲 Token registered for user ${userId}`);
-    res.json({ success: true, message: 'Push token registered successfully' });
+    res.json({ success: true, files });
   } catch (error) {
-    console.error('Push Token Registration Error:', error);
+    console.error('Cloudinary Diagnostics Fetch Error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-
+// GET /api/v1/diagnostics/:filename
+router.get('/diagnostics/:filename', apiKeyGuard, async (req, res) => {
+  try {
+    const { filename } = req.params;
+    const filepath = path.join(DIAGNOSTICS_DIR, filename);
+    if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'File not found' });
+    const content = fs.readFileSync(filepath, 'utf8');
+    res.json(JSON.parse(content));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // POST /api/v1/diagnostics
 router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), async (req, res) => {
