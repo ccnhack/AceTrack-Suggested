@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = "2.3.8";
+const APP_VERSION = "2.3.9";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -643,7 +643,9 @@ export default function App() {
       return cloudData;
     } catch (e) {
       console.log("📡 Cloud unreachable or error:", e.message);
-      setIsCloudOnline(false);
+      if (!e.message.includes('429')) {
+        setIsCloudOnline(false);
+      }
       return false;
     } finally {
       if (versionAtStart === syncVersion.current) {
@@ -670,7 +672,8 @@ export default function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-ace-api-key': config.ACE_API_KEY
+          'x-ace-api-key': config.ACE_API_KEY,
+          'x-socket-id': socketRef.current?.id || ''
         },
         body: JSON.stringify(updates)
       });
@@ -692,10 +695,10 @@ export default function App() {
       return true;
     } catch (error) {
       console.error("❌ Cloud Push Error:", error);
-      // OPTIMIZATION: Only set offline if we are truly in cloud mode and not a transient error
-      // If we have local device ID and online status, we might want a retry or a softer state.
-      // For now, keep it false but logged for diagnostics.
-      setIsCloudOnline(false);
+      // OPTIMIZATION: Only set offline if we are truly in cloud mode and not a rate limit (429)
+      if (!error.message.includes('429')) {
+        setIsCloudOnline(false);
+      }
       logger.logAction('PUSH_DATA_ERROR', { error: error.message, version: thisVersion });
       return false;
     } finally {
@@ -711,6 +714,10 @@ export default function App() {
 
 
   const lastActiveUpdateRef = useRef(0);
+  const pendingSyncUpdatesRef = useRef({});
+  const isPendingAtomicRef = useRef(false);
+  const syncTimeoutRef = useRef(null);
+
   const syncAndSaveData = useCallback(async (updates, isAtomic = false) => {
     if (updates.currentUser && localDeviceIdRef.current) {
       const now = Date.now();
@@ -776,27 +783,29 @@ export default function App() {
       if (!hasSyncable) return;
 
       if (isUsingCloudRef.current) {
-        if (isAtomic) syncUpdates.atomicKeys = Object.keys(syncUpdates).filter(k => k !== 'atomicKeys');
-        const success = await pushStateToCloud(syncUpdates);
-        if (!success) {
-          setPendingSync(prev => {
-            let next = [...prev];
-            let changed = false;
-            for (const key in syncUpdates) {
-              if (!next.includes(key)) {
-                next.push(key);
-                changed = true;
-              }
-            }
-            if (changed) {
-              storage.setItem('pendingSync', next);
-            }
-            return next;
-          });
-        }
+        // Debounced Sync Engine to prevent 429 errors during rapid bulk manager runs
+        Object.assign(pendingSyncUpdatesRef.current, syncUpdates);
+        if (isAtomic) isPendingAtomicRef.current = true;
+
+        if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+        syncTimeoutRef.current = setTimeout(async () => {
+          const finalUpdates = { ...pendingSyncUpdatesRef.current };
+          const finalAtomic = isPendingAtomicRef.current;
+          
+          // Clear trackers early to prevent double-piling
+          pendingSyncUpdatesRef.current = {};
+          isPendingAtomicRef.current = false;
+          syncTimeoutRef.current = null;
+
+          if (finalAtomic) {
+            finalUpdates.atomicKeys = Object.keys(finalUpdates).filter(k => k !== 'atomicKeys');
+          }
+          
+          await pushStateToCloud(finalUpdates);
+        }, 1500); // 1.5s window to capture multiple rapid deletions/edits
       }
-    } catch (e) {
-      console.error(`Failed to sync and save data`, e);
+    } catch (error) {
+      console.error(`Failed to sync and save data`, error);
     }
   }, [pushStateToCloud, isCloudOnline]);
 
