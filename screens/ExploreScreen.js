@@ -72,13 +72,17 @@ const ExploreScreen = (props) => {
   
   // Keep selectedTournament in sync with incoming prop updates (real-time reactivity)
   useEffect(() => {
-    if (selectedTournament) {
-      const updated = tournaments.find(t => t.id === selectedTournament.id);
-      if (updated && JSON.stringify(updated) !== JSON.stringify(selectedTournament)) {
+    if (!selectedTournament) return;
+    
+    const updated = tournaments.find(t => t.id === selectedTournament.id);
+    if (updated) {
+      // Optimization: Only update if a meaningful property has changed to prevent unnecessary re-renders
+      if (updated.registeredPlayerIds?.length !== selectedTournament.registeredPlayerIds?.length || 
+          updated.status !== selectedTournament.status) {
         setSelectedTournament(updated);
       }
     }
-  }, [tournaments, selectedTournament]);
+  }, [tournaments, selectedTournament?.id]); // Use .id to stabilize dependency
 
   const handleDetectLocation = async () => {
     setIsCityDropdownVisible(false);
@@ -240,15 +244,20 @@ const ExploreScreen = (props) => {
 
   const displayTournaments = filteredTournaments;
 
-  // Admin Trace: Log filter results for troubleshooting - STRICTLY THROTTLED
+  // Admin Trace: Log filter results for troubleshooting - STRICTLY THROTTLED & MINIMIZED
   const lastLoggedRef = React.useRef(null);
+  const lastLogTimeRef = React.useRef(0);
   React.useEffect(() => {
     if (userRole?.toLowerCase() === 'admin' && tournaments?.length > 0) {
-      const currentConfig = `${userRole}-${cityFilter}-${sportFilter}-${displayTournaments.length}`;
-      if (lastLoggedRef.current !== currentConfig) {
+      const now = Date.now();
+      const currentConfig = `${cityFilter}-${sportFilter}-${displayTournaments.length}`;
+      
+      // Throttle: Max one log per 10 seconds AND only if config changed
+      if (lastLoggedRef.current !== currentConfig && now - lastLogTimeRef.current > 10000) {
         lastLoggedRef.current = currentConfig;
+        lastLogTimeRef.current = now;
         if (logger?.addLog) {
-          logger.addLog(`🔍 [Explore] Filter Change -> Hub: ${cityFilter}, Sport: ${sportFilter}, Results: ${displayTournaments.length}`, 'info', 'console');
+          logger.addLog(`🔍 [Explore] Filter: ${cityFilter}/${sportFilter} (${displayTournaments.length} results)`, 'info', 'console');
         }
       }
     }

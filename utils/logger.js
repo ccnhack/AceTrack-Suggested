@@ -34,6 +34,11 @@ const formatIST = (date) => {
 let logs = [];
 const MAX_LOG_COUNT = 5000; 
 
+const originalLog = console.log;
+const originalWarn = console.warn;
+const originalError = console.error;
+const originalFetch = global.fetch;
+
 let autoFlushConfig = null;
 const QUEUE_KEY = 'offline_diagnostics_queue';
 
@@ -50,7 +55,8 @@ const processOfflineQueue = async () => {
     const remainingQueue = [...queue];
     for (const item of queue) {
       try {
-        const res = await (global.fetch || fetch)(`${autoFlushConfig.url}/api/diagnostics/auto-flush`, {
+        // CRITICAL: Use originalFetch to bypass interception and prevent recursion
+        const res = await originalFetch(`${autoFlushConfig.url}/api/diagnostics/auto-flush`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-ace-api-key': autoFlushConfig.key },
           body: JSON.stringify({
@@ -74,7 +80,8 @@ const processOfflineQueue = async () => {
 const triggerAutoFlush = async (payload) => {
   if (!autoFlushConfig || !autoFlushConfig.url || !autoFlushConfig.key) return;
   try {
-    const res = await (global.fetch || fetch)(`${autoFlushConfig.url}/api/diagnostics/auto-flush`, {
+    // CRITICAL: Use originalFetch to bypass interception and prevent recursion
+    const res = await originalFetch(`${autoFlushConfig.url}/api/diagnostics/auto-flush`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -105,11 +112,6 @@ const triggerAutoFlush = async (payload) => {
     } catch(storageErr) {}
   }
 };
-
-const originalLog = console.log;
-const originalWarn = console.warn;
-const originalError = console.error;
-const originalFetch = global.fetch;
 
 let isInterceptionEnabled = false;
 

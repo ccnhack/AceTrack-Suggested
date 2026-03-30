@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = "2.3.7";
+const APP_VERSION = "2.3.8";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -285,6 +285,7 @@ export default function App() {
         // INITIAL ARCHITECTURAL STATUS (As requested by user for diagnostics)
         logger.logAction('SYNC_ENGINE_STATUS', { 
           version: 'v5-HARDENED', 
+          platformVersion: Platform.OS === 'ios' ? `iOS ${Platform.Version}` : `Android ${Platform.constants.Release || ''} (API ${Platform.Version})`,
           appVersion: APP_VERSION,
           features: ['Ref-Mirroring', 'Atomic-Callbacks', 'Heartbeat-v36-RESTORED'],
           ota: {
@@ -320,6 +321,19 @@ export default function App() {
         // We log it only if interception is already enabled, otherwise console is the only way
         logger.logAction('CRITICAL_STARTUP_ERROR', { error: e.message, stack: e.stack });
       } finally {
+        // STEP 2: Check for App Version Update
+        const lastRunVersion = await storage.getItem('last_run_app_version');
+        if (lastRunVersion !== APP_VERSION) {
+          logger.logAction('APP_VERSION_UPDATED', { from: lastRunVersion, to: APP_VERSION });
+          await storage.setItem('last_run_app_version', APP_VERSION);
+          if (currentUserRef.current) {
+            // Trigger an immediate sync to push the new version/device-info to the cloud
+            setTimeout(() => {
+              syncAndSaveData({ currentUser: currentUserRef.current });
+            }, 1000);
+          }
+        }
+
         // STEP 3: Finally, reveal the app once everything is settled (GUARANTEED)
         setIsLoading(false);
       }
@@ -519,7 +533,14 @@ export default function App() {
 
     try {
       setSyncingState(true);
-      logger.logAction('LOAD_DATA_START', { version: versionAtStart, isBackground: forceNoLoading });
+      logger.logAction('LOAD_DATA_START', { version: versionAtStart, isBackground: forceNoLoading, forceSync });
+      
+      if (forceSync && currentUserRef.current) {
+        // When manually forcing a sync, also push our latest device info to the cloud
+        logger.logAction('MANUAL_SYNC_PUSH_DEVICE_INFO');
+        syncAndSaveData({ currentUser: currentUserRef.current });
+      }
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
@@ -535,6 +556,11 @@ export default function App() {
       clearTimeout(timeoutId);
 
       if (!response.ok) throw new Error("Cloud fetch failed");
+      
+      // CRITICAL: Successfully reached the server, so we ARE online.
+      // We set this even if the version below is stale, to ensure UI accuracy.
+      setIsCloudOnline(true);
+      setLastSyncTime(new Date().toLocaleTimeString());
 
       const cloudData = await response.json();
       if (!cloudData || typeof cloudData !== 'object') {
@@ -542,14 +568,11 @@ export default function App() {
       }
       console.log(`✅ [v${versionAtStart}] Data fetched successfully [Keys: ${Object.keys(cloudData).join(', ')}]`);
 
-      // DO NOT proceed if a newer sync has already started
+      // DO NOT proceed with data application if a newer sync has already started
       if (versionAtStart !== syncVersion.current && !forceSync) {
         console.log(`⏳ Discarding stale cloud pull [v${versionAtStart}]`);
         return false;
       }
-
-      setIsCloudOnline(true);
-      setLastSyncTime(new Date().toLocaleTimeString());
 
       if (cloudData.lastUpdated) {
         lastServerUpdateRef.current = cloudData.lastUpdated;
@@ -656,8 +679,12 @@ export default function App() {
         const errorText = await response.text();
         throw new Error(`Server returned ${response.status}: ${errorText}`);
       }
-      const result = await response.json();
       
+      const result = await response.json();
+
+      // CRITICAL: Successfully reached the server, so we ARE online.
+      setIsCloudOnline(true);
+
       if (thisVersion === syncVersion.current) {
         lastServerUpdateRef.current = result.lastUpdated;
         logger.logAction('PUSH_DATA_SUCCESS', { lastUpdated: result.lastUpdated });
@@ -665,6 +692,10 @@ export default function App() {
       return true;
     } catch (error) {
       console.error("❌ Cloud Push Error:", error);
+      // OPTIMIZATION: Only set offline if we are truly in cloud mode and not a transient error
+      // If we have local device ID and online status, we might want a retry or a softer state.
+      // For now, keep it false but logged for diagnostics.
+      setIsCloudOnline(false);
       logger.logAction('PUSH_DATA_ERROR', { error: error.message, version: thisVersion });
       return false;
     } finally {
@@ -680,7 +711,7 @@ export default function App() {
 
 
   const lastActiveUpdateRef = useRef(0);
-  const syncAndSaveData = useCallback(async (updates) => {
+  const syncAndSaveData = useCallback(async (updates, isAtomic = false) => {
     if (updates.currentUser && localDeviceIdRef.current) {
       const now = Date.now();
       const needsTimestampUpdate = now - lastActiveUpdateRef.current > 5 * 60 * 1000;
@@ -697,7 +728,7 @@ export default function App() {
           id: localDeviceIdRef.current,
           name: Constants.deviceName || Platform.OS,
           appVersion: APP_VERSION,
-          platformVersion: `${Platform.OS === 'ios' ? 'iOS' : 'Android'} ${Platform.Version}`,
+          platformVersion: Platform.OS === 'ios' ? `iOS ${Platform.Version}` : `Android ${Platform.constants?.Release || Platform.Version} (API ${Platform.Version})`,
           lastActive: now
         };
         updates.currentUser.devices = updates.currentUser.devices || [];
@@ -744,7 +775,8 @@ export default function App() {
 
       if (!hasSyncable) return;
 
-      if (isUsingCloudRef.current && isCloudOnline) {
+      if (isUsingCloudRef.current) {
+        if (isAtomic) syncUpdates.atomicKeys = Object.keys(syncUpdates).filter(k => k !== 'atomicKeys');
         const success = await pushStateToCloud(syncUpdates);
         if (!success) {
           setPendingSync(prev => {
@@ -1131,6 +1163,7 @@ export default function App() {
     isCloudOnline,
     isSyncing,
     lastSyncTime,
+    isUsingCloud,
     onTopUp: (amount) => {
       if (!currentUserRef.current) return;
       const updatedUser = {
@@ -1286,14 +1319,14 @@ export default function App() {
     onPermanentDeleteVideo: (id) => {
       setMatchVideos(prev => {
         const updated = prev.filter(v => v.id !== id);
-        syncAndSaveData({ matchVideos: updated });
+        syncAndSaveData({ matchVideos: updated }, true);
         return updated;
       });
     },
     onCancelVideo: (id) => {
       setMatchVideos(prev => {
         const updated = prev.filter(v => v.id !== id);
-        syncAndSaveData({ matchVideos: updated });
+        syncAndSaveData({ matchVideos: updated }, true);
         return updated;
       });
     },
@@ -1314,10 +1347,19 @@ export default function App() {
     },
     onPurchaseAiHighlights: (vid, uid, method) => {
       if (!currentUserRef.current) return;
-      const updatedUser = { ...currentUserRef.current, credits: method === 'wallet' ? (currentUserRef.current.credits || 0) - 20 : (currentUserRef.current.credits || 0), purchasedHighlights: [...(currentUserRef.current.purchasedHighlights || []), vid] };
-      const updatedPlayers = players.map(p => p.id === currentUserRef.current.id ? updatedUser : p);
-      setPlayers(updatedPlayers); setCurrentUser(updatedUser); currentUserRef.current = updatedUser;
-      syncAndSaveData({ currentUser: updatedUser, players: updatedPlayers });
+      
+      setPlayers(prev => {
+        const updatedUser = { 
+          ...currentUserRef.current, 
+          credits: method === 'wallet' ? (currentUserRef.current.credits || 0) - 20 : (currentUserRef.current.credits || 0), 
+          purchasedHighlights: [...(currentUserRef.current.purchasedHighlights || []), vid] 
+        };
+        const updatedPlayers = prev.map(p => p.id === currentUserRef.current.id ? updatedUser : p);
+        setCurrentUser(updatedUser);
+        currentUserRef.current = updatedUser;
+        syncAndSaveData({ currentUser: updatedUser, players: updatedPlayers });
+        return updatedPlayers;
+      });
     },
     onVideoPlay: (vid, uid) => {
       setMatchVideos(prev => {
@@ -1331,13 +1373,18 @@ export default function App() {
     },
     onToggleFavourite: (vid) => {
       if (!currentUserRef.current) return;
-      const isFav = (currentUserRef.current.favouritedVideos || []).includes(vid);
-      const updatedFavs = isFav ? (currentUserRef.current.favouritedVideos || []).filter(id => id !== vid) : [...(currentUserRef.current.favouritedVideos || []), vid];
-      const updatedUser = { ...currentUserRef.current, favouritedVideos: updatedFavs };
-      setCurrentUser(updatedUser); currentUserRef.current = updatedUser;
-      const updatedPlayers = players.map(p => p.id === currentUserRef.current.id ? updatedUser : p);
-      setPlayers(updatedPlayers);
-      syncAndSaveData({ players: updatedPlayers, currentUser: updatedUser });
+      
+      setPlayers(prev => {
+        const isFav = (currentUserRef.current.favouritedVideos || []).includes(vid);
+        const updatedFavs = isFav ? (currentUserRef.current.favouritedVideos || []).filter(id => id !== vid) : [...(currentUserRef.current.favouritedVideos || []), vid];
+        const updatedUser = { ...currentUserRef.current, favouritedVideos: updatedFavs };
+        const updatedPlayers = prev.map(p => p.id === currentUserRef.current.id ? updatedUser : p);
+        
+        setCurrentUser(updatedUser);
+        currentUserRef.current = updatedUser;
+        syncAndSaveData({ players: updatedPlayers, currentUser: updatedUser });
+        return updatedPlayers;
+      });
     },
     onUpdateTournament: (t) => handleSaveTournament(t),
     onSaveCoachComment: (tid, comment) => {
@@ -1349,26 +1396,98 @@ export default function App() {
     },
     onRegister: (t, method, totalCost, isRescheduling, reschedulingFrom) => {
       if (!currentUserRef.current) return;
-      const updatedUser = { ...currentUserRef.current, registeredTournamentIds: [...(currentUserRef.current.registeredTournamentIds || []), t.id] };
-      const updatedTournaments = tournaments.map(item => item.id === t.id ? { ...item, registeredPlayerIds: [...(item.registeredPlayerIds || []), currentUserRef.current.id] } : item);
-      setTournaments(updatedTournaments); setPlayers(players.map(p => p.id === currentUserRef.current.id ? updatedUser : p)); setCurrentUser(updatedUser);
-      syncAndSaveData({ tournaments: updatedTournaments, players: playersRef.current, currentUser: updatedUser });
+      
+      const userId = currentUserRef.current.id;
+      
+      // 1. Update Tournaments (using functional setter to avoid stale closure)
+      setTournaments(prev => {
+        const updatedT = prev.map(item => {
+          if (item.id === t.id) {
+            return {
+              ...item,
+              registeredPlayerIds: [...new Set([...(item.registeredPlayerIds || []), userId])]
+            };
+          }
+          return item;
+        });
+
+        // 2. Update Players & CurrentUser
+        setPlayers(prevP => {
+          const updatedUser = {
+            ...currentUserRef.current,
+            registeredTournamentIds: [...new Set([...(currentUserRef.current.registeredTournamentIds || []), t.id])]
+          };
+          const updatedPlayers = prevP.map(p => String(p.id).toLowerCase() === String(userId).toLowerCase() ? updatedUser : p);
+          
+          setCurrentUser(updatedUser);
+          currentUserRef.current = updatedUser;
+          
+          // 3. Sync to Cloud
+          syncAndSaveData({ 
+            tournaments: updatedT, 
+            players: updatedPlayers, 
+            currentUser: updatedUser 
+          });
+          
+          return updatedPlayers;
+        });
+        
+        return updatedT;
+      });
     },
     onReschedule: (t) => setReschedulingFrom(t.id),
     onCancelReschedule: () => setReschedulingFrom(null),
     onOptOut: (t) => {
       if (!currentUserRef.current) return;
-      const updatedTournaments = tournaments.map(item => item.id === t.id ? { ...item, registeredPlayerIds: (item.registeredPlayerIds || []).filter(pid => pid !== currentUserRef.current.id) } : item);
-      setTournaments(updatedTournaments);
-      syncAndSaveData({ tournaments: updatedTournaments });
+      const userId = currentUserRef.current.id;
+      
+      setTournaments(prev => {
+        const updatedTournaments = prev.map(item => 
+          item.id === t.id ? { ...item, registeredPlayerIds: (item.registeredPlayerIds || []).filter(pid => pid !== userId) } : item
+        );
+        
+        setPlayers(prevP => {
+          const updatedUser = {
+            ...currentUserRef.current,
+            registeredTournamentIds: (currentUserRef.current.registeredTournamentIds || []).filter(id => id !== t.id)
+          };
+          const updatedPlayers = prevP.map(p => String(p.id).toLowerCase() === String(userId).toLowerCase() ? updatedUser : p);
+          
+          setCurrentUser(updatedUser);
+          currentUserRef.current = updatedUser;
+          
+          syncAndSaveData({ 
+            tournaments: updatedTournaments,
+            players: updatedPlayers,
+            currentUser: updatedUser
+          });
+          
+          return updatedPlayers;
+        });
+
+        return updatedTournaments;
+      });
     },
     onBack: () => { setViewingLanding(true); setShowSignup(false); setShowOnboarding(false); },
     onSignup: () => {
       console.log("➡️ App Navigator: onSignup requested");
       setShowSignup(true);
     }
-  }), [handleLogin, handleLogout, handleSendUserNotification, loadData, handleUpdateMatchmaking, handleRegisterUser, handleSaveTournament, handleSaveVideo, handleSyncUpdate, handleLogTrace, handleSaveTicket, handleConfirmCoachRequest, handleUploadLogs, isUploadingLogs, isCloudOnline, isSyncing, lastSyncTime, isUsingCloud]);
+  }), [
+    handleLogin, handleLogout, handleSendUserNotification, loadData, handleUpdateMatchmaking, 
+    handleRegisterUser, handleSaveTournament, handleSaveVideo, handleSyncUpdate, handleLogTrace, 
+    handleSaveTicket, handleConfirmCoachRequest, handleUploadLogs, isUploadingLogs, isCloudOnline, 
+    isSyncing, lastSyncTime, isUsingCloud, players, tournaments, seenAdminActionIds, visitedAdminSubTabs,
+    matchVideos, matches, supportTickets, evaluations, chatbotMessages
+  ]);
 
+
+  const memoizedPlayers = useMemo(() => {
+    if (!currentUser) return players;
+    const exists = players.some(p => String(p.id).toLowerCase() === String(currentUser.id).toLowerCase());
+    if (exists) return players;
+    return [currentUser, ...players];
+  }, [players, currentUser]);
 
   if (isLoading) {
     return (
@@ -1438,6 +1557,8 @@ export default function App() {
     );
   }
 
+
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
@@ -1458,7 +1579,7 @@ export default function App() {
           user={currentUser}
           role={userRole}
           appVersion={APP_VERSION}
-          players={players.some(p => p.id === currentUser?.id) ? players : (currentUser ? [currentUser, ...players] : players)}
+          players={memoizedPlayers}
           tournaments={tournaments}
           matchVideos={matchVideos}
           matches={matches}

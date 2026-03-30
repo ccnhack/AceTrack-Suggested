@@ -328,6 +328,30 @@ const AdminHubScreen = ({
             <View>
               <Text style={styles.premiumTitle}>Admin Hub</Text>
               <Text style={styles.premiumSubtitle}>System Overview & Management</Text>
+              
+              {/* Connection Status Badge */}
+              <TouchableOpacity 
+                onPress={() => {
+                  logger.logAction('MANUAL_SYNC_CLICK');
+                  onManualSync?.();
+                }}
+                style={[
+                  styles.syncBadge, 
+                  isCloudOnline ? styles.syncOnline : (isUsingCloud ? styles.syncOffline : styles.syncLocal)
+                ]}
+              >
+                <Ionicons 
+                  name={isCloudOnline ? "cloud-done" : (isUsingCloud ? "cloud-offline" : "server")} 
+                  size={10} 
+                  color={isCloudOnline ? "#16A34A" : (isUsingCloud ? "#EF4444" : "#F59E0B")} 
+                />
+                <Text style={[styles.syncText, { color: isCloudOnline ? "#16A34A" : (isUsingCloud ? "#EF4444" : "#F59E0B") }]}>
+                  {isCloudOnline ? 'Cloud Synced' : (isUsingCloud ? 'Offline Mode' : 'Local Mode')}
+                </Text>
+              </TouchableOpacity>
+              {lastSyncTime && (
+                <Text style={styles.lastSyncText}>Last: {lastSyncTime}</Text>
+              )}
             </View>
             <TouchableOpacity style={styles.headerIcon}>
               <Ionicons name="shield-checkmark" size={24} color="#FFF" />
@@ -724,7 +748,7 @@ const AdminHubScreen = ({
                <TouchableOpacity 
                  onPress={() => {
                    logger.logAction('ADMIN_MANUAL_SYNC_TRIGGER');
-                   onManualSync?.();
+                   onManualSync?.(true);
                  }}
                  style={styles.diagSyncBtn}
                >
@@ -818,8 +842,12 @@ const AdminHubScreen = ({
                                      (firstName.length > 3 && low.includes(firstName.toLowerCase()));
                             });
                             
-                            // Sort descending (newest first) by lexical name comparison, then take latest 3
-                            fs = fs.sort((a, b) => b.localeCompare(a)).slice(0, 3);
+                            // Improved sort: extract YYYY-MM-DD_HH-MM-SS or YYYYMMDD_HHMMSS and sort descending
+                            const getTs = (f) => {
+                              const m = f.match(/(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})|(\d{8}_\d{6})/);
+                              return m ? m[0].replace(/[-_]/g, '') : f;
+                            };
+                            fs = fs.sort((a, b) => getTs(b).localeCompare(getTs(a))).slice(0, 5);
                             setUserDiagFiles(fs);
                             logger.logAction('DIAGNOSTICS_FETCH_SUCCESS', { user: p.name, fileCount: fs.length });
                           }
@@ -891,21 +919,7 @@ const AdminHubScreen = ({
                       return (
                       <View key={d.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
                         <View style={{ flex: 1, paddingRight: 6 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0F172A' }} numberOfLines={1}>{d.name}</Text>
-                            <View style={{ flexDirection: 'row', gap: 4 }}>
-                              {d.platformVersion && (
-                                <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                                  <Text style={{ fontSize: 9, fontWeight: '700', color: '#64748B' }}>{d.platformVersion}</Text>
-                                </View>
-                              )}
-                              {d.appVersion && (
-                                <View style={{ backgroundColor: '#EEF2FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#C7D2FE' }}>
-                                  <Text style={{ fontSize: 9, fontWeight: '900', color: '#4F46E5' }}>{d.appVersion}</Text>
-                                </View>
-                              )}
-                            </View>
-                          </View>
+                          <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0F172A' }} numberOfLines={1}>{d.name}</Text>
                           <Text style={{ fontSize: 9, color: '#64748B' }}>ID: {d.id}</Text>
                           <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
                             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: onlineDevices[d.id] ? '#10B981' : '#EF4444' }} />
@@ -915,71 +929,91 @@ const AdminHubScreen = ({
                             <Text style={{ fontSize: 9, color: '#94A3B8' }}>• {new Date(d.lastActive).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</Text>
                           </View>
                         </View>
-                        <TouchableOpacity 
-                          disabled={pullingDeviceIds[d.id] || !onlineDevices[d.id]}
-                          onPress={async () => {
-                            if (socketRef && socketRef.current) {
-                              socketRef.current.emit('admin_pull_diagnostics', { 
-                                targetUserId: selectedDiagUser.id,
-                                targetDeviceId: d.id,
-                                adminId: user?.id 
-                              });
-                              logger.logAction('ADMIN_SENT_PULL_REQUEST', { target: selectedDiagUser.id, device: d.id });
-                              
-                              const initialFiles = new Set(userDiagFiles);
-                              setPullingDeviceIds(prev => ({ ...prev, [d.id]: true }));
-                              let attempts = 0;
-                              
-                              const poll = async () => {
-                                while (attempts < 5) {
-                                  attempts++;
-                                  try {
-                                    const res = await fetch(`${activeApiUrl}/api/diagnostics`, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
-                                    if (res.ok) {
-                                      const data = await res.json();
-                                      const pNameRaw = (selectedDiagUser.name || '').toLowerCase();
-                                      const firstName = pNameRaw.split(' ')[0];
-                                      const safeName = pNameRaw.replace(/[^a-z0-9]/gi, '_');
-                                      const fs = data.files.filter(f => {
-                                        const lf = f.toLowerCase();
-                                        return lf.includes(safeName) || lf.includes(firstName);
-                                      });
-                                      
-                                      // Diff detection: If server file rotation kept length at 3, detect the brand new filename explicitly
-                                      const hasNewFile = fs.some(f => !initialFiles.has(f));
-                                      if (hasNewFile) {
-                                        setUserDiagFiles(fs.reverse());
-                                        setPullingDeviceIds(prev => { const next = {...prev}; delete next[d.id]; return next; });
-                                        return; // Instantly halt the spinner when the file drops
+                        <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                          <TouchableOpacity 
+                            disabled={pullingDeviceIds[d.id] || !onlineDevices[d.id]}
+                            onPress={async () => {
+                              if (socketRef && socketRef.current) {
+                                socketRef.current.emit('admin_pull_diagnostics', { 
+                                  targetUserId: selectedDiagUser.id,
+                                  targetDeviceId: d.id,
+                                  adminId: user?.id 
+                                });
+                                logger.logAction('ADMIN_SENT_PULL_REQUEST', { target: selectedDiagUser.id, device: d.id });
+                                
+                                const initialFiles = new Set(userDiagFiles);
+                                setPullingDeviceIds(prev => ({ ...prev, [d.id]: true }));
+                                let attempts = 0;
+                                
+                                const poll = async () => {
+                                  while (attempts < 5) {
+                                    attempts++;
+                                    try {
+                                      const res = await fetch(`${activeApiUrl}/api/diagnostics`, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
+                                      if (res.ok) {
+                                        const data = await res.json();
+                                        const pNameRaw = (selectedDiagUser.name || '').toLowerCase();
+                                        const firstName = pNameRaw.split(' ')[0];
+                                        const safeName = pNameRaw.replace(/[^a-z0-9]/gi, '_');
+                                        const fs = data.files.filter(f => {
+                                          const lf = f.toLowerCase();
+                                          return lf.includes(safeName) || lf.includes(firstName);
+                                        });
+                                        
+                                        const getTs = (f) => {
+                                          const m = f.match(/(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})|(\d{8}_\d{6})/);
+                                          return m ? m[0].replace(/[-_]/g, '') : f;
+                                        };
+                                        const sortedFs = fs.sort((a, b) => getTs(b).localeCompare(getTs(a)));
+                                        
+                                        // Diff detection: If server file rotation kept length at 3, detect the brand new filename explicitly
+                                        const hasNewFile = sortedFs.some(f => !initialFiles.has(f));
+                                        if (hasNewFile) {
+                                          setUserDiagFiles(sortedFs);
+                                          setPullingDeviceIds(prev => { const next = {...prev}; delete next[d.id]; return next; });
+                                          return; // Instantly halt the spinner when the file drops
+                                        }
                                       }
-                                    }
-                                  } catch (e) {}
-                                  await new Promise(r => setTimeout(r, 3000));
-                                }
-                                setPullingDeviceIds(prev => { const next = {...prev}; delete next[d.id]; return next; }); // Times out after 15s
-                              };
-                              poll();
+                                    } catch (e) {}
+                                    await new Promise(r => setTimeout(r, 3000));
+                                  }
+                                  setPullingDeviceIds(prev => { const next = {...prev}; delete next[d.id]; return next; }); // Times out after 15s
+                                };
+                                poll();
 
-                            } else {
-                              Alert.alert("Error", "WebSocket not connected.");
-                            }
-                          }}
-                          style={{ 
-                            backgroundColor: (pullingDeviceIds[d.id] || !onlineDevices[d.id]) ? '#CBD5E1' : '#EF4444', 
-                            paddingHorizontal: 10, 
-                            paddingVertical: 6, 
-                            borderRadius: 16, 
-                            flexDirection: 'row', 
-                            alignItems: 'center', 
-                            gap: 4, 
-                            minWidth: 90,
-                            justifyContent: 'center',
-                            opacity: (pullingDeviceIds[d.id] || !onlineDevices[d.id]) ? 0.8 : 1 
-                          }}
-                        >
-                          {pullingDeviceIds[d.id] ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="cloud-download-outline" size={12} color="#FFFFFF" />}
-                          <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 10 }}>{pullingDeviceIds[d.id] ? 'PULLING...' : 'PULL LOGS'}</Text>
-                        </TouchableOpacity>
+                              } else {
+                                Alert.alert("Error", "WebSocket not connected.");
+                              }
+                            }}
+                            style={{ 
+                              backgroundColor: (pullingDeviceIds[d.id] || !onlineDevices[d.id]) ? '#CBD5E1' : '#EF4444', 
+                              paddingHorizontal: 10, 
+                              paddingVertical: 6, 
+                              borderRadius: 16, 
+                              flexDirection: 'row', 
+                              alignItems: 'center', 
+                              gap: 4, 
+                              minWidth: 90,
+                              justifyContent: 'center',
+                              opacity: (pullingDeviceIds[d.id] || !onlineDevices[d.id]) ? 0.8 : 1 
+                            }}
+                          >
+                            {pullingDeviceIds[d.id] ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="cloud-download-outline" size={12} color="#FFFFFF" />}
+                            <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 10 }}>{pullingDeviceIds[d.id] ? 'PULLING...' : 'PULL LOGS'}</Text>
+                          </TouchableOpacity>
+                          <View style={{ flexDirection: 'row', gap: 4 }}>
+                            {d.platformVersion && (
+                              <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                                <Text style={{ fontSize: 9, fontWeight: '700', color: '#64748B' }}>{d.platformVersion}</Text>
+                              </View>
+                            )}
+                            {d.appVersion && (
+                              <View style={{ backgroundColor: '#EEF2FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#C7D2FE' }}>
+                                <Text style={{ fontSize: 9, fontWeight: '900', color: '#4F46E5' }}>{d.appVersion}</Text>
+                              </View>
+                            )}
+                          </View>
+                        </View>
                       </View>
                     )})}
                   </View>
@@ -1616,6 +1650,21 @@ const styles = StyleSheet.create({
   coachSmallAvatar: { width: 40, height: 40, borderRadius: 12 },
   coachNameText: { fontSize: 14, fontWeight: '800', color: '#1E293B' },
   coachMetaText: { fontSize: 11, color: '#64748B', fontWeight: '600', marginTop: 1 },
+  syncBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginTop: 8,
+    gap: 4,
+  },
+  syncOnline: { backgroundColor: '#F0FDF4' },
+  syncOffline: { backgroundColor: '#FEF2F2' },
+  syncLocal: { backgroundColor: '#FFF7ED' },
+  syncText: { fontSize: 9, fontWeight: '900', textTransform: 'uppercase' },
+  lastSyncText: { fontSize: 8, color: '#E0E7FF', marginTop: 4, fontWeight: '600' },
 });
 
 export default AdminHubScreen;

@@ -443,21 +443,24 @@ const ProfileScreen = ({
                   </TouchableOpacity>
                 )}
                 
-                {/* Cloud Sync Status Badge */}
+                {/* Connection Status Badge */}
                 <TouchableOpacity 
-              onPress={() => {
-                logger.logAction('MANUAL_SYNC_CLICK');
-                onManualSync();
-              }}
-              style={[styles.syncBadge, isCloudOnline ? styles.syncOnline : styles.syncOffline]}
-            >
+                  onPress={() => {
+                    logger.logAction('MANUAL_SYNC_CLICK');
+                    onManualSync();
+                  }}
+                  style={[
+                    styles.syncBadge, 
+                    isCloudOnline ? styles.syncOnline : (isUsingCloud ? styles.syncOffline : styles.syncLocal)
+                  ]}
+                >
                   <Ionicons 
-                    name={isCloudOnline ? "cloud-done" : "cloud-offline"} 
+                    name={isCloudOnline ? "cloud-done" : (isUsingCloud ? "cloud-offline" : "server")} 
                     size={10} 
-                    color={isCloudOnline ? "#16A34A" : "#EF4444"} 
+                    color={isCloudOnline ? "#16A34A" : (isUsingCloud ? "#EF4444" : "#F59E0B")} 
                   />
-                  <Text style={[styles.syncText, { color: isCloudOnline ? "#16A34A" : "#EF4444" }]}>
-                    {isCloudOnline ? 'Cloud Synced' : 'Offline Mode'}
+                  <Text style={[styles.syncText, { color: isCloudOnline ? "#16A34A" : (isUsingCloud ? "#EF4444" : "#F59E0B") }]}>
+                    {isCloudOnline ? 'Cloud Synced' : (isUsingCloud ? 'Offline Mode' : 'Local Mode')}
                   </Text>
                 </TouchableOpacity>
                 {lastSyncTime && (
@@ -1757,6 +1760,9 @@ const styles = StyleSheet.create({
   },
   syncOffline: {
     backgroundColor: '#FEF2F2',
+  },
+  syncLocal: {
+    backgroundColor: '#FFF7ED',
   },
   syncText: {
     fontSize: 9,
