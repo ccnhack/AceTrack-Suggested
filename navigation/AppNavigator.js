@@ -246,18 +246,18 @@ const LiveScoringWrapper = memo((props) => {
 });
 
 export default function AppNavigator({ 
-  user, role, players, tournaments, matchVideos, matches, tickets, evaluations, 
+  user, role, players, playerMap, tournaments, matchVideos, matches, tickets, evaluations, 
   seenAdminActionIds, visitedAdminSubTabs, setVisitedAdminSubTabs, 
   reschedulingFrom, auditLogs, onLogout, handlers, appVersion, socketRef,
   matchmaking, onUpdateMatchmaking, sendUserNotification
 }) {
   const params = useMemo(() => ({
-    user, role, players, tournaments, matchVideos, matches, tickets, evaluations, 
+    user, role, players, playerMap, tournaments, matchVideos, matches, tickets, evaluations, 
     seenAdminActionIds, visitedAdminSubTabs, setVisitedAdminSubTabs, 
     reschedulingFrom, auditLogs, onLogout, ...handlers, appVersion, socketRef,
     matchmaking, onUpdateMatchmaking, sendUserNotification
   }), [
-    user, role, players, tournaments, matchVideos, matches, tickets, evaluations, 
+    user, role, players, playerMap, tournaments, matchVideos, matches, tickets, evaluations, 
     seenAdminActionIds, visitedAdminSubTabs, reschedulingFrom, auditLogs, onLogout, handlers, appVersion, socketRef,
     matchmaking, onUpdateMatchmaking, sendUserNotification
   ]);

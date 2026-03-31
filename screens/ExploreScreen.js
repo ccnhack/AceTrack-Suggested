@@ -43,7 +43,7 @@ const POPULAR_CITIES = ['All', ...Object.keys(CITY_COORDS)];
 const ExploreScreen = (props) => {
   const { 
     tournaments, onSelect, reschedulingFrom, onCancelReschedule, userId, 
-    userRole, userSports, players = [], Sport, SkillLevel, user,
+    userRole, userSports, players = [], playerMap = {}, Sport, SkillLevel, user,
     onRegister, onAssignCoach, isSyncing, onUpdateTournament
   } = props;
   const [sportFilter, setSportFilter] = useState('All');
@@ -221,7 +221,7 @@ const ExploreScreen = (props) => {
   };
 
   const availableSports = userRole === 'coach' && userSports ? userSports : Object.values(Sport);
-  const currentUser = userId ? (players || []).find(p => p.id === userId) : null;
+  const currentUser = userId ? playerMap[String(userId).toLowerCase()] : null;
 
   const processedTournaments = useMemo(() => {
     const visible = getVisibleTournaments({
@@ -288,10 +288,10 @@ const ExploreScreen = (props) => {
       }).slice(0, 2);
   }, [sortedTournaments, userRole, currentUser]);
 
-  const renderTournamentCard = ({ item: t, isRec = false }) => {
-    const isRegistered = userId && t.registeredPlayerIds?.some(id => String(id).toLowerCase() === String(userId).toLowerCase());
-    const isPendingPayment = userId && t.pendingPaymentPlayerIds?.some(id => String(id).toLowerCase() === String(userId).toLowerCase());
-    const isAssignedCoach = userId && t.assignedCoachIds?.includes(userId);
+  const renderTournamentCard = React.useCallback(({ item: t, isRec = false }) => {
+    const isRegistered = userId && (t.registeredPlayerIds || []).some(id => String(id).toLowerCase() === String(userId).toLowerCase());
+    const isPendingPayment = userId && (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(userId).toLowerCase());
+    const isAssignedCoach = userId && (t.assignedCoachIds || []).includes(userId);
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -310,7 +310,7 @@ const ExploreScreen = (props) => {
 
     if (isRec) {
       return (
-        <TouchableOpacity key={t.id} onPress={() => setSelectedTournament(t)} style={styles.recCard}>
+        <TouchableOpacity key={`rec-${t.id}`} onPress={() => setSelectedTournament(t)} style={styles.recCard}>
           <View style={styles.recCardHeader}>
             <View>
               <View style={styles.bestMatchBadge}>
@@ -427,7 +427,7 @@ const ExploreScreen = (props) => {
         </View>
       </TouchableOpacity>
     );
-  };
+  }, [userId, userRole, setSelectedTournament]);
 
   const renderPaymentModal = () => {
     if (!regPaymentTarget) return null;
@@ -591,18 +591,28 @@ const ExploreScreen = (props) => {
         </View>
       </SafeAreaView>
 
-      <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
-        <View style={styles.main}>
-          {recommendedTournaments.length > 0 && !reschedulingFrom && userRole !== 'coach' && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Recommended for you</Text>
-              {recommendedTournaments.map(t => (
-                <React.Fragment key={`rec-${t.id}`}>
-                  {renderTournamentCard({ item: t, isRec: true })}
-                </React.Fragment>
-              ))}
-            </View>
-          )}
+      <FlatList
+        style={styles.scrollArea}
+        data={sortedTournaments}
+        renderItem={renderTournamentCard}
+        keyExtractor={item => item.id}
+        showsVerticalScrollIndicator={false}
+        removeClippedSubviews={true}
+        initialNumToRender={5}
+        windowSize={5}
+        maxToRenderPerBatch={5}
+        ListHeaderComponent={() => (
+          <View style={styles.main}>
+            {recommendedTournaments.length > 0 && !reschedulingFrom && userRole !== 'coach' && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Recommended for you</Text>
+                {recommendedTournaments.map(t => (
+                  <React.Fragment key={`rec-${t.id}`}>
+                    {renderTournamentCard({ item: t, isRec: true })}
+                  </React.Fragment>
+                ))}
+              </View>
+            )}
 
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>
@@ -613,62 +623,54 @@ const ExploreScreen = (props) => {
               </View>
             </View>
 
-          {reschedulingFrom && (
-            <View style={styles.rescheduleAlert}>
-              <Text style={styles.rescheduleAlertText}>Rescheduling in progress. Please select your new arena below.</Text>
-              <TouchableOpacity onPress={onCancelReschedule} style={styles.cancelBox}>
-                <Text style={styles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <View style={styles.list}>
-            {displayTournaments.length > 0 ? (
-              displayTournaments.map(t => (
-                <React.Fragment key={t.id}>
-                  {renderTournamentCard({ item: t })}
-                </React.Fragment>
-              ))
-            ) : (
-                  <View style={styles.emptyContainer}>
-                    <View style={styles.emptyIconCircle}>
-                      <Ionicons name="search" size={40} color="#EF4444" />
-                    </View>
-                    <Text style={styles.emptySubtext}>
-                      We couldn't find any active tournaments matching your current filters.
-                    </Text>
-                    
-                    
-                    <View style={styles.emptyFilterFeedback}>
-                      {cityFilter !== 'All' && (
-                        <View style={styles.filterFeedbackChip}>
-                          <Ionicons name="location-outline" size={12} color="#64748B" />
-                          <Text style={styles.filterFeedbackText}>City: {cityFilter}</Text>
-                        </View>
-                      )}
-                      {sportFilter !== 'All' && (
-                        <View style={styles.filterFeedbackChip}>
-                          <Ionicons name="trophy-outline" size={12} color="#64748B" />
-                          <Text style={styles.filterFeedbackText}>Sport: {sportFilter}</Text>
-                        </View>
-                      )}
-                    </View>
-
-                    <TouchableOpacity 
-                      style={styles.resetButton}
-                      onPress={() => {
-                        setCityFilter('All');
-                        setSportFilter('All');
-                        setSelectedHub('All');
-                      }}
-                    >
-                      <Text style={styles.resetButtonText}>Clear All Filters</Text>
-                    </TouchableOpacity>
-                  </View>
+            {reschedulingFrom && (
+              <View style={styles.rescheduleAlert}>
+                <Text style={styles.rescheduleAlertText}>Rescheduling in progress. Please select your new arena below.</Text>
+                <TouchableOpacity onPress={onCancelReschedule} style={styles.cancelBox}>
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
-        </View>
-      </ScrollView>
+        )}
+        ListEmptyComponent={() => (
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="search" size={40} color="#EF4444" />
+            </View>
+            <Text style={styles.emptySubtext}>
+              We couldn't find any active tournaments matching your current filters.
+            </Text>
+            
+            <View style={styles.emptyFilterFeedback}>
+              {cityFilter !== 'All' && (
+                <View style={styles.filterFeedbackChip}>
+                  <Ionicons name="location-outline" size={12} color="#64748B" />
+                  <Text style={styles.filterFeedbackText}>City: {cityFilter}</Text>
+                </View>
+              )}
+              {sportFilter !== 'All' && (
+                <View style={styles.filterFeedbackChip}>
+                  <Ionicons name="trophy-outline" size={12} color="#64748B" />
+                  <Text style={styles.filterFeedbackText}>Sport: {sportFilter}</Text>
+                </View>
+              )}
+            </View>
+
+            <TouchableOpacity 
+              style={styles.resetButton}
+              onPress={() => {
+                setCityFilter('All');
+                setSportFilter('All');
+                setSelectedHub('All');
+              }}
+            >
+              <Text style={styles.resetButtonText}>Clear All Filters</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        contentContainerStyle={{ paddingBottom: 100 }}
+      />
 
 
 

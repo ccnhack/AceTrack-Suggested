@@ -16,7 +16,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const MatchesScreen = ({
   navigation, tournaments, user, onReschedule, onOptOut, onLogFailedOtp,
-  players, evaluations, matchVideos, onSaveEvaluation,
+  players, playerMap = {}, evaluations, matchVideos, onSaveEvaluation,
   onConfirmCoachRequest, onDeclineCoachRequest, onStartTournament,
   onEndTournament, onUpdateTournament, onSaveCoachComment, onRegister, Sport,
   supportTickets, onSaveTicket, onReplyTicket
@@ -125,12 +125,88 @@ const MatchesScreen = ({
     return [];
   };
 
+  // HEAVY ROSTER CALCULATION - MEMOIZED
+  const rosterData = useMemo(() => {
+    if (!viewingPlayersFor) return null;
+    
+    const activeTournament = (tournaments || []).find(t => t.id === viewingPlayersFor.id) || viewingPlayersFor;
+    const isDoubles = activeTournament?.format?.includes('Doubles');
+    const currentRound = activeTournament?.currentRound || 1;
+    const playerStatuses = activeTournament?.playerStatuses || {};
+    const roundDecisions = activeTournament?.roundDecisions || {};
+    const currentRoundDecisions = roundDecisions[currentRound] || {};
+    const tId = String(activeTournament.id).toLowerCase();
+    const cId = String(user?.id).toLowerCase();
+
+    // Pre-filter evaluations for this tournament to avoid O(N^2) lookups
+    const tEvaluations = (evaluations || []).filter(e => String(e.tournamentId).toLowerCase() === tId);
+
+    const activePlayerIds = (activeTournament?.registeredPlayerIds || []).filter(id => playerStatuses[id] !== 'Eliminated');
+
+    const teams = [];
+    if (isDoubles) {
+      const playerRatings = activePlayerIds.map(id => {
+        const p = playerMap[String(id).toLowerCase()] || (String(id).toLowerCase() === cId ? user : null);
+        if (!p) return { id, rating: 0 };
+        
+        const pEvals = tEvaluations.filter(e => String(e.playerId).toLowerCase() === String(p.id).toLowerCase());
+        const cumulativeAvg = pEvals.length > 0 
+          ? (pEvals.reduce((sum, e) => sum + e.averageScore, 0) / pEvals.length)
+          : (p.rating || 0);
+          
+        return { id, rating: cumulativeAvg };
+      });
+      
+      playerRatings.sort((a, b) => b.rating - a.rating);
+      const sortedPlayerIds = playerRatings.map(pr => pr.id);
+      
+      const numTeams = Math.ceil(sortedPlayerIds.length / 2);
+      for (let i = 0; i < numTeams; i++) {
+        const teamId = `team_${i}`;
+        const p1 = sortedPlayerIds[i];
+        const p2 = sortedPlayerIds[sortedPlayerIds.length - 1 - i];
+        const teamPlayerIds = p1 === p2 ? [p1] : [p1, p2];
+        teams.push({ id: teamId, name: `Team ${String.fromCharCode(65 + i)}`, playerIds: teamPlayerIds, isPending: false });
+      }
+    } else {
+      activePlayerIds.forEach(id => {
+        const pId = String(id).toLowerCase();
+        const p = playerMap[pId] || (pId === cId ? user : null);
+        teams.push({ id, name: p?.name || `Player ${id}`, playerIds: [id], isPending: false });
+      });
+    }
+
+    const allTeamsEvaluated = teams.every(team =>
+      team.isPending || team.playerIds.every(id =>
+        tEvaluations.some(e => String(e.playerId).toLowerCase() === String(id).toLowerCase() && String(e.coachId).toLowerCase() === cId && (e.round || 1) === currentRound)
+      )
+    );
+
+    const allTeamsDecided = teams.every(team => team.isPending || currentRoundDecisions[team.id] !== undefined);
+
+    return {
+      activeTournament,
+      teams,
+      currentRound,
+      currentRoundDecisions,
+      playerStatuses,
+      allTeamsEvaluated,
+      allTeamsDecided,
+      tEvaluations
+    };
+  }, [viewingPlayersFor, tournaments, evaluations, playerMap, user?.id]);
+
   const handleOpenEvaluation = (player, tournament) => {
-    const existingEval = evaluations.find(e => 
-      String(e.playerId).toLowerCase() === String(player.id).toLowerCase() && 
-      String(e.tournamentId) === String(tournament.id) && 
-      String(e.coachId) === String(user?.id) && 
-      (e.round || 1) === (tournament.currentRound || 1)
+    const pId = String(player.id).toLowerCase();
+    const tId = String(tournament.id).toLowerCase();
+    const cId = String(user?.id).toLowerCase();
+    const round = tournament.currentRound || 1;
+
+    const existingEval = (evaluations || []).find(e => 
+      String(e.playerId).toLowerCase() === pId && 
+      String(e.tournamentId).toLowerCase() === tId && 
+      String(e.coachId).toLowerCase() === cId && 
+      (e.round || 1) === round
     );
     if (existingEval) {
       setEvaluationScores(existingEval.scores);
@@ -175,7 +251,8 @@ const MatchesScreen = ({
   };
 
   const handleVerifyOtp = (modalData) => {
-    const latestTournament = tournaments.find(t => t.id === modalData.tournament.id) || modalData.tournament;
+    const tId = modalData.tournament.id;
+    const latestTournament = (tournaments || []).find(t => t.id === tId) || modalData.tournament;
     const { type } = modalData;
     const t = latestTournament;
     const tDate = new Date(t.date);
@@ -310,164 +387,167 @@ const MatchesScreen = ({
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {displayedMatches.length > 0 ? (
-          displayedMatches.map(t => (
-            <View key={t.id} style={styles.matchCard}>
-              <View style={styles.matchCardHeader}>
-                <View style={{ flex: 1, paddingRight: 12 }}>
-                  <Text style={styles.matchTitle}>{t.title}</Text>
-                  <Text style={styles.matchLocation}>{t.location}</Text>
-                </View>
-                <View style={[
-                  styles.statusBadge,
-                  viewMode === 'requests' ? styles.statusYellow :
-                    t.pendingPaymentPlayerIds?.some(id => String(id).toLowerCase() === String(user.id).toLowerCase()) ? styles.statusOrange :
-                      viewMode === 'upcoming' ? styles.statusRed : styles.statusSlate
+      <FlatList
+        data={displayedMatches}
+        keyExtractor={item => item.id}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        removeClippedSubviews={true}
+        initialNumToRender={8}
+        windowSize={5}
+        renderItem={({ item: t }) => (
+          <View style={styles.matchCard}>
+            <View style={styles.matchCardHeader}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text style={styles.matchTitle}>{t.title}</Text>
+                <Text style={styles.matchLocation}>{t.location}</Text>
+              </View>
+              <View style={[
+                styles.statusBadge,
+                viewMode === 'requests' ? styles.statusYellow :
+                  (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase()) ? styles.statusOrange :
+                    viewMode === 'upcoming' ? styles.statusRed : styles.statusSlate
+              ]}>
+                <Text style={[
+                  styles.statusText,
+                  viewMode === 'requests' ? styles.textYellow :
+                    (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase()) ? styles.textOrange :
+                      viewMode === 'upcoming' ? styles.textRed : styles.textSlate
                 ]}>
-                  <Text style={[
-                    styles.statusText,
-                    viewMode === 'requests' ? styles.textYellow :
-                      t.pendingPaymentPlayerIds?.some(id => String(id).toLowerCase() === String(user.id).toLowerCase()) ? styles.textOrange :
-                        viewMode === 'upcoming' ? styles.textRed : styles.textSlate
-                  ]}>
-                    {viewMode === 'requests' ? 'Requested' : t.pendingPaymentPlayerIds?.some(id => String(id).toLowerCase() === String(user.id).toLowerCase()) ? 'Pending Payment' : viewMode === 'upcoming' ? 'Confirmed' : 'Completed'}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.matchDetails}>
-                <View style={styles.detailBox}>
-                  <Text style={styles.detailLabel}>Date</Text>
-                  <Text style={styles.detailValue}>{t.date}</Text>
-                </View>
-                <View style={styles.detailBox}>
-                  <Text style={styles.detailLabel}>Time</Text>
-                  <Text style={styles.detailValue}>{t.time}</Text>
-                </View>
-                {/* Parity: "Players" detail is clickable ONLY for coaches to open roster */}
-                <TouchableOpacity 
-                  disabled={!isCoach}
-                  onPress={() => {
-                    setRosterTab('roster');
-                    setViewingPlayersFor(t);
-                  }}
-                  style={[styles.detailBox, { borderRightWidth: 0 }]}
-                >
-                  <Text style={[styles.detailLabel, isCoach && { color: '#3B82F6' }]}>Players</Text>
-                  <Text style={[styles.detailValue, isCoach && { color: '#3B82F6' }]}>{(t.registeredPlayerIds || []).length}/{t.maxPlayers}</Text>
-                </TouchableOpacity>
-              </View>
-
-
-              <View style={styles.matchActions}>
-                {viewMode === 'requests' ? (
-                  <>
-                    <TouchableOpacity
-                      onPress={() => onConfirmCoachRequest(t)}
-                      style={[styles.actionButton, styles.buttonBlue]}
-                    >
-                      <Text style={styles.buttonText}>Opt-in as Coach</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => onDeclineCoachRequest(t)}
-                      style={[styles.actionButton, styles.buttonWhite]}
-                    >
-                      <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Decline</Text>
-                    </TouchableOpacity>
-                  </>
-                ) : t.status === 'completed' ? (
-                  <View style={[styles.actionButton, styles.buttonDisabled, { width: '100%' }]}>
-                    <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Event Concluded</Text>
-                  </View>
-                ) : isCoach ? (
-                  <>
-                    {(t.status === 'completed' || t.tournamentConcluded) ? (
-                      <View style={[styles.actionButton, styles.buttonDisabled, { width: '100%' }]}>
-                        <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Event Concluded</Text>
-                      </View>
-                    ) : (
-                      <>
-                        <TouchableOpacity
-                          onPress={() => {
-                            // console.log('--- COACH BUTTON CLICKED ---', t.tournamentStarted ? 'View Players' : 'Start Event', t.id);
-                            if (t.tournamentStarted) {
-                              setRosterTab('roster');
-                              setViewingPlayersFor(t);
-                            }
-                            else setShowOtpModal({ tournament: t, type: 'start' });
-                          }}
-                          style={[styles.actionButton, styles.buttonBlue]}
-                        >
-                          <Text style={styles.buttonText}>{t.tournamentStarted ? 'View Players' : 'Start Event'}</Text>
-                        </TouchableOpacity>
-
-                        {t.tournamentStarted && (
-                          <TouchableOpacity 
-                            onPress={() => navigation.navigate('LiveScoring', { match: t })}
-                            style={[styles.actionButton, { backgroundColor: '#000', borderWidth: 1, borderColor: '#333' }]}
-                          >
-                            <Ionicons name="stats-chart" size={14} color="#fff" />
-                            <Text style={[styles.buttonText, { marginLeft: 5 }]}>Live Score</Text>
-                          </TouchableOpacity>
-                        )}
-                        {t.tournamentStarted ? (
-                          <TouchableOpacity
-                            onPress={() => setShowOtpModal({ tournament: t, type: 'end' })}
-                            style={[styles.actionButton, styles.buttonRed]}
-                          >
-                            <Text style={styles.buttonText}>End Event</Text>
-                          </TouchableOpacity>
-                        ) : (
-                          <TouchableOpacity onPress={() => onOptOut(t)} style={[styles.actionButton, styles.buttonWhite]}>
-                            <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Cancel Assignment</Text>
-                          </TouchableOpacity>
-                        )}
-                      </>
-                    )}
-                  </>
-                ) : viewMode === 'upcoming' ? (
-                  <>
-                    {t.pendingPaymentPlayerIds?.some(id => String(id).toLowerCase() === String(user?.id).toLowerCase()) ? (
-                      <>
-                        <TouchableOpacity onPress={() => setRegPaymentTarget(t)} style={[styles.actionButton, styles.buttonOrange]}>
-                          <Text style={styles.buttonText}>Pay Now</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => onOptOut(t)} style={[styles.actionButton, styles.buttonWhite]}>
-                          <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Cancel Request</Text>
-                        </TouchableOpacity>
-                      </>
-                    ) : (
-                      <>
-                        <TouchableOpacity
-                          onPress={() => {
-                            onReschedule(t);
-                            navigation.navigate('Explore');
-                          }}
-                          style={[styles.actionButton, styles.buttonSlate]}
-                        >
-                          <Text style={styles.buttonText}>Reschedule</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => onOptOut(t)} style={[styles.actionButton, styles.buttonWhite]}>
-                          <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Opt-out</Text>
-                        </TouchableOpacity>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <View style={[styles.actionButton, styles.buttonDisabled]}>
-                    <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Event Concluded</Text>
-                  </View>
-                )}
+                  {viewMode === 'requests' ? 'Requested' : (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase()) ? 'Pending Payment' : viewMode === 'upcoming' ? 'Confirmed' : 'Completed'}
+                </Text>
               </View>
             </View>
-          ))
-        ) : (
+
+            <View style={styles.matchDetails}>
+              <View style={styles.detailBox}>
+                <Text style={styles.detailLabel}>Date</Text>
+                <Text style={styles.detailValue}>{t.date}</Text>
+              </View>
+              <View style={styles.detailBox}>
+                <Text style={styles.detailLabel}>Time</Text>
+                <Text style={styles.detailValue}>{t.time}</Text>
+              </View>
+              <TouchableOpacity 
+                disabled={!isCoach}
+                onPress={() => {
+                  setRosterTab('roster');
+                  setViewingPlayersFor(t);
+                }}
+                style={[styles.detailBox, { borderRightWidth: 0 }]}
+              >
+                <Text style={[styles.detailLabel, isCoach && { color: '#3B82F6' }]}>Players</Text>
+                <Text style={[styles.detailValue, isCoach && { color: '#3B82F6' }]}>{(t.registeredPlayerIds || []).length}/{t.maxPlayers}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.matchActions}>
+              {viewMode === 'requests' ? (
+                <>
+                  <TouchableOpacity
+                    onPress={() => onConfirmCoachRequest(t)}
+                    style={[styles.actionButton, styles.buttonBlue]}
+                  >
+                    <Text style={styles.buttonText}>Opt-in as Coach</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => onDeclineCoachRequest(t)}
+                    style={[styles.actionButton, styles.buttonWhite]}
+                  >
+                    <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Decline</Text>
+                  </TouchableOpacity>
+                </>
+              ) : t.status === 'completed' ? (
+                <View style={[styles.actionButton, styles.buttonDisabled, { width: '100%' }]}>
+                  <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Event Concluded</Text>
+                </View>
+              ) : isCoach ? (
+                <>
+                  {(t.status === 'completed' || t.tournamentConcluded) ? (
+                    <View style={[styles.actionButton, styles.buttonDisabled, { width: '100%' }]}>
+                      <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Event Concluded</Text>
+                    </View>
+                  ) : (
+                    <>
+                      <TouchableOpacity
+                        onPress={() => {
+                          if (t.tournamentStarted) {
+                            setRosterTab('roster');
+                            setViewingPlayersFor(t);
+                          }
+                          else setShowOtpModal({ tournament: t, type: 'start' });
+                        }}
+                        style={[styles.actionButton, styles.buttonBlue]}
+                      >
+                        <Text style={styles.buttonText}>{t.tournamentStarted ? 'View Players' : 'Start Event'}</Text>
+                      </TouchableOpacity>
+
+                      {t.tournamentStarted && (
+                        <TouchableOpacity 
+                          onPress={() => navigation.navigate('LiveScoring', { match: t })}
+                          style={[styles.actionButton, { backgroundColor: '#000', borderWidth: 1, borderColor: '#333' }]}
+                        >
+                          <Ionicons name="stats-chart" size={14} color="#fff" />
+                          <Text style={[styles.buttonText, { marginLeft: 5 }]}>Live Score</Text>
+                        </TouchableOpacity>
+                      )}
+                      {t.tournamentStarted ? (
+                        <TouchableOpacity
+                          onPress={() => setShowOtpModal({ tournament: t, type: 'end' })}
+                          style={[styles.actionButton, styles.buttonRed]}
+                        >
+                          <Text style={styles.buttonText}>End Event</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity onPress={() => onOptOut(t)} style={[styles.actionButton, styles.buttonWhite]}>
+                          <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Cancel Assignment</Text>
+                        </TouchableOpacity>
+                      )}
+                    </>
+                  )}
+                </>
+              ) : viewMode === 'upcoming' ? (
+                <>
+                  {(t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user?.id).toLowerCase()) ? (
+                    <>
+                      <TouchableOpacity onPress={() => setRegPaymentTarget(t)} style={[styles.actionButton, styles.buttonOrange]}>
+                        <Text style={styles.buttonText}>Pay Now</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => onOptOut(t)} style={[styles.actionButton, styles.buttonWhite]}>
+                        <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Cancel Request</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <>
+                      <TouchableOpacity
+                        onPress={() => {
+                          onReschedule(t);
+                          navigation.navigate('Explore');
+                        }}
+                        style={[styles.actionButton, styles.buttonSlate]}
+                      >
+                        <Text style={styles.buttonText}>Reschedule</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => onOptOut(t)} style={[styles.actionButton, styles.buttonWhite]}>
+                        <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Opt-out</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </>
+              ) : (
+                <View style={[styles.actionButton, styles.buttonDisabled]}>
+                  <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Event Concluded</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+        ListEmptyComponent={() => (
           <View style={styles.empty}>
             <Text style={styles.emptyText}>No {viewMode} matches</Text>
           </View>
         )}
-      </ScrollView>
+      />
 
       {/* OTP Modal */}
       <Modal visible={!!showOtpModal} transparent animationType="fade">
@@ -569,47 +649,9 @@ const MatchesScreen = ({
               </TouchableOpacity>
             </View>
 
-            {viewingPlayersFor && (() => {
-                const activeTournament = tournaments.find(t => t.id === viewingPlayersFor.id) || viewingPlayersFor;
-                const isDoubles = activeTournament?.format?.includes('Doubles');
-                const currentRound = activeTournament?.currentRound || 1;
-                const playerStatuses = activeTournament?.playerStatuses || {};
-                const roundDecisions = activeTournament?.roundDecisions || {};
-                const currentRoundDecisions = roundDecisions[currentRound] || {};
-
-                const activePlayerIds = (activeTournament?.registeredPlayerIds || []).filter(id => playerStatuses[id] !== 'Eliminated');
-
-                const teams = [];
-                if (isDoubles) {
-                  const playerRatings = activePlayerIds.map(id => {
-                    const p = players.find(player => String(player.id).toLowerCase() === String(id).toLowerCase()) || (String(id).toLowerCase() === String(user?.id).toLowerCase() ? user : null);
-                    if (!p) return { id, rating: 0 };
-                    
-                    const playerEvaluations = evaluations.filter(e => String(e.playerId).toLowerCase() === String(p.id).toLowerCase() && String(e.tournamentId).toLowerCase() === String(activeTournament?.id).toLowerCase());
-                    const cumulativeAvg = playerEvaluations.length > 0 
-                      ? (playerEvaluations.reduce((sum, e) => sum + e.averageScore, 0) / playerEvaluations.length)
-                      : (p.rating || 0);
-                      
-                    return { id, rating: cumulativeAvg };
-                  });
-                  
-                  playerRatings.sort((a, b) => b.rating - a.rating);
-                  const sortedPlayerIds = playerRatings.map(pr => pr.id);
-                  
-                  const numTeams = Math.ceil(sortedPlayerIds.length / 2);
-                  for (let i = 0; i < numTeams; i++) {
-                    const teamId = `team_${i}`;
-                    const p1 = sortedPlayerIds[i];
-                    const p2 = sortedPlayerIds[sortedPlayerIds.length - 1 - i];
-                    const teamPlayerIds = p1 === p2 ? [p1] : [p1, p2];
-                    teams.push({ id: teamId, name: `Team ${String.fromCharCode(65 + i)}`, playerIds: teamPlayerIds, isPending: false });
-                  }
-                } else {
-                  activePlayerIds.forEach(id => {
-                    const p = players.find(player => String(player.id).toLowerCase() === String(id).toLowerCase()) || (String(id).toLowerCase() === String(user?.id).toLowerCase() ? user : null);
-                    teams.push({ id, name: p?.name || `Player ${id}`, playerIds: [id], isPending: false });
-                  });
-                }
+            {rosterData && (() => {
+                const { activeTournament, teams, currentRound, currentRoundDecisions, playerStatuses, allTeamsEvaluated, allTeamsDecided, tEvaluations } = rosterData;
+                const cId = String(user?.id).toLowerCase();
 
                 if (teams.length === 0) {
                   return (
@@ -623,26 +665,12 @@ const MatchesScreen = ({
                   );
                 }
 
-                const allTeamsEvaluated = teams.every(team =>
-                  team.isPending || team.playerIds.every(id =>
-                    evaluations.some(e => String(e.playerId).toLowerCase() === String(id).toLowerCase() && String(e.tournamentId) === String(activeTournament?.id) && String(e.coachId) === String(user?.id) && (e.round || 1) === currentRound)
-                  )
-                );
-
-                const allTeamsDecided = teams.every(team => team.isPending || currentRoundDecisions[team.id] !== undefined);
-
-                /* console.log('--- COACH DEBUG: RENDERING ROSTER ---', {
-                  teamsLength: teams.length,
-                  firstTeam: teams[0]?.name,
-                  teamsIds: teams.map(t => t.id)
-                }); */
-
                 return (
                   <ScrollView style={styles.rosterList} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
                     {teams.map(team => {
                       const decision = currentRoundDecisions[team.id];
                       const teamEvaluated = team.playerIds.every(id =>
-                        evaluations.some(e => String(e.playerId).toLowerCase() === String(id).toLowerCase() && String(e.tournamentId).toLowerCase() === String(activeTournament?.id).toLowerCase() && String(e.coachId).toLowerCase() === String(user?.id).toLowerCase() && (e.round || 1) === currentRound)
+                        tEvaluations.some(e => String(e.playerId).toLowerCase() === String(id).toLowerCase() && String(e.coachId).toLowerCase() === cId && (e.round || 1) === currentRound)
                       );
 
                       return (
@@ -662,26 +690,22 @@ const MatchesScreen = ({
                           </View>
 
                           {team.playerIds.map(pid => {
-                            const p = players.find(player => String(player.id).toLowerCase() === String(pid).toLowerCase());
-                            
-                            // Highly robust player object resolution
-                            const playerObj = p || (String(pid).toLowerCase() === String(user?.id).toLowerCase() ? user : { 
+                            const pId = String(pid).toLowerCase();
+                            const playerObj = playerMap[pId] || (pId === cId ? user : { 
                               id: pid, 
-                              name: players.find(x => x.id === pid)?.name || `Player ${pid}`,
+                              name: `Player ${pid}`,
                               skillLevel: 'N/A',
                               rating: 1000
                             });
 
-                            const hasEvaluated = evaluations.some(e => String(e.playerId).toLowerCase() === String(playerObj.id).toLowerCase() && String(e.tournamentId).toLowerCase() === String(activeTournament?.id).toLowerCase() && String(e.coachId).toLowerCase() === String(user?.id).toLowerCase() && (e.round || 1) === currentRound);
-                            
-                            const playerEvaluations = evaluations.filter(e => String(e.playerId).toLowerCase() === String(playerObj.id).toLowerCase() && String(e.tournamentId).toLowerCase() === String(activeTournament?.id).toLowerCase());
-                            const cumulativeAvg = playerEvaluations.length > 0 
-                              ? (playerEvaluations.reduce((sum, e) => sum + e.averageScore, 0) / playerEvaluations.length).toFixed(1)
+                            const pEvals = tEvaluations.filter(e => String(e.playerId).toLowerCase() === pId);
+                            const cumulativeAvg = pEvals.length > 0 
+                              ? (pEvals.reduce((sum, e) => sum + e.averageScore, 0) / pEvals.length).toFixed(1)
                               : (playerObj.rating || 0);
 
                             const isEliminated = playerStatuses[pid] === 'Eliminated';
                             const isQualified = playerStatuses[pid] === 'Qualified';
-                            const isPendingPayment = activeTournament?.pendingPaymentPlayerIds?.some(id => String(id).toLowerCase() === String(pid).toLowerCase());
+                            const isPendingPayment = activeTournament?.pendingPaymentPlayerIds?.some(id => String(id).toLowerCase() === pId);
 
                             return (
                               <View key={pid} style={[
@@ -696,7 +720,7 @@ const MatchesScreen = ({
                                 <View style={styles.rosterInfo}>
                                   <View style={styles.nameRow}>
                                       <Text style={[styles.rosterName, isEliminated && { color: '#64748B', textDecorationLine: 'line-through' }]} numberOfLines={1}>
-                                        {playerObj.name || `Player ${pid}`}
+                                        {playerObj.name}
                                       </Text>
                                     {isPendingPayment && (
                                       <View style={[styles.miniBadge, { backgroundColor: '#FFEDD5', marginLeft: 8 }]}>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Image, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Image, StyleSheet, Dimensions, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import designSystem from '../theme/designSystem';
 import { getSafeAvatar } from '../utils/imageUtils';
@@ -7,105 +7,121 @@ import { getSafeAvatar } from '../utils/imageUtils';
 const PlayerDashboardView = ({ players, tournaments, title }) => {
   const [selectedPlayerId, setSelectedPlayerId] = useState(null);
 
-  return (
-    <View style={styles.container}>
-      {(players || []).length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No players found</Text>
+  const renderPlayerItem = ({ item: p }) => {
+    const isSelected = selectedPlayerId === p.id;
+    const playerTournaments = isSelected 
+      ? (tournaments || []).filter(t => t && (t.registeredPlayerIds || []).includes(p.id))
+      : [];
+
+    return (
+      <TouchableOpacity 
+        key={p.id} 
+        activeOpacity={0.9}
+        onPress={() => setSelectedPlayerId(isSelected ? null : p.id)}
+        style={[
+          styles.playerCard, 
+          isSelected && styles.playerCardActive
+        ]}
+      >
+        <View style={styles.cardHeader}>
+          <Image 
+            source={getSafeAvatar(p.avatar, p.name)}
+            style={styles.avatar} 
+          />
+          <View style={styles.info}>
+            <Text style={styles.name}>{p.name}</Text>
+            <Text style={styles.phone}>{p.phone}</Text>
+          </View>
+          <View style={styles.ratingBox}>
+            <Text style={styles.ratingValue}>{p.rating || 0}</Text>
+            <Text style={styles.ratingLabel}>Points</Text>
+          </View>
+          <Ionicons 
+            name={isSelected ? "chevron-up" : "chevron-down"} 
+            size={16} 
+            color="#64748B" 
+            style={{ marginLeft: 8 }} 
+          />
         </View>
-      ) : (
-        (players || []).map(p => (
-          <TouchableOpacity 
-            key={p.id} 
-            activeOpacity={0.9}
-            onPress={() => setSelectedPlayerId(selectedPlayerId === p.id ? null : p.id)}
-            style={[
-              styles.playerCard, 
-              selectedPlayerId === p.id && styles.playerCardActive
-            ]}
-          >
-            <View style={styles.cardHeader}>
-              <Image 
-                source={getSafeAvatar(p.avatar, p.name)}
-                style={styles.avatar} 
-              />
-              <View style={styles.info}>
-                <Text style={styles.name}>{p.name}</Text>
-                <Text style={styles.phone}>{p.phone}</Text>
+
+        {isSelected && (
+          <View style={styles.expandedContent}>
+            <View style={styles.statsRow}>
+              <View style={styles.statBox}>
+                <View style={styles.row}>
+                  <Ionicons name="information-circle-outline" size={14} color="#6366F1" />
+                  <Text style={[styles.statLabel, { marginLeft: 4, marginBottom: 0 }]}>Account Information</Text>
+                </View>
+                <View style={[styles.detailLine, { marginTop: 8 }]}>
+                  <Text style={styles.detailLabel}>UID: </Text>
+                  <Text style={styles.detailValue}>{p.id}</Text>
+                </View>
+                <View style={styles.detailLine}>
+                  <Text style={styles.detailLabel}>Email: </Text>
+                  <Text style={styles.detailValue}>{p.email}</Text>
+                </View>
               </View>
-              <View style={styles.ratingBox}>
-                <Text style={styles.ratingValue}>{p.rating}</Text>
-                <Text style={styles.ratingLabel}>Points</Text>
-              </View>
-              <Ionicons 
-                name={selectedPlayerId === p.id ? "chevron-up" : "chevron-down"} 
-                size={16} 
-                color="#64748B" 
-                style={{ marginLeft: 8 }} 
-              />
             </View>
 
-            {selectedPlayerId === p.id && (
-              <View style={styles.expandedContent}>
-                <View style={styles.statsRow}>
-                  <View style={styles.statBox}>
-                    <View style={styles.row}>
-                      <Ionicons name="information-circle-outline" size={14} color="#6366F1" />
-                      <Text style={[styles.statLabel, { marginLeft: 4, marginBottom: 0 }]}>Account Information</Text>
-                    </View>
-                    <View style={[styles.detailLine, { marginTop: 8 }]}>
-                      <Text style={styles.detailLabel}>UID: </Text>
-                      <Text style={styles.detailValue}>{p.id}</Text>
-                    </View>
-                    <View style={styles.detailLine}>
-                      <Text style={styles.detailLabel}>Email: </Text>
-                      <Text style={styles.detailValue}>{p.email}</Text>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={styles.statsRow}>
-                  <View style={styles.statBox}>
-                    <Text style={styles.statLabel}>Game Record</Text>
-                    <View style={styles.recordValue}>
-                      <Text style={styles.winText}>{p.wins}W</Text>
-                      <Text style={styles.lossText}> / {p.losses}L</Text>
-                    </View>
-                  </View>
-                  <View style={styles.statBox}>
-                    <Text style={styles.statLabel}>Reliability</Text>
-                    <View style={styles.recordValue}>
-                      <Text style={styles.noShowText}>{p.noShows}NS</Text>
-                      <Text style={styles.lossText}> / {p.cancellations}C</Text>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={styles.registrationsHeader}>
-                  <Text style={styles.registrationsTitle}>Active Registrations</Text>
-                  <View style={styles.regList}>
-                    {((tournaments || []).filter(t => t && (t.registeredPlayerIds || []).includes(p.id)) || []).length > 0 ? (
-                      (tournaments || []).filter(t => t && (t.registeredPlayerIds || []).includes(p.id)).map(t => (
-                        <View key={t.id} style={styles.regItem}>
-                          <View>
-                            <Text style={styles.regTitle}>{t.title}</Text>
-                            <Text style={styles.regDate}>{t.date}</Text>
-                          </View>
-                          <Ionicons name="trophy" size={16} color="#6366F1" opacity={0.6} />
-                        </View>
-                      ))
-                    ) : (
-                      <View style={styles.emptyReg}>
-                        <Text style={styles.emptyRegText}>No active events</Text>
-                      </View>
-                    )}
-                  </View>
+            <View style={styles.statsRow}>
+              <View style={styles.statBox}>
+                <Text style={styles.statLabel}>Game Record</Text>
+                <View style={styles.recordValue}>
+                  <Text style={styles.winText}>{p.wins || 0}W</Text>
+                  <Text style={styles.lossText}> / {p.losses || 0}L</Text>
                 </View>
               </View>
-            )}
-          </TouchableOpacity>
-        ))
-      )}
+              <View style={styles.statBox}>
+                <Text style={styles.statLabel}>Reliability</Text>
+                <View style={styles.recordValue}>
+                  <Text style={styles.noShowText}>{p.noShows || 0}NS</Text>
+                  <Text style={styles.lossText}> / {p.cancellations || 0}C</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.registrationsHeader}>
+              <Text style={styles.registrationsTitle}>Active Registrations</Text>
+              <View style={styles.regList}>
+                {playerTournaments.length > 0 ? (
+                  playerTournaments.map(t => (
+                    <View key={t.id} style={styles.regItem}>
+                      <View>
+                        <Text style={styles.regTitle}>{t.title}</Text>
+                        <Text style={styles.regDate}>{t.date}</Text>
+                      </View>
+                      <Ionicons name="trophy" size={16} color="#6366F1" opacity={0.6} />
+                    </View>
+                  ))
+                ) : (
+                  <View style={styles.emptyReg}>
+                    <Text style={styles.emptyRegText}>No active events</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <View style={styles.container}>
+      <FlatList
+        data={players || []}
+        keyExtractor={p => p.id}
+        renderItem={renderPlayerItem}
+        removeClippedSubviews={true}
+        initialNumToRender={10}
+        windowSize={5}
+        contentContainerStyle={{ gap: 12, paddingBottom: 20 }}
+        ListEmptyComponent={(
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No players found</Text>
+          </View>
+        )}
+      />
     </View>
   );
 };

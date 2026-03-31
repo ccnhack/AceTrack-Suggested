@@ -35,7 +35,7 @@ const MOCK_ACADEMIES = [
   { id: 'a3', name: 'Victory Arena', managedSports: ['Badminton', 'Table Tennis'], level: 'Top Rated', dist: '8 km', phone: '+91 76543 21098', image: 'https://i.pravatar.cc/150?u=victory' },
 ];
 
-export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatchmaking, players = [], sendUserNotification, onManualSync }) {
+export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatchmaking, players = [], playerMap = {}, sendUserNotification, onManualSync }) {
   
   const lastSyncRef = React.useRef(0);
 
@@ -57,23 +57,29 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   const [activeTab, setActiveTab] = useState(role === 'coach' ? 'New Bookings' : 'Challenge'); // Challenge, Requests, Accepted, History
 
   // Derived states from global matchmaking prop
-  // Derived states from global matchmaking prop - MEMOIZED
-  const sentRequests = React.useMemo(() => 
-    matchmaking.filter(m => m.senderId === user?.id && m.status !== 'Accepted' && m.status !== 'Cancelled' && m.status !== 'Declined'),
-    [matchmaking, user?.id]
-  );
-  
-  const receivedRequests = React.useMemo(() => 
-    matchmaking.filter(m => m.receiverId === user?.id && m.status === 'Pending'),
-    [matchmaking, user?.id]
-  );
-  
-  const acceptedMatches = React.useMemo(() => 
-    matchmaking.filter(m => 
-      (m.senderId === user?.id || m.receiverId === user?.id) && m.status === 'Accepted'
-    ),
-    [matchmaking, user?.id]
-  );
+  // Derived states from global matchmaking prop - SINGLE PASS MEMO
+  const { sentRequests, receivedRequests, acceptedMatches } = React.useMemo(() => {
+    const sent = [];
+    const received = [];
+    const accepted = [];
+    
+    (matchmaking || []).forEach(m => {
+      const isSender = m.senderId === user?.id;
+      const isReceiver = m.receiverId === user?.id;
+      
+      if (isSender && m.status !== 'Accepted' && m.status !== 'Cancelled' && m.status !== 'Declined') {
+        sent.push(m);
+      }
+      if (isReceiver && m.status === 'Pending') {
+        received.push(m);
+      }
+      if ((isSender || isReceiver) && m.status === 'Accepted') {
+        accepted.push(m);
+      }
+    });
+    
+    return { sentRequests: sent, receivedRequests: received, acceptedMatches: accepted };
+  }, [matchmaking, user?.id]);
 
   const [history, setHistory] = useState([
     { id: 'h1', name: 'Sameer P.', sport: 'Badminton', date: 'Mar 20, 2024' }
@@ -842,76 +848,69 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
     </ScrollView>
   );
 
-  const allPlayers = React.useMemo(() => Array.isArray(players) ? players : [], [players]);
-  
   const filteredOpponents = React.useMemo(() => {
-    const base = (role === 'academy'
-      ? MOCK_ACADEMIES.filter(a => a.id !== user?.id && a.managedSports.some(s => mySports.includes(s)))
-      : allPlayers.filter(p => p.id !== user?.id && p.role === 'user')
-    );
-    
-    if (!playerSearchQuery) return base;
-    const query = playerSearchQuery.toLowerCase();
-    return base.filter(item => 
-      item.name?.toLowerCase().includes(query) || 
-      item.username?.toLowerCase().includes(query) ||
-      item.email?.toLowerCase().includes(query)
-    );
-  }, [role, user?.id, mySports, allPlayers, playerSearchQuery]);
+    const list = role === 'user' ? (players || []).filter(p => p.id !== user?.id && p.role !== 'admin') : (players || []);
+    if (!playerSearchQuery) return list;
+    const q = playerSearchQuery.toLowerCase();
+    return list.filter(p => p.name?.toLowerCase().includes(q) || p.city?.toLowerCase().includes(q));
+  }, [players, user?.id, role, playerSearchQuery]);
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{role === 'coach' ? 'Coach Bookings' : (role === 'academy' ? 'Academy Matchmaking' : 'Matchmaking')}</Text>
+      <SafeAreaView style={styles.header}>
+        <Text style={styles.title}>{role === 'coach' ? 'Academy Management' : 'Matchmaking'}</Text>
         <View style={styles.tabs}>
-           {(role === 'coach' ? ['New Bookings', 'Accepted', 'History'] : ['Challenge', 'Requests', 'Accepted', 'History']).map((tab, index) => (
-             <TouchableOpacity
-               key={`tab-${index}`}
-               style={[styles.tab, activeTab === tab && styles.activeTab]}
-               onPress={() => {
-                 setActiveTab(tab);
-               }}
-             >
-               <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</Text>
-             </TouchableOpacity>
-           ))}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {(role === 'coach' ? ['New Bookings', 'Accepted Bookings', 'Academy History'] : ['Challenge', 'Requests', 'Accepted', 'History']).map(tab => (
+              <TouchableOpacity
+                key={tab}
+                style={[styles.tab, activeTab === tab && styles.tabActive]}
+                onPress={() => setActiveTab(tab)}
+              >
+                <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
-      </View>
-      
-      {activeTab === 'Challenge' && role !== 'coach' && (
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#94A3B8" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search players by name or username..."
-            value={playerSearchQuery}
-            onChangeText={setPlayerSearchQuery}
-            placeholderTextColor="#94A3B8"
+      </SafeAreaView>
+
+      {activeTab === 'Challenge' && (
+        <View style={{ flex: 1 }}>
+          <View style={styles.searchBar}>
+            <Ionicons name="search" size={20} color="#94A3B8" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search players or locations..."
+              value={playerSearchQuery}
+              onChangeText={setPlayerSearchQuery}
+            />
+            {playerSearchQuery !== '' && (
+              <TouchableOpacity onPress={() => setPlayerSearchQuery('')}>
+                <Ionicons name="close-circle" size={18} color="#94A3B8" />
+              </TouchableOpacity>
+            )}
+          </View>
+          <FlatList
+            data={filteredOpponents}
+            renderItem={renderOpponent}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.list}
+            removeClippedSubviews={true}
+            initialNumToRender={10}
+            windowSize={5}
+            ListEmptyComponent={() => (
+              <View style={styles.emptyHistory}>
+                <Ionicons name="people-outline" size={48} color="#CBD5E1" />
+                <Text style={styles.emptyHistoryTitle}>No Players Found</Text>
+              </View>
+            )}
           />
-          {playerSearchQuery !== '' && (
-            <TouchableOpacity onPress={() => setPlayerSearchQuery('')}>
-              <Ionicons name="close-circle" size={18} color="#94A3B8" />
-            </TouchableOpacity>
-          )}
         </View>
       )}
 
-      {(activeTab === 'Challenge' && role !== 'coach') && (
-        <FlatList
-          data={filteredOpponents}
-          renderItem={renderOpponent}
-          keyExtractor={item => item.id}
-          style={{ flex: 1 }}
-          contentContainerStyle={styles.list}
-          ListEmptyComponent={<Text style={styles.emptyText}>No Matching {role === 'academy' ? 'Academies' : 'Players'} Found Near You</Text>}
-          initialNumToRender={10}
-          maxToRenderPerBatch={10}
-          windowSize={5}
-        />
-      )}
-      {(activeTab === 'Requests' || (role === 'coach' && activeTab === 'New Bookings')) && renderRequested()}
-      {activeTab === 'Accepted' && renderAccepted()}
-      {activeTab === 'History' && renderHistory()}
+      {(activeTab === 'Requests' || activeTab === 'New Bookings') && renderRequested()}
+      {(activeTab === 'Accepted' || activeTab === 'Accepted Bookings') && renderAccepted()}
+      {(activeTab === 'History' || activeTab === 'Academy History') && renderHistory()}
 
       {/* Challenge Propose Modal */}
       <Modal visible={isChallengeModalVisible} animationType="slide" transparent>

@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = "2.4.0";
+const APP_VERSION = "2.4.1";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -103,6 +103,14 @@ export default function App() {
 
   const notificationReceivedSubscription = useRef(null);
   const notificationResponseSubscription = useRef(null);
+
+  // Memoized Player lookup map for O(1) complexity across all screens
+  const playerMap = useMemo(() => {
+    return (players || []).reduce((acc, p) => {
+      if (p && p.id) acc[String(p.id).toLowerCase()] = p;
+      return acc;
+    }, {});
+  }, [players]);
 
   // Synchronous helper to update isSyncing state AND ref atomically
   const setSyncingState = (val) => {

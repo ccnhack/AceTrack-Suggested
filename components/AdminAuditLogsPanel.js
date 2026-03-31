@@ -1,67 +1,75 @@
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet, FlatList } from 'react-native';
 
-const AdminAuditLogsPanel = ({ auditLogs, players, search }) => {
-  const filteredLogs = (auditLogs || []).filter(log => {
-    if (!log) return false;
-    if (!search) return true;
-    const admin = (players || []).find(p => p.id === log.adminId);
-    const adminName = (admin?.name || log.adminId || '').toLowerCase();
-    const action = (log.action || '').toLowerCase();
-    const target = (log.targetId || '').toLowerCase();
-    const s = search.toLowerCase().trim();
-    return adminName.includes(s) || action.includes(s) || target.includes(s);
-  });
+const AdminAuditLogsPanel = ({ auditLogs, playerMap, search }) => {
+  const filteredLogs = useMemo(() => {
+    const s = search ? search.toLowerCase().trim() : '';
+    const logs = (auditLogs || []).filter(log => {
+      if (!log) return false;
+      if (!s) return true;
+      const adminName = (playerMap[log.adminId]?.name || log.adminId || '').toLowerCase();
+      const action = (log.action || '').toLowerCase();
+      const target = (log.targetId || '').toLowerCase();
+      return adminName.includes(s) || action.includes(s) || target.includes(s);
+    });
+    return logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  }, [auditLogs, playerMap, search]);
+
+  const renderLogItem = ({ item: log }) => {
+    const adminName = playerMap[log.adminId]?.name || log.adminId;
+    const targetColor = 
+      log.targetType === 'video' ? '#3B82F6' :
+      log.targetType === 'user' ? '#10B981' :
+      log.targetType === 'tournament' ? '#A855F7' :
+      '#94A3B8';
+
+    return (
+      <View key={log.id} style={styles.logCard}>
+        <View style={styles.logHeader}>
+          <View style={styles.actionRow}>
+            <View style={[styles.indicator, { backgroundColor: targetColor }]} />
+            <View>
+              <Text style={styles.actionText}>{log.action}</Text>
+              <Text style={styles.timestamp}>{new Date(log.timestamp).toLocaleString()}</Text>
+            </View>
+          </View>
+          <View style={styles.targetBadge}>
+            <Text style={styles.targetText}>{log.targetType}</Text>
+          </View>
+        </View>
+        
+        <View style={styles.logDetailsHost}>
+          <Text style={styles.detailsText}>{log.details}</Text>
+          <View style={styles.metaRow}>
+            <Text style={styles.metaText}>
+              Admin: <Text style={styles.metaValue}>{adminName}</Text>
+            </Text>
+            <Text style={styles.metaText}>
+              ID: <Text style={styles.metaValue}>{log.targetId}</Text>
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.headerTitle}>System Audit Trails</Text>
-      <View style={styles.logList}>
-        {(filteredLogs || []).length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>{search ? `No logs matching "${search}"` : 'No activity logs available'}</Text>
-          </View>
-        ) : (
-          (filteredLogs || []).map(log => {
-            const admin = (players || []).find(p => p.id === log.adminId);
-            const targetColor = 
-              log.targetType === 'video' ? '#3B82F6' :
-              log.targetType === 'user' ? '#10B981' :
-              log.targetType === 'tournament' ? '#A855F7' :
-              '#94A3B8';
-
-            return (
-              <View key={log.id} style={styles.logCard}>
-                <View style={styles.logHeader}>
-                  <View style={styles.actionRow}>
-                    <View style={[styles.indicator, { backgroundColor: targetColor }]} />
-                    <View>
-                      <Text style={styles.actionText}>{log.action}</Text>
-                      <Text style={styles.timestamp}>{new Date(log.timestamp).toLocaleString()}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.targetBadge}>
-                    <Text style={styles.targetText}>{log.targetType}</Text>
-                  </View>
-                </View>
-                
-                <View style={styles.logDetailsHost}>
-                  <Text style={styles.detailsText}>{log.details}</Text>
-                  <View style={styles.metaRow}>
-                    <Text style={styles.metaText}>
-                      Admin: <Text style={styles.metaValue}>{admin?.name || log.adminId}</Text>
-                    </Text>
-                    <Text style={styles.metaText}>
-                      ID: <Text style={styles.metaValue}>{log.targetId}</Text>
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            );
-          })
-        )}
-      </View>
-    </ScrollView>
+    <FlatList
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      data={filteredLogs}
+      keyExtractor={log => log.id}
+      renderItem={renderLogItem}
+      removeClippedSubviews={true} // Boost performance for long lists
+      initialNumToRender={10}
+      maxToRenderPerBatch={10}
+      ListHeaderComponent={<Text style={styles.headerTitle}>System Audit Trails</Text>}
+      ListEmptyComponent={(
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>{search ? `No logs matching "${search}"` : 'No activity logs available'}</Text>
+        </View>
+      )}
+    />
   );
 };
 
@@ -186,4 +194,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default AdminAuditLogsPanel;
+export default React.memo(AdminAuditLogsPanel);

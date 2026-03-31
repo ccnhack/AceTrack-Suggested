@@ -98,7 +98,7 @@ const AdminRecordingsDashboard = ({
   const getTournamentName = (tid) => (tournaments || []).find(t => t.id === tid)?.title || tid;
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <View style={styles.container}>
       {/* Overview Cards */}
       <LinearGradient colors={['#6366F1', '#4F46E5']} style={styles.premiumOverview}>
         <Text style={styles.premiumLabel}>Video Infrastructure & Analytics</Text>
@@ -238,9 +238,15 @@ const AdminRecordingsDashboard = ({
         </View>
       </View>
 
-      {/* Video Cards */}
-      <View style={styles.videosList}>
-        {(filteredVideos || []).map(video => {
+      {/* Video Cards - FlatList for Virtualization */}
+      <FlatList
+        data={filteredVideos}
+        keyExtractor={item => item.id}
+        contentContainerStyle={styles.videosList}
+        removeClippedSubviews={true}
+        initialNumToRender={6}
+        windowSize={3}
+        renderItem={({ item: video }) => {
           const st = statusColors[video.adminStatus || 'Active'] || statusColors['Active'];
           const isSelected = selectedVideoIds.includes(video.id);
 
@@ -350,8 +356,14 @@ const AdminRecordingsDashboard = ({
               </View>
             </View>
           );
-        })}
-      </View>
+        }}
+        ListEmptyComponent={(
+          <View style={styles.emptyContainer}>
+            <Ionicons name="videocam-off-outline" size={48} color="#CBD5E1" />
+            <Text style={styles.emptyText}>No recordings match the filters</Text>
+          </View>
+        )}
+      />
 
       {/* Popups (Simplified with Modals) */}
       {/* Trash Bin Modal */}
@@ -510,7 +522,7 @@ const AdminRecordingsDashboard = ({
         </SafeAreaView>
       </Modal>
 
-    </ScrollView>
+    </View>
   );
 };
 

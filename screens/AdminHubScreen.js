@@ -12,6 +12,7 @@ import { getSafeAvatar } from '../utils/imageUtils';
 import PlayerDashboardView from '../components/PlayerDashboardView';
 import AdminAuditLogsPanel from '../components/AdminAuditLogsPanel';
 import AdminRecordingsDashboard from '../components/AdminRecordingsDashboard';
+import AdminDiagnosticsPanel from '../components/AdminDiagnosticsPanel';
 import { AdminGrievancesPanel } from '../components/AdminGrievancesPanel';
 import ParticipantsModal from '../components/ParticipantsModal';
 import config from '../config';
@@ -39,6 +40,22 @@ const AdminHubScreen = ({
   const [subTab, setSubTab] = useState('individuals');
   const today = new Date().toISOString().split('T')[0];
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // DEBOUNCE SEARCH: Only update filter state after typing stops for 300ms
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(handler);
+  }, [search]);
+
+  // PLAYER MAP: Pre-calculate lookup dictionary for O(1) access in logs/panels
+  const playerMap = useMemo(() => {
+    return (players || []).reduce((acc, p) => {
+      if (p && p.id) acc[p.id] = p;
+      return acc;
+    }, {});
+  }, [players]);
+
   const [coachSubTab, setCoachSubTab] = useState('pending');
   const [tournamentSubTab, setTournamentSubTab] = useState('upcoming');
   const [rejectType, setRejectType] = useState(null); // 'rejected' | 'addendum'
@@ -163,10 +180,11 @@ const AdminHubScreen = ({
 
   const filterData = (data, field = 'name') => {
     if (!data) return [];
-    if (!search) return data;
+    if (!debouncedSearch) return data;
+    const s = debouncedSearch.toLowerCase().trim();
     return data.filter(item => 
-      (item[field] || '').toLowerCase().includes(search.toLowerCase()) ||
-      (item.id || '').toLowerCase().includes(search.toLowerCase())
+      (item[field] || '').toLowerCase().includes(s) ||
+      (item.id || '').toLowerCase().includes(s)
     );
   };
 
@@ -179,32 +197,40 @@ const AdminHubScreen = ({
       if (tournamentSubTab === 'upcoming' && !isUpcoming) return false;
       if (tournamentSubTab === 'past' && isUpcoming) return false;
       
-      if (!search) return true;
-      const s = search.toLowerCase();
-      const academy = (players || []).find(p => p.id === t.creatorId);
+      if (!debouncedSearch) return true;
+      const s = debouncedSearch.toLowerCase();
+      const academy = playerMap[t.creatorId];
       return (t.title || '').toLowerCase().includes(s) ||
              (t.id || '').toLowerCase().includes(s) ||
              (academy?.name || '').toLowerCase().includes(s);
     });
-  }, [tournaments, today, tournamentSubTab, search, players]);
+  }, [tournaments, today, tournamentSubTab, debouncedSearch, playerMap]);
 
-  const getAcademyStats = (academyId) => {
-    const academyTs = (tournaments || []).filter(t => t.creatorId === academyId);
-    const hostedCount = academyTs.length;
-    const liveCount = academyTs.filter(t => t.status !== 'completed').length;
-    const cancellations = academyTs.filter(t => t.status === 'cancelled').length;
-    
-    // Simple tier logic
-    let tier = 'Bronze';
-    if (hostedCount > 10) tier = 'Gold';
-    else if (hostedCount > 5) tier = 'Silver';
-
-    const sportsBreakdown = {};
-    academyTs.forEach(t => {
-      sportsBreakdown[t.sport] = (sportsBreakdown[t.sport] || 0) + 1;
+  // ACADEMY STATS - SINGLE PASS PRE-CALCULATION
+  const allAcademyStats = useMemo(() => {
+    const stats = {};
+    (tournaments || []).forEach(t => {
+      const aId = t.creatorId;
+      if (!stats[aId]) {
+        stats[aId] = { hostedCount: 0, liveCount: 0, cancellations: 0, sportsBreakdown: {} };
+      }
+      stats[aId].hostedCount++;
+      if (t.status !== 'completed') stats[aId].liveCount++;
+      if (t.status === 'cancelled') stats[aId].cancellations++;
+      stats[aId].sportsBreakdown[t.sport] = (stats[aId].sportsBreakdown[t.sport] || 0) + 1;
     });
 
-    return { hostedCount, liveCount, cancellations, tier, sportsBreakdown };
+    // Add tiers
+    Object.keys(stats).forEach(aId => {
+      const count = stats[aId].hostedCount;
+      stats[aId].tier = count > 10 ? 'Gold' : count > 5 ? 'Silver' : 'Bronze';
+    });
+
+    return stats;
+  }, [tournaments]);
+
+  const getAcademyStats = (academyId) => {
+    return allAcademyStats[academyId] || { hostedCount: 0, liveCount: 0, cancellations: 0, tier: 'Bronze', sportsBreakdown: {} };
   };
 
   const renderCoachList = () => {
@@ -449,13 +475,15 @@ const AdminHubScreen = ({
         />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <View style={[styles.contentHost, { flex: 1 }]}>
         {subTab === 'individuals' && (
-          <PlayerDashboardView players={filteredIndividuals} tournaments={tournaments} title="Individuals" />
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+            <PlayerDashboardView players={filteredIndividuals} tournaments={tournaments} title="Individuals" />
+          </ScrollView>
         )}
 
         {subTab === 'coaches' && (
-          <View>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
             <View style={styles.coachSubTabs}>
               {['pending', 'approved', 'revoked', 'rejected_addendum'].map(t => (
                 <TouchableOpacity 
@@ -470,100 +498,104 @@ const AdminHubScreen = ({
               ))}
             </View>
             {renderCoachList()}
-          </View>
+          </ScrollView>
         )}
 
-        {subTab === 'academies' && filteredAcademies.map(a => {
-          const stats = getAcademyStats(a.id);
-          const isSelected = selectedAcademy === a.id;
-          return (
-            <TouchableOpacity 
-              key={a.id} 
-              activeOpacity={0.9}
-              onPress={() => setSelectedAcademy(isSelected ? null : a.id)}
-              style={[styles.adminCard, isSelected && styles.cardActive]}
-            >
-              <View style={styles.cardHeader}>
-                <View style={[styles.avatar, styles.initialsBox]}>
-                  <Text style={styles.initialsText}>{a.name[0]}</Text>
-                </View>
-                <View style={styles.flex}>
-                  <Text style={styles.cardTitle}>{a.name}</Text>
-                  <View style={[styles.tierBadge, { backgroundColor: stats.tier === 'Gold' ? '#FEF9C3' : stats.tier === 'Silver' ? '#F1F5F9' : '#FFEDD5' }]}>
-                    <Text style={[styles.tierText, { color: stats.tier === 'Gold' ? '#A16207' : stats.tier === 'Silver' ? '#475569' : '#C2410C' }]}>
-                      {stats.tier} Tier
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.statsInline}>
-                  <View style={styles.inlineStat}>
-                    <Text style={styles.inlineValue}>{stats.liveCount}</Text>
-                    <Text style={styles.inlineLabel}>Live</Text>
-                  </View>
-                  <TouchableOpacity 
-                    onPress={(e) => { e.stopPropagation(); setViewingBreakdownFor({ academy: a, stats }); }}
-                    style={styles.inlineStatBtn}
-                  >
-                    <Text style={styles.inlineValue}>{stats.hostedCount}</Text>
-                    <Text style={styles.inlineLabel}>Total</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {isSelected && (
-                <View style={styles.expandedContent}>
-                  <View style={styles.detailsBlock}>
-                    <Text style={styles.blockLabel}>Registration Details</Text>
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailTitle}>Username</Text>
-                      <Text style={styles.detailValue}>{a.id}</Text>
+        {subTab === 'academies' && (
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+            {filteredAcademies.map(a => {
+              const stats = getAcademyStats(a.id);
+              const isSelected = selectedAcademy === a.id;
+              return (
+                <TouchableOpacity 
+                  key={a.id} 
+                  activeOpacity={0.9}
+                  onPress={() => setSelectedAcademy(isSelected ? null : a.id)}
+                  style={[styles.adminCard, isSelected && styles.cardActive]}
+                >
+                  <View style={styles.cardHeader}>
+                    <View style={[styles.avatar, styles.initialsBox]}>
+                      <Text style={styles.initialsText}>{a.name[0]}</Text>
                     </View>
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailTitle}>Email</Text>
-                      <Text style={styles.detailValue}>{a.email}</Text>
+                    <View style={styles.flex}>
+                      <Text style={styles.cardTitle}>{a.name}</Text>
+                      <div style={[styles.tierBadge, { backgroundColor: stats.tier === 'Gold' ? '#FEF9C3' : stats.tier === 'Silver' ? '#F1F5F9' : '#FFEDD5' }]}>
+                        <Text style={[styles.tierText, { color: stats.tier === 'Gold' ? '#A16207' : stats.tier === 'Silver' ? '#475569' : '#C2410C' }]}>
+                          {stats.tier} Tier
+                        </Text>
+                      </div>
                     </View>
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailTitle}>Phone</Text>
-                      <Text style={styles.detailValue}>{a.phone}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.gridStats}>
-                    <View style={styles.gridStatBox}>
-                      <Text style={styles.gridStatLabel}>Sports Coverage</Text>
-                      <Text style={styles.gridStatValue}>{Object.keys(stats.sportsBreakdown).join(', ') || 'None'}</Text>
-                    </View>
-                    <View style={styles.gridStatBox}>
-                      <Text style={styles.gridStatLabel}>Reliability</Text>
-                      <Text style={[styles.gridStatValue, { color: '#EF4444' }]}>{stats.cancellations} Cancellations</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.tournamentList}>
-                    <Text style={styles.blockLabel}>Hosted Tournaments</Text>
-                    {(tournaments || []).filter(t => t.creatorId === a.id).map(t => (
+                    <View style={styles.statsInline}>
+                      <View style={styles.inlineStat}>
+                        <Text style={styles.inlineValue}>{stats.liveCount}</Text>
+                        <Text style={styles.inlineLabel}>Live</Text>
+                      </View>
                       <TouchableOpacity 
-                        key={t.id} 
-                        onPress={() => setViewingPlayersFor(t)}
-                        style={styles.hostedTItem}
+                        onPress={(e) => { e.stopPropagation(); setViewingBreakdownFor({ academy: a, stats }); }}
+                        style={styles.inlineStatBtn}
                       >
-                        <View>
-                           <Text style={styles.hostedTTitle}>{t.title}</Text>
-                           <Text style={styles.hostedTSport}>{t.sport}</Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={14} color="#6366F1" />
+                        <Text style={styles.inlineValue}>{stats.hostedCount}</Text>
+                        <Text style={styles.inlineLabel}>Total</Text>
                       </TouchableOpacity>
-                    ))}
-                    {stats.hostedCount === 0 && <Text style={styles.emptyNote}>No events hosted</Text>}
+                    </View>
                   </View>
-                </View>
-              )}
-            </TouchableOpacity>
-          );
-        })}
+
+                  {isSelected && (
+                    <View style={styles.expandedContent}>
+                      <View style={styles.detailsBlock}>
+                        <Text style={styles.blockLabel}>Registration Details</Text>
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailTitle}>Username</Text>
+                          <Text style={styles.detailValue}>{a.id}</Text>
+                        </View>
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailTitle}>Email</Text>
+                          <Text style={styles.detailValue}>{a.email}</Text>
+                        </View>
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailTitle}>Phone</Text>
+                          <Text style={styles.detailValue}>{a.phone}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.gridStats}>
+                        <View style={styles.gridStatBox}>
+                          <Text style={styles.gridStatLabel}>Sports Coverage</Text>
+                          <Text style={styles.gridStatValue}>{Object.keys(stats.sportsBreakdown).join(', ') || 'None'}</Text>
+                        </View>
+                        <View style={styles.gridStatBox}>
+                          <Text style={styles.gridStatLabel}>Reliability</Text>
+                          <Text style={[styles.gridStatValue, { color: '#EF4444' }]}>{stats.cancellations} Cancellations</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.tournamentList}>
+                        <Text style={styles.blockLabel}>Hosted Tournaments</Text>
+                        {(tournaments || []).filter(t => t.creatorId === a.id).map(t => (
+                          <TouchableOpacity 
+                            key={t.id} 
+                            onPress={() => setViewingPlayersFor(t)}
+                            style={styles.hostedTItem}
+                          >
+                            <View>
+                               <Text style={styles.hostedTTitle}>{t.title}</Text>
+                               <Text style={styles.hostedTSport}>{t.sport}</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={14} color="#6366F1" />
+                          </TouchableOpacity>
+                        ))}
+                        {stats.hostedCount === 0 && <Text style={styles.emptyNote}>No events hosted</Text>}
+                      </View>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
 
         {subTab === 'tournaments' && (
-          <View>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
             <View style={styles.coachSubTabs}>
               {['upcoming', 'past'].map(st => (
                 <TouchableOpacity 
@@ -582,7 +614,7 @@ const AdminHubScreen = ({
                 <Text style={styles.emptyText}>No {tournamentSubTab} tournaments found</Text>
               </View>
             ) : (filteredTournaments || []).map(t => {
-              const academy = (players || []).find(p => p.id === t.creatorId);
+              const academy = playerMap[t.creatorId];
               return (
                 <TouchableOpacity 
                   key={t.id} 
@@ -609,121 +641,136 @@ const AdminHubScreen = ({
                 </TouchableOpacity>
               );
             })}
-          </View>
+          </ScrollView>
         )}
 
-        {subTab === 'coach_assignments' && (tournaments || []).filter(t => 
-          (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration' || t.coachStatus === 'Awaiting Assignment') && 
-          !t.assignedCoachId && 
-          t.status !== 'completed' && 
-          !t.tournamentConcluded &&
-          (t.date >= today)
-        ).map(t => {
-          const academy = (players || []).find(p => p.id === t.creatorId);
-          return (
-            <View key={t.id} style={styles.adminCard}>
-              <View style={styles.cardHeader}>
-                <View style={styles.flex}>
-                  <Text style={styles.cardTitle}>{t.title}</Text>
-                  <Text style={styles.cardSubtitle}>{t.sport} • {t.date}</Text>
-                  {academy && (
-                    <View style={[styles.row, { marginTop: 4 }]}>
-                      <Ionicons name="business-outline" size={10} color="#6366F1" />
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#6366F1', marginLeft: 4 }}>{academy.name}</Text>
+        {subTab === 'coach_assignments' && (
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+            {(tournaments || []).filter(t => 
+              (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration' || t.coachStatus === 'Awaiting Assignment') && 
+              !t.assignedCoachId && 
+              t.status !== 'completed' && 
+              !t.tournamentConcluded &&
+              (t.date >= today)
+            ).map(t => {
+              const academy = playerMap[t.creatorId];
+              return (
+                <View key={t.id} style={styles.adminCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.flex}>
+                      <Text style={styles.cardTitle}>{t.title}</Text>
+                      <Text style={styles.cardSubtitle}>{t.sport} • {t.date}</Text>
+                      {academy && (
+                        <View style={[styles.row, { marginTop: 4 }]}>
+                          <Ionicons name="business-outline" size={10} color="#6366F1" />
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#6366F1', marginLeft: 4 }}>{academy.name}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={[styles.statusBadge, styles.wideBadge, { backgroundColor: t.coachStatus?.includes('Assigned') ? '#DCFCE7' : t.coachStatus?.includes('Confirmed') ? '#FEF9C3' : '#F1F5F9' }]}>
+                      <Text style={[styles.statusText, { color: t.coachStatus?.includes('Assigned') ? '#15803D' : t.coachStatus?.includes('Confirmed') ? '#A16207' : '#64748B' }]}>{t.coachStatus}</Text>
+                    </View>
+                  </View>
+
+                {t.coachStatus === 'Pending Coach Registration' && t.invitedCoachDetails && (
+                  <View style={[styles.infoBlock, { backgroundColor: '#FFF7ED', borderLeftWidth: 3, borderLeftColor: '#F97316' }]}>
+                    <Text style={styles.infoLabel}>Invited Coach Details</Text>
+                    <Text style={styles.coachDetailName}>{t.invitedCoachDetails.name}</Text>
+                    <Text style={styles.coachDetailText}>{t.invitedCoachDetails.email}</Text>
+                  </View>
+                )}
+
+                {t.coachStatus === 'Coach Confirmed - Awaiting Assignment' && t.confirmedCoachId && (
+                  <View style={[styles.infoBlock, { backgroundColor: '#FEF9C3', borderLeftWidth: 3, borderLeftColor: '#EAB308' }]}>
+                    <Text style={styles.infoLabel}>Confirmed Coach</Text>
+                    <View style={styles.assignRow}>
+                      <Text style={styles.coachDetailName}>{playerMap[t.confirmedCoachId]?.name || t.confirmedCoachId}</Text>
+                      <TouchableOpacity onPress={() => onAssignCoach(t.id, t.confirmedCoachId)} style={styles.miniAssignBtn}>
+                        <Text style={styles.miniAssignText}>Assign</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
+                {t.coachAssignmentType === 'platform' && !t.assignedCoachId && t.assignedCoachIds?.length > 0 && (
+                  <View style={[styles.infoBlock, { backgroundColor: '#EEF2FF', borderLeftWidth: 3, borderLeftColor: '#6366F1' }]}>
+                    <Text style={styles.infoLabel}>Opted-in Coaches</Text>
+                    {t.assignedCoachIds.map(cid => (
+                      <View key={cid} style={styles.optedInRow}>
+                        <Text style={styles.coachDetailName}>{playerMap[cid]?.name || cid}</Text>
+                        <TouchableOpacity onPress={() => onAssignCoach(t.id, cid)} style={styles.miniAssignBtnBlue}>
+                          <Text style={styles.miniAssignText}>Assign</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {(t.coachStatus === 'Coach Assigned' || t.coachStatus === 'Coach Assigned - Academy') && t.assignedCoachId && (
+                  <View style={[styles.infoBlock, { backgroundColor: '#F0FDF4', borderLeftWidth: 3, borderLeftColor: '#22C55E' }]}>
+                    <Text style={styles.infoLabel}>Assigned Coach</Text>
+                    <View style={styles.assignRow}>
+                      <Text style={styles.coachDetailName}>{playerMap[t.assignedCoachId]?.name || t.assignedCoachId}</Text>
+                      <TouchableOpacity onPress={() => onRemoveCoach(t.id)} style={styles.miniRemoveBtn}>
+                        <Text style={styles.miniRemoveText}>Remove</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
+                <TouchableOpacity onPress={() => setViewingAssignmentFor(t)} style={styles.detailsBtn}>
+                  <Text style={styles.detailsBtnText}>View Full Details</Text>
+                </TouchableOpacity>
+              </View>
+              );
+            })}
+          </ScrollView>
+        )}
+
+        {subTab === 'security' && (
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+            {(() => {
+              const securityAlerts = (tournaments || []).flatMap(t => 
+                (t.failedOtpAttempts || []).map((attempt, idx) => ({
+                  id: `${t.id}-${idx}`,
+                  tournamentTitle: t.title,
+                  timestamp: attempt.timestamp,
+                  coachName: playerMap[attempt.coachId]?.name || attempt.coachId,
+                  otp: attempt.otp
+                }))
+              ).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+              return (
+                <View>
+                  <Text style={styles.sectionTitle}>Failed Access Attempts</Text>
+                  {securityAlerts.map(alert => (
+                    <View key={alert.id} style={[styles.adminCard, { borderLeftColor: '#EF4444' }]}>
+                      <View style={styles.cardHeader}>
+                        <View style={styles.flex}>
+                          <Text style={[styles.cardTitle, { color: '#EF4444' }]}>Security Alert</Text>
+                          <Text style={styles.cardSubtitle}>{new Date(alert.timestamp).toLocaleString()}</Text>
+                        </View>
+                        <View style={[styles.statusBadge, { backgroundColor: '#FEF2F2' }]}>
+                          <Ionicons name="warning" size={14} color="#EF4444" />
+                        </View>
+                      </View>
+                      <View style={styles.alertContent}>
+                          <Text style={styles.alertLabel}>Tournament: <Text style={styles.alertValue}>{alert.tournamentTitle}</Text></Text>
+                          <Text style={styles.alertLabel}>Coach: <Text style={styles.alertValue}>{alert.coachName}</Text></Text>
+                          <Text style={styles.alertLabel}>OTP Used: <Text style={styles.alertOtp}>{alert.otp}</Text></Text>
+                      </View>
+                    </View>
+                  ))}
+                  {securityAlerts.length === 0 && (
+                    <View style={styles.emptyContainer}>
+                      <Ionicons name="shield-checkmark" size={48} color="#E2E8F0" />
+                      <Text style={[styles.emptyText, { marginTop: 12 }]}>No security alerts logged</Text>
                     </View>
                   )}
                 </View>
-                <View style={[styles.statusBadge, styles.wideBadge, { backgroundColor: t.coachStatus?.includes('Assigned') ? '#DCFCE7' : t.coachStatus?.includes('Confirmed') ? '#FEF9C3' : '#F1F5F9' }]}>
-                  <Text style={[styles.statusText, { color: t.coachStatus?.includes('Assigned') ? '#15803D' : t.coachStatus?.includes('Confirmed') ? '#A16207' : '#64748B' }]}>{t.coachStatus}</Text>
-                </View>
-              </View>
-
-            {t.coachStatus === 'Pending Coach Registration' && t.invitedCoachDetails && (
-              <View style={[styles.infoBlock, { backgroundColor: '#FFF7ED', borderLeftWidth: 3, borderLeftColor: '#F97316' }]}>
-                <Text style={styles.infoLabel}>Invited Coach Details</Text>
-                <Text style={styles.coachDetailName}>{t.invitedCoachDetails.name}</Text>
-                <Text style={styles.coachDetailText}>{t.invitedCoachDetails.email}</Text>
-              </View>
-            )}
-
-            {t.coachStatus === 'Coach Confirmed - Awaiting Assignment' && t.confirmedCoachId && (
-              <View style={[styles.infoBlock, { backgroundColor: '#FEF9C3', borderLeftWidth: 3, borderLeftColor: '#EAB308' }]}>
-                <Text style={styles.infoLabel}>Confirmed Coach</Text>
-                <View style={styles.assignRow}>
-                  <Text style={styles.coachDetailName}>{players.find(p => p.id === t.confirmedCoachId)?.name}</Text>
-                  <TouchableOpacity onPress={() => onAssignCoach(t.id, t.confirmedCoachId)} style={styles.miniAssignBtn}>
-                    <Text style={styles.miniAssignText}>Assign</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-
-            {t.coachAssignmentType === 'platform' && !t.assignedCoachId && t.assignedCoachIds?.length > 0 && (
-              <View style={[styles.infoBlock, { backgroundColor: '#EEF2FF', borderLeftWidth: 3, borderLeftColor: '#6366F1' }]}>
-                <Text style={styles.infoLabel}>Opted-in Coaches</Text>
-                {t.assignedCoachIds.map(cid => (
-                  <View key={cid} style={styles.optedInRow}>
-                    <Text style={styles.coachDetailName}>{players.find(p => p.id === cid)?.name}</Text>
-                    <TouchableOpacity onPress={() => onAssignCoach(t.id, cid)} style={styles.miniAssignBtnBlue}>
-                      <Text style={styles.miniAssignText}>Assign</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {(t.coachStatus === 'Coach Assigned' || t.coachStatus === 'Coach Assigned - Academy') && t.assignedCoachId && (
-              <View style={[styles.infoBlock, { backgroundColor: '#F0FDF4', borderLeftWidth: 3, borderLeftColor: '#22C55E' }]}>
-                <Text style={styles.infoLabel}>Assigned Coach</Text>
-                <View style={styles.assignRow}>
-                  <Text style={styles.coachDetailName}>{players.find(p => p.id === t.assignedCoachId)?.name}</Text>
-                  <TouchableOpacity onPress={() => onRemoveCoach(t.id)} style={styles.miniRemoveBtn}>
-                    <Text style={styles.miniRemoveText}>Remove</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-
-            <TouchableOpacity onPress={() => setViewingAssignmentFor(t)} style={styles.detailsBtn}>
-              <Text style={styles.detailsBtnText}>View Full Details</Text>
-            </TouchableOpacity>
-          </View>
-        );
-      })}
-
-        {subTab === 'security' && (
-          <View>
-            <Text style={styles.sectionTitle}>Failed Access Attempts</Text>
-            {tournaments.flatMap(t => 
-              (t.failedOtpAttempts || []).map((attempt, idx) => {
-                const coach = players.find(p => p.id === attempt.coachId);
-                return (
-                  <View key={`${t.id}-${idx}`} style={[styles.adminCard, { borderLeftColor: '#EF4444' }]}>
-                    <View style={styles.cardHeader}>
-                      <View style={styles.flex}>
-                        <Text style={[styles.cardTitle, { color: '#EF4444' }]}>Security Alert</Text>
-                        <Text style={styles.cardSubtitle}>{new Date(attempt.timestamp).toLocaleString()}</Text>
-                      </View>
-                      <View style={[styles.statusBadge, { backgroundColor: '#FEF2F2' }]}>
-                        <Ionicons name="warning" size={14} color="#EF4444" />
-                      </View>
-                    </View>
-                    <View style={styles.alertContent}>
-                        <Text style={styles.alertLabel}>Tournament: <Text style={styles.alertValue}>{t.title}</Text></Text>
-                        <Text style={styles.alertLabel}>Coach: <Text style={styles.alertValue}>{coach ? coach.name : attempt.coachId}</Text></Text>
-                        <Text style={styles.alertLabel}>OTP Used: <Text style={styles.alertOtp}>{attempt.otp}</Text></Text>
-                    </View>
-                  </View>
-                );
-              })
-            )}
-            {tournaments.every(t => !t.failedOtpAttempts?.length) && (
-              <View style={styles.emptyContainer}>
-                <Ionicons name="shield-checkmark" size={48} color="#E2E8F0" />
-                <Text style={[styles.emptyText, { marginTop: 12 }]}>No security alerts logged</Text>
-              </View>
-            )}
-          </View>
+              );
+            })()}
+          </ScrollView>
         )}
 
         {subTab === 'recordings' && (
@@ -751,436 +798,23 @@ const AdminHubScreen = ({
         )}
 
         {subTab === 'audit' && (
-          <AdminAuditLogsPanel auditLogs={auditLogs} players={players} search={search} />
+          <View style={{ flex: 1 }}>
+            <AdminAuditLogsPanel auditLogs={auditLogs} playerMap={playerMap} search={debouncedSearch} />
+          </View>
         )}
 
         {subTab === 'diagnostics' && (
-          <View style={styles.diagnosticsContainer}>
-            <View style={styles.diagHeaderRow}>
-               <Text style={[styles.sectionTitle, { flex: 1, marginRight: 12, minWidth: 150 }]}>System Diagnostics Management</Text>
-               <TouchableOpacity 
-                 onPress={() => {
-                   logger.logAction('ADMIN_MANUAL_SYNC_TRIGGER');
-                   onManualSync?.(true);
-                 }}
-                 style={styles.diagSyncBtn}
-               >
-                 <Ionicons name="refresh-circle" size={16} color="#FFFFFF" />
-                 <Text style={styles.diagSyncBtnText}>Force Sync Cloud</Text>
-               </TouchableOpacity>
-            </View>
-            
-            <View style={styles.diagSearchBox}>
-              <Ionicons name="people-outline" size={16} color="#64748B" />
-              <TextInput 
-                 placeholder="Search user (shashank, saumya, etc.)..."
-                 value={diagUserSearch}
-                 onChangeText={handleDiagSearchChange}
-                 style={styles.diagSearchInput}
-              />
-            </View>
-
-            <View style={styles.userListScroll}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {(players || [])
-                  .filter(p => {
-                    if (!p) return false;
-                    const name = (p.name || '').toLowerCase();
-                    const id = String(p.id || '').toLowerCase();
-                    const email = (p.email || '').toLowerCase();
-                    const s = diagUserSearch.toLowerCase().trim();
-                    if (s) return name.includes(s) || id.includes(s) || email.includes(s);
-                    const mocks = ['shashank', 'pranshu', 'academy', 'coach'];
-                    return mocks.some(m => name.includes(m) || id.includes(m) || email.includes(m)) || 
-                           name.includes('riya') || name.includes('saumya') || email.includes('riya') || email.includes('saumya');
-                  })
-                  .map(p => (
-                    <TouchableOpacity 
-                      key={p.id} 
-                      onPress={async () => {
-                        setSelectedDiagUser(p);
-                        setUserDiagFiles([]); // Clear immediately to avoid stale data UI
-                        setSelectedDiagFile(null);
-                        setDiagContent(null);
-                        setIsFetchingDiags(true);
-                        
-                        // PING NATIVE DEVICE TO CHECK PRESENCE (3 retries at 1s intervals)
-                        if (socketRef && socketRef.current) {
-                          const isConnected = socketRef.current.connected;
-                          const socketId = socketRef.current.id;
-                          console.log(`🏓 ADMIN PING: target=${p.id}, socketConnected=${isConnected}, socketId=${socketId}`);
-                          
-                          // CLEAR STALE ONLINE STATUS FOR THIS USER BEFORE PINGING
-                          setOnlineDevices(prev => {
-                            const next = { ...prev };
-                            delete next[p.id];
-                            if (p.devices && Array.isArray(p.devices)) {
-                              p.devices.forEach(d => { if (d && d.id) delete next[d.id]; });
-                            }
-                            return next;
-                          });
-
-                          if (!isConnected) {
-                            console.warn('⚠️ Socket NOT connected! Pings will fail silently.');
-                          }
-                          socketRef.current.emit('admin_ping_device', { targetUserId: p.id });
-                          setTimeout(() => socketRef.current?.emit('admin_ping_device', { targetUserId: p.id }), 1000);
-                          setTimeout(() => socketRef.current?.emit('admin_ping_device', { targetUserId: p.id }), 2000);
-                        } else {
-                          console.warn('⚠️ socketRef is null — no ping sent!');
-                        }
-                        
-                        const url = `${activeApiUrl}/api/diagnostics`;
-                        try {
-                          const res = await fetch(url, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
-                          if (res.ok) {
-                            const data = await res.json();
-                            const pName = (p.name || '').toLowerCase();
-                            const pId = String(p.id || '').toLowerCase();
-                            const pEmailRaw = (p.email || '');
-                            const firstName = pName.split(' ')[0];
-
-                            const safeName = p.name ? p.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() : '';
-                            const safeId = p.id ? String(p.id).replace(/[^a-z0-9]/gi, '_').toLowerCase() : '';
-                            const pEmailPrefix = p.email ? p.email.split('@')[0] : '';
-                            const safeEmail = pEmailPrefix.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-                            
-                            // Check for files matching name, id, email or even parts
-                            let fs = (data?.files || []).filter(f => {
-                              if (!f) return false;
-                              const low = f.toLowerCase();
-                              return (safeName && low.startsWith(safeName + '_')) || 
-                                     (safeId && low.startsWith(safeId + '_')) ||
-                                     (safeEmail && low.startsWith(safeEmail + '_')) ||
-                                     (safeName && low.startsWith('admin_requested_' + safeName + '_')) ||
-                                     (safeName && low.startsWith('admin_requested_' + safeName + '_')) ||
-                                     (safeName && low.includes(`_${safeName}_`)) ||
-                                     (firstName.length > 3 && low.includes(firstName.toLowerCase()));
-                            });
-                            
-                            // Improved sort: extract YYYY-MM-DD_HH-MM-SS or YYYYMMDD_HHMMSS and sort descending
-                            const getTs = (f) => {
-                              const m = f.match(/(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})|(\d{8}_\d{6})/);
-                              return m ? m[0].replace(/[-_]/g, '') : f;
-                            };
-                            fs = fs.sort((a, b) => getTs(b).localeCompare(getTs(a))).slice(0, 5);
-                            setUserDiagFiles(fs);
-                            logger.logAction('DIAGNOSTICS_FETCH_SUCCESS', { user: p.name, fileCount: fs.length });
-                          }
-                        } catch (e) {
-                          setUserDiagFiles([]);
-                          logger.logAction('DIAGNOSTICS_FETCH_ERROR', { error: e.message });
-                          if (String(p.id).length >= 20) Alert.alert("Error", "Failed to fetch files.");
-                        } finally {
-                          setIsFetchingDiags(false);
-                        }
-                      }}
-                      style={[styles.miniUserCard, selectedDiagUser?.id === p.id && styles.miniUserCardActive]}
-                    >
-                      <Image 
-                        source={getSafeAvatar(p.avatar, p.name)} 
-                        style={styles.miniAvatar} 
-                      />
-                      <View style={{ alignItems: 'center' }}>
-                        <Text style={[styles.miniUserName, selectedDiagUser?.id === p.id && styles.miniUserNameActive]} numberOfLines={1}>
-                          {p.name.split(' ')[0]}
-                        </Text>
-                        <Text style={{ fontSize: 8, color: selectedDiagUser?.id === p.id ? '#FFFFFF' : '#94A3B8', fontWeight: 'bold' }}>
-                          ({p.id})
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                  {((players || [])
-                  .filter(p => {
-                    if (!p) return false;
-                    const name = (p.name || '').toLowerCase();
-                    const id = String(p.id || '').toLowerCase();
-                    const email = (p.email || '').toLowerCase();
-                    const s = diagUserSearch.toLowerCase().trim();
-                    if (s) return name.includes(s) || id.includes(s) || email.includes(s);
-                    const mocks = ['shashank', 'pranshu', 'academy', 'coach'];
-                    return mocks.some(m => name.includes(m) || id.includes(m) || email.includes(m)) || 
-                           name.includes('riya') || name.includes('saumya') || email.includes('riya') || email.includes('saumya');
-                  }) || []).length === 0 && (
-                    <View style={{ padding: 20 }}>
-                      <Text style={{ color: '#94A3B8', fontStyle: 'italic' }}>
-                        No user matching "{diagUserSearch}" found.
-                      </Text>
-                      <Text style={{ color: '#64748B', fontSize: 10, marginTop: 4 }}>
-                        Players in list: {players.length}. (Check "Refresh Cloud Data" if users are missing)
-                      </Text>
-                    </View>
-                  )}
-              </ScrollView>
-            </View>
-
-            {selectedDiagUser && (
-              <View style={styles.diagFileSection}>
-                {selectedDiagUser.devices && selectedDiagUser.devices.length > 0 ? (
-                  <View style={{ marginBottom: 16 }}>
-                    <Text style={{ fontSize: 12, color: '#64748B', fontWeight: 'bold', marginBottom: 8, textTransform: 'uppercase' }}>Active Devices</Text>
-                    {(selectedDiagUser.devices || []).filter(d => {
-                      const threeDaysAgo = Date.now() - (3 * 24 * 60 * 60 * 1000);
-                      return d.lastActive >= threeDaysAgo;
-                    }).sort((a, b) => {
-                      const aOnline = onlineDevices[a.id] ? 1 : 0;
-                      const bOnline = onlineDevices[b.id] ? 1 : 0;
-                      return bOnline - aOnline;
-                    }).map(d => {
-                      // Debug logger for missing versions
-                      if (!d.appVersion || !d.platformVersion) {
-                        console.log(`[AdminHub] Device version missing: ID=${d.id}, App=${d.appVersion}, Platform=${d.platformVersion}`);
-                        logger.logAction('DEVICE_VERSION_MISSING', { deviceId: d.id, app: d.appVersion, platform: d.platformVersion });
-                      }
-                      return (
-                      <View key={d.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                        <View style={{ flex: 1, paddingRight: 6 }}>
-                          <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0F172A' }} numberOfLines={1}>{d.name}</Text>
-                          <Text style={{ fontSize: 9, color: '#64748B' }}>ID: {d.id}</Text>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
-                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: onlineDevices[d.id] ? '#10B981' : '#EF4444' }} />
-                            <Text style={{ fontSize: 10, color: onlineDevices[d.id] ? '#10B981' : '#EF4444', fontWeight: 'bold' }}>
-                              {onlineDevices[d.id] ? 'ONLINE' : 'OFFLINE'}
-                            </Text>
-                            <Text style={{ fontSize: 9, color: '#94A3B8' }}>• {new Date(d.lastActive).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</Text>
-                          </View>
-                        </View>
-                        <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                          <TouchableOpacity 
-                            disabled={pullingDeviceIds[d.id] || !onlineDevices[d.id]}
-                            onPress={async () => {
-                              if (socketRef && socketRef.current) {
-                                socketRef.current.emit('admin_pull_diagnostics', { 
-                                  targetUserId: selectedDiagUser.id,
-                                  targetDeviceId: d.id,
-                                  adminId: user?.id 
-                                });
-                                logger.logAction('ADMIN_SENT_PULL_REQUEST', { target: selectedDiagUser.id, device: d.id });
-                                
-                                const initialFiles = new Set(userDiagFiles);
-                                setPullingDeviceIds(prev => ({ ...prev, [d.id]: true }));
-                                let attempts = 0;
-                                
-                                const poll = async () => {
-                                  while (attempts < 5) {
-                                    attempts++;
-                                    try {
-                                      const res = await fetch(`${activeApiUrl}/api/diagnostics`, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
-                                      if (res.ok) {
-                                        const data = await res.json();
-                                        const pNameRaw = (selectedDiagUser.name || '').toLowerCase();
-                                        const firstName = pNameRaw.split(' ')[0];
-                                        const safeName = pNameRaw.replace(/[^a-z0-9]/gi, '_');
-                                        const fs = data.files.filter(f => {
-                                          const lf = f.toLowerCase();
-                                          return lf.includes(safeName) || lf.includes(firstName);
-                                        });
-                                        
-                                        const getTs = (f) => {
-                                          const m = f.match(/(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})|(\d{8}_\d{6})/);
-                                          return m ? m[0].replace(/[-_]/g, '') : f;
-                                        };
-                                        const sortedFs = fs.sort((a, b) => getTs(b).localeCompare(getTs(a)));
-                                        
-                                        // Diff detection: If server file rotation kept length at 3, detect the brand new filename explicitly
-                                        const hasNewFile = sortedFs.some(f => !initialFiles.has(f));
-                                        if (hasNewFile) {
-                                          setUserDiagFiles(sortedFs);
-                                          setPullingDeviceIds(prev => { const next = {...prev}; delete next[d.id]; return next; });
-                                          return; // Instantly halt the spinner when the file drops
-                                        }
-                                      }
-                                    } catch (e) {}
-                                    await new Promise(r => setTimeout(r, 3000));
-                                  }
-                                  setPullingDeviceIds(prev => { const next = {...prev}; delete next[d.id]; return next; }); // Times out after 15s
-                                };
-                                poll();
-
-                              } else {
-                                Alert.alert("Error", "WebSocket not connected.");
-                              }
-                            }}
-                            style={{ 
-                              backgroundColor: (pullingDeviceIds[d.id] || !onlineDevices[d.id]) ? '#CBD5E1' : '#EF4444', 
-                              paddingHorizontal: 10, 
-                              paddingVertical: 6, 
-                              borderRadius: 16, 
-                              flexDirection: 'row', 
-                              alignItems: 'center', 
-                              gap: 4, 
-                              minWidth: 90,
-                              justifyContent: 'center',
-                              opacity: (pullingDeviceIds[d.id] || !onlineDevices[d.id]) ? 0.8 : 1 
-                            }}
-                          >
-                            {pullingDeviceIds[d.id] ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="cloud-download-outline" size={12} color="#FFFFFF" />}
-                            <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 10 }}>{pullingDeviceIds[d.id] ? 'PULLING...' : 'PULL LOGS'}</Text>
-                          </TouchableOpacity>
-                          <View style={{ flexDirection: 'row', gap: 4 }}>
-                            {d.platformVersion && (
-                              <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                                <Text style={{ fontSize: 9, fontWeight: '700', color: '#64748B' }}>{d.platformVersion}</Text>
-                              </View>
-                            )}
-                            {d.appVersion && (
-                              <View style={{ backgroundColor: '#EEF2FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#C7D2FE' }}>
-                                <Text style={{ fontSize: 9, fontWeight: '900', color: '#4F46E5' }}>{d.appVersion}</Text>
-                              </View>
-                            )}
-                          </View>
-                        </View>
-                      </View>
-                    )})}
-                  </View>
-                ) : (
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                    <View style={{ flex: 1, marginRight: 10 }}>
-                      <Text style={{ fontSize: 11, color: onlineDevices[selectedDiagUser.id] ? '#10B981' : '#EF4444', fontWeight: 'bold', marginBottom: 2 }}>{onlineDevices[selectedDiagUser.id] ? 'ONLINE (ACTIVE)' : 'OFFLINE'}</Text>
-                      <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>No hardware logs stored on cluster. Live trigger will pull any unrecorded connected devices.</Text>
-                    </View>
-                    <TouchableOpacity 
-                      disabled={pullingDeviceIds[selectedDiagUser.id] || !onlineDevices[selectedDiagUser.id]}
-                      onPress={async () => {
-                        if (socketRef && socketRef.current) {
-                          socketRef.current.emit('admin_pull_diagnostics', { 
-                            targetUserId: selectedDiagUser.id,
-                            adminId: user?.id 
-                          });
-                          logger.logAction('ADMIN_SENT_PULL_REQUEST', { target: selectedDiagUser.id });
-                          
-                          const initialFiles = new Set(userDiagFiles);
-                          setPullingDeviceIds(prev => ({ ...prev, [selectedDiagUser.id]: true }));
-                          let attempts = 0;
-                          
-                          const poll = async () => {
-                            while (attempts < 5) {
-                              attempts++;
-                              try {
-                                const res = await fetch(`${activeApiUrl}/api/diagnostics`, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
-                                if (res.ok) {
-                                  const data = await res.json();
-                                  const pNameRaw = (selectedDiagUser.name || '').toLowerCase();
-                                  const firstName = pNameRaw.split(' ')[0];
-                                  const safeName = pNameRaw.replace(/[^a-z0-9]/gi, '_');
-                                  const fs = data.files.filter(f => {
-                                    const lf = f.toLowerCase();
-                                    return lf.includes(safeName) || lf.includes(firstName);
-                                  });
-                                  
-                                  const hasNewFile = fs.some(f => !initialFiles.has(f));
-                                  if (hasNewFile) {
-                                    setUserDiagFiles(fs.reverse());
-                                    setPullingDeviceIds(prev => { const next = {...prev}; delete next[selectedDiagUser.id]; return next; });
-                                    return; // Instantly halt the spinner when the file drops
-                                  }
-                                }
-                              } catch (e) {}
-                              await new Promise(r => setTimeout(r, 3000));
-                            }
-                            setPullingDeviceIds(prev => { const next = {...prev}; delete next[selectedDiagUser.id]; return next; }); // Times out after 15s
-                          };
-                          poll();
-                        }
-                      }}
-                      style={{ backgroundColor: (pullingDeviceIds[selectedDiagUser.id] || !onlineDevices[selectedDiagUser.id]) ? '#94A3B8' : '#EF4444', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: (pullingDeviceIds[selectedDiagUser.id] || !onlineDevices[selectedDiagUser.id]) ? 0.7 : 1 }}
-                    >
-                      {pullingDeviceIds[selectedDiagUser.id] ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="cloud-download-outline" size={14} color="#FFFFFF" />}
-                      <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 10 }}>{pullingDeviceIds[selectedDiagUser.id] ? 'PULLING...' : `PULL LIVE LOGS FOR ${selectedDiagUser.name.split(' ')[0].toUpperCase()}`}</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-
-                <Text style={styles.diagLabel}>Reports for {selectedDiagUser.name}:</Text>
-                {isFetchingDiags ? (
-                  <Text style={styles.diagLoading}>Fetching files...</Text>
-                ) : userDiagFiles.length === 0 ? (
-                  <Text style={styles.diagEmpty}>No reports found for this user.</Text>
-                ) : (
-                  <View style={styles.diagFileGrid}>
-                    {userDiagFiles.map(file => (
-                      <TouchableOpacity 
-                        key={file} 
-                        onPress={async () => {
-                          setSelectedDiagFile(file);
-                          setIsFetchingDiags(true);
-                          try {
-                            const res = await fetch(`${activeApiUrl}/api/diagnostics/${file}`, {
-                              headers: { 'x-ace-api-key': config.ACE_API_KEY }
-                            });
-                            if (res.ok) {
-                              const content = await res.json();
-                              setDiagContent(content);
-                              setDiagFileSize((JSON.stringify(content).length / 1024).toFixed(1));
-                            }
-                          } catch (e) {
-                            Alert.alert("Error", "Failed to fetch content.");
-                          } finally {
-                            setIsFetchingDiags(false);
-                          }
-                        }}
-                        style={[styles.diagFileItem, selectedDiagFile === file && styles.diagFileItemActive]}
-                      >
-                        <Ionicons name="document-text" size={20} color={selectedDiagFile === file ? "#FFFFFF" : "#3B82F6"} />
-                        <Text style={[styles.diagFileName, selectedDiagFile === file && styles.diagFileNameActive]}>
-                          {file.startsWith('admin_requested_') 
-                            ? `[ADMIN PULL] ${file.replace('admin_requested_', '').replace('.json', '')}`
-                            : file.replace('.json', '')}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </View>
-            )}
-
-            {diagContent && (
-              <View style={styles.diagViewPanel}>
-                <View style={styles.diagViewHeader}>
-                  <Text style={styles.diagViewTitle}>
-                    Report Details {diagContent && `(${diagFileSize} KB)`}
-                  </Text>
-                  <TouchableOpacity 
-                    onPress={handleDownloadDiagnostic}
-                    disabled={isDownloading}
-                    style={[styles.diagDownloadBtn, { backgroundColor: isDownloading ? '#94A3B8' : '#16A34A' }]}
-                  >
-                    {isDownloading ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <Ionicons name="download-outline" size={16} color="#FFFFFF" />
-                    )}
-                    <Text style={styles.diagDownloadText}>
-                      {isDownloading ? 'Downloading...' : 'Download'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <ScrollView style={styles.diagScrollArea}>
-                  <View style={styles.diagMetaRow}>
-                    <Text style={styles.diagMetaLabel}>User: {diagContent.username}</Text>
-                  </View>
-                  <View style={styles.diagMetaRow}>
-                    <Text style={styles.diagMetaLabel}>Date: {diagContent.uploadedAt}</Text>
-                  </View>
-                  <View style={styles.diagMetaRow}>
-                    <Text style={styles.diagMetaLabel}>Device: {diagContent.deviceId || 'Legacy App Instance'}</Text>
-                  </View>
-                  <View style={styles.diagLogBox}>
-                    {(diagContent.logs || []).map((log, idx) => (
-                      <View key={idx} style={styles.diagLogLine}>
-                        <Text style={styles.diagLogTime}>[{log.timestamp?.split(' ')[1] || '00:00'}]</Text>
-                        <Text style={[styles.diagLogLevel, { color: log.level === 'error' ? '#EF4444' : log.level === 'warn' ? '#EAB308' : '#3B82F6' }]}>{log.level?.toUpperCase()}</Text>
-                        <Text style={styles.diagLogMsg}>{log.message}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </ScrollView>
-              </View>
-            )}
-          </View>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+            <AdminDiagnosticsPanel 
+              players={players} 
+              socketRef={socketRef} 
+              isCloudOnline={isCloudOnline} 
+              isUsingCloud={isUsingCloud} 
+              onManualSync={onManualSync} 
+            />
+          </ScrollView>
         )}
-      </ScrollView>
+      </View>
 
       {/* Rejection Modal */}
       <Modal visible={!!rejectingCoachId} transparent animationType="fade">
