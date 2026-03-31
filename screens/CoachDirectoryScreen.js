@@ -243,7 +243,7 @@ export default function CoachDirectoryScreen({ user, role, players = [], onUpdat
       </View>
 
       <FlatList 
-        data={coaches}
+        data={filteredCoaches}
         renderItem={renderCoachCard}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.coachList}

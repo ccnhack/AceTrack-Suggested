@@ -69,7 +69,7 @@ const RankingWrapper = memo((props) => {
 
 const AcademyWrapper = memo((props) => {
   const params = useNavigationParams();
-  return <AcademyScreen {...props} {...params} academyId={params.user?.id} matches={params.matches} onCancelVideo={params.onCancelVideo} Sport={Sport} SkillLevel={SkillLevel} TournamentStructure={TournamentStructure} TournamentFormat={TournamentFormat} />;
+  return <AcademyScreen {...props} {...params} academyId={params.user?.id} matches={params.matches} onCancelVideo={params.onCancelVideo} onDeleteTournament={params.onDeleteTournament} Sport={Sport} SkillLevel={SkillLevel} TournamentStructure={TournamentStructure} TournamentFormat={TournamentFormat} />;
 });
 
 const AdminHubWrapper = memo((props) => {
@@ -109,7 +109,7 @@ const MainTabs = memo(() => {
     onOptOut, onLogFailedOtp, onLogTrace, setPlayers, onToggleFavourite,
     onManualSync, isCloudOnline, lastSyncTime, onBatchUpdate, onUploadLogs, isUploadingLogs,
     onVerifyAccount, isUsingCloud, onToggleCloud, setIsProfileEditActive, socketRef,
-    matchmaking, onUpdateMatchmaking, sendUserNotification
+    matchmaking, onUpdateMatchmaking, sendUserNotification, onDeleteTournament
   } = useNavigationParams();
   
   const typeProps = useMemo(() => ({ Sport, SkillLevel, TournamentStructure, TournamentFormat }), []);

@@ -626,7 +626,7 @@ export const VideoManagement = ({
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Tournament</Text>
               <View style={styles.dummyInput}>
-                <Text style={styles.dummyInputText}>{completedTournaments.find(t => t.id === selectedTournamentId)?.title}</Text>
+                <Text style={styles.dummyInputText}>{closedTournaments.find(t => t.id === selectedTournamentId)?.title}</Text>
               </View>
             </View>
 

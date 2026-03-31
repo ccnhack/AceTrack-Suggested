@@ -21,7 +21,7 @@ export const AcademyScreen = ({
   academyId, user, tournaments, players, matchVideos, matches, evaluations,
   onSaveTournament, onUpdateTournament, onSaveVideo, onCancelVideo, onRequestDeletion,
   onUpdateUser, onReplyTicket, onUpdateTicketStatus, onTopUp, onRegister, onReschedule, onLogTrace,
-  setPlayers, isSyncing, onBatchUpdate
+  setPlayers, isSyncing, onBatchUpdate, onDeleteTournament
 }) => {
   const [subTab, setSubTab] = useState('tournaments');
   const [tFilter, setTFilter] = useState('upcoming');
@@ -78,7 +78,7 @@ export const AcademyScreen = ({
       setFormTitle(editingT.title || '');
       setFormSport(editingT.sport || Sport.Tennis);
       setFormSkill(editingT.skillLevel || SkillLevel.Beginner);
-      setFormVenue(editingT.location || '');
+      setFormVenue(editingT.venue || editingT.location || '');
       setFormDate(editingT.date || '');
       setFormRegDeadline(editingT.registrationDeadline || '');
       setFormTime(editingT.time || '09:00 AM');
@@ -110,7 +110,13 @@ export const AcademyScreen = ({
     setFormTitle('');
     setFormSport(Sport.Tennis);
     setFormSkill(SkillLevel.Beginner);
-    setFormVenue('');
+    
+    // Autopopulate Venue with Academy Name and Location/Area
+    const academyName = user?.name || '';
+    const academyArea = user?.area || user?.location || user?.city || '';
+    const initialVenue = academyArea ? `${academyName}, ${academyArea}` : academyName;
+    setFormVenue(initialVenue);
+
     setFormDate('');
     setFormRegDeadline('');
     setFormTime('09:00 AM');
@@ -222,11 +228,16 @@ export const AcademyScreen = ({
       }
     }
 
-    // Advanced Location Mapping: Format [Academy Name], [Venue], [City], [State]
+    // Advanced Location Mapping: Format [Venue], [City], [State]
+    // Fix: If formVenue already contains academyName or city, we handle gracefully
     const academyName = user?.name || 'Academy';
     const city = user?.city || 'Bangalore';
     const state = user?.state || 'Karnataka';
-    const fullLocation = `${academyName}, ${formVenue}, ${city}, ${state}`;
+    
+    let fullLocation = formVenue;
+    if (!fullLocation.includes(city)) {
+        fullLocation = `${fullLocation}, ${city}, ${state}`;
+    }
 
     // Geocoding Simulation (Mapping to Lat/Lng)
     const getCoords = (loc) => {
@@ -493,10 +504,7 @@ export const AcademyScreen = ({
             <Text style={styles.welcomeLabel}>Welcome back,</Text>
             <Text style={styles.academyNameText}>{user?.name || 'Academy'}</Text>
           </View>
-          <View style={styles.headerIcons}>
-            <TouchableOpacity onPress={exportToCSV} style={[styles.premiumAddBtn, { backgroundColor: '#F0FDF4', marginRight: 10 }]}>
-              <Ionicons name="download-outline" size={20} color="#16A34A" />
-            </TouchableOpacity>
+            {/* Add button remains here for now as requested */}
             {subTab === 'tournaments' && (
               <TouchableOpacity 
                 onPress={() => { setEditingT(null); setIsFormOpen(true); }}
@@ -505,7 +513,6 @@ export const AcademyScreen = ({
                 <Ionicons name="add" size={24} color="#FFFFFF" />
               </TouchableOpacity>
             )}
-          </View>
         </View>
 
         <View style={styles.statsDashboard}>
@@ -564,11 +571,18 @@ export const AcademyScreen = ({
         {subTab === 'tournaments' && (
           <View>
             <View style={styles.filterRow}>
-              <TouchableOpacity onPress={() => setTFilter('upcoming')} style={[styles.filterBtn, tFilter === 'upcoming' && styles.filterBtnActive]}>
-                <Text style={[styles.filterBtnText, tFilter === 'upcoming' && styles.filterBtnTextActive]}>Upcoming</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setTFilter('past')} style={[styles.filterBtn, tFilter === 'past' && styles.filterBtnActive]}>
-                <Text style={[styles.filterBtnText, tFilter === 'past' && styles.filterBtnTextActive]}>Past</Text>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity onPress={() => setTFilter('upcoming')} style={[styles.filterBtn, tFilter === 'upcoming' && styles.filterBtnActive]}>
+                  <Text style={[styles.filterBtnText, tFilter === 'upcoming' && styles.filterBtnTextActive]}>Upcoming</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setTFilter('past')} style={[styles.filterBtn, tFilter === 'past' && styles.filterBtnActive]}>
+                  <Text style={[styles.filterBtnText, tFilter === 'past' && styles.filterBtnTextActive]}>Past</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <TouchableOpacity onPress={exportToCSV} style={styles.downloadFilterBtn}>
+                <Ionicons name="download-outline" size={18} color="#6366F1" />
+                <Text style={styles.downloadFilterText}>Export</Text>
               </TouchableOpacity>
             </View>
 
@@ -592,12 +606,6 @@ export const AcademyScreen = ({
                   </View>
                   
                   <View style={styles.tCardRightActions}>
-                    <TouchableOpacity 
-                        onPress={() => handleClone(t)}
-                        style={[styles.premiumEditBtn, { marginRight: 8, backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}
-                    >
-                        <Ionicons name="copy-outline" size={18} color="#10B981" />
-                    </TouchableOpacity>
                     <TouchableOpacity 
                         onPress={() => { setEditingT(t); setIsFormOpen(true); }}
                         style={styles.premiumEditBtn}
@@ -662,18 +670,37 @@ export const AcademyScreen = ({
                 )}
 
                 <View style={styles.premiumCardFooter}>
-                    <TouchableOpacity 
-                        onPress={() => setViewingTournamentId(t.id)}
-                        style={styles.premiumPrimaryBtn}
-                    >
-                        <Text style={styles.premiumPrimaryBtnText}>Manage Roster</Text>
-                        {t.interestedPlayerIds?.length > 0 && (
-                          <View style={styles.interestBadge}>
-                            <Text style={styles.interestBadgeText}>{t.interestedPlayerIds.length}</Text>
-                          </View>
-                        )}
-                        <Ionicons name="chevron-forward" size={14} color="#FFFFFF" />
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                      <TouchableOpacity 
+                          onPress={() => setViewingTournamentId(t.id)}
+                          style={styles.premiumPrimaryBtn}
+                      >
+                          <Text style={styles.premiumPrimaryBtnText}>Manage Roster</Text>
+                          {t.interestedPlayerIds?.length > 0 && (
+                            <View style={styles.interestBadge}>
+                              <Text style={styles.interestBadgeText}>{t.interestedPlayerIds.length}</Text>
+                            </View>
+                          )}
+                          <Ionicons name="chevron-forward" size={14} color="#FFFFFF" />
+                      </TouchableOpacity>
+
+                      {(t.registeredPlayerIds || []).length === 0 && (t.pendingPaymentPlayerIds || []).length === 0 && (
+                        <TouchableOpacity 
+                            onPress={() => {
+                              Alert.alert(
+                                "Delete Tournament",
+                                "Are you sure you want to permanently delete this tournament?",
+                                [
+                                  { text: "Cancel", style: "cancel" },
+                                  { text: "Delete", style: "destructive", onPress: () => onDeleteTournament(t.id) }
+                                ]
+                              );
+                            }}
+                        >
+                            <Text style={styles.footerDeleteButton}>Delete</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                     
                     <View style={[styles.premiumStatusPill, tFilter === 'past' ? styles.statusPillPast : styles.statusPillActive]}>
                         <View style={[styles.statusDot, tFilter === 'past' ? { backgroundColor: '#94A3B8' } : { backgroundColor: '#EF4444' }]} />
@@ -863,9 +890,6 @@ export const AcademyScreen = ({
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                             <TouchableOpacity onPress={autofillTestData} style={styles.autofillBtn}>
                                 <Text style={styles.autofillBtnText}>Test Feed</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={autofillTestData} style={[styles.autofillBtn, { backgroundColor: '#F0FDF4' }]}>
-                                <Text style={[styles.autofillBtnText, { color: '#16A34A' }]}>Use Template</Text>
                             </TouchableOpacity>
                         </View>
                     )}
@@ -1118,7 +1142,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 0,
   },
   welcomeLabel: {
     fontSize: 12,
@@ -1217,14 +1241,30 @@ const styles = StyleSheet.create({
   },
   filterRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
     marginBottom: 20,
-    gap: 10,
+  },
+  downloadFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 4
+  },
+  downloadFilterText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#6366F1'
   },
   filterBtn: {
-    paddingHorizontal: 16,
     paddingVertical: 8,
+    paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
@@ -1401,10 +1441,16 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   premiumPrimaryBtnText: {
-    fontSize: 11,
-    fontWeight: '900',
+    fontSize: 14,
+    fontWeight: '800',
     color: '#FFFFFF',
-    textTransform: 'uppercase',
+    marginRight: 6,
+  },
+  footerDeleteButton: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#EF4444',
+    textDecorationLine: 'underline'
   },
   premiumStatusPill: {
     flexDirection: 'row',

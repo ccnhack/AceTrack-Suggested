@@ -182,22 +182,26 @@ const MatchesScreen = ({
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    if (tDate < today) {
-      Alert.alert("Expired", "This OTP has expired. It was only valid during the tournament.");
+    // BUFFER: Allow a 7-day grace period for coaches to finalize past events
+    const bufferDate = new Date(tDate);
+    bufferDate.setDate(bufferDate.getDate() + 7);
+
+    if (today > bufferDate && t.status !== 'completed' && t.status !== 'ongoing') {
+      Alert.alert("Expired", "This OTP has expired. Please contact the academy for a new session code.");
       return;
     }
 
     const expectedOtp = type === 'start' ? t.startOtp : t.endOtp;
     if (!expectedOtp || otpInput.trim() === expectedOtp) {
       if (type === 'start') {
-        onStartTournament(t);
+        onStartTournament(t.id);
         setViewingPlayersFor(t);
       } else {
-        if (!t.ratingsModified) {
+        if (!t.ratingsModified && user.role !== 'admin') {
           Alert.alert("Action Required", "Cannot end tournament: Player ratings must be modified before ending the tournament.");
           return;
         }
-        onEndTournament(t);
+        onEndTournament(t.id);
       }
       setShowOtpModal(null);
       setOtpInput('');

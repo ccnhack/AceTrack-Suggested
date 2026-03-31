@@ -292,9 +292,9 @@ export const getVisibleTournaments = ({
 
   return tournaments.filter(t => {
     // 1. Basic Status Check
-    const isOngoingOrUpcoming = t.status === 'upcoming' || t.status === 'ongoing';
-    const isNotCompleted = t.status !== 'completed';
-    if (!isOngoingOrUpcoming || !isNotCompleted) return false;
+    const isUpcoming = t.status === 'upcoming';
+    const isNotCompleted = t.status !== 'completed' && t.status !== 'ongoing';
+    if (!isUpcoming || !isNotCompleted) return false;
 
     // 2. Date/Time Check
     const isPast = isTournamentPast(t, now);
@@ -305,8 +305,8 @@ export const getVisibleTournaments = ({
     if (regDeadline) regDeadline.setHours(23, 59, 59, 999);
     
     const isDeadlinePassed = regDeadline && (regDeadline.getTime() < today.getTime());
-    const deadlineOpen = !regDeadline || !isDeadlinePassed || userRole?.toLowerCase() === 'admin' || t.status === 'ongoing';
-    const isOpen = deadlineOpen && (!isPast || t.status === 'ongoing');
+    const deadlineOpen = !regDeadline || !isDeadlinePassed || userRole?.toLowerCase() === 'admin';
+    const isOpen = deadlineOpen && !isPast;
 
     if (!isOpen) return false;
 

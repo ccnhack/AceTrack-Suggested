@@ -69,6 +69,7 @@ export default function App() {
   const [lastSyncTime, setLastSyncTime] = useState(null);
   const [chatbotMessages, setChatbotMessages] = useState({}); // { [userId]: Array<{role, text}> }
   const [showVerificationPrompt, setShowVerificationPrompt] = useState(false);
+  const [verificationLatch, setVerificationLatch] = useState({ email: false, phone: false });
   const [isSyncing, setIsSyncing] = useState(false);
   const [isUploadingLogs, setIsUploadingLogs] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -96,7 +97,10 @@ export default function App() {
   const isUsingCloudRef = React.useRef(true);
   const socketRef = React.useRef(null);
   const playersRef = React.useRef(players);
-  const lastBackgroundSyncRef = React.useRef(0); // THROTTLE: Prevents redundant pulls
+  const matchVideosRef = React.useRef(matchVideos); // New ref for video sync
+  const matchesRef = React.useRef(matches);
+  const tournamentsRef = React.useRef(tournaments);
+  const lastBackgroundSyncRef = React.useRef(0); 
   const updateCheckTimeoutRef = React.useRef(null); // DEBOUNCE: Groups WebSocket signals
   const syncLockRef = React.useRef(false); // MUTEX: Ensures push and pull don't overlap
   const globalBackoffUntilRef = React.useRef(0); // BACKOFF: 429 recovery timer
@@ -122,6 +126,18 @@ export default function App() {
   useEffect(() => {
     playersRef.current = players;
   }, [players]);
+
+  useEffect(() => {
+    matchVideosRef.current = matchVideos;
+  }, [matchVideos]);
+
+  useEffect(() => {
+    matchesRef.current = matches;
+  }, [matches]);
+
+  useEffect(() => {
+    tournamentsRef.current = tournaments;
+  }, [tournaments]);
 
   useEffect(() => {
     // 1. WebSocket: Connect to real-time events
@@ -369,16 +385,19 @@ export default function App() {
   }, [isUsingCloud]); 
 
   // 4. PERSISTENT VERIFICATION PROMPT: Ensure it shows up if unverified
-  // Fix: Don't show if user is admin OR already in the Edit Profile modal
+  // Fix: Don't show if user is admin OR already in the Edit Profile modal OR recently verified (latch)
   useEffect(() => {
     // Initialize Firebase
     initializeFirebase();
-    if (currentUser && currentUser.role !== 'admin' && (!currentUser.isEmailVerified || !currentUser.isPhoneVerified) && !isProfileEditActive) {
+    const isEmailUnverified = currentUser && !currentUser.isEmailVerified && !verificationLatch.email;
+    const isPhoneUnverified = currentUser && !currentUser.isPhoneVerified && !verificationLatch.phone;
+
+    if (currentUser && currentUser.role !== 'admin' && (isEmailUnverified || isPhoneUnverified) && !isProfileEditActive) {
       setShowVerificationPrompt(true);
     } else {
       setShowVerificationPrompt(false);
     }
-  }, [currentUser?.id, currentUser?.role, currentUser?.isEmailVerified, currentUser?.isPhoneVerified, isProfileEditActive]);
+  }, [currentUser?.id, currentUser?.role, currentUser?.isEmailVerified, currentUser?.isPhoneVerified, isProfileEditActive, verificationLatch]);
   const isVersionObsolete = (local, remote) => {
     try {
       const [c1, c2, c3] = local.split('.').map(Number);
@@ -630,7 +649,7 @@ export default function App() {
         const newPlayersJson = JSON.stringify(cleanedPlayers);
         const oldPlayersJson = JSON.stringify(playersRef.current);
         
-        if (newPlayersJson !== oldPlayersJson) {
+        if (newPlayersJson !== oldPlayersJson && !pendingSyncRef.current.includes('players')) {
           setPlayers(cleanedPlayers);
           storage.setItem('players', cleanedPlayers);
         }
@@ -655,24 +674,24 @@ export default function App() {
         }
       }
 
-      if (Array.isArray(cloudData.tournaments)) {
+      if (Array.isArray(cloudData.tournaments) && !pendingSyncRef.current.includes('tournaments')) {
         const cleaned = cloudData.tournaments.map(t => ({
           ...t,
           registeredPlayerIds: Array.isArray(t.registeredPlayerIds) ? t.registeredPlayerIds.filter(pid => !!pid) : [],
           pendingPaymentPlayerIds: Array.isArray(t.pendingPaymentPlayerIds) ? t.pendingPaymentPlayerIds.filter(pid => !!pid) : []
-        }));
+        })).filter(t => t.status !== 'deleted' && !t.isDeleted); // Filter out soft-deleted items from cloud too
         setTournaments(cleaned);
         storage.setItem('tournaments', cleaned);
       }
-      if (cloudData.matchVideos) {
+      if (cloudData.matchVideos && !pendingSyncRef.current.includes('matchVideos')) {
         setMatchVideos(cloudData.matchVideos);
         storage.setItem('matchVideos', cloudData.matchVideos);
       }
-      if (cloudData.matches) {
+      if (cloudData.matches && !pendingSyncRef.current.includes('matches')) {
         setMatches(cloudData.matches);
         storage.setItem('matches', cloudData.matches);
       }
-      if (cloudData.matchmaking) {
+      if (cloudData.matchmaking && !pendingSyncRef.current.includes('matchmaking')) {
         setMatchmaking(cloudData.matchmaking);
         storage.setItem('matchmaking', cloudData.matchmaking);
       }
@@ -757,6 +776,17 @@ export default function App() {
       }
       
       const result = await response.json();
+      
+      // Clear pending keys ONCE cloud confirms success
+      if (updates && typeof updates === 'object' && !Array.isArray(updates)) {
+        const keys = Object.keys(updates).filter(k => k !== 'atomicKeys');
+        setPendingSync(prev => {
+          const next = (prev || []).filter(k => !keys.includes(k));
+          storage.setItem('pendingSync', next);
+          pendingSyncRef.current = next;
+          return next;
+        });
+      }
 
       // CRITICAL: Successfully reached the server, so we ARE online.
       setIsCloudOnline(true);
@@ -858,6 +888,16 @@ export default function App() {
       if (!hasSyncable) return;
 
       if (isUsingCloudRef.current) {
+        // [Sync Guard] Add modified keys to pendingSync immediately to prevent overwrite by background pull
+        const keysToGuard = Object.keys(syncUpdates);
+        setPendingSync(prev => {
+          const next = [...(prev || [])];
+          keysToGuard.forEach(k => { if (!next.includes(k)) next.push(k); });
+          storage.setItem('pendingSync', next);
+          pendingSyncRef.current = next;
+          return next;
+        });
+
         // Collect updates into the pending ref
         Object.assign(pendingSyncUpdatesRef.current, syncUpdates);
         if (isAtomic) isPendingAtomicRef.current = true;
@@ -910,13 +950,16 @@ export default function App() {
 
     syncAndSaveData({ currentUser: user });
     
-    const isNew = !playersRef.current.some(p => String(p.id).toLowerCase() === String(user.id).toLowerCase());
-    if (user && isNew) {
-      const updated = [user, ...playersRef.current];
-      setPlayers(updated);
-      await storage.setItem('players', updated);
-      await pushStateToCloud({ players: updated });
-    }
+    setPlayers(prev => {
+      const isNew = !(prev || []).some(p => String(p.id).toLowerCase() === String(user.id).toLowerCase());
+      if (user && isNew) {
+        const updated = [user, ...(prev || [])];
+        storage.setItem('players', updated);
+        pushStateToCloud({ players: updated });
+        return updated;
+      }
+      return prev || [];
+    });
     
     await hydrateFromStorage();
     await loadData(true, true);
@@ -949,27 +992,33 @@ export default function App() {
   }, []);
 
   const handleRegisterUser = useCallback(async (newPlayer) => {
-    const updatedPlayers = [newPlayer, ...playersRef.current];
-    setPlayers(updatedPlayers);
-    await storage.setItem('players', updatedPlayers);
-    const success = await pushStateToCloud({ players: updatedPlayers }, true);
-    
-    logger.logAction('USER_SIGNUP', { 
-      id: newPlayer.id, 
-      name: newPlayer.name, 
-      role: newPlayer.role,
-      cloudSync: success ? 'SUCCESS' : 'PENDING'
-    });
-    
-    if (!success) {
-      setPendingSync(prev => {
-        const next = [...prev];
-        if (!next.includes('players')) next.push('players');
-        storage.setItem('pendingSync', next);
-        return next;
+    return new Promise((resolve, reject) => {
+      setPlayers(prev => {
+        const updatedPlayers = [newPlayer, ...(prev || [])];
+        storage.setItem('players', updatedPlayers);
+        pushStateToCloud({ players: updatedPlayers }, true)
+          .then(success => {
+            logger.logAction('USER_SIGNUP', { 
+              id: newPlayer.id, 
+              name: newPlayer.name, 
+              role: newPlayer.role,
+              cloudSync: success ? 'SUCCESS' : 'PENDING'
+            });
+            
+            if (!success) {
+              setPendingSync(prevP => {
+                const next = [...(prevP || [])];
+                if (!next.includes('players')) next.push('players');
+                storage.setItem('pendingSync', next);
+                return next;
+              });
+            }
+            resolve(success);
+          })
+          .catch(reject);
+        return updatedPlayers;
       });
-    }
-    return success;
+    });
   }, [pushStateToCloud]);
 
   const handleSaveTournament = useCallback((t) => {
@@ -982,75 +1031,68 @@ export default function App() {
   }, [syncAndSaveData]);
 
   const handleSaveVideo = useCallback((v) => {
-    const isNew = !matchVideos.find(item => item.id === v.id);
-    const updatedVideos = matchVideos.map(item => item.id === v.id ? v : item);
-    if (isNew) updatedVideos.unshift(v);
-    
-    let updatedPlayers = playersRef.current;
-    const recipientIds = new Set();
-
-    if (isNew) {
-      const match = matches.find(m => m.id === v.matchId);
-      const tournament = tournaments.find(t => t.id === v.tournamentId);
+    setMatchVideos(prevVideos => {
+      const isNew = !(prevVideos || []).find(item => item.id === v.id);
+      const updatedVideos = (prevVideos || []).map(item => item.id === v.id ? v : item);
+      if (isNew) updatedVideos.unshift(v);
       
-      [
-        ...(match?.player1Id ? [match.player1Id] : []),
-        ...(match?.player2Id ? [match.player2Id] : []),
-        ...(tournament?.assignedCoachId ? [tournament.assignedCoachId] : [])
-      ].forEach(id => recipientIds.add(id));
+      setPlayers(prevPlayers => {
+        let updatedPlayers = prevPlayers || [];
+        const recipientIds = new Set();
 
-      updatedPlayers = updatedPlayers.map(p => {
-        if (recipientIds.has(p.id)) {
-            const notif = {
-                id: `notif-${Date.now()}-${p.id}`,
-                title: 'New Video Uploaded',
-                message: `Recording for match ${v.matchId} is now available.`,
-                date: new Date().toISOString(),
-                read: false,
-                type: 'video',
-                tournamentId: v.tournamentId
-            };
-            return { ...p, notifications: [notif, ...(p.notifications || [])] };
-        }
-        return p;
-      });
-    }
+        if (isNew) {
+          const match = (matchesRef.current || []).find(m => m.id === v.matchId);
+          const tournament = (tournamentsRef.current || []).find(t => t.id === v.tournamentId);
+          
+          [
+            ...(match?.player1Id ? [match.player1Id] : []),
+            ...(match?.player2Id ? [match.player2Id] : []),
+            ...(tournament?.assignedCoachId ? [tournament.assignedCoachId] : [])
+          ].forEach(id => recipientIds.add(id));
 
-    setMatchVideos(updatedVideos);
-    setPlayers(updatedPlayers);
-
-    const updates = { matchVideos: updatedVideos, players: updatedPlayers };
-
-    if (isNew && currentUserRef.current && recipientIds.has(currentUserRef.current.id)) {
-      const updatedUser = updatedPlayers.find(p => p.id === currentUserRef.current.id);
-      setCurrentUser(updatedUser);
-      updates.currentUser = updatedUser;
-    }
-
-    syncAndSaveData(updates);
-
-    if (isNew) {
-      setTimeout(() => {
-        setMatchVideos(prev => {
-          const final = prev.map(item => {
-            if (item.id === v.id) {
-              return { 
-                ...item, 
-                status: 'ready',
-                videoUrl: config.sanitizeUrl(item.videoUrl),
-                previewUrl: config.sanitizeUrl(item.previewUrl),
-                watermarkedUrl: config.sanitizeUrl(item.watermarkedUrl)
-              };
+          updatedPlayers = updatedPlayers.map(p => {
+            if (recipientIds.has(p.id)) {
+                const notif = {
+                    id: `notif-${Date.now()}-${p.id}`,
+                    title: 'New Video Uploaded',
+                    message: `Recording for match ${v.matchId} is now available.`,
+                    date: new Date().toISOString(),
+                    read: false,
+                    type: 'video',
+                    tournamentId: v.tournamentId
+                };
+                return { ...p, notifications: [notif, ...(p.notifications || [])] };
             }
-            return item;
+            return p;
           });
-          pushStateToCloud({ matchVideos: final });
-          storage.setItem('matchVideos', final);
-          return final;
-        });
-      }, 5000);
-    }
-  }, [matchVideos, matches, tournaments, pushStateToCloud, syncAndSaveData]);
+        }
+
+        const updates = { matchVideos: updatedVideos, players: updatedPlayers };
+        
+        if (isNew && currentUserRef.current && recipientIds.has(currentUserRef.current.id)) {
+          const updatedUser = updatedPlayers.find(p => p.id === currentUserRef.current.id);
+          if (updatedUser) {
+            setCurrentUser(updatedUser);
+            currentUserRef.current = updatedUser;
+            updates.currentUser = updatedUser;
+          }
+        }
+
+        syncAndSaveData(updates);
+        return updatedPlayers;
+      });
+
+      return updatedVideos;
+    });
+
+    setTimeout(() => {
+      setMatchVideos(prev => {
+        const final = (prev || []).map(item => item.id === v.id ? { ...item, status: 'ready' } : item);
+        syncAndSaveData({ matchVideos: final });
+        return final;
+      });
+    }, 5000);
+  }, [syncAndSaveData]);
 
   const handleSyncUpdate = useCallback(async (updates) => {
     const currentU = currentUserRef.current;
@@ -1121,47 +1163,47 @@ export default function App() {
   }, [syncAndSaveData]);
 
   const handleUpdateMatchmaking = useCallback((newMatchmaking) => {
-    setMatchmaking(newMatchmaking);
-    syncAndSaveData({ matchmaking: newMatchmaking });
+    setMatchmaking(prev => {
+      syncAndSaveData({ matchmaking: newMatchmaking });
+      return newMatchmaking;
+    });
   }, [syncAndSaveData]);
 
   const handleSendUserNotification = useCallback((targetUserId, notification) => {
-    const currentP = playersRef.current || players;
-    const updatedPlayers = currentP.map(p => {
-      if (String(p.id).toLowerCase() === String(targetUserId).toLowerCase()) {
-        return {
-          ...p,
-          notifications: [
-            {
-              id: `notif-${Date.now()}`,
-              read: false,
-              date: new Date().toISOString(),
-              ...notification
-            },
-            ...(p.notifications || [])
-          ]
-        };
-      }
-      return p;
-    });
-    
-    logger.logAction('NOTIFICATION_SENT', {
-      targetUserId,
-      type: notification.type,
-      title: notification.title,
-      timestamp: new Date().toISOString()
-    });
+    setPlayers(prevPlayers => {
+      const currentP = prevPlayers || [];
+      const updatedPlayers = currentP.map(p => {
+        if (String(p.id).toLowerCase() === String(targetUserId).toLowerCase()) {
+          return {
+            ...p,
+            notifications: [
+              {
+                id: `notif-${Date.now()}`,
+                read: false,
+                date: new Date().toISOString(),
+                ...notification
+              },
+              ...(p.notifications || [])
+            ]
+          };
+        }
+        return p;
+      });
 
-    const isMe = currentUserRef.current && String(targetUserId).toLowerCase() === String(currentUserRef.current.id).toLowerCase();
-    if (isMe) {
-      const updatedUser = updatedPlayers.find(p => String(p.id).toLowerCase() === String(targetUserId).toLowerCase());
-      setCurrentUser(updatedUser);
-      handleSyncUpdate({ currentUser: updatedUser, players: updatedPlayers });
-    } else {
-      setPlayers(updatedPlayers);
-      handleSyncUpdate({ players: updatedPlayers });
-    }
-  }, [handleSyncUpdate]);
+      const isMe = currentUserRef.current && String(targetUserId).toLowerCase() === String(currentUserRef.current.id).toLowerCase();
+      const targetUser = updatedPlayers.find(p => String(p.id).toLowerCase() === String(targetUserId).toLowerCase());
+
+      if (isMe && targetUser) {
+        setCurrentUser(targetUser);
+        currentUserRef.current = targetUser;
+        syncAndSaveData({ currentUser: targetUser, players: updatedPlayers });
+      } else {
+        syncAndSaveData({ players: updatedPlayers });
+      }
+      
+      return updatedPlayers;
+    });
+  }, [syncAndSaveData]);
 
   const handleSaveTicket = useCallback((ticket) => {
     setSupportTickets(prev => {
@@ -1173,10 +1215,13 @@ export default function App() {
   }, [syncAndSaveData]);
 
   const handleConfirmCoachRequest = useCallback((t) => {
-    const updated = tournaments.map(item => item.id === t.id ? { ...item, coachStatus: 'Coach Confirmed' } : item);
-    setTournaments(updated);
-    syncAndSaveData({ tournaments: updated });
-  }, [syncAndSaveData, tournaments]);
+    if (!currentUserRef.current) return;
+    setTournaments(prev => {
+      const updated = (prev || []).map(item => item.id === t.id ? { ...item, assignedCoachId: currentUserRef.current.id, coachStatus: 'Coach Confirmed' } : item);
+      syncAndSaveData({ tournaments: updated });
+      return updated;
+    });
+  }, [syncAndSaveData]);
 
   const handleUploadLogs = useCallback(async () => {
     setIsUploadingLogs(true);
@@ -1210,11 +1255,17 @@ export default function App() {
     onLogin: handleLogin,
     onLogout: handleLogout,
     onResetPassword: async (userId, newPassword) => {
-      const updatedPlayers = playersRef.current.map(p => p.id === userId ? { ...p, password: newPassword } : p);
-      setPlayers(updatedPlayers);
-      await storage.setItem('players', updatedPlayers);
-      return await pushStateToCloud({ players: updatedPlayers }, true);
-    },
+       return new Promise((resolve, reject) => {
+         setPlayers(prev => {
+           const updatedPlayers = (prev || []).map(p => p.id === userId ? { ...p, password: newPassword } : p);
+           storage.setItem('players', updatedPlayers);
+           pushStateToCloud({ players: updatedPlayers }, true)
+             .then(resolve)
+             .catch(reject);
+           return updatedPlayers;
+         });
+       });
+     },
     sendUserNotification: handleSendUserNotification,
     loadData: loadData,
     onManualSync: loadData,
@@ -1249,16 +1300,40 @@ export default function App() {
     onSaveTournament: handleSaveTournament,
     onSaveVideo: handleSaveVideo,
     onUpdateUser: (u) => { 
-       const updatedPlayers = playersRef.current.map(p => String(p.id).toLowerCase() === String(u.id).toLowerCase() ? u : p);
-       handleSyncUpdate({ currentUser: u, players: updatedPlayers });
+       setPlayers(prev => {
+         const updatedPlayers = (prev || []).map(p => String(p.id).toLowerCase() === String(u.id).toLowerCase() ? u : p);
+         if (currentUserRef.current?.id === u.id) {
+           setCurrentUser(u);
+           currentUserRef.current = u;
+           syncAndSaveData({ currentUser: u, players: updatedPlayers });
+         } else {
+           syncAndSaveData({ players: updatedPlayers });
+         }
+         return updatedPlayers;
+       });
     },
     onLogTrace: handleLogTrace,
     onVerifyAccount: (type) => {
-      const currentU = currentUserRef.current;
-      if (!currentU) return;
-      const updatedUser = { ...currentU, [type === 'email' ? 'isEmailVerified' : 'isPhoneVerified']: true };
-      const updatedPlayers = playersRef.current.map(p => String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p);
-      handleSyncUpdate({ currentUser: updatedUser, players: updatedPlayers });
+        // Latch the local state to prevent flip-flopping during cloud sync
+        setVerificationLatch(prev => ({ ...prev, [type]: true }));
+        
+        setPlayers(prev => {
+          const currentU = currentUserRef.current;
+          if (!currentU) return prev || [];
+          const updatedUser = { ...currentU, [type === 'email' ? 'isEmailVerified' : 'isPhoneVerified']: true };
+          const updatedPlayers = (prev || []).map(p => String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p);
+          
+          setCurrentUser(updatedUser);
+          currentUserRef.current = updatedUser;
+          syncAndSaveData({ currentUser: updatedUser, players: updatedPlayers });
+          
+          return updatedPlayers;
+        });
+
+        // Release latch after 5 minutes (more than enough for cloud sync to settle)
+        setTimeout(() => {
+          setVerificationLatch(prev => ({ ...prev, [type]: false }));
+        }, 300000);
     },
     onBatchUpdate: (updates) => handleSyncUpdate(updates),
     isCloudOnline,
@@ -1266,45 +1341,49 @@ export default function App() {
     lastSyncTime,
     isUsingCloud,
     onTopUp: (amount) => {
-      if (!currentUserRef.current) return;
-      const updatedUser = {
-        ...currentUserRef.current,
-        credits: (currentUserRef.current.credits || 0) + amount,
-        walletHistory: [{ id: Date.now().toString(), type: 'credit', amount, description: 'Wallet Top Up', date: new Date().toISOString() }, ...(currentUserRef.current.walletHistory || [])]
-      };
-      const updatedPlayers = playersRef.current.map(p => String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p);
-      setPlayers(updatedPlayers);
-      setCurrentUser(updatedUser);
-      currentUserRef.current = updatedUser;
-      syncAndSaveData({ players: updatedPlayers, currentUser: updatedUser });
-      Alert.alert("Success", `₹${amount} added!`);
-    },
+       setPlayers(prev => {
+         if (!currentUserRef.current) return prev || [];
+         const uid = currentUserRef.current.id;
+         const user = (prev || []).find(p => p.id === uid);
+         if (!user) return prev || [];
+
+         const updatedUser = {
+           ...user,
+           credits: (user.credits || 0) + amount,
+           walletHistory: [
+             { id: Date.now().toString(), type: 'credit', amount, description: 'Wallet Top Up', date: new Date().toISOString() }, 
+             ...(user.walletHistory || [])
+           ]
+         };
+
+         const updatedPlayers = (prev || []).map(p => String(p.id).toLowerCase() === String(uid).toLowerCase() ? updatedUser : p);
+         
+         setCurrentUser(updatedUser);
+         currentUserRef.current = updatedUser;
+         syncAndSaveData({ players: updatedPlayers, currentUser: updatedUser });
+         
+         Alert.alert("Success", `₹${amount} added!`);
+         return updatedPlayers;
+       });
+     },
     onReplyTicket: (id, text, image, replyToMsg) => {
-      if (!Array.isArray(supportTickets)) return;
-      const msgText = typeof text === 'string' ? text : (text?.text || String(text || ''));
-      const msg = { senderId: currentUserRef.current?.id || 'admin', text: msgText, timestamp: new Date().toISOString() };
-      if (image) msg.image = image;
-      if (replyToMsg) msg.replyTo = { text: replyToMsg.text || '', senderId: replyToMsg.senderId || '' };
-      const updated = supportTickets.map(t => t && t.id === id ? { ...t, messages: [...(t.messages || []), msg] } : t);
-      setSupportTickets(updated);
-      syncAndSaveData({ supportTickets: updated });
-    },
+       setSupportTickets(prev => {
+         const msgText = typeof text === 'string' ? text : (text?.text || String(text || ''));
+         const msg = { senderId: currentUserRef.current?.id || 'admin', text: msgText, timestamp: new Date().toISOString() };
+         if (image) msg.image = image;
+         if (replyToMsg) msg.replyTo = { text: replyToMsg.text || '', senderId: replyToMsg.senderId || '' };
+         
+         const updated = (prev || []).map(t => t && t.id === id ? { ...t, messages: [...(t.messages || []), msg] } : t);
+         syncAndSaveData({ supportTickets: updated });
+         return updated;
+       });
+     },
     onUpdateTicketStatus: (id, status) => {
-      const updated = supportTickets.map(t => t.id === id ? { ...t, status } : t);
-      setSupportTickets(updated);
-      syncAndSaveData({ supportTickets: updated });
-      if (currentUserRef.current) {
-          const ticket = updated.find(t => t.id === id);
-          if (ticket && ticket.userId === currentUserRef.current.id) {
-            const notif = { id: `notif-${Date.now()}`, title: 'Ticket Status Updated', message: `Ticket "${ticket.title}" is ${status}.`, date: new Date().toISOString(), read: false, type: 'support' };
-            const updatedUser = { ...currentUserRef.current, notifications: [notif, ...(currentUserRef.current.notifications || [])] };
-            setCurrentUser(updatedUser);
-            currentUserRef.current = updatedUser;
-            const updatedPlayers = playersRef.current.map(p => String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p);
-            setPlayers(updatedPlayers);
-            syncAndSaveData({ players: updatedPlayers, currentUser: updatedUser });
-          }
-      }
+      setSupportTickets(prev => {
+        const updated = (prev || []).map(t => t && t.id === id ? { ...t, status } : t);
+        syncAndSaveData({ supportTickets: updated });
+        return updated;
+      });
     },
     onSaveTicket: handleSaveTicket,
     onSaveEvaluation: (e) => {
@@ -1341,14 +1420,18 @@ export default function App() {
       syncAndSaveData({ tournaments: updated });
     },
     onStartTournament: (tid) => {
-      const updated = tournaments.map(t => t.id === tid ? { ...t, tournamentStarted: true } : t);
-      setTournaments(updated);
-      syncAndSaveData({ tournaments: updated });
+      setTournaments(prev => {
+        const updated = (prev || []).map(t => t.id === tid ? { ...t, tournamentStarted: true, status: 'ongoing' } : t);
+        syncAndSaveData({ tournaments: updated });
+        return updated;
+      });
     },
     onEndTournament: (tid) => {
-      const updated = tournaments.map(t => t.id === tid ? { ...t, status: 'completed', tournamentConcluded: true } : t);
-      setTournaments(updated);
-      syncAndSaveData({ tournaments: updated });
+      setTournaments(prev => {
+        const updated = (prev || []).map(t => t.id === tid ? { ...t, status: 'completed', tournamentConcluded: true } : t);
+        syncAndSaveData({ tournaments: updated });
+        return updated;
+      });
     },
     onLogFailedOtp: (tid, cid, otp) => {
       setTournaments(prev => {
@@ -1378,6 +1461,21 @@ export default function App() {
         return updated;
       });
     },
+    onDeleteTournament: (tid) => {
+      setTournaments(prev => {
+        const list = prev || [];
+        // Soft delete: Mark it as deleted so the server knows to remove it from DB
+        const softDeletedList = list.map(t => t.id === tid ? { ...t, status: 'deleted', isDeleted: true } : t);
+        
+        // Filter out for immediate local UI update
+        const updated = softDeletedList.filter(t => t.id !== tid);
+        
+        // PUSH the soft-deleted list to ensure server gets the deletion signal
+        syncAndSaveData({ tournaments: softDeletedList }, true);
+        
+        return updated;
+      });
+    },
     onUpdateVideoStatus: (vid, status) => {
       setMatchVideos(prev => {
         const updated = (prev || []).map(v => v && v.id === vid ? { ...v, adminStatus: status } : v);
@@ -1395,7 +1493,7 @@ export default function App() {
     onBulkPermanentDeleteVideos: (ids) => {
       setMatchVideos(prev => {
         const updated = (prev || []).filter(v => v && !ids.includes(v.id));
-        syncAndSaveData({ matchVideos: updated }, true); // Force overwrite for deletions
+        syncAndSaveData({ matchVideos: updated }, true); 
         return updated;
       });
     },
@@ -1407,17 +1505,29 @@ export default function App() {
       });
     },
     onApproveDeleteVideo: (id) => {
-      const video = matchVideos.find(v => v.id === id);
-      if (!video) return;
-      const updatedVideos = matchVideos.map(v => v.id === id ? { ...v, adminStatus: 'Removed' } : v);
-      const updatedPlayers = players.map(player => {
-        let credits = player.credits || 0;
-        let pVideos = player.purchasedVideos || [];
-        if (pVideos.includes(id)) { credits += (video.price || 0); pVideos = pVideos.filter(vid => vid !== id); }
-        return { ...player, credits, purchasedVideos: pVideos };
+      setMatchVideos(prevVideos => {
+        const video = prevVideos.find(v => v.id === id);
+        if (!video) return prevVideos;
+
+        const updatedVideos = prevVideos.map(v => v.id === id ? { ...v, adminStatus: 'Removed' } : v);
+        
+        setPlayers(prevPlayers => {
+          const updatedPlayers = (prevPlayers || []).map(player => {
+            let credits = player.credits || 0;
+            let pVideos = player.purchasedVideos || [];
+            if (pVideos.includes(id)) { 
+              credits += (video.price || 0); 
+              pVideos = pVideos.filter(vid => vid !== id); 
+            }
+            return { ...player, credits, purchasedVideos: pVideos };
+          });
+          
+          syncAndSaveData({ matchVideos: updatedVideos, players: updatedPlayers });
+          return updatedPlayers;
+        });
+
+        return updatedVideos;
       });
-      setMatchVideos(updatedVideos); setPlayers(updatedPlayers);
-      syncAndSaveData({ matchVideos: updatedVideos, players: updatedPlayers });
     },
     onRejectDeleteVideo: (id) => {
       setMatchVideos(prev => {
@@ -1441,11 +1551,11 @@ export default function App() {
       });
     },
     onRequestDeletion: (id, reason) => {
-      if (!Array.isArray(matchVideos)) return;
-      const updated = matchVideos.map(v => v && v.id === id ? { ...v, adminStatus: 'Deletion Requested', deletionReason: reason } : v);
-      setMatchVideos(updated);
-      syncAndSaveData({ matchVideos: updated });
-      return updated;
+      setMatchVideos(prev => {
+        const updated = (prev || []).map(v => v && v.id === id ? { ...v, adminStatus: 'Deletion Requested', deletionReason: reason } : v);
+        syncAndSaveData({ matchVideos: updated });
+        return updated;
+      });
     },
     onUnlockVideo: (vid, price, method) => {
       if (!currentUserRef.current) return;
