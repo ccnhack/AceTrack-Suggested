@@ -10,16 +10,17 @@ import config from '../config';
 
 const AdminDiagnosticsPanel = ({ 
   players, 
+  playerMap,
   socketRef, 
   isCloudOnline, 
   isUsingCloud, 
-  onManualSync 
+  onManualSync,
+  onlineDevices = {}
 }) => {
   const [diagUserSearch, setDiagUserSearch] = useState('');
   const [selectedDiagUser, setSelectedDiagUser] = useState(null);
   const [userDiagFiles, setUserDiagFiles] = useState([]);
   const [isFetchingDiags, setIsFetchingDiags] = useState(false);
-  const [onlineDevices, setOnlineDevices] = useState({});
 
   const targetCloudUrl = 'https://acetrack-suggested.onrender.com';
   const activeApiUrl = isUsingCloud ? targetCloudUrl : config.API_BASE_URL;
@@ -47,12 +48,6 @@ const AdminDiagnosticsPanel = ({
     // PING DEVICE (Local socket logic)
     if (socketRef && socketRef.current) {
         socketRef.current.emit('admin_ping_device', { targetUserId: p.id });
-        // Coalesce status in this component
-        setOnlineDevices(prev => {
-            const next = { ...prev };
-            delete next[p.id];
-            return next;
-        });
     }
 
     const url = `${activeApiUrl}/api/diagnostics`;
@@ -94,6 +89,7 @@ const AdminDiagnosticsPanel = ({
       onPress={() => handleFetchFiles(item)}
       style={[styles.miniUserCard, selectedDiagUser?.id === item.id && styles.miniUserCardActive]}
     >
+      <View style={[styles.statusDot, onlineDevices[item.id] && styles.statusDotOnline]} />
       <Image source={getSafeAvatar(item.avatar, item.name)} style={styles.miniAvatar} />
       <View style={{ alignItems: 'center' }}>
         <Text style={[styles.miniUserName, selectedDiagUser?.id === item.id && styles.miniUserNameActive]} numberOfLines={1}>
@@ -141,6 +137,25 @@ const AdminDiagnosticsPanel = ({
 
       {selectedDiagUser && (
           <View style={styles.detailsPanel}>
+            {/* Active Device Status Section */}
+            {onlineDevices[selectedDiagUser.id] && (
+              <View style={styles.deviceCard}>
+                <View style={styles.deviceInfo}>
+                   <View style={styles.pulseContainer}>
+                      <View style={styles.pulse} />
+                      <Ionicons name="wifi" size={20} color="#16A34A" />
+                   </View>
+                   <View>
+                      <Text style={styles.deviceName}>Active Session Detected</Text>
+                      <Text style={styles.deviceId}>System responding to pings</Text>
+                   </View>
+                </View>
+                <View style={[styles.onlineBadge, { backgroundColor: '#DCFCE7' }]}>
+                   <Text style={[styles.onlineBadgeText, { color: '#16A34A' }]}>CONNECTED</Text>
+                </View>
+              </View>
+            )}
+
              <Text style={styles.panelTitle}>Diagnostic Reports for {selectedDiagUser.name}</Text>
              {isFetchingDiags ? (
                  <ActivityIndicator size="small" color="#6366F1" style={{ marginVertical: 20 }} />
@@ -287,6 +302,74 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontStyle: 'italic',
     padding: 20,
+  },
+  // Connection Status Styles
+  statusDot: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#CBD5E1',
+    borderWidth: 2,
+    borderColor: '#F8FAFC',
+    zIndex: 1,
+  },
+  statusDotOnline: {
+    backgroundColor: '#22C55E',
+  },
+  deviceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    marginBottom: 20,
+  },
+  deviceInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  pulseContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F0FDF4',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pulse: {
+    position: 'absolute',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#22C55E',
+    opacity: 0.2,
+  },
+  deviceName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  deviceId: {
+    fontSize: 9,
+    color: '#94A3B8',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  onlineBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  onlineBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
   }
 });
 

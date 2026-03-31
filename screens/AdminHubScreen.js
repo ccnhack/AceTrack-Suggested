@@ -477,9 +477,7 @@ const AdminHubScreen = ({
 
       <View style={[styles.contentHost, { flex: 1 }]}>
         {subTab === 'individuals' && (
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-            <PlayerDashboardView players={filteredIndividuals} tournaments={tournaments} title="Individuals" />
-          </ScrollView>
+          <PlayerDashboardView players={filteredIndividuals} tournaments={tournaments} title="Individuals" />
         )}
 
         {subTab === 'coaches' && (
@@ -519,11 +517,11 @@ const AdminHubScreen = ({
                     </View>
                     <View style={styles.flex}>
                       <Text style={styles.cardTitle}>{a.name}</Text>
-                      <div style={[styles.tierBadge, { backgroundColor: stats.tier === 'Gold' ? '#FEF9C3' : stats.tier === 'Silver' ? '#F1F5F9' : '#FFEDD5' }]}>
+                      <View style={[styles.tierBadge, { backgroundColor: stats.tier === 'Gold' ? '#FEF9C3' : stats.tier === 'Silver' ? '#F1F5F9' : '#FFEDD5' }]}>
                         <Text style={[styles.tierText, { color: stats.tier === 'Gold' ? '#A16207' : stats.tier === 'Silver' ? '#475569' : '#C2410C' }]}>
                           {stats.tier} Tier
                         </Text>
-                      </div>
+                      </View>
                     </View>
                     <View style={styles.statsInline}>
                       <View style={styles.inlineStat}>
@@ -804,15 +802,15 @@ const AdminHubScreen = ({
         )}
 
         {subTab === 'diagnostics' && (
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-            <AdminDiagnosticsPanel 
-              players={players} 
-              socketRef={socketRef} 
-              isCloudOnline={isCloudOnline} 
-              isUsingCloud={isUsingCloud} 
-              onManualSync={onManualSync} 
-            />
-          </ScrollView>
+          <AdminDiagnosticsPanel 
+            players={players} 
+            playerMap={playerMap}
+            socketRef={socketRef} 
+            isCloudOnline={isCloudOnline} 
+            isUsingCloud={isUsingCloud} 
+            onManualSync={onManualSync} 
+            onlineDevices={onlineDevices}
+          />
         )}
       </View>
 
