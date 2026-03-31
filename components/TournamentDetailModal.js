@@ -81,7 +81,7 @@ const TournamentDetailModal = ({
     return false;
   })();
 
-  const creator = players.find(p => p.id === tournament.creatorId);
+  const creator = (players || []).find(p => p.id === tournament.creatorId);
 
   const handleRegister = () => {
     // LOCK: Prevent registration if not verified

@@ -4,21 +4,26 @@ import {
   SafeAreaView, TouchableOpacity
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { getSafeAvatar } from '../utils/imageUtils';
 
 const RankingScreen = ({ user, role, players, tournaments }) => {
-  let rankingPlayers = [...players].filter(p => p.id !== 'admin_sys' && p.role !== 'academy' && p.role !== 'coach');
+  let rankingPlayers = [...(players || [])].filter(p => p && p.id !== 'admin_sys' && p.role !== 'academy' && p.role !== 'coach');
   
   if (role === 'academy' && user) {
     const myParticipantIds = new Set(
-      tournaments
+      (tournaments || [])
         .filter(t => t.creatorId === user.id)
-        .flatMap(t => t.registeredPlayerIds)
+        .flatMap(t => t.registeredPlayerIds || [])
     );
-    rankingPlayers = players.filter(p => myParticipantIds.has(p.id) && p.role !== 'coach');
+    rankingPlayers = (players || []).filter(p => p && myParticipantIds.has(p.id) && p.role !== 'coach');
   }
 
   // Sort by trueSkillRating or rating descending
-  rankingPlayers.sort((a, b) => (b.trueSkillRating || b.rating) - (a.trueSkillRating || a.rating));
+  rankingPlayers.sort((a, b) => {
+    const ratingA = (a.trueSkillRating || a.rating || 0);
+    const ratingB = (b.trueSkillRating || b.rating || 0);
+    return ratingB - ratingA;
+  });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -51,7 +56,7 @@ const RankingScreen = ({ user, role, players, tournaments }) => {
                   <Text style={styles.rankNumber}>{idx + 1}</Text>
                   
                   <Image 
-                    source={{ uri: p.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random` }} 
+                    source={getSafeAvatar(p.avatar, p.name)}
                     style={styles.avatar} 
                   />
                   

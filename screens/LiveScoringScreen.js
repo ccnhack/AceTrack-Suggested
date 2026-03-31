@@ -117,7 +117,7 @@ export default function LiveScoringScreen({ route, onSaveEvaluation, navigation 
         {/* Team 1 Area */}
         <View style={styles.teamArea}>
           <View style={styles.playersList}>
-             {isDoubles ? team1.map((p, idx) => renderPlayer(typeof p === 'string' ? p : p.name, p)) 
+             {isDoubles ? (team1 || []).map((p, idx) => renderPlayer(typeof p === 'string' ? p : p.name, p)) 
                        : renderPlayer(player1 || 'Player 1', player1)}
           </View>
           <TouchableOpacity style={styles.scoreContainer} onPress={() => addPoint(1)}>
@@ -134,7 +134,7 @@ export default function LiveScoringScreen({ route, onSaveEvaluation, navigation 
         {/* Team 2 Area */}
         <View style={styles.teamArea}>
           <View style={styles.playersList}>
-             {isDoubles ? team2.map((p, idx) => renderPlayer(typeof p === 'string' ? p : p.name, p)) 
+             {isDoubles ? (team2 || []).map((p, idx) => renderPlayer(typeof p === 'string' ? p : p.name, p)) 
                        : renderPlayer(player2 || 'Player 2', player2)}
           </View>
           <TouchableOpacity style={styles.scoreContainer} onPress={() => addPoint(2)}>
@@ -185,7 +185,7 @@ export default function LiveScoringScreen({ route, onSaveEvaluation, navigation 
             </View>
 
             <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-              {sportQuestions.map(q => (
+              {(sportQuestions || []).map(q => (
                 <View key={q} style={styles.ratingGroup}>
                   <Text style={styles.ratingLabel}>{q}</Text>
                   <View style={styles.starRow}>

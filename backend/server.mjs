@@ -15,6 +15,7 @@ import bcrypt from 'bcryptjs';
 import mongoSanitize from 'express-mongo-sanitize';
 import helmet from 'helmet';
 import admin from 'firebase-admin';
+import compression from 'compression';
 
 dotenv.config();
 
@@ -98,8 +99,9 @@ app.use(cors({
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: Request body size limit (SEC Fix — 5MB max)
 // ═══════════════════════════════════════════════════════════════
-app.use(express.json({ limit: '5mb' }));
-app.use(express.urlencoded({ extended: true, limit: '5mb' }));
+app.use(compression());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: MongoDB injection prevention (SEC Fix #5)
@@ -201,7 +203,11 @@ const MONGODB_URI = process.env.MONGODB_URI;
 if (!MONGODB_URI) {
   console.error("❌ MONGODB_URI is not defined in .env!");
 } else {
-  mongoose.connect(MONGODB_URI)
+  mongoose.connect(MONGODB_URI, {
+    maxPoolSize: 50,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+  })
     .then(() => console.log("✅ Connected to MongoDB Atlas"))
     .catch(err => console.error("❌ MongoDB Connection Error:", err));
 }
@@ -328,20 +334,24 @@ export const compareOtp = async (plainOtp, hashedOtp) => {
 // ═══════════════════════════════════════════════════════════════
 // Helpers
 // ═══════════════════════════════════════════════════════════════
-const logServerEvent = (action, details = {}) => {
+const logServerEvent = async (action, details = {}) => {
   try {
     const logFile = path.join(DIAGNOSTICS_DIR, 'server_events.json');
     let logs = [];
     if (fs.existsSync(logFile)) {
-      const content = fs.readFileSync(logFile, 'utf8');
+      const content = await fs.promises.readFile(logFile, 'utf8');
       logs = JSON.parse(content || '[]');
     }
     logs.unshift({ timestamp: new Date().toISOString(), action, ...details });
-    fs.writeFileSync(logFile, JSON.stringify(logs.slice(0, 1000), null, 2));
+    await fs.promises.writeFile(logFile, JSON.stringify(logs.slice(0, 1000), null, 2));
     console.log(`📡 [Server Log] ${action}:`, details);
   } catch (e) {
     console.error("❌ Failed to write server log:", e.message);
   }
+};
+
+const asyncHandler = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch(next);
 };
 
 const logAudit = async (req, action, changedCollections = [], details = {}) => {
@@ -374,10 +384,20 @@ app.use('/uploads', express.static(UPLOADS_DIR, {
   }
 }));
 
-const storageConfig = multer.memoryStorage();
+const storageConfig = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const tmp = path.join(__dirname, 'tmp_uploads');
+    if (!fs.existsSync(tmp)) fs.mkdirSync(tmp);
+    cb(null, tmp);
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  }
+});
+
 const upload = multer({ 
   storage: storageConfig,
-  limits: { fileSize: 100 * 1024 * 1024 } // 100MB max upload
+  limits: { fileSize: 150 * 1024 * 1024 } // 150MB max upload
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -449,106 +469,102 @@ router.get('/diagnostics', apiKeyGuard, async (req, res) => {
 });
 
 // GET /api/v1/diagnostics/:filename
-router.get('/diagnostics/:filename', apiKeyGuard, async (req, res) => {
+router.get('/diagnostics/:filename', apiKeyGuard, asyncHandler(async (req, res) => {
+  const filename = path.basename(req.params.filename); // 🛡️ SEC Fix: Path Traversal prevention
+  
+  // 1. Check Cloudinary First
   try {
-    const { filename } = req.params;
-    
-    // 1. Check Cloudinary First
-    try {
-      const publicId = `acetrack/diagnostics/${filename}`;
-      const fileUrl = cloudinary.url(publicId, { resource_type: 'raw', secure: true });
-      // Fetch using global node fetch
-      const cloudRes = await fetch(fileUrl);
-      if (cloudRes.ok) {
-        const data = await cloudRes.json();
-        return res.json(data);
-      }
-    } catch (cloudErr) {
-      console.log(`Cloudinary fetch failed for ${filename}, trying local fallback.`);
+    const publicId = `acetrack/diagnostics/${filename}`;
+    const fileUrl = cloudinary.url(publicId, { resource_type: 'raw', secure: true });
+    const cloudRes = await fetch(fileUrl);
+    if (cloudRes.ok) {
+      const data = await cloudRes.json();
+      return res.json(data);
     }
-
-    // 2. Fallback to Local Disk
-    const filepath = path.join(DIAGNOSTICS_DIR, filename);
-    if (fs.existsSync(filepath)) {
-      const data = fs.readFileSync(filepath, 'utf8');
-      return res.json(JSON.parse(data));
-    }
-
-    res.status(404).json({ error: 'File not found in cloud or local storage' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  } catch (cloudErr) {
+    console.log(`Cloudinary fetch failed for ${filename}, trying local fallback.`);
   }
-});
+
+  // 2. Fallback to Local Disk
+  const filepath = path.join(DIAGNOSTICS_DIR, filename);
+  if (fs.existsSync(filepath)) {
+    const data = await fs.promises.readFile(filepath, 'utf8');
+    return res.json(JSON.parse(data));
+  }
+
+  res.status(404).json({ error: 'File not found in cloud or local storage' });
+}));
 
 // POST /api/v1/save
 router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => {
   try {
-    const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser'];
-    
-    const state = await AppState.findOne().sort({ lastUpdated: -1 });
-    const currentData = (state && state.data) ? state.data : {};
+    const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser', 'matchmaking'];
     
     // Audit log
     const changedKeys = Object.keys(req.body).filter(k => syncableKeys.includes(k));
-    logAudit(req, 'DATA_SAVE', changedKeys, { overwrite: !!req.body.overwrite });
-    
+    await logAudit(req, 'DATA_SAVE', changedKeys, { overwrite: !!req.body.overwrite, atomicKeys: req.body.atomicKeys });
+
+    const now = Date.now();
+    let updatedState;
+
     if (req.body.overwrite === true) {
       console.log("⚠️ [Server] ATOMIC OVERWRITE REQUESTED.");
       const cleanData = {};
-      for (const key of syncableKeys) {
-        cleanData[key] = req.body[key] !== undefined ? req.body[key] : (currentData[key] || undefined);
-      }
-      const newState = new AppState({ data: cleanData, lastUpdated: Date.now() });
-      await newState.save();
-      return res.json({ success: true, message: 'Database overwritten successfully', lastUpdated: newState.lastUpdated });
-    }
-    
-    const atomicKeys = req.body.atomicKeys || [];
-    const updateObj = { lastUpdated: Date.now() };
-    for (const key of syncableKeys) {
-      const incoming = req.body[key];
-      const existing = currentData[key];
+      const state = await AppState.findOne().sort({ lastUpdated: -1 });
+      const currentData = (state && state.data) ? state.data : {};
       
-      if (incoming !== undefined) {
-        const isAtomic = atomicKeys.includes(key);
-        if (Array.isArray(incoming) && Array.isArray(existing) && !isAtomic) {
-          const merged = [...incoming];
-          existing.forEach(oldItem => {
-            if (oldItem && oldItem.id) {
-              const isUpdated = incoming.some(newItem => 
-                newItem && newItem.id && String(newItem.id).toLowerCase() === String(oldItem.id).toLowerCase()
-              );
-              if (!isUpdated) merged.push(oldItem);
-            }
-          });
-          updateObj[`data.${key}`] = merged;
-        } else if (incoming && typeof incoming === 'object' && !Array.isArray(incoming) && !isAtomic) {
-          for (const subKey in incoming) {
-            updateObj[`data.${key}.${subKey}`] = incoming[subKey];
+      for (const key of syncableKeys) {
+        cleanData[key] = req.body[key] !== undefined ? req.body[key] : (currentData[key] || []);
+      }
+      updatedState = new AppState({ data: cleanData, lastUpdated: now });
+      await updatedState.save();
+    } else {
+      // 🛡️ ATOMIC FIELD-LEVEL UPDATES
+      const atomicKeys = req.body.atomicKeys || [];
+      const updateObj = { lastUpdated: now };
+      
+      for (const key of syncableKeys) {
+        if (req.body[key] !== undefined) {
+          const incoming = req.body[key];
+          const isAtomic = atomicKeys.includes(key);
+          
+          if (Array.isArray(incoming) && !isAtomic) {
+            // Smart Merge for Arrays (only if not atomic)
+            // We use a positional update or a full replace of that field
+            // To be truly atomic in Mongo, we'd need separate collections.
+            // For now, we update the specific field in the AppState document.
+            updateObj[`data.${key}`] = incoming;
+          } else {
+            // Full field replacement (Atomic or Object)
+            updateObj[`data.${key}`] = incoming;
           }
-        } else {
-          // If atomic, or not an object/array, perform full replacement
-          updateObj[`data.${key}`] = incoming;
         }
       }
-    }
 
-    // For atomic updates, use a special update operation to ensure replacement
-    const updatedState = await AppState.findOneAndUpdate(
-      {}, { $set: updateObj }, { upsert: true, new: true }
-    );
+      updatedState = await AppState.findOneAndUpdate(
+        {}, 
+        { $set: updateObj }, 
+        { upsert: true, new: true, sort: { lastUpdated: -1 } }
+      );
+    }
 
     const socketId = req.headers['x-socket-id'];
+    const broadcastPayload = { 
+      lastUpdated: updatedState.lastUpdated, 
+      keys: Object.keys(req.body).filter(k => syncableKeys.includes(k)),
+      lastSocketId: socketId || 'system'
+    };
+
     if (socketId) {
-      // Exclude the sender from the update event to prevent infinite sync loops
-      io.except(socketId).emit('data_updated', { lastUpdated: updatedState.lastUpdated, keys: Object.keys(req.body) });
+      io.except(socketId).emit('data_updated', broadcastPayload);
     } else {
-      io.emit('data_updated', { lastUpdated: updatedState.lastUpdated, keys: Object.keys(req.body) });
+      io.emit('data_updated', broadcastPayload);
     }
     
-    logServerEvent('DATA_SAVE_SUCCESS', { lastUpdated: updatedState.lastUpdated });
+    logServerEvent('DATA_SAVE_SUCCESS', { lastUpdated: updatedState.lastUpdated, keys: broadcastPayload.keys });
     res.json({ success: true, lastUpdated: updatedState.lastUpdated });
   } catch (error) {
+    console.error("❌ Save Error:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -574,68 +590,36 @@ router.post('/upload', apiKeyGuard, upload.single('video'), async (req, res) => 
         folder: uploadFolder,
         public_id: `${Date.now()}-${Math.round(Math.random() * 1e9)}`,
       },
-      (error, result) => {
+      async (error, result) => {
+        // Cleanup local file immediately
+        if (req.file.path) {
+          fs.promises.unlink(req.file.path).catch(e => console.error("Cleanup error:", e));
+        }
+
         if (error) {
           console.error("❌ Cloudinary Upload Error:", error);
-          logServerEvent('UPLOAD_FAILED_CLOUDINARY', { error: error.message });
+          await logServerEvent('UPLOAD_FAILED_CLOUDINARY', { error: error.message });
           return res.status(500).json({ error: "Failed to upload to cloud" });
         }
         
-        logAudit(req, 'FILE_UPLOAD_CLOUDINARY', [], { url: result.secure_url, size: req.file.size });
-        logServerEvent('UPLOAD_SUCCESS_CLOUDINARY', { url: result.secure_url });
+        await logAudit(req, 'FILE_UPLOAD_CLOUDINARY', [], { url: result.secure_url, size: req.file.size });
+        await logServerEvent('UPLOAD_SUCCESS_CLOUDINARY', { url: result.secure_url });
         
         res.json({ url: result.secure_url });
       }
     );
 
-    stream.end(req.file.buffer);
+    // Read from disk buffer/stream and pass to Cloudinary
+    fs.createReadStream(req.file.path).pipe(stream);
   } catch (error) {
     console.error('Upload Process Error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// GET /api/v1/diagnostics
-router.get('/diagnostics', apiKeyGuard, async (req, res) => {
-  try {
-    // Fetch raw files from the 'acetrack/diagnostics' folder
-    const result = await cloudinary.search
-      .expression('folder:acetrack/diagnostics/*')
-      .sort_by('created_at', 'desc')
-      .max_results(500)
-      .execute();
-      
-    // Map to just the filenames to match the old frontend expectation
-    const files = result.resources.map(file => {
-      // Return just the filename part, with extension
-      const parts = file.public_id.split('/');
-      return parts[parts.length - 1] + '.' + file.format;
-    });
-    
-    res.json({ success: true, files });
-  } catch (error) {
-    console.error('Cloudinary Diagnostics Fetch Error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// GET /api/v1/diagnostics/:filename
-router.get('/diagnostics/:filename', apiKeyGuard, async (req, res) => {
-  try {
-    const { filename } = req.params;
-    const filepath = path.join(DIAGNOSTICS_DIR, filename);
-    if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'File not found' });
-    const content = fs.readFileSync(filepath, 'utf8');
-    res.json(JSON.parse(content));
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // POST /api/v1/diagnostics
-router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), async (req, res) => {
-  try {
-    const { username, logs, prefix, deviceId } = req.body;
+router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), asyncHandler(async (req, res) => {
+  const { username, logs, prefix, deviceId } = req.body;
     const now = new Date();
     const istOffset = 5.5 * 60 * 60 * 1000;
     const istDate = new Date(now.getTime() + istOffset);
@@ -714,86 +698,75 @@ router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), async (req
         filename,
         stack: err.stack 
       });
-      logAudit(req, 'DIAG_UPLOAD_CLOUDINARY_FAILED', [], { error: err.message, filename });
+      await logAudit(req, 'DIAG_UPLOAD_CLOUDINARY_FAILED', [], { error: err.message, filename });
     }
 
     res.json({ success: true, filename });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+}));
 
 // POST /api/v1/diagnostics/auto-flush
-router.post('/diagnostics/auto-flush', apiKeyGuard, validate(AutoFlushSchema), async (req, res) => {
+router.post('/diagnostics/auto-flush', apiKeyGuard, validate(AutoFlushSchema), asyncHandler(async (req, res) => {
+  const { username, deviceId, logs } = req.body;
+  const safeUser = String(username || 'unknown').replace(/[^a-zA-Z0-9-]/gi, '_');
+  const safeDevice = String(deviceId || 'unknown').replace(/[^a-zA-Z0-9-]/gi, '_');
+  const timestamp = Date.now();
+  const filename = `${safeUser}_${safeDevice}_${timestamp}.log`;
+  
+  const filePath = path.join(DIAGNOSTICS_DIR, filename);
+  const logContent = logs.map(l => `[${l.timestamp}] ${l.level.toUpperCase()} [${l.type}]: ${l.message}`).join('\n');
+  await fs.promises.writeFile(filePath, logContent);
+
+  // ☁️ Persistence Fix: Upload to Cloudinary
+  console.log(`☁️ [Cloudinary Auto-Flush] Starting upload for: ${filename} (Size: ${(await fs.promises.stat(filePath)).size} bytes)`);
   try {
-    const { username, deviceId, logs } = req.body;
-    const safeUser = String(username || 'unknown').replace(/[^a-zA-Z0-9-]/gi, '_');
-    const safeDevice = String(deviceId || 'unknown').replace(/[^a-zA-Z0-9-]/gi, '_');
-    const timestamp = Date.now();
-    const filename = `${safeUser}_${safeDevice}_${timestamp}.log`;
-    
-    const filePath = path.join(DIAGNOSTICS_DIR, filename);
-    const logContent = logs.map(l => `[${l.timestamp}] ${l.level.toUpperCase()} [${l.type}]: ${l.message}`).join('\n');
-    fs.writeFileSync(filePath, logContent);
-
-    // ☁️ Persistence Fix: Upload to Cloudinary
-    console.log(`☁️ [Cloudinary Auto-Flush] Starting upload for: ${filename} (Size: ${fs.statSync(filePath).size} bytes)`);
-    try {
-      const cloudResult = await cloudinary.uploader.upload(filePath, {
-        folder: 'acetrack/diagnostics/auto-flush',
-        resource_type: 'raw',
-        public_id: filename,
-        use_filename: true,
-        unique_filename: false
-      });
-      console.log(`✅ [Cloudinary Auto-Flush] Success: ${cloudResult.secure_url}`);
-      logServerEvent('AUTO_FLUSH_CLOUDINARY_BACKUP_SUCCESS', { 
-        url: cloudResult.secure_url,
-        filename: filename
-      });
-      logAudit(req, 'AUTO_FLUSH_UPLOAD_CLOUDINARY_SUCCESS', [], { url: cloudResult.secure_url, filename });
-    } catch (err) {
-      console.error('❌ [Cloudinary Auto-Flush] Backup Failed:', err.message);
-      logServerEvent('AUTO_FLUSH_CLOUDINARY_BACKUP_ERROR', { 
-        error: err.message, 
-        filename,
-        stack: err.stack
-      });
-      logAudit(req, 'AUTO_FLUSH_UPLOAD_CLOUDINARY_FAILED', [], { error: err.message, filename });
-    }
-
-    // Retention: Keep 3 newest
-    const allFiles = fs.readdirSync(DIAGNOSTICS_DIR);
-    const userFiles = allFiles
-      .filter(f => f.startsWith(`${safeUser}_${safeDevice}_`) && f.endsWith('.log'))
-      .sort((a, b) => {
-        const timeA = parseInt(a.split('_').pop().replace('.log', '')) || 0;
-        const timeB = parseInt(b.split('_').pop().replace('.log', '')) || 0;
-        return timeB - timeA;
-      });
-
-    if (userFiles.length > 3) {
-      userFiles.slice(3).forEach(f => {
-        try { fs.unlinkSync(path.join(DIAGNOSTICS_DIR, f)); } catch(e) {}
-      });
-    }
-
-    res.json({ success: true, count: logs.length, retained: 3 });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+    const cloudResult = await cloudinary.uploader.upload(filePath, {
+      folder: 'acetrack/diagnostics/auto-flush',
+      resource_type: 'raw',
+      public_id: filename,
+      use_filename: true,
+      unique_filename: false
+    });
+    console.log(`✅ [Cloudinary Auto-Flush] Success: ${cloudResult.secure_url}`);
+    await logServerEvent('AUTO_FLUSH_CLOUDINARY_BACKUP_SUCCESS', { 
+      url: cloudResult.secure_url,
+      filename: filename
+    });
+    await logAudit(req, 'AUTO_FLUSH_UPLOAD_CLOUDINARY_SUCCESS', [], { url: cloudResult.secure_url, filename });
+  } catch (err) {
+    console.error('❌ [Cloudinary Auto-Flush] Backup Failed:', err.message);
+    await logServerEvent('AUTO_FLUSH_CLOUDINARY_BACKUP_ERROR', { 
+      error: err.message, 
+      filename,
+      stack: err.stack
+    });
+    await logAudit(req, 'AUTO_FLUSH_UPLOAD_CLOUDINARY_FAILED', [], { error: err.message, filename });
   }
-});
+
+  // Retention: Keep 3 newest
+  const allFiles = await fs.promises.readdir(DIAGNOSTICS_DIR);
+  const userFiles = allFiles
+    .filter(f => f.startsWith(`${safeUser}_${safeDevice}_`) && f.endsWith('.log'))
+    .sort((a, b) => {
+      const timeA = parseInt(a.split('_').pop().replace('.log', '')) || 0;
+      const timeB = parseInt(b.split('_').pop().replace('.log', '')) || 0;
+      return timeB - timeA;
+    });
+
+  if (userFiles.length > 3) {
+    for (const f of userFiles.slice(3)) {
+      await fs.promises.unlink(path.join(DIAGNOSTICS_DIR, f)).catch(() => {});
+    }
+  }
+
+  res.json({ success: true, count: logs.length, retained: 3 });
+}));
 
 // GET /api/v1/audit-logs (Admin only)
-router.get('/audit-logs', apiKeyGuard, async (req, res) => {
-  try {
-    const limit = Math.min(parseInt(req.query.limit) || 100, 500);
-    const logs = await AuditLog.find().sort({ timestamp: -1 }).limit(limit);
-    res.json({ success: true, logs });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+router.get('/audit-logs', apiKeyGuard, asyncHandler(async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+  const logs = await AuditLog.find().sort({ timestamp: -1 }).limit(limit);
+  res.json({ success: true, logs });
+}));
 
 // ═══════════════════════════════════════════════════════════════
 // 🌐 Mount API v1 + backward-compatible un-versioned routes
@@ -872,6 +845,24 @@ if (fs.existsSync(publicPath)) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// 🚀 Centralized Error Handler
+// ═══════════════════════════════════════════════════════════════
+app.use((err, req, res, next) => {
+  const status = err.status || 500;
+  const message = err.message || 'Internal Server Error';
+  
+  if (status === 500) {
+    console.error(`❌ [SERVER_ERROR] ${req.method} ${req.url}:`, err.stack);
+    logServerEvent('CRITICAL_ERROR', { url: req.url, error: message });
+  }
+  
+  res.status(status).json({
+    success: false,
+    error: message,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // 🚀 Start
 // ═══════════════════════════════════════════════════════════════
 httpServer.listen(PORT, () => {

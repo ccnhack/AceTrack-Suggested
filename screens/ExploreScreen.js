@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, memo } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, Image, 
   StyleSheet, SafeAreaView, Dimensions, FlatList, Modal, Alert, ActivityIndicator, TextInput 
@@ -221,24 +221,25 @@ const ExploreScreen = (props) => {
   };
 
   const availableSports = userRole === 'coach' && userSports ? userSports : Object.values(Sport);
-  const currentUser = userId ? players.find(p => p.id === userId) : null;
+  const currentUser = userId ? (players || []).find(p => p.id === userId) : null;
 
   const processedTournaments = useMemo(() => {
     const visible = getVisibleTournaments({
-      tournaments,
+      tournaments: tournaments || [],
       userRole,
       userGender: user?.gender,
+      userStatus: user?.status,
       userSports,
       cityFilter,
       sportFilter,
       reschedulingFrom,
     });
 
-    return visible.map(t => {
+    return (visible || []).map(t => {
       const distance = userLocation && t.lat && t.lng ? calculateDistance(userLocation.latitude, userLocation.longitude, t.lat, t.lng) : null;
       return { ...t, distance: distance ? parseFloat(distance) : 99999 };
     });
-  }, [tournaments, userRole, userSports, reschedulingFrom, cityFilter, user, sportFilter, userLocation]);
+  }, [tournaments, userRole, userSports, reschedulingFrom, cityFilter, user?.gender, user?.id, sportFilter, userLocation]);
 
   const filteredTournaments = processedTournaments;
 
@@ -264,7 +265,7 @@ const ExploreScreen = (props) => {
   }, [userRole, cityFilter, sportFilter, displayTournaments.length]);
 
   const sortedTournaments = useMemo(() => {
-    const list = [...displayTournaments];
+    const list = [...(displayTournaments || [])];
     return list.sort((a, b) => {
       // Priority sort by distance if user location is available
       if (userLocation && a.distance !== b.distance) {
@@ -278,7 +279,7 @@ const ExploreScreen = (props) => {
   }, [displayTournaments, userLocation]);
 
   const recommendedTournaments = useMemo(() => {
-    return sortedTournaments
+    return (sortedTournaments || [])
       .filter(t => {
           if (userRole === 'user' && currentUser?.trueSkillRating) {
              if (t.skillRange) return currentUser.trueSkillRating >= t.skillRange.min && currentUser.trueSkillRating <= t.skillRange.max;
@@ -683,7 +684,7 @@ const ExploreScreen = (props) => {
         onUpdateTournament={onUpdateTournament}
       />
 
-    {renderPaymentModal()}
+      {renderPaymentModal()}
     </View>
   );
 };

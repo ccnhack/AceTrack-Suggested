@@ -682,7 +682,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
     const isAcademy = role === 'academy';
     const isSent = sentRequests.some(r => r.id === item.id);
 
-    const imageUri = item.image || item.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name || 'User')}&background=random`;
+    const imageUri = item.image || item.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name || 'User')}&background=007AFF&color=ffffff`;
 
     return (
       <View style={styles.card}>

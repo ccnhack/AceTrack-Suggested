@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, memo } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, TextInput,
   StyleSheet, SafeAreaView, Dimensions, Modal, Image, Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { getSafeAvatar } from '../utils/imageUtils';
 import TournamentBracket from '../components/TournamentBracket';
 import Slider from '@react-native-community/slider';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -48,30 +49,38 @@ const MatchesScreen = ({
     }
   }, [user, tournaments, isCoach]);
 
-  const assignedTournaments = isCoach
-    ? tournaments.filter(t => String(t.assignedCoachId).toLowerCase() === String(user.id).toLowerCase())
-    : tournaments.filter(t => 
-        (t.registeredPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase()) || 
-        (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase())
-      );
+  const assignedTournaments = useMemo(() => {
+    if (isCoach) {
+      return (tournaments || []).filter(t => String(t.assignedCoachId).toLowerCase() === String(user.id).toLowerCase());
+    }
+    return (tournaments || []).filter(t => 
+      (t.registeredPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase()) || 
+      (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase())
+    );
+  }, [isCoach, tournaments, user.id]);
 
-  const requestTournaments = isCoach
-    ? tournaments.filter(t =>
+  const requestTournaments = useMemo(() => {
+    if (!isCoach) return [];
+    return (tournaments || []).filter(t =>
       t.coachAssignmentType === 'platform' &&
       t.coachStatus === 'Awaiting Coach Confirmation' &&
       !t.declinedCoachIds?.includes(user.id) &&
       !isTournamentPast(t)
-    )
-    : [];
+    );
+  }, [isCoach, tournaments, user.id]);
 
-  const displayedMatches = viewMode === 'requests' ? requestTournaments : assignedTournaments.filter(t => {
-    const isPast = isTournamentPast(t);
-    if (viewMode === 'upcoming') {
-      return t.status !== 'completed' && !t.tournamentConcluded && (!isPast || t.tournamentStarted);
-    } else {
-      return t.status === 'completed' || t.tournamentConcluded || (isPast && !t.tournamentStarted);
-    }
-  });
+  const displayedMatches = useMemo(() => {
+    if (viewMode === 'requests') return requestTournaments || [];
+    
+    return (assignedTournaments || []).filter(t => {
+      const isPast = isTournamentPast(t);
+      if (viewMode === 'upcoming') {
+        return t.status !== 'completed' && !t.tournamentConcluded && (!isPast || t.tournamentStarted);
+      } else {
+        return t.status === 'completed' || t.tournamentConcluded || (isPast && !t.tournamentStarted);
+      }
+    });
+  }, [viewMode, requestTournaments, assignedTournaments]);
 
   const getReliabilityVerdict = (p) => {
     const noShows = p.noShows || 0;
@@ -680,8 +689,8 @@ const MatchesScreen = ({
                                 isPendingPayment && { opacity: 0.7, backgroundColor: '#FFF7ED' },
                                 isEliminated && { opacity: 0.6, backgroundColor: '#F1F5F9' }
                               ]}>
-                                <Image
-                                  source={{ uri: playerObj.avatar || p?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(playerObj.name)}&background=random` }}
+                                <Image 
+                                  source={getSafeAvatar(playerObj.avatar, playerObj.name)}
                                   style={[styles.rosterAvatar, isEliminated && { grayscale: 1 }]}
                                 />
                                 <View style={styles.rosterInfo}>

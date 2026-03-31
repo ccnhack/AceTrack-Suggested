@@ -67,7 +67,7 @@ const LoginScreen = ({
           id: 'admin', 
           name: 'System Admin', 
           role: 'admin',
-          avatar: 'https://ui-avatars.com/api/?name=Admin&background=random'
+          avatar: 'https://ui-avatars.com/api/?name=Admin&background=000000&color=ffffff'
         });
         return;
       }

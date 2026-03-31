@@ -24,19 +24,19 @@ const ParticipantsModal = ({
   
   // Calculate leaderboard
   const playerScores = new Map();
-  const tournamentEvals = evaluations.filter(e => e.tournamentId === tournament.id);
+  const tournamentEvals = (evaluations || []).filter(e => e && e.tournamentId === tournament.id);
   
-  tournament.registeredPlayerIds.forEach(pid => {
-    const evals = tournamentEvals.filter(e => e.playerId === pid);
+  (tournament.registeredPlayerIds || []).forEach(pid => {
+    const evals = (tournamentEvals || []).filter(e => e && e.playerId === pid);
     if (evals.length > 0) {
-      const avg = evals.reduce((sum, e) => sum + e.averageScore, 0) / evals.length;
+      const avg = evals.reduce((sum, e) => sum + (e.averageScore || 0), 0) / evals.length;
       playerScores.set(pid, Number(avg.toFixed(1)));
     } else {
       playerScores.set(pid, 0);
     }
   });
   
-  const leaderboard = [...tournament.registeredPlayerIds].sort((a, b) => (playerScores.get(b) || 0) - (playerScores.get(a) || 0));
+  const leaderboard = [...(tournament.registeredPlayerIds || [])].filter(id => !!id).sort((a, b) => (playerScores.get(b) || 0) - (playerScores.get(a) || 0));
 
   return (
     <Modal visible animationType="slide">
@@ -94,21 +94,25 @@ const ParticipantsModal = ({
                 style={styles.coachCard}
               >
                 <View style={styles.coachRow}>
-                  {tournament.assignedCoachId || tournament.confirmedCoachId ? (
-                    <>
-                      <Image 
-                        source={{ uri: (players.find(p => p.id === (tournament.assignedCoachId || tournament.confirmedCoachId))?.avatar && players.find(p => p.id === (tournament.assignedCoachId || tournament.confirmedCoachId))?.avatar !== 'null') ? players.find(p => p.id === (tournament.assignedCoachId || tournament.confirmedCoachId))?.avatar : `https://ui-avatars.com/api/?name=${encodeURIComponent(players.find(p => p.id === (tournament.assignedCoachId || tournament.confirmedCoachId))?.name || 'Coach')}&background=random` }} 
-                        style={styles.avatar} 
-                      />
-                      <View style={styles.flex}>
-                        <Text style={styles.playerName}>{players.find(p => p.id === (tournament.assignedCoachId || tournament.confirmedCoachId))?.name || 'Unknown Coach'}</Text>
-                        <Text style={styles.roleTag}>
-                          {tournament.assignedCoachId ? 'Assigned Coach' : 'Confirmed Coach'}
-                        </Text>
-                      </View>
-                      <Ionicons name={expandedPlayerId === (tournament.assignedCoachId || tournament.confirmedCoachId) ? "chevron-up" : "chevron-down"} size={16} color="#94A3B8" />
-                    </>
-                  ) : tournament.coachStatus === 'Pending Coach Registration' && tournament.invitedCoachDetails ? (
+                  {tournament.assignedCoachId || tournament.confirmedCoachId ? (() => {
+                    const coachId = tournament.assignedCoachId || tournament.confirmedCoachId;
+                    const c = (players || []).find(p => p.id === coachId);
+                    return (
+                      <>
+                        <Image 
+                          source={{ uri: (c?.avatar && c.avatar !== 'null') ? c.avatar : `https://ui-avatars.com/api/?name=${encodeURIComponent(c?.name || 'Coach')}&background=007AFF&color=fff` }} 
+                          style={styles.avatar} 
+                        />
+                        <View style={styles.flex}>
+                          <Text style={styles.playerName}>{c?.name || 'Unknown Coach'}</Text>
+                          <Text style={styles.roleTag}>
+                            {tournament.assignedCoachId ? 'Assigned Coach' : 'Confirmed Coach'}
+                          </Text>
+                        </View>
+                        <Ionicons name={expandedPlayerId === coachId ? "chevron-up" : "chevron-down"} size={16} color="#94A3B8" />
+                      </>
+                    );
+                  })() : tournament.coachStatus === 'Pending Coach Registration' && tournament.invitedCoachDetails ? (
                     <>
                       <View style={[styles.avatar, styles.initials]}>
                         <Text style={styles.initialsText}>{tournament.invitedCoachDetails.name.charAt(0)}</Text>
@@ -127,22 +131,26 @@ const ParticipantsModal = ({
                     </>
                   )}
                 </View>
-                {expandedPlayerId === (tournament.assignedCoachId || tournament.confirmedCoachId) && (
-                    <View style={styles.expandedInfo}>
-                        <View style={styles.contactRow}>
-                            <Ionicons name="at-outline" size={14} color="#64748B" />
-                            <Text style={styles.contactText}>{players.find(p => p.id === (tournament.assignedCoachId || tournament.confirmedCoachId))?.id || 'N/A'}</Text>
+                {expandedPlayerId === (tournament.assignedCoachId || tournament.confirmedCoachId) && (() => {
+                    const coachId = tournament.assignedCoachId || tournament.confirmedCoachId;
+                    const c = (players || []).find(p => p.id === coachId);
+                    return (
+                        <View style={styles.expandedInfo}>
+                            <View style={styles.contactRow}>
+                                <Ionicons name="at-outline" size={14} color="#64748B" />
+                                <Text style={styles.contactText}>{c?.id || 'N/A'}</Text>
+                            </View>
+                            <View style={styles.contactRow}>
+                                <Ionicons name="call" size={14} color="#64748B" />
+                                <Text style={styles.contactText}>{c?.phone || 'N/A'}</Text>
+                            </View>
+                            <View style={styles.contactRow}>
+                                <Ionicons name="mail" size={14} color="#64748B" />
+                                <Text style={styles.contactText}>{c?.email || 'N/A'}</Text>
+                            </View>
                         </View>
-                        <View style={styles.contactRow}>
-                            <Ionicons name="call" size={14} color="#64748B" />
-                            <Text style={styles.contactText}>{players.find(p => p.id === (tournament.assignedCoachId || tournament.confirmedCoachId))?.phone || 'N/A'}</Text>
-                        </View>
-                        <View style={styles.contactRow}>
-                            <Ionicons name="mail" size={14} color="#64748B" />
-                            <Text style={styles.contactText}>{players.find(p => p.id === (tournament.assignedCoachId || tournament.confirmedCoachId))?.email || 'N/A'}</Text>
-                        </View>
-                    </View>
-                )}
+                    );
+                })()}
               </TouchableOpacity>
 
               <View style={styles.sectionHeader}>
@@ -161,7 +169,7 @@ const ParticipantsModal = ({
                     value={newPlayerPhone}
                     onChangeText={text => {
                         setNewPlayerPhone(text);
-                        const matched = players.find(p => p.phone === text && (p.role === 'user' || !p.role));
+                        const matched = (players || []).find(p => p && p.phone === text && (p.role === 'user' || !p.role));
                         setNewPlayerName(matched ? matched.name : '');
                     }}
                     style={styles.formInput}
@@ -211,8 +219,8 @@ const ParticipantsModal = ({
                   );
                 }
 
-                return combinedIds.map(pid => {
-                  const p = players.find(player => String(player.id).toLowerCase() === String(pid).toLowerCase());
+                return (combinedIds || []).map(pid => {
+                  const p = (players || []).find(player => player && String(player.id).toLowerCase() === String(pid).toLowerCase());
                   const status = tournament.playerStatuses?.[pid];
                   const isRegistered = (tournament.registeredPlayerIds || []).includes(pid);
                   const isPending = (tournament.pendingPaymentPlayerIds || []).includes(pid);

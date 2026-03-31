@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, StyleSheet, 
   SafeAreaView, Image, TextInput, Modal, Alert, Linking, Platform, Share,
@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { getSafeAvatar } from '../utils/imageUtils';
 import PlayerDashboardView from '../components/PlayerDashboardView';
 import AdminAuditLogsPanel from '../components/AdminAuditLogsPanel';
 import AdminRecordingsDashboard from '../components/AdminRecordingsDashboard';
@@ -22,7 +23,8 @@ const AdminHubScreen = ({
   user, players, tournaments, matchVideos, supportTickets, auditLogs = [],
   onApproveCoach, onAssignCoach, onRemoveCoach, onUpdateVideoStatus, 
   onBulkUpdateVideoStatus, onForceRefundVideo, onApproveDeleteVideo, 
-  onRejectDeleteVideo, onPermanentDeleteVideo, onReplyTicket, 
+  onRejectDeleteVideo, onPermanentDeleteVideo, onBulkPermanentDeleteVideos, 
+  onReplyTicket, 
   onUpdateTicketStatus, onManualSync, seenAdminActionIds = new Set(),
   setSeenAdminActionIds, visitedAdminSubTabs = new Set(), setVisitedAdminSubTabs,
   isUsingCloud, onOptOut, onLogFailedOtp, onLogTrace, setPlayers, onToggleFavourite,
@@ -69,14 +71,12 @@ const AdminHubScreen = ({
   const [isPullingLive, setIsPullingLive] = useState(false);
   const [onlineDevices, setOnlineDevices] = useState({});
   const [pullingDeviceIds, setPullingDeviceIds] = useState({});
+  const pongBufferRef = React.useRef({}); // BUFFER: Coalesce pongs to prevent UI lag
 
     const handlePong = (data) => {
-      console.log(`📡 [AdminHub] Pong received for ${data.targetUserId} (Device: ${data.deviceId})`);
-      setOnlineDevices(prev => ({
-        ...prev,
-        [data.deviceId]: true,
-        [data.targetUserId]: true // fallback tracking just by user id
-      }));
+      // Buffer the pong instead of instant state update to prevent UI locking during mass pings
+      pongBufferRef.current[data.deviceId] = true;
+      pongBufferRef.current[data.targetUserId] = true;
     };
 
     // Keep a local flag to ensure we don't double-register if screen re-renders
@@ -93,8 +93,17 @@ const AdminHubScreen = ({
         }
       }, 1000);
 
+      // FLUSH TIMER: Update UI state from buffer every 2s to keep it snappy without lag
+      const flushTimer = setInterval(() => {
+        if (Object.keys(pongBufferRef.current).length > 0) {
+          setOnlineDevices(prev => ({ ...prev, ...pongBufferRef.current }));
+          pongBufferRef.current = {};
+        }
+      }, 2000);
+
       return () => {
         clearInterval(timer);
+        clearInterval(flushTimer);
         if (socketRef && socketRef.current) {
           socketRef.current.off('device_pong_relay', handlePong);
           isRegistered.current = false;
@@ -153,6 +162,7 @@ const AdminHubScreen = ({
   };
 
   const filterData = (data, field = 'name') => {
+    if (!data) return [];
     if (!search) return data;
     return data.filter(item => 
       (item[field] || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -160,24 +170,26 @@ const AdminHubScreen = ({
     );
   };
 
-  const filteredIndividuals = filterData(players.filter(p => !p.role || p.role === 'user'));
-  const filteredAcademies = filterData(players.filter(p => p.role === 'academy'));
-  const filteredCoaches = filterData(players.filter(p => p.role === 'coach'));
-  const filteredTournaments = tournaments.filter(t => {
-    const isUpcoming = t.date >= today;
-    if (tournamentSubTab === 'upcoming' && !isUpcoming) return false;
-    if (tournamentSubTab === 'past' && isUpcoming) return false;
-    
-    if (!search) return true;
-    const s = search.toLowerCase();
-    const academy = players.find(p => p.id === t.creatorId);
-    return (t.title || '').toLowerCase().includes(s) ||
-           (t.id || '').toLowerCase().includes(s) ||
-           (academy?.name || '').toLowerCase().includes(s);
-  });
+  const filteredIndividuals = useMemo(() => filterData((players || []).filter(p => !p.role || p.role === 'user')), [players, search]);
+  const filteredAcademies = useMemo(() => filterData((players || []).filter(p => p.role === 'academy')), [players, search]);
+  const filteredCoaches = useMemo(() => filterData((players || []).filter(p => p.role === 'coach')), [players, search]);
+  const filteredTournaments = useMemo(() => {
+    return (tournaments || []).filter(t => {
+      const isUpcoming = t.date >= today;
+      if (tournamentSubTab === 'upcoming' && !isUpcoming) return false;
+      if (tournamentSubTab === 'past' && isUpcoming) return false;
+      
+      if (!search) return true;
+      const s = search.toLowerCase();
+      const academy = (players || []).find(p => p.id === t.creatorId);
+      return (t.title || '').toLowerCase().includes(s) ||
+             (t.id || '').toLowerCase().includes(s) ||
+             (academy?.name || '').toLowerCase().includes(s);
+    });
+  }, [tournaments, today, tournamentSubTab, search, players]);
 
   const getAcademyStats = (academyId) => {
-    const academyTs = tournaments.filter(t => t.creatorId === academyId);
+    const academyTs = (tournaments || []).filter(t => t.creatorId === academyId);
     const hostedCount = academyTs.length;
     const liveCount = academyTs.filter(t => t.status !== 'completed').length;
     const cancellations = academyTs.filter(t => t.status === 'cancelled').length;
@@ -221,7 +233,7 @@ const AdminHubScreen = ({
         >
           <View style={styles.cardHeader}>
             <Image 
-              source={{ uri: c.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(c.name)}&background=random` }} 
+              source={getSafeAvatar(c.avatar, c.name)} 
               style={styles.avatar} 
             />
             <View style={styles.flex}>
@@ -366,12 +378,12 @@ const AdminHubScreen = ({
           {[
             { id: 'individuals', label: 'Individuals', icon: 'person' },
             { id: 'academies', label: 'Academies', icon: 'business' },
-            { id: 'coaches', label: 'Coaches', icon: 'school', count: players.filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !seenAdminActionIds.has(p.id)).length },
+            { id: 'coaches', label: 'Coaches', icon: 'school', count: (players || []).filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !seenAdminActionIds.has(p.id)).length },
             { id: 'security', label: 'Security', icon: 'lock-closed' },
             { id: 'tournaments', label: 'Tournaments', icon: 'trophy' },
-            { id: 'coach_assignments', label: 'Assignments', icon: 'people', count: tournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today) && !seenAdminActionIds.has(t.id)).length },
-            { id: 'recordings', label: 'Videos', icon: 'videocam', count: matchVideos.filter(v => v.adminStatus === 'Deletion Requested' && !seenAdminActionIds.has(v.id)).length },
-            { id: 'grievances', label: 'Tickets', icon: 'chatbubbles', count: supportTickets.filter(t => t.status === 'Open').length },
+            { id: 'coach_assignments', label: 'Assignments', icon: 'people', count: (tournaments || []).filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today) && !seenAdminActionIds.has(t.id)).length },
+            { id: 'recordings', label: 'Videos', icon: 'videocam', count: (matchVideos || []).filter(v => v.adminStatus === 'Deletion Requested' && !seenAdminActionIds.has(v.id)).length },
+            { id: 'grievances', label: 'Tickets', icon: 'chatbubbles', count: (supportTickets || []).filter(t => t.status === 'Open').length },
             { id: 'audit', label: 'Audit', icon: 'list' },
             { id: 'diagnostics', label: 'Diag', icon: 'pulse' }
           ].map(tab => {
@@ -392,22 +404,22 @@ const AdminHubScreen = ({
                     const newSeenIds = new Set(seenAdminActionIds);
                     let added = false;
                     if (tab.id === 'coaches') {
-                      players.filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus)).forEach(p => {
+                      (players || []).filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus)).forEach(p => {
                         const pid = String(p.id);
                         if (!newSeenIds.has(pid)) { newSeenIds.add(pid); added = true; }
                       });
                     } else if (tab.id === 'recordings') {
-                      matchVideos.filter(v => v.adminStatus === 'Deletion Requested').forEach(v => {
+                      (matchVideos || []).filter(v => v.adminStatus === 'Deletion Requested').forEach(v => {
                         const vid = String(v.id);
                         if (!newSeenIds.has(vid)) { newSeenIds.add(vid); added = true; }
                       });
                     } else if (tab.id === 'coach_assignments') {
-                      tournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today)).forEach(t => {
+                      (tournaments || []).filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today)).forEach(t => {
                         const tid = String(t.id);
                         if (!newSeenIds.has(tid)) { newSeenIds.add(tid); added = true; }
                       });
                     } else if (tab.id === 'grievances') {
-                      supportTickets.filter(t => t.status === 'Open' || t.status === 'Awaiting Response').forEach(t => {
+                      (supportTickets || []).filter(t => t.status === 'Open' || t.status === 'Awaiting Response').forEach(t => {
                         const sid = String(t.id);
                         if (!newSeenIds.has(sid)) { newSeenIds.add(sid); added = true; }
                       });
@@ -529,7 +541,7 @@ const AdminHubScreen = ({
 
                   <View style={styles.tournamentList}>
                     <Text style={styles.blockLabel}>Hosted Tournaments</Text>
-                    {tournaments.filter(t => t.creatorId === a.id).map(t => (
+                    {(tournaments || []).filter(t => t.creatorId === a.id).map(t => (
                       <TouchableOpacity 
                         key={t.id} 
                         onPress={() => setViewingPlayersFor(t)}
@@ -569,8 +581,8 @@ const AdminHubScreen = ({
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>No {tournamentSubTab} tournaments found</Text>
               </View>
-            ) : filteredTournaments.map(t => {
-              const academy = players.find(p => p.id === t.creatorId);
+            ) : (filteredTournaments || []).map(t => {
+              const academy = (players || []).find(p => p.id === t.creatorId);
               return (
                 <TouchableOpacity 
                   key={t.id} 
@@ -600,14 +612,14 @@ const AdminHubScreen = ({
           </View>
         )}
 
-        {subTab === 'coach_assignments' && tournaments.filter(t => 
+        {subTab === 'coach_assignments' && (tournaments || []).filter(t => 
           (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration' || t.coachStatus === 'Awaiting Assignment') && 
           !t.assignedCoachId && 
           t.status !== 'completed' && 
           !t.tournamentConcluded &&
           (t.date >= today)
         ).map(t => {
-          const academy = players.find(p => p.id === t.creatorId);
+          const academy = (players || []).find(p => p.id === t.creatorId);
           return (
             <View key={t.id} style={styles.adminCard}>
               <View style={styles.cardHeader}>
@@ -725,6 +737,7 @@ const AdminHubScreen = ({
             onApproveDeleteVideo={onApproveDeleteVideo}
             onRejectDeleteVideo={onRejectDeleteVideo}
             onPermanentDeleteVideo={onPermanentDeleteVideo}
+            onBulkPermanentDeleteVideos={onBulkPermanentDeleteVideos}
           />
         )}
 
@@ -769,8 +782,9 @@ const AdminHubScreen = ({
 
             <View style={styles.userListScroll}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {players
+                {(players || [])
                   .filter(p => {
+                    if (!p) return false;
                     const name = (p.name || '').toLowerCase();
                     const id = String(p.id || '').toLowerCase();
                     const email = (p.email || '').toLowerCase();
@@ -800,8 +814,8 @@ const AdminHubScreen = ({
                           setOnlineDevices(prev => {
                             const next = { ...prev };
                             delete next[p.id];
-                            if (p.devices) {
-                              p.devices.forEach(d => { delete next[d.id]; });
+                            if (p.devices && Array.isArray(p.devices)) {
+                              p.devices.forEach(d => { if (d && d.id) delete next[d.id]; });
                             }
                             return next;
                           });
@@ -832,11 +846,13 @@ const AdminHubScreen = ({
                             const safeEmail = pEmailPrefix.replace(/[^a-z0-9]/gi, '_').toLowerCase();
                             
                             // Check for files matching name, id, email or even parts
-                            let fs = data.files.filter(f => {
+                            let fs = (data?.files || []).filter(f => {
+                              if (!f) return false;
                               const low = f.toLowerCase();
                               return (safeName && low.startsWith(safeName + '_')) || 
                                      (safeId && low.startsWith(safeId + '_')) ||
                                      (safeEmail && low.startsWith(safeEmail + '_')) ||
+                                     (safeName && low.startsWith('admin_requested_' + safeName + '_')) ||
                                      (safeName && low.startsWith('admin_requested_' + safeName + '_')) ||
                                      (safeName && low.includes(`_${safeName}_`)) ||
                                      (firstName.length > 3 && low.includes(firstName.toLowerCase()));
@@ -862,7 +878,7 @@ const AdminHubScreen = ({
                       style={[styles.miniUserCard, selectedDiagUser?.id === p.id && styles.miniUserCardActive]}
                     >
                       <Image 
-                        source={{ uri: p.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random` }} 
+                        source={getSafeAvatar(p.avatar, p.name)} 
                         style={styles.miniAvatar} 
                       />
                       <View style={{ alignItems: 'center' }}>
@@ -875,8 +891,9 @@ const AdminHubScreen = ({
                       </View>
                     </TouchableOpacity>
                   ))}
-                  {players
+                  {((players || [])
                   .filter(p => {
+                    if (!p) return false;
                     const name = (p.name || '').toLowerCase();
                     const id = String(p.id || '').toLowerCase();
                     const email = (p.email || '').toLowerCase();
@@ -885,7 +902,7 @@ const AdminHubScreen = ({
                     const mocks = ['shashank', 'pranshu', 'academy', 'coach'];
                     return mocks.some(m => name.includes(m) || id.includes(m) || email.includes(m)) || 
                            name.includes('riya') || name.includes('saumya') || email.includes('riya') || email.includes('saumya');
-                  }).length === 0 && (
+                  }) || []).length === 0 && (
                     <View style={{ padding: 20 }}>
                       <Text style={{ color: '#94A3B8', fontStyle: 'italic' }}>
                         No user matching "{diagUserSearch}" found.
@@ -1284,7 +1301,7 @@ const AdminHubScreen = ({
                           {listCoaches.length > 0 ? listCoaches.map((c) => (
                             <View key={c.id} style={styles.coachListRow}>
                               <Image 
-                                source={{ uri: (c.avatar && c.avatar !== 'null') ? c.avatar : `https://ui-avatars.com/api/?name=${encodeURIComponent(c.name)}&background=random` }} 
+                                source={getSafeAvatar(c.avatar, c.name)} 
                                 style={styles.coachSmallAvatar} 
                               />
                               <View>

@@ -163,16 +163,16 @@ export const VideoManagement = ({
   const [uploadProgress, setUploadProgress] = useState(0);
 
 
-  const myTournaments = isPlayerMode 
-    ? tournaments.filter(t => matchVideos.some(v => v.tournamentId === t.id))
-    : tournaments.filter(t => t.creatorId === academyId);
+  const myTournaments = (academyId && academyId !== 'all') 
+    ? (tournaments || []).filter(t => (matchVideos || []).some(v => v && v.tournamentId === t.id))
+    : (tournaments || []).filter(t => t && t.creatorId === academyId);
 
-  const completedTournaments = isPlayerMode 
-    ? myTournaments 
-    : myTournaments.filter(t => t.status === 'completed' || t.tournamentConcluded);
-
-  const myTournamentIds = new Set(myTournaments.map(t => t.id));
-  const myVideos = isPlayerMode ? matchVideos : matchVideos.filter(v => myTournamentIds.has(v.tournamentId));
+  const closedTournaments = isPlayerMode 
+    ? (tournaments || [])
+    : (myTournaments || []).filter(t => t && (t.status === 'completed' || t.tournamentConcluded));
+  
+  const myTournamentIds = new Set((myTournaments || []).map(t => t.id));
+  const myVideos = isPlayerMode ? (matchVideos || []) : (matchVideos || []).filter(v => v && myTournamentIds.has(v.tournamentId));
 
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
 
@@ -190,12 +190,13 @@ export const VideoManagement = ({
     onLogTrace && onLogTrace('Video Dashboard Access', 'academy-video', academyId, {
       totalTournaments: tournaments?.length,
       myTournaments: myTournaments.length,
-      completedTournaments: completedTournaments.length,
+      completedTournaments: closedTournaments.length,
       myVideos: myVideos.length
     });
   }, [academyId]);
 
-  const getVideoCountForTournament = (tId) => matchVideos.filter(v => v.tournamentId === tId).length;
+  const getVideoCountForTournament = (tId) => (matchVideos || []).filter(v => v && v.tournamentId === tId).length;
+  const getPurchasers = (vId) => (players || []).filter(p => (p.purchasedVideos || []).includes(vId));
 
   const handlePickVideo = async () => {
     try {
@@ -309,11 +310,8 @@ export const VideoManagement = ({
     setDeletionReason('');
   };
 
-  const selectedTournamentVideos = hideSelector 
-    ? myVideos 
-    : (selectedTournamentId
-      ? myVideos.filter(v => v.tournamentId === selectedTournamentId)
-      : []);
+  const selectedTournamentVideos = hideSelector    ? (myVideos || []).filter(v => v && v.matchId === selectedMatchId)
+    : (myVideos || []).filter(v => v && v.tournamentId === selectedTournamentId);
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -325,7 +323,7 @@ export const VideoManagement = ({
             style={[styles.selector, showTournamentPicker && styles.selectorActive]}
           >
             <Text style={styles.selectorText}>
-              {selectedTournamentId ? completedTournaments.find(t => t.id === selectedTournamentId)?.title : '-- Select completed tournament --'}
+              {selectedTournamentId ? closedTournaments.find(t => t.id === selectedTournamentId)?.title : '-- Select completed tournament --'}
             </Text>
             <Ionicons name={showTournamentPicker ? "chevron-up" : "chevron-down"} size={20} color="#94A3B8" />
           </TouchableOpacity>
@@ -333,7 +331,7 @@ export const VideoManagement = ({
           {showTournamentPicker && (
             <View style={styles.dropdown}>
               <ScrollView style={styles.dropdownList} nestedScrollEnabled={true}>
-                {completedTournaments.map((t) => (
+                {closedTournaments.map((t) => (
                   <TouchableOpacity
                     key={t.id}
                     onPress={() => { setSelectedTournamentId(t.id); setShowTournamentPicker(false); }}
@@ -343,7 +341,7 @@ export const VideoManagement = ({
                     {selectedTournamentId === t.id && <Ionicons name="checkmark" size={16} color="#3B82F6" />}
                   </TouchableOpacity>
                 ))}
-                {completedTournaments.length === 0 && (
+                {closedTournaments.length === 0 && (
                   <Text style={styles.noTournamentsText}>No completed tournaments found.</Text>
                 )}
               </ScrollView>
@@ -382,7 +380,7 @@ export const VideoManagement = ({
 
           <View style={styles.videoGrid}>
             {selectedTournamentVideos.map(v => {
-              const purchasers = players.filter(p => p.purchasedVideos?.includes(v.id));
+              const purchasers = (players || []).filter(p => (p.purchasedVideos || []).includes(v.id));
               const isExpanded = expandedVideoPurchasers.has(v.id);
 
               return (

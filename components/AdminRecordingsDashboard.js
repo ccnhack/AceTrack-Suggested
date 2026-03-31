@@ -7,6 +7,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import designSystem from '../theme/designSystem';
+import { getSafeAvatar, getSafePreview } from '../utils/imageUtils';
 
 const { width } = Dimensions.get('window');
 
@@ -28,6 +29,7 @@ const AdminRecordingsDashboard = ({
   onApproveDeleteVideo,
   onRejectDeleteVideo,
   onPermanentDeleteVideo,
+  onBulkPermanentDeleteVideos,
 }) => {
   const [selectedAcademyId, setSelectedAcademyId] = useState(null);
   const [selectedTournamentId, setSelectedTournamentId] = useState(null);
@@ -44,6 +46,7 @@ const AdminRecordingsDashboard = ({
   const [expandedPurchaserId, setExpandedPurchaserId] = useState(null);
   const [expandedRefundId, setExpandedRefundId] = useState(null);
   const [showTrashOnly, setShowTrashOnly] = useState(false);
+  const [selectedTrashIds, setSelectedTrashIds] = useState([]);
 
   useEffect(() => {
     if (pendingDeletions === 0 && showDeletionPopup) {
@@ -51,24 +54,25 @@ const AdminRecordingsDashboard = ({
     }
   }, [pendingDeletions, showDeletionPopup]);
 
-  const academies = useMemo(() => players.filter(p => p.role === 'academy' || p.id.includes('academy')), [players]);
+  const academies = useMemo(() => (players || []).filter(p => p && (p.role === 'academy' || p.id?.includes('academy'))), [players]);
 
-  const activeVideos = useMemo(() => matchVideos.filter(v => v.adminStatus !== 'Removed' && v.adminStatus !== 'Trash'), [matchVideos]);
-  const trashVideos = useMemo(() => matchVideos.filter(v => v.adminStatus === 'Removed' || v.adminStatus === 'Trash'), [matchVideos]);
+  const activeVideos = useMemo(() => (matchVideos || []).filter(v => v && v.adminStatus !== 'Removed' && v.adminStatus !== 'Trash'), [matchVideos]);
+  const trashVideos = useMemo(() => (matchVideos || []).filter(v => v && (v.adminStatus === 'Removed' || v.adminStatus === 'Trash')), [matchVideos]);
 
-  const totalVideos = activeVideos.length;
-  const videosToday = matchVideos.filter(v => {
+  const totalVideos = (activeVideos || []).length;
+  const videosToday = (matchVideos || []).filter(v => {
+    if (!v) return false;
     const d = v.uploadDate ? new Date(v.uploadDate) : new Date(v.date);
     return d.toDateString() === new Date().toDateString();
   }).length;
-  const pendingDeletions = matchVideos.filter(v => v.adminStatus === 'Deletion Requested').length;
-  const trashVideosCount = trashVideos.length;
-  const totalRevenue = activeVideos.reduce((sum, v) => sum + (v.revenue || 0), 0);
+  const pendingDeletions = (matchVideos || []).filter(v => v && v.adminStatus === 'Deletion Requested').length;
+  const trashVideosCount = (trashVideos || []).length;
+  const totalRevenue = (activeVideos || []).reduce((sum, v) => sum + (v.revenue || 0), 0);
 
   const filteredVideos = useMemo(() => {
     let videos = showTrashOnly ? trashVideos : activeVideos;
     if (selectedAcademyId) {
-      const hostedTournamentIds = tournaments.filter(t => t.creatorId === selectedAcademyId).map(t => t.id);
+      const hostedTournamentIds = (tournaments || []).filter(t => t.creatorId === selectedAcademyId).map(t => t.id);
       videos = videos.filter(v => hostedTournamentIds.includes(v.tournamentId));
     }
     if (selectedTournamentId) videos = videos.filter(v => v.tournamentId === selectedTournamentId);
@@ -79,8 +83,8 @@ const AdminRecordingsDashboard = ({
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       videos = videos.filter(v => 
-        v.matchId.toLowerCase().includes(q) || 
-        v.playerIds.some(pid => players.find(p => p.id === pid)?.name.toLowerCase().includes(q))
+        (v.matchId || '').toLowerCase().includes(q) || 
+        (v.playerIds || []).some(pid => (players || []).find(p => p.id === pid)?.name.toLowerCase().includes(q))
       );
     }
     return videos;
@@ -90,8 +94,8 @@ const AdminRecordingsDashboard = ({
     setSelectedVideoIds(prev => prev.includes(id) ? prev.filter(vid => vid !== id) : [...prev, id]);
   };
 
-  const getPlayerNames = (pids) => pids.map(id => players.find(p => p.id === id)?.name || id).join(' vs ');
-  const getTournamentName = (tid) => tournaments.find(t => t.id === tid)?.title || tid;
+  const getPlayerNames = (pids) => (pids || []).map(id => (players || []).find(p => p.id === id)?.name || id).join(' vs ');
+  const getTournamentName = (tid) => (tournaments || []).find(t => t.id === tid)?.title || tid;
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -139,10 +143,10 @@ const AdminRecordingsDashboard = ({
           </TouchableOpacity>
           <TouchableOpacity 
             onPress={() => {
-              setFilterStatus('All');
-              setShowTrashOnly(true);
+              setSelectedTrashIds([]);
+              setShowTrashPopup(true);
             }} 
-            style={[styles.glassStat, showTrashOnly && styles.glassStatActive]}
+            style={[styles.glassStat, showTrashPopup && styles.glassStatActive]}
           >
             <Text style={styles.premiumStatValue}>{trashVideosCount}</Text>
             <Text style={styles.premiumStatLabel}>Trash Bin</Text>
@@ -236,7 +240,7 @@ const AdminRecordingsDashboard = ({
 
       {/* Video Cards */}
       <View style={styles.videosList}>
-        {filteredVideos.map(video => {
+        {(filteredVideos || []).map(video => {
           const st = statusColors[video.adminStatus || 'Active'] || statusColors['Active'];
           const isSelected = selectedVideoIds.includes(video.id);
 
@@ -250,7 +254,7 @@ const AdminRecordingsDashboard = ({
                   {isSelected && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
                 </TouchableOpacity>
                 <Image 
-                  source={{ uri: (video.previewUrl && video.previewUrl !== 'null') ? video.previewUrl : `https://ui-avatars.com/api/?name=Match&background=000000&color=ffffff` }} 
+                  source={getSafePreview(video.previewUrl)} 
                   style={styles.previewImage} 
                 />
                 <View style={styles.playOverlay}>
@@ -286,12 +290,12 @@ const AdminRecordingsDashboard = ({
                 {expandedPurchaserId === video.id && (
                     <View style={styles.purchaserPanel}>
                         <Text style={styles.panelTitle}>Purchased By</Text>
-                        {players.filter(p => p.purchasedVideos?.includes(video.id)).map(p => {
+                        {(players || []).filter(p => (p.purchasedVideos || []).includes(video.id)).map(p => {
                             const displayName = p.name || p.username || p.id;
                             return (
                                 <View key={p.id} style={styles.purchaserChip}>
                                     <Image 
-                                      source={{ uri: (p.avatar && p.avatar !== 'null') ? p.avatar : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random` }} 
+                                      source={getSafeAvatar(p.avatar, displayName, 'random')} 
                                       style={styles.chipAvatar} 
                                     />
                                     <Text style={styles.chipName}>{displayName}</Text>
@@ -350,6 +354,123 @@ const AdminRecordingsDashboard = ({
       </View>
 
       {/* Popups (Simplified with Modals) */}
+      {/* Trash Bin Modal */}
+      <Modal visible={showTrashPopup} transparent animationType="slide">
+        <SafeAreaView style={styles.modalBg}>
+            <View style={styles.modalHeader}>
+                <View>
+                  <Text style={styles.modalTitle}>Trash Bin</Text>
+                  <Text style={styles.modalSubtitle}>{trashVideosCount} videos scheduled for deletion</Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowTrashPopup(false)}>
+                    <Ionicons name="close" size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+            </View>
+
+            <View style={styles.bulkActionRow}>
+              <TouchableOpacity 
+                onPress={() => {
+                  if (selectedTrashIds.length === trashVideosCount) setSelectedTrashIds([]);
+                  else setSelectedTrashIds(trashVideos.map(v => v.id));
+                }}
+                style={styles.bulkSelectBtn}
+              >
+                <Ionicons name={selectedTrashIds.length === trashVideosCount ? "checkbox" : "square-outline"} size={16} color="#6366F1" />
+                <Text style={styles.bulkSelectText}>Select All</Text>
+              </TouchableOpacity>
+
+              <View style={styles.flex} />
+
+              {selectedTrashIds.length > 0 && (
+                <>
+                  <TouchableOpacity 
+                    onPress={() => {
+                      onBulkUpdateStatus(selectedTrashIds, 'Active');
+                      setSelectedTrashIds([]);
+                    }}
+                    style={[styles.miniActionBtn, styles.restoreBtn]}
+                  >
+                    <Text style={styles.miniActionBtnText}>Restore ({selectedTrashIds.length})</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    onPress={() => {
+                      Alert.alert(
+                        "Permanent Delete",
+                        `Delete ${selectedTrashIds.length} videos permanently?`,
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          { text: "Delete", style: "destructive", onPress: () => {
+                              onBulkPermanentDeleteVideos(selectedTrashIds);
+                              setSelectedTrashIds([]);
+                          }}
+                        ]
+                      );
+                    }}
+                    style={[styles.miniActionBtn, styles.purgeBtn]}
+                  >
+                    <Text style={styles.miniActionBtnText}>Purge</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+              {trashVideosCount > 0 && selectedTrashIds.length === 0 && (
+                <TouchableOpacity 
+                  onPress={() => {
+                    Alert.alert(
+                      "Empty Trash",
+                      "Are you sure you want to permanently delete ALL videos in the trash?",
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        { text: "Delete All", style: "destructive", onPress: () => onBulkPermanentDeleteVideos(trashVideos.map(v => v.id)) }
+                      ]
+                    );
+                  }}
+                  style={styles.emptyTrashBtn}
+                >
+                  <Ionicons name="trash-outline" size={14} color="#EF4444" />
+                  <Text style={styles.emptyTrashText}>Empty Trash</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <FlatList
+              data={trashVideos}
+              keyExtractor={item => item.id}
+              contentContainerStyle={styles.modalScrollContent}
+              renderItem={({ item }) => {
+                const isSelected = selectedTrashIds.includes(item.id);
+                return (
+                  <View style={styles.trashCard}>
+                    <TouchableOpacity 
+                      onPress={() => setSelectedTrashIds(prev => isSelected ? prev.filter(id => id !== item.id) : [...prev, item.id])}
+                      style={[styles.trashCheckbox, isSelected && styles.trashCheckboxSelected]}
+                    >
+                      {isSelected && <Ionicons name="checkmark" size={12} color="#FFF" />}
+                    </TouchableOpacity>
+                    <Image source={getSafePreview(item.previewUrl)} style={styles.trashThumbnail} />
+                    <View style={styles.flex}>
+                      <Text style={styles.trashTitle} numberOfLines={1}>{getPlayerNames(item.playerIds)}</Text>
+                      <Text style={styles.trashMeta}>{getTournamentName(item.tournamentId)} • {item.sport}</Text>
+                    </View>
+                    <View style={styles.trashActions}>
+                      <TouchableOpacity onPress={() => onUpdateVideoStatus(item.id, 'Active')} style={styles.trashRestBtn}>
+                        <Ionicons name="refresh" size={18} color="#6366F1" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              }}
+              ListEmptyComponent={(
+                <View style={styles.emptyTrashContainer}>
+                  <Ionicons name="trash-bin-outline" size={64} color="#1E293B" />
+                  <Text style={styles.emptyTrashTitle}>Trash is Empty</Text>
+                  <Text style={styles.emptyTrashSub}>Deleted videos will appear here.</Text>
+                </View>
+              )}
+            />
+        </SafeAreaView>
+      </Modal>
+
       <Modal visible={showDeletionPopup} transparent animationType="slide">
         <SafeAreaView style={styles.modalBg}>
             <View style={styles.modalHeader}>
@@ -359,11 +480,11 @@ const AdminRecordingsDashboard = ({
                 </TouchableOpacity>
             </View>
             <ScrollView style={styles.modalContent}>
-                {matchVideos.filter(v => v.adminStatus === 'Deletion Requested').map(v => (
+                {(matchVideos || []).filter(v => v && v.adminStatus === 'Deletion Requested').map(v => (
                     <View key={v.id} style={styles.deletionCard}>
                         <View style={styles.deletionHeader}>
                           <Image 
-                            source={{ uri: (v.previewUrl && v.previewUrl !== 'null') ? v.previewUrl : `https://ui-avatars.com/api/?name=Match&background=000000&color=ffffff` }} 
+                            source={getSafePreview(v.previewUrl)} 
                             style={styles.deletionThumbnail} 
                           />
                           <View style={styles.flex}>
@@ -911,6 +1032,139 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     textTransform: 'uppercase',
     letterSpacing: 1,
+  },
+  modalSubtitle: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  bulkActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+    gap: 12,
+  },
+  bulkSelectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+    gap: 8,
+  },
+  bulkSelectText: {
+    color: '#E2E8F0',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  emptyTrashBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.2)',
+  },
+  emptyTrashText: {
+    color: '#EF4444',
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  modalScrollContent: {
+    padding: 20,
+    paddingBottom: 100,
+  },
+  trashCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 24,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  trashCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  trashCheckboxSelected: {
+    backgroundColor: '#6366F1',
+    borderColor: '#6366F1',
+  },
+  trashThumbnail: {
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    marginRight: 16,
+    backgroundColor: '#000',
+  },
+  trashTitle: {
+    color: '#F8FAFC',
+    fontSize: 14,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  trashMeta: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  trashRestBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  miniActionBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  restoreBtn: {
+    backgroundColor: '#6366F1',
+  },
+  purgeBtn: {
+    backgroundColor: '#EF4444',
+  },
+  miniActionBtnText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  emptyTrashContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 100,
+  },
+  emptyTrashTitle: {
+    color: '#F8FAFC',
+    fontSize: 20,
+    fontWeight: '900',
+    marginTop: 24,
+  },
+  emptyTrashSub: {
+    color: '#64748B',
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 8,
   },
 });
 

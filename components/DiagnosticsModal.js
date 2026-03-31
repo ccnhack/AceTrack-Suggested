@@ -9,11 +9,10 @@ import logger from '../utils/logger';
 const DiagnosticsModal = ({ visible, onClose, onUpload, isUploading }) => {
     const logs = logger.getLogs();
     
-    // Calculate metadata
-    const totalLines = logs.length;
+    const logStr = (logs || []).map(l => JSON.stringify(l)).join('\n');
+    const totalLines = (logs || []).length;
     let fileSizeKB = '0.00';
     try {
-        const logStr = JSON.stringify(logs);
         fileSizeKB = (logStr.length / 1024).toFixed(2);
     } catch (e) {
         // Handle serialization errors gracefully
@@ -55,8 +54,8 @@ const DiagnosticsModal = ({ visible, onClose, onUpload, isUploading }) => {
                         showsVerticalScrollIndicator={true}
                         contentContainerStyle={styles.logContent}
                     >
-                        {logs.length > 0 ? (
-                            logs.map((log, i) => (
+                        {(logs || []).length > 0 ? (
+                            (logs || []).map((log, i) => (
                                 <View key={i} style={styles.logEntry}>
                                     <Text style={styles.logTimestamp}>{log.timestamp}</Text>
                                     <View style={styles.logRow}>
@@ -72,9 +71,9 @@ const DiagnosticsModal = ({ visible, onClose, onUpload, isUploading }) => {
                     </ScrollView>
 
                     <TouchableOpacity 
-                        disabled={isUploading || logs.length === 0}
+                        disabled={isUploading || (logs || []).length === 0}
                         onPress={onUpload} 
-                        style={[styles.uploadBtn, (isUploading || logs.length === 0) && styles.uploadBtnDisabled]}
+                        style={[styles.uploadBtn, (isUploading || (logs || []).length === 0) && styles.uploadBtnDisabled]}
                     >
                         {isUploading ? (
                             <ActivityIndicator color="#FFFFFF" size="small" />

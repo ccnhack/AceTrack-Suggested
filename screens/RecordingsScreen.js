@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, memo } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, 
   StyleSheet, SafeAreaView
@@ -15,28 +15,32 @@ const RecordingsScreen = ({
   const isCoach = role === 'coach';
 
   // Players see videos they played in. Coaches see videos for tournaments they are assigned to.
-  const allMyVideos = matchVideos.filter(v => {
-    if (v.adminStatus === 'Removed' || v.adminStatus === 'Trash') return false;
-    if (v.playerIds?.includes(user?.id)) return true;
-    if (isCoach) {
-      const tournament = tournaments.find(t => t.id === v.tournamentId);
-      return tournament?.assignedCoachId === user.id;
-    }
-    return false;
-  });
+  const allMyVideos = useMemo(() => {
+    return (matchVideos || []).filter(v => {
+      if (!v) return false;
+      if (v.adminStatus === 'Removed' || v.adminStatus === 'Trash') return false;
+      if (v.playerIds?.includes(user?.id)) return true;
+      if (isCoach) {
+        const tournament = (tournaments || []).find(t => t.id === v.tournamentId);
+        return tournament?.assignedCoachId === user.id;
+      }
+      return false;
+    });
+  }, [matchVideos, user?.id, isCoach, tournaments]);
 
-  const filteredVideos = (() => {
+  const filteredVideos = useMemo(() => {
+    const list = allMyVideos || [];
     switch (activeFilter) {
       case 'recent':
-        return [...allMyVideos].sort((a, b) => new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0));
+        return [...list].sort((a, b) => new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0));
       case 'favorites':
-        return allMyVideos.filter(v => user?.favouritedVideos?.includes(v.id));
+        return list.filter(v => (user?.favouritedVideos || []).includes(v.id));
       case 'analyzed':
-        return allMyVideos.filter(v => v.hasAiHighlights || v.aiStatus === 'completed');
+        return list.filter(v => v.hasAiHighlights || v.aiStatus === 'completed');
       default:
-        return allMyVideos;
+        return list;
     }
-  })();
+  }, [activeFilter, allMyVideos, user?.favouritedVideos]);
 
   const filters = [
     { id: 'recent', label: 'Recent', icon: 'time-outline' },

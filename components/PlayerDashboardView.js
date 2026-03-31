@@ -2,18 +2,19 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Image, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import designSystem from '../theme/designSystem';
+import { getSafeAvatar } from '../utils/imageUtils';
 
 const PlayerDashboardView = ({ players, tournaments, title }) => {
   const [selectedPlayerId, setSelectedPlayerId] = useState(null);
 
   return (
     <View style={styles.container}>
-      {players.length === 0 ? (
+      {(players || []).length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>No players found</Text>
         </View>
       ) : (
-        players.map(p => (
+        (players || []).map(p => (
           <TouchableOpacity 
             key={p.id} 
             activeOpacity={0.9}
@@ -25,7 +26,7 @@ const PlayerDashboardView = ({ players, tournaments, title }) => {
           >
             <View style={styles.cardHeader}>
               <Image 
-                source={{ uri: (p.avatar && p.avatar !== 'null') ? p.avatar : `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random` }} 
+                source={getSafeAvatar(p.avatar, p.name)}
                 style={styles.avatar} 
               />
               <View style={styles.info}>
@@ -83,8 +84,8 @@ const PlayerDashboardView = ({ players, tournaments, title }) => {
                 <View style={styles.registrationsHeader}>
                   <Text style={styles.registrationsTitle}>Active Registrations</Text>
                   <View style={styles.regList}>
-                    {tournaments.filter(t => t.registeredPlayerIds.includes(p.id)).length > 0 ? (
-                      tournaments.filter(t => t.registeredPlayerIds.includes(p.id)).map(t => (
+                    {((tournaments || []).filter(t => t && (t.registeredPlayerIds || []).includes(p.id)) || []).length > 0 ? (
+                      (tournaments || []).filter(t => t && (t.registeredPlayerIds || []).includes(p.id)).map(t => (
                         <View key={t.id} style={styles.regItem}>
                           <View>
                             <Text style={styles.regTitle}>{t.title}</Text>

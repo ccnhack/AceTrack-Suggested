@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = "2.3.9";
+const APP_VERSION = "2.4.0";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -96,10 +96,18 @@ export default function App() {
   const isUsingCloudRef = React.useRef(true);
   const socketRef = React.useRef(null);
   const playersRef = React.useRef(players);
+  const lastBackgroundSyncRef = React.useRef(0); // THROTTLE: Prevents redundant pulls
+  const updateCheckTimeoutRef = React.useRef(null); // DEBOUNCE: Groups WebSocket signals
+  const syncLockRef = React.useRef(false); // MUTEX: Ensures push and pull don't overlap
+  const globalBackoffUntilRef = React.useRef(0); // BACKOFF: 429 recovery timer
+
+  const notificationReceivedSubscription = useRef(null);
+  const notificationResponseSubscription = useRef(null);
 
   // Synchronous helper to update isSyncing state AND ref atomically
   const setSyncingState = (val) => {
     isSyncingRef.current = val; // Immediate ref update (no render delay)
+    syncLockRef.current = val;  // Mutex lock
     setIsSyncing(val);          // React state update (for UI)
   };
 
@@ -140,14 +148,19 @@ export default function App() {
     socketRef.current.on('data_updated', (payload) => {
       console.log("⚡ Real-time update received via WebSocket!", payload);
       logger.logAction('WS_UPDATE_RECEIVED', { payload });
-      // If not currently pushing data themselves, pull the updates
-      if (!isSyncingRef.current) {
-        checkForUpdates(); 
-      } else {
-        console.log("⏳ Sync in progress, queueing update check...");
-        pendingUpdateCheckRef.current = true;
-        logger.logAction('WS_UPDATE_QUEUED');
-      }
+      
+      // DEBOUNCED: Group multiple WebSocket signals into one check
+      if (updateCheckTimeoutRef.current) clearTimeout(updateCheckTimeoutRef.current);
+      updateCheckTimeoutRef.current = setTimeout(() => {
+        updateCheckTimeoutRef.current = null;
+        if (!syncLockRef.current) {
+          checkForUpdates(); 
+        } else {
+          console.log("⏳ Sync in progress, queueing update check...");
+          pendingUpdateCheckRef.current = true;
+          logger.logAction('WS_UPDATE_QUEUED');
+        }
+      }, 5000); // 5s quiet period for rapid changes
     });
 
     socketRef.current.on('force_upload_diagnostics', async (data) => {
@@ -225,10 +238,15 @@ export default function App() {
         }
         
         // STEP 1: Always ensure hardware ID exists
-        let hardwareId = await AsyncStorage.getItem('acetrack_device_id');
-        if (!hardwareId) {
-          hardwareId = (Constants.deviceName || Platform.OS).replace(/[^a-zA-Z0-9]/g, '_');
-          await AsyncStorage.setItem('acetrack_device_id', hardwareId);
+        let hardwareId;
+        try {
+          hardwareId = await AsyncStorage.getItem('acetrack_device_id');
+          if (!hardwareId) {
+            hardwareId = (Constants.deviceName || Platform.OS || 'device').replace(/[^a-zA-Z0-9]/g, '_') + '_' + Math.random().toString(36).substr(2, 5);
+            await AsyncStorage.setItem('acetrack_device_id', hardwareId);
+          }
+        } catch (storageErr) {
+          hardwareId = 'fallback_device_' + Date.now();
         }
         localDeviceIdRef.current = hardwareId;
 
@@ -241,14 +259,12 @@ export default function App() {
                 sendTokenToBackend(currentUserRef.current.id, token);
               }
             }
-          });
+          }).catch(err => console.warn("Push token registration failed:", err));
 
           // PUSH NOTIFICATION LISTENERS & LOGGING
-          let receivedSubscription;
-          let responseSubscription;
           try {
             if (typeof Notifications !== 'undefined' && Notifications.addNotificationReceivedListener) {
-              receivedSubscription = Notifications.addNotificationReceivedListener(notification => {
+              notificationReceivedSubscription.current = Notifications.addNotificationReceivedListener(notification => {
                 logger.logAction('PUSH_NOTIFICATION_RECEIVED', {
                   title: notification.request.content.title,
                   message: notification.request.content.body,
@@ -260,7 +276,7 @@ export default function App() {
             }
 
             if (typeof Notifications !== 'undefined' && Notifications.addNotificationResponseReceivedListener) {
-              responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
+              notificationResponseSubscription.current = Notifications.addNotificationResponseReceivedListener(response => {
                 logger.logAction('PUSH_NOTIFICATION_OPENED', {
                   actionIdentifier: response.actionIdentifier,
                   title: response.notification.request.content.title,
@@ -343,6 +359,12 @@ export default function App() {
     return () => {
       if (socketRef.current) socketRef.current.disconnect();
       subscription.remove();
+      if (notificationReceivedSubscription.current) {
+        notificationReceivedSubscription.current.remove();
+      }
+      if (notificationResponseSubscription.current) {
+        notificationResponseSubscription.current.remove();
+      }
     };
   }, [isUsingCloud]); 
 
@@ -378,6 +400,12 @@ export default function App() {
       const response = await fetch(`${activeApiUrl}/api/status`, {
         headers: { 'x-ace-api-key': config.ACE_API_KEY }
       });
+      
+      if (response.status === 429) {
+        console.log("🛑 Rate limited on status check, skipping.");
+        return;
+      }
+      
       const status = await response.json();
       
       if (status.latestAppVersion) {
@@ -386,6 +414,13 @@ export default function App() {
           setShowForceUpdate(true);
           return; // Abort further syncs if obsolete
         }
+      }
+
+      const isInternalChange = status.lastSocketId === socketRef.current?.id;
+      if (isInternalChange && status.lastUpdated) {
+          lastServerUpdateRef.current = status.lastUpdated;
+          console.log("🛡️ Internal change detected via status check. Skipping pull.");
+          return;
       }
 
       if (status.lastUpdated && status.lastUpdated !== lastServerUpdateRef.current) {
@@ -397,7 +432,7 @@ export default function App() {
       console.log("⚠️ Update check failed (silent):", error.message);
       logger.logAction('CHECK_UPDATES_FAILED', { error: error.message });
     }
-  }, []); // Status check is safe to memoize broadly as it uses refs for latest values
+  }, [loadData]); // Note: loadData is stable via useCallback
 
   const hydrateFromStorage = async () => {
     console.log("📦 Hydrating app state from local storage...");
@@ -506,20 +541,30 @@ export default function App() {
   }, []);
 
   const loadData = useCallback(async (forceNoLoading = false, forceSync = false) => {
-    if (isSyncingRef.current && !forceSync) {
-      console.log("📡 Sync already in progress, skipping background loadData");
+    if (syncLockRef.current && !forceSync) {
+      console.log("📡 Sync Mutex active, skipping pull.");
+      return;
+    }
+    
+    const now = Date.now();
+    if (now < globalBackoffUntilRef.current && !forceSync) {
+      console.log("⏳ Backoff active, skipping pull until:", new Date(globalBackoffUntilRef.current).toLocaleTimeString());
       return;
     }
 
     // First, try to sync any local changes.
     const syncSuccess = await syncPendingData();
-    // THROTTLE: Prevent sync more than once every 10 seconds unless forced
-    const now = Date.now();
-    if (!forceSync && now - lastManualSyncTimeRef.current < 10000) {
-      console.log("⏱️ Sync throttled (last sync was < 10s ago)");
+    
+    // THROTTLE: Prevent background sync more than once every 15 seconds unless forced
+    if (!forceSync && now - lastBackgroundSyncRef.current < 15000) {
+      console.log("⏱️ Background sync throttled (last sync was < 15s ago)");
       return false;
     }
-    lastManualSyncTimeRef.current = now;
+    if (!forceNoLoading || forceSync) {
+        // Manual or foreground syncs reset the manual timer
+        lastManualSyncTimeRef.current = now;
+    }
+    lastBackgroundSyncRef.current = now;
 
     if (pendingSyncRef.current.length > 0 && !syncSuccess) {
       console.log("⏳ Local changes pending sync. Skipping cloud pull to prevent overwrite.");
@@ -643,33 +688,54 @@ export default function App() {
       return cloudData;
     } catch (e) {
       console.log("📡 Cloud unreachable or error:", e.message);
+      logger.logAction('LOAD_DATA_ERROR', { error: e.message });
       if (!e.message.includes('429')) {
         setIsCloudOnline(false);
       }
       return false;
     } finally {
+      // 🛡️ CRITICAL FIX: Always release the lock regardless of outcome
       if (versionAtStart === syncVersion.current) {
         setSyncingState(false);
         if (!forceNoLoading) setIsLoading(false);
         if (pendingUpdateCheckRef.current) {
            pendingUpdateCheckRef.current = false;
-           checkForUpdates();
+           // Use a small delay to ensure React has finished state updates
+           setTimeout(() => checkForUpdates(), 100);
         }
+      } else {
+        // If versions mismatch, we still need to unlock if THIS sync was the one holding the lock
+        setSyncingState(false);
       }
     }
   }, [syncPendingData, checkForUpdates]);
-
   const pushStateToCloud = useCallback(async (updates) => {
     if (!isUsingCloudRef.current) return;
     
+    if (syncLockRef.current) {
+      console.log("📡 Sync Mutex active, skipping push.");
+      return false;
+    }
+
+    const now = Date.now();
+    if (now < globalBackoffUntilRef.current) {
+      console.log("⏳ Backoff active, skipping push.");
+      return false;
+    }
+
     const thisVersion = ++syncVersion.current;
+    syncLockRef.current = true;
     try {
       setSyncingState(true);
       logger.logAction('PUSH_DATA_START', { keys: Object.keys(updates), version: thisVersion });
       
       const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout for push
+
       const response = await fetch(`${activeApiUrl}/api/save`, {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           'x-ace-api-key': config.ACE_API_KEY,
@@ -677,6 +743,13 @@ export default function App() {
         },
         body: JSON.stringify(updates)
       });
+      clearTimeout(timeoutId);
+
+      if (response.status === 429) {
+        console.log("🛑 Server Rate Limit (429). Engaging 60s Global Backoff.");
+        globalBackoffUntilRef.current = Date.now() + 60000;
+        throw new Error("Server returned 429: Too many requests.");
+      }
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -706,8 +779,10 @@ export default function App() {
         setSyncingState(false);
         if (pendingUpdateCheckRef.current) {
            pendingUpdateCheckRef.current = false;
-           checkForUpdates();
+           setTimeout(() => checkForUpdates(), 100);
         }
+      } else {
+        setSyncingState(false);
       }
     }
   }, [checkForUpdates]);
@@ -783,26 +858,43 @@ export default function App() {
       if (!hasSyncable) return;
 
       if (isUsingCloudRef.current) {
-        // Debounced Sync Engine to prevent 429 errors during rapid bulk manager runs
+        // Collect updates into the pending ref
         Object.assign(pendingSyncUpdatesRef.current, syncUpdates);
         if (isAtomic) isPendingAtomicRef.current = true;
 
-        if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-        syncTimeoutRef.current = setTimeout(async () => {
-          const finalUpdates = { ...pendingSyncUpdatesRef.current };
-          const finalAtomic = isPendingAtomicRef.current;
-          
-          // Clear trackers early to prevent double-piling
-          pendingSyncUpdatesRef.current = {};
-          isPendingAtomicRef.current = false;
+        // ATOMIC ACTION: Bypass debounce and push IMMEDIATELY
+        if (isAtomic) {
+          if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
           syncTimeoutRef.current = null;
 
-          if (finalAtomic) {
-            finalUpdates.atomicKeys = Object.keys(finalUpdates).filter(k => k !== 'atomicKeys');
-          }
+          const finalUpdates = { ...pendingSyncUpdatesRef.current };
+          finalUpdates.atomicKeys = Object.keys(finalUpdates).filter(k => k !== 'atomicKeys');
           
+          // Reset trackers BEFORE push to allow next cycle to start fresh
+          pendingSyncUpdatesRef.current = {};
+          isPendingAtomicRef.current = false;
+          
+          console.log("🚀 [SyncEngine] Atomic Update Detected. Pushing Immediately:", finalUpdates.atomicKeys);
           await pushStateToCloud(finalUpdates);
-        }, 1500); // 1.5s window to capture multiple rapid deletions/edits
+        } else {
+          // STANDBY: Debounce minor updates (e.g. log traces, simple field edits)
+          if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+          syncTimeoutRef.current = setTimeout(async () => {
+            const finalUpdates = { ...pendingSyncUpdatesRef.current };
+            const finalAtomic = isPendingAtomicRef.current;
+            
+            pendingSyncUpdatesRef.current = {};
+            isPendingAtomicRef.current = false;
+            syncTimeoutRef.current = null;
+
+            if (finalAtomic) {
+              finalUpdates.atomicKeys = Object.keys(finalUpdates).filter(k => k !== 'atomicKeys');
+            }
+            
+            console.log("⏱️ [SyncEngine] Debounced Push Executing...");
+            await pushStateToCloud(finalUpdates);
+          }, 3000); 
+        }
       }
     } catch (error) {
       console.error(`Failed to sync and save data`, error);
@@ -1188,11 +1280,12 @@ export default function App() {
       Alert.alert("Success", `₹${amount} added!`);
     },
     onReplyTicket: (id, text, image, replyToMsg) => {
+      if (!Array.isArray(supportTickets)) return;
       const msgText = typeof text === 'string' ? text : (text?.text || String(text || ''));
       const msg = { senderId: currentUserRef.current?.id || 'admin', text: msgText, timestamp: new Date().toISOString() };
       if (image) msg.image = image;
       if (replyToMsg) msg.replyTo = { text: replyToMsg.text || '', senderId: replyToMsg.senderId || '' };
-      const updated = supportTickets.map(t => t.id === id ? { ...t, messages: [...t.messages, msg] } : t);
+      const updated = supportTickets.map(t => t && t.id === id ? { ...t, messages: [...(t.messages || []), msg] } : t);
       setSupportTickets(updated);
       syncAndSaveData({ supportTickets: updated });
     },
@@ -1242,7 +1335,8 @@ export default function App() {
     onUploadLogs: handleUploadLogs,
     isUploadingLogs,
     onDeclineCoachRequest: (t) => {
-      const updated = tournaments.map(item => item.id === t.id ? { ...item, coachStatus: 'Declined' } : item);
+      if (!t || !Array.isArray(tournaments)) return;
+      const updated = tournaments.map(item => item && item.id === t.id ? { ...item, coachStatus: 'Declined' } : item);
       setTournaments(updated);
       syncAndSaveData({ tournaments: updated });
     },
@@ -1286,15 +1380,22 @@ export default function App() {
     },
     onUpdateVideoStatus: (vid, status) => {
       setMatchVideos(prev => {
-        const updated = prev.map(v => v.id === vid ? { ...v, status } : v);
+        const updated = (prev || []).map(v => v && v.id === vid ? { ...v, adminStatus: status } : v);
         syncAndSaveData({ matchVideos: updated });
         return updated;
       });
     },
     onBulkUpdateVideoStatus: (ids, status) => {
       setMatchVideos(prev => {
-        const updated = prev.map(v => ids.includes(v.id) ? { ...v, status } : v);
+        const updated = (prev || []).map(v => v && ids.includes(v.id) ? { ...v, adminStatus: status } : v);
         syncAndSaveData({ matchVideos: updated });
+        return updated;
+      });
+    },
+    onBulkPermanentDeleteVideos: (ids) => {
+      setMatchVideos(prev => {
+        const updated = (prev || []).filter(v => v && !ids.includes(v.id));
+        syncAndSaveData({ matchVideos: updated }, true); // Force overwrite for deletions
         return updated;
       });
     },
@@ -1340,11 +1441,11 @@ export default function App() {
       });
     },
     onRequestDeletion: (id, reason) => {
-      setMatchVideos(prev => {
-        const updated = prev.map(v => v.id === id ? { ...v, adminStatus: 'Deletion Requested', deletionReason: reason } : v);
-        syncAndSaveData({ matchVideos: updated });
-        return updated;
-      });
+      if (!Array.isArray(matchVideos)) return;
+      const updated = matchVideos.map(v => v && v.id === id ? { ...v, adminStatus: 'Deletion Requested', deletionReason: reason } : v);
+      setMatchVideos(updated);
+      syncAndSaveData({ matchVideos: updated });
+      return updated;
     },
     onUnlockVideo: (vid, price, method) => {
       if (!currentUserRef.current) return;
@@ -1371,9 +1472,10 @@ export default function App() {
       });
     },
     onVideoPlay: (vid, uid) => {
+      if (!Array.isArray(matchVideos)) return;
       setMatchVideos(prev => {
-        const updated = prev.map(v => {
-          if (v.id === vid) { const currentViewers = v.viewerIds || []; if (!uid || currentViewers.includes(uid)) return v; return { ...v, viewerIds: [...currentViewers, uid] }; }
+        const updated = (prev || []).map(v => {
+          if (v && v.id === vid) { const currentViewers = v.viewerIds || []; if (!uid || currentViewers.includes(uid)) return v; return { ...v, viewerIds: [...currentViewers, uid] }; }
           return v;
         });
         syncAndSaveData({ matchVideos: updated });
@@ -1384,10 +1486,12 @@ export default function App() {
       if (!currentUserRef.current) return;
       
       setPlayers(prev => {
-        const isFav = (currentUserRef.current.favouritedVideos || []).includes(vid);
-        const updatedFavs = isFav ? (currentUserRef.current.favouritedVideos || []).filter(id => id !== vid) : [...(currentUserRef.current.favouritedVideos || []), vid];
-        const updatedUser = { ...currentUserRef.current, favouritedVideos: updatedFavs };
-        const updatedPlayers = prev.map(p => p.id === currentUserRef.current.id ? updatedUser : p);
+        const currentU = currentUserRef.current;
+        if (!currentU) return prev || [];
+        const isFav = (currentU.favouritedVideos || []).includes(vid);
+        const updatedFavs = isFav ? (currentU.favouritedVideos || []).filter(id => id !== vid) : [...(currentU.favouritedVideos || []), vid];
+        const updatedUser = { ...currentU, favouritedVideos: updatedFavs };
+        const updatedPlayers = (prev || []).map(p => p && String(p.id).toLowerCase() === String(currentU.id).toLowerCase() ? updatedUser : p);
         
         setCurrentUser(updatedUser);
         currentUserRef.current = updatedUser;
@@ -1397,21 +1501,21 @@ export default function App() {
     },
     onUpdateTournament: (t) => handleSaveTournament(t),
     onSaveCoachComment: (tid, comment) => {
+      if (!currentUserRef.current) return;
       setTournaments(prev => {
-        const updated = prev.map(t => t.id === tid ? { ...t, coachComments: [...(t.coachComments || []), { id: Date.now(), coachId: currentUserRef.current.id, text: comment, timestamp: new Date().toISOString() }] } : t);
+        const updated = (prev || []).map(t => t && t.id === tid ? { ...t, coachComments: [...(t.coachComments || []), { id: Date.now(), coachId: currentUserRef.current.id, text: comment, timestamp: new Date().toISOString() }] } : t);
         syncAndSaveData({ tournaments: updated });
         return updated;
       });
     },
     onRegister: (t, method, totalCost, isRescheduling, reschedulingFrom) => {
-      if (!currentUserRef.current) return;
+      if (!currentUserRef.current || !t) return;
       
       const userId = currentUserRef.current.id;
       
-      // 1. Update Tournaments (using functional setter to avoid stale closure)
-      setTournaments(prev => {
-        const updatedT = prev.map(item => {
-          if (item.id === t.id) {
+      setTournaments(prevT => {
+        const updatedT = (prevT || []).map(item => {
+          if (item && item.id === t.id) {
             return {
               ...item,
               registeredPlayerIds: [...new Set([...(item.registeredPlayerIds || []), userId])]
@@ -1420,18 +1524,17 @@ export default function App() {
           return item;
         });
 
-        // 2. Update Players & CurrentUser
         setPlayers(prevP => {
+          if (!currentUserRef.current) return prevP || [];
           const updatedUser = {
             ...currentUserRef.current,
             registeredTournamentIds: [...new Set([...(currentUserRef.current.registeredTournamentIds || []), t.id])]
           };
-          const updatedPlayers = prevP.map(p => String(p.id).toLowerCase() === String(userId).toLowerCase() ? updatedUser : p);
+          const updatedPlayers = (prevP || []).map(p => p && String(p.id).toLowerCase() === String(userId).toLowerCase() ? updatedUser : p);
           
           setCurrentUser(updatedUser);
           currentUserRef.current = updatedUser;
           
-          // 3. Sync to Cloud
           syncAndSaveData({ 
             tournaments: updatedT, 
             players: updatedPlayers, 
@@ -1447,20 +1550,21 @@ export default function App() {
     onReschedule: (t) => setReschedulingFrom(t.id),
     onCancelReschedule: () => setReschedulingFrom(null),
     onOptOut: (t) => {
-      if (!currentUserRef.current) return;
+      if (!currentUserRef.current || !t) return;
       const userId = currentUserRef.current.id;
       
-      setTournaments(prev => {
-        const updatedTournaments = prev.map(item => 
-          item.id === t.id ? { ...item, registeredPlayerIds: (item.registeredPlayerIds || []).filter(pid => pid !== userId) } : item
+      setTournaments(prevT => {
+        const updatedTournaments = (prevT || []).map(item => 
+          item && item.id === t.id ? { ...item, registeredPlayerIds: (item.registeredPlayerIds || []).filter(pid => pid !== userId) } : item
         );
         
         setPlayers(prevP => {
+          if (!currentUserRef.current) return prevP || [];
           const updatedUser = {
             ...currentUserRef.current,
             registeredTournamentIds: (currentUserRef.current.registeredTournamentIds || []).filter(id => id !== t.id)
           };
-          const updatedPlayers = prevP.map(p => String(p.id).toLowerCase() === String(userId).toLowerCase() ? updatedUser : p);
+          const updatedPlayers = (prevP || []).map(p => p && String(p.id).toLowerCase() === String(userId).toLowerCase() ? updatedUser : p);
           
           setCurrentUser(updatedUser);
           currentUserRef.current = updatedUser;

@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Calendar } from 'react-native-calendars';
 import designSystem from '../theme/designSystem';
 import { Sport } from '../types';
+import { getSafeAvatar } from '../utils/imageUtils';
 import * as ImagePicker from 'expo-image-picker';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Updates from 'expo-updates';
@@ -322,7 +323,6 @@ const ProfileScreen = ({
   }, [showEditProfile]);
 
   const suggestedAvatars = [
-    `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=random`,
     'https://api.dicebear.com/7.x/avataaars/png?seed=Felix',
     'https://api.dicebear.com/7.x/avataaars/png?seed=Aneka',
     'https://api.dicebear.com/7.x/avataaars/png?seed=Milo',
@@ -405,13 +405,8 @@ const ProfileScreen = ({
                   </View>
                 ) : user.avatar && !imageError ? (
                   <Image 
-                    key={`${user.avatar}_${Math.random()}`}
-                    source={{ uri: `${user.avatar}${user.avatar.includes('?') ? '&' : '?'}v=${Math.random().toString(36).substring(7)}` }} 
+                    source={getSafeAvatar(user.avatar, user.name)}
                     style={styles.avatar} 
-                    onError={() => {
-                        console.log("📸 Avatar load error, switching to initials");
-                        setImageError(true);
-                    }}
                   />
                 ) : (
                   <AvatarPlaceholder name={user.name} size={80} />

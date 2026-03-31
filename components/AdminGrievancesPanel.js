@@ -38,15 +38,15 @@ export const AdminGrievancesPanel = ({
 
   useEffect(() => {
     if (selectedTicket) {
-      const updated = tickets.find(t => t.id === selectedTicket.id);
+      const updated = (tickets || []).find(t => t.id === selectedTicket.id);
       if (updated) setSelectedTicket(updated);
     }
   }, [tickets]);
 
-  const getUserName = (userId) => players.find(pl => pl.id === userId)?.name || userId;
-  const getUserRole = (userId) => players.find(pl => pl.id === userId)?.role || 'user';
+  const getUserName = (userId) => (players || []).find(pl => pl.id === userId)?.name || userId;
+  const getUserRole = (userId) => (players || []).find(pl => pl.id === userId)?.role || 'user';
 
-  const filteredTickets = tickets
+  const filteredTickets = (tickets || [])
     .filter(t => filterStatus === 'All' || t.status === filterStatus)
     .filter(t => {
       if (!searchQuery) return true;
@@ -196,7 +196,7 @@ export const AdminGrievancesPanel = ({
               style={styles.chatScroll} 
               onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
             >
-              {selectedTicket.messages.map((msg, index) => renderMessage(msg, index))}
+              {(selectedTicket?.messages || []).map((msg, index) => renderMessage(msg, index))}
               {isUserTyping && (
                 <View style={styles.typingIndicator}>
                   <Text style={styles.typingText}>User is typing...</Text>
@@ -281,15 +281,15 @@ export const AdminGrievancesPanel = ({
       <View style={styles.statsGrid}>
         <View style={[styles.statBox, { backgroundColor: '#EFF6FF' }]}>
           <Text style={styles.statLabel}>Open</Text>
-          <Text style={[styles.statValue, { color: '#2563EB' }]}>{tickets.filter(t => t.status === 'Open').length}</Text>
+          <Text style={[styles.statValue, { color: '#2563EB' }]}>{(tickets || []).filter(t => t && t.status === 'Open').length}</Text>
         </View>
         <View style={[styles.statBox, { backgroundColor: '#FFFBEB' }]}>
           <Text style={styles.statLabel}>Active</Text>
-          <Text style={[styles.statValue, { color: '#D97706' }]}>{tickets.filter(t => t.status === 'In Progress').length}</Text>
+          <Text style={[styles.statValue, { color: '#D97706' }]}>{(tickets || []).filter(t => t && t.status === 'In Progress').length}</Text>
         </View>
         <View style={[styles.statBox, { backgroundColor: '#F0FDF4' }]}>
           <Text style={styles.statLabel}>Done</Text>
-          <Text style={[styles.statValue, { color: '#16A34A' }]}>{tickets.filter(t => t.status === 'Resolved' || t.status === 'Closed').length}</Text>
+          <Text style={[styles.statValue, { color: '#16A34A' }]}>{(tickets || []).filter(t => t && (t.status === 'Resolved' || t.status === 'Closed')).length}</Text>
         </View>
       </View>
 
@@ -316,7 +316,7 @@ export const AdminGrievancesPanel = ({
       </ScrollView>
 
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-        {filteredTickets.map(ticket => {
+        {(filteredTickets || []).map(ticket => {
           const st = statusColors[ticket.status] || statusColors['Open'];
           return (
             <TouchableOpacity 

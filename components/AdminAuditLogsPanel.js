@@ -2,27 +2,28 @@ import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 
 const AdminAuditLogsPanel = ({ auditLogs, players, search }) => {
-  const filteredLogs = auditLogs.filter(log => {
+  const filteredLogs = (auditLogs || []).filter(log => {
+    if (!log) return false;
     if (!search) return true;
-    const s = search.toLowerCase();
-    const admin = players.find(p => p.id === log.adminId);
-    return (log.action || '').toLowerCase().includes(s) ||
-           (log.details || '').toLowerCase().includes(s) ||
-           (log.targetType || '').toLowerCase().includes(s) ||
-           (admin?.name || '').toLowerCase().includes(s);
+    const admin = (players || []).find(p => p.id === log.adminId);
+    const adminName = (admin?.name || log.adminId || '').toLowerCase();
+    const action = (log.action || '').toLowerCase();
+    const target = (log.targetId || '').toLowerCase();
+    const s = search.toLowerCase().trim();
+    return adminName.includes(s) || action.includes(s) || target.includes(s);
   });
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.headerTitle}>System Audit Trails</Text>
       <View style={styles.logList}>
-        {filteredLogs.length === 0 ? (
+        {(filteredLogs || []).length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>{search ? `No logs matching "${search}"` : 'No activity logs available'}</Text>
           </View>
         ) : (
-          filteredLogs.map(log => {
-            const admin = players.find(p => p.id === log.adminId);
+          (filteredLogs || []).map(log => {
+            const admin = (players || []).find(p => p.id === log.adminId);
             const targetColor = 
               log.targetType === 'video' ? '#3B82F6' :
               log.targetType === 'user' ? '#10B981' :

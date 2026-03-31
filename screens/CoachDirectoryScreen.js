@@ -4,6 +4,7 @@ import {
   Image, Modal, Alert, ScrollView, TextInput, SafeAreaView 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { getSafeAvatar } from '../utils/imageUtils';
 import designSystem from '../theme/designSystem';
 import { Calendar } from 'react-native-calendars';
 
@@ -15,9 +16,9 @@ export default function CoachDirectoryScreen({ user, role, players = [], onUpdat
   const [selectedTime, setSelectedTime] = useState(null);
   const [expandedSlot, setExpandedSlot] = useState(null);
   
-  const coaches = useMemo(() => {
-    return players.filter(p => p.role === 'coach')
-      .filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || 
+  const filteredCoaches = useMemo(() => {
+    return (players || []).filter(p => p && p.role === 'coach')
+      .filter(p => (p.name || '').toLowerCase().includes(search.toLowerCase()) || 
                    p.managedSports?.some(s => s.toLowerCase().includes(search.toLowerCase())));
   }, [players, search]);
 
@@ -91,7 +92,7 @@ export default function CoachDirectoryScreen({ user, role, players = [], onUpdat
   const renderCoachCard = ({ item }) => (
     <TouchableOpacity style={styles.coachCard} onPress={() => handleBook(item)}>
       <Image 
-        source={{ uri: item.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name)}&background=random` }} 
+        source={getSafeAvatar(item.avatar, item.name)}
         style={styles.coachAvatar} 
       />
       <View style={styles.coachInfo}>
@@ -166,7 +167,7 @@ export default function CoachDirectoryScreen({ user, role, players = [], onUpdat
   );
 
   if (role === 'coach') {
-    const coachBookings = players.flatMap(p => p.bookings || []).filter(b => b.coachId === user.id);
+    const coachBookings = (players || []).flatMap(p => p.bookings || []).filter(b => b.coachId === user.id);
     
     return (
       <SafeAreaView style={styles.container}>
