@@ -14,6 +14,7 @@ import PureJSDateTimePicker from '../components/PureJSDateTimePicker';
 import { Sport, SkillLevel, TournamentStructure, TournamentFormat } from '../types';
 import logger from '../utils/logger';
 import BroadcastTools from '../components/BroadcastTools';
+import { AcademyAnalytics } from '../components/AcademyAnalytics';
 
 const { width, height } = Dimensions.get('window');
 

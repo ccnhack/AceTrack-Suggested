@@ -7,6 +7,7 @@ export default function BroadcastTools({ tournaments = [] }) {
   const [message, setMessage] = useState('');
   const [selectedTournament, setSelectedTournament] = useState('all');
   const [targetAudience, setTargetAudience] = useState('registered');
+  const [categoryFilter, setCategoryFilter] = useState('all');
 
   const handleSend = () => {
     if (!message) return;
@@ -24,6 +25,18 @@ export default function BroadcastTools({ tournaments = [] }) {
     return t?.registeredPlayerIds?.length || 0;
   };
 
+  const filteredTournaments = (tournaments || []).filter(t => {
+    if (categoryFilter === 'all') return true;
+    const tDate = new Date(t.date);
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    if (categoryFilter === 'upcoming') {
+      return t.status !== 'completed' && !t.tournamentConcluded && (tDate >= today || t.tournamentStarted);
+    } else {
+      return t.status === 'completed' || t.tournamentConcluded || (tDate < today && !t.tournamentStarted);
+    }
+  });
+
   return (
     <View style={styles.container}>
       <View style={styles.card}>
@@ -37,15 +50,35 @@ export default function BroadcastTools({ tournaments = [] }) {
           </View>
         </View>
 
+        <Text style={styles.label}>FILTER BY STATUS</Text>
+        <View style={styles.categoryRow}>
+          {['all', 'upcoming', 'past'].map((cat) => (
+            <TouchableOpacity 
+              key={cat}
+              style={[styles.catBtn, categoryFilter === cat && styles.catBtnActive]}
+              onPress={() => {
+                setCategoryFilter(cat);
+                if (cat === 'all') setSelectedTournament('all');
+              }}
+            >
+              <Text style={[styles.catBtnText, categoryFilter === cat && styles.catBtnTextActive]}>
+                {cat.charAt(0).toUpperCase() + cat.slice(1)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         <Text style={styles.label}>SELECT TOURNAMENT</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow} contentContainerStyle={{ paddingBottom: 10 }}>
-          <TouchableOpacity 
-            style={[styles.chip, selectedTournament === 'all' && styles.chipActive]}
-            onPress={() => setSelectedTournament('all')}
-          >
-            <Text style={[styles.chipText, selectedTournament === 'all' && styles.chipTextActive]}>All Tournaments</Text>
-          </TouchableOpacity>
-          {tournaments.map(t => (
+          {categoryFilter === 'all' && (
+            <TouchableOpacity 
+              style={[styles.chip, selectedTournament === 'all' && styles.chipActive]}
+              onPress={() => setSelectedTournament('all')}
+            >
+              <Text style={[styles.chipText, selectedTournament === 'all' && styles.chipTextActive]}>All Tournaments</Text>
+            </TouchableOpacity>
+          )}
+          {filteredTournaments.map(t => (
             <TouchableOpacity 
               key={t.id}
               style={[styles.chip, selectedTournament === t.id && styles.chipActive]}
@@ -54,6 +87,11 @@ export default function BroadcastTools({ tournaments = [] }) {
               <Text style={[styles.chipText, selectedTournament === t.id && styles.chipTextActive]}>{t.title}</Text>
             </TouchableOpacity>
           ))}
+          {filteredTournaments.length === 0 && (
+            <View style={styles.emptyChip}>
+              <Text style={styles.emptyChipText}>No {categoryFilter} events found</Text>
+            </View>
+          )}
         </ScrollView>
 
         <Text style={styles.label}>TARGET AUDIENCE</Text>
@@ -113,8 +151,15 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: '900', color: '#0F172A' },
   subtitle: { fontSize: 12, color: '#64748B', fontWeight: '600' },
   label: { fontSize: 10, fontWeight: '900', color: '#94A3B8', letterSpacing: 1.5, marginBottom: 12, marginTop: 5 },
+  categoryRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  catBtn: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 12, backgroundColor: '#F1F5F slate-400', backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
+  catBtnActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' },
+  catBtnText: { fontSize: 11, fontWeight: '800', color: '#64748B' },
+  catBtnTextActive: { color: '#FFFFFF' },
   chipRow: { marginBottom: 15 },
   chip: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 14, backgroundColor: '#F1F5F9', marginRight: 10, height: 40, justifyContent: 'center' },
+  emptyChip: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 14, backgroundColor: '#F8FAFC', borderStyle: 'dashed', borderWidth: 1, borderColor: '#E2E8F0', height: 40, justifyContent: 'center' },
+  emptyChipText: { fontSize: 12, color: '#94A3B8', fontWeight: '600' },
   chipActive: { backgroundColor: designSystem.colors.primary },
   chipText: { fontSize: 13, color: '#64748B', fontWeight: '700' },
   chipTextActive: { color: '#fff' },

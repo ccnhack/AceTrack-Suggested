@@ -79,7 +79,20 @@ const AdminHubWrapper = memo((props) => {
 
 const InsightsWrapper = memo((props) => {
   const params = useNavigationParams();
-  return <InsightsScreen {...props} {...params} />;
+  return (
+    <InsightsScreen 
+      {...props} 
+      {...params} 
+      role={params.role} 
+      user={params.user} 
+      academyId={params.user?.id}
+      players={params.players}
+      tournaments={params.tournaments}
+      matchVideos={params.matchVideos}
+      matches={params.matches}
+      evaluations={params.evaluations}
+    />
+  );
 });
 
 const MatchmakingWrapper = memo((props) => {
@@ -184,10 +197,11 @@ const MainTabs = memo(() => {
       {role === 'admin' && (
         <Tab.Screen name="Admin" component={AdminHubWrapper} />
       )}
-      {role === 'admin' ? (
-        <Tab.Screen name="Insights" component={InsightsWrapper} />
-      ) : (
+      {Platform.OS !== 'web' && (role === 'user' || role === 'coach' || role === 'academy' || role === 'admin') && (
         <Tab.Screen name="Matchmaking" component={MatchmakingWrapper} />
+      )}
+      {(role === 'admin' || role === 'academy') && (
+        <Tab.Screen name="Insights" component={InsightsWrapper} />
       )}
       <Tab.Screen name="Profile" component={ProfileWrapper} />
     </Tab.Navigator>

@@ -1,13 +1,23 @@
 import React, { useMemo, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Animated, SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import designSystem from '../theme/designSystem';
 import logger from '../utils/logger';
+import { AcademyAnalytics } from '../components/AcademyAnalytics';
 
 const screenWidth = Dimensions.get('window').width;
 
-const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) => {
+const InsightsScreen = ({ 
+  role, 
+  user, 
+  academyId, 
+  players = [], 
+  tournaments = [], 
+  matchVideos = [],
+  matches = [],
+  evaluations = []
+}) => {
   const [selectedCity, setSelectedCity] = useState(null);
   const [selectedAcademyId, setSelectedAcademyId] = useState(null);
   const [selectedStat, setSelectedStat] = useState(null); // 'Players' | 'Tournaments' | 'Footage' | 'Coaches' | null
@@ -228,6 +238,25 @@ const InsightsScreen = ({ players = [], tournaments = [], matchVideos = [] }) =>
     logger.logAction('Insights_Coach_DeepDive', { id, name });
     setSelectedCoachId(id);
   };
+
+  if (role === 'academy') {
+    return (
+        <SafeAreaView style={styles.container}>
+            <View style={styles.academyHeader}>
+                <Text style={styles.welcomeText}>Academy Insights</Text>
+                <Text style={styles.subText}>Performance & Revenue analytics</Text>
+            </View>
+            <AcademyAnalytics 
+                academyId={academyId || user?.id} 
+                tournaments={tournaments} 
+                players={players} 
+                matchVideos={matchVideos}
+                matches={matches}
+                evaluations={evaluations}
+            />
+        </SafeAreaView>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -477,6 +506,7 @@ const StatBox = ({ title, value, icon, color, trend, isActive, onPress }) => (
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   content: { padding: 20 },
+  academyHeader: { paddingHorizontal: 24, paddingTop: 40, paddingBottom: 16, backgroundColor: '#FFFFFF' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, marginTop: 40 },
   welcomeText: { fontSize: 26, fontWeight: '800', color: '#1E293B' },
   subText: { fontSize: 13, color: '#64748B', marginTop: 2 },
