@@ -105,7 +105,9 @@ export interface Player {
   purchasedVideos?: string[];
   purchasedHighlights?: string[];
   favouritedVideos?: string[];
-  walletHistory?: { id: string; amount: number; type: 'credit' | 'debit'; description: string; date: string }[];
+  walletHistory?: { id: string; amount: number; type: 'credit' | 'debit'; description: string; date: string; status?: 'Pending' | 'Completed' }[];
+  referralCode: string;
+  referredBy?: string | null;
 }
 
 export type TicketStatus = 'Open' | 'In Progress' | 'Awaiting Response' | 'Resolved' | 'Closed';

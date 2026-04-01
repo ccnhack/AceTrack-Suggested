@@ -38,7 +38,8 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, Sport, isUsingCloud, o
     certificationUrl: '',
     city: '',
     state: '',
-    managedSports: []
+    managedSports: [],
+    referralCode: ''
   });
   const [error, setError] = useState('');
   const [usernameStatus, setUsernameStatus] = useState('idle');
@@ -112,6 +113,26 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, Sport, isUsingCloud, o
       return;
     }
 
+    if (players.find(p => p.email.toLowerCase() === formData.email.toLowerCase())) {
+      setError('Email address already registered.');
+      return;
+    }
+
+    if (players.find(p => p.phone === formData.phone)) {
+      setError('Mobile number already registered.');
+      return;
+    }
+
+    let referrerId = null;
+    if (formData.referralCode && formData.referralCode.trim() !== '') {
+      const referrer = players.find(p => p.referralCode && p.referralCode.toUpperCase() === formData.referralCode.trim().toUpperCase());
+      if (!referrer) {
+        setError('Invalid referral code. Please check or leave blank.');
+        return;
+      }
+      referrerId = referrer.id;
+    }
+
     const newPlayer = {
       id: formData.username,
       name: isAcademy ? formData.academyName : `${formData.firstName} ${formData.lastName}`,
@@ -136,6 +157,18 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, Sport, isUsingCloud, o
       role: accountType,
       isEmailVerified: false,
       isPhoneVerified: false,
+      referredBy: referrerId,
+      referralCode: `ACE-${formData.username.substring(0, 5).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+      walletHistory: referrerId ? [
+        {
+          id: `ref-pending-${formData.username}`,
+          amount: 100,
+          type: 'credit',
+          description: 'Referral Reward (Pending - Play 1 Tournament)',
+          date: new Date().toISOString(),
+          status: 'Pending'
+        }
+      ] : [],
       ...(isCoach && {
         isApprovedCoach: false,
         certifiedSports: formData.certifiedSports,
@@ -146,6 +179,27 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, Sport, isUsingCloud, o
         managedSports: formData.managedSports
       })
     };
+
+    // If there's a referrer, also add a pending entry to their history
+    if (referrerId && setPlayers) {
+      setPlayers(prev => prev.map(p => {
+        if (p.id === referrerId) {
+          const pendingEntry = {
+            id: `bonus-pending-${formData.username}`,
+            amount: 100,
+            type: 'credit',
+            description: `Referral Bonus: ${formData.username} (Pending Participation)`,
+            date: new Date().toISOString(),
+            status: 'Pending'
+          };
+          return {
+            ...p,
+            walletHistory: [pendingEntry, ...(p.walletHistory || [])]
+          };
+        }
+        return p;
+      }));
+    }
 
     setIsRegistering(true);
     setNewlyCreatedUser(newPlayer);
@@ -388,6 +442,19 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, Sport, isUsingCloud, o
             secureTextEntry
           />
         </View>
+
+        {accountType === 'user' && (
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Referral Code (Optional)</Text>
+            <TextInput 
+              style={styles.input}
+              placeholder="ACE-XXXX-YYYY"
+              value={formData.referralCode}
+              onChangeText={(val) => setFormData({...formData, referralCode: val})}
+              autoCapitalize="characters"
+            />
+          </View>
+        )}
 
         {accountType === 'coach' && (
           <>

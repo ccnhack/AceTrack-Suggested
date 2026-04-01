@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = "2.4.2";
+const APP_VERSION = "2.4.3";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -1387,11 +1387,61 @@ export default function App() {
     },
     onSaveTicket: handleSaveTicket,
     onSaveEvaluation: (e) => {
-      setEvaluations(prev => {
-        const updated = prev.map(item => item.id === e.id ? e : item);
-        if (!prev.find(item => item.id === e.id)) updated.unshift(e);
-        syncAndSaveData({ evaluations: updated });
-        return updated;
+      setEvaluations(prevEval => {
+        const updatedEval = prevEval.map(item => item.id === e.id ? e : item);
+        if (!prevEval.find(item => item.id === e.id)) updatedEval.unshift(e);
+        syncAndSaveData({ evaluations: updatedEval });
+        
+        // Finalize Referral Rewards if this is proof of participation
+        setPlayers(prevPlayers => {
+          const referee = prevPlayers.find(p => p.id === e.playerId);
+          if (referee && referee.referredBy) {
+            // Check if this is the first evaluation for this player across all tournaments
+            const prevEvalsRec = updatedEval.filter(ev => ev.playerId === e.playerId);
+            if (prevEvalsRec.length === 1) { // This is their first match evaluation
+              const updatedPlayers = prevPlayers.map(p => {
+                // Finalize Referee
+                if (p.id === referee.id) {
+                  const refereePendingId = `ref-pending-${p.id}`;
+                  const history = p.walletHistory || [];
+                  const entryIdx = history.findIndex(h => h.id === refereePendingId && h.status === 'Pending');
+                  if (entryIdx > -1) {
+                    const newHistory = [...history];
+                    newHistory[entryIdx] = { ...newHistory[entryIdx], status: 'Completed', description: 'Referral Reward (Completed - Played Tournament)' };
+                    return { ...p, walletHistory: newHistory, credits: (p.credits || 0) + 100 };
+                  }
+                }
+                // Finalize Referrer
+                if (p.id === referee.referredBy) {
+                  const referrerPendingId = `bonus-pending-${referee.id}`;
+                  const history = p.walletHistory || [];
+                  const entryIdx = history.findIndex(h => h.id === referrerPendingId && h.status === 'Pending');
+                  if (entryIdx > -1) {
+                    const newHistory = [...history];
+                    newHistory[entryIdx] = { ...newHistory[entryIdx], status: 'Completed', description: `Referral Bonus: ${referee.id} (Tournament Played)` };
+                    return { ...p, walletHistory: newHistory, credits: (p.credits || 0) + 100 };
+                  }
+                }
+                return p;
+              });
+              
+              // If current user is either referee or referrer, update their session too
+              if (currentUserRef.current) {
+                const me = updatedPlayers.find(p => p.id === currentUserRef.current.id);
+                if (me) {
+                  setCurrentUser(me);
+                  currentUserRef.current = me;
+                }
+              }
+              
+              syncAndSaveData({ players: updatedPlayers, currentUser: currentUserRef.current });
+              return updatedPlayers;
+            }
+          }
+          return prevPlayers;
+        });
+
+        return updatedEval;
       });
     },
     onConfirmCoachRequest: handleConfirmCoachRequest,
@@ -1636,12 +1686,43 @@ export default function App() {
 
         setPlayers(prevP => {
           if (!currentUserRef.current) return prevP || [];
-          const updatedUser = {
+          
+          const isFirstRegistration = (currentUserRef.current.registeredTournamentIds || []).length === 0;
+          const referralBonus = (isFirstRegistration && currentUserRef.current.referredBy) ? 100 : 0;
+          
+          let updatedUser = {
             ...currentUserRef.current,
             registeredTournamentIds: [...new Set([...(currentUserRef.current.registeredTournamentIds || []), t.id])]
           };
-          const updatedPlayers = (prevP || []).map(p => p && String(p.id).toLowerCase() === String(userId).toLowerCase() ? updatedUser : p);
           
+          if (referralBonus > 0) {
+            updatedUser.credits = (updatedUser.credits || 0) + referralBonus;
+            updatedUser.walletHistory = [
+              { id: `ref-ref-${Date.now()}`, amount: referralBonus, type: 'credit', description: `Referral Reward (Referee Bonus)`, date: new Date().toISOString() },
+              ...(updatedUser.walletHistory || [])
+            ];
+          }
+
+          let updatedPlayers = (prevP || []).map(p => p && String(p.id).toLowerCase() === String(userId).toLowerCase() ? updatedUser : p);
+          
+          // If referral bonus applies, also reward the referrer
+          if (referralBonus > 0 && currentUserRef.current.referredBy) {
+            const referrerId = currentUserRef.current.referredBy;
+            updatedPlayers = updatedPlayers.map(p => {
+              if (String(p.id).toLowerCase() === String(referrerId).toLowerCase()) {
+                return {
+                  ...p,
+                  credits: (p.credits || 0) + 100,
+                  walletHistory: [
+                    { id: `ref-sor-${Date.now()}`, amount: 100, type: 'credit', description: `Referral Reward (Referrer Bonus for ${updatedUser.name})`, date: new Date().toISOString() },
+                    ...(p.walletHistory || [])
+                  ]
+                };
+              }
+              return p;
+            });
+          }
+
           setCurrentUser(updatedUser);
           currentUserRef.current = updatedUser;
           
@@ -1651,6 +1732,10 @@ export default function App() {
             currentUser: updatedUser 
           });
           
+          if (referralBonus > 0) {
+            Alert.alert("Referral Reward!", "You and your referrer have both earned ₹100 for your first tournament registration!");
+          }
+
           return updatedPlayers;
         });
         
@@ -1711,6 +1796,28 @@ export default function App() {
     if (exists) return players;
     return [currentUser, ...players];
   }, [players, currentUser]);
+
+  // Migration: Ensure all players have referral codes EXACTLY ONCE
+  React.useEffect(() => {
+    if (!isLoading && players.length > 0 && players.some(p => !p.referralCode)) {
+      setPlayers(prev => {
+        const needsUpdate = prev.some(p => !p.referralCode);
+        if (!needsUpdate) return prev;
+        
+        const updated = prev.map(p => {
+          if (!p.referralCode) {
+            return {
+              ...p,
+              referralCode: `ACE-${(p.id || 'PLAYER').substring(0, 5).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
+            };
+          }
+          return p;
+        });
+        syncAndSaveData({ players: updated });
+        return updated;
+      });
+    }
+  }, [isLoading, players.length]);
 
   if (isLoading) {
     return (

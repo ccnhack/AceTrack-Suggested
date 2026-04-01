@@ -12,7 +12,7 @@ import { getSafeAvatar } from '../utils/imageUtils';
 import * as ImagePicker from 'expo-image-picker';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Updates from 'expo-updates';
-import { PlayerSkillDashboard, PlayerPerformanceAnalytics, PlayerWalletDashboard } from '../components/PlayerProfileFeatures';
+import { PlayerSkillDashboard, PlayerPerformanceAnalytics, PlayerWalletDashboard, PlayerReferralDashboard } from '../components/PlayerProfileFeatures';
 import CoachOnboardingModal from '../components/CoachOnboardingModal';
 import { SupportTicketSystem } from '../components/SupportTicketSystem';
 import DiagnosticsModal from '../components/DiagnosticsModal';
@@ -134,6 +134,7 @@ const ProfileScreen = ({
   const [sessionCustomAvatar, setSessionCustomAvatar] = useState(null); // Persistence for session
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [showReferralModal, setShowReferralModal] = useState(false);
   const [isPickingImage, setIsPickingImage] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -579,6 +580,22 @@ const ProfileScreen = ({
                 <Text style={styles.menuLabel}>Change Password</Text>
                 <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
             </TouchableOpacity>
+            
+            {user.role === 'user' && (
+              <TouchableOpacity 
+                  onPress={() => {
+                    logger.logAction('MODAL_OPEN', { modal: 'Referral' });
+                    setShowReferralModal(true);
+                  }}
+                  style={styles.menuItem}
+              >
+                  <View style={[styles.menuIcon, { backgroundColor: '#EEF2FF' }]}>
+                      <Ionicons name="gift-outline" size={20} color="#4F46E5" />
+                  </View>
+                  <Text style={styles.menuLabel}>Refer Friends, Play Along</Text>
+                  <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity 
                 onPress={() => {
@@ -789,6 +806,22 @@ const ProfileScreen = ({
                 onTopUp={onTopUp} 
                 noCard={true}
               />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showReferralModal} animationType="fade" transparent={true} onRequestClose={() => setShowReferralModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.walletModalContent}>
+            <View style={styles.walletModalHeader}>
+              <Text style={styles.walletModalTitle}>Referral Program</Text>
+              <TouchableOpacity onPress={() => setShowReferralModal(false)} style={styles.walletModalClose}>
+                <Ionicons name="close" size={22} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+              <PlayerReferralDashboard user={user} />
             </ScrollView>
           </View>
         </View>

@@ -27,6 +27,42 @@ const ReviewOverlay = ({ isUnderReview }) => {
   );
 };
 
+export const PlayerReferralDashboard = ({ user }) => {
+  if (user.role !== 'user') return null;
+
+  const handleShare = () => {
+    const shareMessage = `Join me on AceTrack! Use my referral code ${user.referralCode} to get ₹100 credits when you register for your first tournament. Download now: https://acetrack.app/invite`;
+    Alert.alert(
+      "Referral Code Copied!",
+      "Share this message with your friends:\n\n" + shareMessage
+    );
+  };
+
+  return (
+    <View style={styles.referCard}>
+      <View style={styles.referHeader}>
+        <View style={styles.referIconContainer}>
+          <Ionicons name="gift-outline" size={22} color="#6366F1" />
+        </View>
+        <Text style={styles.referTitle}>Refer Friends, Play Along</Text>
+      </View>
+      <Text style={styles.referDesc}>
+        Gift ₹100 to your friends! You both earn ₹100 credits when they register for their first tournament using your code.
+      </Text>
+      <View style={styles.codeBox}>
+        <View style={styles.codeTextContainer}>
+          <Text style={styles.codeLabel}>YOUR REFERRAL CODE</Text>
+          <Text style={styles.codeText} numberOfLines={1} adjustsFontSizeToFit>{user.referralCode}</Text>
+        </View>
+        <TouchableOpacity style={styles.referShareBtn} onPress={handleShare}>
+          <Ionicons name="share-social-outline" size={18} color="#FFFFFF" />
+          <Text style={styles.referShareBtnText}>Invite</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
 export const PlayerSkillDashboard = ({ user }) => {
   return (
     <View style={styles.card}>
@@ -610,7 +646,14 @@ export const PlayerWalletDashboard = ({ user, onTopUp, noCard }) => {
                       />
                     </View>
                     <View>
-                      <Text style={styles.historyDesc}>{item.description}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={styles.historyDesc}>{item.description}</Text>
+                        {item.status === 'Pending' && (
+                          <View style={styles.pendingBadge}>
+                            <Text style={styles.pendingBadgeText}>Pending</Text>
+                          </View>
+                        )}
+                      </View>
                       <Text style={styles.historyDate}>
                         {new Date(item.date).toLocaleDateString()} • {new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </Text>
@@ -670,6 +713,84 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     padding: 16,
     borderRadius: 20,
+  },
+  miniSportBadge: { backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  miniSportText: { fontSize: 10, fontWeight: '800', color: '#6366F1', textTransform: 'uppercase' },
+  referCard: {
+    backgroundColor: '#EEF2FF',
+    borderRadius: 32,
+    padding: 24,
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: '#E0E7FF',
+  },
+  referHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  referIconContainer: {
+    width: 40,
+    height: 40,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  referTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#1E1B4B',
+    textTransform: 'uppercase',
+  },
+  referDesc: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#4338CA',
+    fontWeight: '600',
+    marginBottom: 20,
+    opacity: 0.8,
+  },
+  codeBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  codeTextContainer: {
+    flex: 1,
+    marginRight: 8,
+  },
+  codeLabel: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#94A3B8',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  codeText: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+    letterSpacing: 1,
+  },
+  referShareBtn: {
+    backgroundColor: '#6366F1',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  referShareBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
   },
   skillLabel: {
     fontSize: 10,
@@ -1405,5 +1526,19 @@ const styles = StyleSheet.create({
     fontSize: 9,
     textAlign: 'center',
     fontWeight: 'bold',
+  },
+  pendingBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  pendingBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#D97706',
+    textTransform: 'uppercase',
   },
 });
