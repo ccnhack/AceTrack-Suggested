@@ -1662,8 +1662,7 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   calendarModalContent: {
     backgroundColor: '#FFF',
@@ -1673,8 +1672,6 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 40 : 24,
     maxHeight: '90%',
     width: '100%',
-    position: 'absolute',
-    bottom: 0,
   },
   eventsSection: {
     marginTop: 25,
