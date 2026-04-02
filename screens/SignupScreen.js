@@ -9,7 +9,7 @@ import logger from '../utils/logger';
 
 const { width, height } = Dimensions.get('window');
 
-const SignupScreen = ({ onSignupSuccess, onBack, players, Sport, isUsingCloud, onToggleCloud }) => {
+const SignupScreen = ({ onSignupSuccess, onBack, players, setPlayers, Sport, isUsingCloud, onToggleCloud }) => {
   
   React.useEffect(() => {
     // DIAGNOSTIC LOGGING

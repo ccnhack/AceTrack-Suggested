@@ -232,6 +232,7 @@ const SignupWrapper = memo((props) => {
     <SignupScreen 
       {...props} 
       players={params.players} 
+      setPlayers={params.setPlayers}
       onSignupSuccess={(newUser) => {
         params.onRegisterUser(newUser);
         props.navigation.navigate('Login');
