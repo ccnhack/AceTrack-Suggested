@@ -165,10 +165,11 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
 
   const getSportFromText = (text) => {
     const t = text.toLowerCase();
-    if (t.includes("badminton")) return "Badminton";
-    if (t.includes("cricket")) return "Cricket";
-    if (t.includes("table tennis") || t.includes(" tt")) return "Table Tennis";
-    return "";
+    const sports = [];
+    if (t.includes("badminton")) sports.push("Badminton");
+    if (t.includes("cricket")) sports.push("Cricket");
+    if (t.includes("table tennis") || t.includes(" tt")) sports.push("Table Tennis");
+    return sports.join(", ");
   };
 
   // LOCATION & VENUE DISCOVERY (LOCAL DATA + FALLBACK)
@@ -239,19 +240,22 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   const loadLocalVenues = (lat, lng) => {
     setIsFetchingVenues(true);
     
-    const processedVenues = venuesData.map(v => ({
-      label: v.venueName + (v.area ? ` - ${v.area}` : ''),
-      venueName: v.venueName,
-      area: v.area,
-      sport: v.sport,
-      value: v.venueName,
-      address: v.address || "",
-      lat: v.lat,
-      lon: v.lon,
-      phone: v.phone,
-      email: v.email,
-      distance: getDistance(lat, lng, v.lat, v.lon)
-    }));
+    const processedVenues = venuesData.map(v => {
+      const detectedSport = getSportFromText(v.venueName + " " + (v.address || ""));
+      return {
+        label: v.venueName + (v.area ? ` - ${v.area}` : ''),
+        venueName: v.venueName,
+        area: v.area,
+        sport: detectedSport || v.sport,
+        value: v.venueName,
+        address: v.address || "",
+        lat: v.lat,
+        lon: v.lon,
+        phone: v.phone,
+        email: v.email,
+        distance: getDistance(lat, lng, v.lat, v.lon)
+      };
+    });
 
     // Filter strictly for ones within 30km as requested
     const within30km = processedVenues.filter(v => v.distance !== null && parseFloat(v.distance) <= 30);
@@ -1052,7 +1056,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                              const matchesSearch = (v.venueName?.toLowerCase() || "").includes(q) || 
                                                   (v.area?.toLowerCase() || "").includes(q) || 
                                                   (v.sport?.toLowerCase() || "").includes(q);
-                             const matchesSport = v.sport?.toLowerCase() === selectedSport.toLowerCase();
+                             const matchesSport = v.sport?.toLowerCase().includes(selectedSport.toLowerCase());
                              return matchesSearch && matchesSport;
                           })
                           .map((venue, idx) => (
@@ -1489,7 +1493,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                                const matchesSearch = (v.venueName?.toLowerCase() || "").includes(q) || 
                                                     (v.area?.toLowerCase() || "").includes(q) || 
                                                     (v.sport?.toLowerCase() || "").includes(q);
-                               const matchesSport = v.sport?.toLowerCase() === selectedChallenge?.sport?.toLowerCase();
+                               const matchesSport = v.sport?.toLowerCase().includes(selectedChallenge?.sport?.toLowerCase());
                                return matchesSearch && matchesSport;
                             })
                             .map((venue, idx) => (
