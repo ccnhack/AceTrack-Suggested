@@ -1049,9 +1049,11 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                         {nearbyVenues
                           .filter(v => {
                              const q = venueDropdownSearchQuery.toLowerCase();
-                             return (v.venueName?.toLowerCase() || "").includes(q) || 
-                                    (v.area?.toLowerCase() || "").includes(q) || 
-                                    (v.sport?.toLowerCase() || "").includes(q);
+                             const matchesSearch = (v.venueName?.toLowerCase() || "").includes(q) || 
+                                                  (v.area?.toLowerCase() || "").includes(q) || 
+                                                  (v.sport?.toLowerCase() || "").includes(q);
+                             const matchesSport = v.sport?.toLowerCase() === selectedSport.toLowerCase();
+                             return matchesSearch && matchesSport;
                           })
                           .map((venue, idx) => (
                            <TouchableOpacity 
@@ -1423,7 +1425,11 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                       />
                     </View>
                     <ScrollView style={styles.venueResults} nestedScrollEnabled>
-                        {MOCK_ACADEMIES.filter(a => a.name.toLowerCase().includes(venueSearchQuery.toLowerCase())).map((academy, index) => {
+                        {MOCK_ACADEMIES.filter(a => {
+                          const matchesSearch = a.name.toLowerCase().includes(venueSearchQuery.toLowerCase());
+                          const supportsSport = a.managedSports?.includes(selectedChallenge?.sport);
+                          return matchesSearch && supportsSport;
+                        }).map((academy, index) => {
                             const isBusy = isTimeSlotBlocked(counterDate, counterTime, academy.id);
                             const isSelected = selectedAcademyForVenue?.id === academy.id;
                             const nextSlot = isBusy ? getNextAvailableSlot(counterDate, counterTime, academy.id) : null;
@@ -1480,9 +1486,11 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                           {nearbyVenues
                             .filter(v => {
                                const q = venueDropdownSearchQuery.toLowerCase();
-                               return (v.venueName?.toLowerCase() || "").includes(q) || 
-                                      (v.area?.toLowerCase() || "").includes(q) || 
-                                      (v.sport?.toLowerCase() || "").includes(q);
+                               const matchesSearch = (v.venueName?.toLowerCase() || "").includes(q) || 
+                                                    (v.area?.toLowerCase() || "").includes(q) || 
+                                                    (v.sport?.toLowerCase() || "").includes(q);
+                               const matchesSport = v.sport?.toLowerCase() === selectedChallenge?.sport?.toLowerCase();
+                               return matchesSearch && matchesSport;
                             })
                             .map((venue, idx) => (
                             <TouchableOpacity 
