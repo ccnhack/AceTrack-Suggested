@@ -57,14 +57,18 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   const [activeTab, setActiveTab] = useState(role === 'coach' ? 'New Bookings' : 'Challenge'); // Challenge, Requests, Accepted, History
 
   // Derived states from global matchmaking prop
-  // Derived states from global matchmaking prop - MEMOIZED
   const sentRequests = React.useMemo(() => 
-    matchmaking.filter(m => m.senderId === user?.id && m.status !== 'Accepted' && m.status !== 'Cancelled' && m.status !== 'Declined'),
+    matchmaking.filter(m => m.senderId === user?.id && m.status !== 'Accepted' && m.status !== 'Cancelled' && m.status !== 'Declined' && m.status !== 'Countered'),
     [matchmaking, user?.id]
   );
   
   const receivedRequests = React.useMemo(() => 
     matchmaking.filter(m => m.receiverId === user?.id && m.status === 'Pending'),
+    [matchmaking, user?.id]
+  );
+
+  const counteredRequests = React.useMemo(() => 
+    matchmaking.filter(m => (m.senderId === user?.id || m.receiverId === user?.id) && m.status === 'Countered'),
     [matchmaking, user?.id]
   );
   
@@ -705,8 +709,8 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   }, [role, sentRequests, handleChallenge]);
 
   const renderRequested = () => {
-    const counteredRequests = sentRequests.filter(req => req.status === 'Countered');
-    const actualSentRequests = sentRequests.filter(req => req.status !== 'Countered');
+    // counteredRequests is now a top-level memoized state
+    const actualSentRequests = sentRequests;
 
     return (
       <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
