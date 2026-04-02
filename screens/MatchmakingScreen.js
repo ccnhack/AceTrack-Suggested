@@ -273,49 +273,33 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   React.useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.warn('Permission to access location was denied');
-        // If no location, still show venues but without distance
-        const processedVenues = venuesData.map(v => ({
-            label: v.venueName + (v.area ? ` - ${v.area}` : ''),
-            venueName: v.venueName,
-            area: v.area,
-            sport: v.sport,
-            value: v.venueName,
-            address: v.address,
-            lat: v.lat,
-            lon: v.lon,
-            phone: v.phone,
-            email: v.email,
-            distance: null
-          }));
-        setNearbyVenues(processedVenues);
-        return;
-      }
+      if (status !== 'granted') return;
+
       let location = await Location.getCurrentPositionAsync({});
       setUserLocation(location.coords);
     })();
   }, []);
 
   React.useEffect(() => {
-    if ((isChallengeModalVisible || isCounterModalVisible) && nearbyVenues.length === 0) {
+    if (isChallengeModalVisible || isCounterModalVisible) {
       if (userLocation) {
+        // We have location - compute distances
         loadLocalVenues(userLocation.latitude, userLocation.longitude);
-      } else {
-        // Fallback if location not ready
+      } else if (nearbyVenues.length === 0) {
+        // Location not ready, but we need to show something
         const processedVenues = venuesData.map(v => ({
-            label: v.venueName + (v.area ? ` - ${v.area}` : ''),
-            venueName: v.venueName,
-            area: v.area,
-            sport: v.sport,
-            value: v.venueName,
-            address: v.address,
-            lat: v.lat,
-            lon: v.lon,
-            phone: v.phone,
-            email: v.email,
-            distance: null
-          }));
+          label: v.venueName + (v.area ? ` - ${v.area}` : ''),
+          venueName: v.venueName,
+          area: v.area,
+          sport: v.sport,
+          value: v.venueName,
+          address: v.address,
+          lat: v.lat,
+          lon: v.lon,
+          phone: v.phone,
+          email: v.email,
+          distance: null
+        }));
         setNearbyVenues(processedVenues);
       }
     }
