@@ -148,7 +148,7 @@ const otpLimiter = rateLimit({
   message: { error: 'Too many OTP attempts. Account temporarily locked.' }
 });
 
-app.use('/api/', globalLimiter);
+app.use('/api', globalLimiter);
 
 // ═══════════════════════════════════════════════════════════════
 // WebSocket Setup
@@ -771,9 +771,6 @@ router.get('/audit-logs', apiKeyGuard, asyncHandler(async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 // 🌐 Mount API v1 + backward-compatible un-versioned routes
 // ═══════════════════════════════════════════════════════════════
-app.use('/api', router);
-
-// Backward compatibility: also mount at /api/ for older clients
 app.use('/api', router);
 
 // ═══════════════════════════════════════════════════════════════

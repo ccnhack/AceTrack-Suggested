@@ -415,10 +415,16 @@ export default function App() {
       try {
         status = await response.json();
       } catch (jsonErr) {
+        // Fallback for non-JSON content (e.g. HTML error pages)
         const text = await response.text();
-        console.warn("⚠️ Received non-JSON response from status check:", text.substring(0, 100));
-        logger.logAction('CHECK_UPDATES_PARSE_ERROR', { bodyPrefix: text.substring(0, 200) });
-        throw jsonErr;
+        const snippet = text.substring(0, 100).replace(/\n/g, ' ');
+        console.warn(`⚠️ Update check received non-JSON (${response.status}): ${snippet}`);
+        logger.logAction('CHECK_UPDATES_PARSE_ERROR', { 
+            status: response.status, 
+            url: response.url,
+            bodyPrefix: snippet 
+        });
+        return; // Silent fail for background check
       }
       
       if (status.latestAppVersion) {
