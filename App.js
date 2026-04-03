@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, 
-  SafeAreaView, Alert, Platform, Modal, Image, KeyboardAvoidingView, ActivityIndicator, AppState, PanResponder, StatusBar 
+  SafeAreaView, Alert, Platform, Modal, Image, KeyboardAvoidingView, ActivityIndicator, AppState, PanResponder, StatusBar, InteractionManager 
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
@@ -115,29 +115,15 @@ export default function App() {
     setIsSyncing(val);          // React state update (for UI)
   };
 
+  // Unified Ref Synchronization
   useEffect(() => {
     pendingSyncRef.current = pendingSync;
-  }, [pendingSync]);
-
-  useEffect(() => {
     isUsingCloudRef.current = isUsingCloud;
-  }, [isUsingCloud]);
-
-  useEffect(() => {
     playersRef.current = players;
-  }, [players]);
-
-  useEffect(() => {
     matchVideosRef.current = matchVideos;
-  }, [matchVideos]);
-
-  useEffect(() => {
     matchesRef.current = matches;
-  }, [matches]);
-
-  useEffect(() => {
     tournamentsRef.current = tournaments;
-  }, [tournaments]);
+  }, [pendingSync, isUsingCloud, players, matchVideos, matches, tournaments]);
 
   useEffect(() => {
     // 1. WebSocket: Connect to real-time events
@@ -317,7 +303,7 @@ export default function App() {
         // INITIAL ARCHITECTURAL STATUS (As requested by user for diagnostics)
         logger.logAction('SYNC_ENGINE_STATUS', { 
           version: 'v5-HARDENED', 
-          platformVersion: Platform.OS === 'ios' ? `iOS ${Platform.Version}` : `Android ${Platform.constants.Release || ''} (API ${Platform.Version})`,
+          platformVersion: Platform.OS === 'ios' ? `iOS ${Platform.Version}` : Platform.OS === 'android' ? `Android ${Platform.constants?.Release || ''} (API ${Platform.Version})` : 'Web',
           appVersion: APP_VERSION,
           features: ['Ref-Mirroring', 'Atomic-Callbacks', 'Heartbeat-v36-RESTORED'],
           ota: {
@@ -645,18 +631,17 @@ export default function App() {
 
       if (Array.isArray(cloudData.players)) {
         const cleanedPlayers = cloudData.players.filter(p => !!(p && p.id));
-        // Optimization: Use stringify on the cleaned array only once and compare to ref
-        const newPlayersJson = JSON.stringify(cleanedPlayers);
-        const oldPlayersJson = JSON.stringify(playersRef.current);
         
-        if (newPlayersJson !== oldPlayersJson && !pendingSyncRef.current.includes('players')) {
+        // Optimization: Use lastUpdated timestamp instead of expensive JSON.stringify comparison
+        if (!pendingSyncRef.current.includes('players')) {
           setPlayers(cleanedPlayers);
           storage.setItem('players', cleanedPlayers);
         }
 
         const currentU = currentUserRef.current;
         if (currentU) {
-          const cloudUser = cloudData.players.find(p => String(p.id).toLowerCase() === String(currentU.id).toLowerCase());
+          const currentIdLower = String(currentU.id).toLowerCase();
+          const cloudUser = cleanedPlayers.find(p => String(p.id).toLowerCase() === currentIdLower);
           if (cloudUser) {
             const sanitizeUser = (u) => {
               const { devices, lastActive, ...rest } = u;
@@ -679,7 +664,7 @@ export default function App() {
           ...t,
           registeredPlayerIds: Array.isArray(t.registeredPlayerIds) ? t.registeredPlayerIds.filter(pid => !!pid) : [],
           pendingPaymentPlayerIds: Array.isArray(t.pendingPaymentPlayerIds) ? t.pendingPaymentPlayerIds.filter(pid => !!pid) : []
-        })).filter(t => t.status !== 'deleted' && !t.isDeleted); // Filter out soft-deleted items from cloud too
+        })).filter(t => t.status !== 'deleted' && !t.isDeleted);
         setTournaments(cleaned);
         storage.setItem('tournaments', cleaned);
       }
@@ -695,6 +680,7 @@ export default function App() {
         setMatchmaking(cloudData.matchmaking);
         storage.setItem('matchmaking', cloudData.matchmaking);
       }
+      // Write data directly to avoid interaction blocks during initial load
       if (cloudData.auditLogs) {
         setAuditLogs(cloudData.auditLogs);
         storage.setItem('auditLogs', cloudData.auditLogs);

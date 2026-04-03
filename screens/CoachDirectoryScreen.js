@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { 
   View, Text, StyleSheet, FlatList, TouchableOpacity, 
-  Image, Modal, Alert, ScrollView, TextInput, SafeAreaView 
+  Image, Modal, Alert, ScrollView, TextInput, SafeAreaView, Platform 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getSafeAvatar } from '../utils/imageUtils';
@@ -89,7 +89,7 @@ export default function CoachDirectoryScreen({ user, role, players = [], onUpdat
     }
   };
 
-  const renderCoachCard = ({ item }) => (
+  const renderCoachCard = useCallback(({ item }) => (
     <TouchableOpacity style={styles.coachCard} onPress={() => handleBook(item)}>
       <Image 
         source={getSafeAvatar(item.avatar, item.name)}
@@ -116,7 +116,15 @@ export default function CoachDirectoryScreen({ user, role, players = [], onUpdat
         <Text style={styles.priceUnit}>/HOUR</Text>
       </View>
     </TouchableOpacity>
-  );
+  ), [handleBook]);
+
+  const keyExtractor = useCallback(item => item.id, []);
+  
+  const getItemLayout = useCallback((data, index) => ({
+    length: 112,
+    offset: 112 * index,
+    index,
+  }), []);
 
   const renderDashboardBooking = (booking) => (
     <View key={booking.id} style={styles.dashboardCard}>
@@ -245,8 +253,13 @@ export default function CoachDirectoryScreen({ user, role, players = [], onUpdat
       <FlatList 
         data={filteredCoaches}
         renderItem={renderCoachCard}
-        keyExtractor={item => item.id}
+        keyExtractor={keyExtractor}
         contentContainerStyle={styles.coachList}
+        getItemLayout={getItemLayout}
+        initialNumToRender={8}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={Platform.OS !== 'web'}
         ListEmptyComponent={
           <View style={styles.emptyView}>
             <Ionicons name="people-outline" size={60} color="#E2E8F0" />

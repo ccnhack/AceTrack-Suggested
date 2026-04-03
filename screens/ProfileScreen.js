@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, Image, FlatList,
   StyleSheet, SafeAreaView, Modal, TextInput, Alert,
-  KeyboardAvoidingView, Platform 
+  KeyboardAvoidingView, Platform, InteractionManager 
 } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Calendar } from 'react-native-calendars';
 import designSystem from '../theme/designSystem';
@@ -19,6 +20,8 @@ import DiagnosticsModal from '../components/DiagnosticsModal';
 import config from '../config';
 import logger from '../utils/logger';
 import storage from '../utils/storage';
+import ProfileHeader, { AvatarPlaceholder, getInitials } from '../components/ProfileHeader';
+import ProfileMenuSection from '../components/ProfileMenuSection';
 
 const calculateAcademyTier = (uid, tournaments) => {
   const hostedCount = tournaments.filter(t => t.creatorId === uid).length;
@@ -27,32 +30,8 @@ const calculateAcademyTier = (uid, tournaments) => {
   return 'Bronze';
 };
 
-const getInitials = (name) => {
-  if (!name) return 'AT';
-  return name
-    .split(' ')
-    .map(n => n[0])
-    .join('')
-    .toUpperCase()
-    .substring(0, 2);
-};
 
-const AvatarPlaceholder = ({ name, size = 80 }) => {
-  const initials = getInitials(name);
-  // Hash name to get a consistent color
-  const colors = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'];
-  const colorIndex = (name || '').length % colors.length;
-  const backgroundColor = colors[colorIndex];
 
-  return (
-    <View style={[
-      styles.avatarPlaceholder, 
-      { width: size, height: size, borderRadius: size / 2, backgroundColor }
-    ]}>
-      <Text style={[styles.avatarInitials, { fontSize: size * 0.4 }]}>{initials}</Text>
-    </View>
-  );
-};
 
 const NotificationsModal = ({ visible, onClose, notifications, onClear, onNotificationClick }) => {
   return (
@@ -122,9 +101,12 @@ const ProfileScreen = ({
   isUploadingLogs,
   appVersion
 }) => {
+  const isFocused = useIsFocused();
   useEffect(() => {
-    logger.logAction('SCREEN_VIEW', { screen: 'Profile' });
-  }, []);
+    if (isFocused) {
+      logger.logAction('SCREEN_VIEW', { screen: 'Profile' });
+    }
+  }, [isFocused]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showCoachOnboarding, setShowCoachOnboarding] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
@@ -148,8 +130,10 @@ const ProfileScreen = ({
 
   const activeApiUrl = isUsingCloud ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
 
-  // New Update Check logic
+  // Optimized Update Check logic: Debounced and Focus-aware
   useEffect(() => {
+    if (!isFocused) return;
+
     const checkUpdates = async () => {
       try {
         const response = await fetch(`${activeApiUrl}/api/status`, {
@@ -158,7 +142,6 @@ const ProfileScreen = ({
         const data = await response.json();
         if (data && data.latestAppVersion) {
             setLatestVersion(data.latestAppVersion);
-            // Local appVersion comes from props
             if (appVersion && data.latestAppVersion !== appVersion) {
               const localParts = appVersion.split('-')[0].split('.').map(Number);
               const remoteParts = data.latestAppVersion.split('-')[0].split('.').map(Number);
@@ -173,12 +156,7 @@ const ProfileScreen = ({
                   break;
                 }
               }
-              
-              if (isNewer) {
-                setUpdateAvailable(true);
-              } else {
-                setUpdateAvailable(false);
-              }
+              setUpdateAvailable(isNewer);
             }
         }
       } catch (err) {
@@ -186,8 +164,13 @@ const ProfileScreen = ({
       }
     };
     
-    checkUpdates();
-  }, [appVersion, activeApiUrl]);
+    // Defer the heavy network check until the screen transition animation is complete
+    const interactionTask = InteractionManager.runAfterInteractions(() => {
+      checkUpdates();
+    });
+
+    return () => interactionTask.cancel();
+  }, [isFocused, appVersion, activeApiUrl]);
 
   const handleManualUpdate = async () => {
     if (__DEV__) {
@@ -398,89 +381,19 @@ const ProfileScreen = ({
   const content = (
     <SafeAreaView style={[styles.container, isWeb && { maxWidth: 900, alignSelf: 'center', width: '100%', backgroundColor: '#FFFFFF', padding: 24, marginVertical: 16, borderRadius: 24, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.08, shadowRadius: 40, overflow: 'hidden', flex: 1 }]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-            <View style={styles.avatarContainer}>
-                {user.role === 'admin' ? (
-                  <View style={[styles.avatar, { backgroundColor: '#0F172A', borderWidth: 2, borderColor: '#3B82F6', justifyContent: 'center', alignItems: 'center' }]}>
-                    <Image source={require('../assets/icon.png')} style={{width: 50, height: 50, resizeMode: 'contain'}} />
-                  </View>
-                ) : user.avatar && !imageError ? (
-                  <Image 
-                    source={getSafeAvatar(user.avatar, user.name)}
-                    style={styles.avatar} 
-                  />
-                ) : (
-                  <AvatarPlaceholder name={user.name} size={80} />
-                )}
-                <TouchableOpacity 
-                   style={styles.editBtn} 
-                   onPress={() => {
-                     logger.logAction('MODAL_OPEN', { modal: 'AvatarPicker' });
-                     setShowAvatarPicker(true);
-                   }}
-                 >
-                    <Ionicons name="camera" size={16} color="#FFFFFF" />
-                </TouchableOpacity>
-            </View>
-            <View style={styles.userInfo}>
-                <Text style={styles.userName}>{user.name}</Text>
-                {academyTier && (
-                  <View style={styles.roleRow}>
-                    <View style={[styles.tierBadge, academyTier === 'Gold' ? styles.tierGold : academyTier === 'Silver' ? styles.tierSilver : styles.tierBronze]}>
-                      <Text style={styles.tierText}>Academy Tier: {academyTier}</Text>
-                    </View>
-                  </View>
-                )}
-
-                {user.role !== 'admin' && user.role !== 'academy' && user.role !== 'coach' && (
-                  <TouchableOpacity onPress={() => setShowWalletModal(true)} style={styles.walletTrigger}>
-                    <Ionicons name="wallet" size={12} color="#16A34A" />
-                    <Text style={styles.walletTriggerText}>Wallet: ₹{user.credits || 0}</Text>
-                  </TouchableOpacity>
-                )}
-                
-                {/* Connection Status Badge */}
-                <TouchableOpacity 
-                  onPress={() => {
-                    logger.logAction('MANUAL_SYNC_CLICK');
-                    onManualSync();
-                  }}
-                  style={[
-                    styles.syncBadge, 
-                    isCloudOnline ? styles.syncOnline : (isUsingCloud ? styles.syncOffline : styles.syncLocal)
-                  ]}
-                >
-                  <Ionicons 
-                    name={isCloudOnline ? "cloud-done" : (isUsingCloud ? "cloud-offline" : "server")} 
-                    size={10} 
-                    color={isCloudOnline ? "#16A34A" : (isUsingCloud ? "#EF4444" : "#F59E0B")} 
-                  />
-                  <Text style={[styles.syncText, { color: isCloudOnline ? "#16A34A" : (isUsingCloud ? "#EF4444" : "#F59E0B") }]}>
-                    {isCloudOnline ? 'Cloud Synced' : (isUsingCloud ? 'Offline Mode' : 'Local Mode')}
-                  </Text>
-                </TouchableOpacity>
-                {lastSyncTime && (
-                  <Text style={styles.lastSyncText}>Last: {lastSyncTime}</Text>
-                )}
-            </View>
-
-            <TouchableOpacity 
-              style={styles.notificationBell} 
-              onPress={() => {
-                logger.logAction('MODAL_OPEN', { modal: 'Notifications' });
-                setShowNotifications(true);
-              }}
-            >
-                <Ionicons name="notifications-outline" size={24} color="#0F172A" />
-                {user.notifications?.some(n => !n.read) && (
-                    <View style={styles.notificationBadge}>
-                        <Text style={styles.badgeText}>
-                            {user.notifications.filter(n => !n.read).length}
-                        </Text>
-                    </View>
-                )}
-            </TouchableOpacity>
-        </View>
+        <ProfileHeader
+          user={user}
+          academyTier={academyTier}
+          imageError={imageError}
+          isCloudOnline={isCloudOnline}
+          isUsingCloud={isUsingCloud}
+          lastSyncTime={lastSyncTime}
+          onManualSync={onManualSync}
+          onAvatarPress={() => setShowAvatarPicker(true)}
+          onNotificationPress={() => setShowNotifications(true)}
+          onWalletPress={() => setShowWalletModal(true)}
+          logger={logger}
+        />
 
         {/* Skill Dashboard (Optional, based on user roles etc) */}
 
@@ -538,144 +451,18 @@ const ProfileScreen = ({
             </View>
         </View>
 
-        <View style={styles.menuSection}>
-            <TouchableOpacity 
-                onPress={() => {
-                  logger.logAction('MODAL_OPEN', { modal: 'EditProfile' });
-                  setShowEditProfile(true);
-                }}
-                style={styles.menuItem}
-            >
-                <View style={[styles.menuIcon, { backgroundColor: '#F8FAFC' }]}>
-                    <Ionicons name="person-outline" size={20} color="#334155" />
-                </View>
-                <Text style={styles.menuLabel}>Edit Profile</Text>
-                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-                onPress={() => {
-                  logger.logAction('MODAL_OPEN', { modal: 'Diagnostics' });
-                  setShowDiagnostics(true);
-                }}
-                style={styles.menuItem}
-            >
-                <View style={[styles.menuIcon, { backgroundColor: '#F8FAFC' }]}>
-                    <Ionicons name="bug-outline" size={20} color="#334155" />
-                </View>
-                <Text style={styles.menuLabel}>System Diagnostics</Text>
-                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-                onPress={() => {
-                  logger.logAction('MODAL_OPEN', { modal: 'ChangePassword' });
-                  setShowChangePassword(true);
-                }}
-                style={styles.menuItem}
-            >
-                <View style={[styles.menuIcon, { backgroundColor: '#F8FAFC' }]}>
-                    <Ionicons name="lock-closed-outline" size={20} color="#334155" />
-                </View>
-                <Text style={styles.menuLabel}>Change Password</Text>
-                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
-            </TouchableOpacity>
-            
-            {user.role === 'user' && (
-              <TouchableOpacity 
-                  onPress={() => {
-                    logger.logAction('MODAL_OPEN', { modal: 'Referral' });
-                    setShowReferralModal(true);
-                  }}
-                  style={styles.menuItem}
-              >
-                  <View style={[styles.menuIcon, { backgroundColor: '#EEF2FF' }]}>
-                      <Ionicons name="gift-outline" size={20} color="#4F46E5" />
-                  </View>
-                  <Text style={styles.menuLabel}>Refer Friends, Play Along</Text>
-                  <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity 
-                onPress={() => {
-                  logger.logAction('MODAL_OPEN', { modal: 'Support' });
-                  setShowSupport(true);
-                }}
-                style={styles.menuItem}
-            >
-                <View style={[styles.menuIcon, { backgroundColor: '#EFF6FF' }]}>
-                    <Ionicons name="help-buoy" size={20} color="#3B82F6" />
-                </View>
-                <Text style={styles.menuLabel}>Help & Support</Text>
-                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
-            </TouchableOpacity>
-
-            {user.role === 'coach' && (
-                <TouchableOpacity 
-                    onPress={() => setShowCoachOnboarding(true)}
-                    style={styles.menuItem}
-                >
-                    <View style={[styles.menuIcon, { backgroundColor: '#F0FDF4' }]}>
-                        <Ionicons name="ribbon" size={20} color="#16A34A" />
-                    </View>
-                    <Text style={styles.menuLabel}>Edit Academy</Text>
-                    <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
-                </TouchableOpacity>
-            )}
-
-            <TouchableOpacity 
-                onPress={async () => {
-                  if (__DEV__) {
-                    Alert.alert("Dev Mode", "OTA updates are disabled in development. This will work in the production app.");
-                    return;
-                  }
-                  try {
-                    setIsUpdatingBinary(true);
-                    logger.logAction('MANUAL_OTA_CHECK_START');
-                    const update = await Updates.checkForUpdateAsync();
-                    if (update.isAvailable) {
-                      Alert.alert("Update Found", "New version detected. Downloading...");
-                      await Updates.fetchUpdateAsync();
-                      Alert.alert("Success", "Update downloaded. Restarting app...", [
-                        { text: "OK", onPress: () => Updates.reloadAsync() }
-                      ]);
-                    } else {
-                      Alert.alert("Up to Date", "You are already on the latest version.");
-                    }
-                  } catch (e) {
-                    logger.logAction('MANUAL_OTA_CHECK_ERROR', { error: e.message });
-                    Alert.alert("Update Error", "Could not reach update server. Please check your internet connection.");
-                  } finally {
-                    setIsUpdatingBinary(false);
-                  }
-                }}
-                style={styles.menuItem}
-                disabled={isUpdatingBinary}
-            >
-                <View style={[styles.menuIcon, { backgroundColor: '#F0F9FF' }]}>
-                    <Ionicons name={isUpdatingBinary ? "hourglass-outline" : "cloud-download-outline"} size={20} color="#0369A1" />
-                </View>
-                <Text style={[styles.menuLabel, { color: '#0369A1', fontWeight: 'bold' }]}>
-                  {isUpdatingBinary ? "Checking for updates..." : "Force Update App"}
-                </Text>
-                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-                onPress={() => {
-                  logger.logAction('USER_LOGOUT_CLICK');
-                  onLogout();
-                }}
-                style={[styles.menuItem, styles.logoutItem]}
-            >
-                <View style={[styles.menuIcon, { backgroundColor: '#FEF2F2' }]}>
-                    <Ionicons name="log-out" size={20} color="#EF4444" />
-                </View>
-                <Text style={[styles.menuLabel, { color: '#EF4444' }]}>Logout</Text>
-            </TouchableOpacity>
-
-        </View>
+        <ProfileMenuSection
+          user={user}
+          isUpdatingBinary={isUpdatingBinary}
+          setIsUpdatingBinary={setIsUpdatingBinary}
+          onEditProfile={() => setShowEditProfile(true)}
+          onDiagnostics={() => setShowDiagnostics(true)}
+          onChangePassword={() => setShowChangePassword(true)}
+          onReferral={() => setShowReferralModal(true)}
+          onSupport={() => setShowSupport(true)}
+          onCoachOnboarding={() => setShowCoachOnboarding(true)}
+          onLogout={onLogout}
+        />
 
         <View style={styles.footer}>
             <Text style={styles.versionText}>AceTrack v{appVersion || '2.0.1'} (Mobile)</Text>
@@ -684,94 +471,100 @@ const ProfileScreen = ({
 
       </ScrollView>
 
-      <DiagnosticsModal 
-        visible={showDiagnostics}
-        onClose={() => setShowDiagnostics(false)}
-        onUpload={onUploadLogs}
-        isUploading={isUploadingLogs}
-      />
+      {showDiagnostics && (
+        <DiagnosticsModal 
+          visible={showDiagnostics}
+          onClose={() => setShowDiagnostics(false)}
+          onUpload={onUploadLogs}
+          isUploading={isUploadingLogs}
+        />
+      )}
 
       {/* Support System Modal */}
-      <Modal visible={showSupport} animationType="slide">
-        <GestureHandlerRootView style={{ flex: 1 }}>
-        <SafeAreaView style={styles.supportContainer}>
-            <View style={styles.supportHeader}>
-                <Text style={styles.supportTitle}>Support Center</Text>
-                <TouchableOpacity onPress={() => setShowSupport(false)} style={styles.supportClose}>
-                    <Ionicons name="close" size={24} color="#0F172A" />
-                </TouchableOpacity>
-            </View>
-            {SupportTicketSystem ? (
-              <SupportTicketSystem 
-                  tickets={supportTickets || []}
-                  userId={user?.id || 'unknown'}
-                  userName={user?.name || 'User'}
-                  onCreateTicket={onSaveTicket}
+      {showSupport && (
+        <Modal visible={showSupport} animationType="slide">
+          <GestureHandlerRootView style={{ flex: 1 }}>
+          <SafeAreaView style={styles.supportContainer}>
+              <View style={styles.supportHeader}>
+                  <Text style={styles.supportTitle}>Support Center</Text>
+                  <TouchableOpacity onPress={() => setShowSupport(false)} style={styles.supportClose}>
+                      <Ionicons name="close" size={24} color="#0F172A" />
+                  </TouchableOpacity>
+              </View>
+              {SupportTicketSystem ? (
+                <SupportTicketSystem 
+                    tickets={supportTickets || []}
+                    userId={user?.id || 'unknown'}
+                    userName={user?.name || 'User'}
+                    onCreateTicket={onSaveTicket}
 
-                  onSendMessage={onReplyTicket}
-              />
-            ) : <Text>Support System Unavailable</Text>}
-        </SafeAreaView>
-        </GestureHandlerRootView>
-      </Modal>
+                    onSendMessage={onReplyTicket}
+                />
+              ) : <Text>Support System Unavailable</Text>}
+          </SafeAreaView>
+          </GestureHandlerRootView>
+        </Modal>
+      )}
 
       {/* Verification OTP Modal */}
-      <Modal visible={!!showVerifyModal} animationType="fade" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.otpModalContent}>
-            <View style={styles.otpIconContainer}>
-              <Ionicons name={showVerifyModal === 'email' ? "mail-unread" : "chatbubble-ellipses"} size={32} color="#EF4444" />
-            </View>
-            <Text style={styles.otpTitle}>Verify {showVerifyModal === 'email' ? 'Email' : 'Phone'}</Text>
-            <Text style={styles.otpDescription}>
-              We've sent a 6-digit verification code to your {showVerifyModal === 'email' ? 'email address' : 'phone number'}.
-            </Text>
-            
-            <TextInput 
-              style={styles.otpInput}
-              placeholder="123456"
-              maxLength={6}
-              keyboardType="number-pad"
-              value={verificationCode}
-              onChangeText={setVerificationCode}
-            />
-            
-            <View style={styles.otpActions}>
-              <TouchableOpacity 
-                style={[styles.otpVerifyBtn, (verificationCode.length !== 6 || isVerifying) && styles.disabledBtn]}
-                disabled={verificationCode.length !== 6 || isVerifying}
-                onPress={() => {
-                  setIsVerifying(true);
-                  // Simulate API call
-                  setTimeout(() => {
-                    const type = showVerifyModal;
-                    onUpdateUser({
-                      ...user,
-                      [type === 'email' ? 'isEmailVerified' : 'isPhoneVerified']: true
-                    });
+      {!!showVerifyModal && (
+        <Modal visible={!!showVerifyModal} animationType="fade" transparent={true}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.otpModalContent}>
+              <View style={styles.otpIconContainer}>
+                <Ionicons name={showVerifyModal === 'email' ? "mail-unread" : "chatbubble-ellipses"} size={32} color="#EF4444" />
+              </View>
+              <Text style={styles.otpTitle}>Verify {showVerifyModal === 'email' ? 'Email' : 'Phone'}</Text>
+              <Text style={styles.otpDescription}>
+                We've sent a 6-digit verification code to your {showVerifyModal === 'email' ? 'email address' : 'phone number'}.
+              </Text>
+              
+              <TextInput 
+                style={styles.otpInput}
+                placeholder="123456"
+                maxLength={6}
+                keyboardType="number-pad"
+                value={verificationCode}
+                onChangeText={setVerificationCode}
+              />
+              
+              <View style={styles.otpActions}>
+                <TouchableOpacity 
+                  style={[styles.otpVerifyBtn, (verificationCode.length !== 6 || isVerifying) && styles.disabledBtn]}
+                  disabled={verificationCode.length !== 6 || isVerifying}
+                  onPress={() => {
+                    setIsVerifying(true);
+                    // Simulate API call
+                    setTimeout(() => {
+                      const type = showVerifyModal;
+                      onUpdateUser({
+                        ...user,
+                        [type === 'email' ? 'isEmailVerified' : 'isPhoneVerified']: true
+                      });
+                      setShowVerifyModal(null);
+                      setVerificationCode('');
+                      setIsVerifying(false);
+                      Alert.alert("Success", `${type === 'email' ? 'Email' : 'Phone'} verified successfully!`);
+                    }, 1500);
+                  }}
+                >
+                  <Text style={styles.otpVerifyText}>{isVerifying ? 'Verifying...' : 'Verify'}</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.otpCancelBtn}
+                  onPress={() => {
                     setShowVerifyModal(null);
                     setVerificationCode('');
-                    setIsVerifying(false);
-                    Alert.alert("Success", `${type === 'email' ? 'Email' : 'Phone'} verified successfully!`);
-                  }, 1500);
-                }}
-              >
-                <Text style={styles.otpVerifyText}>{isVerifying ? 'Verifying...' : 'Verify'}</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.otpCancelBtn}
-                onPress={() => {
-                  setShowVerifyModal(null);
-                  setVerificationCode('');
-                }}
-              >
-                <Text style={styles.otpCancelText}>Cancel</Text>
-              </TouchableOpacity>
+                  }}
+                >
+                  <Text style={styles.otpCancelText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      )}
 
       {/* Coach Onboarding (Affiliation Edit) */}
       {showCoachOnboarding && (
@@ -791,318 +584,54 @@ const ProfileScreen = ({
       )}
 
       {/* Wallet Modal — centered popup with blurred dark background */}
-      <Modal visible={showWalletModal} animationType="fade" transparent={true} onRequestClose={() => setShowWalletModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.walletModalContent}>
-            <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+      {showWalletModal && (
+        <Modal visible={showWalletModal} animationType="fade" transparent={true} onRequestClose={() => setShowWalletModal(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.walletModalContent}>
+              <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+                <View style={styles.walletModalHeader}>
+                  <Text style={styles.walletModalTitle}>My Wallet</Text>
+                  <TouchableOpacity onPress={() => setShowWalletModal(false)} style={styles.walletModalClose}>
+                    <Ionicons name="close" size={22} color="#0F172A" />
+                  </TouchableOpacity>
+                </View>
+                <PlayerWalletDashboard 
+                  user={user} 
+                  onTopUp={onTopUp} 
+                  noCard={true}
+                />
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {showReferralModal && (
+        <Modal visible={showReferralModal} animationType="fade" transparent={true} onRequestClose={() => setShowReferralModal(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.walletModalContent}>
               <View style={styles.walletModalHeader}>
-                <Text style={styles.walletModalTitle}>My Wallet</Text>
-                <TouchableOpacity onPress={() => setShowWalletModal(false)} style={styles.walletModalClose}>
+                <Text style={styles.walletModalTitle}>Referral Program</Text>
+                <TouchableOpacity onPress={() => setShowReferralModal(false)} style={styles.walletModalClose}>
                   <Ionicons name="close" size={22} color="#0F172A" />
                 </TouchableOpacity>
               </View>
-              <PlayerWalletDashboard 
-                user={user} 
-                onTopUp={onTopUp} 
-                noCard={true}
-              />
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={showReferralModal} animationType="fade" transparent={true} onRequestClose={() => setShowReferralModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.walletModalContent}>
-            <View style={styles.walletModalHeader}>
-              <Text style={styles.walletModalTitle}>Referral Program</Text>
-              <TouchableOpacity onPress={() => setShowReferralModal(false)} style={styles.walletModalClose}>
-                <Ionicons name="close" size={22} color="#0F172A" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-              <PlayerReferralDashboard user={user} />
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Avatar Picker Modal */}
-      <Modal visible={showAvatarPicker} animationType="fade" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.editModalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Change Profile Picture</Text>
-              <TouchableOpacity onPress={() => setShowAvatarPicker(false)} style={styles.closeBtn}>
-                <Ionicons name="close" size={24} color="#0F172A" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-              <View style={styles.inputGroup}>
-                <View style={styles.labelRow}>
-                  <Text style={styles.inputLabel}>Choose Avatar</Text>
-                </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.avatarGrid}>
-                  <TouchableOpacity onPress={pickImage} style={styles.avatarOption}>
-                    <View style={[styles.avatarOptionImage, { backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }]}>
-                      <Ionicons name="add" size={24} color="#94A3B8" />
-                    </View>
-                  </TouchableOpacity>
-
-                  {allAvatars.map((url, idx) => (
-                    <TouchableOpacity 
-                      key={idx} 
-                      onPress={() => setEditAvatar(url)}
-                      style={[styles.avatarOption, editAvatar === url && styles.avatarOptionSelected]}
-                    >
-                      {url.includes('ui-avatars.com') ? (
-                         <AvatarPlaceholder name={user.name} size={56} />
-                      ) : (
-                         <Image 
-                           key={`${url}_${Math.random()}`} 
-                           source={{ uri: `${url}${url.includes('?') ? '&' : '?'}v=${Math.random().toString(36).substring(7)}` }} 
-                           style={styles.avatarOptionImage} 
-                         />
-                      )}
-                      {editAvatar === url && (
-                        <View style={styles.selectedCheck}>
-                          <Ionicons name="checkmark-circle" size={16} color="#3B82F6" />
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-                
-                <TouchableOpacity style={styles.uploadImageBtn} onPress={pickImage} disabled={isPickingImage}>
-                  <Ionicons name={isPickingImage ? "hourglass-outline" : "image-outline"} size={20} color="#3B82F6" />
-                  <Text style={styles.uploadImageText}>{isPickingImage ? "Opening Gallery..." : "Upload from Gallery"}</Text>
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity 
-                onPress={async () => {
-                  let finalAvatar = editAvatar;
-                  if (editAvatar && (editAvatar.startsWith('file://') || editAvatar.startsWith('content://'))) {
-                    setIsUploading(true);
-                    logger.logAction('AVATAR_UPLOAD_START', { localUri: editAvatar });
-                    try {
-                      const formData = new FormData();
-                      // Server expects 'video' field name for generic uploads
-                      formData.append('video', { 
-                        uri: editAvatar, 
-                        name: `avatar_${user.id || 'new'}.jpg`, 
-                        type: 'image/jpeg' 
-                      });
-                      
-                      const response = await fetch(`${activeApiUrl}/api/upload`, {
-                        method: 'POST',
-                        body: formData,
-                        headers: { 
-                          'Content-Type': 'multipart/form-data',
-                          'x-ace-api-key': config.ACE_API_KEY
-                        },
-                      });
-                      
-                      if (response.ok) {
-                        const data = await response.json();
-                        finalAvatar = data.url;
-                        setSessionCustomAvatar(data.url); // Persist in picker for session
-                        logger.logAction('AVATAR_UPLOAD_SUCCESS', { cloudUrl: data.url });
-                      } else {
-                        const errorText = await response.text();
-                        logger.logAction('AVATAR_UPLOAD_FAIL', { status: response.status, error: errorText });
-                        Alert.alert("Upload Failed", "Could not sync your image to the cloud. Please try again or use a prebuilt avatar.");
-                        setIsUploading(false);
-                        return; // DO NOT SAVE LOCAL URI TO CLOUD
-                      }
-                    } catch (e) { 
-                      logger.logAction('AVATAR_UPLOAD_ERROR', { error: e.message });
-                      Alert.alert("Connection Error", "Network issue while uploading image.");
-                      setIsUploading(false);
-                      return; 
-                    }
-                    finally { setIsUploading(false); }
-                  }
-                                    logger.logAction('PROFILE_UPDATE_FINAL', { userId: user.id, avatar: finalAvatar });
-                   onUpdateUser({ ...user, avatar: finalAvatar });
-                   setShowAvatarPicker(false);
-                   Alert.alert("Success", "Profile picture updated!");
-                }}
-                style={[styles.saveBtn, isUploading && { opacity: 0.5 }]}
-                disabled={isUploading}
-              >
-                <Text style={styles.saveBtnText}>{isUploading ? "Uploading..." : "Update Picture"}</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Edit Profile Modal */}
-      <Modal visible={showEditProfile} animationType="fade" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView 
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={styles.keyboardView}
-          >
-            <View style={styles.editModalContent}>
-              <TouchableOpacity onPress={() => setShowEditProfile(false)} style={styles.closeBtn}>
-                <Ionicons name="close" size={24} color="#0F172A" />
-              </TouchableOpacity>
-              <View style={styles.modalHeader}>
-                <Text style={styles.editModalTitle}>Edit Profile</Text>
-              </View>
-
               <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-
-                <View style={styles.inputGroup}>
-                  <View style={styles.labelRow}>
-                    <Text style={styles.inputLabel}>Full Name</Text>
-                  </View>
-                  <TextInput 
-                    style={styles.input}
-                    value={editName}
-                    onChangeText={setEditName}
-                    placeholder="Enter name"
-                  />
-                </View>
-
-            {user.role === 'academy' && (
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Managed Sports</Text>
-                <TouchableOpacity 
-                  onPress={() => setIsSportsDropdownOpen(!isSportsDropdownOpen)}
-                  style={styles.dropdownButton}
-                >
-                  <Text style={styles.dropdownButtonText}>
-                    {editManagedSports.length > 0 
-                      ? editManagedSports.join(', ') 
-                      : 'Select Sports'}
-                  </Text>
-                  <Ionicons name={isSportsDropdownOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#94A3B8" />
-                </TouchableOpacity>
-                
-                {isSportsDropdownOpen && (
-                  <View style={styles.dropdownList}>
-                    {Object.values(Sport).map(s => {
-                      const isSelected = editManagedSports.includes(s);
-                      return (
-                        <TouchableOpacity
-                          key={s}
-                          onPress={() => {
-                            const newSports = isSelected
-                              ? editManagedSports.filter(sport => sport !== s)
-                              : [...editManagedSports, s];
-                            setEditManagedSports(newSports);
-                          }}
-                          style={[styles.dropdownItem, isSelected && styles.dropdownItemActive]}
-                        >
-                          <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemTextActive]}>{s}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                )}
-              </View>
-            )}
-
-
-                <View style={styles.inputGroup}>
-                  <View style={styles.labelRow}>
-                    <Text style={styles.inputLabel}>Email Address</Text>
-                    {user.role !== 'admin' && (
-                      user.isEmailVerified ? (
-                        <View style={styles.inlineVerifiedBadge}>
-                          <Ionicons name="checkmark-circle" size={12} color="#16A34A" />
-                          <Text style={styles.verifiedText}>Verified</Text>
-                        </View>
-                      ) : (
-                        <TouchableOpacity 
-                          style={styles.inlineVerifyBtn}
-                          onPress={() => setShowVerifyModal('email')}
-                        >
-                          <Text style={styles.verifyBtnText}>Verify Now</Text>
-                        </TouchableOpacity>
-                      )
-                    )}
-                  </View>
-                  <TextInput 
-                    style={styles.input}
-                    value={editEmail}
-                    onChangeText={setEditEmail}
-                    placeholder="john@example.com"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <View style={styles.labelRow}>
-                    <Text style={styles.inputLabel}>Phone Number</Text>
-                    {user.role !== 'admin' && (
-                      user.isPhoneVerified ? (
-                        <View style={styles.inlineVerifiedBadge}>
-                          <Ionicons name="checkmark-circle" size={12} color="#16A34A" />
-                          <Text style={styles.verifiedText}>Verified</Text>
-                        </View>
-                      ) : (
-                        <TouchableOpacity 
-                          style={styles.inlineVerifyBtn}
-                          onPress={() => setShowVerifyModal('phone')}
-                        >
-                          <Text style={styles.verifyBtnText}>Verify Now</Text>
-                        </TouchableOpacity>
-                      )
-                    )}
-                  </View>
-                  <TextInput 
-                    style={styles.input}
-                    value={editPhone}
-                    onChangeText={setEditPhone}
-                    placeholder="+91 9876543210"
-                    keyboardType="phone-pad"
-                  />
-                </View>
-
-                <TouchableOpacity 
-                  onPress={() => {
-                    onUpdateUser({ 
-                      ...user, 
-                      name: editName, 
-                      email: editEmail, 
-                      phone: editPhone,
-                      managedSports: editManagedSports
-                    });
-                    setShowEditProfile(false);
-                    Alert.alert("Success", "Profile updated successfully!");
-                  }}
-                  style={styles.saveBtn}
-                >
-                  <Text style={styles.saveBtnText}>Save Changes</Text>
-                </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => setShowEditProfile(false)} style={styles.cancelBtn}>
-              <Text style={styles.cancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
+                <PlayerReferralDashboard user={user} />
               </ScrollView>
             </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
+          </View>
+        </Modal>
+      )}
 
-      {/* Change Password Modal */}
-      {/* Change Password Modal */}
-      <Modal visible={showChangePassword} animationType="fade" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView 
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={styles.keyboardView}
-          >
+      {/* Avatar Picker Modal */}
+      {showAvatarPicker && (
+        <Modal visible={showAvatarPicker} animationType="fade" transparent={true}>
+          <View style={styles.modalOverlay}>
             <View style={styles.editModalContent}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Change Password</Text>
-                <TouchableOpacity onPress={() => setShowChangePassword(false)} style={styles.closeBtn}>
+                <Text style={styles.modalTitle}>Change Profile Picture</Text>
+                <TouchableOpacity onPress={() => setShowAvatarPicker(false)} style={styles.closeBtn}>
                   <Ionicons name="close" size={24} color="#0F172A" />
                 </TouchableOpacity>
               </View>
@@ -1110,137 +639,412 @@ const ProfileScreen = ({
               <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
                 <View style={styles.inputGroup}>
                   <View style={styles.labelRow}>
-                    <Text style={styles.inputLabel}>Current Password</Text>
+                    <Text style={styles.inputLabel}>Choose Avatar</Text>
                   </View>
-                  <TextInput 
-                    style={styles.input}
-                    value={oldPassword}
-                    onChangeText={setOldPassword}
-                    placeholder="••••••••"
-                    secureTextEntry
-                  />
-                </View>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.avatarGrid}>
+                    <TouchableOpacity onPress={pickImage} style={styles.avatarOption}>
+                      <View style={[styles.avatarOptionImage, { backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }]}>
+                        <Ionicons name="add" size={24} color="#94A3B8" />
+                      </View>
+                    </TouchableOpacity>
 
-                <View style={styles.inputGroup}>
-                  <View style={styles.labelRow}>
-                    <Text style={styles.inputLabel}>New Password</Text>
-                  </View>
-                  <TextInput 
-                    style={styles.input}
-                    value={newPassword}
-                    onChangeText={setNewPassword}
-                    placeholder="••••••••"
-                    secureTextEntry
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <View style={styles.labelRow}>
-                    <Text style={styles.inputLabel}>Confirm New Password</Text>
-                  </View>
-                  <TextInput 
-                    style={styles.input}
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    placeholder="••••••••"
-                    secureTextEntry
-                  />
+                    {allAvatars.map((url, idx) => (
+                      <TouchableOpacity 
+                        key={idx} 
+                        onPress={() => setEditAvatar(url)}
+                        style={[styles.avatarOption, editAvatar === url && styles.avatarOptionSelected]}
+                      >
+                        {url.includes('ui-avatars.com') ? (
+                           <AvatarPlaceholder name={user.name} size={56} />
+                        ) : (
+                           <Image 
+                             key={`${url}_${Math.random()}`} 
+                             source={{ uri: `${url}${url.includes('?') ? '&' : '?'}v=${Math.random().toString(36).substring(7)}` }} 
+                             style={styles.avatarOptionImage} 
+                           />
+                        )}
+                        {editAvatar === url && (
+                          <View style={styles.selectedCheck}>
+                            <Ionicons name="checkmark-circle" size={16} color="#3B82F6" />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  
+                  <TouchableOpacity style={styles.uploadImageBtn} onPress={pickImage} disabled={isPickingImage}>
+                    <Ionicons name={isPickingImage ? "hourglass-outline" : "image-outline"} size={20} color="#3B82F6" />
+                    <Text style={styles.uploadImageText}>{isPickingImage ? "Opening Gallery..." : "Upload from Gallery"}</Text>
+                  </TouchableOpacity>
                 </View>
 
                 <TouchableOpacity 
-                   onPress={() => {
-                     if (!oldPassword || !newPassword || !confirmPassword) {
-                       Alert.alert("Error", "Please fill all fields");
-                       return;
-                     }
-                     if (newPassword !== confirmPassword) {
-                       Alert.alert("Error", "New passwords do not match");
-                       return;
-                     }
-                     
-                     logger.logAction('PASSWORD_CHANGE_ATTEMPT');
-                     Alert.alert("Success", "Password changed successfully!");
-                     setShowChangePassword(false);
-                     setOldPassword('');
-                     setNewPassword('');
-                     setConfirmPassword('');
-                   }}
-                   style={styles.saveBtn}
+                  onPress={async () => {
+                    let finalAvatar = editAvatar;
+                    if (editAvatar && (editAvatar.startsWith('file://') || editAvatar.startsWith('content://'))) {
+                      setIsUploading(true);
+                      logger.logAction('AVATAR_UPLOAD_START', { localUri: editAvatar });
+                      try {
+                        const formData = new FormData();
+                        // Server expects 'video' field name for generic uploads
+                        formData.append('video', { 
+                          uri: editAvatar, 
+                          name: `avatar_${user.id || 'new'}.jpg`, 
+                          type: 'image/jpeg' 
+                        });
+                        
+                        const response = await fetch(`${activeApiUrl}/api/upload`, {
+                          method: 'POST',
+                          body: formData,
+                          headers: { 
+                            'Content-Type': 'multipart/form-data',
+                            'x-ace-api-key': config.ACE_API_KEY
+                          },
+                        });
+                        
+                        if (response.ok) {
+                          const data = await response.json();
+                          finalAvatar = data.url;
+                          setSessionCustomAvatar(data.url); // Persist in picker for session
+                          logger.logAction('AVATAR_UPLOAD_SUCCESS', { cloudUrl: data.url });
+                        } else {
+                          const errorText = await response.text();
+                          logger.logAction('AVATAR_UPLOAD_FAIL', { status: response.status, error: errorText });
+                          Alert.alert("Upload Failed", "Could not sync your image to the cloud. Please try again or use a prebuilt avatar.");
+                          setIsUploading(false);
+                          return; // DO NOT SAVE LOCAL URI TO CLOUD
+                        }
+                      } catch (e) { 
+                        logger.logAction('AVATAR_UPLOAD_ERROR', { error: e.message });
+                        Alert.alert("Connection Error", "Network issue while uploading image.");
+                        setIsUploading(false);
+                        return; 
+                      }
+                      finally { setIsUploading(false); }
+                    }
+                                      logger.logAction('PROFILE_UPDATE_FINAL', { userId: user.id, avatar: finalAvatar });
+                     onUpdateUser({ ...user, avatar: finalAvatar });
+                     setShowAvatarPicker(false);
+                     Alert.alert("Success", "Profile picture updated!");
+                  }}
+                  style={[styles.saveBtn, isUploading && { opacity: 0.5 }]}
+                  disabled={isUploading}
                 >
-                  <Text style={styles.saveBtnText}>Update Password</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity onPress={() => setShowChangePassword(false)} style={styles.cancelBtn}>
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                  <Text style={styles.saveBtnText}>{isUploading ? "Uploading..." : "Update Picture"}</Text>
                 </TouchableOpacity>
               </ScrollView>
             </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
+          </View>
+        </Modal>
+      )}
 
-      <NotificationsModal 
-        visible={showNotifications}
-        onClose={() => setShowNotifications(false)}
-        notifications={user.notifications || []}
-        onClear={() => {
-          const updated = (user.notifications || []).map(n => ({ ...n, read: true }));
-          onUpdateUser({ ...user, notifications: updated });
-        }}
-        onNotificationClick={(notif) => {
-            // Mark as read
-            const updated = (user.notifications || []).map(n => n.id === notif.id ? { ...n, read: true } : n);
+      {/* Edit Profile Modal */}
+      {showEditProfile && (
+        <Modal visible={showEditProfile} animationType="fade" transparent={true}>
+          <View style={styles.modalOverlay}>
+            <KeyboardAvoidingView 
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+              style={styles.keyboardView}
+            >
+              <View style={styles.editModalContent}>
+                <TouchableOpacity onPress={() => setShowEditProfile(false)} style={styles.closeBtn}>
+                  <Ionicons name="close" size={24} color="#0F172A" />
+                </TouchableOpacity>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.editModalTitle}>Edit Profile</Text>
+                </View>
+
+                <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+
+                  <View style={styles.inputGroup}>
+                    <View style={styles.labelRow}>
+                      <Text style={styles.inputLabel}>Full Name</Text>
+                    </View>
+                    <TextInput 
+                      style={styles.input}
+                      value={editName}
+                      onChangeText={setEditName}
+                      placeholder="Enter name"
+                    />
+                  </View>
+
+              {user.role === 'academy' && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Managed Sports</Text>
+                  <TouchableOpacity 
+                    onPress={() => setIsSportsDropdownOpen(!isSportsDropdownOpen)}
+                    style={styles.dropdownButton}
+                  >
+                    <Text style={styles.dropdownButtonText}>
+                      {editManagedSports.length > 0 
+                        ? editManagedSports.join(', ') 
+                        : 'Select Sports'}
+                    </Text>
+                    <Ionicons name={isSportsDropdownOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#94A3B8" />
+                  </TouchableOpacity>
+                  
+                  {isSportsDropdownOpen && (
+                    <View style={styles.dropdownList}>
+                      {Object.values(Sport).map(s => {
+                        const isSelected = editManagedSports.includes(s);
+                        return (
+                          <TouchableOpacity
+                            key={s}
+                            onPress={() => {
+                              const newSports = isSelected
+                                ? editManagedSports.filter(sport => sport !== s)
+                                : [...editManagedSports, s];
+                              setEditManagedSports(newSports);
+                            }}
+                            style={[styles.dropdownItem, isSelected && styles.dropdownItemActive]}
+                          >
+                            <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemTextActive]}>{s}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              )}
+
+
+                  <View style={styles.inputGroup}>
+                    <View style={styles.labelRow}>
+                      <Text style={styles.inputLabel}>Email Address</Text>
+                      {user.role !== 'admin' && (
+                        user.isEmailVerified ? (
+                          <View style={styles.inlineVerifiedBadge}>
+                            <Ionicons name="checkmark-circle" size={12} color="#16A34A" />
+                            <Text style={styles.verifiedText}>Verified</Text>
+                          </View>
+                        ) : (
+                          <TouchableOpacity 
+                            style={styles.inlineVerifyBtn}
+                            onPress={() => setShowVerifyModal('email')}
+                          >
+                            <Text style={styles.verifyBtnText}>Verify Now</Text>
+                          </TouchableOpacity>
+                        )
+                      )}
+                    </View>
+                    <TextInput 
+                      style={styles.input}
+                      value={editEmail}
+                      onChangeText={setEditEmail}
+                      placeholder="john@example.com"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <View style={styles.labelRow}>
+                      <Text style={styles.inputLabel}>Phone Number</Text>
+                      {user.role !== 'admin' && (
+                        user.isPhoneVerified ? (
+                          <View style={styles.inlineVerifiedBadge}>
+                            <Ionicons name="checkmark-circle" size={12} color="#16A34A" />
+                            <Text style={styles.verifiedText}>Verified</Text>
+                          </View>
+                        ) : (
+                          <TouchableOpacity 
+                            style={styles.inlineVerifyBtn}
+                            onPress={() => setShowVerifyModal('phone')}
+                          >
+                            <Text style={styles.verifyBtnText}>Verify Now</Text>
+                          </TouchableOpacity>
+                        )
+                      )}
+                    </View>
+                    <TextInput 
+                      style={styles.input}
+                      value={editPhone}
+                      onChangeText={setEditPhone}
+                      placeholder="+91 9876543210"
+                      keyboardType="phone-pad"
+                    />
+                  </View>
+
+                  <TouchableOpacity 
+                    onPress={() => {
+                      onUpdateUser({ 
+                        ...user, 
+                        name: editName, 
+                        email: editEmail, 
+                        phone: editPhone,
+                        managedSports: editManagedSports
+                      });
+                      setShowEditProfile(false);
+                      Alert.alert("Success", "Profile updated successfully!");
+                    }}
+                    style={styles.saveBtn}
+                  >
+                    <Text style={styles.saveBtnText}>Save Changes</Text>
+                  </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => setShowEditProfile(false)} style={styles.cancelBtn}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+                </ScrollView>
+              </View>
+            </KeyboardAvoidingView>
+          </View>
+        </Modal>
+      )}
+
+      {/* Change Password Modal */}
+      {showChangePassword && (
+        <Modal visible={showChangePassword} animationType="fade" transparent={true}>
+          <View style={styles.modalOverlay}>
+            <KeyboardAvoidingView 
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+              style={styles.keyboardView}
+            >
+              <View style={styles.editModalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Change Password</Text>
+                  <TouchableOpacity onPress={() => setShowChangePassword(false)} style={styles.closeBtn}>
+                    <Ionicons name="close" size={24} color="#0F172A" />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+                  <View style={styles.inputGroup}>
+                    <View style={styles.labelRow}>
+                      <Text style={styles.inputLabel}>Current Password</Text>
+                    </View>
+                    <TextInput 
+                      style={styles.input}
+                      value={oldPassword}
+                      onChangeText={setOldPassword}
+                      placeholder="••••••••"
+                      secureTextEntry
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <View style={styles.labelRow}>
+                      <Text style={styles.inputLabel}>New Password</Text>
+                    </View>
+                    <TextInput 
+                      style={styles.input}
+                      value={newPassword}
+                      onChangeText={setNewPassword}
+                      placeholder="••••••••"
+                      secureTextEntry
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <View style={styles.labelRow}>
+                      <Text style={styles.inputLabel}>Confirm New Password</Text>
+                    </View>
+                    <TextInput 
+                      style={styles.input}
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      placeholder="••••••••"
+                      secureTextEntry
+                    />
+                  </View>
+
+                  <TouchableOpacity 
+                     onPress={() => {
+                       if (!oldPassword || !newPassword || !confirmPassword) {
+                         Alert.alert("Error", "Please fill all fields");
+                         return;
+                       }
+                       if (newPassword !== confirmPassword) {
+                         Alert.alert("Error", "New passwords do not match");
+                         return;
+                       }
+                       
+                       logger.logAction('PASSWORD_CHANGE_ATTEMPT');
+                       Alert.alert("Success", "Password changed successfully!");
+                       setShowChangePassword(false);
+                       setOldPassword('');
+                       setNewPassword('');
+                       setConfirmPassword('');
+                     }}
+                     style={styles.saveBtn}
+                  >
+                    <Text style={styles.saveBtnText}>Update Password</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity onPress={() => setShowChangePassword(false)} style={styles.cancelBtn}>
+                    <Text style={styles.cancelBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
+            </KeyboardAvoidingView>
+          </View>
+        </Modal>
+      )}
+
+      {showNotifications && (
+        <NotificationsModal 
+          visible={showNotifications}
+          onClose={() => setShowNotifications(false)}
+          notifications={user.notifications || []}
+          onClear={() => {
+            const updated = (user.notifications || []).map(n => ({ ...n, read: true }));
             onUpdateUser({ ...user, notifications: updated });
-            setShowNotifications(false);
-            
-            // LOG: Logging in-app notification click
-            logger.logAction('IN_APP_NOTIFICATION_CLICKED', {
-                id: notif.id,
-                type: notif.type,
-                title: notif.title,
-                timestamp: new Date().toISOString()
-            });
-
-            
-            // Navigate based on type
-            if (notif.type === 'video') {
-                navigation.navigate('Recordings');
-            } else if (notif.type === 'support') {
-                setShowSupport(true);
-            } else if (notif.type === 'tournament' || notif.type === 'tournament_invite') {
-                navigation.navigate('Matches');
-            } else if (notif.type === 'challenge') {
-                navigation.navigate('Matchmaking');
-            } else if (notif.type === 'booking') {
-                navigation.navigate('CoachDiscovery');
-            } else if (notif.type === 'general') {
-                // If it's a general invite without specific type
-                if (notif.title === 'Tournament Invitation') navigation.navigate('Matches');
-            }
-        }}
-      />
+          }}
+          onNotificationClick={(notif) => {
+              // Mark as read
+              const updated = (user.notifications || []).map(n => n.id === notif.id ? { ...n, read: true } : n);
+              onUpdateUser({ ...user, notifications: updated });
+              setShowNotifications(false);
+              
+              // LOG: Logging in-app notification click
+              logger.logAction('IN_APP_NOTIFICATION_CLICKED', {
+                  id: notif.id,
+                  type: notif.type,
+                  title: notif.title,
+                  timestamp: new Date().toISOString()
+              });
+              
+              // Navigate based on type
+              if (notif.type === 'video') {
+                  navigation.navigate('Recordings');
+              } else if (notif.type === 'support') {
+                  setShowSupport(true);
+              } else if (notif.type === 'tournament' || notif.type === 'tournament_invite') {
+                  navigation.navigate('Matches');
+              } else if (notif.type === 'challenge') {
+                  navigation.navigate('Matchmaking');
+              } else if (notif.type === 'booking') {
+                  navigation.navigate('CoachDiscovery');
+              } else if (notif.type === 'general') {
+                  // If it's a general invite without specific type
+                  if (notif.title === 'Tournament Invitation') navigation.navigate('Matches');
+              }
+          }}
+        />
+      )}
             {/* Calendar Modal */}
-            <Modal visible={isCalendarModalVisible} animationType="slide" transparent>
-                <View style={styles.modalOverlay}>
-                    <View style={styles.calendarModalContent}>
-                        <View style={styles.calendarModalHeader}>
-                            <Text style={styles.calendarModalTitle}>{user.role === 'coach' ? 'Calendar' : 'Tournament Calendar'}</Text>
-                            <TouchableOpacity onPress={() => setIsCalendarModalVisible(false)} style={styles.calendarCloseBtn}>
-                                <Ionicons name="close" size={28} color="#333" />
-                            </TouchableOpacity>
-                        </View>
-                        
-                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-                            <Calendar 
-                              onMonthChange={(month) => setCurrentMonth(month.dateString.substring(0, 7))}
-                              theme={{
-                                todayTextColor: designSystem.colors.primary,
-                                arrowColor: designSystem.colors.primary,
-                                dotColor: designSystem.colors.primary,
-                                selectedDayBackgroundColor: designSystem.colors.primary,
-                              }}
-                              markedDates={markedDates}
-                            />
+            {isCalendarModalVisible && (
+              <Modal visible={isCalendarModalVisible} animationType="slide" transparent>
+                  <View style={styles.modalOverlay}>
+                      <View style={styles.calendarModalContent}>
+                          <View style={styles.calendarModalHeader}>
+                              <Text style={styles.calendarModalTitle}>{user.role === 'coach' ? 'Calendar' : 'Tournament Calendar'}</Text>
+                              <TouchableOpacity onPress={handleCloseCalendar} style={styles.calendarCloseBtn}>
+                                  <Ionicons name="close" size={28} color="#333" />
+                              </TouchableOpacity>
+                          </View>
+                          
+                          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+                              <Calendar 
+                                onMonthChange={handleMonthChange}
+                                theme={{
+                                  todayTextColor: designSystem.colors.primary,
+                                  arrowColor: designSystem.colors.primary,
+                                  dotColor: designSystem.colors.primary,
+                                  selectedDayBackgroundColor: designSystem.colors.primary,
+                                }}
+                                markedDates={markedDates}
+                              />
                             
                             <View style={styles.eventsSection}>
                               <Text style={styles.calendarSectionTitle}>Upcoming Events</Text>
@@ -1275,13 +1079,14 @@ const ProfileScreen = ({
                               )}
                             </View>
 
-                            <TouchableOpacity style={styles.calendarCloseBtnLarge} onPress={() => setIsCalendarModalVisible(false)}>
+                            <TouchableOpacity style={styles.calendarCloseBtnLarge} onPress={handleCloseCalendar}>
                                 <Text style={styles.calendarCloseBtnText}>Close</Text>
                             </TouchableOpacity>
                         </ScrollView>
                     </View>
                 </View>
             </Modal>
+          )}
     </SafeAreaView>
   );
 

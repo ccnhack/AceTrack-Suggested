@@ -2,15 +2,16 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   getAuth,
   initializeAuth, 
-  getReactNativePersistence,
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
   signOut as firebaseSignOut, 
   onAuthStateChanged as firebaseOnAuthStateChanged,
   GoogleAuthProvider,
-  signInWithCredential
+  signInWithCredential,
+  browserLocalPersistence
 } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -35,17 +36,23 @@ export const initializeFirebase = () => {
     try {
       auth = getAuth(app);
     } catch (e) {
-      // If getAuth fails, it might mean it was never initialized for this app
-      auth = initializeAuth(app, {
-        persistence: getReactNativePersistence(AsyncStorage)
-      });
+      if (Platform.OS === 'web') {
+        auth = initializeAuth(app, { persistence: browserLocalPersistence });
+      } else {
+        const { getReactNativePersistence } = require('firebase/auth');
+        auth = initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) });
+      }
     }
   } else {
     app = initializeApp(firebaseConfig);
-    auth = initializeAuth(app, {
-      persistence: getReactNativePersistence(AsyncStorage)
-    });
-    console.log('🔥 Firebase initialized with AsyncStorage persistence');
+    if (Platform.OS === 'web') {
+      auth = initializeAuth(app, { persistence: browserLocalPersistence });
+      console.log('🔥 Firebase initialized with browserLocalPersistence');
+    } else {
+      const { getReactNativePersistence } = require('firebase/auth');
+      auth = initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) });
+      console.log('🔥 Firebase initialized with AsyncStorage persistence');
+    }
   }
   return { app, auth };
 };

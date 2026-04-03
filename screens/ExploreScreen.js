@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useMemo, memo } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, Image, 
-  StyleSheet, SafeAreaView, Dimensions, FlatList, Modal, Alert, ActivityIndicator, TextInput 
+  StyleSheet, SafeAreaView, Dimensions, FlatList, Modal, Alert, ActivityIndicator, TextInput, InteractionManager 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import logger from '../utils/logger';
 import TournamentDetailModal from '../components/TournamentDetailModal';
+import TournamentCard from '../components/TournamentCard';
 import designSystem from '../theme/designSystem';
 import { isTournamentPast, getVisibleTournaments } from '../utils/tournamentUtils';
+import { useIsFocused } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
@@ -55,6 +57,7 @@ const ExploreScreen = (props) => {
   const [userLocation, setUserLocation] = useState(null);
   const [isFetchingLoc, setIsFetchingLoc] = useState(false);
   const [selectedHub, setSelectedHub] = useState('All');
+  const isFocused = useIsFocused();
 
 
   // Handle Deep Linking from ChatBot
@@ -144,7 +147,7 @@ const ExploreScreen = (props) => {
   };
 
   useEffect(() => {
-    (async () => {
+    const fetchLocation = async () => {
       try {
         if (!Location || typeof Location.requestForegroundPermissionsAsync !== 'function') {
           console.warn('Location module or required functions not found.');
@@ -192,8 +195,16 @@ const ExploreScreen = (props) => {
       } catch (err) {
         console.warn('Location module error:', err.message);
       }
-    })();
-  }, []);
+    };
+
+    const interactionTask = InteractionManager.runAfterInteractions(() => {
+       if (isFocused) {
+         fetchLocation();
+       }
+    });
+
+    return () => interactionTask.cancel();
+  }, [isFocused]);
 
   const INITIAL_CITIES = ['All', 'Bangalore', 'Mumbai']; // Only show 3 options initially
   const filteredCities = (citySearch ? POPULAR_CITIES : INITIAL_CITIES).filter(c => c.toLowerCase().includes(citySearch.toLowerCase()));
@@ -288,146 +299,14 @@ const ExploreScreen = (props) => {
       }).slice(0, 2);
   }, [sortedTournaments, userRole, currentUser]);
 
-  const renderTournamentCard = ({ item: t, isRec = false }) => {
-    const isRegistered = userId && t.registeredPlayerIds?.some(id => String(id).toLowerCase() === String(userId).toLowerCase());
-    const isPendingPayment = userId && t.pendingPaymentPlayerIds?.some(id => String(id).toLowerCase() === String(userId).toLowerCase());
-    const isAssignedCoach = userId && t.assignedCoachIds?.includes(userId);
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const deadline = t.registrationDeadline ? new Date(t.registrationDeadline) : null;
-    if (deadline) deadline.setHours(0, 0, 0, 0);
-    const diffTime = deadline ? deadline.getTime() - today.getTime() : null;
-    const diffDays = diffTime !== null ? Math.ceil(diffTime / (1000 * 60 * 60 * 24)) : null;
-
-    let registrationMessage = '';
-    if (diffDays !== null) {
-      if (diffDays < 0) registrationMessage = 'Registration Closed';
-      else if (diffDays === 0) registrationMessage = 'Hurry Up! Registration closes today.';
-      else if (diffDays <= 3) registrationMessage = `Hurry Up! Registration closes in ${diffDays} day${diffDays === 1 ? '' : 's'}.`;
-      else registrationMessage = `Registrations are open. Closes in ${diffDays} days.`;
-    }
-
-    if (isRec) {
-      return (
-        <TouchableOpacity key={t.id} onPress={() => setSelectedTournament(t)} style={styles.recCard}>
-          <View style={styles.recCardHeader}>
-            <View>
-              <View style={styles.bestMatchBadge}>
-                <Text style={styles.bestMatchText}>Best Match</Text>
-              </View>
-              <Text style={styles.recCardTitle} numberOfLines={1}>{t.title}</Text>
-            </View>
-            <View style={styles.recIcon}>
-              <Ionicons name="chevron-forward" size={16} color="#F87171" />
-            </View>
-          </View>
-          <View style={styles.recCardFooter}>
-            <View style={styles.recInfoItem}>
-              <Ionicons name="time-outline" size={12} color="#94A3B8" />
-              <Text style={styles.recInfoText}>{t.date}</Text>
-            </View>
-            <View style={styles.recInfoItem}>
-              <Ionicons name="cash-outline" size={12} color="#94A3B8" />
-              <Text style={styles.recInfoText}>₹{t.entryFee}</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-      );
-    }
-
-    return (
-      <TouchableOpacity onPress={() => setSelectedTournament(t)} style={styles.card}>
-        <View style={styles.cardCover}>
-          <Image 
-            source={{ uri: getSportImage(t.sport) || "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?q=80&w=1000" }} 
-            style={styles.cardImage} 
-          />
-          <View style={styles.overlay} />
-          <View style={styles.cardHeaderArea}>
-            <View style={styles.cardBadges}>
-              <View style={styles.levelBadge}>
-                <View style={styles.pulseDot} />
-                <Text style={styles.levelBadgeText}>{t.skillLevel}</Text>
-              </View>
-              {isRegistered && userRole !== 'coach' && (
-                <View style={[styles.statusBadge, { backgroundColor: '#EF4444' }]}>
-                  <Text style={styles.statusBadgeText}>Registered</Text>
-                </View>
-              )}
-              {isPendingPayment && userRole !== 'coach' && (
-                <View style={[styles.statusBadge, { backgroundColor: '#F97316' }]}>
-                  <Text style={styles.statusBadgeText}>Pending Payment</Text>
-                </View>
-              )}
-              {isAssignedCoach && userRole === 'coach' && (
-                <View style={[styles.statusBadge, { backgroundColor: '#3B82F6' }]}>
-                  <Text style={styles.statusBadgeText}>Assigned</Text>
-                </View>
-              )}
-            </View>
-            <View style={styles.locationContainer}>
-              <Ionicons name="location" size={16} color="#EF4444" />
-              <Text style={styles.locationText}>{t.location}</Text>
-            </View>
-          </View>
-          <Text style={styles.cardTitle} numberOfLines={1}>{t.title}</Text>
-        </View>
-        <View style={styles.cardContent}>
-          <View style={styles.infoRow}>
-            <View style={styles.infoCol}>
-              <View style={styles.infoLabelContainer}>
-                <Ionicons name="calendar-outline" size={12} color="#94A3B8" />
-                <Text style={styles.infoLabel}>Date</Text>
-              </View>
-              <Text style={styles.infoValue}>{t.date}</Text>
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.infoCol}>
-              <View style={styles.infoLabelContainer}>
-                <Ionicons name="people-outline" size={12} color="#94A3B8" />
-                <Text style={styles.infoLabel}>Slots</Text>
-              </View>
-              <Text style={styles.infoValue}>
-                {(t.registeredPlayerIds || []).filter(Boolean).length}/{t.maxPlayers}
-              </Text>
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.infoCol}>
-              <View style={styles.infoLabelContainer}>
-                <Ionicons name="cash-outline" size={12} color="#94A3B8" />
-                <Text style={styles.infoLabel}>Entry</Text>
-              </View>
-              <Text style={styles.infoValue}>₹{t.entryFee}</Text>
-            </View>
-          </View>
-
-          <View style={styles.cardFooter}>
-            <View>
-              {userRole !== 'coach' ? (
-                <Text style={[
-                  styles.regMessage, 
-                  diffDays < 0 ? { color: '#94A3B8' } : diffDays <= 3 ? { color: '#EF4444' } : { color: '#16A34A' }
-                ]}>
-                  {registrationMessage}
-                </Text>
-              ) : (
-                <Text style={[styles.regMessage, { color: '#3B82F6' }]}>COACH VIEW</Text>
-              )}
-              {t.distance !== Infinity && (
-                <Text style={styles.distanceIndicator}>
-                  <Ionicons name="navigate-outline" size={10} color="#64748B" /> {t.distance} km away
-                </Text>
-              )}
-            </View>
-            <View style={styles.arrowButton}>
-              <Ionicons name="chevron-forward" size={16} color="#FFFFFF" />
-            </View>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const renderItem = React.useCallback(({ item }) => (
+    <TournamentCard 
+      tournament={item} 
+      onPress={() => setSelectedTournament(item)}
+      userId={userId}
+      userRole={userRole}
+    />
+  ), [userId, userRole]);
 
   const renderPaymentModal = () => {
     if (!regPaymentTarget) return null;
@@ -591,18 +470,28 @@ const ExploreScreen = (props) => {
         </View>
       </SafeAreaView>
 
-      <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
-        <View style={styles.main}>
-          {recommendedTournaments.length > 0 && !reschedulingFrom && userRole !== 'coach' && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Recommended for you</Text>
-              {recommendedTournaments.map(t => (
-                <React.Fragment key={`rec-${t.id}`}>
-                  {renderTournamentCard({ item: t, isRec: true })}
-                </React.Fragment>
-              ))}
-            </View>
-          )}
+      <FlatList
+        data={sortedTournaments}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <View style={styles.main}>
+            {recommendedTournaments.length > 0 && !reschedulingFrom && userRole !== 'coach' && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Recommended for you</Text>
+                {recommendedTournaments.map(t => (
+                  <TournamentCard 
+                    key={`rec-${t.id}`}
+                    tournament={t}
+                    isRec={true}
+                    onPress={() => setSelectedTournament(t)}
+                    userId={userId}
+                    userRole={userRole}
+                  />
+                ))}
+              </View>
+            )}
 
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>
@@ -613,62 +502,54 @@ const ExploreScreen = (props) => {
               </View>
             </View>
 
-          {reschedulingFrom && (
-            <View style={styles.rescheduleAlert}>
-              <Text style={styles.rescheduleAlertText}>Rescheduling in progress. Please select your new arena below.</Text>
-              <TouchableOpacity onPress={onCancelReschedule} style={styles.cancelBox}>
-                <Text style={styles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <View style={styles.list}>
-            {displayTournaments.length > 0 ? (
-              displayTournaments.map(t => (
-                <React.Fragment key={t.id}>
-                  {renderTournamentCard({ item: t })}
-                </React.Fragment>
-              ))
-            ) : (
-                  <View style={styles.emptyContainer}>
-                    <View style={styles.emptyIconCircle}>
-                      <Ionicons name="search" size={40} color="#EF4444" />
-                    </View>
-                    <Text style={styles.emptySubtext}>
-                      We couldn't find any active tournaments matching your current filters.
-                    </Text>
-                    
-                    
-                    <View style={styles.emptyFilterFeedback}>
-                      {cityFilter !== 'All' && (
-                        <View style={styles.filterFeedbackChip}>
-                          <Ionicons name="location-outline" size={12} color="#64748B" />
-                          <Text style={styles.filterFeedbackText}>City: {cityFilter}</Text>
-                        </View>
-                      )}
-                      {sportFilter !== 'All' && (
-                        <View style={styles.filterFeedbackChip}>
-                          <Ionicons name="trophy-outline" size={12} color="#64748B" />
-                          <Text style={styles.filterFeedbackText}>Sport: {sportFilter}</Text>
-                        </View>
-                      )}
-                    </View>
-
-                    <TouchableOpacity 
-                      style={styles.resetButton}
-                      onPress={() => {
-                        setCityFilter('All');
-                        setSportFilter('All');
-                        setSelectedHub('All');
-                      }}
-                    >
-                      <Text style={styles.resetButtonText}>Clear All Filters</Text>
-                    </TouchableOpacity>
-                  </View>
+            {reschedulingFrom && (
+              <View style={styles.rescheduleAlert}>
+                <Text style={styles.rescheduleAlertText}>Rescheduling in progress. Please select your new arena below.</Text>
+                <TouchableOpacity onPress={onCancelReschedule} style={styles.cancelBox}>
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
-        </View>
-      </ScrollView>
+        }
+        ListEmptyComponent={
+          <View style={styles.main}>
+            <View style={styles.emptyContainer}>
+              <View style={styles.emptyIconCircle}>
+                <Ionicons name="search" size={40} color="#EF4444" />
+              </View>
+              <Text style={styles.emptySubtext}>
+                We couldn't find any active tournaments matching your current filters.
+              </Text>
+              <View style={styles.emptyFilterFeedback}>
+                {cityFilter !== 'All' && (
+                  <View style={styles.filterFeedbackChip}>
+                    <Ionicons name="location-outline" size={12} color="#64748B" />
+                    <Text style={styles.filterFeedbackText}>City: {cityFilter}</Text>
+                  </View>
+                )}
+                {sportFilter !== 'All' && (
+                  <View style={styles.filterFeedbackChip}>
+                    <Ionicons name="trophy-outline" size={12} color="#64748B" />
+                    <Text style={styles.filterFeedbackText}>Sport: {sportFilter}</Text>
+                  </View>
+                )}
+              </View>
+              <TouchableOpacity 
+                style={styles.resetButton}
+                onPress={() => {
+                  setCityFilter('All');
+                  setSportFilter('All');
+                  setSelectedHub('All');
+                }}
+              >
+                <Text style={styles.resetButtonText}>Clear All Filters</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        }
+        contentContainerStyle={{ paddingBottom: 100 }}
+      />
 
 
 
