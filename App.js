@@ -411,7 +411,15 @@ export default function App() {
         return;
       }
       
-      const status = await response.json();
+      let status;
+      try {
+        status = await response.json();
+      } catch (jsonErr) {
+        const text = await response.text();
+        console.warn("⚠️ Received non-JSON response from status check:", text.substring(0, 100));
+        logger.logAction('CHECK_UPDATES_PARSE_ERROR', { bodyPrefix: text.substring(0, 200) });
+        throw jsonErr;
+      }
       
       if (status.latestAppVersion) {
         setLatestAppVersion(status.latestAppVersion);
