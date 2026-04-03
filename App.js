@@ -377,6 +377,15 @@ export default function App() {
         storage.getItem('matchmaking')
       ]);
 
+      // 🛡️ STORAGE NUKE: For version 2.4.9+, force-clear any 'false' setting one time
+      const hasNuked = await AsyncStorage.getItem('cloud_nuke_v249');
+      if (!hasNuked) {
+        console.log("💣 ONE-TIME STORAGE NUKE: Clearing old cloud preference...");
+        await storage.removeItem('isUsingCloud');
+        await AsyncStorage.setItem('cloud_nuke_v249', 'true');
+        iuc = null; // Forces default to TRUE below
+      }
+
       if (p) setPlayers(p);
       if (t) setTournaments(t);
       if (v) setMatchVideos(v);

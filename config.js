@@ -29,9 +29,10 @@ const ACE_API_KEY = (Constants.expoConfig && Constants.expoConfig.extra && Const
   : (process.env.EXPO_PUBLIC_ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=');
 
 export default {
-  API_BASE_URL,
+  API_BASE_URL: (Constants.appConfig?.extra?.apiUrl || 
+                 'https://acetrack-suggested.onrender.com').replace(/\/$/, ''),
   GROQ_API_KEY,
-  ACE_API_KEY,
+  ACE_API_KEY: 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=',
   IS_ANDROID: Platform.OS === 'android',
   IS_IOS: Platform.OS === 'ios',
   sanitizeUrl: (url) => {
