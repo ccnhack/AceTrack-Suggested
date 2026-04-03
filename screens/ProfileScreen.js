@@ -217,7 +217,18 @@ const ProfileScreen = ({
 
 
 
-  // Edit Profile States
+  // Top-level Protection
+  if (!user) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#F8FAFC', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#4F46E5" />
+      </View>
+    );
+  }
+
+  const academyTier = user?.role === 'academy' ? calculateAcademyTier(user.id, tournaments) : null;
+  const isWeb = Platform.OS === 'web';
+
   const [message, setMessage] = useState('');
   const [isCalendarModalVisible, setIsCalendarModalVisible] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().substring(0, 7));
@@ -231,7 +242,7 @@ const ProfileScreen = ({
     { id: '6', title: 'May Day Cup', date: '2026-05-15', sport: 'Badminton', type: 'tournament' },
   ];
 
-  const MOCK_CONFIRMED_BOOKINGS = user.role === 'coach' ? [
+  const MOCK_CONFIRMED_BOOKINGS = user?.role === 'coach' ? [
     { id: 'cb1', title: 'Coaching: Aaryan Sharma', date: '2026-03-26', sport: 'Tennis', type: 'booking' },
     { id: 'cb2', title: 'Coaching: Rohan G.', date: '2026-03-28', sport: 'Cricket', type: 'booking' },
   ] : [];
@@ -373,11 +384,6 @@ const ProfileScreen = ({
 
 
 
-  if (!user) return null;
-
-  const academyTier = user.role === 'academy' ? calculateAcademyTier(user.id, tournaments) : null;
-
-  const isWeb = Platform.OS === 'web';
   const content = (
     <SafeAreaView style={[styles.container, isWeb && { maxWidth: 900, alignSelf: 'center', width: '100%', backgroundColor: '#FFFFFF', padding: 24, marginVertical: 16, borderRadius: 24, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.08, shadowRadius: 40, overflow: 'hidden', flex: 1 }]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -398,7 +404,7 @@ const ProfileScreen = ({
         {/* Skill Dashboard (Optional, based on user roles etc) */}
 
 
-        {user.role !== 'admin' && user.role !== 'academy' && user.role !== 'coach' && (
+        {user?.role !== 'admin' && user?.role !== 'academy' && user?.role !== 'coach' && (
           <View style={styles.section}>
               <Text style={styles.sectionTitle}>Skills</Text>
               {renderUpdateCard()}
@@ -406,7 +412,7 @@ const ProfileScreen = ({
           </View>
         )}
 
-        {(user.role === 'admin' || user.role === 'academy' || user.role === 'coach') && renderUpdateCard()}
+        {(user?.role === 'admin' || user?.role === 'academy' || user?.role === 'coach') && renderUpdateCard()}
 
         {/* --- NEW: Expert Panel Feature Hub --- */}
         <View style={styles.section}>
@@ -414,17 +420,17 @@ const ProfileScreen = ({
             <View style={styles.featureGrid}>
                 <TouchableOpacity 
                     style={styles.featureTile} 
-                    onPress={() => navigation.navigate(user.role === 'admin' ? 'Insights' : 'Matchmaking')}
+                    onPress={() => navigation.navigate(user?.role === 'admin' ? 'Insights' : 'Matchmaking')}
                 >
-                    <View style={[styles.featureIcon, { backgroundColor: user.role === 'admin' ? '#EEF2FF' : '#EEF2FF' }]}>
-                        <Ionicons name={user.role === 'admin' ? 'analytics' : 'people'} size={24} color="#4F46E5" />
+                    <View style={[styles.featureIcon, { backgroundColor: user?.role === 'admin' ? '#EEF2FF' : '#EEF2FF' }]}>
+                        <Ionicons name={user?.role === 'admin' ? 'analytics' : 'people'} size={24} color="#4F46E5" />
                     </View>
                     <Text style={styles.featureLabel}>
-                        {user.role === 'admin' ? 'Insights' : user.role === 'coach' ? 'Bookings' : 'Matchmaking'}
+                        {user?.role === 'admin' ? 'Insights' : user?.role === 'coach' ? 'Bookings' : 'Matchmaking'}
                     </Text>
                 </TouchableOpacity>
 
-                {user.role !== 'coach' && user.role !== 'admin' && (
+                {user?.role !== 'coach' && user?.role !== 'admin' && (
                   <TouchableOpacity style={styles.featureTile} onPress={() => navigation.navigate('CoachDirectory')}>
                       <View style={[styles.featureIcon, { backgroundColor: '#FFF7ED' }]}>
                           <Ionicons name="school" size={24} color="#EA580C" />
@@ -440,7 +446,7 @@ const ProfileScreen = ({
                     <Text style={styles.featureLabel}>Calendar</Text>
                 </TouchableOpacity>
 
-                {user.role === 'academy' && (
+                {user?.role === 'academy' && (
                   <TouchableOpacity style={styles.featureTile} onPress={() => navigation.navigate('Subscriptions')}>
                       <View style={[styles.featureIcon, { backgroundColor: '#FDF2F8' }]}>
                           <Ionicons name="card" size={24} color="#DB2777" />
@@ -615,7 +621,7 @@ const ProfileScreen = ({
 
       {showReferralModal && (
         <Modal visible={showReferralModal} animationType="fade" transparent={true} onRequestClose={() => setShowReferralModal(false)}>
-          <View style={styles.modalOverlay}>
+          <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
             <View style={styles.walletModalContent}>
               <View style={styles.walletModalHeader}>
                 <Text style={styles.walletModalTitle}>Referral Program</Text>
@@ -634,7 +640,7 @@ const ProfileScreen = ({
       {/* Avatar Picker Modal */}
       {showAvatarPicker && (
         <Modal visible={showAvatarPicker} animationType="fade" transparent={true}>
-          <View style={styles.modalOverlay}>
+          <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
             <View style={styles.editModalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Change Profile Picture</Text>
@@ -756,7 +762,7 @@ const ProfileScreen = ({
       {/* Edit Profile Modal */}
       {showEditProfile && (
         <Modal visible={showEditProfile} animationType="fade" transparent={true}>
-          <View style={styles.modalOverlay}>
+          <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
             <KeyboardAvoidingView 
               behavior={Platform.OS === "ios" ? "padding" : "height"}
               style={styles.keyboardView}
@@ -910,7 +916,7 @@ const ProfileScreen = ({
       {/* Change Password Modal */}
       {showChangePassword && (
         <Modal visible={showChangePassword} animationType="fade" transparent={true}>
-          <View style={styles.modalOverlay}>
+          <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
             <KeyboardAvoidingView 
               behavior={Platform.OS === "ios" ? "padding" : "height"}
               style={styles.keyboardView}

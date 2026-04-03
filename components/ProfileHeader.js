@@ -47,17 +47,17 @@ const ProfileHeader = memo(({
   return (
     <View style={styles.header}>
       <View style={styles.avatarContainer}>
-        {user.role === 'admin' ? (
+        {user?.role === 'admin' ? (
           <View style={[styles.avatar, { backgroundColor: '#0F172A', borderWidth: 2, borderColor: '#3B82F6', justifyContent: 'center', alignItems: 'center' }]}>
             <Image source={require('../assets/icon.png')} style={{width: 50, height: 50, resizeMode: 'contain'}} />
           </View>
-        ) : user.avatar && !imageError ? (
+        ) : user?.avatar && !imageError ? (
           <Image 
             source={getSafeAvatar(user.avatar, user.name)}
             style={styles.avatar} 
           />
         ) : (
-          <AvatarPlaceholder name={user.name} size={80} />
+          <AvatarPlaceholder name={user?.name} size={80} />
         )}
         <TouchableOpacity 
           style={styles.editBtn} 
@@ -70,7 +70,7 @@ const ProfileHeader = memo(({
         </TouchableOpacity>
       </View>
       <View style={styles.userInfo}>
-        <Text style={styles.userName}>{user.name}</Text>
+        <Text style={styles.userName}>{user?.name}</Text>
         {academyTier && (
           <View style={styles.roleRow}>
             <View style={[styles.tierBadge, academyTier === 'Gold' ? styles.tierGold : academyTier === 'Silver' ? styles.tierSilver : styles.tierBronze]}>
@@ -79,10 +79,10 @@ const ProfileHeader = memo(({
           </View>
         )}
 
-        {user.role !== 'admin' && user.role !== 'academy' && user.role !== 'coach' && (
+        {user?.role !== 'admin' && user?.role !== 'academy' && user?.role !== 'coach' && (
           <TouchableOpacity onPress={onWalletPress} style={styles.walletTrigger}>
             <Ionicons name="wallet" size={12} color="#16A34A" />
-            <Text style={styles.walletTriggerText}>Wallet: ₹{user.credits || 0}</Text>
+            <Text style={styles.walletTriggerText}>Wallet: ₹{user?.credits || 0}</Text>
           </TouchableOpacity>
         )}
         
@@ -119,7 +119,7 @@ const ProfileHeader = memo(({
         }}
       >
         <Ionicons name="notifications-outline" size={24} color="#0F172A" />
-        {user.notifications?.some(n => !n.read) && (
+        {user?.notifications?.some(n => !n.read) && (
           <View style={styles.notificationBadge}>
             <Text style={styles.badgeText}>
               {user.notifications.filter(n => !n.read).length}
