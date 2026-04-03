@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = "2.4.10";
+const APP_VERSION = "2.5.1";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -407,18 +407,9 @@ export default function App() {
       if (cm) setChatbotMessages(cm);
       if (matchmakingFromStorage) setMatchmaking(matchmakingFromStorage);
       
-      if (ps && Array.isArray(ps)) {
-        let finalPs = ps;
-        // 🛡️ STALE SYNC GUARD: If we have 9 or fewer players locally, DON'T allow them to be pushed.
-        // This stops a stale local list from wiping out the 14-player cloud list.
-        if (p && p.length <= 9 && ps.includes('players')) {
-          console.log("🛡️ [Hydration] Blocking stale player push (Count: " + p.length + ")");
-          finalPs = ps.filter(k => k !== 'players');
-          storage.setItem('pendingSync', finalPs);
-        }
-        setPendingSync(finalPs);
-        pendingSyncRef.current = finalPs;
-      }
+        // 🛡️ STALE SYNC GUARD REMOVED in v2.5.1 in favor of Master Merge
+        setPendingSync(ps);
+        pendingSyncRef.current = ps;
       if (typeof effectiveIwc === 'boolean') {
         console.log("☁️ Hydrated isUsingCloud:", effectiveIwc);
         logger.logAction('HYDRATION_IS_USING_CLOUD', { value: effectiveIwc });
@@ -594,24 +585,28 @@ export default function App() {
       if (Array.isArray(cloudData.players)) {
         const cleanedPlayers = cloudData.players.filter(p => !!(p && p.id));
         
-        // 🛡️ CLOUD-FIRST PROTECTION: If cloud has more players, local state is stale.
-        const localCount = (playersRef.current || []).length;
-        const cloudCount = cleanedPlayers.length;
-        
-        if (cloudCount > localCount) {
-          console.log(`📡 [Sync] Cloud has MORE players (${cloudCount} vs ${localCount}). Correcting local state...`);
-          setPlayers(cleanedPlayers);
-          storage.setItem('players', cleanedPlayers);
-          // Suppress any pending local pushes for 'players' as they are now officially stale
-          setPendingSync(prev => {
-            const next = prev.filter(k => k !== 'players');
-            storage.setItem('pendingSync', next);
-            pendingSyncRef.current = next;
-            return next;
-          });
-        } else if (!pendingSyncRef.current.includes('players')) {
-          setPlayers(cleanedPlayers);
-          storage.setItem('players', cleanedPlayers);
+        // 🛡️ MASTER MERGE: Cloud is the Single Source of Truth
+        const localPlayers = playersRef.current || [];
+        const playerMap = new Map();
+
+        // 1. Start with Local State (to preserve references/ui state if needed)
+        localPlayers.forEach(p => { if (p && p.id) playerMap.set(String(p.id).toLowerCase(), p); });
+
+        // 2. Overlay Cloud State (Cloud always wins on conflict)
+        cleanedPlayers.forEach(p => { if (p && p.id) playerMap.set(String(p.id).toLowerCase(), p); });
+
+        const mergedPlayers = Array.from(playerMap.values());
+        setPlayers(mergedPlayers);
+        storage.setItem('players', mergedPlayers);
+
+        // If cloud had updates for players, we clear any 'pending' player push to prevent rollback
+        if (pendingSyncRef.current.includes('players')) {
+           setPendingSync(prev => {
+             const next = prev.filter(k => k !== 'players');
+             storage.setItem('pendingSync', next);
+             pendingSyncRef.current = next;
+             return next;
+           });
         }
 
         const currentU = currentUserRef.current;

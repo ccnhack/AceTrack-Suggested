@@ -57,7 +57,7 @@ try {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
 
-const APP_VERSION = '2.4.9'; // AceTrack Suggested — Expert Panel Enhanced
+const APP_VERSION = '2.5.1'; // AceTrack Suggested — Expert Panel Enhanced
 
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: CORS Whitelist (SEC Fix #3)
@@ -500,80 +500,59 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
   try {
     const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser', 'matchmaking'];
     
-    // Audit log
+    // 🛡️ SMART MERGE: MongoDB is the Single Source of Truth
     const changedKeys = Object.keys(req.body).filter(k => syncableKeys.includes(k));
-    await logAudit(req, 'DATA_SAVE', changedKeys, { overwrite: !!req.body.overwrite, atomicKeys: req.body.atomicKeys });
+    await logAudit(req, 'DATA_SAVE', changedKeys, { atomicKeys: req.body.atomicKeys });
 
     const now = Date.now();
-    let updatedState;
+    
+    // Fetch the current state to perform a deep merge
+    const state = await AppState.findOne().sort({ lastUpdated: -1 });
+    const currentData = (state && state.data) ? state.data : {};
+    const newMasterData = { ...currentData };
 
-    if (req.body.overwrite === true) {
-      console.log("⚠️ [Server] ATOMIC OVERWRITE REQUESTED.");
-      const state = await AppState.findOne().sort({ lastUpdated: -1 });
-      const currentData = (state && state.data) ? state.data : {};
-      
-      const cleanData = {};
-      for (const key of syncableKeys) {
-        cleanData[key] = req.body[key] !== undefined ? req.body[key] : (currentData[key] || []);
-      }
-      
-      // CRITICAL FIX: Always UPDATE the existing document instead of creating a new one.
-      // Creating new documents caused split-brain state and data loss.
-      updatedState = await AppState.findOneAndUpdate(
-        {},
-        { $set: { data: cleanData, lastUpdated: now } },
-        { upsert: true, new: true, sort: { lastUpdated: -1 } }
-      );
-    } else {
-      // 🛡️ ATOMIC FIELD-LEVEL UPDATES
-      const atomicKeys = req.body.atomicKeys || [];
-      const updateObj = { lastUpdated: now };
-      
-      for (const key of syncableKeys) {
-        if (req.body[key] !== undefined) {
-          const incoming = req.body[key];
-          const isAtomic = atomicKeys.includes(key);
-          
-          if (key === 'players' && Array.isArray(incoming) && !isAtomic) {
-            // 🛡️ SMART MERGE for Players: Protect against deleting accounts from stale clients
-            const state = await AppState.findOne().sort({ lastUpdated: -1 });
-            const currentPlayers = (state?.data?.players || []);
-            
-            const playerMap = new Map();
-            // Start with ALL current players (master list)
-            currentPlayers.forEach(p => { 
-                if (p && p.id) playerMap.set(String(p.id).toLowerCase(), p); 
-            });
-            
-            // Overwrite with specifically incoming players (client-side updates)
-            incoming.forEach(p => { 
-                if (p && p.id) {
-                    const id = String(p.id).toLowerCase();
-                    const existing = playerMap.get(id);
-                    playerMap.set(id, existing ? { ...existing, ...p } : p);
-                }
-            });
-            
-            updateObj[`data.${key}`] = Array.from(playerMap.values());
-            console.log(`📡 [Server] Merged players. Cloud: ${currentPlayers.length}, Incoming: ${incoming.length}, Merged: ${playerMap.size}`);
-          } else {
-            // Default behavior: Replace field (Atomic or Simple data)
-            updateObj[`data.${key}`] = incoming;
-          }
+    for (const key of syncableKeys) {
+      if (req.body[key] !== undefined) {
+        const incoming = req.body[key];
+        const atomicKeys = req.body.atomicKeys || [];
+        const isAtomic = atomicKeys.includes(key);
+
+        if (key === 'players' && Array.isArray(incoming) && !isAtomic) {
+          // 🛡️ MASTER MERGE for Players: Protect by ID
+          const playerMap = new Map();
+          // 1. Start with the Cloud Truth
+          (currentData.players || []).forEach(p => {
+            if (p && p.id) playerMap.set(String(p.id).toLowerCase(), p);
+          });
+          // 2. Overlay Client Updates (UPSERT)
+          incoming.forEach(p => {
+            if (p && p.id) {
+              const id = String(p.id).toLowerCase();
+              const existing = playerMap.get(id);
+              // Merge existing cloud fields with incoming client fields
+              playerMap.set(id, existing ? { ...existing, ...p } : p);
+            }
+          });
+          newMasterData.players = Array.from(playerMap.values());
+          console.log(`📡 [Server] Merged players. Cloud: ${(currentData.players || []).length}, Incoming: ${incoming.length}, Result: ${playerMap.size}`);
+        } else {
+          // For other collections, we currently trust the incoming array if provided, 
+          // but we preserve the cloud data for anything NOT in the request body.
+          newMasterData[key] = incoming;
         }
       }
-
-      updatedState = await AppState.findOneAndUpdate(
-        {}, 
-        { $set: updateObj }, 
-        { upsert: true, new: true, sort: { lastUpdated: -1 } }
-      );
     }
+
+    const updatedState = await AppState.findOneAndUpdate(
+      {},
+      { $set: { data: newMasterData, lastUpdated: now } },
+      { upsert: true, new: true, sort: { lastUpdated: -1 } }
+    );
 
     const socketId = req.headers['x-socket-id'];
     const broadcastPayload = { 
       lastUpdated: updatedState.lastUpdated, 
-      keys: Object.keys(req.body).filter(k => syncableKeys.includes(k)),
+      keys: changedKeys,
       lastSocketId: socketId || 'system'
     };
 
