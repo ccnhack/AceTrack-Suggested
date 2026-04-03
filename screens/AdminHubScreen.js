@@ -378,11 +378,11 @@ const AdminHubScreen = ({
           {[
             { id: 'individuals', label: 'Individuals', icon: 'person' },
             { id: 'academies', label: 'Academies', icon: 'business' },
-            { id: 'coaches', label: 'Coaches', icon: 'school', count: (players || []).filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !seenAdminActionIds.has(p.id)).length },
+            { id: 'coaches', label: 'Coaches', icon: 'school', count: (players || []).filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && (seenAdminActionIds?.has ? !seenAdminActionIds.has(p.id) : true)).length },
             { id: 'security', label: 'Security', icon: 'lock-closed' },
             { id: 'tournaments', label: 'Tournaments', icon: 'trophy' },
-            { id: 'coach_assignments', label: 'Assignments', icon: 'people', count: (tournaments || []).filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today) && !seenAdminActionIds.has(t.id)).length },
-            { id: 'recordings', label: 'Videos', icon: 'videocam', count: (matchVideos || []).filter(v => v.adminStatus === 'Deletion Requested' && !seenAdminActionIds.has(v.id)).length },
+            { id: 'coach_assignments', label: 'Assignments', icon: 'people', count: (tournaments || []).filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today) && (seenAdminActionIds?.has ? !seenAdminActionIds.has(t.id) : true)).length },
+            { id: 'recordings', label: 'Videos', icon: 'videocam', count: (matchVideos || []).filter(v => v.adminStatus === 'Deletion Requested' && (seenAdminActionIds?.has ? !seenAdminActionIds.has(v.id) : true)).length },
             { id: 'grievances', label: 'Tickets', icon: 'chatbubbles', count: (supportTickets || []).filter(t => t.status === 'Open').length },
             { id: 'audit', label: 'Audit', icon: 'list' },
             { id: 'diagnostics', label: 'Diag', icon: 'pulse' }
@@ -1284,7 +1284,7 @@ const AdminHubScreen = ({
                   if (viewingCoachStatusList) {
                     const activeStat = stats.find(s => s.label === viewingCoachStatusList);
                     const listIds = activeStat?.ids || [];
-                    const listCoaches = listIds.map(id => players.find(p => p.id === id)).filter(Boolean);
+                    const listCoaches = listIds.map(id => (players || []).find(p => p.id === id)).filter(Boolean);
 
                     return (
                       <View style={styles.flex}>
@@ -1402,12 +1402,12 @@ const AdminHubScreen = ({
             { id: 'dashboard', label: 'Dashboard', icon: 'speedometer-outline' },
             { id: 'individuals', label: 'Individuals', icon: 'person-outline' },
             { id: 'academies', label: 'Academies', icon: 'business-outline' },
-            { id: 'coaches', label: 'Coaches', icon: 'megaphone-outline', count: players.filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !seenAdminActionIds.has(p.id)).length },
+            { id: 'coaches', label: 'Coaches', icon: 'megaphone-outline', count: (players || []).filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && (seenAdminActionIds?.has ? !seenAdminActionIds.has(p.id) : true)).length },
             { id: 'security', label: 'Security', icon: 'shield-checkmark-outline' },
             { id: 'tournaments', label: 'Tournaments', icon: 'trophy-outline' },
-            { id: 'coach_assignments', label: 'Coach Assignments', icon: 'clipboard-outline', count: tournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today) && !seenAdminActionIds.has(t.id)).length },
-            { id: 'recordings', label: 'Recordings', icon: 'videocam-outline', count: matchVideos.filter(v => v.adminStatus === 'Deletion Requested' && !seenAdminActionIds.has(v.id)).length },
-            { id: 'grievances', label: 'Grievances', icon: 'warning-outline', count: supportTickets.filter(t => t.status === 'Open').length },
+            { id: 'coach_assignments', label: 'Coach Assignments', icon: 'clipboard-outline', count: (tournaments || []).filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today) && (seenAdminActionIds?.has ? !seenAdminActionIds.has(t.id) : true)).length },
+            { id: 'recordings', label: 'Recordings', icon: 'videocam-outline', count: (matchVideos || []).filter(v => v.adminStatus === 'Deletion Requested' && (seenAdminActionIds?.has ? !seenAdminActionIds.has(v.id) : true)).length },
+            { id: 'grievances', label: 'Grievances', icon: 'warning-outline', count: (supportTickets || []).filter(t => t.status === 'Open').length },
             { id: 'audit', label: 'Audit Logs', icon: 'book-outline' },
             { id: 'diagnostics', label: 'Diagnostics', icon: 'desktop-outline' }
           ].map(tab => {

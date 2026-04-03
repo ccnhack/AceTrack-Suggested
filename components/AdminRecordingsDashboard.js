@@ -227,13 +227,13 @@ const AdminRecordingsDashboard = ({
           <TouchableOpacity 
             disabled={!selectedAcademyId}
             onPress={() => {
-                const tourns = tournaments.filter(t => t.creatorId === selectedAcademyId);
+                const tourns = (tournaments || []).filter(t => t.creatorId === selectedAcademyId);
                 const nextIdx = (tourns.findIndex(t => t.id === selectedTournamentId) + 1) % (tourns.length + 1);
                 setSelectedTournamentId(nextIdx === 0 ? null : tourns[nextIdx - 1].id);
             }}
             style={[styles.selector, !selectedAcademyId && styles.selectorDisabled]}
           >
-            <Text style={styles.selectorText}>{selectedTournamentId ? tournaments.find(t => t.id === selectedTournamentId)?.title : 'All'}</Text>
+            <Text style={styles.selectorText}>{selectedTournamentId ? (tournaments || []).find(t => t.id === selectedTournamentId)?.title : 'All'}</Text>
           </TouchableOpacity>
         </View>
       </View>
