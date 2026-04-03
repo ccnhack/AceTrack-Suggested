@@ -36,27 +36,14 @@ async function cleanup() {
     }
 
     const data = state.data;
-    const oldPlayerCount = data.players?.length || 0;
+    // 1. Players (Preserved)
+    console.log(`👤 Players: ${data.players?.length || 0} (Preserved)`);
 
-    // 1. Filter Players
-    data.players = (data.players || []).filter(p => 
-      USERS_TO_KEEP.includes(String(p.id).toLowerCase())
-    );
-    console.log(`👤 Players: ${oldPlayerCount} -> ${data.players.length}`);
+    // 2. Tournaments (Preserved)
+    console.log(`🏆 Tournaments: ${data.tournaments?.length || 0} (Preserved)`);
 
-    // 2. Filter Tournaments (only keep those created by remaining users)
-    const oldTCount = data.tournaments?.length || 0;
-    data.tournaments = (data.tournaments || []).filter(t => 
-      USERS_TO_KEEP.includes(String(t.creatorId).toLowerCase())
-    );
-    console.log(`🏆 Tournaments: ${oldTCount} -> ${data.tournaments.length}`);
-
-    // 3. Filter Match Videos
-    const oldVCount = data.matchVideos?.length || 0;
-    data.matchVideos = (data.matchVideos || []).filter(v => 
-      USERS_TO_KEEP.includes(String(v.userId).toLowerCase())
-    );
-    console.log(`📹 MatchVideos: ${oldVCount} -> ${data.matchVideos.length}`);
+    // 3. Match Videos (Preserved)
+    console.log(`📹 MatchVideos: ${data.matchVideos?.length || 0} (Preserved)`);
 
     // 4. Update atomic timestamp
     const newState = new AppState({

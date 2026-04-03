@@ -39,7 +39,7 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, setPlayers, Sport, isU
     city: '',
     state: '',
     managedSports: [],
-    referralCode: ''
+    referralCode: 'ACE-'
   });
   const [error, setError] = useState('');
   const [usernameStatus, setUsernameStatus] = useState('idle');
@@ -49,6 +49,26 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, setPlayers, Sport, isU
   const [isRegistering, setIsRegistering] = useState(false);
   const [newlyCreatedUser, setNewlyCreatedUser] = useState(null);
 
+  const handleReferralCodeChange = (text) => {
+    let val = String(text || '').toUpperCase().replace(/[^A-Z0-9-]/g, '');
+    
+    // Always start with ACE-
+    if (!val.startsWith('ACE-')) {
+      val = 'ACE-' + val.replace(/^ACE-?/, '');
+    }
+
+    // Insert second hyphen after 5 characters of the second segment (index 9)
+    // Format: ACE-XXXXX-XXXX (total 14)
+    if (val.length > 9 && val[9] !== '-') {
+      val = val.slice(0, 9) + '-' + val.slice(9);
+    }
+
+    // Max length 14
+    if (val.length > 14) val = val.slice(0, 14);
+
+    setFormData({ ...formData, referralCode: val });
+  };
+
   const checkUsername = () => {
     if (!formData.username) {
       setUsernameStatus('idle');
@@ -56,7 +76,7 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, setPlayers, Sport, isU
     }
     setUsernameStatus('checking');
     setTimeout(() => {
-      const isTaken = players.some(p => p.id.toLowerCase() === formData.username.toLowerCase());
+      const isTaken = players.some(p => p && p.id && String(p.id).toLowerCase() === String(formData.username || '').toLowerCase());
       if (isTaken) {
         setUsernameStatus('taken');
         setUsernameSuggestions([
@@ -108,12 +128,12 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, setPlayers, Sport, isU
       return;
     }
 
-    if (players.find(p => p.id.toLowerCase() === formData.username.toLowerCase())) {
+    if (players.find(p => p && p.id && String(p.id).toLowerCase() === String(formData.username || '').toLowerCase())) {
       setError('Username already taken.');
       return;
     }
 
-    if (players.find(p => p.email.toLowerCase() === formData.email.toLowerCase())) {
+    if (players.find(p => p && p.email && String(p.email).toLowerCase() === String(formData.email || '').toLowerCase())) {
       setError('Email address already registered.');
       return;
     }
@@ -124,8 +144,8 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, setPlayers, Sport, isU
     }
 
     let referrerId = null;
-    if (formData.referralCode && formData.referralCode.trim() !== '') {
-      const referrer = players.find(p => p.referralCode && p.referralCode.toUpperCase() === formData.referralCode.trim().toUpperCase());
+    if (formData.referralCode && formData.referralCode.trim() !== '' && formData.referralCode !== 'ACE-') {
+      const referrer = players.find(p => p && p.referralCode && String(p.referralCode).toUpperCase() === String(formData.referralCode || '').trim().toUpperCase());
       if (!referrer) {
         setError('Invalid referral code. Please check or leave blank.');
         return;
@@ -448,10 +468,11 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, setPlayers, Sport, isU
             <Text style={styles.inputLabel}>Referral Code (Optional)</Text>
             <TextInput 
               style={styles.input}
-              placeholder="ACE-XXXX-YYYY"
+              placeholder="ACE-XXXXX-XXXX"
               value={formData.referralCode}
-              onChangeText={(val) => setFormData({...formData, referralCode: val})}
+              onChangeText={handleReferralCodeChange}
               autoCapitalize="characters"
+              maxLength={14}
             />
           </View>
         )}

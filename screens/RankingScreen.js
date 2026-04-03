@@ -31,7 +31,7 @@ const RankingScreen = ({ user, role, players, tournaments }) => {
         <Text style={styles.headerTitle}>LEADERBOARD</Text>
       </View>
       <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
-        {(!user?.isEmailVerified || !user?.isPhoneVerified) && role !== 'admin' ? (
+        {(!user?.isEmailVerified || !user?.isPhoneVerified) && role !== 'admin' && user?.role !== 'admin' && user?.id !== 'admin' ? (
           <View style={styles.lockContainer}>
             <View style={styles.lockIconCircle}>
               <Ionicons name="lock-closed" size={48} color="#EF4444" />

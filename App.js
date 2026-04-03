@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = "2.4.9";
+const APP_VERSION = "2.4.10";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -136,6 +136,7 @@ export default function App() {
     socketRef.current.on('connect', () => {
       console.log("🔌 WebSocket Connected for real-time sync");
       logger.logAction('WS_CONNECTED', { socketId: socketRef.current?.id, url: activeApiUrl });
+      setIsCloudOnline(true); // Proactively warm up the UI badge
     });
 
     socketRef.current.on('disconnect', (reason) => {
@@ -320,6 +321,10 @@ export default function App() {
         return;
       }
       
+      // Proactively update online status since we reached the server
+      setIsCloudOnline(true);
+      setLastSyncTime(new Date().toLocaleTimeString());
+      
       let status;
       try {
         status = await response.json();
@@ -401,9 +406,18 @@ export default function App() {
       if (al) setAuditLogs(al);
       if (cm) setChatbotMessages(cm);
       if (matchmakingFromStorage) setMatchmaking(matchmakingFromStorage);
+      
       if (ps && Array.isArray(ps)) {
-        setPendingSync(ps);
-        pendingSyncRef.current = ps;
+        let finalPs = ps;
+        // 🛡️ STALE SYNC GUARD: If we have 9 or fewer players locally, DON'T allow them to be pushed.
+        // This stops a stale local list from wiping out the 14-player cloud list.
+        if (p && p.length <= 9 && ps.includes('players')) {
+          console.log("🛡️ [Hydration] Blocking stale player push (Count: " + p.length + ")");
+          finalPs = ps.filter(k => k !== 'players');
+          storage.setItem('pendingSync', finalPs);
+        }
+        setPendingSync(finalPs);
+        pendingSyncRef.current = finalPs;
       }
       if (typeof effectiveIwc === 'boolean') {
         console.log("☁️ Hydrated isUsingCloud:", effectiveIwc);
@@ -491,25 +505,30 @@ export default function App() {
   }, []);
 
   const loadData = useCallback(async (forceNoLoading = false, forceSync = false) => {
+    const now = Date.now();
+    console.log(`📡 [Sync] loadData called. forceNoLoading=${forceNoLoading}, forceSync=${forceSync}`);
+    
     if (syncLockRef.current && !forceSync) {
       console.log("📡 Sync Mutex active, skipping pull.");
-      return;
+      return null;
     }
     
-    const now = Date.now();
     if (now < globalBackoffUntilRef.current && !forceSync) {
       console.log("⏳ Backoff active, skipping pull until:", new Date(globalBackoffUntilRef.current).toLocaleTimeString());
-      return;
+      return null;
     }
 
     // First, try to sync any local changes.
     const syncSuccess = await syncPendingData();
     
     // THROTTLE: Prevent background sync more than once every 15 seconds unless forced
-    if (!forceSync && now - lastBackgroundSyncRef.current < 15000) {
-      console.log("⏱️ Background sync throttled (last sync was < 15s ago)");
-      return false;
+    const timeSinceLastSync = now - lastBackgroundSyncRef.current;
+    if (!forceSync && timeSinceLastSync < 15000) {
+      console.log(`⏱️ Background sync throttled (${timeSinceLastSync}ms since last sync < 15s)`);
+      return null;
     }
+    
+    console.log("🚀 [Sync] Throttle bypassed. Starting cloud fetch...");
     if (!forceNoLoading || forceSync) {
         // Manual or foreground syncs reset the manual timer
         lastManualSyncTimeRef.current = now;
@@ -517,9 +536,7 @@ export default function App() {
     lastBackgroundSyncRef.current = now;
 
     if (pendingSyncRef.current.length > 0 && !syncSuccess) {
-      console.log("⏳ Local changes pending sync. Skipping cloud pull to prevent overwrite.");
-      setIsCloudOnline(false);
-      setIsLoading(false);
+      console.log("⏳ Local changes pending sync. Keeping current connection state.");
       return false;
     }
 
@@ -577,8 +594,22 @@ export default function App() {
       if (Array.isArray(cloudData.players)) {
         const cleanedPlayers = cloudData.players.filter(p => !!(p && p.id));
         
-        // Optimization: Use lastUpdated timestamp instead of expensive JSON.stringify comparison
-        if (!pendingSyncRef.current.includes('players')) {
+        // 🛡️ CLOUD-FIRST PROTECTION: If cloud has more players, local state is stale.
+        const localCount = (playersRef.current || []).length;
+        const cloudCount = cleanedPlayers.length;
+        
+        if (cloudCount > localCount) {
+          console.log(`📡 [Sync] Cloud has MORE players (${cloudCount} vs ${localCount}). Correcting local state...`);
+          setPlayers(cleanedPlayers);
+          storage.setItem('players', cleanedPlayers);
+          // Suppress any pending local pushes for 'players' as they are now officially stale
+          setPendingSync(prev => {
+            const next = prev.filter(k => k !== 'players');
+            storage.setItem('pendingSync', next);
+            pendingSyncRef.current = next;
+            return next;
+          });
+        } else if (!pendingSyncRef.current.includes('players')) {
           setPlayers(cleanedPlayers);
           storage.setItem('players', cleanedPlayers);
         }
@@ -645,9 +676,15 @@ export default function App() {
       const isRateLimit = e.message?.includes('429');
       
       if (!isRateLimit && !isTimeout) {
-        setIsCloudOnline(false);
+        // Only set offline if WebSocket is ALSO dead
+        if (socketRef.current?.connected) {
+          console.log("📡 HTTP failed but WebSocket alive. Staying online.");
+          setIsCloudOnline(true);
+        } else {
+          setIsCloudOnline(false);
+        }
       } else {
-        console.log("⏳ Sync delayed by network/latency, keeping last known status.");
+        console.log("⏳ Sync delayed by network/latency, keeping state.");
       }
       return false;
     } finally {
@@ -737,11 +774,12 @@ export default function App() {
     } catch (error) {
       console.error("❌ Cloud Push Error:", error);
       // 🛡️ LATENCY HARDENING: Don't flip to "Local" if it's just a timeout or abort
-      const isTimeout = error.message?.includes('Aborted') || error.message?.includes('timeout') || error.message?.includes('Network request failed');
-      const isRateLimit = error.message?.includes('429');
-
       if (!isRateLimit && !isTimeout) {
-        setIsCloudOnline(false);
+        if (socketRef.current?.connected) {
+           setIsCloudOnline(true);
+        } else {
+           setIsCloudOnline(false);
+        }
       }
       logger.logAction('PUSH_DATA_ERROR', { error: error.message, version: thisVersion });
       return false;
@@ -789,12 +827,18 @@ export default function App() {
         if (dIndex >= 0) updates.currentUser.devices[dIndex] = myTracker;
         else updates.currentUser.devices.push(myTracker);
         
-        if (!updates.players) {
-          updates.players = [...playersRef.current];
-        }
-        const pIndex = updates.players.findIndex(p => p.id === updates.currentUser.id);
+        // 🛡️ REFINEMENT: Don't force-push the entire players array on every tiny currentUser update
+        // This was causing stale local player lists (9) to overwrite cloud lists (14).
+        // Only update the specific player record in the local list, but don't mark 'players' as pending.
+        const currentP = [...playersRef.current || []];
+        const pIndex = currentP.findIndex(p => p.id === updates.currentUser.id);
         if (pIndex >= 0) {
-          updates.players[pIndex] = { ...updates.players[pIndex], devices: updates.currentUser.devices };
+          const updatedP = { ...currentP[pIndex], devices: updates.currentUser.devices };
+          currentP[pIndex] = updatedP;
+          setPlayers(currentP);
+          storage.setItem('players', currentP);
+          // Note: We deliberately DON'T add 'players' to 'updates' here 
+          // unless it was already part of the requested sync.
         }
       }
     }
@@ -896,7 +940,8 @@ export default function App() {
       if (user && isNew) {
         const updated = [user, ...(prev || [])];
         storage.setItem('players', updated);
-        pushStateToCloud({ players: updated });
+        // CRITICAL FIX: Use syncAndSaveData (sets pendingSync guard) instead of pushStateToCloud directly
+        syncAndSaveData({ players: updated }, true);
         return updated;
       }
       return prev || [];
@@ -909,7 +954,7 @@ export default function App() {
     if (pushToken && user?.id) {
       sendTokenToBackend(user.id, pushToken);
     }
-  }, [hydrateFromStorage, loadData, pushStateToCloud, syncAndSaveData]);
+  }, [hydrateFromStorage, loadData, syncAndSaveData]);
 
   const handleLogout = useCallback(async () => {
     logger.logAction('USER_LOGOUT_START', { userId: currentUserRef.current?.id });
@@ -937,30 +982,35 @@ export default function App() {
       setPlayers(prev => {
         const updatedPlayers = [newPlayer, ...(prev || [])];
         storage.setItem('players', updatedPlayers);
-        pushStateToCloud({ players: updatedPlayers }, true)
-          .then(success => {
-            logger.logAction('USER_SIGNUP', { 
-              id: newPlayer.id, 
-              name: newPlayer.name, 
-              role: newPlayer.role,
-              cloudSync: success ? 'SUCCESS' : 'PENDING'
-            });
-            
-            if (!success) {
-              setPendingSync(prevP => {
-                const next = [...(prevP || [])];
-                if (!next.includes('players')) next.push('players');
-                storage.setItem('pendingSync', next);
-                return next;
-              });
-            }
-            resolve(success);
-          })
-          .catch(reject);
+        
+        // CRITICAL FIX: Use syncAndSaveData with atomic=true instead of pushStateToCloud directly.
+        // This ensures: 1) pendingSync guard is set (blocks background overwrites)
+        //               2) atomicKeys are sent in the request body
+        //               3) Push happens immediately without debounce
+        try {
+          syncAndSaveData({ players: updatedPlayers }, true);
+          logger.logAction('USER_SIGNUP', { 
+            id: newPlayer.id, 
+            name: newPlayer.name, 
+            role: newPlayer.role,
+            cloudSync: 'ATOMIC_PUSH'
+          });
+          resolve(true);
+        } catch (err) {
+          console.error('❌ Registration cloud sync failed:', err);
+          setPendingSync(prevP => {
+            const next = [...(prevP || [])];
+            if (!next.includes('players')) next.push('players');
+            storage.setItem('pendingSync', next);
+            pendingSyncRef.current = next;
+            return next;
+          });
+          resolve(false); // Don't reject — user is still registered locally
+        }
         return updatedPlayers;
       });
     });
-  }, [pushStateToCloud]);
+  }, [syncAndSaveData]);
 
   const handleSaveTournament = useCallback((t) => {
     setTournaments(prev => {
@@ -1191,6 +1241,15 @@ export default function App() {
     }
   }, []);
 
+
+  const memoizedUser = useMemo(() => {
+    if (!currentUser) return null;
+    return {
+      ...currentUser,
+      isEmailVerified: currentUser.isEmailVerified || verificationLatch.email,
+      isPhoneVerified: currentUser.isPhoneVerified || verificationLatch.phone,
+    };
+  }, [currentUser, verificationLatch]);
 
   const memoizedHandlers = useMemo(() => ({
     onLogin: handleLogin,
@@ -1728,7 +1787,7 @@ export default function App() {
     handleRegisterUser, handleSaveTournament, handleSaveVideo, handleSyncUpdate, handleLogTrace, 
     handleSaveTicket, handleConfirmCoachRequest, handleUploadLogs, isUploadingLogs, isCloudOnline, 
     isSyncing, lastSyncTime, isUsingCloud, players, tournaments, seenAdminActionIds, visitedAdminSubTabs,
-    matchVideos, matches, supportTickets, evaluations, chatbotMessages
+    matchVideos, matches, supportTickets, evaluations, chatbotMessages, verificationLatch
   ]);
 
 
@@ -1781,7 +1840,7 @@ export default function App() {
     );
   }
 
-  if (viewingLanding && !currentUser) {
+  if (viewingLanding && !memoizedUser) {
     return (
       <LandingScreen 
         onLogin={() => {
@@ -1813,7 +1872,7 @@ export default function App() {
     );
   }
 
-  if (!currentUser) {
+  if (!memoizedUser) {
     return (
       <LoginScreen 
         onLoginSuccess={handleLogin}
@@ -1824,12 +1883,13 @@ export default function App() {
         players={players}
         onSignup={memoizedHandlers.onSignup}
         onResetPassword={memoizedHandlers.onResetPassword}
-        onRefreshData={memoizedHandlers.onManualSync}
+        onRefreshData={async () => {
+          const result = await loadData(true, true);
+          return result;
+        }}
       />
     );
   }
-
-
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -1848,7 +1908,10 @@ export default function App() {
         >
         <StatusBar barStyle="dark-content" />
         <AppNavigator
-          user={currentUser}
+          user={memoizedUser}
+          isCloudOnline={isCloudOnline}
+          isUsingCloud={isUsingCloud}
+          lastSyncTime={lastSyncTime}
           role={userRole}
           appVersion={APP_VERSION}
           players={memoizedPlayers}

@@ -509,15 +509,21 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
 
     if (req.body.overwrite === true) {
       console.log("⚠️ [Server] ATOMIC OVERWRITE REQUESTED.");
-      const cleanData = {};
       const state = await AppState.findOne().sort({ lastUpdated: -1 });
       const currentData = (state && state.data) ? state.data : {};
       
+      const cleanData = {};
       for (const key of syncableKeys) {
         cleanData[key] = req.body[key] !== undefined ? req.body[key] : (currentData[key] || []);
       }
-      updatedState = new AppState({ data: cleanData, lastUpdated: now });
-      await updatedState.save();
+      
+      // CRITICAL FIX: Always UPDATE the existing document instead of creating a new one.
+      // Creating new documents caused split-brain state and data loss.
+      updatedState = await AppState.findOneAndUpdate(
+        {},
+        { $set: { data: cleanData, lastUpdated: now } },
+        { upsert: true, new: true, sort: { lastUpdated: -1 } }
+      );
     } else {
       // 🛡️ ATOMIC FIELD-LEVEL UPDATES
       const atomicKeys = req.body.atomicKeys || [];
@@ -528,14 +534,30 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
           const incoming = req.body[key];
           const isAtomic = atomicKeys.includes(key);
           
-          if (Array.isArray(incoming) && !isAtomic) {
-            // Smart Merge for Arrays (only if not atomic)
-            // We use a positional update or a full replace of that field
-            // To be truly atomic in Mongo, we'd need separate collections.
-            // For now, we update the specific field in the AppState document.
-            updateObj[`data.${key}`] = incoming;
+          if (key === 'players' && Array.isArray(incoming) && !isAtomic) {
+            // 🛡️ SMART MERGE for Players: Protect against deleting accounts from stale clients
+            const state = await AppState.findOne().sort({ lastUpdated: -1 });
+            const currentPlayers = (state?.data?.players || []);
+            
+            const playerMap = new Map();
+            // Start with ALL current players (master list)
+            currentPlayers.forEach(p => { 
+                if (p && p.id) playerMap.set(String(p.id).toLowerCase(), p); 
+            });
+            
+            // Overwrite with specifically incoming players (client-side updates)
+            incoming.forEach(p => { 
+                if (p && p.id) {
+                    const id = String(p.id).toLowerCase();
+                    const existing = playerMap.get(id);
+                    playerMap.set(id, existing ? { ...existing, ...p } : p);
+                }
+            });
+            
+            updateObj[`data.${key}`] = Array.from(playerMap.values());
+            console.log(`📡 [Server] Merged players. Cloud: ${currentPlayers.length}, Incoming: ${incoming.length}, Merged: ${playerMap.size}`);
           } else {
-            // Full field replacement (Atomic or Object)
+            // Default behavior: Replace field (Atomic or Simple data)
             updateObj[`data.${key}`] = incoming;
           }
         }

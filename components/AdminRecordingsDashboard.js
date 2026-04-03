@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, Image, 
   StyleSheet, Modal, TextInput, Alert, Dimensions,
-  SafeAreaView, FlatList
+  SafeAreaView, FlatList, Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -331,14 +331,20 @@ const AdminRecordingsDashboard = ({
                         </TouchableOpacity>
                         <TouchableOpacity 
                             onPress={() => {
-                              Alert.alert(
-                                "Permanent Delete",
-                                "Are you sure you want to delete this video permanently? This action cannot be undone.",
-                                [
-                                  { text: "Cancel", style: "cancel" },
-                                  { text: "Delete", style: "destructive", onPress: () => onPermanentDeleteVideo(video.id) }
-                                ]
-                              );
+                              if (Platform.OS === 'web') {
+                                if (window.confirm("Permanent Delete\nAre you sure you want to delete this video permanently? This action cannot be undone.")) {
+                                  onPermanentDeleteVideo(video.id);
+                                }
+                              } else {
+                                Alert.alert(
+                                  "Permanent Delete",
+                                  "Are you sure you want to delete this video permanently? This action cannot be undone.",
+                                  [
+                                    { text: "Cancel", style: "cancel" },
+                                    { text: "Delete", style: "destructive", onPress: () => onPermanentDeleteVideo(video.id) }
+                                  ]
+                                );
+                              }
                             }}
                             style={[styles.actionBtn, styles.actionBtnDanger]}
                         >
@@ -394,17 +400,24 @@ const AdminRecordingsDashboard = ({
                   </TouchableOpacity>
                   <TouchableOpacity 
                     onPress={() => {
-                      Alert.alert(
-                        "Permanent Delete",
-                        `Delete ${selectedTrashIds.length} videos permanently?`,
-                        [
-                          { text: "Cancel", style: "cancel" },
-                          { text: "Delete", style: "destructive", onPress: () => {
-                              onBulkPermanentDeleteVideos(selectedTrashIds);
-                              setSelectedTrashIds([]);
-                          }}
-                        ]
-                      );
+                      if (Platform.OS === 'web') {
+                        if (window.confirm(`Permanent Delete\nDelete ${selectedTrashIds.length} videos permanently?`)) {
+                          onBulkPermanentDeleteVideos(selectedTrashIds);
+                          setSelectedTrashIds([]);
+                        }
+                      } else {
+                        Alert.alert(
+                          "Permanent Delete",
+                          `Delete ${selectedTrashIds.length} videos permanently?`,
+                          [
+                            { text: "Cancel", style: "cancel" },
+                            { text: "Delete", style: "destructive", onPress: () => {
+                                onBulkPermanentDeleteVideos(selectedTrashIds);
+                                setSelectedTrashIds([]);
+                            }}
+                          ]
+                        );
+                      }
                     }}
                     style={[styles.miniActionBtn, styles.purgeBtn]}
                   >
@@ -416,14 +429,20 @@ const AdminRecordingsDashboard = ({
               {trashVideosCount > 0 && selectedTrashIds.length === 0 && (
                 <TouchableOpacity 
                   onPress={() => {
-                    Alert.alert(
-                      "Empty Trash",
-                      "Are you sure you want to permanently delete ALL videos in the trash?",
-                      [
-                        { text: "Cancel", style: "cancel" },
-                        { text: "Delete All", style: "destructive", onPress: () => onBulkPermanentDeleteVideos(trashVideos.map(v => v.id)) }
-                      ]
-                    );
+                    if (Platform.OS === 'web') {
+                      if (window.confirm("Empty Trash\nAre you sure you want to permanently delete ALL videos in the trash?")) {
+                        onBulkPermanentDeleteVideos(trashVideos.map(v => v.id));
+                      }
+                    } else {
+                      Alert.alert(
+                        "Empty Trash",
+                        "Are you sure you want to permanently delete ALL videos in the trash?",
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          { text: "Delete All", style: "destructive", onPress: () => onBulkPermanentDeleteVideos(trashVideos.map(v => v.id)) }
+                        ]
+                      );
+                    }
                   }}
                   style={styles.emptyTrashBtn}
                 >

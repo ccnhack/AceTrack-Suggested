@@ -20,7 +20,7 @@ import ProfileScreen from './ProfileScreen';
 import designSystem from '../theme/designSystem';
 
 const AdminHubScreen = ({ 
-  user, players, tournaments, matchVideos, supportTickets, auditLogs = [],
+  user, players = [], tournaments = [], matchVideos, supportTickets, auditLogs = [],
   onApproveCoach, onAssignCoach, onRemoveCoach, onUpdateVideoStatus, 
   onBulkUpdateVideoStatus, onForceRefundVideo, onApproveDeleteVideo, 
   onRejectDeleteVideo, onPermanentDeleteVideo, onBulkPermanentDeleteVideos, 
@@ -30,7 +30,7 @@ const AdminHubScreen = ({
   isUsingCloud, onOptOut, onLogFailedOtp, onLogTrace, setPlayers, onToggleFavourite,
   isCloudOnline, lastSyncTime, onBatchUpdate, onUploadLogs, isUploadingLogs,
   onVerifyAccount, onToggleCloud, setIsProfileEditActive, appVersion, socketRef,
-  navigation
+  navigation, ...restProps
 }) => {
   const screenWidth = Dimensions.get('window').width;
   const targetCloudUrl = 'https://acetrack-suggested.onrender.com';
@@ -53,12 +53,64 @@ const AdminHubScreen = ({
   
   // Diagnostics Dashboard States
   const [diagUserSearch, setDiagUserSearch] = useState('');
+  const fetchRecentLogs = async () => {
+    try {
+      const res = await fetch(`${activeApiUrl}/api/diagnostics`, { 
+        headers: { 'x-ace-api-key': config.ACE_API_KEY } 
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Extract system-wide recent logs from the file list
+        // Typically these follow YYYY-MM-DD format in the suffix
+        const files = (data?.files || [])
+          .filter(f => !f.includes('server_events.json'))
+          .slice(0, 10);
+        setRecentLogFiles(files);
+      }
+    } catch (e) { console.warn("Failed to fetch recent logs:", e); }
+  };
+
+  useEffect(() => {
+    if (subTab === 'diagnostics') {
+      fetchRecentLogs();
+    }
+  }, [subTab]);
+
   const handleDiagSearchChange = (txt) => {
     setDiagUserSearch(txt);
+    setCloudMatchFiles([]);
     if (selectedDiagUser) {
       setSelectedDiagUser(null);
       setUserDiagFiles([]);
       setDiagContent(null);
+    }
+  };
+
+  const handleCloudFilenameSearch = async () => {
+    if (!diagUserSearch.trim()) return;
+    setIsSearchingFilenames(true);
+    setCloudMatchFiles([]);
+    
+    try {
+      const res = await fetch(`${activeApiUrl}/api/diagnostics`, { 
+        headers: { 'x-ace-api-key': config.ACE_API_KEY } 
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const searchLow = diagUserSearch.toLowerCase().trim();
+        const matches = (data?.files || []).filter(f => f.toLowerCase().includes(searchLow));
+        setCloudMatchFiles(matches.slice(0, 10)); // Limit to top 10 matches for UI sanity
+        if (matches.length === 0) {
+          Alert.alert("No Cloud Logs", `No files matching "${diagUserSearch}" were found on the server.`);
+        }
+      } else {
+        Alert.alert("Error", "Could not fetch cloud directory.");
+      }
+    } catch (e) {
+      console.error("Cloud Search Error:", e);
+      Alert.alert("Error", "Network error during cloud search.");
+    } finally {
+      setIsSearchingFilenames(false);
     }
   };
   const [selectedDiagUser, setSelectedDiagUser] = useState(null);
@@ -71,6 +123,9 @@ const AdminHubScreen = ({
   const [isPullingLive, setIsPullingLive] = useState(false);
   const [onlineDevices, setOnlineDevices] = useState({});
   const [pullingDeviceIds, setPullingDeviceIds] = useState({});
+  const [isSearchingFilenames, setIsSearchingFilenames] = useState(false);
+  const [cloudMatchFiles, setCloudMatchFiles] = useState([]);
+  const [recentLogFiles, setRecentLogFiles] = useState([]);
   const pongBufferRef = React.useRef({}); // BUFFER: Coalesce pongs to prevent UI lag
 
     const handlePong = (data) => {
@@ -188,8 +243,8 @@ const AdminHubScreen = ({
     });
   }, [tournaments, today, tournamentSubTab, search, players]);
 
-  const getAcademyStats = (academyId) => {
-    const academyTs = (tournaments || []).filter(t => t.creatorId === academyId);
+  const calculateAcademyTier = (uid, tournaments) => {
+    const academyTs = (tournaments || []).filter(t => t.creatorId === uid);
     const hostedCount = academyTs.length;
     const liveCount = academyTs.filter(t => t.status !== 'completed').length;
     const cancellations = academyTs.filter(t => t.status === 'cancelled').length;
@@ -381,9 +436,9 @@ const AdminHubScreen = ({
             { id: 'coaches', label: 'Coaches', icon: 'school', count: (players || []).filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && (seenAdminActionIds?.has ? !seenAdminActionIds.has(p.id) : true)).length },
             { id: 'security', label: 'Security', icon: 'lock-closed' },
             { id: 'tournaments', label: 'Tournaments', icon: 'trophy' },
-            { id: 'coach_assignments', label: 'Assignments', icon: 'people', count: (tournaments || []).filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today) && (seenAdminActionIds?.has ? !seenAdminActionIds.has(t.id) : true)).length },
-            { id: 'recordings', label: 'Videos', icon: 'videocam', count: (matchVideos || []).filter(v => v.adminStatus === 'Deletion Requested' && (seenAdminActionIds?.has ? !seenAdminActionIds.has(v.id) : true)).length },
-            { id: 'grievances', label: 'Tickets', icon: 'chatbubbles', count: (supportTickets || []).filter(t => t.status === 'Open').length },
+            { id: 'coach_assignments', label: 'Assignments', icon: 'people', count: (tournaments || []).filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration' || t.coachStatus === 'Awaiting Assignment') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today) && (seenAdminActionIds?.has ? !seenAdminActionIds.has(String(t.id)) : true)).length },
+            { id: 'recordings', label: 'Videos', icon: 'videocam', count: (matchVideos || []).filter(v => v.adminStatus === 'Deletion Requested' && (seenAdminActionIds?.has ? !seenAdminActionIds.has(String(v.id)) : true)).length },
+            { id: 'grievances', label: 'Tickets', icon: 'chatbubbles', count: (supportTickets || []).filter(t => (t.status === 'Open' || t.status === 'Awaiting Response') && (seenAdminActionIds?.has ? !seenAdminActionIds.has(String(t.id)) : true)).length },
             { id: 'audit', label: 'Audit', icon: 'list' },
             { id: 'diagnostics', label: 'Diag', icon: 'pulse' }
           ].map(tab => {
@@ -398,7 +453,11 @@ const AdminHubScreen = ({
                   setSubTab(tab.id); 
                   setSearch(''); 
                   if (tab.id !== 'grievances' && setVisitedAdminSubTabs) {
-                    setVisitedAdminSubTabs(prev => new Set(prev).add(tab.id));
+                    setVisitedAdminSubTabs(prev => {
+                        const next = new Set(prev);
+                        next.add(tab.id);
+                        return next;
+                    });
                   }
                   if (setSeenAdminActionIds) {
                     const newSeenIds = new Set(seenAdminActionIds);
@@ -761,7 +820,7 @@ const AdminHubScreen = ({
                <TouchableOpacity 
                  onPress={() => {
                    logger.logAction('ADMIN_MANUAL_SYNC_TRIGGER');
-                   onManualSync?.(true);
+                   onManualSync?.(false, true);
                  }}
                  style={styles.diagSyncBtn}
                >
@@ -780,6 +839,38 @@ const AdminHubScreen = ({
               />
             </View>
 
+            {recentLogFiles.length > 0 && !diagUserSearch && (
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#64748B', marginLeft: 4, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Recent System Activity</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {recentLogFiles.map(file => (
+                    <TouchableOpacity 
+                      key={file}
+                      onPress={async () => {
+                        setSelectedDiagUser(null);
+                        setSelectedDiagFile(file);
+                        setDiagContent(null);
+                        setIsDownloading(true);
+                        try {
+                          const res = await fetch(`${activeApiUrl}/api/diagnostics/${file}`, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
+                          if (res.ok) {
+                            const text = await res.text();
+                            setDiagContent(text);
+                            setDiagFileSize(text.length);
+                          }
+                        } catch (e) { Alert.alert("Error", "Could not fetch file."); }
+                        finally { setIsDownloading(false); }
+                      }}
+                      style={{ backgroundColor: '#F0F9FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, marginRight: 8, borderWidth: 1, borderColor: '#BAE6FD', flexDirection: 'row', alignItems: 'center' }}
+                    >
+                      <Ionicons name="document-text-outline" size={12} color="#0369A1" style={{ marginRight: 4 }} />
+                      <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#0369A1' }}>{file.split('_')[0]}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
             <View style={styles.userListScroll}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 {(players || [])
@@ -790,9 +881,8 @@ const AdminHubScreen = ({
                     const email = (p.email || '').toLowerCase();
                     const s = diagUserSearch.toLowerCase().trim();
                     if (s) return name.includes(s) || id.includes(s) || email.includes(s);
-                    const mocks = ['shashank', 'pranshu', 'academy', 'coach'];
-                    return mocks.some(m => name.includes(m) || id.includes(m) || email.includes(m)) || 
-                           name.includes('riya') || name.includes('saumya') || email.includes('riya') || email.includes('saumya');
+                    // No search — show all users who have devices or reports, or just everyone (horizontal scroll will handle)
+                    return true;
                   })
                   .map(p => (
                     <TouchableOpacity 
@@ -830,7 +920,7 @@ const AdminHubScreen = ({
                           console.warn('⚠️ socketRef is null — no ping sent!');
                         }
                         
-                        const url = `${activeApiUrl}/api/diagnostics`;
+                        const url = `${activeApiUrl}/api/diagnostics?userId=${p.id}`;
                         try {
                           const res = await fetch(url, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
                           if (res.ok) {
@@ -853,7 +943,7 @@ const AdminHubScreen = ({
                                      (safeId && low.startsWith(safeId + '_')) ||
                                      (safeEmail && low.startsWith(safeEmail + '_')) ||
                                      (safeName && low.startsWith('admin_requested_' + safeName + '_')) ||
-                                     (safeName && low.startsWith('admin_requested_' + safeName + '_')) ||
+                                     (safeName && low.startsWith('profile_manual_' + safeName + '_')) ||
                                      (safeName && low.includes(`_${safeName}_`)) ||
                                      (firstName.length > 3 && low.includes(firstName.toLowerCase()));
                             });
@@ -899,17 +989,59 @@ const AdminHubScreen = ({
                     const email = (p.email || '').toLowerCase();
                     const s = diagUserSearch.toLowerCase().trim();
                     if (s) return name.includes(s) || id.includes(s) || email.includes(s);
-                    const mocks = ['shashank', 'pranshu', 'academy', 'coach'];
-                    return mocks.some(m => name.includes(m) || id.includes(m) || email.includes(m)) || 
-                           name.includes('riya') || name.includes('saumya') || email.includes('riya') || email.includes('saumya');
+                    // No search — show all (horizontal scroll will handle)
+                    return true;
                   }) || []).length === 0 && (
                     <View style={{ padding: 20 }}>
                       <Text style={{ color: '#94A3B8', fontStyle: 'italic' }}>
                         No user matching "{diagUserSearch}" found.
                       </Text>
-                      <Text style={{ color: '#64748B', fontSize: 10, marginTop: 4 }}>
+                      <Text style={{ color: '#64748B', fontSize: 10, marginTop: 4, marginBottom: 12 }}>
                         Players in list: {(players || []).length}. (Check "Refresh Cloud Data" if users are missing)
                       </Text>
+                      {diagUserSearch.length > 2 && (
+                        <TouchableOpacity 
+                          onPress={handleCloudFilenameSearch}
+                          disabled={isSearchingFilenames}
+                          style={{ backgroundColor: '#EEF2FF', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#C7D2FE', alignItems: 'center' }}
+                        >
+                          {isSearchingFilenames ? (
+                            <ActivityIndicator size="small" color="#4F46E5" />
+                          ) : (
+                            <Text style={{ color: '#4F46E5', fontWeight: 'bold', fontSize: 12 }}>🔍 Search Cloud for logs matching "{diagUserSearch}"</Text>
+                          )}
+                        </TouchableOpacity>
+                      )}
+
+                      {cloudMatchFiles.length > 0 && (
+                        <View style={{ marginTop: 16 }}>
+                          <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#0F172A', marginBottom: 8 }}>Found {cloudMatchFiles.length} Cloud Logs:</Text>
+                          {cloudMatchFiles.map(file => (
+                            <TouchableOpacity 
+                              key={file}
+                              onPress={async () => {
+                                setSelectedDiagFile(file);
+                                setDiagContent(null);
+                                setIsDownloading(true);
+                                try {
+                                  const res = await fetch(`${activeApiUrl}/api/diagnostics/${file}`, { 
+                                    headers: { 'x-ace-api-key': config.ACE_API_KEY } 
+                                  });
+                                  if (res.ok) {
+                                    const text = await res.text();
+                                    setDiagContent(text);
+                                    setDiagFileSize(text.length);
+                                  }
+                                } catch (e) { Alert.alert("Error", "Could not fetch file."); }
+                                finally { setIsDownloading(false); }
+                              }}
+                              style={{ backgroundColor: '#F8FAFC', padding: 8, borderRadius: 6, marginBottom: 4, borderWidth: 1, borderColor: '#E2E8F0' }}
+                            >
+                              <Text style={{ fontSize: 10, color: '#334155' }} numberOfLines={1}>{file}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      )}
                     </View>
                   )}
               </ScrollView>
@@ -966,7 +1098,7 @@ const AdminHubScreen = ({
                                   while (attempts < 5) {
                                     attempts++;
                                     try {
-                                      const res = await fetch(`${activeApiUrl}/api/diagnostics`, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
+                                      const res = await fetch(`${activeApiUrl}/api/diagnostics?userId=${selectedDiagUser.id}`, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
                                       if (res.ok) {
                                         const data = await res.json();
                                         const pNameRaw = (selectedDiagUser.name || '').toLowerCase();
@@ -1450,11 +1582,13 @@ const AdminHubScreen = ({
       <View style={{ flex: 1, padding: 32, overflow: 'hidden' }}>
         {subTab === 'profile' ? (
            <ProfileScreen 
-             user={user} tournaments={tournaments} isCloudOnline={isCloudOnline}
+             user={user} tournaments={tournaments || []} isCloudOnline={isCloudOnline}
              isUsingCloud={isUsingCloud} lastSyncTime={lastSyncTime}
              onManualSync={onManualSync} onToggleCloud={onToggleCloud}
              setIsProfileEditActive={setIsProfileEditActive} appVersion={appVersion}
-             navigation={navigation}
+             navigation={navigation} players={players || []} supportTickets={supportTickets || []}
+             onVerifyAccount={onVerifyAccount} onUploadLogs={onUploadLogs} isUploadingLogs={isUploadingLogs}
+             {...restProps}
            />
         ) : (
            <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 24, shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 30, shadowOffset: { width: 0, height: 10 }, overflow: 'hidden' }}>
@@ -1682,6 +1816,42 @@ const styles = StyleSheet.create({
   syncLocal: { backgroundColor: '#FFF7ED' },
   syncText: { fontSize: 9, fontWeight: '900', textTransform: 'uppercase' },
   lastSyncText: { fontSize: 8, color: '#E0E7FF', marginTop: 4, fontWeight: '600' },
+  tabContainer: { backgroundColor: '#F8FAFC', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  tabScroll: { paddingHorizontal: 20, gap: 10 },
+  premiumTab: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 16, 
+    paddingVertical: 10, 
+    borderRadius: 14, 
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...designSystem.shadows.sm
+  },
+  premiumTabActive: { 
+    backgroundColor: '#6366F1',
+    borderColor: '#4F46E5'
+  },
+  premiumTabText: { fontSize: 13, fontWeight: '700', color: '#64748B', marginLeft: 4 },
+  premiumTabTextActive: { color: '#FFFFFF' },
+  premiumBadge: {
+    backgroundColor: '#EF4444',
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+    paddingHorizontal: 4,
+    borderWidth: 1,
+    borderColor: '#FFFFFF'
+  },
+  premiumBadgeText: { 
+    color: '#FFFFFF', 
+    fontSize: 9, 
+    fontWeight: '900' 
+  },
 });
 
 export default AdminHubScreen;

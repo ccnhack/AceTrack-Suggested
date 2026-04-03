@@ -509,7 +509,7 @@ const ProfileScreen = ({
       {/* Verification OTP Modal */}
       {!!showVerifyModal && (
         <Modal visible={!!showVerifyModal} animationType="fade" transparent={true}>
-          <View style={styles.modalOverlay}>
+          <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
             <View style={styles.otpModalContent}>
               <View style={styles.otpIconContainer}>
                 <Ionicons name={showVerifyModal === 'email' ? "mail-unread" : "chatbubble-ellipses"} size={32} color="#EF4444" />
@@ -522,10 +522,13 @@ const ProfileScreen = ({
               <TextInput 
                 style={styles.otpInput}
                 placeholder="123456"
+                placeholderTextColor="#CBD5E1"
                 maxLength={6}
                 keyboardType="number-pad"
                 value={verificationCode}
                 onChangeText={setVerificationCode}
+                autoFocus={true}
+                selectionColor="#3B82F6"
               />
               
               <View style={styles.otpActions}>
@@ -537,10 +540,14 @@ const ProfileScreen = ({
                     // Simulate API call
                     setTimeout(() => {
                       const type = showVerifyModal;
-                      onUpdateUser({
-                        ...user,
-                        [type === 'email' ? 'isEmailVerified' : 'isPhoneVerified']: true
-                      });
+                      if (onVerifyAccount) {
+                        onVerifyAccount(type);
+                      } else {
+                        onUpdateUser({
+                          ...user,
+                          [type === 'email' ? 'isEmailVerified' : 'isPhoneVerified']: true
+                        });
+                      }
                       setShowVerifyModal(null);
                       setVerificationCode('');
                       setIsVerifying(false);
@@ -586,7 +593,7 @@ const ProfileScreen = ({
       {/* Wallet Modal — centered popup with blurred dark background */}
       {showWalletModal && (
         <Modal visible={showWalletModal} animationType="fade" transparent={true} onRequestClose={() => setShowWalletModal(false)}>
-          <View style={styles.modalOverlay}>
+          <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
             <View style={styles.walletModalContent}>
               <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
                 <View style={styles.walletModalHeader}>
@@ -681,17 +688,23 @@ const ProfileScreen = ({
                 <TouchableOpacity 
                   onPress={async () => {
                     let finalAvatar = editAvatar;
-                    if (editAvatar && (editAvatar.startsWith('file://') || editAvatar.startsWith('content://'))) {
+                    if (editAvatar && (editAvatar.startsWith('file://') || editAvatar.startsWith('content://') || editAvatar.startsWith('data:') || editAvatar.startsWith('blob:'))) {
                       setIsUploading(true);
                       logger.logAction('AVATAR_UPLOAD_START', { localUri: editAvatar });
                       try {
                         const formData = new FormData();
-                        // Server expects 'video' field name for generic uploads
-                        formData.append('video', { 
-                          uri: editAvatar, 
-                          name: `avatar_${user.id || 'new'}.jpg`, 
-                          type: 'image/jpeg' 
-                        });
+                        
+                        if (Platform.OS === 'web' && (editAvatar.startsWith('data:') || editAvatar.startsWith('blob:'))) {
+                          const res = await fetch(editAvatar);
+                          const blob = await res.blob();
+                          formData.append('video', blob, `avatar_${user.id || 'new'}.jpg`);
+                        } else {
+                          formData.append('video', { 
+                            uri: editAvatar, 
+                            name: `avatar_${user.id || 'new'}.jpg`, 
+                            type: 'image/jpeg' 
+                          });
+                        }
                         
                         const response = await fetch(`${activeApiUrl}/api/upload`, {
                           method: 'POST',
@@ -704,9 +717,11 @@ const ProfileScreen = ({
                         
                         if (response.ok) {
                           const data = await response.json();
-                          finalAvatar = data.url;
-                          setSessionCustomAvatar(data.url); // Persist in picker for session
-                          logger.logAction('AVATAR_UPLOAD_SUCCESS', { cloudUrl: data.url });
+                          // Append a cache-buster so React Native knows the remote image actually changed
+                          const cacheBustedUrl = `${data.url}${data.url.includes('?') ? '&' : '?'}v=${Date.now()}`;
+                          finalAvatar = cacheBustedUrl;
+                          setSessionCustomAvatar(cacheBustedUrl); // Persist in picker for session
+                          logger.logAction('AVATAR_UPLOAD_SUCCESS', { cloudUrl: cacheBustedUrl });
                         } else {
                           const errorText = await response.text();
                           logger.logAction('AVATAR_UPLOAD_FAIL', { status: response.status, error: errorText });
@@ -811,7 +826,7 @@ const ProfileScreen = ({
                   <View style={styles.inputGroup}>
                     <View style={styles.labelRow}>
                       <Text style={styles.inputLabel}>Email Address</Text>
-                      {user.role !== 'admin' && (
+                      {user.role !== 'admin' && user?.role !== 'admin' && user?.id !== 'admin' && user?.id !== 'admin_sys' && (
                         user.isEmailVerified ? (
                           <View style={styles.inlineVerifiedBadge}>
                             <Ionicons name="checkmark-circle" size={12} color="#16A34A" />
@@ -840,7 +855,7 @@ const ProfileScreen = ({
                   <View style={styles.inputGroup}>
                     <View style={styles.labelRow}>
                       <Text style={styles.inputLabel}>Phone Number</Text>
-                      {user.role !== 'admin' && (
+                      {user.role !== 'admin' && user?.role !== 'admin' && user?.id !== 'admin' && user?.id !== 'admin_sys' && (
                         user.isPhoneVerified ? (
                           <View style={styles.inlineVerifiedBadge}>
                             <Ionicons name="checkmark-circle" size={12} color="#16A34A" />
@@ -1029,14 +1044,14 @@ const ProfileScreen = ({
                       <View style={styles.calendarModalContent}>
                           <View style={styles.calendarModalHeader}>
                               <Text style={styles.calendarModalTitle}>{user.role === 'coach' ? 'Calendar' : 'Tournament Calendar'}</Text>
-                              <TouchableOpacity onPress={handleCloseCalendar} style={styles.calendarCloseBtn}>
+                              <TouchableOpacity onPress={() => setIsCalendarModalVisible(false)} style={styles.calendarCloseBtn}>
                                   <Ionicons name="close" size={28} color="#333" />
                               </TouchableOpacity>
                           </View>
                           
                           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
                               <Calendar 
-                                onMonthChange={handleMonthChange}
+                                onMonthChange={(month) => setCurrentMonth(month.dateString.substring(0, 7))}
                                 theme={{
                                   todayTextColor: designSystem.colors.primary,
                                   arrowColor: designSystem.colors.primary,
@@ -1079,7 +1094,7 @@ const ProfileScreen = ({
                               )}
                             </View>
 
-                            <TouchableOpacity style={styles.calendarCloseBtnLarge} onPress={handleCloseCalendar}>
+                            <TouchableOpacity style={styles.calendarCloseBtnLarge} onPress={() => setIsCalendarModalVisible(false)}>
                                 <Text style={styles.calendarCloseBtnText}>Close</Text>
                             </TouchableOpacity>
                         </ScrollView>
@@ -1268,6 +1283,11 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     padding: 32,
     alignItems: 'center',
+    elevation: 24,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.15,
+    shadowRadius: 32,
   },
   otpIconContainer: {
     width: 64,
@@ -1299,10 +1319,12 @@ const styles = StyleSheet.create({
     borderColor: '#F1F5F9',
     borderRadius: 16,
     padding: 16,
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 28,
+    fontWeight: '900',
     textAlign: 'center',
-    letterSpacing: 8,
+    letterSpacing: 12,
+    paddingLeft: 12, // Balance letterSpacing for perfect centering
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     color: '#0F172A',
     marginBottom: 24,
   },

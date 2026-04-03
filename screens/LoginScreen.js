@@ -98,13 +98,26 @@ const LoginScreen = ({
 
       // ROBUSTNESS: If user not found locally, try to refresh data from cloud
       if (!foundUser && onRefreshData) {
-        console.log(`🔍 User ${username} not found locally. Attempting cloud refresh...`);
+        console.log(`🔍 User "${username}" not found in ${players.length} local players. IDs: [${players.slice(0, 10).map(p => p.id).join(', ')}]. Attempting cloud refresh...`);
+        logger.logAction('LOGIN_CLOUD_REFRESH_START', { username, localPlayerCount: players.length });
         setIsSyncing(true);
         const cloudResult = await onRefreshData();
         setIsSyncing(false);
+        
+        logger.logAction('LOGIN_CLOUD_REFRESH_RESULT', { 
+          hasResult: !!cloudResult, 
+          type: typeof cloudResult, 
+          hasPlayers: !!(cloudResult && cloudResult.players),
+          playerCount: cloudResult?.players?.length || 0 
+        });
+        
         // If cloudResult contains players, search in the fresh list immediately
         if (cloudResult && cloudResult.players) {
           const search = username.toLowerCase().trim();
+          const cloudPlayerIds = cloudResult.players.map(p => String(p.id || '').toLowerCase());
+          console.log(`☁️ Cloud returned ${cloudResult.players.length} players. Searching for "${search}"...`);
+          console.log(`☁️ Cloud player IDs: [${cloudPlayerIds.slice(0, 15).join(', ')}${cloudPlayerIds.length > 15 ? '...' : ''}]`);
+          
           foundUser = cloudResult.players.find(p => {
             const pEmail = (p.email || '').toLowerCase();
             const pId = String(p.id || '').toLowerCase();
@@ -112,7 +125,16 @@ const LoginScreen = ({
             const pName = (p.name || '').toLowerCase();
             return pEmail === search || pId === search || pUsername === search || pName === search;
           });
-          if (foundUser) console.log("✅ User found in fresh cloud data.");
+          if (foundUser) {
+            console.log("✅ User found in fresh cloud data!");
+            logger.logAction('LOGIN_CLOUD_USER_FOUND', { userId: foundUser.id, role: foundUser.role });
+          } else {
+            console.log(`❌ User "${search}" NOT found even after cloud refresh.`);
+            logger.logAction('LOGIN_CLOUD_USER_NOT_FOUND', { search, cloudPlayerCount: cloudResult.players.length });
+          }
+        } else {
+          console.log(`⚠️ Cloud refresh returned no player data. cloudResult type: ${typeof cloudResult}`);
+          logger.logAction('LOGIN_CLOUD_REFRESH_NO_DATA', { resultType: typeof cloudResult });
         }
       }
 
@@ -131,11 +153,12 @@ const LoginScreen = ({
         const diagInfo = {
           searchingFor: username,
           totalPlayers: players.length,
-          sampleIds: players.slice(0, 5).map(p => p.id),
+          allPlayerIds: players.slice(0, 30).map(p => p.id),
           isUsingCloud,
           apiUrl: isUsingCloud ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL
         };
         logger.logAction('LOGIN_FAILURE_DIAG', diagInfo);
+        console.error(`🛑 LOGIN FAILED for "${username}". Players in state: [${players.map(p => p.id).join(', ')}]`);
         setError('Invalid credentials. Check your username or email.');
       }
     } catch (err) {

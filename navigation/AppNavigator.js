@@ -76,17 +76,17 @@ const MatchesWrapper = memo((props) => {
 });
 
 const RecordingsWrapper = memo((props) => {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const data = useAppData();
   const actions = useAppActions();
-  return <RecordingsScreen {...props} {...data} {...actions} user={user} Sport={Sport} SkillLevel={SkillLevel} TournamentStructure={TournamentStructure} TournamentFormat={TournamentFormat} />;
+  return <RecordingsScreen {...props} {...data} {...actions} user={user} role={role} Sport={Sport} SkillLevel={SkillLevel} TournamentStructure={TournamentStructure} TournamentFormat={TournamentFormat} />;
 });
 
 const RankingWrapper = memo((props) => {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const data = useAppData();
   const actions = useAppActions();
-  return <RankingScreen {...props} {...data} {...actions} user={user} Sport={Sport} SkillLevel={SkillLevel} TournamentStructure={TournamentStructure} TournamentFormat={TournamentFormat} />;
+  return <RankingScreen {...props} {...data} {...actions} user={user} role={role} Sport={Sport} SkillLevel={SkillLevel} TournamentStructure={TournamentStructure} TournamentFormat={TournamentFormat} />;
 });
 
 const AcademyWrapper = memo((props) => {
@@ -97,9 +97,10 @@ const AcademyWrapper = memo((props) => {
 });
 
 const AdminHubWrapper = memo((props) => {
-  const data = useAppData();
+  const { user, onLogout } = useAuth();
+  const { isCloudOnline, ...data } = useAppData();
   const actions = useAppActions();
-  return <AdminHubScreen {...props} {...data} {...actions} Sport={Sport} SkillLevel={SkillLevel} TournamentStructure={TournamentStructure} TournamentFormat={TournamentFormat} />;
+  return <AdminHubScreen {...props} {...data} user={user} onLogout={onLogout} isCloudOnline={isCloudOnline} {...actions} Sport={Sport} SkillLevel={SkillLevel} TournamentStructure={TournamentStructure} TournamentFormat={TournamentFormat} />;
 });
 
 const InsightsWrapper = memo((props) => {
@@ -125,11 +126,11 @@ const MatchmakingWrapper = memo((props) => {
 
 const ProfileWrapper = memo((props) => {
   const { user, onLogout } = useAuth();
-  const { isUsingCloud, lastSyncTime, appVersion, supportTickets, players } = useAppData();
+  const { isCloudOnline, isUsingCloud, lastSyncTime, appVersion, supportTickets, players } = useAppData();
   const { 
     onManualSync, onUploadLogs, isUploadingLogs, onSaveTicket, 
     onReplyTicket, onUpdateUser, onTopUp, setIsProfileEditActive, 
-    onToggleCloud 
+    onToggleCloud, onVerifyAccount 
   } = useAppActions();
 
   return (
@@ -137,6 +138,7 @@ const ProfileWrapper = memo((props) => {
       {...props} 
       user={user} 
       onLogout={onLogout}
+      isCloudOnline={isCloudOnline}
       isUsingCloud={isUsingCloud}
       lastSyncTime={lastSyncTime}
       appVersion={appVersion}
@@ -151,6 +153,7 @@ const ProfileWrapper = memo((props) => {
       onTopUp={onTopUp}
       setIsProfileEditActive={setIsProfileEditActive}
       onToggleCloud={onToggleCloud}
+      onVerifyAccount={onVerifyAccount}
       Sport={Sport} 
       SkillLevel={SkillLevel} 
       TournamentStructure={TournamentStructure} 
@@ -176,10 +179,11 @@ const MainTabs = memo(() => {
     const hasVisited = (tab) => visitedAdminSubTabs?.has && typeof visitedAdminSubTabs.has === 'function' && visitedAdminSubTabs.has(tab);
     const hasSeen = (id) => seenAdminActionIds?.has && typeof seenAdminActionIds.has === 'function' && seenAdminActionIds.has(String(id));
 
+    const today = new Date().toISOString().split('T')[0];
     const pendingCoaches = hasVisited('coaches') ? [] : (players || []).filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !hasSeen(p.id));
     const pendingRecordings = hasVisited('recordings') ? [] : (matchVideos || []).filter(v => v.adminStatus === 'Deletion Requested' && !hasSeen(v.id));
     const pendingTickets = (supportTickets || []).filter(t => (t.status === 'Open' || t.status === 'Awaiting Response') && !hasSeen(t.id));
-    const pendingAssignments = hasVisited('coach_assignments') ? [] : (tournaments || []).filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && !hasSeen(t.id));
+    const pendingAssignments = hasVisited('coach_assignments') ? [] : (tournaments || []).filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration' || t.coachStatus === 'Awaiting Assignment') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today) && !hasSeen(t.id));
     
     const total = (pendingCoaches?.length || 0) + (pendingRecordings?.length || 0) + (pendingTickets?.length || 0) + (pendingAssignments?.length || 0);
     if (total > 0) {
@@ -265,7 +269,10 @@ const LoginWrapper = memo((props) => {
       onLoginSuccess={onLogin} 
       onSignup={() => props.navigation.navigate('Signup')}
       onResetPassword={onResetPassword}
-      onRefreshData={() => onToggleCloud && loadData(true, true)}
+      onRefreshData={async () => {
+        const cloudData = await loadData(true, true);
+        return cloudData || null;
+      }}
       onBack={onBack} 
       isUsingCloud={isUsingCloud}
       onToggleCloud={onToggleCloud}
@@ -315,21 +322,21 @@ export default function AppNavigator({
   user, role, players, tournaments, matchVideos, matches, tickets, evaluations, 
   seenAdminActionIds, visitedAdminSubTabs, setVisitedAdminSubTabs, 
   reschedulingFrom, auditLogs, onLogout, handlers, appVersion, socketRef,
-  matchmaking, onUpdateMatchmaking, sendUserNotification
+  matchmaking, onUpdateMatchmaking, sendUserNotification,
+  isCloudOnline, isUsingCloud, lastSyncTime
 }) {
   const authParams = useMemo(() => ({
     user, role, onLogout
-  }), [user?.id, role, onLogout]);
+  }), [user?.id, user?.isEmailVerified, user?.isPhoneVerified, role, onLogout]);
 
   const dataParams = useMemo(() => ({
     players, tournaments, matchVideos, matches, tickets, evaluations,
     seenAdminActionIds, visitedAdminSubTabs, reschedulingFrom, auditLogs,
-    appVersion, matchmaking, isCloudOnline: handlers.isCloudOnline, 
-    lastSyncTime: handlers.lastSyncTime
+    appVersion, matchmaking, isCloudOnline, isUsingCloud, lastSyncTime
   }), [
     players, tournaments, matchVideos, matches, tickets, evaluations,
     seenAdminActionIds, visitedAdminSubTabs, reschedulingFrom, auditLogs,
-    appVersion, matchmaking, handlers.isCloudOnline, handlers.lastSyncTime
+    appVersion, matchmaking, isCloudOnline, isUsingCloud, lastSyncTime
   ]);
 
   const actionParams = useMemo(() => ({
