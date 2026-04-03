@@ -144,7 +144,10 @@ export default function App() {
 
     // CATCH-ALL: Log every single event the socket receives for diagnostics
     socketRef.current.onAny((eventName, ...args) => {
-      logger.logAction('WS_EVENT_RECEIVED', { event: eventName, argsPreview: JSON.stringify(args).substring(0, 200) });
+      if (eventName === 'SYNC_READY' || eventName === 'DATA_UPDATE') {
+        clearTimeout(updateCheckTimeoutRef.current);
+        updateCheckTimeoutRef.current = setTimeout(() => checkForUpdates(), 500); 
+      }
     });
 
     socketRef.current.on('data_updated', (payload) => {
@@ -169,12 +172,6 @@ export default function App() {
       if (data.targetUserId === currentUserRef.current?.id) {
         logger.logAction('ADMIN_DIAGNOSTICS_PULL_RECEIVED', { adminId: data.adminId, targetUserId: data.targetUserId, myId: currentUserRef.current?.id, targetDeviceId: data.targetDeviceId, myDeviceId: localDeviceIdRef.current });
         
-        // Let all active instances bypass strict hardware locking to guarantee log delivery
-        if (data.targetDeviceId && data.targetDeviceId !== localDeviceIdRef.current) {
-          logger.logAction('DIAGNOSTICS_PULL_DEVICE_MISMATCH_WARN', { targetDevice: data.targetDeviceId, localDevice: localDeviceIdRef.current });
-          // NO RETURN ABORT HERE - Just warn and proceed uploading logs anyway!
-        }
-
         const logs = logger.getLogs();
         try {
           const cloudUrl = isUsingCloudRef.current ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
@@ -199,7 +196,6 @@ export default function App() {
     });
 
     socketRef.current.on('admin_ping_device_relay', (data) => {
-      // If the admin is actively checking if we are online, respond instantly!
       logger.logAction('PING_RELAY_RECEIVED', { targetUserId: data.targetUserId, myId: currentUserRef.current?.id, match: data.targetUserId === currentUserRef.current?.id });
       if (data.targetUserId === currentUserRef.current?.id) {
         logger.logAction('PING_MATCH_SENDING_PONG', { deviceId: localDeviceIdRef.current, deviceName: Constants.deviceName || Platform.OS });
@@ -228,131 +224,36 @@ export default function App() {
     // 3. IMMEDIATE HYDRATION FROM STORAGE & DEVICE REGISTRATION
     const startup = async () => {
       try {
-        // 1. EARLY INTERCEPTION: Enable immediately to catch hydration logs
         await logger.initialize();
         logger.enableInterception();
         
         const cloudUrl = 'https://acetrack-suggested.onrender.com';
         logger.checkAndUploadCrash(cloudUrl, config.ACE_API_KEY);
-        if (Platform.OS === 'web') {
-          // Relies on injected CSS font-face for CORS safety
-          console.log("🕸️ Ionicons styling injected via CSS");
-        }
         
-        // STEP 1: Always ensure hardware ID exists
-        let hardwareId;
-        try {
-          hardwareId = await AsyncStorage.getItem('acetrack_device_id');
-          if (!hardwareId) {
-            hardwareId = (Constants.deviceName || Platform.OS || 'device').replace(/[^a-zA-Z0-9]/g, '_') + '_' + Math.random().toString(36).substr(2, 5);
-            await AsyncStorage.setItem('acetrack_device_id', hardwareId);
-          }
-        } catch (storageErr) {
-          hardwareId = 'fallback_device_' + Date.now();
+        let hardwareId = await AsyncStorage.getItem('acetrack_device_id');
+        if (!hardwareId) {
+          hardwareId = (Constants.deviceName || Platform.OS || 'device').replace(/[^a-zA-Z0-9]/g, '_') + '_' + Math.random().toString(36).substr(2, 5);
+          await AsyncStorage.setItem('acetrack_device_id', hardwareId);
         }
         localDeviceIdRef.current = hardwareId;
 
-        // Register for Push Notifications
         if (Platform.OS !== 'web') {
           registerForPushNotificationsAsync().then(token => {
             if (token) {
               storage.setItem('push_token', token);
-              if (currentUserRef.current) {
-                sendTokenToBackend(currentUserRef.current.id, token);
-              }
+              if (currentUserRef.current) sendTokenToBackend(currentUserRef.current.id, token);
             }
-          }).catch(err => console.warn("Push token registration failed:", err));
-
-          // PUSH NOTIFICATION LISTENERS & LOGGING
-          try {
-            if (typeof Notifications !== 'undefined' && Notifications.addNotificationReceivedListener) {
-              notificationReceivedSubscription.current = Notifications.addNotificationReceivedListener(notification => {
-                logger.logAction('PUSH_NOTIFICATION_RECEIVED', {
-                  title: notification.request.content.title,
-                  message: notification.request.content.body,
-                  data: notification.request.content.data,
-                  timestamp: new Date().toISOString()
-                });
-                console.log("🔔 Push Notification Received (Foreground):", notification.request.content.title);
-              });
-            }
-
-            if (typeof Notifications !== 'undefined' && Notifications.addNotificationResponseReceivedListener) {
-              notificationResponseSubscription.current = Notifications.addNotificationResponseReceivedListener(response => {
-                logger.logAction('PUSH_NOTIFICATION_OPENED', {
-                  actionIdentifier: response.actionIdentifier,
-                  title: response.notification.request.content.title,
-                  data: response.notification.request.content.data,
-                  timestamp: new Date().toISOString()
-                });
-                console.log("🔔 Push Notification Opened:", response.notification.request.content.title);
-              });
-            }
-          } catch (notifErr) {
-            logger.logAction('NOTIFICATION_LISTENER_SETUP_FAILED', { error: notifErr.message });
-            console.warn('⚠️ Push notification listeners failed to initialize:', notifErr.message);
-          }
+          });
         }
         
-        // Use "admin" or "samsung" or currentUser.id for label
-        const getLabel = () => {
-          if (currentUserRef.current) return currentUserRef.current.id;
-          return Platform.OS === 'android' ? 'samsung' : 'admin';
-        };
-
-        // INITIAL ARCHITECTURAL STATUS (As requested by user for diagnostics)
-        logger.logAction('SYNC_ENGINE_STATUS', { 
-          version: 'v5-HARDENED', 
-          platformVersion: Platform.OS === 'ios' ? `iOS ${Platform.Version}` : Platform.OS === 'android' ? `Android ${Platform.constants?.Release || ''} (API ${Platform.Version})` : 'Web',
-          appVersion: APP_VERSION,
-          features: ['Ref-Mirroring', 'Atomic-Callbacks', 'Heartbeat-v36-RESTORED'],
-          ota: {
-            updateId: Updates.updateId || 'Built-in',
-            channel: Updates.channel || 'Default',
-            runtimeVersion: Updates.runtimeVersion || 'Unknown'
-          },
-          status: 'Operational'
-        });
-
-        // User specifically requested to disable 15s heartbeats.
-
-        // Note: setThresholdCallback was removed due to scope-related ReferenceError in v1.0.29
-
         await hydrateFromStorage();
-        
-        // STEP 2: Tiny wait to ensure React state batching has committed the user
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        // Mark startup as complete BEFORE loadData so that any background attempts are allowed or known
         isStartupCompleteRef.current = true;
-        logger.logAction('STARTUP_COMPLETE', { 
-          hasUser: !!currentUserRef.current,
-          userId: currentUserRef.current?.id 
-        });
-
-        // Only after local data is visible do we attempt a cloud pull
-        // We pass 'true' to loadData here to avoid redundant setIsLoading calls
         await loadData(true); 
 
       } catch (e) {
         console.error("❌ Critical Startup Error:", e);
-        // We log it only if interception is already enabled, otherwise console is the only way
-        logger.logAction('CRITICAL_STARTUP_ERROR', { error: e.message, stack: e.stack });
+        logger.logAction('CRITICAL_STARTUP_ERROR', { error: e.message });
       } finally {
-        // STEP 2: Check for App Version Update
-        const lastRunVersion = await storage.getItem('last_run_app_version');
-        if (lastRunVersion !== APP_VERSION) {
-          logger.logAction('APP_VERSION_UPDATED', { from: lastRunVersion, to: APP_VERSION });
-          await storage.setItem('last_run_app_version', APP_VERSION);
-          if (currentUserRef.current) {
-            // Trigger an immediate sync to push the new version/device-info to the cloud
-            setTimeout(() => {
-              syncAndSaveData({ currentUser: currentUserRef.current });
-            }, 1000);
-          }
-        }
-
-        // STEP 3: Finally, reveal the app once everything is settled (GUARANTEED)
         setIsLoading(false);
       }
     };
@@ -361,14 +262,17 @@ export default function App() {
     return () => {
       if (socketRef.current) socketRef.current.disconnect();
       subscription.remove();
-      if (notificationReceivedSubscription.current) {
-        notificationReceivedSubscription.current.remove();
-      }
-      if (notificationResponseSubscription.current) {
-        notificationResponseSubscription.current.remove();
-      }
     };
-  }, [isUsingCloud]); 
+  }, []); // Only once at mount
+
+  // TRACE: Monitor isUsingCloud state changes
+  useEffect(() => {
+    console.log(`📡 [isUsingCloud TRACE] State changed to: ${isUsingCloud}`);
+    logger.logAction('STATE_TRACE_CLOUD_MODE', { 
+        value: isUsingCloud, 
+        reason: isSyncingRef.current ? 'hydrating/syncing' : 'manual/active' 
+    });
+  }, [isUsingCloud]);
 
   // 4. PERSISTENT VERIFICATION PROMPT: Ensure it shows up if unverified
   // Fix: Don't show if user is admin OR already in the Edit Profile modal OR recently verified (latch)
@@ -487,9 +391,18 @@ export default function App() {
         pendingSyncRef.current = ps;
       }
       if (typeof iuc === 'boolean') {
+        console.log("☁️ Hydrated isUsingCloud:", iuc);
+        logger.logAction('HYDRATION_IS_USING_CLOUD', { value: iuc });
         setIsUsingCloud(iuc);
       } else if (iuc && typeof iuc === 'string') {
-        setIsUsingCloud(iuc === 'true');
+        const val = iuc === 'true';
+        console.log("☁️ Hydrated isUsingCloud (string):", val);
+        logger.logAction('HYDRATION_IS_USING_CLOUD', { value: val, raw: iuc });
+        setIsUsingCloud(val);
+      } else {
+        // DEFAULT: Force cloud for new versions if no preference found
+        console.log("☁️ No stored cloud preference, defaulting to TRUE");
+        setIsUsingCloud(true);
       }
       if (saids && Array.isArray(saids)) {
         const normalized = new Set(saids.map(id => String(id)));
