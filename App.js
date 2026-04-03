@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = "2.5.1";
+const APP_VERSION = "2.5.2";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -265,6 +265,19 @@ export default function App() {
       subscription.remove();
     };
   }, []); // Only once at mount
+
+  // 3b. Initialize Logger Auto-Flush when user is ready
+  useEffect(() => {
+    if (currentUser?.id && localDeviceIdRef.current) {
+      const cloudUrl = 'https://acetrack-suggested.onrender.com';
+      logger.initAutoFlush(
+        cloudUrl,
+        config.ACE_API_KEY,
+        currentUser.name || currentUser.id,
+        localDeviceIdRef.current
+      );
+    }
+  }, [currentUser?.id, localDeviceIdRef.current]);
 
   // TRACE: Monitor isUsingCloud state changes
   useEffect(() => {

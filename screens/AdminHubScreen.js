@@ -148,13 +148,13 @@ const AdminHubScreen = ({
         }
       }, 1000);
 
-      // FLUSH TIMER: Update UI state from buffer every 2s to keep it snappy without lag
+      // FLUSH TIMER: Update UI state from buffer every 500ms to keep it snappy
       const flushTimer = setInterval(() => {
         if (Object.keys(pongBufferRef.current).length > 0) {
           setOnlineDevices(prev => ({ ...prev, ...pongBufferRef.current }));
           pongBufferRef.current = {};
         }
-      }, 2000);
+      }, 500);
 
       return () => {
         clearInterval(timer);
@@ -1075,7 +1075,9 @@ const AdminHubScreen = ({
                             <Text style={{ fontSize: 10, color: onlineDevices[d.id] ? '#10B981' : '#EF4444', fontWeight: 'bold' }}>
                               {onlineDevices[d.id] ? 'ONLINE' : 'OFFLINE'}
                             </Text>
-                            <Text style={{ fontSize: 9, color: '#94A3B8' }}>• {new Date(d.lastActive).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</Text>
+                            <Text style={{ fontSize: 9, color: '#94A3B8' }}>
+                              • Last Seen: {new Date(d.lastActive).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            </Text>
                           </View>
                         </View>
                         <View style={{ alignItems: 'flex-end', gap: 6 }}>

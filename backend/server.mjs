@@ -529,12 +529,45 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
             if (p && p.id) {
               const id = String(p.id).toLowerCase();
               const existing = playerMap.get(id);
+              
+              // 🛡️ DEEP MERGE DEVICES: Prevent Device A from deleting Device B
+              const mergedDevices = [...(existing?.devices || [])];
+              if (p.devices && Array.isArray(p.devices)) {
+                p.devices.forEach(d => {
+                  if (!d || !d.id) return;
+                  const dIndex = mergedDevices.findIndex(ed => ed.id === d.id);
+                  if (dIndex >= 0) mergedDevices[dIndex] = { ...mergedDevices[dIndex], ...d };
+                  else mergedDevices.push(d);
+                });
+              }
+
               // Merge existing cloud fields with incoming client fields
-              playerMap.set(id, existing ? { ...existing, ...p } : p);
+              playerMap.set(id, existing ? { ...existing, ...p, devices: mergedDevices } : p);
             }
           });
           newMasterData.players = Array.from(playerMap.values());
           console.log(`📡 [Server] Merged players. Cloud: ${(currentData.players || []).length}, Incoming: ${incoming.length}, Result: ${playerMap.size}`);
+        } else if (key === 'currentUser' && incoming && incoming.id) {
+          // 🛡️ SYNC currentUser to Players array (Ensure visibility in Admin Hub)
+          newMasterData.currentUser = incoming;
+          if (newMasterData.players && Array.isArray(newMasterData.players)) {
+            const id = String(incoming.id).toLowerCase();
+            const pIndex = newMasterData.players.findIndex(p => p && String(p.id).toLowerCase() === id);
+            if (pIndex >= 0) {
+              const existing = newMasterData.players[pIndex];
+              const mergedDevices = [...(existing.devices || [])];
+              if (incoming.devices && Array.isArray(incoming.devices)) {
+                incoming.devices.forEach(d => {
+                  if (!d || !d.id) return;
+                  const dIndex = mergedDevices.findIndex(ed => ed.id === d.id);
+                  if (dIndex >= 0) mergedDevices[dIndex] = { ...mergedDevices[dIndex], ...d };
+                  else mergedDevices.push(d);
+                });
+              }
+              newMasterData.players[pIndex] = { ...existing, ...incoming, devices: mergedDevices };
+              console.log(`📡 [Server] Synced currentUser '${id}' to players list. Total Devices: ${mergedDevices.length}`);
+            }
+          }
         } else {
           // For other collections, we currently trust the incoming array if provided, 
           // but we preserve the cloud data for anything NOT in the request body.
