@@ -394,15 +394,18 @@ export default function App() {
         console.log("☁️ Hydrated isUsingCloud:", iuc);
         logger.logAction('HYDRATION_IS_USING_CLOUD', { value: iuc });
         setIsUsingCloud(iuc);
+        isUsingCloudRef.current = iuc; // 🛡️ ATOMIC SYNC
       } else if (iuc && typeof iuc === 'string') {
         const val = iuc === 'true';
         console.log("☁️ Hydrated isUsingCloud (string):", val);
         logger.logAction('HYDRATION_IS_USING_CLOUD', { value: val, raw: iuc });
         setIsUsingCloud(val);
+        isUsingCloudRef.current = val; // 🛡️ ATOMIC SYNC
       } else {
         // DEFAULT: Force cloud for new versions if no preference found
         console.log("☁️ No stored cloud preference, defaulting to TRUE");
         setIsUsingCloud(true);
+        isUsingCloudRef.current = true; // 🛡️ ATOMIC SYNC
       }
       if (saids && Array.isArray(saids)) {
         const normalized = new Set(saids.map(id => String(id)));
@@ -1186,6 +1189,7 @@ export default function App() {
     onToggleCloud: () => {
       setIsUsingCloud(prev => {
         const next = !prev;
+        isUsingCloudRef.current = next; // 🛡️ ATOMIC SYNC: Update ref before async load
         storage.setItem('isUsingCloud', next);
         setTimeout(() => { setIsLoading(true); loadData(true, true); }, 100);
         return next;
