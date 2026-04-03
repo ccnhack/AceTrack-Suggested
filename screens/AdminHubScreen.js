@@ -908,7 +908,7 @@ const AdminHubScreen = ({
                         No user matching "{diagUserSearch}" found.
                       </Text>
                       <Text style={{ color: '#64748B', fontSize: 10, marginTop: 4 }}>
-                        Players in list: {players.length}. (Check "Refresh Cloud Data" if users are missing)
+                        Players in list: {(players || []).length}. (Check "Refresh Cloud Data" if users are missing)
                       </Text>
                     </View>
                   )}

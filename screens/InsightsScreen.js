@@ -30,7 +30,7 @@ const InsightsScreen = ({
         playerCount: players.length, 
         tournamentCount: tournaments.length, 
         videoCount: matchVideos.length,
-        coachCount: players.filter(p => p.role === 'coach').length
+        coachCount: (players || []).filter(p => (p || {}).role === 'coach').length
     });
   }, []);
 
@@ -62,12 +62,12 @@ const InsightsScreen = ({
   const areaStats = useMemo(() => {
     if (!selectedCity) return [];
     const counts = {};
-    players.filter(p => p.city === selectedCity).forEach(p => {
+    (players || []).filter(p => p && p.city === selectedCity).forEach(p => {
         const area = p.mostPlayedVenue || 'General Area';
         counts[area] = (counts[area] || 0) + 1;
     });
     const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    const total = players.filter(p => p.city === selectedCity).length || 1;
+    const total = (players || []).filter(p => p && p.city === selectedCity).length || 1;
     return sorted.map(([name, count]) => ({ name, count, percent: Math.round((count / total) * 100) }));
   }, [players, selectedCity]);
 
@@ -92,10 +92,10 @@ const InsightsScreen = ({
   // 5. Academy Detail Stats
   const academyDetailStats = useMemo(() => {
     if (!selectedAcademyId) return null;
-    const hosted = tournaments.filter(t => (t.creatorId || 'system') === selectedAcademyId);
+    const hosted = (tournaments || []).filter(t => t && (t.creatorId || 'system') === selectedAcademyId);
     const sportsCounts = {};
     hosted.forEach(t => { sportsCounts[t.sport] = (sportsCounts[t.sport] || 0) + 1; });
-    const sportsDist = Object.entries(sportsCounts).map(([name, count]) => ({ name, count, percent: (count / hosted.length) * 100 }));
+    const sportsDist = Object.entries(sportsCounts).map(([name, count]) => ({ name, count, percent: (count / (hosted.length || 1)) * 100 }));
     const totalParticipation = hosted.reduce((sum, t) => sum + (t.registeredPlayerIds?.length || 0), 0);
     return { sportsDistribution: sportsDist, totalParticipation, count: hosted.length };
   }, [tournaments, selectedAcademyId]);
@@ -275,10 +275,10 @@ const InsightsScreen = ({
 
         {/* Quick Stats Grid */}
         <View style={styles.statsGrid}>
-          <StatBox title="Players" value={players.length} icon="people" color="#6366F1" trend="+12%" isActive={selectedStat === 'Players'} onPress={() => handleStatSelect('Players')} />
-          <StatBox title="Tournaments" value={tournaments.length} icon="trophy" color="#F59E0B" trend="+5%" isActive={selectedStat === 'Tournaments'} onPress={() => handleStatSelect('Tournaments')} />
-          <StatBox title="Footage" value={matchVideos.length} icon="videocam" color="#10B981" trend="+24%" isActive={selectedStat === 'Footage'} onPress={() => handleStatSelect('Footage')} />
-          <StatBox title="Coaches" value={players.filter(p => p.role === 'coach').length} icon="school" color="#8B5CF6" trend="+18%" isActive={selectedStat === 'Coaches'} onPress={() => handleStatSelect('Coaches')} />
+          <StatBox title="Players" value={(players || []).length} icon="people" color="#6366F1" trend="+12%" isActive={selectedStat === 'Players'} onPress={() => handleStatSelect('Players')} />
+          <StatBox title="Tournaments" value={(tournaments || []).length} icon="trophy" color="#F59E0B" trend="+5%" isActive={selectedStat === 'Tournaments'} onPress={() => handleStatSelect('Tournaments')} />
+          <StatBox title="Footage" value={(matchVideos || []).length} icon="videocam" color="#10B981" trend="+24%" isActive={selectedStat === 'Footage'} onPress={() => handleStatSelect('Footage')} />
+          <StatBox title="Coaches" value={(players || []).filter(p => p && p.role === 'coach').length} icon="school" color="#8B5CF6" trend="+18%" isActive={selectedStat === 'Coaches'} onPress={() => handleStatSelect('Coaches')} />
         </View>
 
         {/* Dynamic Stat Drill-down with Area/Coach Deep-dive */}
