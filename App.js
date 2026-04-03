@@ -306,9 +306,14 @@ export default function App() {
       if (isSyncingRef.current) return;
 
       const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout for status check
+
       const response = await fetch(`${activeApiUrl}/api/status`, {
+        signal: controller.signal,
         headers: { 'x-ace-api-key': config.ACE_API_KEY }
       });
+      clearTimeout(timeoutId);
       
       if (response.status === 429) {
         console.log("🛑 Rate limited on status check, skipping.");
@@ -379,11 +384,12 @@ export default function App() {
 
       // 🛡️ STORAGE NUKE: For version 2.4.9+, force-clear any 'false' setting one time
       const hasNuked = await AsyncStorage.getItem('cloud_nuke_v249');
+      let effectiveIwc = iuc;
       if (!hasNuked) {
         console.log("💣 ONE-TIME STORAGE NUKE: Clearing old cloud preference...");
         await storage.removeItem('isUsingCloud');
         await AsyncStorage.setItem('cloud_nuke_v249', 'true');
-        iuc = null; // Forces default to TRUE below
+        effectiveIwc = null; // Forces default to TRUE below
       }
 
       if (p) setPlayers(p);
@@ -399,15 +405,15 @@ export default function App() {
         setPendingSync(ps);
         pendingSyncRef.current = ps;
       }
-      if (typeof iuc === 'boolean') {
-        console.log("☁️ Hydrated isUsingCloud:", iuc);
-        logger.logAction('HYDRATION_IS_USING_CLOUD', { value: iuc });
-        setIsUsingCloud(iuc);
-        isUsingCloudRef.current = iuc; // 🛡️ ATOMIC SYNC
-      } else if (iuc && typeof iuc === 'string') {
-        const val = iuc === 'true';
+      if (typeof effectiveIwc === 'boolean') {
+        console.log("☁️ Hydrated isUsingCloud:", effectiveIwc);
+        logger.logAction('HYDRATION_IS_USING_CLOUD', { value: effectiveIwc });
+        setIsUsingCloud(effectiveIwc);
+        isUsingCloudRef.current = effectiveIwc; // 🛡️ ATOMIC SYNC
+      } else if (effectiveIwc && typeof effectiveIwc === 'string') {
+        const val = effectiveIwc === 'true';
         console.log("☁️ Hydrated isUsingCloud (string):", val);
-        logger.logAction('HYDRATION_IS_USING_CLOUD', { value: val, raw: iuc });
+        logger.logAction('HYDRATION_IS_USING_CLOUD', { value: val, raw: effectiveIwc });
         setIsUsingCloud(val);
         isUsingCloudRef.current = val; // 🛡️ ATOMIC SYNC
       } else {
@@ -531,7 +537,7 @@ export default function App() {
       }
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 🛡️ Increased to 60s for Render cold starts
 
       const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
 
@@ -633,8 +639,15 @@ export default function App() {
     } catch (e) {
       console.log("📡 Cloud unreachable or error:", e.message);
       logger.logAction('LOAD_DATA_ERROR', { error: e.message });
-      if (!e.message.includes('429')) {
+      
+      // 🛡️ LATENCY HARDENING: Don't flip to "Local" if it's just a timeout or abort
+      const isTimeout = e.message?.includes('Aborted') || e.message?.includes('timeout') || e.message?.includes('Network request failed');
+      const isRateLimit = e.message?.includes('429');
+      
+      if (!isRateLimit && !isTimeout) {
         setIsCloudOnline(false);
+      } else {
+        console.log("⏳ Sync delayed by network/latency, keeping last known status.");
       }
       return false;
     } finally {
@@ -723,8 +736,11 @@ export default function App() {
       return true;
     } catch (error) {
       console.error("❌ Cloud Push Error:", error);
-      // OPTIMIZATION: Only set offline if we are truly in cloud mode and not a rate limit (429)
-      if (!error.message.includes('429')) {
+      // 🛡️ LATENCY HARDENING: Don't flip to "Local" if it's just a timeout or abort
+      const isTimeout = error.message?.includes('Aborted') || error.message?.includes('timeout') || error.message?.includes('Network request failed');
+      const isRateLimit = error.message?.includes('429');
+
+      if (!isRateLimit && !isTimeout) {
         setIsCloudOnline(false);
       }
       logger.logAction('PUSH_DATA_ERROR', { error: error.message, version: thisVersion });
