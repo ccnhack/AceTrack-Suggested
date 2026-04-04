@@ -333,27 +333,44 @@ const ProfileScreen = ({
   // USER REQUIREMENT: Custom avatar should be at the front!
   const customAvatars = [];
   
+  const normalizeAvatarUrl = (url) => {
+    if (!url) return '';
+    // Strip everything after ? for unique comparison
+    return url.split('?')[0];
+  };
+
+  const normalizedSuggested = suggestedAvatars.map(normalizeAvatarUrl);
+
   // Add current avatar if custom
-  if (user?.avatar && !suggestedAvatars.includes(user.avatar)) {
+  if (user?.avatar && !normalizedSuggested.includes(normalizeAvatarUrl(user.avatar))) {
     customAvatars.push(user.avatar);
   }
 
   // Add session-uploaded avatar if not already current
-  if (sessionCustomAvatar && !customAvatars.includes(sessionCustomAvatar)) {
+  if (sessionCustomAvatar && !customAvatars.map(normalizeAvatarUrl).includes(normalizeAvatarUrl(sessionCustomAvatar))) {
     customAvatars.push(sessionCustomAvatar);
   }
 
   // 🛡️ PERSISTENCE HARDENING: Add the cloud-stored last custom avatar if it exists
-  if (user?.lastCustomAvatar && !customAvatars.includes(user.lastCustomAvatar)) {
+  if (user?.lastCustomAvatar && !customAvatars.map(normalizeAvatarUrl).includes(normalizeAvatarUrl(user?.lastCustomAvatar))) {
     customAvatars.push(user.lastCustomAvatar);
   }
   
   // Add newly picked/edited avatar if custom and not already in list
-  if (editAvatar && !suggestedAvatars.includes(editAvatar) && !customAvatars.includes(editAvatar)) {
+  if (editAvatar && !normalizedSuggested.includes(normalizeAvatarUrl(editAvatar)) && !customAvatars.map(normalizeAvatarUrl).includes(normalizeAvatarUrl(editAvatar))) {
     customAvatars.unshift(editAvatar);
   }
 
-  const allAvatars = [...new Set([...customAvatars, ...suggestedAvatars])];
+  // Use a map to ensure uniqueness by normalized URL but preserve original URL for functional usage
+  const uniqueAvatarMap = new Map();
+  [...customAvatars, ...suggestedAvatars].forEach(url => {
+    const normal = normalizeAvatarUrl(url);
+    if (!uniqueAvatarMap.has(normal)) {
+      uniqueAvatarMap.set(normal, url);
+    }
+  });
+
+  const allAvatars = Array.from(uniqueAvatarMap.values());
 
   // Change Password States
   const [oldPassword, setOldPassword] = useState('');
@@ -671,7 +688,7 @@ const ProfileScreen = ({
 
                     {allAvatars.map((url, idx) => (
                       <TouchableOpacity 
-                        key={idx} 
+                        key={`${url}_${idx}`} 
                         onPress={() => setEditAvatar(url)}
                         style={[styles.avatarOption, editAvatar === url && styles.avatarOptionSelected]}
                       >
@@ -679,8 +696,7 @@ const ProfileScreen = ({
                            <AvatarPlaceholder name={user.name} size={56} />
                         ) : (
                            <Image 
-                             key={`${url}_${Math.random()}`} 
-                             source={{ uri: `${url}${url.includes('?') ? '&' : '?'}v=${Math.random().toString(36).substring(7)}` }} 
+                             source={{ uri: url }} 
                              style={styles.avatarOptionImage} 
                            />
                         )}
