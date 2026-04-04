@@ -969,6 +969,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 16,
   },
+  referTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 4,
+    flex: 1, // 🛡️ Fix overflow
+  },
   emptyTitle: {
     fontSize: 14,
     fontWeight: 'bold',

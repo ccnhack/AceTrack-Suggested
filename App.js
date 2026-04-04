@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = "2.6.1";
+const APP_VERSION = '2.6.2'; // 🛡️ Hardened Referral & Sync (v2.6.2)
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -93,7 +93,6 @@ export default function App() {
   const pendingUpdateCheckRef = React.useRef(false); // New: Track missed WebSocket signals
   const lastServerUpdateRef = React.useRef(null);
   const syncVersion = React.useRef(0);
-  const navigationRef = React.useRef();
   const isUsingCloudRef = React.useRef(true);
   const socketRef = React.useRef(null);
   const playersRef = React.useRef(players);
@@ -152,6 +151,14 @@ export default function App() {
     });
 
     socketRef.current.on('data_updated', (payload) => {
+      // 🛡️ SYNC HARDENING (v2.6.2): Strictly ignore updates originating from OUR OWN socket.
+      // This prevents the "Hydration War" where a local push triggers an immediate pull
+      // that might return stale data before cloud propagation is complete.
+      if (payload?.lastSocketId && socketRef.current?.id && payload.lastSocketId === socketRef.current.id) {
+        console.log("🛡️ [SyncEngine] Skipping self-originated cloud update.");
+        return;
+      }
+
       console.log("⚡ Real-time update received via WebSocket!", payload);
       logger.logAction('WS_UPDATE_RECEIVED', { payload });
       
@@ -166,7 +173,7 @@ export default function App() {
           pendingUpdateCheckRef.current = true;
           logger.logAction('WS_UPDATE_QUEUED');
         }
-      }, 1000); // Reduced to 1s for better responsiveness
+      }, 1000); 
     });
 
     socketRef.current.on('force_upload_diagnostics', async (data) => {
@@ -1847,9 +1854,17 @@ export default function App() {
         
         const updated = prev.map(p => {
           if (!p.referralCode) {
+            // 🛡️ v2.6.2 DETERMINISTIC REFERRAL: Extract a stable 4-char suffix from ID to ensure permanence
+            const getStableSuffix = (id) => {
+              const str = String(id);
+              let hash = 0;
+              for (let i = 0; i < str.length; i++) hash = ((hash << 5) - hash) + str.charCodeAt(i);
+              return Math.abs(hash).toString(36).substring(0, 4).toUpperCase();
+            };
+
             return {
               ...p,
-              referralCode: `ACE-${(p.id || 'PLAYER').substring(0, 5).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
+              referralCode: `ACE-${(p.id || 'PLAYER').substring(0, 5).toUpperCase()}-${getStableSuffix(p.id || 'PLAYER')}`
             };
           }
           return p;
