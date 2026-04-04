@@ -178,7 +178,7 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, setPlayers, Sport, isU
       isEmailVerified: false,
       isPhoneVerified: false,
       referredBy: referrerId,
-      referralCode: `ACE-${formData.username.substring(0, 5).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+      referralCode: `ACE-${formData.username.substring(0, 5).toUpperCase()}-${Math.random().toString(16).slice(2, 6).toUpperCase()}`,
       walletHistory: referrerId ? [
         {
           id: `ref-pending-${formData.username}`,

@@ -46,6 +46,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "jsdom": "^28.1.0",
     "puppeteer": "^24.39.1",
+    "socket.io-client": "^4.8.3",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
     "vitest": "^4.0.18"

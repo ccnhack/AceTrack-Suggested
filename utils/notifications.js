@@ -1,28 +1,28 @@
 /**
- * 🔔 Push Notification Scaffolding (STUB)
- * PM Fix: Notification pipeline ready for Firebase Cloud Messaging
- * 
- * TODO: Install and configure:
- *   npm install expo-notifications expo-device
- *   Add Firebase config to app.json
+ * 🔔 Push Notification Service
+ * v2.6.3 Production Hardened
  */
 
 import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
 
-// TODO: Uncomment when expo-notifications is properly configured
-// import * as Notifications from 'expo-notifications';
-// import * as Device from 'expo-device';
+// Configure notification behavior
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
 /**
  * Register for push notifications and get the device token
  * @returns {Promise<string|null>} Push token
  */
 export const registerForPushNotifications = async () => {
-  console.log('📱 Push notifications: STUB — Firebase not yet configured');
-  
-  // TODO: Implement when Firebase is set up
-  /*
   if (Platform.OS === 'web') return null;
+  
   if (!Device.isDevice) {
     console.warn('Push notifications only work on physical devices');
     return null;
@@ -41,16 +41,19 @@ export const registerForPushNotifications = async () => {
     return null;
   }
 
-  const token = (await Notifications.getExpoPushTokenAsync()).data;
-  console.log('📱 Push token:', token);
-  return token;
-  */
-  
-  return null;
+  // 🛡️ Get Token with Fallback
+  try {
+    const token = (await Notifications.getExpoPushTokenAsync()).data;
+    console.log('📱 Push token registered:', token);
+    return token;
+  } catch (error) {
+    console.error('❌ Failed to get push token:', error);
+    return null;
+  }
 };
 
 /**
- * Send a local notification
+ * Send a local notification (Immediate)
  * @param {string} title
  * @param {string} body
  * @param {Object} data - Additional data payload
@@ -58,13 +61,20 @@ export const registerForPushNotifications = async () => {
 export const sendLocalNotification = async (title, body, data = {}) => {
   console.log(`🔔 Local notification: ${title} — ${body}`);
   
-  // TODO: Implement when expo-notifications is configured
-  /*
-  await Notifications.scheduleNotificationAsync({
-    content: { title, body, data },
-    trigger: null, // Immediate
-  });
-  */
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: { 
+        title, 
+        body, 
+        data,
+        sound: true,
+        priority: Notifications.AndroidNotificationPriority.HIGH,
+      },
+      trigger: null, // Immediate
+    });
+  } catch (err) {
+    console.error("❌ Send Notification Error:", err);
+  }
 };
 
 /**
@@ -88,22 +98,26 @@ export const NOTIFICATION_TYPES = {
  * @param {Object} tournament
  */
 export const scheduleTournamentReminder = async (tournament) => {
+  if (!tournament || !tournament.date) return;
+
   const tournamentDate = new Date(tournament.date);
   const reminderDate = new Date(tournamentDate.getTime() - 24 * 60 * 60 * 1000);
   
   if (reminderDate > new Date()) {
     console.log(`⏰ Tournament reminder scheduled for ${reminderDate.toISOString()}`);
-    // TODO: Implement scheduled notification
-    /*
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: `🏆 Tournament Tomorrow!`,
-        body: `${tournament.title} starts tomorrow at ${tournament.time || 'TBD'}`,
-        data: { type: NOTIFICATION_TYPES.TOURNAMENT_REMINDER, tournamentId: tournament.id },
-      },
-      trigger: { date: reminderDate },
-    });
-    */
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `🏆 Tournament Tomorrow!`,
+          body: `${tournament.title} starts tomorrow at ${tournament.time || 'TBD'}`,
+          data: { type: NOTIFICATION_TYPES.TOURNAMENT_REMINDER, tournamentId: tournament.id },
+          sound: true,
+        },
+        trigger: reminderDate,
+      });
+    } catch (err) {
+      console.error("❌ Schedule Notification Error:", err);
+    }
   }
 };
 
@@ -131,3 +145,4 @@ export default {
   createAnnouncementPayload,
   NOTIFICATION_TYPES,
 };
+

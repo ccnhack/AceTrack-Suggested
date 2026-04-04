@@ -26,6 +26,8 @@ export const AcademyScreen = ({
 }) => {
   const [subTab, setSubTab] = useState('tournaments');
   const [tFilter, setTFilter] = useState('upcoming');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingT, setEditingT] = useState(null);
   const [viewingTournamentId, setViewingTournamentId] = useState(null);
@@ -186,7 +188,8 @@ export const AcademyScreen = ({
   const isReadOnly = (editingT?.date ? new Date(editingT.date).getTime() < new Date().setHours(0,0,0,0) : false) || editingT?.status === 'completed' || editingT?.tournamentConcluded;
 
   const handleFormSubmit = () => {
-    if (isReadOnly) return;
+    if (isReadOnly || isSubmitting) return;
+    setIsSubmitting(true);
     
     if (!coachAssignmentType) {
       Alert.alert("Error", "Please select a coach assignment option.");
@@ -252,7 +255,7 @@ export const AcademyScreen = ({
     const coords = getCoords(fullLocation);
 
     const newT = {
-      id: editingT?.id || `t_${Date.now()}`,
+      id: editingT?.id || `tournament_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
       title: formTitle,
       sport: formSport,
       location: fullLocation,
@@ -294,6 +297,7 @@ export const AcademyScreen = ({
     setIsFormOpen(false);
     setEditingT(null);
     resetForm();
+    setTimeout(() => setIsSubmitting(false), 500); 
   };
 
   const handleClone = (t) => {

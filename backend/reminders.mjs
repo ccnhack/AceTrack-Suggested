@@ -34,12 +34,13 @@ cron.schedule('0 * * * *', async () => {
           .map(p => p.pushToken);
 
         if (tokensToNotify.length > 0) {
-          await sendPushNotification(
+          const tickets = await sendPushNotification(
             tokensToNotify,
             'Tournament Reminder! 🏆',
             `Your tournament "${tournament.title}" starts in 24 hours. Get ready!`,
             { tournamentId: tournament.id, type: 'TOURNAMENT_REMINDER' }
           );
+          console.log(`✅ Sent ${tokensToNotify.length} reminders for tourney ${tournament.id}. Tickets:`, tickets.length);
         }
       }
     }

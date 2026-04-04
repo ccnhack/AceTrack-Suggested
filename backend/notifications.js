@@ -32,17 +32,15 @@ export async function sendPushNotification(tokens, title, body, data = {}) {
   // The Expo push notification service accepts batches of notifications.
   let chunks = expo.chunkPushNotifications(messages);
   let tickets = [];
-  (async () => {
-    for (let chunk of chunks) {
-      try {
-        let ticketChunk = await expo.sendPushNotificationsAsync(chunk);
-        console.log('Push ticket chunk sent successfully');
-        tickets.push(...ticketChunk);
-      } catch (error) {
-        console.error('Error sending push notification chunk:', error);
-      }
+  
+  for (let chunk of chunks) {
+    try {
+      let ticketChunk = await expo.sendPushNotificationsAsync(chunk);
+      tickets.push(...ticketChunk);
+    } catch (error) {
+      console.error('❌ Expo Push Error:', error);
     }
-  })();
+  }
 
   // In a production app, you would later check the tickets for errors.
   return tickets;

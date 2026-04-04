@@ -106,7 +106,7 @@ const triggerAutoFlush = async (payload) => {
       }
       if (!Array.isArray(queue)) queue = [];
       
-      queue.push({ id: Date.now().toString(), data: payload });
+      queue.push({ id: `q_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`, data: payload });
       if (queue.length > 5) queue.shift(); // Hard cap at 5 offline payloads
       await storage.setItem(QUEUE_KEY, queue);
     } catch(storageErr) {}
@@ -126,15 +126,52 @@ const saveLogsToStorage = async () => {
     }
 };
 
+const maskPII = (val) => {
+  if (typeof val === 'string') {
+    // Mask Email: s***@example.com
+    let masked = val.replace(/([a-zA-Z0-9._%+-])([a-zA-Z0-9._%+-]{2,})@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g, 
+      (match, p1, p2, p3) => `${p1}${'*'.repeat(p2.length)}@${p3}`);
+    // Mask Phone: +91******4321
+    masked = masked.replace(/(\+?\d{1,3}[- ]?)?\d{10}/g, (match) => {
+      return match.replace(/\d{6}(?=\d{4}$)/, '******');
+    });
+    return masked;
+  }
+  if (typeof val === 'object' && val !== null) {
+    const masked = Array.isArray(val) ? [] : {};
+    for (const key in val) {
+      if (Object.prototype.hasOwnProperty.call(val, key)) {
+        const lowerKey = key.toLowerCase();
+        if (['password', 'otp', 'token', 'secret', 'cvv', 'creditcard', 'pin', 'authorization', 'key', 'address', 'city', 'location'].some(s => lowerKey.includes(s))) {
+          masked[key] = '[REDACTED]';
+        } else {
+          masked[key] = maskPII(val[key]);
+        }
+      }
+    }
+    return masked;
+  }
+  return val;
+};
+
 const addLog = (level, type, message) => {
   const now = new Date();
   const timestamp = formatIST(now);
+  
+  let processedMessage = message;
+  try {
+    processedMessage = maskPII(message);
+  } catch (e) {
+    // Fallback if masking fails
+    processedMessage = "[Masking Error] " + String(message);
+  }
+
   const logEntry = {
     timestamp,
     unix: now.getTime(),
     level,
     type,
-    message: typeof message === 'object' ? JSON.stringify(message) : String(message),
+    message: typeof processedMessage === 'object' ? JSON.stringify(processedMessage) : String(processedMessage),
   };
   
   logs.push(logEntry);
@@ -142,12 +179,10 @@ const addLog = (level, type, message) => {
   if (logs.length >= MAX_LOG_COUNT) {
     const payload = [...logs];
     logs = [];
-    // Immediate save on overflow
     if (saveTimeout) clearTimeout(saveTimeout);
     saveLogsToStorage();
     triggerAutoFlush(payload);
   } else {
-    // Debounced save for normal logs
     if (saveTimeout) clearTimeout(saveTimeout);
     saveTimeout = setTimeout(saveLogsToStorage, DEBOUNCE_DELAY);
   }

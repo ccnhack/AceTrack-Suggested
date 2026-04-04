@@ -134,7 +134,7 @@ export const formatSetScores = (sets) => {
 export const createMatch = (player1Id, player2Id, sport = 'badminton', options = {}) => {
   const rules = SPORT_RULES[sport];
   return {
-    id: `match_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    id: `match_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
     player1Id,
     player2Id,
     sport,

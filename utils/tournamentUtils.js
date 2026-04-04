@@ -12,7 +12,7 @@
 export const cloneTournament = (sourceTournament, overrides = {}) => {
   const clone = {
     ...sourceTournament,
-    id: `tournament_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    id: `tournament_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
     title: overrides.title || `${sourceTournament.title} (Copy)`,
     date: overrides.date || '',
     registrationDeadline: overrides.registrationDeadline || '',
@@ -136,7 +136,7 @@ export const generateFinancialCSV = (tournament, players) => {
   rows.push(['Prize Pool', '', `₹${tournament.prizePool || 0}`, '', '', '']);
   rows.push(['Net Revenue', '', `₹${(registered.length * (tournament.entryFee || 0)) - (tournament.prizePool || 0)}`, '', '', '']);
   
-  return rows.map(row => row.join(',')).join('\n');
+  return rows.map(row => row.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(',')).join('\n');
 };
 
 /**

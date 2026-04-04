@@ -1,0 +1,90 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.18 [39m[90m/Users/shashankshekhar/Final Working/mobile-app 4/backend[39m
+
+[90mstdout[2m | tests/production_stress.test.mjs[2m > [22m[2mAceTrack Production Stress Suite (50 Parallel Requests)[2m > [22m[2mshould handle heavy parallel load without data loss or crashes
+[22m[39m🚀 Starting Stress Test (50 Parallel Requests)...
+
+[90mstdout[2m | tests/production_stress.test.mjs[2m > [22m[2mAceTrack Production Stress Suite (50 Parallel Requests)[2m > [22m[2mshould handle heavy parallel load without data loss or crashes
+[22m[39m📊 Stress Test Finished in 10125ms
+✅ Successes: 10
+❌ Failures: 40
+Detailed Statuses: [
+  [33m500[39m, [33m500[39m, [33m500[39m, [33m500[39m, [33m500[39m, [33m500[39m, [33m500[39m, [33m500[39m,
+  [33m500[39m, [33m500[39m, [33m500[39m, [33m500[39m, [33m500[39m, [33m500[39m, [33m500[39m, [33m500[39m,
+  [33m500[39m, [33m500[39m, [33m500[39m, [33m500[39m, [33m200[39m, [33m200[39m, [33m200[39m, [33m200[39m,
+  [33m200[39m, [33m200[39m, [33m200[39m, [33m200[39m, [33m200[39m, [33m200[39m, [33m500[39m, [33m500[39m,
+  [33m500[39m, [33m500[39m, [33m500[39m, [33m500[39m, [33m500[39m, [33m500[39m, [33m500[39m, [33m500[39m,
+  [33m500[39m, [33m500[39m, [33m500[39m, [33m500[39m, [33m500[39m, [33m500[39m, [33m500[39m, [33m500[39m,
+  [33m500[39m, [33m500[39m
+]
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+Error details: [90mundefined[39m
+
+ [31m×[39m tests/production_stress.test.mjs[2m > [22mAceTrack Production Stress Suite (50 Parallel Requests)[2m > [22mshould handle heavy parallel load without data loss or crashes[33m 10133[2mms[22m[39m
+[31m   → expected 40 to be +0 // Object.is equality[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m tests/production_stress.test.mjs[2m > [22mAceTrack Production Stress Suite (50 Parallel Requests)[2m > [22mshould handle heavy parallel load without data loss or crashes
+[31m[1mAssertionError[22m: expected 40 to be +0 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 0[39m
+[31m+ 40[39m
+
+[36m [2m❯[22m tests/production_stress.test.mjs:[2m79:26[22m[39m
+    [90m 77| [39m    }
+    [90m 78| [39m
+    [90m 79| [39m    [34mexpect[39m(failureCount)[33m.[39m[34mtoBe[39m([34m0[39m)[33m;[39m
+    [90m   | [39m                         [31m^[39m
+    [90m 80| [39m    [34mexpect[39m(duration)[33m.[39m[34mtoBeLessThan[39m([34m25000[39m)[33m;[39m 
+    [90m 81| [39m  }[33m,[39m [34m30000[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m   Start at [22m 03:05:04
+[2m   Duration [22m 10.28s[2m (transform 11ms, setup 0ms, import 18ms, tests 10.13s, environment 0ms)[22m
+

@@ -241,7 +241,7 @@ export default function App() {
         
         let hardwareId = await AsyncStorage.getItem('acetrack_device_id');
         if (!hardwareId) {
-          hardwareId = (Constants.deviceName || Platform.OS || 'device').replace(/[^a-zA-Z0-9]/g, '_') + '_' + Math.random().toString(36).substr(2, 5);
+          hardwareId = (Constants.deviceName || Platform.OS || 'device').replace(/[^a-zA-Z0-9]/g, '_') + '_' + Date.now() + '_' + Math.random().toString(16).slice(2, 6);
           await AsyncStorage.setItem('acetrack_device_id', hardwareId);
         }
         localDeviceIdRef.current = hardwareId;
@@ -517,6 +517,12 @@ export default function App() {
   }, []);
 
   const loadData = useCallback(async (forceNoLoading = false, forceSync = false) => {
+    // 🛡️ SESSION GUARD: Bail immediately if no user is logged in (unless it's an initial hydration pull)
+    if (!currentUserRef.current && !forceSync && isInitialized) {
+      console.log("📡 [Sync] Bailing on loadData: No active user session.");
+      return null;
+    }
+
     const now = Date.now();
     console.log(`📡 [Sync] loadData called. forceNoLoading=${forceNoLoading}, forceSync=${forceSync}`);
     
@@ -595,6 +601,13 @@ export default function App() {
       // DO NOT proceed with data application if a newer sync has already started
       if (versionAtStart !== syncVersion.current && !forceSync) {
         console.log(`⏳ Discarding stale cloud pull [v${versionAtStart}]`);
+        return false;
+      }
+
+      // 🛡️ MID-FETCH GUARD: If new local changes entered the queue WHILE we were fetching,
+      // we MUST abort to prevent overwriting those fresh local updates with stale cloud data.
+      if (pendingSyncRef.current.length > 0 && !forceSync) {
+        console.log(`🛡️ [Sync] Mid-fetch local changes detected. Aborting pull [v${versionAtStart}] to prevent rollback.`);
         return false;
       }
 
@@ -1021,6 +1034,12 @@ export default function App() {
     setPendingSync([]);
     pendingSyncRef.current = [];
     
+    if (socketRef.current) {
+        console.log("🔌 Disconnecting WebSocket on logout...");
+        socketRef.current.disconnect();
+        socketRef.current = null;
+    }
+    
     await storage.removeItem('currentUser');
     await storage.removeItem('pendingSync');
   }, []);
@@ -1186,7 +1205,7 @@ export default function App() {
 
   const handleLogTrace = useCallback((action, targetType, targetId, details, adminId = 'system') => {
     const newLog = {
-      id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `log_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
       action,
       targetType,
       targetId,
@@ -1307,8 +1326,9 @@ export default function App() {
          setPlayers(prev => {
            const updatedPlayers = (prev || []).map(p => p.id === userId ? { ...p, password: newPassword } : p);
            storage.setItem('players', updatedPlayers);
-           pushStateToCloud({ players: updatedPlayers }, true)
-             .then(resolve)
+           // 🛡️ SYNC HARDENING: Use syncAndSaveData to ensure pendingSync guard is active
+           syncAndSaveData({ players: updatedPlayers }, true)
+             .then(() => resolve(true))
              .catch(reject);
            return updatedPlayers;
          });

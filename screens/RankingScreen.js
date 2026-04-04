@@ -1,83 +1,106 @@
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { 
-  View, Text, Image, ScrollView, StyleSheet, 
-  SafeAreaView, TouchableOpacity
+  View, Text, Image, StyleSheet, 
+  SafeAreaView, FlatList
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getSafeAvatar } from '../utils/imageUtils';
 
 const RankingScreen = ({ user, role, players, tournaments }) => {
-  let rankingPlayers = [...(players || [])].filter(p => p && p.id !== 'admin_sys' && p.role !== 'academy' && p.role !== 'coach');
-  
-  if (role === 'academy' && user) {
-    const myParticipantIds = new Set(
-      (tournaments || [])
-        .filter(t => t.creatorId === user.id)
-        .flatMap(t => t.registeredPlayerIds || [])
-    );
-    rankingPlayers = (players || []).filter(p => p && myParticipantIds.has(p.id) && p.role !== 'coach');
-  }
+  const rankingPlayers = useMemo(() => {
+    let list = [...(players || [])].filter(p => p && p.id !== 'admin_sys' && p.role !== 'academy' && p.role !== 'coach');
+    
+    if (role === 'academy' && user) {
+      const myParticipantIds = new Set(
+        (tournaments || [])
+          .filter(t => t.creatorId === user.id)
+          .flatMap(t => t.registeredPlayerIds || [])
+      );
+      list = (players || []).filter(p => p && myParticipantIds.has(p.id) && p.role !== 'coach');
+    }
 
-  // Sort by trueSkillRating or rating descending
-  rankingPlayers.sort((a, b) => {
-    const ratingA = (a.trueSkillRating || a.rating || 0);
-    const ratingB = (b.trueSkillRating || b.rating || 0);
-    return ratingB - ratingA;
-  });
+    // Sort by trueSkillRating or rating descending
+    return list.sort((a, b) => {
+      const ratingA = (a.trueSkillRating || a.rating || 0);
+      const ratingB = (b.trueSkillRating || b.rating || 0);
+      return ratingB - ratingA;
+    });
+  }, [players, tournaments, role, user?.id]);
+
+  const renderPlayer = useCallback(({ item, index }) => {
+    const isCurrentUser = item.id === user?.id;
+    return (
+      <View 
+        style={[
+          styles.playerCard, 
+          isCurrentUser ? styles.currentUserCard : styles.defaultCard
+        ]}
+      >
+        <Text style={styles.rankNumber}>{index + 1}</Text>
+        
+        <Image 
+          source={getSafeAvatar(item.avatar, item.name)}
+          style={styles.avatar} 
+        />
+        
+        <View style={styles.infoCol}>
+          <Text style={styles.playerName}>{item.name}</Text>
+          <Text style={styles.skillLevel}>{item.skillLevel}</Text>
+        </View>
+        
+        <View style={styles.ratingCol}>
+          <Text style={styles.ratingValue}>{item.trueSkillRating || item.rating}</Text>
+          <Text style={styles.ratingLabel}>RATING</Text>
+        </View>
+      </View>
+    );
+  }, [user?.id]);
+
+  const listHeader = useMemo(() => (
+    <View style={styles.header}>
+      <Text style={styles.headerTitle}>LEADERBOARD</Text>
+    </View>
+  ), []);
+
+  const emptyComponent = useMemo(() => (
+    <Text style={styles.emptyText}>NO RANKINGS AVAILABLE</Text>
+  ), []);
+
+  const isLocked = useMemo(() => {
+    return (!user?.isEmailVerified || !user?.isPhoneVerified) && role !== 'admin' && user?.role !== 'admin' && user?.id !== 'admin';
+  }, [user?.isEmailVerified, user?.isPhoneVerified, role, user?.role, user?.id]);
+
+  if (isLocked) {
+    return (
+      <SafeAreaView style={styles.container}>
+        {listHeader}
+        <View style={styles.lockContainer}>
+          <View style={styles.lockIconCircle}>
+            <Ionicons name="lock-closed" size={48} color="#EF4444" />
+          </View>
+          <Text style={styles.lockTitle}>Verification Required</Text>
+          <Text style={styles.lockSubtitle}>
+            Please complete your email and phone verification in the Profile tab to view the global rankings and leaderboards.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>LEADERBOARD</Text>
-      </View>
-      <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
-        {(!user?.isEmailVerified || !user?.isPhoneVerified) && role !== 'admin' && user?.role !== 'admin' && user?.id !== 'admin' ? (
-          <View style={styles.lockContainer}>
-            <View style={styles.lockIconCircle}>
-              <Ionicons name="lock-closed" size={48} color="#EF4444" />
-            </View>
-            <Text style={styles.lockTitle}>Verification Required</Text>
-            <Text style={styles.lockSubtitle}>
-              Please complete your email and phone verification in the Profile tab to view the global rankings and leaderboards.
-            </Text>
-          </View>
-        ) : (
-          <>
-            {rankingPlayers.map((p, idx) => {
-              const isCurrentUser = p.id === user?.id;
-              return (
-                <View 
-                  key={p.id} 
-                  style={[
-                    styles.playerCard, 
-                    isCurrentUser ? styles.currentUserCard : styles.defaultCard
-                  ]}
-                >
-                  <Text style={styles.rankNumber}>{idx + 1}</Text>
-                  
-                  <Image 
-                    source={getSafeAvatar(p.avatar, p.name)}
-                    style={styles.avatar} 
-                  />
-                  
-                  <View style={styles.infoCol}>
-                    <Text style={styles.playerName}>{p.name}</Text>
-                    <Text style={styles.skillLevel}>{p.skillLevel}</Text>
-                  </View>
-                  
-                  <View style={styles.ratingCol}>
-                    <Text style={styles.ratingValue}>{p.trueSkillRating || p.rating}</Text>
-                    <Text style={styles.ratingLabel}>RATING</Text>
-                  </View>
-                </View>
-              );
-            })}
-            {rankingPlayers.length === 0 && (
-              <Text style={styles.emptyText}>NO RANKINGS AVAILABLE</Text>
-            )}
-          </>
-        )}
-      </ScrollView>
+      <FlatList
+        data={rankingPlayers}
+        renderItem={renderPlayer}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={listHeader}
+        ListEmptyComponent={emptyComponent}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+      />
     </SafeAreaView>
   );
 };
@@ -101,7 +124,6 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 24,
     paddingBottom: 120, // Extra padding for the bottom tab bar
-    gap: 12,
   },
   playerCard: {
     flexDirection: 'row',
@@ -110,6 +132,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     gap: 16,
+    marginBottom: 12,
   },
   defaultCard: {
     backgroundColor: '#FFFFFF',
@@ -208,3 +231,4 @@ const styles = StyleSheet.create({
 });
 
 export default RankingScreen;
+

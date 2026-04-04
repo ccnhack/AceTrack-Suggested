@@ -86,6 +86,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   const [isChallengeModalVisible, setIsChallengeModalVisible] = useState(false);
   const [isDetailsModalVisible, setIsDetailsModalVisible] = useState(false);
   const [isCounterModalVisible, setIsCounterModalVisible] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedOpponent, setSelectedOpponent] = useState(null);
   const [selectedChallenge, setSelectedChallenge] = useState(null);
   const [challengeDate, setChallengeDate] = useState('');
@@ -385,6 +386,9 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   };
 
   const confirmChallenge = () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    
     if (!challengeDate || !challengeTime || !selectedSport || !selectedAcademyForVenue) {
       let missingFields = [];
       if (!challengeDate) missingFields.push("Date");
@@ -393,10 +397,11 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
       if (!selectedAcademyForVenue) missingFields.push("Venue");
       
       Alert.alert("Missing Details", `Please select the following: ${missingFields.join(", ")}`);
+      setIsSubmitting(false);
       return;
     }
     const newChallenge = {
-      id: `match_${Date.now()}`,
+      id: `match_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
       senderId: user.id,
       senderName: user.name,
       receiverId: selectedOpponent.id,
@@ -414,6 +419,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
     setIsChallengeModalVisible(false);
     setChallengeDate('');
     setChallengeTime('');
+    setTimeout(() => setIsSubmitting(false), 500);
     
     // Send Notification to recipient
     if (sendUserNotification) {
@@ -596,6 +602,9 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   };
 
   const submitCounterProposal = () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    
     if (!counterDate || !counterTime || (!selectedAcademyForVenue && negotiatedVenue === 'opponent')) {
       let missingFields = [];
       if (!counterDate) missingFields.push("Date");
@@ -603,6 +612,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
       if (!selectedAcademyForVenue && negotiatedVenue === 'opponent') missingFields.push("Venue");
       
       Alert.alert("Missing Details", `Please select the following: ${missingFields.join(", ")}`);
+      setIsSubmitting(false);
       return;
     }
     const selectedVenueName = selectedAcademyForVenue?.label || selectedAcademyForVenue?.name;
@@ -630,6 +640,8 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
     onUpdateMatchmaking(updated);
 
     setIsCounterModalVisible(false);
+    setSelectedChallenge(null);
+    setTimeout(() => setIsSubmitting(false), 500);
     Alert.alert("Counter Proposal Sent", `You suggested ${counterDate} at ${counterTime} at ${venueLabel}.`);
   };
 

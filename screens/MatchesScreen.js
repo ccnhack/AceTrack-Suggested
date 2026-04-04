@@ -17,6 +17,148 @@ import { FlatList } from 'react-native';
 // Styles
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+// Virtualized Roster Row Component
+const RosterRow = memo(({ 
+  team, 
+  teamEvaluated, 
+  decision, 
+  activeTournament, 
+  currentRound, 
+  players, 
+  evaluations, 
+  user, 
+  onUpdateTournament, 
+  setViewingHistoryForPlayer, 
+  handleOpenEvaluation 
+}) => {
+  const playerStatuses = activeTournament?.playerStatuses || {};
+  return (
+    <View style={styles.teamContainer}>
+      <View style={styles.teamHeader}>
+        <Text style={styles.teamName}>{team.name}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {teamEvaluated && (
+            <Text style={styles.submittedBadge}>submitted</Text>
+          )}
+          {decision && (
+            <Text style={[styles.decisionText, decision === 'Qualified' ? styles.textSuccess : styles.textDanger]}>
+              {decision}
+            </Text>
+          )}
+        </View>
+      </View>
+
+      {team.playerIds.map(pid => {
+        const p = players.find(player => String(player.id).toLowerCase() === String(pid).toLowerCase());
+        const playerObj = p || (String(pid).toLowerCase() === String(user?.id).toLowerCase() ? user : { 
+          id: pid, 
+          name: players.find(x => x.id === pid)?.name || `Player ${pid}`,
+          skillLevel: 'N/A',
+          rating: 1000
+        });
+
+        const playerEvaluations = evaluations.filter(e => String(e.playerId).toLowerCase() === String(playerObj.id).toLowerCase() && String(e.tournamentId).toLowerCase() === String(activeTournament?.id).toLowerCase());
+        const cumulativeAvg = playerEvaluations.length > 0 
+          ? (playerEvaluations.reduce((sum, e) => sum + e.averageScore, 0) / playerEvaluations.length).toFixed(1)
+          : (playerObj.rating || 0);
+
+        const isEliminated = playerStatuses[pid] === 'Eliminated';
+        const isQualified = playerStatuses[pid] === 'Qualified';
+        const isPendingPayment = activeTournament?.pendingPaymentPlayerIds?.some(id => String(id).toLowerCase() === String(pid).toLowerCase());
+
+        return (
+          <View key={pid} style={[
+            styles.rosterItem, 
+            isPendingPayment && { opacity: 0.7, backgroundColor: '#FFF7ED' },
+            isEliminated && { opacity: 0.6, backgroundColor: '#F1F5F9' }
+          ]}>
+            <Image 
+              source={getSafeAvatar(playerObj.avatar, playerObj.name)}
+              style={[styles.rosterAvatar, isEliminated && { grayscale: 1 }]}
+            />
+            <View style={styles.rosterInfo}>
+              <View style={styles.nameRow}>
+                  <Text style={[styles.rosterName, isEliminated && { color: '#64748B', textDecorationLine: 'line-through' }]} numberOfLines={1}>
+                    {playerObj.name || `Player ${pid}`}
+                  </Text>
+                {isPendingPayment && (
+                  <View style={[styles.miniBadge, { backgroundColor: '#FFEDD5', marginLeft: 8 }]}>
+                    <Text style={[styles.miniBadgeText, { color: '#C2410C' }]}>Awaiting Pay</Text>
+                  </View>
+                )}
+                {isEliminated && (
+                  <View style={[styles.miniBadge, { backgroundColor: '#FEE2E2', marginLeft: 8 }]}>
+                    <Text style={[styles.miniBadgeText, { color: '#DC2626' }]}>Eliminated</Text>
+                  </View>
+                )}
+                {isQualified && !decision && (
+                  <View style={[styles.miniBadge, { backgroundColor: '#DCFCE7', marginLeft: 8 }]}>
+                    <Text style={[styles.miniBadgeText, { color: '#16A34A' }]}>Qualified</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.rosterRating}>Avg: {cumulativeAvg} | {playerObj.skillLevel || 'N/A'}</Text>
+            </View>
+            <View style={styles.rosterActions}>
+              {(activeTournament?.status !== 'completed' && !activeTournament?.tournamentConcluded) ? (
+                <>
+                  <TouchableOpacity 
+                    onPress={() => handleOpenEvaluation(playerObj, activeTournament)}
+                    style={[styles.evalButton, isEliminated && { backgroundColor: '#64748B' }]}
+                  >
+                    <Text style={styles.evalButtonText}>Eval</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    onPress={() => setViewingHistoryForPlayer(playerObj)}
+                    style={styles.histButton}
+                  >
+                    <Text style={styles.histButtonText}>Hist</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <View style={[styles.miniBadge, { backgroundColor: '#F1F5F9' }]}>
+                  <Text style={[styles.miniBadgeText, { color: '#64748B' }]}>Locked</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        );
+      })}
+
+      {teamEvaluated && !decision && (
+        <View style={styles.decisionRow}>
+          <TouchableOpacity
+            onPress={() => {
+              const newStatuses = { ...(activeTournament?.playerStatuses || {}) };
+              team.playerIds.forEach(id => newStatuses[id] = 'Qualified');
+              const newRoundDecisions = { ...(activeTournament?.roundDecisions || {}) };
+              if (!newRoundDecisions[currentRound]) newRoundDecisions[currentRound] = {};
+              newRoundDecisions[currentRound][team.id] = 'Qualified';
+              onUpdateTournament({ ...activeTournament, playerStatuses: newStatuses, roundDecisions: newRoundDecisions, ratingsModified: true });
+            }}
+            style={styles.decisionButtonSuccess}
+          >
+            <Text style={styles.decisionTextSuccess}>Qualify</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              const newStatuses = { ...(activeTournament?.playerStatuses || {}) };
+              team.playerIds.forEach(id => newStatuses[id] = 'Eliminated');
+              const newRoundDecisions = { ...(activeTournament?.roundDecisions || {}) };
+              if (!newRoundDecisions[currentRound]) newRoundDecisions[currentRound] = {};
+              newRoundDecisions[currentRound][team.id] = 'Eliminated';
+              onUpdateTournament({ ...activeTournament, playerStatuses: newStatuses, roundDecisions: newRoundDecisions, ratingsModified: true });
+            }}
+            style={styles.decisionButtonDanger}
+          >
+            <Text style={styles.decisionTextDanger}>Eliminate</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+});
+
 const MatchesScreen = ({
   navigation, tournaments, user, onReschedule, onOptOut, onLogFailedOtp,
   players, evaluations, matchVideos, onSaveEvaluation,
@@ -181,7 +323,7 @@ const MatchesScreen = ({
     const averageScore = Number((totalScore / questions.length).toFixed(1));
 
     const newEvaluation = {
-      id: `eval_${Date.now()}`,
+      id: `eval_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
       playerId: evaluatingPlayer?.player?.id,
       coachId: user?.id,
       tournamentId: evaluatingPlayer?.tournament?.id,
@@ -456,207 +598,96 @@ const MatchesScreen = ({
               </View>
 
               {viewingPlayersFor && (() => {
-                  const activeTournament = tournaments.find(t => t.id === viewingPlayersFor.id) || viewingPlayersFor;
-                  const isDoubles = activeTournament?.format?.includes('Doubles');
-                  const currentRound = activeTournament?.currentRound || 1;
-                  const playerStatuses = activeTournament?.playerStatuses || {};
-                  const roundDecisions = activeTournament?.roundDecisions || {};
-                  const currentRoundDecisions = roundDecisions[currentRound] || {};
+                const activeTournament = tournaments.find(t => t.id === viewingPlayersFor.id) || viewingPlayersFor;
+                const isDoubles = activeTournament?.format?.includes('Doubles');
+                const currentRound = activeTournament?.currentRound || 1;
+                const playerStatuses = activeTournament?.playerStatuses || {};
+                const roundDecisions = activeTournament?.roundDecisions || {};
+                const currentRoundDecisions = roundDecisions[currentRound] || {};
 
-                  const activePlayerIds = (activeTournament?.registeredPlayerIds || []).filter(id => playerStatuses[id] !== 'Eliminated');
+                const activePlayerIds = (activeTournament?.registeredPlayerIds || []).filter(id => playerStatuses[id] !== 'Eliminated');
 
-                  const teams = [];
-                  if (isDoubles) {
-                    const playerRatings = activePlayerIds.map(id => {
-                      const p = players.find(player => String(player.id).toLowerCase() === String(id).toLowerCase()) || (String(id).toLowerCase() === String(user?.id).toLowerCase() ? user : null);
-                      if (!p) return { id, rating: 0 };
+                const teams = [];
+                if (isDoubles) {
+                  const playerRatings = activePlayerIds.map(id => {
+                    const p = players.find(player => String(player.id).toLowerCase() === String(id).toLowerCase()) || (String(id).toLowerCase() === String(user?.id).toLowerCase() ? user : null);
+                    if (!p) return { id, rating: 0 };
+                    
+                    const playerEvaluations = evaluations.filter(e => String(e.playerId).toLowerCase() === String(p.id).toLowerCase() && String(e.tournamentId).toLowerCase() === String(activeTournament?.id).toLowerCase());
+                    const cumulativeAvg = playerEvaluations.length > 0 
+                      ? (playerEvaluations.reduce((sum, e) => sum + e.averageScore, 0) / playerEvaluations.length)
+                      : (p.rating || 0);
                       
-                      const playerEvaluations = evaluations.filter(e => String(e.playerId).toLowerCase() === String(p.id).toLowerCase() && String(e.tournamentId).toLowerCase() === String(activeTournament?.id).toLowerCase());
-                      const cumulativeAvg = playerEvaluations.length > 0 
-                        ? (playerEvaluations.reduce((sum, e) => sum + e.averageScore, 0) / playerEvaluations.length)
-                        : (p.rating || 0);
-                        
-                      return { id, rating: cumulativeAvg };
-                    });
-                    
-                    playerRatings.sort((a, b) => b.rating - a.rating);
-                    const sortedPlayerIds = playerRatings.map(pr => pr.id);
-                    
-                    const numTeams = Math.ceil(sortedPlayerIds.length / 2);
-                    for (let i = 0; i < numTeams; i++) {
-                      const teamId = `team_${i}`;
-                      const p1 = sortedPlayerIds[i];
-                      const p2 = sortedPlayerIds[sortedPlayerIds.length - 1 - i];
-                      const teamPlayerIds = p1 === p2 ? [p1] : [p1, p2];
-                      teams.push({ id: teamId, name: `Team ${String.fromCharCode(65 + i)}`, playerIds: teamPlayerIds, isPending: false });
-                    }
-                  } else {
-                    activePlayerIds.forEach(id => {
-                      const p = players.find(player => String(player.id).toLowerCase() === String(id).toLowerCase()) || (String(id).toLowerCase() === String(user?.id).toLowerCase() ? user : null);
-                      teams.push({ id, name: p?.name || `Player ${id}`, playerIds: [id], isPending: false });
-                    });
+                    return { id, rating: cumulativeAvg };
+                  });
+                  
+                  playerRatings.sort((a, b) => b.rating - a.rating);
+                  const sortedPlayerIds = playerRatings.map(pr => pr.id);
+                  
+                  const numTeams = Math.ceil(sortedPlayerIds.length / 2);
+                  for (let i = 0; i < numTeams; i++) {
+                    const teamId = `team_${i}`;
+                    const p1 = sortedPlayerIds[i];
+                    const p2 = sortedPlayerIds[sortedPlayerIds.length - 1 - i];
+                    const teamPlayerIds = p1 === p2 ? [p1] : [p1, p2];
+                    teams.push({ id: teamId, name: `Team ${String.fromCharCode(65 + i)}`, playerIds: teamPlayerIds, isPending: false });
                   }
+                } else {
+                  activePlayerIds.forEach(id => {
+                    const p = players.find(player => String(player.id).toLowerCase() === String(id).toLowerCase()) || (String(id).toLowerCase() === String(user?.id).toLowerCase() ? user : null);
+                    teams.push({ id, name: p?.name || `Player ${id}`, playerIds: [id], isPending: false });
+                  });
+                }
 
-                  if (teams.length === 0) {
-                    return (
-                      <ScrollView style={styles.rosterList} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-                        <View style={styles.emptyHistory}>
-                          <Ionicons name="people-outline" size={48} color="#CBD5E1" />
-                          <Text style={styles.emptyHistoryTitle}>No Participants Yet</Text>
-                          <Text style={styles.emptyHistoryText}>Players will appear here once they register or are invited by the academy.</Text>
-                        </View>
-                      </ScrollView>
-                    );
-                  }
-
-                  const allTeamsEvaluated = teams.every(team =>
-                    team.isPending || team.playerIds.every(id =>
-                      evaluations.some(e => String(e.playerId).toLowerCase() === String(id).toLowerCase() && String(e.tournamentId) === String(activeTournament?.id) && String(e.coachId) === String(user?.id) && (e.round || 1) === currentRound)
-                    )
-                  );
-
-                  const allTeamsDecided = teams.every(team => team.isPending || currentRoundDecisions[team.id] !== undefined);
-
+                if (teams.length === 0) {
                   return (
-                    <ScrollView style={styles.rosterList} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-                      {teams.map(team => {
-                        const decision = currentRoundDecisions[team.id];
-                        const teamEvaluated = team.playerIds.every(id =>
-                          evaluations.some(e => String(e.playerId).toLowerCase() === String(id).toLowerCase() && String(e.tournamentId).toLowerCase() === String(activeTournament?.id).toLowerCase() && String(e.coachId).toLowerCase() === String(user?.id).toLowerCase() && (e.round || 1) === currentRound)
-                        );
+                    <View style={styles.emptyHistory}>
+                      <Ionicons name="people-outline" size={48} color="#CBD5E1" />
+                      <Text style={styles.emptyHistoryTitle}>No Participants Yet</Text>
+                      <Text style={styles.emptyHistoryText}>Players will appear here once they register or are invited by the academy.</Text>
+                    </View>
+                  );
+                }
 
-                        return (
-                          <View key={team.id} style={styles.teamContainer}>
-                            <View style={styles.teamHeader}>
-                              <Text style={styles.teamName}>{team.name}</Text>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                {teamEvaluated && (
-                                  <Text style={styles.submittedBadge}>submitted</Text>
-                                )}
-                                {decision && (
-                                  <Text style={[styles.decisionText, decision === 'Qualified' ? styles.textSuccess : styles.textDanger]}>
-                                    {decision}
-                                  </Text>
-                                )}
-                              </View>
-                            </View>
+                const allTeamsEvaluated = teams.every(team =>
+                  team.isPending || team.playerIds.every(id =>
+                    evaluations.some(e => String(e.playerId).toLowerCase() === String(id).toLowerCase() && String(e.tournamentId) === String(activeTournament?.id) && String(e.coachId) === String(user?.id) && (e.round || 1) === currentRound)
+                  )
+                );
 
-                            {team.playerIds.map(pid => {
-                              const p = players.find(player => String(player.id).toLowerCase() === String(pid).toLowerCase());
-                              
-                              // Highly robust player object resolution
-                              const playerObj = p || (String(pid).toLowerCase() === String(user?.id).toLowerCase() ? user : { 
-                                id: pid, 
-                                name: players.find(x => x.id === pid)?.name || `Player ${pid}`,
-                                skillLevel: 'N/A',
-                                rating: 1000
-                              });
+                const allTeamsDecided = teams.every(team => team.isPending || currentRoundDecisions[team.id] !== undefined);
 
-                              const hasEvaluated = evaluations.some(e => String(e.playerId).toLowerCase() === String(playerObj.id).toLowerCase() && String(e.tournamentId).toLowerCase() === String(activeTournament?.id).toLowerCase() && String(e.coachId).toLowerCase() === String(user?.id).toLowerCase() && (e.round || 1) === currentRound);
-                              
-                              const playerEvaluations = evaluations.filter(e => String(e.playerId).toLowerCase() === String(playerObj.id).toLowerCase() && String(e.tournamentId).toLowerCase() === String(activeTournament?.id).toLowerCase());
-                              const cumulativeAvg = playerEvaluations.length > 0 
-                                ? (playerEvaluations.reduce((sum, e) => sum + e.averageScore, 0) / playerEvaluations.length).toFixed(1)
-                                : (playerObj.rating || 0);
-
-                              const isEliminated = playerStatuses[pid] === 'Eliminated';
-                              const isQualified = playerStatuses[pid] === 'Qualified';
-                              const isPendingPayment = activeTournament?.pendingPaymentPlayerIds?.some(id => String(id).toLowerCase() === String(pid).toLowerCase());
-
-                              return (
-                                <View key={pid} style={[
-                                  styles.rosterItem, 
-                                  isPendingPayment && { opacity: 0.7, backgroundColor: '#FFF7ED' },
-                                  isEliminated && { opacity: 0.6, backgroundColor: '#F1F5F9' }
-                                ]}>
-                                  <Image 
-                                    source={getSafeAvatar(playerObj.avatar, playerObj.name)}
-                                    style={[styles.rosterAvatar, isEliminated && { grayscale: 1 }]}
-                                  />
-                                  <View style={styles.rosterInfo}>
-                                    <View style={styles.nameRow}>
-                                        <Text style={[styles.rosterName, isEliminated && { color: '#64748B', textDecorationLine: 'line-through' }]} numberOfLines={1}>
-                                          {playerObj.name || `Player ${pid}`}
-                                        </Text>
-                                      {isPendingPayment && (
-                                        <View style={[styles.miniBadge, { backgroundColor: '#FFEDD5', marginLeft: 8 }]}>
-                                          <Text style={[styles.miniBadgeText, { color: '#C2410C' }]}>Awaiting Pay</Text>
-                                        </View>
-                                      )}
-                                      {isEliminated && (
-                                        <View style={[styles.miniBadge, { backgroundColor: '#FEE2E2', marginLeft: 8 }]}>
-                                          <Text style={[styles.miniBadgeText, { color: '#DC2626' }]}>Eliminated</Text>
-                                        </View>
-                                      )}
-                                      {isQualified && !decision && (
-                                        <View style={[styles.miniBadge, { backgroundColor: '#DCFCE7', marginLeft: 8 }]}>
-                                          <Text style={[styles.miniBadgeText, { color: '#16A34A' }]}>Qualified</Text>
-                                        </View>
-                                      )}
-                                    </View>
-                                    <Text style={styles.rosterRating}>Avg: {cumulativeAvg} | {playerObj.skillLevel || 'N/A'}</Text>
-                                  </View>
-                                  <View style={styles.rosterActions}>
-                                    {(activeTournament?.status !== 'completed' && !activeTournament?.tournamentConcluded) ? (
-                                      <>
-                                        <TouchableOpacity 
-                                          onPress={() => handleOpenEvaluation(playerObj, activeTournament)}
-                                          style={[styles.evalButton, isEliminated && { backgroundColor: '#64748B' }]}
-                                        >
-                                          <Text style={styles.evalButtonText}>Eval</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity 
-                                          onPress={() => setViewingHistoryForPlayer(playerObj)}
-                                          style={styles.histButton}
-                                        >
-                                          <Text style={styles.histButtonText}>Hist</Text>
-                                        </TouchableOpacity>
-                                      </>
-                                    ) : (
-                                      <View style={[styles.miniBadge, { backgroundColor: '#F1F5F9' }]}>
-                                        <Text style={[styles.miniBadgeText, { color: '#64748B' }]}>Locked</Text>
-                                      </View>
-                                    )}
-                                  </View>
-                                </View>
-                              );
-                            })}
-
-                            {teamEvaluated && !decision && (
-                              <View style={styles.decisionRow}>
-                                <TouchableOpacity
-                                  onPress={() => {
-                                    const newStatuses = { ...(activeTournament?.playerStatuses || {}) };
-                                    team.playerIds.forEach(id => newStatuses[id] = 'Qualified');
-                                    const newRoundDecisions = { ...(activeTournament?.roundDecisions || {}) };
-                                    if (!newRoundDecisions[currentRound]) newRoundDecisions[currentRound] = {};
-                                    newRoundDecisions[currentRound][team.id] = 'Qualified';
-                                    onUpdateTournament({ ...activeTournament, playerStatuses: newStatuses, roundDecisions: newRoundDecisions, ratingsModified: true });
-                                  }}
-                                  style={styles.decisionButtonSuccess}
-                                >
-                                  <Text style={styles.decisionTextSuccess}>Qualify</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  onPress={() => {
-                                    const newStatuses = { ...(activeTournament?.playerStatuses || {}) };
-                                    team.playerIds.forEach(id => newStatuses[id] = 'Eliminated');
-                                    const newRoundDecisions = { ...(activeTournament?.roundDecisions || {}) };
-                                    if (!newRoundDecisions[currentRound]) newRoundDecisions[currentRound] = {};
-                                    newRoundDecisions[currentRound][team.id] = 'Eliminated';
-                                    onUpdateTournament({ ...activeTournament, playerStatuses: newStatuses, roundDecisions: newRoundDecisions, ratingsModified: true });
-                                  }}
-                                  style={styles.decisionButtonDanger}
-                                >
-                                  <Text style={styles.decisionTextDanger}>Eliminate</Text>
-                                </TouchableOpacity>
-                              </View>
-                            )}
-                          </View>
-                        );
-                      })}
-
-                      {allTeamsEvaluated && allTeamsDecided && teams.length > 1 && (activeTournament?.status !== 'completed' && !activeTournament?.tournamentConcluded) && (
+                return (
+                  <FlatList
+                    data={teams}
+                    keyExtractor={t => t.id}
+                    renderItem={({ item: team }) => {
+                      const decision = currentRoundDecisions[team.id];
+                      const teamEvaluated = team.playerIds.every(id =>
+                        evaluations.some(e => String(e.playerId).toLowerCase() === String(id).toLowerCase() && String(e.tournamentId).toLowerCase() === String(activeTournament?.id).toLowerCase() && String(e.coachId).toLowerCase() === String(user?.id).toLowerCase() && (e.round || 1) === currentRound)
+                      );
+                      return (
+                        <RosterRow 
+                          team={team}
+                          teamEvaluated={teamEvaluated}
+                          decision={decision}
+                          activeTournament={activeTournament}
+                          currentRound={currentRound}
+                          players={players}
+                          evaluations={evaluations}
+                          user={user}
+                          onUpdateTournament={onUpdateTournament}
+                          setEvaluatingPlayer={setEvaluatingPlayer}
+                          setEvaluationScores={setEvaluationScores}
+                          setViewingHistoryForPlayer={setViewingHistoryForPlayer}
+                          handleOpenEvaluation={handleOpenEvaluation}
+                        />
+                      );
+                    }}
+                    contentContainerStyle={{ paddingBottom: 24 }}
+                    showsVerticalScrollIndicator={false}
+                    ListFooterComponent={
+                      allTeamsEvaluated && allTeamsDecided && teams.length > 1 && (activeTournament?.status !== 'completed' && !activeTournament?.tournamentConcluded) ? (
                         <TouchableOpacity
                           onPress={() => {
                             const nextRoundTeams = teams.filter(t => currentRoundDecisions[t.id] === 'Qualified');
@@ -673,14 +704,16 @@ const MatchesScreen = ({
                             {teams.filter(t => currentRoundDecisions[t.id] === 'Qualified').length <= 1 ? 'End Tournament' : `Proceed to Round ${currentRound + 1}`}
                           </Text>
                         </TouchableOpacity>
-                      )}
-                    </ScrollView>
-                  );
-                })()}
+                      ) : null
+                    }
+                  />
+                );
+              })()}
             </View>
           </View>
         </Modal>
       )}
+
 
       {/* Verification History Modal */}
       {!!viewingHistoryForPlayer && (

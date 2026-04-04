@@ -45,36 +45,38 @@ const NotificationsModal = ({ visible, onClose, notifications, onClear, onNotifi
             </TouchableOpacity>
           </View>
           
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {notifications && notifications.length > 0 ? (
-              notifications.map((notif) => (
-                <TouchableOpacity 
-                  key={notif.id} 
-                  style={[styles.notificationItem, !notif.read && styles.unreadNotification]}
-                  onPress={() => onNotificationClick(notif)}
-                >
-                  <View style={styles.notificationIcon}>
-                    <Ionicons 
-                      name={notif.type === 'video' ? 'play-circle' : notif.type === 'support' ? 'help-buoy' : 'notifications'} 
-                      size={24} 
-                      color={notif.read ? '#94A3B8' : '#3B82F6'} 
-                    />
-                  </View>
-                  <View style={styles.notificationText}>
-                    <Text style={[styles.notificationTitle, !notif.read && styles.boldText]}>{notif.title}</Text>
-                    <Text style={styles.notificationMessage}>{notif.message}</Text>
-                    <Text style={styles.notificationDate}>{new Date(notif.date).toLocaleDateString()}</Text>
-                  </View>
-                  {!notif.read && <View style={styles.unreadDot} />}
-                </TouchableOpacity>
-              ))
-            ) : (
+          <FlatList
+            data={notifications}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item: notif }) => (
+              <TouchableOpacity 
+                style={[styles.notificationItem, !notif.read && styles.unreadNotification]}
+                onPress={() => onNotificationClick(notif)}
+              >
+                <View style={styles.notificationIcon}>
+                  <Ionicons 
+                    name={notif.type === 'video' ? 'play-circle' : notif.type === 'support' ? 'help-buoy' : 'notifications'} 
+                    size={24} 
+                    color={notif.read ? '#94A3B8' : '#3B82F6'} 
+                  />
+                </View>
+                <View style={styles.notificationText}>
+                  <Text style={[styles.notificationTitle, !notif.read && styles.boldText]}>{notif.title}</Text>
+                  <Text style={styles.notificationMessage}>{notif.message}</Text>
+                  <Text style={styles.notificationDate}>{new Date(notif.date).toLocaleDateString()}</Text>
+                </View>
+                {!notif.read && <View style={styles.unreadDot} />}
+              </TouchableOpacity>
+            )}
+            ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Ionicons name="notifications-off-outline" size={48} color="#CBD5E1" />
                 <Text style={styles.emptyText}>No notifications yet</Text>
               </View>
-            )}
-          </ScrollView>
+            }
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={notifications?.length === 0 ? { flex: 1, justifyContent: 'center' } : { paddingBottom: 20 }}
+          />
           
           {notifications && notifications.some(n => !n.read) && (
             <TouchableOpacity onPress={onClear} style={styles.clearBtn}>

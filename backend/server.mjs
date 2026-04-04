@@ -161,6 +161,16 @@ const io = new Server(httpServer, {
   }
 });
 
+// 🔐 SOCKET SECURITY: Auth Handshake (SEC Fix)
+io.use((socket, next) => {
+  const apiKey = socket.handshake.headers['x-ace-api-key'] || socket.handshake.auth.token;
+  if (apiKey === ACE_API_KEY) {
+    return next();
+  }
+  logServerEvent('WS_UNAUTHORIZED', { ip: socket.handshake.address });
+  return next(new Error('Unauthorized: WebSocket requires valid API Key'));
+});
+
 io.on('connection', (socket) => {
   logServerEvent('WS_CLIENT_CONNECTED', { socketId: socket.id });
   
@@ -217,22 +227,23 @@ if (!MONGODB_URI) {
 // ═══════════════════════════════════════════════════════════════
 const AppStateSchema = new mongoose.Schema({
   data: mongoose.Schema.Types.Mixed,
+  version: { type: Number, default: 1 },
   lastUpdated: { type: Date, default: Date.now, index: true }
 }, { minimize: false });
 
 const AppState = mongoose.model('AppState', AppStateSchema);
-
 // ═══════════════════════════════════════════════════════════════
 // 📋 AUDIT LOG (SEC Fix #7 — Immutable audit trail)
 // ═══════════════════════════════════════════════════════════════
 const AuditLogSchema = new mongoose.Schema({
   userId: { type: String, index: true },
-  action: { type: String, required: true },
+  action: { type: String, index: true },
   changedCollections: [String],
   ipAddress: String,
   userAgent: String,
   details: mongoose.Schema.Types.Mixed,
-  timestamp: { type: Date, default: Date.now, index: true }
+  timestamp: { type: Date, default: Date.now, index: true },
+  createdAt: { type: Date, default: Date.now, index: { expires: '30d' } }
 });
 AuditLogSchema.index({ timestamp: -1 });
 
@@ -260,7 +271,13 @@ const AuditLog = mongoose.model('AuditLog', AuditLogSchema);
 // ═══════════════════════════════════════════════════════════════
 // Security & Middleware
 // ═══════════════════════════════════════════════════════════════
-const ACE_API_KEY = process.env.ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=';
+// 🔐 SECURITY: API KEY Configuration (SEC Fix)
+// In production, failure is mandatory if key is missing.
+const ACE_API_KEY = process.env.ACE_API_KEY || (process.env.NODE_ENV === 'production' ? null : 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=');
+if (!ACE_API_KEY) {
+  console.error("❌ CRITICAL: ACE_API_KEY is missing in production environment!");
+  process.exit(1); 
+}
 
 const apiKeyGuard = (req, res, next) => {
   const providedKey = req.headers['x-ace-api-key'];
@@ -303,8 +320,10 @@ const SaveDataSchema = z.object({
   auditLogs: z.array(z.any()).optional(),
   chatbotMessages: z.any().optional(),
   currentUser: z.any().optional(),
+  matchmaking: z.array(z.any()).optional(),
   overwrite: z.boolean().optional(),
-  atomicKeys: z.array(z.string()).optional()
+  atomicKeys: z.array(z.string()).optional(),
+  version: z.number().optional()
 }).refine(data => {
   const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser'];
   return Object.keys(data).some(key => syncableKeys.includes(key));
@@ -397,13 +416,45 @@ const storageConfig = multer.diskStorage({
 
 const upload = multer({ 
   storage: storageConfig,
-  limits: { fileSize: 150 * 1024 * 1024 } // 150MB max upload
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
 });
+
+// 🛡️ SYNC MUTEX: Prevent race conditions during concurrent /save requests
+class AsyncMutex {
+  constructor() {
+    this.queue = [];
+    this.isLocked = false;
+  }
+  acquire() {
+    return new Promise(resolve => {
+      const release = () => {
+        if (this.queue.length > 0) {
+          const next = this.queue.shift();
+          next(release);
+        } else {
+          this.isLocked = false;
+        }
+      };
+      if (this.isLocked) {
+        this.queue.push(resolve);
+      } else {
+        this.isLocked = true;
+        resolve(release);
+      }
+    });
+  }
+}
+const syncMutex = new AsyncMutex();
 
 // ═══════════════════════════════════════════════════════════════
 // 🌐 API v1 Routes (SE Fix: API versioning)
 // ═══════════════════════════════════════════════════════════════
 const router = express.Router();
+
+// Public Health Check (No Key Required)
+router.get('/health', (req, res) => {
+  res.json({ status: 'ok', uptime: process.uptime(), version: APP_VERSION });
+});
 
 // GET /api/v1/data
 router.get('/data', apiKeyGuard, async (req, res) => {
@@ -411,7 +462,7 @@ router.get('/data', apiKeyGuard, async (req, res) => {
     const state = await AppState.findOne().sort({ lastUpdated: -1 });
     if (!state || !state.data) return res.json({});
     const sanitizedData = JSON.parse(JSON.stringify(state.data));
-    res.json({ ...sanitizedData, lastUpdated: state.lastUpdated });
+    res.json({ ...sanitizedData, lastUpdated: state.lastUpdated, version: state.version || 1 });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -420,9 +471,10 @@ router.get('/data', apiKeyGuard, async (req, res) => {
 // GET /api/v1/status
 router.get('/status', apiKeyGuard, async (req, res) => {
   try {
-    const state = await AppState.findOne().sort({ lastUpdated: -1 }).select('lastUpdated');
+    const state = await AppState.findOne().sort({ lastUpdated: -1 }).select('lastUpdated version');
     res.json({ 
       lastUpdated: state?.lastUpdated || 0,
+      version: state?.version || 1,
       latestAppVersion: process.env.LATEST_APP_VERSION || APP_VERSION
     });
   } catch (error) {
@@ -497,40 +549,64 @@ router.get('/diagnostics/:filename', apiKeyGuard, asyncHandler(async (req, res) 
 
 // POST /api/v1/save
 router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => {
+  const release = await syncMutex.acquire();
   try {
     const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser', 'matchmaking'];
     
-    // 🛡️ SMART MERGE: MongoDB is the Single Source of Truth
-    const changedKeys = Object.keys(req.body).filter(k => syncableKeys.includes(k));
-    await logAudit(req, 'DATA_SAVE', changedKeys, { atomicKeys: req.body.atomicKeys });
-
     const now = Date.now();
-    
-    // Fetch the current state to perform a deep merge
+    const clientVersion = req.body.version;
+
+    // 🛡️ CONCURRENCY CONTROL: Fetch the current state
     const state = await AppState.findOne().sort({ lastUpdated: -1 });
     const currentData = (state && state.data) ? state.data : {};
+    const currentVersion = state?.version || 1;
+
+    // 🛡️ OCC VERSION CHECK: If client provided a version, it MUST match the server
+    if (clientVersion !== undefined && clientVersion < currentVersion) {
+      console.warn(`🛑 OCC Conflict: Client v${clientVersion} vs Server v${currentVersion}`);
+      return res.status(409).json({ 
+        error: 'Conflict: Your local data is out of date. Please refresh and try again.',
+        serverVersion: currentVersion,
+        cloudLastUpdated: state?.lastUpdated
+      });
+    }
+
+    const changedKeys = Object.keys(req.body).filter(k => syncableKeys.includes(k));
+    await logAudit(req, 'DATA_SAVE', changedKeys, { atomicKeys: req.body.atomicKeys, version: clientVersion });
+
     const newMasterData = { ...currentData };
 
+    // 🛡️ MASTER MERGE & HARDENING
     for (const key of syncableKeys) {
       if (req.body[key] !== undefined) {
-        const incoming = req.body[key];
+        let incoming = req.body[key];
         const atomicKeys = req.body.atomicKeys || [];
         const isAtomic = atomicKeys.includes(key);
 
-        if (key === 'players' && Array.isArray(incoming) && !isAtomic) {
+        const isAtomicKey = atomicKeys.includes(key);
+
+        // 🛡️ SECURITY: HASH TOURNEY OTPS BEFORE DATABASE PERSISTENCE
+        if (key === 'tournaments' && Array.isArray(incoming)) {
+          incoming = await Promise.all(incoming.map(async (t) => {
+             const updatedT = { ...t };
+             if (t.startOtp && String(t.startOtp).length === 6 && !String(t.startOtp).startsWith('$2')) {
+                updatedT.startOtp = await hashOtp(t.startOtp);
+             }
+             if (t.endOtp && String(t.endOtp).length === 6 && !String(t.endOtp).startsWith('$2')) {
+                updatedT.endOtp = await hashOtp(t.endOtp);
+             }
+             return updatedT;
+          }));
+        }
+
+        if (key === 'players' && Array.isArray(incoming) && !isAtomicKey) {
           // 🛡️ MASTER MERGE for Players: Protect by ID
           const playerMap = new Map();
-          // 1. Start with the Cloud Truth
-          (currentData.players || []).forEach(p => {
-            if (p && p.id) playerMap.set(String(p.id).toLowerCase(), p);
-          });
-          // 2. Overlay Client Updates (UPSERT)
+          (currentData.players || []).forEach(p => { if (p && p.id) playerMap.set(String(p.id).toLowerCase(), p); });
           incoming.forEach(p => {
             if (p && p.id) {
               const id = String(p.id).toLowerCase();
               const existing = playerMap.get(id);
-              
-              // 🛡️ DEEP MERGE DEVICES: Prevent Device A from deleting Device B
               const mergedDevices = [...(existing?.devices || [])];
               if (p.devices && Array.isArray(p.devices)) {
                 p.devices.forEach(d => {
@@ -540,15 +616,11 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
                   else mergedDevices.push(d);
                 });
               }
-
-              // Merge existing cloud fields with incoming client fields
               playerMap.set(id, existing ? { ...existing, ...p, devices: mergedDevices } : p);
             }
           });
           newMasterData.players = Array.from(playerMap.values());
-          console.log(`📡 [Server] Merged players. Cloud: ${(currentData.players || []).length}, Incoming: ${incoming.length}, Result: ${playerMap.size}`);
         } else if (key === 'currentUser' && incoming && incoming.id) {
-          // 🛡️ SYNC currentUser to Players array (Ensure visibility in Admin Hub)
           newMasterData.currentUser = incoming;
           if (newMasterData.players && Array.isArray(newMasterData.players)) {
             const id = String(incoming.id).toLowerCase();
@@ -565,26 +637,31 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
                 });
               }
               newMasterData.players[pIndex] = { ...existing, ...incoming, devices: mergedDevices };
-              console.log(`📡 [Server] Synced currentUser '${id}' to players list. Total Devices: ${mergedDevices.length}`);
             }
           }
+        } else if (['matchmaking', 'tournaments', 'matches'].includes(key) && Array.isArray(incoming) && !isAtomicKey) {
+           // 🛡️ MASTER MERGE for Matches/Tournaments: Prevent lost entities
+           const entityMap = new Map();
+           (currentData[key] || []).forEach(e => { if (e && e.id) entityMap.set(String(e.id), e); });
+           incoming.forEach(e => { if (e && e.id) entityMap.set(String(e.id), { ...(entityMap.get(String(e.id)) || {}), ...e }); });
+           newMasterData[key] = Array.from(entityMap.values());
         } else {
-          // For other collections, we currently trust the incoming array if provided, 
-          // but we preserve the cloud data for anything NOT in the request body.
           newMasterData[key] = incoming;
         }
       }
     }
 
+    const nextVersion = currentVersion + 1;
     const updatedState = await AppState.findOneAndUpdate(
       {},
-      { $set: { data: newMasterData, lastUpdated: now } },
+      { $set: { data: newMasterData, lastUpdated: now, version: nextVersion } },
       { upsert: true, new: true, sort: { lastUpdated: -1 } }
     );
 
     const socketId = req.headers['x-socket-id'];
     const broadcastPayload = { 
       lastUpdated: updatedState.lastUpdated, 
+      version: updatedState.version,
       keys: changedKeys,
       lastSocketId: socketId || 'system'
     };
@@ -595,11 +672,13 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
       io.emit('data_updated', broadcastPayload);
     }
     
-    logServerEvent('DATA_SAVE_SUCCESS', { lastUpdated: updatedState.lastUpdated, keys: broadcastPayload.keys });
-    res.json({ success: true, lastUpdated: updatedState.lastUpdated });
+    logServerEvent('DATA_SAVE_SUCCESS', { lastUpdated: updatedState.lastUpdated, version: updatedState.version, keys: broadcastPayload.keys });
+    res.json({ success: true, lastUpdated: updatedState.lastUpdated, version: updatedState.version });
   } catch (error) {
     console.error("❌ Save Error:", error);
     res.status(500).json({ error: error.message });
+  } finally {
+    release();
   }
 });
 
@@ -815,13 +894,14 @@ app.get('/results/:tournamentId', async (req, res) => {
   try {
     const state = await AppState.findOne().sort({ lastUpdated: -1 });
     if (!state || !state.data) return res.status(404).send('No data');
-    const tournament = (state.data.tournaments || []).find(t => t.id === req.params.tournamentId);
+    const tournaments = (state.data && Array.isArray(state.data.tournaments)) ? state.data.tournaments : [];
+    const tournament = tournaments.find(t => t && t.id === req.params.tournamentId);
     if (!tournament) return res.status(404).send('Tournament not found');
     
-    const matches = (state.data.matches || []).filter(m => m.tournamentId === tournament.id);
-    const players = (state.data.players || []).filter(p => 
-      (tournament.registeredPlayerIds || []).includes(p.id)
-    );
+    const matches = (state.data && Array.isArray(state.data.matches)) ? state.data.matches.filter(m => m && m.tournamentId === tournament.id) : [];
+    const registeredIds = Array.isArray(tournament.registeredPlayerIds) ? tournament.registeredPlayerIds.map(String) : [];
+    const allPlayers = (state.data && Array.isArray(state.data.players)) ? state.data.players : [];
+    const players = allPlayers.filter(p => p && p.id && registeredIds.includes(String(p.id)));
     
     // Simple HTML result page
     const html = `<!DOCTYPE html>
@@ -857,6 +937,7 @@ ${tournament.sponsorName ? `<div class="sponsor">Sponsored by ${tournament.spons
     res.setHeader('Content-Type', 'text/html');
     res.send(html);
   } catch (error) {
+    console.error('❌ Public Results Error:', error);
     res.status(500).send('Server error');
   }
 });
