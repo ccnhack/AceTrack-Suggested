@@ -335,8 +335,8 @@ const ProfileScreen = ({
   
   const normalizeAvatarUrl = (url) => {
     if (!url) return '';
-    // Strip everything after ? for unique comparison
-    return url.split('?')[0];
+    // Surgically remove only the 'v=' cache-buster, preserving seeds and other params
+    return url.replace(/[?&]v=[^&]+/, '').replace(/\?$/, '');
   };
 
   const normalizedSuggested = suggestedAvatars.map(normalizeAvatarUrl);
