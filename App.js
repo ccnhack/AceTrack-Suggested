@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = "2.5.2";
+const APP_VERSION = "2.6.1";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -166,7 +166,7 @@ export default function App() {
           pendingUpdateCheckRef.current = true;
           logger.logAction('WS_UPDATE_QUEUED');
         }
-      }, 5000); // 5s quiet period for rapid changes
+      }, 1000); // Reduced to 1s for better responsiveness
     });
 
     socketRef.current.on('force_upload_diagnostics', async (data) => {
@@ -598,15 +598,31 @@ export default function App() {
       if (Array.isArray(cloudData.players)) {
         const cleanedPlayers = cloudData.players.filter(p => !!(p && p.id));
         
+        // 🛡️ CACHE HARDENING: Apply buster to ALL players to ensure universal reflection
+        const busterTime = Date.now();
+        const playersWithBusters = cleanedPlayers.map(p => {
+          if (p.avatar && (p.avatar.includes('cloudinary') || p.avatar.includes('dicebear'))) {
+            // 🛡️ REFINEMENT: Only add buster if not already present to avoid malformed URLs (e.g. double 'v=')
+            if (p.avatar.includes('v=')) return p;
+            
+            const buster = `v=${busterTime}`;
+            return {
+              ...p,
+              avatar: p.avatar.includes('?') ? `${p.avatar}&${buster}` : `${p.avatar}?${buster}`
+            };
+          }
+          return p;
+        });
+
         // 🛡️ MASTER MERGE: Cloud is the Single Source of Truth
         const localPlayers = playersRef.current || [];
         const playerMap = new Map();
 
-        // 1. Start with Local State (to preserve references/ui state if needed)
+        // 1. Start with Local State
         localPlayers.forEach(p => { if (p && p.id) playerMap.set(String(p.id).toLowerCase(), p); });
 
         // 2. Overlay Cloud State (Cloud always wins on conflict)
-        cleanedPlayers.forEach(p => { if (p && p.id) playerMap.set(String(p.id).toLowerCase(), p); });
+        playersWithBusters.forEach(p => { if (p && p.id) playerMap.set(String(p.id).toLowerCase(), p); });
 
         const mergedPlayers = Array.from(playerMap.values());
         setPlayers(mergedPlayers);
@@ -625,15 +641,24 @@ export default function App() {
         const currentU = currentUserRef.current;
         if (currentU) {
           const currentIdLower = String(currentU.id).toLowerCase();
-          const cloudUser = cleanedPlayers.find(p => String(p.id).toLowerCase() === currentIdLower);
+          const cloudUser = playersWithBusters.find(p => String(p.id).toLowerCase() === currentIdLower);
+          
           if (cloudUser) {
             const sanitizeUser = (u) => {
-              const { devices, lastActive, ...rest } = u;
+              const { devices, lastActive, ...rest } = u || {};
               return rest;
             };
-            const hasChanged = JSON.stringify(sanitizeUser(cloudUser)) !== JSON.stringify(sanitizeUser(currentU));
+            
+            // Compare without the cache-buster to detect meaningful changes
+            const stripBuster = (url) => url ? String(url).split(/[?&]v=/)[0] : url;
+            const currentObj = sanitizeUser(currentU);
+            const cloudObj = sanitizeUser(cloudUser);
+            
+            const hasChanged = JSON.stringify({ ...currentObj, avatar: stripBuster(currentObj.avatar) }) !== 
+                             JSON.stringify({ ...cloudObj, avatar: stripBuster(cloudObj.avatar) });
             
             if (hasChanged) {
+              console.log("👤 [Sync] Current user updated from cloud. Propagating buster for consistency.");
               setCurrentUser(cloudUser);
               currentUserRef.current = cloudUser;
               setUserRole(cloudUser.role || 'user');
@@ -781,6 +806,9 @@ export default function App() {
       return true;
     } catch (error) {
       console.error("❌ Cloud Push Error:", error);
+      const isRateLimit = error.message.includes('429');
+      const isTimeout = error.name === 'AbortError' || error.message.includes('timeout');
+
       // 🛡️ LATENCY HARDENING: Don't flip to "Local" if it's just a timeout or abort
       if (!isRateLimit && !isTimeout) {
         if (socketRef.current?.connected) {
@@ -792,14 +820,13 @@ export default function App() {
       logger.logAction('PUSH_DATA_ERROR', { error: error.message, version: thisVersion });
       return false;
     } finally {
-      if (thisVersion === syncVersion.current) {
-        setSyncingState(false);
-        if (pendingUpdateCheckRef.current) {
-           pendingUpdateCheckRef.current = false;
-           setTimeout(() => checkForUpdates(), 100);
-        }
-      } else {
-        setSyncingState(false);
+      // Robustly release the lock regardless of version mismatch to prevent total sync death
+      setSyncingState(false);
+      
+      // If we missed an update signal while pushing, trigger it now
+      if (pendingUpdateCheckRef.current) {
+         pendingUpdateCheckRef.current = false;
+         setTimeout(() => checkForUpdates(), 100);
       }
     }
   }, [checkForUpdates]);
@@ -835,18 +862,23 @@ export default function App() {
         if (dIndex >= 0) updates.currentUser.devices[dIndex] = myTracker;
         else updates.currentUser.devices.push(myTracker);
         
-        // 🛡️ REFINEMENT: Don't force-push the entire players array on every tiny currentUser update
-        // This was causing stale local player lists (9) to overwrite cloud lists (14).
-        // Only update the specific player record in the local list, but don't mark 'players' as pending.
-        const currentP = [...playersRef.current || []];
+        // 🛡️ REFINEMENT: Don't force-push the entire players array on every tiny currentUser update.
+        // But ENSURE we use the latest provided players list if it exists in the 'updates' object.
+        const currentP = [...(updates.players || playersRef.current || [])];
         const pIndex = currentP.findIndex(p => p.id === updates.currentUser.id);
         if (pIndex >= 0) {
-          const updatedP = { ...currentP[pIndex], devices: updates.currentUser.devices };
+          // Merge current user data into the players list to keep names/avatars in sync
+          const updatedP = { ...currentP[pIndex], ...updates.currentUser };
           currentP[pIndex] = updatedP;
-          setPlayers(currentP);
-          storage.setItem('players', currentP);
-          // Note: We deliberately DON'T add 'players' to 'updates' here 
-          // unless it was already part of the requested sync.
+          
+          // Only trigger state/storage update here if players wasn't already in the updates
+          // (If it was, the loop below will handle the storage/sync)
+          if (!updates.players) {
+            setPlayers(currentP);
+            storage.setItem('players', currentP);
+          } else {
+            updates.players = currentP; // Update the reference in the pending sync object
+          }
         }
       }
     }
@@ -1314,9 +1346,9 @@ export default function App() {
          if (currentUserRef.current?.id === u.id) {
            setCurrentUser(u);
            currentUserRef.current = u;
-           syncAndSaveData({ currentUser: u, players: updatedPlayers });
+           syncAndSaveData({ currentUser: u, players: updatedPlayers }, true); // 🚀 ATOMIC SYNC: Immediate push for profile updates
          } else {
-           syncAndSaveData({ players: updatedPlayers });
+           syncAndSaveData({ players: updatedPlayers }, true); // 🚀 ATOMIC SYNC: Ensure player list consistency immediately
          }
          return updatedPlayers;
        });

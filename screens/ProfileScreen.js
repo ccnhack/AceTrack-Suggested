@@ -247,6 +247,7 @@ const ProfileScreen = ({
     { id: 'cb2', title: 'Coaching: Rohan G.', date: '2026-03-28', sport: 'Cricket', type: 'booking' },
   ] : [];
 
+  const APP_VERSION = "2.6.0";
   const allEvents = [...MOCK_EVENTS, ...MOCK_CONFIRMED_BOOKINGS];
 
   const filteredEvents = allEvents.filter(event => {
@@ -276,12 +277,14 @@ const ProfileScreen = ({
   useEffect(() => {
     if (user) {
       setEditName(user.name || '');
+      setEditEmail(user.email || ''); // Ensure email stays in sync
+      setEditPhone(user.phone || ''); // Ensure phone stays in sync
       setEditAvatar(user.avatar || '');
       setEditManagedSports(user.managedSports || []);
       setImageError(false);
       logger.logAction('USER_AVATAR_INITIALIZED', { id: user.id, avatar: user.avatar });
     }
-  }, [user?.id, user?.avatar, user?.managedSports]);
+  }, [user?.id, user?.avatar, user?.name, user?.email, user?.phone, user?.managedSports]);
 
   // Load persisted session avatar on mount
   useEffect(() => {
@@ -338,6 +341,11 @@ const ProfileScreen = ({
   // Add session-uploaded avatar if not already current
   if (sessionCustomAvatar && !customAvatars.includes(sessionCustomAvatar)) {
     customAvatars.push(sessionCustomAvatar);
+  }
+
+  // 🛡️ PERSISTENCE HARDENING: Add the cloud-stored last custom avatar if it exists
+  if (user?.lastCustomAvatar && !customAvatars.includes(user.lastCustomAvatar)) {
+    customAvatars.push(user.lastCustomAvatar);
   }
   
   // Add newly picked/edited avatar if custom and not already in list
@@ -727,6 +735,15 @@ const ProfileScreen = ({
                           const cacheBustedUrl = `${data.url}${data.url.includes('?') ? '&' : '?'}v=${Date.now()}`;
                           finalAvatar = cacheBustedUrl;
                           setSessionCustomAvatar(cacheBustedUrl); // Persist in picker for session
+                          
+                          // 🛡️ PERSISTENCE HARDENING: Store in cloud user object so it follows the user across devices
+                          // This ensures the image remains in the 'Selection' list on other phones
+                          onUpdateUser({ 
+                            ...user, 
+                            avatar: cacheBustedUrl, 
+                            lastCustomAvatar: cacheBustedUrl 
+                          });
+                          
                           logger.logAction('AVATAR_UPLOAD_SUCCESS', { cloudUrl: cacheBustedUrl });
                         } else {
                           const errorText = await response.text();
@@ -893,6 +910,7 @@ const ProfileScreen = ({
                         name: editName, 
                         email: editEmail, 
                         phone: editPhone,
+                        avatar: editAvatar, // CRITICAL FIX: Ensure avatar persists during name/email saves
                         managedSports: editManagedSports
                       });
                       setShowEditProfile(false);

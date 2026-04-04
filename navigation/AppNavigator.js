@@ -327,7 +327,7 @@ export default function AppNavigator({
 }) {
   const authParams = useMemo(() => ({
     user, role, onLogout
-  }), [user?.id, user?.isEmailVerified, user?.isPhoneVerified, role, onLogout]);
+  }), [user?.id, user?.avatar, user?.isEmailVerified, user?.isPhoneVerified, role, onLogout]);
 
   const dataParams = useMemo(() => ({
     players, tournaments, matchVideos, matches, tickets, evaluations,

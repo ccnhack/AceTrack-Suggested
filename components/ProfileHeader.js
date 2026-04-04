@@ -42,20 +42,32 @@ const ProfileHeader = memo(({
   onWalletPress,
   logger 
 }) => {
+  const [localImageError, setLocalImageError] = React.useState(false);
+
+  // Reset local error when avatar changes (e.g. after a fresh upload or sync)
+  React.useEffect(() => {
+    setLocalImageError(false);
+  }, [user?.avatar]);
+
   if (!user) return null;
 
   return (
     <View style={styles.header}>
       <View style={styles.avatarContainer}>
-        {user?.role === 'admin' ? (
+        {user?.avatar && !imageError && !localImageError ? (
+          <Image 
+            key={user.avatar}
+            source={getSafeAvatar(user.avatar, user.name)}
+            style={styles.avatar} 
+            onError={() => {
+              console.warn("ProfileHeader: Profile image failed to load, falling back to placeholder");
+              setLocalImageError(true);
+            }}
+          />
+        ) : user?.role === 'admin' ? (
           <View style={[styles.avatar, { backgroundColor: '#0F172A', borderWidth: 2, borderColor: '#3B82F6', justifyContent: 'center', alignItems: 'center' }]}>
             <Image source={require('../assets/icon.png')} style={{width: 50, height: 50, resizeMode: 'contain'}} />
           </View>
-        ) : user?.avatar && !imageError ? (
-          <Image 
-            source={getSafeAvatar(user.avatar, user.name)}
-            style={styles.avatar} 
-          />
         ) : (
           <AvatarPlaceholder name={user?.name} size={80} />
         )}

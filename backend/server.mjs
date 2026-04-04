@@ -622,7 +622,8 @@ router.post('/upload', apiKeyGuard, upload.single('video'), async (req, res) => 
       {
         resource_type: 'auto',
         folder: uploadFolder,
-        public_id: `${Date.now()}-${Math.round(Math.random() * 1e9)}`,
+        public_id: `${Date.now()}-${Math.round(Math.random() * 1e9)}${req.file.mimetype.startsWith('image/') ? '.jpg' : ''}`,
+        format: req.file.mimetype.startsWith('image/') ? 'jpg' : undefined, // Force conversion to JPG for cross-device compatibility (HEIC fix)
       },
       async (error, result) => {
         // Cleanup local file immediately
