@@ -106,6 +106,7 @@ export default function App() {
 
   const notificationReceivedSubscription = useRef(null);
   const notificationResponseSubscription = useRef(null);
+  const navigationRef = useRef(null);
 
   // Synchronous helper to update isSyncing state AND ref atomically
   const setSyncingState = (val) => {
