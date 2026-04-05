@@ -64,4 +64,52 @@ const storage = {
   }
 };
 
+/**
+ * 🛡️ STORAGE OPTIMIZATION (v2.6.7)
+ * Strips non-essential, high-growth fields from player objects before persistence.
+ * This prevents the global 'players' list from exceeding the 2MB Android CursorWindow limit.
+ */
+export const thinPlayer = (p: any) => {
+  if (!p) return p;
+  // Keep only essential UI and ranking fields
+  const { 
+    id, name, avatar, rating, trueSkillRating, role, 
+    matchesPlayed, wins, losses, skillLevel, city, sport,
+    isApprovedCoach, coachStatus, preferredFormat, mostPlayedVenue,
+    referralCode
+  } = p;
+  
+  return { 
+    id, name, avatar, rating, trueSkillRating, role, 
+    matchesPlayed, wins, losses, skillLevel, city, sport,
+    isApprovedCoach, coachStatus, preferredFormat, mostPlayedVenue,
+    referralCode,
+    _thinned: true // Meta-flag for diagnostics
+  };
+};
+
+export const thinPlayers = (players: any[]) => {
+  if (!Array.isArray(players)) return players;
+  return players.map(thinPlayer);
+};
+
+/**
+ * 🛡️ PERSONAL STORAGE CAP (v2.6.7)
+ * Caps a player's history and notifications to the 50 most recent entries.
+ * This ensures that even the 'currentUser' key stays safely within the 2MB threshold.
+ */
+export const capPlayerDetail = (p: any) => {
+  if (!p) return p;
+  const history = Array.isArray(p.trueSkillHistory) ? p.trueSkillHistory.slice(-50) : p.trueSkillHistory;
+  const notifications = Array.isArray(p.notifications) ? p.notifications.slice(0, 50) : p.notifications;
+  const wallet = Array.isArray(p.walletHistory) ? p.walletHistory.slice(0, 50) : p.walletHistory;
+  
+  return {
+    ...p,
+    trueSkillHistory: history,
+    notifications: notifications,
+    walletHistory: wallet
+  };
+};
+
 export default storage;
