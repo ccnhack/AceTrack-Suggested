@@ -445,7 +445,7 @@ const AdminHubScreen = ({
           {[
             { id: 'individuals', label: 'Individuals', icon: 'person' },
             { id: 'academies', label: 'Academies', icon: 'business' },
-            { id: 'coaches', label: 'Coaches', icon: 'school', count: (players || []).filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && (seenAdminActionIds?.has ? !seenAdminActionIds.has(p.id) : true)).length },
+            { id: 'coaches', label: 'Coaches', icon: 'school', count: (players || []).filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !p.isApprovedCoach && (seenAdminActionIds?.has ? !seenAdminActionIds.has(String(p.id)) : true)).length },
             { id: 'security', label: 'Security', icon: 'lock-closed' },
             { id: 'tournaments', label: 'Tournaments', icon: 'trophy' },
             { id: 'coach_assignments', label: 'Assignments', icon: 'people', count: (tournaments || []).filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration' || t.coachStatus === 'Awaiting Assignment') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today) && (seenAdminActionIds?.has ? !seenAdminActionIds.has(String(t.id)) : true)).length },

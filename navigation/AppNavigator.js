@@ -180,7 +180,7 @@ const MainTabs = memo(() => {
     const hasSeen = (id) => seenAdminActionIds?.has && typeof seenAdminActionIds.has === 'function' && seenAdminActionIds.has(String(id));
 
     const today = new Date().toISOString().split('T')[0];
-    const pendingCoaches = hasVisited('coaches') ? [] : (players || []).filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !hasSeen(p.id));
+    const pendingCoaches = hasVisited('coaches') ? [] : (players || []).filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !p.isApprovedCoach && !hasSeen(p.id));
     const pendingRecordings = hasVisited('recordings') ? [] : (matchVideos || []).filter(v => v.adminStatus === 'Deletion Requested' && !hasSeen(v.id));
     const pendingTickets = (supportTickets || []).filter(t => (t.status === 'Open' || t.status === 'Awaiting Response') && !hasSeen(t.id));
     const pendingAssignments = hasVisited('coach_assignments') ? [] : (tournaments || []).filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration' || t.coachStatus === 'Awaiting Assignment') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today) && !hasSeen(t.id));

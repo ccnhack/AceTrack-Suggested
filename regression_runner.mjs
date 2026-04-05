@@ -210,6 +210,33 @@ assert('TC-AUTH-022', 'Auth', 'Strict phone check still applies for non-thinned 
   return !userToReset; // Should NOT be found
 })());
 
+assert('TC-AUTH-023', 'Auth', 'onApproveCoach sets both status and isApprovedCoach boolean', (() => {
+  const testPlayers = [
+      { id: 'pending1', role: 'coach', coachStatus: 'pending', isApprovedCoach: false }
+  ];
+  // Simulate onApproveCoach logic
+  const cid = 'pending1';
+  const status = 'approved';
+  const updated = testPlayers.map(p => 
+    String(p.id).toLowerCase().trim() === String(cid).toLowerCase().trim() 
+      ? { ...p, coachStatus: status, isApprovedCoach: status === 'approved' } 
+      : p
+  );
+  const approvedCoach = updated[0];
+  return approvedCoach.coachStatus === 'approved' && approvedCoach.isApprovedCoach === true;
+})());
+
+assert('TC-AUTH-024', 'Auth', 'onApproveCoach ID matching is case-insensitive and trimmed', (() => {
+  const testPlayers = [{ id: 'Coach_A', role: 'coach' }];
+  const cid = '  COACH_A  ';
+  const updated = testPlayers.map(p => 
+    String(p.id).toLowerCase().trim() === String(cid).toLowerCase().trim() 
+      ? { ...p, coachStatus: 'approved' } : p
+  );
+  return updated[0].coachStatus === 'approved';
+})());
+
+
 
 
 

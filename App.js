@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = '2.6.15'; // 🛠️ Admin Matchmaking UX Exclusion (v2.6.15)
+const APP_VERSION = '2.6.16'; // 🛡️ Coach Approval Sync Hardening (v2.6.16)
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -1586,10 +1586,16 @@ export default function App() {
         return updated;
       });
     },
-    onApproveCoach: (cid) => {
+    onApproveCoach: (cid, status = 'approved') => {
       setPlayers(prev => {
-        const updated = prev.map(p => p.id === cid ? { ...p, coachStatus: 'approved' } : p);
-        syncAndSaveData({ players: updated });
+        const targetId = String(cid).toLowerCase().trim();
+        const updated = prev.map(p => 
+          String(p.id).toLowerCase().trim() === targetId 
+            ? { ...p, coachStatus: status, isApprovedCoach: status === 'approved' } 
+            : p
+        );
+        // Force atomic sync (true) for critical admin approvals to ensure they are NOT lost on logout
+        syncAndSaveData({ players: updated }, true);
         return updated;
       });
     },
