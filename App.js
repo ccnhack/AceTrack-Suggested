@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = '2.6.7'; // 📱 Startup Fix & Storage Scale (v2.6.7)
+const APP_VERSION = '2.6.9'; // 📱 Startup Fix & Storage Scale (v2.6.9)
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -1068,6 +1068,7 @@ export default function App() {
     
     await storage.removeItem('currentUser');
     await storage.removeItem('pendingSync');
+    await storage.removeItem('sessionCustomAvatar');
   }, []);
 
   const handleRegisterUser = useCallback(async (newPlayer) => {

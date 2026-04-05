@@ -1017,7 +1017,18 @@ const ProfileScreen = ({
                          return;
                        }
                        
-                       logger.logAction('PASSWORD_CHANGE_ATTEMPT');
+                       // VERIFY OLD PASSWORD
+                       if (user && oldPassword !== user.password) {
+                         Alert.alert("Error", "Current password is incorrect");
+                         return;
+                       }
+                       
+                       // SYNC TO CLOUD
+                       if (handlers?.onResetPassword) {
+                         handlers.onResetPassword(user.id, newPassword);
+                       }
+                       
+                       logger.logAction('PASSWORD_CHANGE_SUCCESS');
                        Alert.alert("Success", "Password changed successfully!");
                        setShowChangePassword(false);
                        setOldPassword('');

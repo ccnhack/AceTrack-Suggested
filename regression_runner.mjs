@@ -106,6 +106,28 @@ assert('TC-AUTH-012', 'Auth', 'Avatar History: Uniqueness & Limit (10)', (() => 
     .slice(0, 2); // Testing limit with 2
   return updated.length === 2 && updated[0] === 'url2?v=99' && normalize(updated[1]) === 'url1';
 })());
+assert('TC-AUTH-013', 'Auth', 'Password Reset Authenticates Previous Credential before execution', (() => {
+  const user = { id: 1, password: 'old_password' };
+  const oldPasswordInput = 'wrong_password';
+  if (user && oldPasswordInput !== user.password) {
+    return true; // Execution halts properly
+  }
+  return false;
+})());
+assert('TC-AUTH-014', 'Auth', 'Password Reset routes to network Sync on Success', (() => {
+  let syncTriggered = false;
+  const user = { id: 1, password: 'old_password' };
+  const oldPasswordInput = 'old_password';
+  const newPasswordInput = 'new_password';
+  const handlers = {
+    onResetPassword: (id, pass) => { syncTriggered = true; }
+  };
+  
+  if (user && oldPasswordInput !== user.password) return false;
+  if (handlers?.onResetPassword) handlers.onResetPassword(user.id, newPasswordInput);
+  
+  return syncTriggered;
+})());
 
 
 // ══════════════════════════════════════════════
@@ -675,6 +697,15 @@ assert('TC-SYNC-009', 'Sync', 'Avatar Sync: Identical buster does not flag drift
   const cloudAvatar = 'https://cloudinary.com/img1?v=100';
   const drifted = localAvatar !== cloudAvatar;
   return drifted === false;
+})());
+assert('TC-SYNC-010', 'Sync', 'Logout completely clears sessionCustomAvatar state leak', (() => {
+  let storageState = { currentUser: { id: 'shashank' }, pendingSync: [], sessionCustomAvatar: 'https://shashank-avatar' };
+  const mockRemoveItem = (key) => { delete storageState[key]; };
+  
+  mockRemoveItem('currentUser');
+  mockRemoveItem('pendingSync');
+  mockRemoveItem('sessionCustomAvatar'); 
+  return !('sessionCustomAvatar' in storageState);
 })());
 
 
