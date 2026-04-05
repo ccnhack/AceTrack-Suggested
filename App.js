@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = '2.6.16'; // 🛡️ Coach Approval Sync Hardening (v2.6.16)
+const APP_VERSION = '2.6.20'; // 🛡️ WebSocket Auth & CORS Hardening (v2.6.20)
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -129,9 +129,16 @@ export default function App() {
   useEffect(() => {
     // 1. WebSocket: Connect to real-time events
     const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
+    
+    // 🛡️ SYNC HARDENING (v2.6.17): Remove rigid 'websocket' transport to allow 'polling' fallback.
+    // This is much more reliable on certain networks and for Render.com cold starts.
     socketRef.current = io(activeApiUrl, {
-      transports: ['websocket'],
-      reconnection: true
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      auth: {
+        token: config.ACE_API_KEY
+      }
     });
 
     socketRef.current.on('connect', () => {
@@ -271,10 +278,16 @@ export default function App() {
     startup();
 
     return () => {
-      if (socketRef.current) socketRef.current.disconnect();
+      if (socketRef.current) {
+        console.log("🔌 WebSocket Disconnecting (cleanup)");
+        socketRef.current.disconnect();
+        // 🛡️ SYNC HARDENING: Don't set ref to null here, just disconnect. 
+        // This ensures child screens (like AdminHub) still have a valid (though disconnected) ref object 
+        // they can call .connect() on if needed.
+      }
       subscription.remove();
     };
-  }, []); // Only once at mount
+  }, [isUsingCloud]); // 🔄 SYNC HARDENING (v2.6.19): Re-init socket when cloud mode toggles
 
   // 3b. Initialize Logger Auto-Flush when user is ready
   useEffect(() => {

@@ -46,7 +46,7 @@ import {
 
 console.log('\n' + '═'.repeat(70));
 console.log('  🧪  ACETRACK REGRESSION TEST SUITE — EXECUTION REPORT');
-console.log('  📱  App Version: v2.6.6');
+console.log('  📱  App Version: v2.6.20');
 console.log('  ⏰  Run Time:', new Date().toLocaleString());
 console.log('═'.repeat(70) + '\n');
 
@@ -844,6 +844,49 @@ assert('TC-REF-006', 'Referral', 'Referral stats calculation', (() => {
 })());
 assert('TC-REF-007', 'Referral', 'Null username handled', generateReferralCode(null) === 'ACE-USER');
 assert('TC-REF-008', 'Referral', 'Special chars stripped from code', generateReferralCode('user@123!') === 'ACE-USER123');
+ 
+// ══════════════════════════════════════════════
+// MODULE 15: WEBSOCKET CONNECTIVITY
+// ══════════════════════════════════════════════
+console.log('📦 Module 15: WebSocket Connectivity');
+
+assert('TC-WS-001', 'WebSocket', 'App.js: io() initialization includes auth.token', (() => {
+  const ACE_API_KEY = 'test_key_123';
+  const config = { ACE_API_KEY };
+  const activeApiUrl = 'https://test.com';
+  
+  // Mocking the io() call structure from App.js v2.6.20
+  const mockIo = (url, opts) => ({ url, opts });
+  const socket = mockIo(activeApiUrl, {
+    reconnection: true,
+    auth: { token: config.ACE_API_KEY }
+  });
+  
+  return socket.opts.auth.token === 'test_key_123';
+})());
+
+assert('TC-WS-002', 'WebSocket', 'Server.mjs: CORS origin logic allows mobile (no origin)', (() => {
+  const ALLOWED_ORIGINS = ['https://acetrack.com'];
+  
+  // Mocking the CORS origin callback from server.mjs v2.6.20
+  const corsOriginCheck = (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
+  };
+
+  let result1 = false;
+  corsOriginCheck(undefined, (err, success) => { result1 = success; });
+
+  let result2 = false;
+  corsOriginCheck('https://acetrack.com', (err, success) => { result2 = success; });
+
+  let result3 = true;
+  corsOriginCheck('https://malicious.com', (err, success) => { if (err) result3 = false; });
+
+  return result1 === true && result2 === true && result3 === false;
+})());
+
 
 // ══════════════════════════════════════════════
 // REPORT

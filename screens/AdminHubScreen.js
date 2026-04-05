@@ -907,9 +907,18 @@ const AdminHubScreen = ({
                         setIsFetchingDiags(true);
                         
                         // PING NATIVE DEVICE TO CHECK PRESENCE (3 retries at 1s intervals)
-                        if (socketRef && socketRef.current) {
-                          const isConnected = socketRef.current.connected;
-                          const socketId = socketRef.current.id;
+                        const socket = socketRef?.current;
+                        
+                        // 🛡️ SYNC HARDENING (v2.6.18): Better null/disconnected check
+                        if (!socketRef) {
+                          console.error('❌ [AdminHub] socketRef prop is MISSING!');
+                          Alert.alert('Connection Error', 'Socket reference missing. Please restart the app.');
+                        } else if (!socket) {
+                          console.warn('⚠️ [AdminHub] socket.current is null! Socket might still be initializing...');
+                          Alert.alert('Sync Starting', 'Please wait a moment for the connection to warm up.');
+                        } else {
+                          const isConnected = socket.connected;
+                          const socketId = socket.id;
                           console.log(`🏓 ADMIN PING: target=${p.id}, socketConnected=${isConnected}, socketId=${socketId}`);
                           
                           // CLEAR STALE ONLINE STATUS FOR THIS USER BEFORE PINGING
@@ -923,13 +932,38 @@ const AdminHubScreen = ({
                           });
 
                           if (!isConnected) {
-                            console.warn('⚠️ Socket NOT connected! Pings will fail silently.');
+                            console.warn('⚠️ Socket NOT connected! Attempting manual reconnect (v2.6.20)...');
+                            
+                            // 🛡️ SYNC HARDENING (v2.6.20): Detailed error logging for manual connect
+                            const errHandler = (err) => {
+                              console.error(`❌ Socket RECONNECT_ERROR: ${err.message}`);
+                              logger.logAction('WS_RECONNECT_ERROR', { error: err.message, message: err.toString() });
+                            };
+                            socket.once('connect_error', errHandler);
+                            
+                            socket.connect();
+                            // 🛡️ SYNC HARDENING (v2.6.20): Wait up to 1500ms for connection
+                            await new Promise(resolve => {
+                              const timeout = setTimeout(resolve, 1500);
+                              socket.once('connect', () => {
+                                clearTimeout(timeout);
+                                socket.off('connect_error', errHandler);
+                                resolve();
+                              });
+                            });
+                            
+                            if (!socket.connected) {
+                              Alert.alert('Reconnecting', 'WebSocket failed to authenticate or connect. Please check your internet or try again.');
+                              socket.off('connect_error', errHandler);
+                              return;
+                            }
+                            console.log('✅ Reconnected successfully (v2.6.20). Proceeding with ping.');
                           }
-                          socketRef.current.emit('admin_ping_device', { targetUserId: p.id });
-                          setTimeout(() => socketRef.current?.emit('admin_ping_device', { targetUserId: p.id }), 1000);
-                          setTimeout(() => socketRef.current?.emit('admin_ping_device', { targetUserId: p.id }), 2000);
-                        } else {
-                          console.warn('⚠️ socketRef is null — no ping sent!');
+
+                          // Send initial ping plus retries
+                          socket.emit('admin_ping_device', { targetUserId: p.id });
+                          setTimeout(() => socket?.emit('admin_ping_device', { targetUserId: p.id }), 1000);
+                          setTimeout(() => socket?.emit('admin_ping_device', { targetUserId: p.id }), 2000);
                         }
                         
                         const url = `${activeApiUrl}/api/diagnostics?userId=${p.id}`;

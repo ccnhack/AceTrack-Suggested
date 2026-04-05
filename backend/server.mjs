@@ -57,7 +57,7 @@ try {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
 
-const APP_VERSION = '2.6.7'; // AceTrack Suggested — v2.6.7 Scale & Stability Patch
+const APP_VERSION = '2.6.20'; // AceTrack Suggested — v2.6.20 Auth & CORS Stabilization
 
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: CORS Whitelist (SEC Fix #3)
@@ -156,8 +156,17 @@ app.use('/api', globalLimiter);
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: ALLOWED_ORIGINS,
-    methods: ['GET', 'POST']
+    origin: (origin, callback) => {
+      // 🛡️ SYNC HARDENING (v2.6.20): Allow mobile apps (no origin) 
+      // consistent with the REST API CORS policy above.
+      if (!origin) return callback(null, true);
+      if (ALLOWED_ORIGINS.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error('Not allowed by CORS'));
+    },
+    methods: ['GET', 'POST'],
+    credentials: true
   }
 });
 
