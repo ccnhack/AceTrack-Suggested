@@ -177,9 +177,15 @@ const LoginScreen = ({
   };
 
   const handleIdentify = async () => {
+    const normalize = (s) => String(s || '').trim().toLowerCase();
+    const cleanPhone = (s) => String(s || '').trim();
+
+    const nUser = normalize(forgotUser);
+    const nPhone = cleanPhone(forgotPhone);
+
     let userToReset = players.find(p => 
-      (String(p.id).toLowerCase() === forgotUser.toLowerCase() || (p.email && p.email.toLowerCase() === forgotUser.toLowerCase())) &&
-      (String(p.phone) === String(forgotPhone))
+      (normalize(p.id) === nUser || normalize(p.email) === nUser) &&
+      (cleanPhone(p.phone) === nPhone)
     );
 
     // ROBUSTNESS: If not found locally, try a cloud refresh
@@ -190,8 +196,8 @@ const LoginScreen = ({
       
       if (cloudResult && cloudResult.players) {
         userToReset = cloudResult.players.find(p => 
-          (String(p.id).toLowerCase() === forgotUser.toLowerCase() || (p.email && p.email.toLowerCase() === forgotUser.toLowerCase())) &&
-          (String(p.phone) === String(forgotPhone))
+          (normalize(p.id) === nUser || normalize(p.email) === nUser) &&
+          (cleanPhone(p.phone) === nPhone)
         );
       }
     }

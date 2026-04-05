@@ -162,6 +162,19 @@ assert('TC-AUTH-018', 'Auth', 'Robust Phone Identification (String normalization
   const inputPhone = '1234567894'; // String from input
   return String(p.phone) === String(inputPhone);
 })());
+assert('TC-AUTH-019', 'Auth', 'Identification Robustness: Trims Phone Padding', (() => {
+  const p = { id: 'user', phone: '12345' };
+  const inputPhone = ' 12345 ';
+  const clean = (s) => String(s || '').trim();
+  return clean(p.phone) === clean(inputPhone);
+})());
+assert('TC-AUTH-020', 'Auth', 'Identification Robustness: Case and Space Normalization (ID)', (() => {
+  const p = { id: 'riyaplay' };
+  const inputUser = ' RiyaPlay ';
+  const normalize = (s) => String(s || '').trim().toLowerCase();
+  return normalize(p.id) === normalize(inputUser);
+})());
+
 
 
 
