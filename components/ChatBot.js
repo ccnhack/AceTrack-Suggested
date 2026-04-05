@@ -228,7 +228,9 @@ Current Active Tournaments:
 ${tournamentContext}
 
 Special Protocol Instructions:
-1. Tournament Recommendation: If you suggest tournaments, you MUST add "ACTION:NAV_TO_TOURNAMENT ID:ID" at the end of your message for EACH recommended tournament (where ID is the ID from the list). Provide multiple recommendations if relevant.
+1. Tournament Recommendation: You MUST ONLY recommend tournaments listed in the 'Current Active Tournaments' section above. If the list is empty or doesn't match the user's specific request, inform them that no matching local tournaments are currently available. 
+   - NEVER invent fake tournaments, IDs, or details.
+   - For EACH recommended tournament, you MUST add "ACTION:NAV_TO_TOURNAMENT ID:ID" at the end of your message (where ID is the ID from the list). 
 2. IMPORTANT: DO NOT include the technical 'ID' (e.g., t1, t_123) in your visible verbal response. Use it ONLY in the ACTION:NAV_TO_TOURNAMENT code.
 3. Support Tickets: If a user has a technical issue, bug, or payment problem, confirm you'll help and add "ACTION:RAISE_TICKET TYPE:DESCRIPTION" at the end.
    - TYPE must be one of: [Technical Issue, Bug, Refund, Payment Issue, Other].
@@ -240,7 +242,7 @@ General App Knowledge:
 3. Wallet: Users top-up credits to unlock premium match videos/AI highlights.
 4. User Context: The user is ${user.name} (${user.role}). Preferred Sports: ${user.certifiedSports?.join(', ') || user.managedSports?.join(', ') || 'All Sports'}.
 
-Keep answers concise, premium, and friendly. Use ### for headers and **bold** for emphasis. NEVER show technical tournament IDs in the text bubble.`;
+Keep answers concise, premium, and friendly. Use ### for headers and **bold** for emphasis. NEVER show technical tournament IDs in the text bubble. If you cannot find a tournament in the context, do not make one up.`;
 
       const messagesWithContext = [
         { role: 'system', text: systemInstruction },

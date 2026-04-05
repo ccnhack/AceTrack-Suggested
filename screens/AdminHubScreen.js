@@ -533,7 +533,7 @@ const AdminHubScreen = ({
         )}
 
         {subTab === 'academies' && filteredAcademies.map(a => {
-          const stats = getAcademyStats(a.id);
+          const stats = calculateAcademyTier(a.id, tournaments);
           const isSelected = selectedAcademy === a.id;
           return (
             <TouchableOpacity 
@@ -973,7 +973,7 @@ const AdminHubScreen = ({
                       />
                       <View style={{ alignItems: 'center' }}>
                         <Text style={[styles.miniUserName, selectedDiagUser?.id === p.id && styles.miniUserNameActive]} numberOfLines={1}>
-                          {p.name.split(' ')[0]}
+                          {(p.name || 'User').split(' ')[0]}
                         </Text>
                         <Text style={{ fontSize: 8, color: selectedDiagUser?.id === p.id ? '#FFFFFF' : '#94A3B8', fontWeight: 'bold' }}>
                           ({p.id})
@@ -1221,7 +1221,7 @@ const AdminHubScreen = ({
                       style={{ backgroundColor: (pullingDeviceIds[selectedDiagUser.id] || !onlineDevices[selectedDiagUser.id]) ? '#94A3B8' : '#EF4444', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: (pullingDeviceIds[selectedDiagUser.id] || !onlineDevices[selectedDiagUser.id]) ? 0.7 : 1 }}
                     >
                       {pullingDeviceIds[selectedDiagUser.id] ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="cloud-download-outline" size={14} color="#FFFFFF" />}
-                      <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 10 }}>{pullingDeviceIds[selectedDiagUser.id] ? 'PULLING...' : `PULL LIVE LOGS FOR ${selectedDiagUser.name.split(' ')[0].toUpperCase()}`}</Text>
+                      <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 10 }}>{pullingDeviceIds[selectedDiagUser.id] ? 'PULLING...' : `PULL LIVE LOGS FOR ${(selectedDiagUser.name || 'USER').split(' ')[0].toUpperCase()}`}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
