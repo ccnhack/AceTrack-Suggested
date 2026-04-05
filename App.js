@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = '2.6.2'; // 🛡️ Hardened Referral & Sync (v2.6.2)
+const APP_VERSION = '2.6.3'; // 🛡️ Remediation & Stability Update (v2.6.3)
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
