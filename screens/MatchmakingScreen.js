@@ -32,8 +32,31 @@ const MOCK_PLAYERS = [
 const MOCK_ACADEMIES = [
   { id: 'a1', name: 'Elite Smashers', managedSports: ['Badminton', 'Cricket'], level: 'Pro Academy', dist: '5 km', phone: '+91 98765 43210', image: 'https://i.pravatar.cc/150?u=elite' },
   { id: 'a2', name: 'Net Kings', managedSports: ['Table Tennis'], level: 'Intermediate', dist: '12 km', phone: '+91 87654 32109', image: 'https://i.pravatar.cc/150?u=netkings' },
-  { id: 'a3', name: 'Victory Arena', managedSports: ['Badminton', 'Table Tennis'], level: 'Top Rated', dist: '8 km', phone: '+91 76543 21098', image: 'https://i.pravatar.cc/150?u=victory' },
+  { id: 'a3', name: ' Victory Arena', managedSports: ['Badminton', 'Table Tennis'], level: 'Top Rated', dist: '8 km', phone: '+91 76543 21098', image: 'https://i.pravatar.cc/150?u=victory' },
 ];
+
+const parseTime = (timeStr) => {
+  if (!timeStr) return 0;
+  const [time, modifier] = timeStr.split(' ');
+  let [hours, minutes] = time.split(':');
+  if (hours === '12') hours = '00';
+  if (modifier === 'PM') hours = parseInt(hours, 10) + 12;
+  return parseInt(hours, 10) * 60 + parseInt(minutes, 10);
+};
+
+const isTimeInPast = (date, timeSlot) => {
+  if (!date) return false;
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  if (date < todayStr) return true;
+  if (date > todayStr) return false;
+
+  // Same day, check time
+  if (!timeSlot) return false;
+  const slotMinutes = parseTime(timeSlot);
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  return slotMinutes <= nowMinutes;
+};
 
 export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatchmaking, players = [], sendUserNotification, onManualSync }) {
   
@@ -78,6 +101,22 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
     ),
     [matchmaking, user?.id]
   );
+
+  const upcomingMatches = React.useMemo(() => {
+    return acceptedMatches.filter(m => {
+      const date = m.proposedDate || m.time?.split(',')[0]?.trim();
+      const time = m.proposedTime || m.time?.split(',')[1]?.trim();
+      return !isTimeInPast(date, time);
+    });
+  }, [acceptedMatches]);
+
+  const pastMatches = React.useMemo(() => {
+    return acceptedMatches.filter(m => {
+      const date = m.proposedDate || m.time?.split(',')[0]?.trim();
+      const time = m.proposedTime || m.time?.split(',')[1]?.trim();
+      return isTimeInPast(date, time);
+    });
+  }, [acceptedMatches]);
 
   const [history, setHistory] = useState([
     { id: 'h1', name: 'Sameer P.', sport: 'Badminton', date: 'Mar 20, 2024' }
@@ -305,27 +344,6 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
       }
     }
   }, [isChallengeModalVisible, isCounterModalVisible, userLocation]);
-
-  const parseTime = (timeStr) => {
-    const [time, modifier] = timeStr.split(' ');
-    let [hours, minutes] = time.split(':');
-    if (hours === '12') hours = '00';
-    if (modifier === 'PM') hours = parseInt(hours, 10) + 12;
-    return parseInt(hours, 10) * 60 + parseInt(minutes, 10);
-  };
-
-  const isTimeInPast = (date, timeSlot) => {
-    if (!date) return false;
-    const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
-    if (date < todayStr) return true;
-    if (date > todayStr) return false;
-
-    // Same day, check time
-    const slotMinutes = parseTime(timeSlot);
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    return slotMinutes <= nowMinutes;
-  };
 
   const isTimeSlotBlocked = (date, timeSlot, academyId) => {
     if (!date || !academyId) return false; // Cannot check without date or academyId
@@ -818,8 +836,8 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
 
   const renderAccepted = () => (
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-      {acceptedMatches.length === 0 && <Text style={styles.emptyText}>No Accepted Matches Yet</Text>}
-      {acceptedMatches.map((match, index) => (
+      {upcomingMatches.length === 0 && <Text style={styles.emptyText}>No Upcoming Matches Found</Text>}
+      {upcomingMatches.map((match, index) => (
         <TouchableOpacity key={match.id || `accepted-${index}`} style={styles.acceptedCard} onPress={() => openDetails(match)}>
           <View style={styles.acceptedHeader}>
              <Ionicons name="calendar" size={20} color={designSystem.colors.primary} />
@@ -832,19 +850,31 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
     </ScrollView>
   );
 
-  const renderHistory = () => (
-    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-      {history.length === 0 && <Text style={styles.emptyText}>No Match History Found</Text>}
-      {history.map((item, index) => (
-        <TouchableOpacity key={item.id || `history-${index}`} style={styles.historyCard} onPress={() => openDetails(item)}>
-          <View>
-            <Text style={styles.historyName}>{getOpponentName(item)}</Text>
-            <Text style={styles.historyDetail}>{item.sport} • {item.date}</Text>
-          </View>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
-  );
+  const renderHistory = () => {
+    // Combine explicit history with past accepted matches
+    const allHistory = [
+      ...history,
+      ...pastMatches.map(m => ({
+        ...m,
+        date: m.proposedDate || m.time?.split(',')[0]?.trim() || 'Past Date'
+      }))
+    ];
+
+    return (
+      <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+        {allHistory.length === 0 && <Text style={styles.emptyText}>No Match History Found</Text>}
+        {allHistory.map((item, index) => (
+          <TouchableOpacity key={item.id || `history-${index}`} style={styles.historyCard} onPress={() => openDetails(item)}>
+            <View>
+              <Text style={styles.historyName}>{getOpponentName(item)}</Text>
+              <Text style={styles.historyDetail}>{item.sport} • {item.date || item.proposedDate}</Text>
+              {item.location && <Text style={styles.historySubDetail}>{item.location}</Text>}
+            </View>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    );
+  };
 
   const allPlayers = React.useMemo(() => Array.isArray(players) ? players : [], [players]);
   
@@ -1618,17 +1648,20 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', gap: 10 },
   smallBtn: { backgroundColor: '#f0f0f0', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 },
   smallBtnText: { fontSize: 12, fontWeight: '700', color: '#333' },
+  subTabContainer: { flexDirection: 'row', backgroundColor: '#f0f0f0', borderRadius: 8, padding: 3, marginHorizontal: 15, marginTop: 15, marginBottom: 5 },
+  subTab: { flex: 1, paddingVertical: 6, alignItems: 'center', borderRadius: 6 },
+  activeSubTab: { backgroundColor: '#fff', elevation: 1 },
+  subTabText: { fontSize: 11, fontWeight: '700', color: '#64748B' },
+  activeSubTabText: { color: designSystem.colors.primary },
   acceptedCard: { backgroundColor: '#fff', padding: 15, borderRadius: 12, marginBottom: 12, elevation: 3 },
   acceptedHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   acceptedTime: { fontSize: 12, color: '#666', fontWeight: '600' },
-  acceptedTitle: { fontSize: 18, fontWeight: '800', color: '#1a1a1a' },
-  acceptedDetail: { fontSize: 13, color: '#666', marginTop: 4 },
-  historyCard: { 
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', 
-    backgroundColor: '#fff', padding: 15, borderRadius: 12, marginBottom: 10 
-  },
-  historyName: { fontSize: 15, fontWeight: '700', color: '#333' },
-  historyDetail: { fontSize: 12, color: '#666', marginTop: 2 },
+  acceptedTitle: { fontSize: 16, fontWeight: '700', color: '#334155', marginBottom: 4 },
+  acceptedDetail: { fontSize: 13, color: '#64748B' },
+  historyCard: { backgroundColor: '#fff', padding: 15, borderRadius: 12, marginBottom: 10, elevation: 2 },
+  historyName: { fontSize: 15, fontWeight: '700', color: '#333', marginBottom: 4 },
+  historyDetail: { fontSize: 13, color: '#666' },
+  historySubDetail: { fontSize: 12, color: '#94A3B8', marginTop: 2 },
   historyResult: { fontSize: 14, fontWeight: '800', color: '#16A34A' },
   emptyText: { textAlign: 'center', color: '#94A3B8', marginTop: 0, fontSize: 13, paddingVertical: 10 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },

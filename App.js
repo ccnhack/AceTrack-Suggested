@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = '2.6.3'; // 🛡️ Remediation & Stability Update (v2.6.3)
+const APP_VERSION = '2.6.5'; // 📱 Matchmaking Layout Optimization (v2.6.5)
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
