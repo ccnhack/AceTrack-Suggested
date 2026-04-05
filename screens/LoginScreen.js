@@ -36,6 +36,7 @@ const LoginScreen = ({
   const [confirmPass, setConfirmPass] = useState('');
   const [isResetting, setIsResetting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [storedUserToReset, setStoredUserToReset] = useState(null);
 
   const handleLogin = async () => {
     logger.logAction('LOGIN_CLICK', { username });
@@ -182,6 +183,7 @@ const LoginScreen = ({
     );
 
     if (userToReset) {
+      setStoredUserToReset(userToReset);
       setForgotStep(2);
       // MOCK OTP SEND
       console.log(`🔑 OTP 1234 sent to ${forgotPhone}`);
@@ -205,7 +207,8 @@ const LoginScreen = ({
     }
 
     setIsResetting(true);
-    const success = await onResetPassword(forgotUser, newPass);
+    const targetId = storedUserToReset ? storedUserToReset.id : forgotUser;
+    const success = await onResetPassword(targetId, newPass);
     setIsResetting(false);
 
     if (success) {

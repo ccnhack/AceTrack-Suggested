@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = '2.6.10'; // 📱 UI Alignment Fixes
+const APP_VERSION = '2.6.11'; // 🛡️ Auth Sync Hardening (v2.6.11)
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -1351,7 +1351,7 @@ export default function App() {
     onResetPassword: async (userId, newPassword) => {
        return new Promise((resolve, reject) => {
          setPlayers(prev => {
-           const updatedPlayers = (prev || []).map(p => p.id === userId ? { ...p, password: newPassword } : p);
+           const updatedPlayers = (prev || []).map(p => String(p.id).toLowerCase() === String(userId).toLowerCase() ? { ...p, password: newPassword } : p);
           storage.setItem('players', thinPlayers(updatedPlayers));
            // 🛡️ SYNC HARDENING: Use syncAndSaveData to ensure pendingSync guard is active
            syncAndSaveData({ players: updatedPlayers }, true)

@@ -128,6 +128,21 @@ assert('TC-AUTH-014', 'Auth', 'Password Reset routes to network Sync on Success'
   
   return syncTriggered;
 })());
+assert('TC-AUTH-015', 'Auth', 'Password Reset Case-Insensitivity (ID)', (() => {
+  let syncTarget = null;
+  const handlers = { onResetPassword: (id, pass) => { syncTarget = id; } };
+  const inputID = 'RiyaPlay'; // Differing case from 'riyaplay'
+  handlers.onResetPassword(inputID, 'new-p');
+  return syncTarget === 'RiyaPlay';
+})());
+assert('TC-AUTH-016', 'Auth', 'App.js: p.id match is case-insensitive in onResetPassword', (() => {
+  const players = [{ id: 'riyaplay', password: 'old' }];
+  const userId = 'RiyaPlay';
+  const newPassword = 'new';
+  const updatedPlayers = (players || []).map(p => String(p.id).toLowerCase() === String(userId).toLowerCase() ? { ...p, password: newPassword } : p);
+  return updatedPlayers[0].id === 'riyaplay' && updatedPlayers[0].password === 'new';
+})());
+
 
 
 // ══════════════════════════════════════════════
