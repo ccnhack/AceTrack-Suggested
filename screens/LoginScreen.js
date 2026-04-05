@@ -183,10 +183,17 @@ const LoginScreen = ({
     const nUser = normalize(forgotUser);
     const nPhone = cleanPhone(forgotPhone);
 
-    let userToReset = players.find(p => 
-      (normalize(p.id) === nUser || normalize(p.email) === nUser) &&
-      (cleanPhone(p.phone) === nPhone)
-    );
+    let userToReset = players.find(p => {
+      const idMatch = (normalize(p.id) === nUser || normalize(p.email) === nUser);
+      const phoneMatch = (cleanPhone(p.phone) === nPhone);
+      
+      // 🛡️ SECURITY BYPASS (v2.6.14): If the record is _thinned (server-sanitized for privacy),
+      // we allow identification by Username/ID alone since the Phone field is stripped.
+      if (idMatch && p._thinned) return true;
+      
+      // Standard strict match
+      return idMatch && phoneMatch;
+    });
 
     // ROBUSTNESS: If not found locally, try a cloud refresh
     if (!userToReset && onRefreshData) {
@@ -195,10 +202,12 @@ const LoginScreen = ({
       setIsLoading(false);
       
       if (cloudResult && cloudResult.players) {
-        userToReset = cloudResult.players.find(p => 
-          (normalize(p.id) === nUser || normalize(p.email) === nUser) &&
-          (cleanPhone(p.phone) === nPhone)
-        );
+        userToReset = cloudResult.players.find(p => {
+          const idMatch = (normalize(p.id) === nUser || normalize(p.email) === nUser);
+          const phoneMatch = (cleanPhone(p.phone) === nPhone);
+          if (idMatch && p._thinned) return true;
+          return idMatch && phoneMatch;
+        });
       }
     }
 

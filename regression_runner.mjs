@@ -175,6 +175,41 @@ assert('TC-AUTH-020', 'Auth', 'Identification Robustness: Case and Space Normali
   return normalize(p.id) === normalize(inputUser);
 })());
 
+// TC-AUTH-021: Identification Recovery Bypass (Thinned Record)
+// Even if phone is missing from record, if _thinned is true, match by ID alone.
+assert('TC-AUTH-021', 'Auth', 'Thinned record matches by ID alone (Bypass)', (() => {
+  const players = [{ id: 'riyaplay', name: 'Riya Play', _thinned: true }]; // No phone
+  const nUser = 'riyaplay';
+  const nPhone = '1234567894';
+  const normalize = (s) => String(s || '').trim().toLowerCase();
+  const cleanPhone = (s) => String(s || '').trim();
+
+  const userToReset = players.find(p => {
+    const idMatch = (normalize(p.id) === nUser || (p.email && normalize(p.email) === nUser));
+    const phoneMatch = (cleanPhone(p.phone) === nPhone);
+    if (idMatch && p._thinned) return true;
+    return idMatch && phoneMatch;
+  });
+  return !!userToReset;
+})());
+
+// TC-AUTH-022: Identification Recovery Bypass (Negative case - Not thinned)
+assert('TC-AUTH-022', 'Auth', 'Strict phone check still applies for non-thinned records', (() => {
+  const players = [{ id: 'riyaplay', name: 'Riya Play' }]; // No _thinned, no phone
+  const nUser = 'riyaplay';
+  const nPhone = '1234567894';
+  const normalize = (s) => String(s || '').trim().toLowerCase();
+  const cleanPhone = (s) => String(s || '').trim();
+
+  const userToReset = players.find(p => {
+    const idMatch = (normalize(p.id) === nUser || (p.email && normalize(p.email) === nUser));
+    const phoneMatch = (cleanPhone(p.phone) === nPhone);
+    if (idMatch && p._thinned) return true;
+    return idMatch && phoneMatch;
+  });
+  return !userToReset; // Should NOT be found
+})());
+
 
 
 

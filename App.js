@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = '2.6.13'; // 🛡️ Normalization Hardening (v2.6.13)
+const APP_VERSION = '2.6.14'; // 🛡️ Thinned Identification Bypass (v2.6.14)
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
