@@ -176,11 +176,25 @@ const LoginScreen = ({
     setShowForgot(true);
   };
 
-  const handleIdentify = () => {
-    const userToReset = players.find(p => 
+  const handleIdentify = async () => {
+    let userToReset = players.find(p => 
       (String(p.id).toLowerCase() === forgotUser.toLowerCase() || (p.email && p.email.toLowerCase() === forgotUser.toLowerCase())) &&
-      p.phone === forgotPhone
+      (String(p.phone) === String(forgotPhone))
     );
+
+    // ROBUSTNESS: If not found locally, try a cloud refresh
+    if (!userToReset && onRefreshData) {
+      setIsLoading(true);
+      const cloudResult = await onRefreshData();
+      setIsLoading(false);
+      
+      if (cloudResult && cloudResult.players) {
+        userToReset = cloudResult.players.find(p => 
+          (String(p.id).toLowerCase() === forgotUser.toLowerCase() || (p.email && p.email.toLowerCase() === forgotUser.toLowerCase())) &&
+          (String(p.phone) === String(forgotPhone))
+        );
+      }
+    }
 
     if (userToReset) {
       setStoredUserToReset(userToReset);

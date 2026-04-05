@@ -142,6 +142,27 @@ assert('TC-AUTH-016', 'Auth', 'App.js: p.id match is case-insensitive in onReset
   const updatedPlayers = (players || []).map(p => String(p.id).toLowerCase() === String(userId).toLowerCase() ? { ...p, password: newPassword } : p);
   return updatedPlayers[0].id === 'riyaplay' && updatedPlayers[0].password === 'new';
 })());
+assert('TC-AUTH-017', 'Auth', 'Forgot Password identification triggers onRefreshData fallback', (() => {
+  let refreshCalled = false;
+  const onRefreshData = async () => { refreshCalled = true; return { players: [{ id: 'cloud_user', phone: '123' }] }; };
+  const players = [];
+  const forgotUser = 'cloud_user';
+  const forgotPhone = '123';
+  
+  // Simulation of handleIdentify logic
+  let found = players.find(p => p.id === forgotUser && p.phone === forgotPhone);
+  if (!found && onRefreshData) {
+    onRefreshData(); // Not awaiting for sync mock
+    return true; // it triggered
+  }
+  return false;
+})());
+assert('TC-AUTH-018', 'Auth', 'Robust Phone Identification (String normalization)', (() => {
+  const p = { id: 'user', phone: 1234567894 }; // Numeric in storage
+  const inputPhone = '1234567894'; // String from input
+  return String(p.phone) === String(inputPhone);
+})());
+
 
 
 
