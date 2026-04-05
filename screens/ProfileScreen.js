@@ -1733,6 +1733,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 1,
   },
+  modalHeader: {
+    marginBottom: 24,
+    paddingRight: 40,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#0F172A',
+    letterSpacing: -0.5,
+  },
   inputGroup: {
     marginBottom: 20,
   },
@@ -1742,7 +1752,6 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    marginLeft: 4,
     marginBottom: 8,
   },
   input: {
@@ -1952,9 +1961,12 @@ const styles = StyleSheet.create({
   },
   closeBtn: {
     position: 'absolute',
-    top: 24,
-    right: 24,
-    padding: 8,
+    top: 32,
+    right: 32,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#F1F5F9',
     borderRadius: 20,
     zIndex: 10,
