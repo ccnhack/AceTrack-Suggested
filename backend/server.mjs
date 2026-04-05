@@ -57,7 +57,7 @@ try {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
 
-const APP_VERSION = '2.6.2'; // AceTrack Suggested — v2.6.2 Hardened Sync
+const APP_VERSION = '2.6.6'; // AceTrack Suggested — v2.6.6 Storage & Avatar Sync Patch
 
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: CORS Whitelist (SEC Fix #3)
