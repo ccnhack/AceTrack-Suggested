@@ -412,7 +412,7 @@ const AdminHubScreen = ({
               <TouchableOpacity 
                 onPress={() => {
                   logger.logAction('MANUAL_SYNC_CLICK');
-                  onManualSync?.();
+                  onManualSync?.(true, true);
                 }}
                 style={[
                   styles.syncBadge, 
@@ -832,7 +832,7 @@ const AdminHubScreen = ({
                <TouchableOpacity 
                  onPress={() => {
                    logger.logAction('ADMIN_MANUAL_SYNC_TRIGGER');
-                   onManualSync?.(false, true);
+                   onManualSync?.(true, true);
                  }}
                  style={styles.diagSyncBtn}
                >

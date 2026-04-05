@@ -102,7 +102,7 @@ const ProfileHeader = memo(({
         <TouchableOpacity 
           onPress={() => {
             if (logger?.logAction) logger.logAction('MANUAL_SYNC_CLICK');
-            onManualSync();
+            onManualSync(true, true);
           }}
           style={[
             styles.syncBadge, 

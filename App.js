@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = '2.6.20'; // 🛡️ WebSocket Auth & CORS Hardening (v2.6.20)
+const APP_VERSION = '2.6.21'; // 🛡️ Web Connectivity Stabilization (v2.6.21)
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -136,6 +136,7 @@ export default function App() {
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
+      transports: ['websocket', 'polling'], // Explicitly enable websocket to fix web client disconnects
       auth: {
         token: config.ACE_API_KEY
       }

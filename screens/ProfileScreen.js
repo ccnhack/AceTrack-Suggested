@@ -139,7 +139,7 @@ const ProfileScreen = ({
     const checkUpdates = async () => {
       try {
         const response = await fetch(`${activeApiUrl}/api/status`, {
-          headers: { 'x-api-key': config.ACE_API_KEY || 'ace-secret-key-1717' }
+          headers: { 'x-ace-api-key': config.ACE_API_KEY || 'ace-secret-key-1717' }
         });
         const data = await response.json();
         if (data && data.latestAppVersion) {
