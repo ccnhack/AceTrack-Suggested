@@ -247,7 +247,7 @@ const MainTabs = memo(() => {
       {role === 'admin' && (
         <Tab.Screen name="Admin" component={AdminHubWrapper} />
       )}
-      {Platform.OS !== 'web' && (role === 'user' || role === 'coach' || role === 'academy' || role === 'admin') && (
+      {Platform.OS !== 'web' && (role === 'user' || role === 'coach' || role === 'academy') && (
         <Tab.Screen name="Matchmaking" component={MatchmakingWrapper} />
       )}
       {(role === 'admin' || role === 'academy') && (

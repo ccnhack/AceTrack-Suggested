@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = '2.6.14'; // 🛡️ Thinned Identification Bypass (v2.6.14)
+const APP_VERSION = '2.6.15'; // 🛠️ Admin Matchmaking UX Exclusion (v2.6.15)
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
