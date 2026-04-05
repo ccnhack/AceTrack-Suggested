@@ -16,7 +16,7 @@ import {
   SUPPORT_TICKETS,
   MATCHES
 } from './mockData';
-import storage from './utils/storage';
+import storage, { thinPlayers, capPlayerDetail } from './utils/storage';
 import AppNavigator from './navigation/AppNavigator';
 import ChatBot from './components/ChatBot';
 import * as Updates from 'expo-updates';
@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = '2.6.6'; // 📱 Avatar Sync & Storage Hardening (v2.6.6)
+const APP_VERSION = '2.6.7'; // 📱 Startup Fix & Storage Scale (v2.6.7)
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -83,6 +83,7 @@ export default function App() {
   
   const localDeviceIdRef = useRef(null);
   const [isProfileEditActive, setIsProfileEditActive] = useState(false); // New state to track if profile edit is open
+  const [isInitialized, setIsInitialized] = useState(false);
   const [pendingSync, setPendingSync] = useState([]); // Keys that need to be pushed to cloud
   const [visitedAdminSubTabs, setVisitedAdminSubTabs] = useState(new Set());
   const isSyncingRef = useRef(false);
@@ -258,6 +259,7 @@ export default function App() {
         await hydrateFromStorage();
         isStartupCompleteRef.current = true;
         await loadData(true); 
+        setIsInitialized(true); 
 
       } catch (e) {
         console.error("❌ Critical Startup Error:", e);
@@ -628,22 +630,27 @@ export default function App() {
 
         const playersWithBusters = cleanedPlayers.map(p => {
           const localP = playersRefMap.get(String(p.id).toLowerCase());
-          const stripBuster = (url) => url ? String(url).split(/[?&]v=/)[0] : url;
+          
+          // 🛡️ BUSTER HARDENING (v2.6.7): Use robust URL parsing to avoid ?? or && malformations
+          const stripBuster = (url) => {
+            if (!url) return url;
+            const str = String(url);
+            const idx = str.indexOf('?v=');
+            if (idx !== -1) return str.substring(0, idx);
+            const idx2 = str.indexOf('&v=');
+            return idx2 !== -1 ? str.substring(0, idx2) : str;
+          };
 
           if (p.avatar && (p.avatar.includes('cloudinary') || p.avatar.includes('dicebear'))) {
             const cloudBase = stripBuster(p.avatar);
             const localBase = stripBuster(localP?.avatar);
 
-            // 🛡️ GLOBAL DRIFT DETECTION: If base URL changed, force a new buster to break browser cache.
-            // This ensures Rankings and Admin Hub update real-time across Web/Mobile.
             if (cloudBase !== localBase || !p.avatar.includes('v=')) {
-              if (localBase && cloudBase !== localBase) {
-                console.log(`🖼️ [Sync] Player ${p.name}'s avatar drifted — forcing refresh.`);
-              }
               const buster = `v=${Date.now()}`;
+              const separator = cloudBase.includes('?') ? '&' : '?';
               return {
                 ...p,
-                avatar: p.avatar.includes('?') ? `${cloudBase}&${buster}` : `${cloudBase}?${buster}`
+                avatar: `${cloudBase}${separator}${buster}`
               };
             }
           }
@@ -662,7 +669,8 @@ export default function App() {
 
         const mergedPlayers = Array.from(playerMap.values());
         setPlayers(mergedPlayers);
-        storage.setItem('players', mergedPlayers);
+        // 🛡️ STORAGE OPTIMIZATION (v2.6.7): Strip bloat (history, notifs) from global list before persistence
+        storage.setItem('players', thinPlayers(mergedPlayers));
 
         // If cloud had updates for players, we clear any 'pending' player push to prevent rollback
         if (pendingSyncRef.current.includes('players')) {
@@ -685,26 +693,21 @@ export default function App() {
               return rest;
             };
             
-            // Compare without the cache-buster to detect meaningful changes
-            const stripBuster = (url) => url ? String(url).split(/[?&]v=/)[0] : url;
             const currentObj = sanitizeUser(currentU);
             const cloudObj = sanitizeUser(cloudUser);
             
-            const hasChanged = JSON.stringify({ ...currentObj, avatar: stripBuster(currentObj.avatar) }) !== 
-                             JSON.stringify({ ...cloudObj, avatar: stripBuster(cloudObj.avatar) });
+            const hasChanged = JSON.stringify(currentObj) !== JSON.stringify(cloudObj);
             
-            // 🛡️ AVATAR DELTA: Explicit check for avatar URL mismatch (catches dicebear↔cloudinary cross-device desync)
-            const localAvatarBase = stripBuster(currentU.avatar || '');
-            const cloudAvatarBase = stripBuster(cloudUser.avatar || '');
-            const avatarDrifted = localAvatarBase !== cloudAvatarBase;
+            // 🛡️ AVATAR DELTA: Explicitly catch timestamp/buster changes from other clients
+            const avatarDrifted = currentU.avatar !== cloudUser.avatar;
             
             if (hasChanged || avatarDrifted) {
-              if (avatarDrifted) console.log("🖼️ [Sync] Avatar drift detected — forcing update from cloud.", { local: localAvatarBase.slice(-30), cloud: cloudAvatarBase.slice(-30) });
+              if (avatarDrifted) console.log("🖼️ [Sync] Avatar drift detected — forcing update from cloud.", { local: currentU.avatar?.slice(-30), cloud: cloudUser.avatar?.slice(-30) });
               else console.log("👤 [Sync] Current user updated from cloud. Propagating buster for consistency.");
               setCurrentUser(cloudUser);
               currentUserRef.current = cloudUser;
               setUserRole(cloudUser.role || 'user');
-              storage.setItem('currentUser', cloudUser);
+              storage.setItem('currentUser', capPlayerDetail(cloudUser));
             }
           }
         }
@@ -917,7 +920,7 @@ export default function App() {
           // (If it was, the loop below will handle the storage/sync)
           if (!updates.players) {
             setPlayers(currentP);
-            storage.setItem('players', currentP);
+            storage.setItem('players', thinPlayers(currentP));
           } else {
             updates.players = currentP; // Update the reference in the pending sync object
           }
@@ -929,7 +932,9 @@ export default function App() {
       for (const key in updates) {
         let val = updates[key];
         if (key === 'players' && Array.isArray(val)) {
-          val = val.filter(p => !!(p && p.id));
+          val = thinPlayers(val.filter(p => !!(p && p.id)));
+        } else if (key === 'currentUser' && val) {
+          val = capPlayerDetail(val);
         }
         if (key === 'tournaments' && Array.isArray(val)) {
           val = val.map(t => ({
@@ -1013,7 +1018,7 @@ export default function App() {
     setCurrentUser(user);
     currentUserRef.current = user;
     setUserRole(role);
-    await storage.setItem('currentUser', user);
+    await storage.setItem('currentUser', capPlayerDetail(user));
 
     syncAndSaveData({ currentUser: user });
     
@@ -1021,7 +1026,7 @@ export default function App() {
       const isNew = !(prev || []).some(p => String(p.id).toLowerCase() === String(user.id).toLowerCase());
       if (user && isNew) {
         const updated = [user, ...(prev || [])];
-        storage.setItem('players', updated);
+        storage.setItem('players', thinPlayers(updated));
         // CRITICAL FIX: Use syncAndSaveData (sets pendingSync guard) instead of pushStateToCloud directly
         syncAndSaveData({ players: updated }, true);
         return updated;
@@ -1069,7 +1074,7 @@ export default function App() {
     return new Promise((resolve, reject) => {
       setPlayers(prev => {
         const updatedPlayers = [newPlayer, ...(prev || [])];
-        storage.setItem('players', updatedPlayers);
+        storage.setItem('players', thinPlayers(updatedPlayers));
         
         // CRITICAL FIX: Use syncAndSaveData with atomic=true instead of pushStateToCloud directly.
         // This ensures: 1) pendingSync guard is set (blocks background overwrites)
@@ -1346,7 +1351,7 @@ export default function App() {
        return new Promise((resolve, reject) => {
          setPlayers(prev => {
            const updatedPlayers = (prev || []).map(p => p.id === userId ? { ...p, password: newPassword } : p);
-           storage.setItem('players', updatedPlayers);
+          storage.setItem('players', thinPlayers(updatedPlayers));
            // 🛡️ SYNC HARDENING: Use syncAndSaveData to ensure pendingSync guard is active
            syncAndSaveData({ players: updatedPlayers }, true)
              .then(() => resolve(true))

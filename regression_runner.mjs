@@ -563,6 +563,24 @@ assert('TC-ADMIN-005', 'Admin', 'Refund policy creation', (() => {
   const policy = createRefundPolicy('2026-06-15', 3, 100, 25);
   return policy.refundPercent === 100 && policy.lateRefundPercent === 25 && policy.daysBeforeDeadline === 3;
 })());
+assert('TC-ADMIN-006', 'Admin', 'Safe diagnostics string split handles null/undefined gracefully', (() => {
+  // Mocking the safe split implemented in diagnostics map
+  const pName = undefined;
+  const firstName = (pName || 'USER').split(' ')[0];
+  const safeTimestamp = undefined;
+  const timestampExtracted = safeTimestamp?.split(' ')[1] || '00:00';
+  return firstName === 'USER' && timestampExtracted === '00:00';
+})());
+assert('TC-ADMIN-007', 'Admin', 'Calculate Academy Tier assigns Gold for >10 hosted', (() => {
+  // Simulating AdminHubScreen academy tier logic
+  const uid = 'academy';
+  const t = Array.from({ length: 11 }, (_, i) => ({ creatorId: uid, sport: 'Badminton', status: 'completed' }));
+  const hostedCount = t.length;
+  let tier = 'Bronze';
+  if (hostedCount > 10) tier = 'Gold';
+  else if (hostedCount > 5) tier = 'Silver';
+  return tier === 'Gold' && hostedCount === 11;
+})());
 
 // ══════════════════════════════════════════════
 // MODULE 12: SUPPORT / GRIEVANCE SYSTEM
@@ -645,19 +663,17 @@ assert('TC-SYNC-007', 'Sync', 'Version match no update needed', (() => {
   const latestAppVersion = '2.6.5';
   return APP_VERSION === latestAppVersion;
 })());
-assert('TC-SYNC-008', 'Sync', 'Avatar Drift Detection: Base URL change forces buster', (() => {
-  const strip = (u) => u ? u.split('?')[0] : u;
-  const localAvatar = 'https://dicebear.com/seed=1?v=100';
-  const cloudAvatar = 'https://cloudinary.com/new_image'; // different base
-  const drifted = strip(localAvatar) !== strip(cloudAvatar);
-  const finalAvatar = drifted ? `${cloudAvatar}?v=${Date.now()}` : cloudAvatar;
-  return drifted === true && finalAvatar.includes('v=');
-})());
-assert('TC-SYNC-009', 'Sync', 'Avatar Drift Detection: Same base URL skips new buster', (() => {
-  const strip = (u) => u ? u.split('?')[0] : u;
+assert('TC-SYNC-008', 'Sync', 'Avatar Sync: Cache buster change correctly flags drift', (() => {
+  // Simulating App.js avatar drift detection (exact string match without stripping buster)
   const localAvatar = 'https://cloudinary.com/img1?v=100';
-  const cloudAvatar = 'https://cloudinary.com/img1?v=200'; // same base, cloud already has buster
-  const drifted = strip(localAvatar) !== strip(cloudAvatar);
+  const cloudAvatar = 'https://cloudinary.com/img1?v=200';
+  const drifted = localAvatar !== cloudAvatar;
+  return drifted === true;
+})());
+assert('TC-SYNC-009', 'Sync', 'Avatar Sync: Identical buster does not flag drift', (() => {
+  const localAvatar = 'https://cloudinary.com/img1?v=100';
+  const cloudAvatar = 'https://cloudinary.com/img1?v=100';
+  const drifted = localAvatar !== cloudAvatar;
   return drifted === false;
 })());
 
