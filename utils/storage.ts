@@ -15,7 +15,12 @@ const storage = {
         console.error(`Error parsing JSON for key "${key}":`, parseError);
         return null;
       }
-    } catch (e) {
+    } catch (e: any) {
+      // 🛡️ CursorWindow Recovery: Auto-delete the key that's too large to read
+      if (e.message && (e.message.includes('Row too big') || e.message.includes('CursorWindow'))) {
+        console.warn(`[Storage] CursorWindow overflow for key "${key}" — auto-clearing to recover.`);
+        try { await AsyncStorage.removeItem(key); } catch (_) {}
+      }
       console.error('Error reading value from AsyncStorage:', e);
       return null;
     }

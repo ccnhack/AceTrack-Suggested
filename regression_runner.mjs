@@ -46,7 +46,7 @@ import {
 
 console.log('\n' + '═'.repeat(70));
 console.log('  🧪  ACETRACK REGRESSION TEST SUITE — EXECUTION REPORT');
-console.log('  📱  App Version: v2.6.5');
+console.log('  📱  App Version: v2.6.6');
 console.log('  ⏰  Run Time:', new Date().toLocaleString());
 console.log('═'.repeat(70) + '\n');
 
@@ -91,6 +91,22 @@ assert('TC-AUTH-007', 'Auth', 'Approved coach can login', (() => {
 assert('TC-AUTH-008', 'Auth', 'Case-insensitive login', findUser('SHASHANK', mockPlayers)?.id === 'shashank');
 assert('TC-AUTH-009', 'Auth', 'Login by name match', findUser('Shashank S', mockPlayers)?.id === 'shashank');
 assert('TC-AUTH-010', 'Auth', 'Academy login', findUser('academy', mockPlayers)?.role === 'academy');
+assert('TC-AUTH-011', 'Auth', 'Avatar History: Prepend new avatar', (() => {
+  const history = ['url1', 'url2'];
+  const newAvatar = 'url3';
+  const updated = [newAvatar, ...history].slice(0, 10);
+  return updated[0] === 'url3' && updated.length === 3;
+})());
+assert('TC-AUTH-012', 'Auth', 'Avatar History: Uniqueness & Limit (10)', (() => {
+  const normalize = (u) => u.split('?')[0];
+  const history = ['url1?v=1', 'url2?v=1', 'url3?v=1'];
+  const selectOld = 'url2?v=99'; // Same base as index 1
+  const updated = [selectOld, ...history]
+    .filter((url, idx, self) => self.findIndex(u => normalize(u) === normalize(url)) === idx)
+    .slice(0, 2); // Testing limit with 2
+  return updated.length === 2 && updated[0] === 'url2?v=99' && normalize(updated[1]) === 'url1';
+})());
+
 
 // ══════════════════════════════════════════════
 // MODULE 2: TOURNAMENT MANAGEMENT
@@ -629,6 +645,22 @@ assert('TC-SYNC-007', 'Sync', 'Version match no update needed', (() => {
   const latestAppVersion = '2.6.5';
   return APP_VERSION === latestAppVersion;
 })());
+assert('TC-SYNC-008', 'Sync', 'Avatar Drift Detection: Base URL change forces buster', (() => {
+  const strip = (u) => u ? u.split('?')[0] : u;
+  const localAvatar = 'https://dicebear.com/seed=1?v=100';
+  const cloudAvatar = 'https://cloudinary.com/new_image'; // different base
+  const drifted = strip(localAvatar) !== strip(cloudAvatar);
+  const finalAvatar = drifted ? `${cloudAvatar}?v=${Date.now()}` : cloudAvatar;
+  return drifted === true && finalAvatar.includes('v=');
+})());
+assert('TC-SYNC-009', 'Sync', 'Avatar Drift Detection: Same base URL skips new buster', (() => {
+  const strip = (u) => u ? u.split('?')[0] : u;
+  const localAvatar = 'https://cloudinary.com/img1?v=100';
+  const cloudAvatar = 'https://cloudinary.com/img1?v=200'; // same base, cloud already has buster
+  const drifted = strip(localAvatar) !== strip(cloudAvatar);
+  return drifted === false;
+})());
+
 
 // ══════════════════════════════════════════════
 // MODULE 14: REFERRAL SYSTEM

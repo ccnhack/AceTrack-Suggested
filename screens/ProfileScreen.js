@@ -331,48 +331,39 @@ const ProfileScreen = ({
     'https://api.dicebear.com/7.x/avataaars/png?seed=Willow',
   ];
 
-  // Combine suggested, user's current avatar, and newly picked avatar
-  // USER REQUIREMENT: Custom avatar should be at the front!
-  const customAvatars = [];
-  
+  // --- 🛡️ AVATAR HISTORY LOGIC (v2.6.2) ---
   const normalizeAvatarUrl = (url) => {
     if (!url) return '';
-    // Surgically remove only the 'v=' cache-buster, preserving seeds and other params
-    return url.replace(/[?&]v=[^&]+/, '').replace(/\?$/, '');
+    return String(url).split(/[?&]v=/)[0].replace(/\?$/, '');
   };
 
   const normalizedSuggested = suggestedAvatars.map(normalizeAvatarUrl);
-
-  // Add current avatar if custom
-  if (user?.avatar && !normalizedSuggested.includes(normalizeAvatarUrl(user.avatar))) {
-    customAvatars.push(user.avatar);
-  }
-
-  // Add session-uploaded avatar if not already current
-  if (sessionCustomAvatar && !customAvatars.map(normalizeAvatarUrl).includes(normalizeAvatarUrl(sessionCustomAvatar))) {
-    customAvatars.push(sessionCustomAvatar);
-  }
-
-  // 🛡️ PERSISTENCE HARDENING: Add the cloud-stored last custom avatar if it exists
-  if (user?.lastCustomAvatar && !customAvatars.map(normalizeAvatarUrl).includes(normalizeAvatarUrl(user?.lastCustomAvatar))) {
-    customAvatars.push(user.lastCustomAvatar);
-  }
+  const currentHistory = user?.avatarHistory || [];
   
-  // Add newly picked/edited avatar if custom and not already in list
-  if (editAvatar && !normalizedSuggested.includes(normalizeAvatarUrl(editAvatar)) && !customAvatars.map(normalizeAvatarUrl).includes(normalizeAvatarUrl(editAvatar))) {
-    customAvatars.unshift(editAvatar);
-  }
+  // Combine all sources in order: 
+  // 1. Current Preview (editAvatar)
+  // 2. User's active avatar
+  // 3. User's historical custom avatars
+  // 4. Default suggested avatars
+  let candidateAvatars = [];
+  if (editAvatar) candidateAvatars.push(editAvatar);
+  if (user?.avatar) candidateAvatars.push(user.avatar);
+  if (sessionCustomAvatar) candidateAvatars.push(sessionCustomAvatar);
+  if (user?.lastCustomAvatar) candidateAvatars.push(user.lastCustomAvatar);
+  candidateAvatars = [...candidateAvatars, ...currentHistory, ...suggestedAvatars];
 
-  // Use a map to ensure uniqueness by normalized URL but preserve original URL for functional usage
+  // Unique by base URL while preserving chronological order
   const uniqueAvatarMap = new Map();
-  [...customAvatars, ...suggestedAvatars].forEach(url => {
-    const normal = normalizeAvatarUrl(url);
-    if (!uniqueAvatarMap.has(normal)) {
-      uniqueAvatarMap.set(normal, url);
+  candidateAvatars.forEach(url => {
+    if (!url) return;
+    const base = normalizeAvatarUrl(url);
+    if (!uniqueAvatarMap.has(base)) {
+      uniqueAvatarMap.set(base, url);
     }
   });
 
   const allAvatars = Array.from(uniqueAvatarMap.values());
+
 
   // Change Password States
   const [oldPassword, setOldPassword] = useState('');
@@ -754,12 +745,16 @@ const ProfileScreen = ({
                           finalAvatar = cacheBustedUrl;
                           setSessionCustomAvatar(cacheBustedUrl); // Persist in picker for session
                           
-                          // 🛡️ PERSISTENCE HARDENING: Store in cloud user object so it follows the user across devices
-                          // This ensures the image remains in the 'Selection' list on other phones
+                          // 🛡️ PERSISTENCE HARDENING: Update Avatar History
+                          const updatedHistory = [cacheBustedUrl, ...(user?.avatarHistory || [])]
+                            .filter((url, idx, self) => self.findIndex(u => normalizeAvatarUrl(u) === normalizeAvatarUrl(url)) === idx)
+                            .slice(0, 10);
+
                           onUpdateUser({ 
                             ...user, 
                             avatar: cacheBustedUrl, 
-                            lastCustomAvatar: cacheBustedUrl 
+                            lastCustomAvatar: cacheBustedUrl,
+                            avatarHistory: updatedHistory
                           });
                           
                           logger.logAction('AVATAR_UPLOAD_SUCCESS', { cloudUrl: cacheBustedUrl });
@@ -778,10 +773,16 @@ const ProfileScreen = ({
                       }
                       finally { setIsUploading(false); }
                     }
-                                      logger.logAction('PROFILE_UPDATE_FINAL', { userId: user.id, avatar: finalAvatar });
-                     onUpdateUser({ ...user, avatar: finalAvatar });
-                     setShowAvatarPicker(false);
-                     Alert.alert("Success", "Profile picture updated!");
+                      logger.logAction('PROFILE_UPDATE_FINAL', { userId: user.id, avatar: finalAvatar });
+                      
+                      // 🛡️ PERSISTENCE HARDENING: Update Avatar History on final selection
+                      const finalHistory = [finalAvatar, ...(user?.avatarHistory || [])]
+                        .filter((url, idx, self) => self.findIndex(u => normalizeAvatarUrl(u) === normalizeAvatarUrl(url)) === idx)
+                        .slice(0, 10);
+
+                      onUpdateUser({ ...user, avatar: finalAvatar, avatarHistory: finalHistory });
+                      setShowAvatarPicker(false);
+                      Alert.alert("Success", "Profile picture updated!");
                   }}
                   style={[styles.saveBtn, isUploading && { opacity: 0.5 }]}
                   disabled={isUploading}

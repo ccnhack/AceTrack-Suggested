@@ -32,7 +32,9 @@ const formatIST = (date) => {
 };
 
 let logs = [];
-const MAX_LOG_COUNT = 5000; 
+const MAX_LOG_COUNT = 2000;
+const MAX_STORAGE_ENTRIES = 1000;
+const MAX_STORAGE_BYTES = 1.5 * 1024 * 1024; // 1.5 MB — safely under Android CursorWindow 2MB limit
 
 const originalLog = console.log;
 const originalWarn = console.warn;
@@ -120,8 +122,25 @@ const DEBOUNCE_DELAY = 5000; // Increased to 5s to reduce bridge saturation
 
 const saveLogsToStorage = async () => {
     try {
-        await storage.setItem('persistent_logs', logs);
+        // Only persist the most recent entries to stay under CursorWindow limit
+        const toSave = logs.slice(-MAX_STORAGE_ENTRIES);
+        const jsonStr = JSON.stringify(toSave);
+        
+        // 🛡️ SIZE GUARD: Skip write if payload exceeds safe limit
+        if (jsonStr.length > MAX_STORAGE_BYTES) {
+            originalWarn(`[Logger] persistent_logs size ${(jsonStr.length / 1024 / 1024).toFixed(2)}MB exceeds limit. Truncating.`);
+            const truncated = toSave.slice(-Math.floor(MAX_STORAGE_ENTRIES / 2));
+            await storage.setItem('persistent_logs', truncated);
+            return;
+        }
+        
+        await storage.setItem('persistent_logs', toSave);
     } catch (e) {
+        // If write fails (SQLITE_FULL / disk full), clear the key to recover
+        if (e.message && (e.message.includes('disk is full') || e.message.includes('SQLITE_FULL'))) {
+            originalWarn('[Logger] Storage full — clearing persistent_logs to recover.');
+            try { await storage.removeItem('persistent_logs'); } catch (_) {}
+        }
         originalError("Failed to persist logs:", e.message);
     }
 };
@@ -328,16 +347,22 @@ const logger = {
     try {
       const saved = await storage.getItem('persistent_logs');
       if (saved && Array.isArray(saved)) {
-        // Restore logs. No 5-minute TTL limit. Keep all until 15k limit.
         if (saved.length > 0) {
-          logs = saved.slice(-MAX_LOG_COUNT);
+          logs = saved.slice(-MAX_STORAGE_ENTRIES);
           addLog('system', 'init', `Restored ${logs.length} persistent logs from previous session`);
         }
+      } else if (saved === null) {
+        // 🛡️ RECOVERY: getItem returned null — could be CursorWindow overflow.
+        // Proactively clear the key to ensure we can write fresh data.
+        try { await storage.removeItem('persistent_logs'); } catch (_) {}
+        addLog('system', 'init', 'persistent_logs was null/corrupted — cleared for recovery');
       }
     } catch (e) {
+      // 🛡️ CursorWindow / Row too big error — nuke the key and start fresh
       originalError("Failed to hydrate persistent logs:", e.message);
+      try { await storage.removeItem('persistent_logs'); } catch (_) {}
     }
-    addLog('system', 'init', `Diagnostics Logger v5 Ready [Platform: ${Platform.OS}]`);
+    addLog('system', 'init', `Diagnostics Logger v6 Ready [Platform: ${Platform.OS}] [MaxStore: ${MAX_STORAGE_ENTRIES}]`);
   }
 };
 

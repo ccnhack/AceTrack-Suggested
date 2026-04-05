@@ -45,7 +45,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = '2.6.5'; // 📱 Matchmaking Layout Optimization (v2.6.5)
+const APP_VERSION = '2.6.6'; // 📱 Avatar Sync & Storage Hardening (v2.6.6)
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -621,16 +621,31 @@ export default function App() {
         
         // 🛡️ CACHE HARDENING: Apply buster to ALL players to ensure universal reflection
         const busterTime = Date.now();
+        const playersRefMap = new Map();
+        (playersRef.current || []).forEach(lp => {
+          if (lp && lp.id) playersRefMap.set(String(lp.id).toLowerCase(), lp);
+        });
+
         const playersWithBusters = cleanedPlayers.map(p => {
+          const localP = playersRefMap.get(String(p.id).toLowerCase());
+          const stripBuster = (url) => url ? String(url).split(/[?&]v=/)[0] : url;
+
           if (p.avatar && (p.avatar.includes('cloudinary') || p.avatar.includes('dicebear'))) {
-            // 🛡️ REFINEMENT: Only add buster if not already present to avoid malformed URLs (e.g. double 'v=')
-            if (p.avatar.includes('v=')) return p;
-            
-            const buster = `v=${busterTime}`;
-            return {
-              ...p,
-              avatar: p.avatar.includes('?') ? `${p.avatar}&${buster}` : `${p.avatar}?${buster}`
-            };
+            const cloudBase = stripBuster(p.avatar);
+            const localBase = stripBuster(localP?.avatar);
+
+            // 🛡️ GLOBAL DRIFT DETECTION: If base URL changed, force a new buster to break browser cache.
+            // This ensures Rankings and Admin Hub update real-time across Web/Mobile.
+            if (cloudBase !== localBase || !p.avatar.includes('v=')) {
+              if (localBase && cloudBase !== localBase) {
+                console.log(`🖼️ [Sync] Player ${p.name}'s avatar drifted — forcing refresh.`);
+              }
+              const buster = `v=${Date.now()}`;
+              return {
+                ...p,
+                avatar: p.avatar.includes('?') ? `${cloudBase}&${buster}` : `${cloudBase}?${buster}`
+              };
+            }
           }
           return p;
         });
@@ -678,8 +693,14 @@ export default function App() {
             const hasChanged = JSON.stringify({ ...currentObj, avatar: stripBuster(currentObj.avatar) }) !== 
                              JSON.stringify({ ...cloudObj, avatar: stripBuster(cloudObj.avatar) });
             
-            if (hasChanged) {
-              console.log("👤 [Sync] Current user updated from cloud. Propagating buster for consistency.");
+            // 🛡️ AVATAR DELTA: Explicit check for avatar URL mismatch (catches dicebear↔cloudinary cross-device desync)
+            const localAvatarBase = stripBuster(currentU.avatar || '');
+            const cloudAvatarBase = stripBuster(cloudUser.avatar || '');
+            const avatarDrifted = localAvatarBase !== cloudAvatarBase;
+            
+            if (hasChanged || avatarDrifted) {
+              if (avatarDrifted) console.log("🖼️ [Sync] Avatar drift detected — forcing update from cloud.", { local: localAvatarBase.slice(-30), cloud: cloudAvatarBase.slice(-30) });
+              else console.log("👤 [Sync] Current user updated from cloud. Propagating buster for consistency.");
               setCurrentUser(cloudUser);
               currentUserRef.current = cloudUser;
               setUserRole(cloudUser.role || 'user');
