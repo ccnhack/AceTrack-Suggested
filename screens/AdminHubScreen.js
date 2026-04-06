@@ -142,6 +142,17 @@ const AdminHubScreen = ({
     const isRegistered = React.useRef(false);
 
     React.useEffect(() => {
+      // PROACTIVE PING (v2.6.25): When diagnostics sub-tab is opened, ping all active players once
+      if (subTab === 'diagnostics' && socketRef?.current?.connected) {
+        players.forEach(p => {
+          if (p.devices && p.devices.length > 0) {
+            socketRef.current.emit('admin_ping_device', { targetUserId: p.id });
+          }
+        });
+      }
+    }, [subTab]);
+
+    React.useEffect(() => {
       // Re-check periodically if socket not yet available, OR register immediately
       const timer = setInterval(() => {
         if (socketRef && socketRef.current && !isRegistered.current) {
@@ -876,7 +887,7 @@ const AdminHubScreen = ({
                       style={{ backgroundColor: '#F0F9FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, marginRight: 8, borderWidth: 1, borderColor: '#BAE6FD', flexDirection: 'row', alignItems: 'center' }}
                     >
                       <Ionicons name="document-text-outline" size={12} color="#0369A1" style={{ marginRight: 4 }} />
-                      <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#0369A1' }}>{file.split('_')[0]}</Text>
+                      <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#0369A1' }}>{(file || '').split('_')[0] || 'Report'}</Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
@@ -974,7 +985,7 @@ const AdminHubScreen = ({
                             const pName = (p.name || '').toLowerCase();
                             const pId = String(p.id || '').toLowerCase();
                             const pEmailRaw = (p.email || '');
-                            const firstName = pName.split(' ')[0];
+                            const firstName = (pName || 'user').split(' ')[0];
 
                             const safeName = p.name ? p.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() : '';
                             const safeId = p.id ? String(p.id).replace(/[^a-z0-9]/gi, '_').toLowerCase() : '';
@@ -1150,7 +1161,7 @@ const AdminHubScreen = ({
                                       if (res.ok) {
                                         const data = await res.json();
                                         const pNameRaw = (selectedDiagUser.name || '').toLowerCase();
-                                        const firstName = pNameRaw.split(' ')[0];
+                                        const firstName = (pNameRaw || 'user').split(' ')[0];
                                         const safeName = pNameRaw.replace(/[^a-z0-9]/gi, '_');
                                         const fs = data.files.filter(f => {
                                           const lf = f.toLowerCase();
@@ -1242,7 +1253,7 @@ const AdminHubScreen = ({
                                 if (res.ok) {
                                   const data = await res.json();
                                   const pNameRaw = (selectedDiagUser.name || '').toLowerCase();
-                                  const firstName = pNameRaw.split(' ')[0];
+                                  const firstName = (pNameRaw || 'user').split(' ')[0];
                                   const safeName = pNameRaw.replace(/[^a-z0-9]/gi, '_');
                                   const fs = data.files.filter(f => {
                                     const lf = f.toLowerCase();

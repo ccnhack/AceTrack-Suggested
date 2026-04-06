@@ -47,7 +47,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = '2.6.24'; // 🛡️ Referral Stability (v2.6.24)
+const APP_VERSION = '2.6.25'; // 🛡️ Web Dashboard Hardening (v2.6.25)
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -968,6 +968,13 @@ export default function App() {
             registeredPlayerIds: (t.registeredPlayerIds || []).filter(pid => !!pid),
             pendingPaymentPlayerIds: (t.pendingPaymentPlayerIds || []).filter(pid => !!pid)
           }));
+        }
+        // 🛡️ WEB STORAGE OPTIMIZATION: Skip persisting large data sets on Web to avoid QuotaExceededError (5MB limit)
+        const isWeb = Platform.OS === 'web';
+        const isLargeKey = key === 'players' || key === 'auditLogs';
+        if (isWeb && isLargeKey) {
+            // console.log(`📦 [Sync] Skipping local storage for large key on Web: ${key}`);
+            continue;
         }
         await storage.setItem(key, val);
       }
