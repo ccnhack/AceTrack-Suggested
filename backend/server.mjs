@@ -57,7 +57,7 @@ try {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
 
-const APP_VERSION = '2.6.21'; // AceTrack Suggested — v2.6.21 Web Connectivity Stabilization
+const APP_VERSION = '2.6.25'; // AceTrack Suggested — v2.6.25 Web Hardening Deployment
 
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: CORS Whitelist (SEC Fix #3)
