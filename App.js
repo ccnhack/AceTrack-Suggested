@@ -17,6 +17,8 @@ import {
   MATCHES
 } from './mockData';
 import storage, { thinPlayers, capPlayerDetail } from './utils/storage';
+import NetInfo from '@react-native-community/netinfo';
+import OfflineScreen from './components/OfflineScreen';
 import AppNavigator from './navigation/AppNavigator';
 import ChatBot from './components/ChatBot';
 import * as Updates from 'expo-updates';
@@ -45,7 +47,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = '2.6.21'; // 🛡️ Web Connectivity Stabilization (v2.6.21)
+const APP_VERSION = '2.6.22'; // 🛡️ Login & Password Reset Sync Hardening (v2.6.22)
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -80,6 +82,7 @@ export default function App() {
   const [isUpdatingFromModal, setIsUpdatingFromModal] = useState(false);
   const [viewingLanding, setViewingLanding] = useState(true); // Default to landing for new users
   const [showSignup, setShowSignup] = useState(false);
+  const [isFullyConnected, setIsFullyConnected] = useState(true); // Tracks true internet availability
   
   const localDeviceIdRef = useRef(null);
   const [isProfileEditActive, setIsProfileEditActive] = useState(false); // New state to track if profile edit is open
@@ -115,6 +118,15 @@ export default function App() {
     syncLockRef.current = val;  // Mutex lock
     setIsSyncing(val);          // React state update (for UI)
   };
+
+  // Global Network Listener
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener(state => {
+      const connected = state.isConnected && state.isInternetReachable !== false;
+      setIsFullyConnected(connected);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Unified Ref Synchronization
   useEffect(() => {
@@ -533,8 +545,8 @@ export default function App() {
   }, []);
 
   const loadData = useCallback(async (forceNoLoading = false, forceSync = false) => {
-    // 🛡️ SESSION GUARD: Bail immediately if no user is logged in (unless it's an initial hydration pull)
-    if (!currentUserRef.current && !forceSync && isInitialized) {
+    // 🛡️ SESSION GUARD: Bail immediately if no user is logged in (unless it's an initial hydration pull or explicitly forced)
+    if (!currentUserRef.current && !forceSync && isSyncingRef.current) {
       console.log("📡 [Sync] Bailing on loadData: No active user session.");
       return null;
     }
@@ -1074,50 +1086,34 @@ export default function App() {
     setPendingSync([]);
     pendingSyncRef.current = [];
     
-    if (socketRef.current) {
-        console.log("🔌 Disconnecting WebSocket on logout...");
-        socketRef.current.disconnect();
-        socketRef.current = null;
-    }
-    
+    // We intentionally DO NOT disconnect the global app-level socket here,
+    // otherwise if the user logs back in, it remains null permanently until restart.
     await storage.removeItem('currentUser');
     await storage.removeItem('pendingSync');
     await storage.removeItem('sessionCustomAvatar');
   }, []);
 
   const handleRegisterUser = useCallback(async (newPlayer) => {
-    return new Promise((resolve, reject) => {
-      setPlayers(prev => {
-        const updatedPlayers = [newPlayer, ...(prev || [])];
-        storage.setItem('players', thinPlayers(updatedPlayers));
-        
-        // CRITICAL FIX: Use syncAndSaveData with atomic=true instead of pushStateToCloud directly.
-        // This ensures: 1) pendingSync guard is set (blocks background overwrites)
-        //               2) atomicKeys are sent in the request body
-        //               3) Push happens immediately without debounce
-        try {
-          syncAndSaveData({ players: updatedPlayers }, true);
-          logger.logAction('USER_SIGNUP', { 
-            id: newPlayer.id, 
-            name: newPlayer.name, 
-            role: newPlayer.role,
-            cloudSync: 'ATOMIC_PUSH'
-          });
-          resolve(true);
-        } catch (err) {
-          console.error('❌ Registration cloud sync failed:', err);
-          setPendingSync(prevP => {
-            const next = [...(prevP || [])];
-            if (!next.includes('players')) next.push('players');
-            storage.setItem('pendingSync', next);
-            pendingSyncRef.current = next;
-            return next;
-          });
-          resolve(false); // Don't reject — user is still registered locally
-        }
-        return updatedPlayers;
+    // 🛡️ ATOMIC SIGNUP: Update state first, then immediately push to cloud
+    const updatedPlayers = [newPlayer, ...(playersRef.current || [])];
+    setPlayers(updatedPlayers);
+    playersRef.current = updatedPlayers;
+    storage.setItem('players', thinPlayers(updatedPlayers));
+    
+    logger.logAction('USER_SIGNUP_START', { id: newPlayer.id });
+    
+    const success = await syncAndSaveData({ players: updatedPlayers }, true);
+    if (!success) {
+      console.warn('⚠️ Registration sync failed, marked as pending.');
+      setPendingSync(prev => {
+        const next = [...(prev || [])];
+        if (!next.includes('players')) next.push('players');
+        storage.setItem('pendingSync', next);
+        pendingSyncRef.current = next;
+        return next;
       });
-    });
+    }
+    return success;
   }, [syncAndSaveData]);
 
   const handleSaveTournament = useCallback((t) => {
@@ -1376,8 +1372,8 @@ export default function App() {
        });
      },
     sendUserNotification: handleSendUserNotification,
-    loadData: loadData,
-    onManualSync: loadData,
+    loadData: () => loadData(true, true), // 🛡️ FORCE SYNC: Ensure LoginScreen can fetch cloud records
+    onManualSync: () => loadData(true, true),
     onRegisterUser: handleRegisterUser,
     onToggleCloud: () => {
       setIsUsingCloud(prev => {
@@ -1942,6 +1938,10 @@ export default function App() {
       });
     }
   }, [isLoading, players.length]);
+
+  if (!isFullyConnected) {
+    return <OfflineScreen />;
+  }
 
   if (isLoading) {
     return (

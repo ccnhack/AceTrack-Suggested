@@ -914,7 +914,7 @@ const AdminHubScreen = ({
                           console.error('❌ [AdminHub] socketRef prop is MISSING!');
                           Alert.alert('Connection Error', 'Socket reference missing. Please restart the app.');
                         } else if (!socket) {
-                          console.warn('⚠️ [AdminHub] socket.current is null! Socket might still be initializing...');
+                          console.log('⚠️ [AdminHub] socket.current is null! Socket might still be initializing...');
                           Alert.alert('Sync Starting', 'Please wait a moment for the connection to warm up.');
                         } else {
                           const isConnected = socket.connected;

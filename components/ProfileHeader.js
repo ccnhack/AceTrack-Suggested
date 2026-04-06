@@ -60,7 +60,7 @@ const ProfileHeader = memo(({
             source={getSafeAvatar(user.avatar, user.name)}
             style={styles.avatar} 
             onError={() => {
-              console.warn("ProfileHeader: Profile image failed to load, falling back to placeholder");
+              console.log("ProfileHeader: Profile image failed to load, falling back to placeholder");
               setLocalImageError(true);
             }}
           />

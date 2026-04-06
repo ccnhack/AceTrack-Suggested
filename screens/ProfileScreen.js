@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, Image, FlatList,
-  StyleSheet, SafeAreaView, Modal, TextInput, Alert,
+  StyleSheet, Modal, TextInput, Alert,
   KeyboardAvoidingView, Platform, InteractionManager 
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Calendar } from 'react-native-calendars';
@@ -104,6 +105,7 @@ const ProfileScreen = ({
   appVersion
 }) => {
   const isFocused = useIsFocused();
+  const insets = useSafeAreaInsets();
   useEffect(() => {
     if (isFocused) {
       logger.logAction('SCREEN_VIEW', { screen: 'Profile' });
@@ -403,7 +405,7 @@ const ProfileScreen = ({
 
 
   const content = (
-    <SafeAreaView style={[styles.container, isWeb && { maxWidth: 900, alignSelf: 'center', width: '100%', backgroundColor: '#FFFFFF', padding: 24, marginVertical: 16, borderRadius: 24, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.08, shadowRadius: 40, overflow: 'hidden', flex: 1 }]}>
+    <View style={[styles.container, isWeb && { maxWidth: 900, alignSelf: 'center', width: '100%', backgroundColor: '#FFFFFF', padding: 24, marginVertical: 16, borderRadius: 24, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.08, shadowRadius: 40, overflow: 'hidden', flex: 1 }, { paddingTop: Math.max(insets.top, 16) }]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <ProfileHeader
           user={user}
@@ -1156,7 +1158,7 @@ const ProfileScreen = ({
                 </View>
             </Modal>
           )}
-    </SafeAreaView>
+    </View>
   );
 
   return isWeb ? (
@@ -1378,7 +1380,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 12,
     paddingLeft: 12, // Balance letterSpacing for perfect centering
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
     color: '#0F172A',
     marginBottom: 24,
   },

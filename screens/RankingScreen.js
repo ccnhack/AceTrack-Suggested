@@ -4,9 +4,11 @@ import {
   SafeAreaView, FlatList
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getSafeAvatar } from '../utils/imageUtils';
 
 const RankingScreen = ({ user, role, players, tournaments }) => {
+  const insets = useSafeAreaInsets();
   const rankingPlayers = useMemo(() => {
     let list = [...(players || [])].filter(p => p && p.id !== 'admin_sys' && p.role !== 'academy' && p.role !== 'coach');
     
@@ -72,7 +74,7 @@ const RankingScreen = ({ user, role, players, tournaments }) => {
 
   if (isLocked) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
         {listHeader}
         <View style={styles.lockContainer}>
           <View style={styles.lockIconCircle}>
@@ -83,12 +85,12 @@ const RankingScreen = ({ user, role, players, tournaments }) => {
             Please complete your email and phone verification in the Profile tab to view the global rankings and leaderboards.
           </Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
       <FlatList
         data={rankingPlayers}
         renderItem={renderPlayer}
@@ -101,7 +103,7 @@ const RankingScreen = ({ user, role, players, tournaments }) => {
         maxToRenderPerBatch={10}
         windowSize={5}
       />
-    </SafeAreaView>
+    </View>
   );
 };
 

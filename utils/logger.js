@@ -2,29 +2,20 @@ import { Platform } from 'react-native';
 import storage from './storage';
 import config from '../config';
 
-// IST Formatting Options
-const IST_OPTIONS = {
-  timeZone: 'Asia/Kolkata',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hour12: false,
-};
-
-const formatter = new Intl.DateTimeFormat('en-IN', IST_OPTIONS);
-
+// IST Formatting Manual Implementation (Hermes lacks full Intl.DateTimeFormat support)
 const formatIST = (date) => {
   try {
-    const parts = formatter.formatToParts(date);
-    const d = parts.find(p => p.type === 'day')?.value || '01';
-    const m = parts.find(p => p.type === 'month')?.value || '01';
-    const y = parts.find(p => p.type === 'year')?.value || '2024';
-    const h = parts.find(p => p.type === 'hour')?.value || '00';
-    const min = parts.find(p => p.type === 'minute')?.value || '00';
-    const s = parts.find(p => p.type === 'second')?.value || '00';
+    // IST is UTC + 5:30
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istDate = new Date(date.getTime() + istOffset);
+    
+    const y = istDate.getUTCFullYear();
+    const m = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(istDate.getUTCDate()).padStart(2, '0');
+    const h = String(istDate.getUTCHours()).padStart(2, '0');
+    const min = String(istDate.getUTCMinutes()).padStart(2, '0');
+    const s = String(istDate.getUTCSeconds()).padStart(2, '0');
+    
     return `${y}-${m}-${d} ${h}:${min}:${s}`;
   } catch (e) {
     return date.toISOString(); // Fallback

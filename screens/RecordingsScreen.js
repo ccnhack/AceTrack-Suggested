@@ -4,6 +4,7 @@ import {
   StyleSheet, SafeAreaView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { VideoManagement } from '../components/VideoManagement';
 
 const RecordingsScreen = ({ 
@@ -12,6 +13,7 @@ const RecordingsScreen = ({
   onToggleFavourite
 }) => {
   const [activeFilter, setActiveFilter] = useState('recent');
+  const insets = useSafeAreaInsets();
   const isCoach = role === 'coach';
 
   // Players see videos they played in. Coaches see videos for tournaments they are assigned to.
@@ -49,7 +51,7 @@ const RecordingsScreen = ({
   ];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: Math.max(insets.top, insets.top > 0 ? insets.top : 16) }]}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>
           {isCoach ? 'Coached Recordings' : 'My Recordings'}
@@ -129,7 +131,7 @@ const RecordingsScreen = ({
           />
         )}
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 

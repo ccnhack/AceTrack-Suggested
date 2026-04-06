@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, memo } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, Image, 
-  StyleSheet, SafeAreaView, Dimensions, FlatList, Modal, Alert, ActivityIndicator, TextInput, InteractionManager 
+  StyleSheet, Dimensions, FlatList, Modal, Alert, ActivityIndicator, TextInput, InteractionManager 
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import logger from '../utils/logger';
@@ -57,6 +58,7 @@ const ExploreScreen = (props) => {
   const [userLocation, setUserLocation] = useState(null);
   const [isFetchingLoc, setIsFetchingLoc] = useState(false);
   const [selectedHub, setSelectedHub] = useState('All');
+  const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
 
 
@@ -385,7 +387,7 @@ const ExploreScreen = (props) => {
 
   return (
     <View style={styles.container}>
-      <SafeAreaView style={styles.hero}>
+      <View style={[styles.hero, { paddingTop: Math.max(insets.top, 16) }]}>
         <View style={styles.heroContent}>
           <View style={styles.headerRow}>
             <View>
@@ -468,7 +470,7 @@ const ExploreScreen = (props) => {
             ))}
           </ScrollView>
         </View>
-      </SafeAreaView>
+      </View>
 
       <FlatList
         data={sortedTournaments}

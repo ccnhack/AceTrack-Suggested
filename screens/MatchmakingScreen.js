@@ -4,6 +4,7 @@ import {
   Image, Modal, TextInput, Alert, ScrollView
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import designSystem from '../theme/designSystem';
@@ -61,6 +62,7 @@ const isTimeInPast = (date, timeSlot) => {
 export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatchmaking, players = [], sendUserNotification, onManualSync }) {
   
   const lastSyncRef = React.useRef(0);
+  const insets = useSafeAreaInsets();
 
   // REAL-TIME SYNC: Refresh data when screen comes into focus
   useFocusEffect(
@@ -894,7 +896,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   }, [role, user?.id, mySports, allPlayers, playerSearchQuery]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
       <View style={styles.header}>
         <Text style={styles.title}>{role === 'coach' ? 'Coach Bookings' : (role === 'academy' ? 'Academy Matchmaking' : 'Matchmaking')}</Text>
         <View style={styles.tabs}>

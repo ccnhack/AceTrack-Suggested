@@ -97,8 +97,11 @@ const LoginScreen = ({
         return pEmail === search || pId === search || pUsername === search || pName === search;
       });
 
-      // ROBUSTNESS: If user not found locally, try to refresh data from cloud
-      if (!foundUser && onRefreshData) {
+      // ROBUSTNESS: If user not found locally OR password doesn't match local record, 
+      // try to refresh data from cloud to ensure we have the absolute latest master record.
+      const localPasswordMatch = foundUser && (foundUser.password || 'password') === password;
+      
+      if ((!foundUser || !localPasswordMatch) && onRefreshData) {
         console.log(`🔍 User "${username}" not found in ${players.length} local players. IDs: [${players.slice(0, 10).map(p => p.id).join(', ')}]. Attempting cloud refresh...`);
         logger.logAction('LOGIN_CLOUD_REFRESH_START', { username, localPlayerCount: players.length });
         setIsSyncing(true);
@@ -187,15 +190,12 @@ const LoginScreen = ({
       const idMatch = (normalize(p.id) === nUser || normalize(p.email) === nUser);
       const phoneMatch = (cleanPhone(p.phone) === nPhone);
       
-      // 🛡️ SECURITY BYPASS (v2.6.14): If the record is _thinned (server-sanitized for privacy),
-      // we allow identification by Username/ID alone since the Phone field is stripped.
-      if (idMatch && p._thinned) return true;
-      
       // Standard strict match
       return idMatch && phoneMatch;
     });
 
-    // ROBUSTNESS: If not found locally, try a cloud refresh
+    // ROBUSTNESS Fix: If strictly not found locally (maybe due to thinned cache without phones),
+    // force a full cloud refresh to check the un-thinned master backend records.
     if (!userToReset && onRefreshData) {
       setIsLoading(true);
       const cloudResult = await onRefreshData();
@@ -205,7 +205,7 @@ const LoginScreen = ({
         userToReset = cloudResult.players.find(p => {
           const idMatch = (normalize(p.id) === nUser || normalize(p.email) === nUser);
           const phoneMatch = (cleanPhone(p.phone) === nPhone);
-          if (idMatch && p._thinned) return true;
+          
           return idMatch && phoneMatch;
         });
       }

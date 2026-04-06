@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
   },
   logTimestamp: {
     fontSize: 9,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
     color: '#64748B',
     marginBottom: 2,
   },
@@ -169,17 +169,17 @@ const styles = StyleSheet.create({
   },
   logLevel: {
     fontSize: 10,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
     fontWeight: 'bold',
   },
   logType: {
     fontSize: 10,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
     color: '#94A3B8',
   },
   logMessage: {
     fontSize: 10,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
     color: '#F8FAFC',
     flex: 1,
   },

@@ -4,6 +4,7 @@ import {
   StyleSheet, SafeAreaView, Dimensions, Modal, Image, Alert, InteractionManager
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getSafeAvatar } from '../utils/imageUtils';
 import TournamentBracket from '../components/TournamentBracket';
 import Slider from '@react-native-community/slider';
@@ -178,6 +179,7 @@ const MatchesScreen = ({
   const [rosterTab, setRosterTab] = useState('roster');
 
   const isFocused = useIsFocused();
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     logger.logAction('Matches View Mode Changed', { mode: viewMode });
@@ -447,7 +449,7 @@ const MatchesScreen = ({
 
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Matches</Text>
@@ -776,7 +778,7 @@ const MatchesScreen = ({
       )}
 
       {renderPaymentModal()}
-    </SafeAreaView>
+    </View>
   );
 };
 
