@@ -525,6 +525,8 @@ const ProfileScreen = ({
                     onCreateTicket={onSaveTicket}
 
                     onSendMessage={onReplyTicket}
+                    onReply={onReplyTicket}
+                    onUpdateStatus={onUpdateTicketStatus}
                 />
               ) : <Text>Support System Unavailable</Text>}
           </SafeAreaView>

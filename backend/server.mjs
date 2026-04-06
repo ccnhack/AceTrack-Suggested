@@ -57,17 +57,19 @@ try {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
 
-const APP_VERSION = '2.6.25'; // AceTrack Suggested — v2.6.25 Web Hardening Deployment
+const APP_VERSION = '2.6.26'; // AceTrack Suggested — v2.6.26 Working_Enhanced_Support_Center Deployment
 
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: CORS Whitelist (SEC Fix #3)
 // ═══════════════════════════════════════════════════════════════
 const ALLOWED_ORIGINS = [
   'https://acetrack-suggested.onrender.com',
-  'https://acetrack-suggested.onrender.com',
+  'https://acetrack-web.onrender.com',
+  'https://acetrack-suggested-web.onrender.com',
   'http://localhost:8081',
   'http://localhost:19006',
-  'http://localhost:3005'
+  'http://localhost:3005',
+  'http://localhost:8082'
 ];
 
 const app = express();
@@ -86,13 +88,17 @@ app.use(helmet({
 // ═══════════════════════════════════════════════════════════════
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, etc.)
+    // 🛡️ SYNC HARDENING (v2.6.20): Allow mobile apps (no origin)
     if (!origin) return callback(null, true);
     if (ALLOWED_ORIGINS.includes(origin)) {
       return callback(null, true);
     }
-    return callback(new Error('Not allowed by CORS'));
+    // 🛡️ DIAGNOSTIC: Log blocked origin to help identify required whitelist additions
+    console.warn(`🛑 CORS Blocked: origin=${origin}`);
+    logServerEvent('CORS_BLOCKED', { origin });
+    return callback(new Error(`Not allowed by CORS: ${origin}`));
   },
+  allowedHeaders: ['Content-Type', 'x-ace-api-key', 'x-socket-id', 'Authorization'],
   credentials: true
 }));
 
@@ -157,15 +163,15 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
     origin: (origin, callback) => {
-      // 🛡️ SYNC HARDENING (v2.6.20): Allow mobile apps (no origin) 
-      // consistent with the REST API CORS policy above.
+      // 🛡️ SYNC HARDENING (v2.6.20): Consistent origin policy for WebSockets
       if (!origin) return callback(null, true);
       if (ALLOWED_ORIGINS.includes(origin)) {
         return callback(null, true);
       }
-      return callback(new Error('Not allowed by CORS'));
+      return callback(null, false); // Fail silently for CORS to avoid crashing
     },
     methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'x-ace-api-key', 'x-socket-id', 'Authorization'],
     credentials: true
   }
 });
@@ -332,11 +338,8 @@ const SaveDataSchema = z.object({
   matchmaking: z.array(z.any()).optional(),
   overwrite: z.boolean().optional(),
   atomicKeys: z.array(z.string()).optional(),
-  version: z.number().optional()
-}).refine(data => {
-  const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser'];
-  return Object.keys(data).some(key => syncableKeys.includes(key));
-}, { message: 'No syncable context found' });
+  version: z.number({ required_error: 'Version is required for cloud synchronization' })
+});
 
 // Validation middleware factory
 const validate = (schema) => (req, res, next) => {
@@ -470,6 +473,24 @@ router.get('/data', apiKeyGuard, async (req, res) => {
   try {
     const state = await AppState.findOne().sort({ lastUpdated: -1 }).lean();
     if (!state || !state.data) return res.json({});
+    
+    // 🛡️ DATA RECOVERY (v2.6.25): 'Soft Restoration' for Nishant
+    // We inject him into the GET response so the next syncing client will naturally "save" him back to the DB.
+    // This bypasses the version-based race conditions on high-traffic servers.
+    if (!state.data.players) state.data.players = [];
+    if (!state.data.players.some(p => p && String(p.id).toLowerCase() === 'nishant')) {
+       console.log("🛠️ [Recovery] Soft-restoring Nishant Shekhar in GET response...");
+       state.data.players.push({
+         id: 'nishant',
+         name: 'Nishant Shekhar',
+         role: 'user',
+         registrationDate: new Date().toISOString(),
+         lastActive: Date.now(),
+         devices: []
+       });
+       // Note: We don't increment version here to avoid confusing OCC; the syncing client will increment it.
+    }
+
     res.json({ ...state.data, lastUpdated: state.lastUpdated, version: state.version || 1 });
   } catch (error) {
     console.error('❌ Data Fetch Error:', error.message);
@@ -570,8 +591,13 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
     const currentData = (state && state.data) ? state.data : {};
     const currentVersion = state?.version || 1;
 
-    // 🛡️ OCC VERSION CHECK: If client provided a version, it MUST match the server
-    if (clientVersion !== undefined && clientVersion < currentVersion) {
+    // 🛡️ OCC VERSION CHECK: Linear progression enforcement (v2.6.25 Hardening)
+    if (clientVersion === undefined) {
+      console.warn(`🛑 Rejected: Request missing version from ${req.ip}`);
+      return res.status(403).json({ error: 'Forbidden: Missing version number. Please update your app.' });
+    }
+    
+    if (clientVersion < currentVersion) {
       console.warn(`🛑 OCC Conflict: Client v${clientVersion} vs Server v${currentVersion}`);
       return res.status(409).json({ 
         error: 'Conflict: Your local data is out of date. Please refresh and try again.',
@@ -608,27 +634,38 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
           }));
         }
 
-        if (key === 'players' && Array.isArray(incoming) && !isAtomicKey) {
-          // 🛡️ MASTER MERGE for Players: Protect by ID
-          const playerMap = new Map();
-          (currentData.players || []).forEach(p => { if (p && p.id) playerMap.set(String(p.id).toLowerCase(), p); });
+        if (['players', 'matchmaking', 'tournaments', 'matches', 'auditLogs', 'matchVideos', 'supportTickets', 'evaluations'].includes(key) && Array.isArray(incoming)) {
+          // 🛡️ MASTER MERGE: Prevent lost entities for all synced arrays (Hardened v2.6.25)
+          const entityMap = new Map();
+          
+          // 1. Seed with existing data
+          (currentData[key] || []).forEach(e => { if (e && e.id) entityMap.set(String(e.id).toLowerCase(), e); });
+          
+          // 2. Multi-strategy Merge
           incoming.forEach(p => {
             if (p && p.id) {
               const id = String(p.id).toLowerCase();
-              const existing = playerMap.get(id);
-              const mergedDevices = [...(existing?.devices || [])];
-              if (p.devices && Array.isArray(p.devices)) {
-                p.devices.forEach(d => {
-                  if (!d || !d.id) return;
-                  const dIndex = mergedDevices.findIndex(ed => ed.id === d.id);
-                  if (dIndex >= 0) mergedDevices[dIndex] = { ...mergedDevices[dIndex], ...d };
-                  else mergedDevices.push(d);
-                });
+              const existing = entityMap.get(id);
+              
+              if (key === 'players' && existing) {
+                // SPECIAL: Players need deep device merging
+                const mergedDevices = [...(existing.devices || [])];
+                if (p.devices && Array.isArray(p.devices)) {
+                  p.devices.forEach(d => {
+                    if (!d || !d.id) return;
+                    const dIndex = mergedDevices.findIndex(ed => ed.id === d.id);
+                    if (dIndex >= 0) mergedDevices[dIndex] = { ...mergedDevices[dIndex], ...d };
+                    else mergedDevices.push(d);
+                  });
+                }
+                entityMap.set(id, { ...existing, ...p, devices: mergedDevices });
+              } else {
+                // DEFAULT: ID-based merge for all other entities
+                entityMap.set(id, existing ? { ...existing, ...p } : p);
               }
-              playerMap.set(id, existing ? { ...existing, ...p, devices: mergedDevices } : p);
             }
           });
-          newMasterData.players = Array.from(playerMap.values());
+          newMasterData[key] = Array.from(entityMap.values());
         } else if (key === 'currentUser' && incoming && incoming.id) {
           newMasterData.currentUser = incoming;
           if (newMasterData.players && Array.isArray(newMasterData.players)) {
@@ -648,19 +685,15 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
               newMasterData.players[pIndex] = { ...existing, ...incoming, devices: mergedDevices };
             }
           }
-        } else if (['matchmaking', 'tournaments', 'matches'].includes(key) && Array.isArray(incoming) && !isAtomicKey) {
-           // 🛡️ MASTER MERGE for Matches/Tournaments: Prevent lost entities
-           const entityMap = new Map();
-           (currentData[key] || []).forEach(e => { if (e && e.id) entityMap.set(String(e.id), e); });
-           incoming.forEach(e => { if (e && e.id) entityMap.set(String(e.id), { ...(entityMap.get(String(e.id)) || {}), ...e }); });
-           newMasterData[key] = Array.from(entityMap.values());
         } else {
+          // Fallback for objects or non-array data
           newMasterData[key] = incoming;
         }
       }
     }
 
     const nextVersion = currentVersion + 1;
+
     const updatedState = await AppState.findOneAndUpdate(
       {},
       { $set: { data: newMasterData, lastUpdated: now, version: nextVersion } },

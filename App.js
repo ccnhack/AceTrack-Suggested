@@ -47,7 +47,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = '2.6.25'; // 🛡️ Web Dashboard Hardening (v2.6.25)
+const APP_VERSION = '2.6.26'; // 🛡️ Working_Enhanced_Support_Center (v2.6.26)
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -106,6 +106,8 @@ export default function App() {
   const lastBackgroundSyncRef = React.useRef(0); 
   const updateCheckTimeoutRef = React.useRef(null); // DEBOUNCE: Groups WebSocket signals
   const syncLockRef = React.useRef(false); // MUTEX: Ensures push and pull don't overlap
+  const [cloudVersion, setCloudVersion] = useState(0);
+  const cloudVersionRef = useRef(0);
   const globalBackoffUntilRef = React.useRef(0); // BACKOFF: 429 recovery timer
 
   const notificationReceivedSubscription = useRef(null);
@@ -151,6 +153,10 @@ export default function App() {
       transports: ['websocket', 'polling'], // Explicitly enable websocket to fix web client disconnects
       auth: {
         token: config.ACE_API_KEY
+      },
+      // 🛡️ SYNC HARDENING (v2.6.25): Ensure headers are passed for the initial polling handshake on Web
+      extraHeaders: {
+        'x-ace-api-key': config.ACE_API_KEY
       }
     });
 
@@ -594,7 +600,7 @@ export default function App() {
 
     try {
       setSyncingState(true);
-      logger.logAction('LOAD_DATA_START', { version: versionAtStart, isBackground: forceNoLoading, forceSync });
+      logger.logAction('LOAD_DATA_START', { version: versionAtStart, isBackground: forceNoLoading, forceSync, localCloudVersion: cloudVersionRef.current });
       
       if (forceSync && currentUserRef.current) {
         // When manually forcing a sync, also push our latest device info to the cloud
@@ -627,7 +633,13 @@ export default function App() {
       if (!cloudData || typeof cloudData !== 'object') {
         throw new Error("Invalid data format received from cloud");
       }
-      console.log(`✅ [v${versionAtStart}] Data fetched successfully [Keys: ${Object.keys(cloudData).join(', ')}]`);
+      
+      const newVersion = cloudData.version || 0;
+      setCloudVersion(newVersion);
+      cloudVersionRef.current = newVersion;
+      storage.setItem('cloudVersion', newVersion);
+
+      console.log(`✅ [v${versionAtStart}] Data fetched (Cloud v${newVersion}) [Keys: ${Object.keys(cloudData).join(', ')}]`);
 
       // DO NOT proceed with data application if a newer sync has already started
       if (versionAtStart !== syncVersion.current && !forceSync) {
@@ -763,6 +775,14 @@ export default function App() {
         setMatchmaking(cloudData.matchmaking);
         storage.setItem('matchmaking', cloudData.matchmaking);
       }
+      if (cloudData.supportTickets && !pendingSyncRef.current.includes('supportTickets')) {
+        setSupportTickets(cloudData.supportTickets);
+        storage.setItem('supportTickets', cloudData.supportTickets);
+      }
+      if (cloudData.evaluations && !pendingSyncRef.current.includes('evaluations')) {
+        setEvaluations(cloudData.evaluations);
+        storage.setItem('evaluations', cloudData.evaluations);
+      }
       // Write data directly to avoid interaction blocks during initial load
       if (cloudData.auditLogs) {
         setAuditLogs(cloudData.auditLogs);
@@ -842,7 +862,10 @@ export default function App() {
           'x-ace-api-key': config.ACE_API_KEY,
           'x-socket-id': socketRef.current?.id || ''
         },
-        body: JSON.stringify(updates)
+        body: JSON.stringify({
+          ...updates,
+          version: cloudVersionRef.current
+        })
       });
       clearTimeout(timeoutId);
 
@@ -850,6 +873,25 @@ export default function App() {
         console.log("🛑 Server Rate Limit (429). Engaging 60s Global Backoff.");
         globalBackoffUntilRef.current = Date.now() + 60000;
         throw new Error("Server returned 429: Too many requests.");
+      }
+
+      if (response.status === 409) {
+        console.log("🛑 OCC Conflict (409). Cloud version has progressed. Triggering refresh...");
+        const conflictData = await response.json().catch(() => ({}));
+        
+        // Update local version if server provided it
+        if (conflictData.serverVersion) {
+            setCloudVersion(conflictData.serverVersion);
+            cloudVersionRef.current = conflictData.serverVersion;
+            storage.setItem('cloudVersion', conflictData.serverVersion);
+        }
+
+        logger.logAction('PUSH_DATA_CONFLICT', { serverVersion: conflictData.serverVersion });
+        
+        // Release lock and trigger a full pull to resolve conflict
+        setSyncingState(false);
+        setTimeout(() => loadData(true, true), 100);
+        return false;
       }
 
       if (!response.ok) {
@@ -1312,8 +1354,25 @@ export default function App() {
 
   const handleSaveTicket = useCallback((ticket) => {
     setSupportTickets(prev => {
-      const updated = prev.map(t => t.id === ticket.id ? ticket : t);
-      if (!prev.find(t => t.id === ticket.id)) updated.unshift(ticket);
+      const generatedId = ticket.id || `${Math.floor(1000000 + Math.random() * 9000000)}`;
+      const enrichmentTicket = { 
+        id: generatedId,
+        status: ticket.status || 'Open',
+        createdAt: ticket.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        ...ticket, 
+        deviceInfo: ticket.deviceInfo || {
+          os: Platform.OS,
+          osVersion: Platform.Version,
+          appVersion: APP_VERSION,
+          deviceName: Constants.deviceName || 'Device'
+        }
+      };
+      
+      const ticketsArray = Array.isArray(prev) ? prev : [];
+      const updated = ticketsArray.map(t => t && t.id === enrichmentTicket.id ? enrichmentTicket : t);
+      if (!ticketsArray.find(t => t && t.id === enrichmentTicket.id)) updated.unshift(enrichmentTicket);
+      
       syncAndSaveData({ supportTickets: updated });
       return updated;
     });
@@ -1485,18 +1544,68 @@ export default function App() {
     onReplyTicket: (id, text, image, replyToMsg) => {
        setSupportTickets(prev => {
          const msgText = typeof text === 'string' ? text : (text?.text || String(text || ''));
-         const msg = { senderId: currentUserRef.current?.id || 'admin', text: msgText, timestamp: new Date().toISOString() };
-         if (image) msg.image = image;
-         if (replyToMsg) msg.replyTo = { text: replyToMsg.text || '', senderId: replyToMsg.senderId || '' };
+         const senderId = currentUserRef.current?.id || 'admin';
+         const isAdmin = userRole === 'admin';
          
-         const updated = (prev || []).map(t => t && t.id === id ? { ...t, messages: [...(t.messages || []), msg] } : t);
+         const msg = { id: `m-${Date.now()}`, senderId, text: msgText, timestamp: new Date().toISOString() };
+         if (image) msg.image = image;
+         if (replyToMsg) msg.replyTo = { id: replyToMsg.id, timestamp: replyToMsg.timestamp, text: replyToMsg.text || '', senderId: replyToMsg.senderId || '' };
+         
+         const updated = (prev || []).map(t => {
+           if (t && t.id === id) {
+             const newStatus = (!isAdmin && t.status === 'Awaiting Response') ? 'In Progress' : t.status;
+             return { 
+               ...t, 
+               status: newStatus,
+               messages: [...(t.messages || []), msg],
+               updatedAt: new Date().toISOString() 
+             };
+           }
+           return t;
+         });
+         
          syncAndSaveData({ supportTickets: updated });
          return updated;
        });
      },
-    onUpdateTicketStatus: (id, status) => {
+    onUpdateTicketStatus: (id, status, summary) => {
       setSupportTickets(prev => {
-        const updated = (prev || []).map(t => t && t.id === id ? { ...t, status } : t);
+        const updated = (prev || []).map(t => {
+          if (t && t.id === id) {
+            const oldStatus = t.status || 'Open';
+            const patch = { status, updatedAt: new Date().toISOString() };
+            if (summary) patch.closureSummary = summary;
+            
+            // 🔄 If moving from Resolved/Closed back to an active state (Open, In Progress, Awaiting Response), clear current summary and closedAt
+            const activeStates = ['Open', 'In Progress', 'Awaiting Response'];
+            if (activeStates.includes(status)) {
+              if (oldStatus === 'Resolved' || oldStatus === 'Closed') {
+                patch.closureSummary = null;
+                patch.closedAt = null;
+              }
+            } else if (status === 'Resolved' || status === 'Closed') {
+              // 🏁 Record closure time for the 3-day reopening rule
+              patch.closedAt = new Date().toISOString();
+            }
+
+            // 📅 Log the transition event in the chat (admin-only view will filter this)
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const eventMsg = {
+              id: `system-${Date.now()}`,
+              senderId: 'system',
+              type: 'event',
+              text: `---------${status} was ${oldStatus}-------\n(${time})`,
+              timestamp: new Date().toISOString()
+            };
+
+            return { 
+              ...t, 
+              ...patch,
+              messages: [...(t.messages || []), eventMsg]
+            };
+          }
+          return t;
+        });
         syncAndSaveData({ supportTickets: updated });
         return updated;
       });
@@ -1949,6 +2058,34 @@ export default function App() {
     }
   }, [isLoading, players.length]);
 
+  // Migration: Repair malformed support tickets (missing ID, status, or createdAt) and modernize IDs
+  React.useEffect(() => {
+    if (!isLoading && supportTickets.length > 0) {
+      const isNumeric = (str) => /^\d{7}$/.test(str);
+      const needsRepair = supportTickets.some(t => !t.id || !t.status || !t.createdAt || !isNumeric(t.id));
+      
+      if (needsRepair) {
+        setSupportTickets(prev => {
+          const repaired = (prev || []).map((t, idx) => {
+            const currentIdIsNumeric = isNumeric(t.id);
+            if (!t.id || !t.status || !t.createdAt || !currentIdIsNumeric) {
+              return {
+                ...t,
+                id: currentIdIsNumeric ? t.id : `${Math.floor(1000000 + Math.random() * 9000000)}`,
+                status: t.status || 'Open',
+                createdAt: t.createdAt || new Date().toISOString(),
+                updatedAt: t.updatedAt || new Date().toISOString()
+              };
+            }
+            return t;
+          });
+          syncAndSaveData({ supportTickets: repaired });
+          return repaired;
+        });
+      }
+    }
+  }, [isLoading, supportTickets.length]);
+
   if (!isFullyConnected) {
     return <OfflineScreen />;
   }
@@ -2051,7 +2188,7 @@ export default function App() {
           tournaments={tournaments}
           matchVideos={matchVideos}
           matches={matches}
-          tickets={supportTickets}
+          supportTickets={supportTickets}
           evaluations={evaluations}
           seenAdminActionIds={seenAdminActionIds}
           visitedAdminSubTabs={visitedAdminSubTabs}

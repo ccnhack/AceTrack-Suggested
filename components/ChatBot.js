@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, TextInput, 
   StyleSheet, Modal, KeyboardAvoidingView, Platform, 
-  SafeAreaView, ActivityIndicator, Dimensions
+  SafeAreaView, ActivityIndicator, Dimensions,
+  Animated, PanResponder
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -116,6 +117,33 @@ const ChatBot = ({
   const scrollViewRef = useRef(null);
   const prevMessagesCountRef = useRef(messages.length);
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  
+  // 🖐️ DRAGGABLE LOGIC (v2.6.25)
+  const pan = useRef(new Animated.ValueXY()).current;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // Only take control if there's actual movement (avoids stealing taps)
+        return Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5;
+      },
+      onPanResponderGrant: () => {
+        pan.setOffset({
+          x: pan.x._value,
+          y: pan.y._value
+        });
+        pan.setValue({ x: 0, y: 0 });
+      },
+      onPanResponderMove: Animated.event(
+        [null, { dx: pan.x, dy: pan.y }],
+        { useNativeDriver: false }
+      ),
+      onPanResponderRelease: () => {
+        pan.flattenOffset();
+      }
+    })
+  ).current;
 
   useEffect(() => {
     const opened = isOpen && !prevIsOpen;
@@ -270,15 +298,20 @@ Keep answers concise, premium, and friendly. Use ### for headers and **bold** fo
 
   return (
     <>
-      {/* Floating Action Button */}
+      {/* 🚀 Draggable FAB (v2.6.25) */}
       {!isOpen && (
-        <TouchableOpacity
-          onPress={() => setIsOpen(true)}
-          style={styles.fab}
-          activeOpacity={0.8}
+        <Animated.View 
+          style={[styles.fab, { transform: pan.getTranslateTransform() }]}
+          {...panResponder.panHandlers}
         >
-          <Ionicons name="chatbubble-ellipses" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+          <TouchableOpacity 
+            activeOpacity={0.8}
+            onPress={() => setIsOpen(true)}
+            style={styles.fabInner}
+          >
+            <Ionicons name="chatbubble-ellipses" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        </Animated.View>
       )}
 
       {/* Chat Modal */}
@@ -379,6 +412,7 @@ Keep answers concise, premium, and friendly. Use ### for headers and **bold** fo
           </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
+      
     </>
   );
 };
@@ -408,6 +442,12 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  fabInner: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   header: {
     flexDirection: 'row',

@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Animated, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Animated, SafeAreaView, Modal, TextInput, Alert, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import designSystem from '../theme/designSystem';
@@ -16,20 +16,25 @@ const InsightsScreen = ({
   tournaments = [], 
   matchVideos = [],
   matches = [],
-  evaluations = []
+  evaluations = [],
+  supportTickets: tickets = [], // Alias supportTickets to tickets for component-wide usage
+  navigation
 }) => {
   const [selectedCity, setSelectedCity] = useState(null);
   const [selectedAcademyId, setSelectedAcademyId] = useState(null);
-  const [selectedStat, setSelectedStat] = useState(null); // 'Players' | 'Tournaments' | 'Footage' | 'Coaches' | null
+  const [selectedStat, setSelectedStat] = useState(null); // 'Players' | 'Tournaments' | 'Footage' | 'Coaches' | 'Devices' | 'Tickets' | null
   const [selectedArea, setSelectedArea] = useState(null);
   const [selectedCoachId, setSelectedCoachId] = useState(null);
+  const [deviceModalVisible, setDeviceModalVisible] = useState(false);
+  const [selectedPlatform, setSelectedPlatform] = useState(null); // 'ios' | 'android'
+  const [deviceSearchQuery, setDeviceSearchQuery] = useState('');
 
   // Initial Diagnostic Log
   useEffect(() => {
     logger.logAction('Insights_Mount', { 
-        playerCount: players.length, 
-        tournamentCount: tournaments.length, 
-        videoCount: matchVideos.length,
+        playerCount: (players || []).length, 
+        tournamentCount: (tournaments || []).length, 
+        videoCount: (matchVideos || []).length,
         coachCount: (players || []).filter(p => (p || {}).role === 'coach').length
     });
   }, []);
@@ -37,7 +42,7 @@ const InsightsScreen = ({
   // 1. Process Sports Distribution (General)
   const sportsStats = useMemo(() => {
     const counts = {};
-    players.forEach(p => {
+    (players || []).forEach(p => {
       const sport = p.sport || (p.certifiedSports && p.certifiedSports[0]) || 'Other';
       counts[sport] = (counts[sport] || 0) + 1;
     });
@@ -49,12 +54,12 @@ const InsightsScreen = ({
   // 2. Process Geographic Insights (Cities)
   const cityStats = useMemo(() => {
     const counts = {};
-    players.forEach(p => {
+    (players || []).forEach(p => {
       const city = p.city || 'Other';
       counts[city] = (counts[city] || 0) + 1;
     });
     const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 4);
-    const total = players.length || 1;
+    const total = (players || []).length || 1;
     return sorted.map(([name, count]) => ({ name, count, percent: Math.round((count / total) * 100) }));
   }, [players]);
 
@@ -74,7 +79,7 @@ const InsightsScreen = ({
   // 4. Academy Hosting Stats
   const academyStats = useMemo(() => {
     const counts = {};
-    tournaments.forEach(t => {
+    (tournaments || []).forEach(t => {
         const authorId = t.creatorId || 'system';
         counts[authorId] = (counts[authorId] || 0) + 1;
     });
@@ -83,9 +88,9 @@ const InsightsScreen = ({
       .slice(0, 4)
       .map(([id, count]) => ({
         id,
-        name: players.find(p => p.id === id)?.name || (id === 'system' ? 'Platform Admin' : 'Unknown Academy'),
+        name: (players || []).find(p => p.id === id)?.name || (id === 'system' ? 'Platform Admin' : 'Unknown Academy'),
         count,
-        percent: (count / Math.max(tournaments.length, 1)) * 100
+        percent: (count / Math.max((tournaments || []).length, 1)) * 100
       }));
   }, [tournaments, players]);
 
@@ -106,10 +111,11 @@ const InsightsScreen = ({
     if (selectedStat === 'Players') {
         const counts = {};
         const newCounts = {};
-        players.forEach((p, index) => { 
+        const _p = (players || []);
+        _p.forEach((p, index) => { 
             const area = p.mostPlayedVenue || 'General Area'; 
             counts[area] = (counts[area] || 0) + 1; 
-            if (index > players.length * 0.7) {
+            if (index > _p.length * 0.7) {
                 newCounts[area] = (newCounts[area] || 0) + 1;
             }
         });
@@ -120,22 +126,22 @@ const InsightsScreen = ({
     }
     if (selectedStat === 'Tournaments') {
         const counts = {};
-        tournaments.forEach(t => { const area = t.location || 'General Venue'; counts[area] = (counts[area] || 0) + 1; });
+        (tournaments || []).forEach(t => { const area = t.location || 'General Venue'; counts[area] = (counts[area] || 0) + 1; });
         return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([name, count]) => ({ name, value: count, label: 'Hosts' }));
     }
     if (selectedStat === 'Footage') {
         const counts = {};
-        matchVideos.forEach(v => {
-            const tourney = tournaments.find(t => t.id === v.tournamentId);
+        (matchVideos || []).forEach(v => {
+            const tourney = (tournaments || []).find(t => t.id === v.tournamentId);
             const authorId = tourney?.creatorId || 'system';
-            const academyName = players.find(p => p.id === authorId)?.name || 'Platform Admin';
+            const academyName = (players || []).find(p => p.id === authorId)?.name || 'Platform Admin';
             counts[academyName] = (counts[academyName] || 0) + 1;
         });
         return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([name, count]) => ({ name, value: count, label: 'Uploads' }));
     }
     if (selectedStat === 'Coaches') {
         const counts = {};
-        tournaments.forEach(t => {
+        (tournaments || []).forEach(t => {
             const coachIds = (t.assignedCoachIds || []).concat(Object.keys(t.coachOtps || {}));
             [...new Set(coachIds)].forEach(cid => {
                 counts[cid] = (counts[cid] || 0) + 1;
@@ -143,7 +149,7 @@ const InsightsScreen = ({
         });
         return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([cid, count]) => ({
             id: cid,
-            name: players.find(p => p.id === cid)?.name || 'Unknown Coach',
+            name: (players || []).find(p => p.id === cid)?.name || 'Unknown Coach',
             value: count,
             label: 'Judged'
         }));
@@ -198,6 +204,90 @@ const InsightsScreen = ({
         tournaments: judged.slice(0, 5)
     };
   }, [tournaments, selectedCoachId]);
+  
+  // 9. Device Distribution Insights
+  const deviceStats = useMemo(() => {
+    const counts = { ios: 0, android: 0, other: 0 };
+    (players || []).forEach(p => {
+      if (!p.devices || p.devices.length === 0) return;
+      const latestDevice = [...p.devices].sort((a,b) => (b.lastActive || 0) - (a.lastActive || 0))[0];
+      const name = (latestDevice?.name || '').toLowerCase();
+      const pVer = (latestDevice?.platformVersion || '').toLowerCase();
+      const fullInfo = `${name} ${pVer}`;
+      
+      if (fullInfo.includes('ios') || fullInfo.includes('iphone') || fullInfo.includes('ipad') || fullInfo.includes('apple')) counts.ios++;
+      else if (fullInfo.includes('android')) counts.android++;
+      else counts.other++;
+    });
+    return counts;
+  }, [players]);
+
+  // 10. Support Ticket Device/Version Insights
+  const ticketDeviceStats = useMemo(() => {
+    const versionCounts = {}; // { '2.6.25': 5, ... }
+    const osCounts = { ios: 0, android: 0, other: 0 };
+    const _t = (tickets || []);
+
+    _t.forEach(t => {
+      const deviceInfo = t.deviceInfo;
+      const appVer = deviceInfo?.appVersion || 'Unknown';
+      versionCounts[appVer] = (versionCounts[appVer] || 0) + 1;
+      
+      const os = deviceInfo?.os?.toLowerCase() || 'other';
+      if (os === 'ios') osCounts.ios++;
+      else if (os === 'android') osCounts.android++;
+      else osCounts.other++;
+    });
+
+    const sortedVersions = Object.entries(versionCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const maxVal = Math.max(...sortedVersions.map(v => v[1]), 1);
+
+    return {
+      versions: sortedVersions.map(([v, count]) => ({ name: v, count, percent: (count / maxVal) * 100 })),
+      platforms: osCounts
+    };
+  }, [tickets]);
+
+  // 11. Detailed Device Player Lists
+  const deviceDetailList = useMemo(() => {
+    if (selectedStat !== 'Devices' && selectedStat !== 'Tickets') return [];
+    
+    // For Devices stat, we show distribution of ALL players
+    if (selectedStat === 'Devices') {
+        const iosPlayers = [];
+        const androidPlayers = [];
+        
+        players.forEach(p => {
+            if (!p.devices || p.devices.length === 0) return;
+            const latestDevice = [...p.devices].sort((a,b) => (b.lastActive || 0) - (a.lastActive || 0))[0];
+            const name = (latestDevice?.name || '').toLowerCase();
+            const pVer = (latestDevice?.platformVersion || '').toLowerCase();
+            const fullInfo = `${name} ${pVer}`;
+            
+            const info = { ...p, appVersion: latestDevice?.appVersion || 'Legacy' };
+            
+            if (fullInfo.includes('ios') || fullInfo.includes('iphone') || fullInfo.includes('ipad') || fullInfo.includes('apple')) iosPlayers.push(info);
+            else if (fullInfo.includes('android')) androidPlayers.push(info);
+        });
+
+        return { ios: iosPlayers, android: androidPlayers };
+    }
+    return null;
+  }, [players, selectedStat]);
+
+  // 12. Filtered Device Users for Modal Search
+  const filteredDeviceUsers = useMemo(() => {
+    if (!selectedPlatform || !deviceDetailList) return [];
+    const list = selectedPlatform === 'ios' ? deviceDetailList.ios : deviceDetailList.android;
+    if (!deviceSearchQuery.trim()) return list;
+    
+    const q = deviceSearchQuery.toLowerCase();
+    return list.filter(p => 
+        (p.name || '').toLowerCase().includes(q) || 
+        (p.id || '').toLowerCase().includes(q) || 
+        (p.appVersion || '').toLowerCase().includes(q)
+    );
+  }, [selectedPlatform, deviceDetailList, deviceSearchQuery]);
 
   // Growth Data with Percentages
   const growthStats = useMemo(() => {
@@ -279,6 +369,8 @@ const InsightsScreen = ({
           <StatBox title="Tournaments" value={(tournaments || []).length} icon="trophy" color="#F59E0B" trend="+5%" isActive={selectedStat === 'Tournaments'} onPress={() => handleStatSelect('Tournaments')} />
           <StatBox title="Footage" value={(matchVideos || []).length} icon="videocam" color="#10B981" trend="+24%" isActive={selectedStat === 'Footage'} onPress={() => handleStatSelect('Footage')} />
           <StatBox title="Coaches" value={(players || []).filter(p => p && p.role === 'coach').length} icon="school" color="#8B5CF6" trend="+18%" isActive={selectedStat === 'Coaches'} onPress={() => handleStatSelect('Coaches')} />
+          <StatBox title="Devices" value={deviceStats.ios + deviceStats.android} icon="phone-portrait" color="#EC4899" trend="Dist" isActive={selectedStat === 'Devices'} onPress={() => handleStatSelect('Devices')} />
+          <StatBox title="Tickets" value={(tickets || []).length} icon="chatbubbles" color="#3B82F6" trend="Issues" isActive={selectedStat === 'Tickets'} onPress={() => handleStatSelect('Tickets')} />
         </View>
 
         {/* Dynamic Stat Drill-down with Area/Coach Deep-dive */}
@@ -374,6 +466,81 @@ const InsightsScreen = ({
                                 </View>
                             </TouchableOpacity>
                         ))}
+                        
+                        {/* Device Detail View */}
+                        {selectedStat === 'Devices' && (
+                            <View style={styles.deviceDetailContainer}>
+                                <Text style={styles.subChartTitle}>Android vs iPhone (by Players)</Text>
+                                <View style={styles.deviceSplitRow}>
+                                    <TouchableOpacity 
+                                        onPress={() => {
+                                            setSelectedPlatform('android');
+                                            setDeviceModalVisible(true);
+                                        }}
+                                        style={[styles.deviceCol, { borderLeftColor: '#10B981', borderLeftWidth: 3 }]}
+                                    >
+                                        <View style={styles.rowBetween}>
+                                            <Text style={styles.deviceTitle}>Android</Text>
+                                            <Ionicons name="search" size={12} color="#94A3B8" />
+                                        </View>
+                                        <Text style={styles.deviceCount}>{deviceStats.android}</Text>
+                                        <Text style={styles.tapToSearch}>Tap to search all users</Text>
+                                    </TouchableOpacity>
+                                    
+                                    <TouchableOpacity 
+                                        onPress={() => {
+                                            setSelectedPlatform('ios');
+                                            setDeviceModalVisible(true);
+                                        }}
+                                        style={[styles.deviceCol, { borderLeftColor: '#3B82F6', borderLeftWidth: 3 }]}
+                                    >
+                                        <View style={styles.rowBetween}>
+                                            <Text style={styles.deviceTitle}>iPhone</Text>
+                                            <Ionicons name="search" size={12} color="#94A3B8" />
+                                        </View>
+                                        <Text style={styles.deviceCount}>{deviceStats.ios}</Text>
+                                        <Text style={styles.tapToSearch}>Tap to search all users</Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                            </View>
+                        )}
+
+                        {/* Ticket Analysis View */}
+                        {selectedStat === 'Tickets' && (
+                            <View style={styles.ticketDetailContainer}>
+                                <Text style={styles.subChartTitle}>Issue Source Breakdown</Text>
+                                <View style={styles.deviceSplitRow}>
+                                    <View style={[styles.deviceCol, { borderLeftColor: '#F59E0B', borderLeftWidth: 3, flex: 1 }]}>
+                                        <Text style={styles.deviceTitle}>Tickets Total</Text>
+                                        <Text style={styles.deviceCount}>{tickets.length}</Text>
+                                    </View>
+                                </View>
+
+                                <Text style={[styles.subChartTitle, { marginTop: 20 }]}>Tickets by App Version</Text>
+                                {ticketDeviceStats.versions.map((ver) => (
+                                    <View key={ver.name} style={[styles.detailBarRow, { marginBottom: 12 }]}>
+                                        <View style={styles.barLabelContainer}>
+                                            <Text style={styles.barLabel}>Version {ver.name}</Text>
+                                            <Text style={styles.barValue}>{ver.count} Issues</Text>
+                                        </View>
+                                        <View style={styles.barTrack}><View style={[styles.barFill, { width: `${ver.percent}%`, backgroundColor: '#F59E0B' }]} /></View>
+                                    </View>
+                                ))}
+
+                                <Text style={[styles.subChartTitle, { marginTop: 20 }]}>Tickets by Platform</Text>
+                                <View style={styles.rowBetween}>
+                                    <View style={styles.platformIconBox}>
+                                        <Ionicons name="logo-android" size={18} color="#10B981" />
+                                        <Text style={styles.platformIconText}>{ticketDeviceStats.platforms.android} Android</Text>
+                                    </View>
+                                    <View style={styles.platformIconBox}>
+                                        <Ionicons name="logo-apple" size={18} color="#0F172A" />
+                                        <Text style={styles.platformIconText}>{ticketDeviceStats.platforms.ios} iPhone</Text>
+                                    </View>
+                                </View>
+                            </View>
+                        )}
                     </View>
                 )}
             </View>
@@ -477,6 +644,93 @@ const InsightsScreen = ({
 
         <View style={{ height: 40 }} />
       </LinearGradient>
+
+      {/* Full-screen Searchable User Modal */}
+      <Modal 
+        visible={deviceModalVisible} 
+        animationType="slide" 
+        onRequestClose={() => setDeviceModalVisible(false)}
+      >
+        <SafeAreaView style={styles.modalFullContainer}>
+          <View style={styles.modalHeader}>
+            <View>
+              <Text style={styles.modalTitle}>{selectedPlatform === 'ios' ? 'iPhone' : 'Android'} Users</Text>
+              <Text style={styles.modalSubtitle}>{filteredDeviceUsers.length} total users match search</Text>
+            </View>
+            <TouchableOpacity onPress={() => { setDeviceModalVisible(false); setDeviceSearchQuery(''); }}>
+              <Ionicons name="close-circle" size={32} color="#CBD5E1" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.searchBarWrapper}>
+            <Ionicons name="search" size={18} color="#94A3B8" style={styles.searchIcon} />
+            <TextInput 
+              style={styles.modalSearchInput}
+              placeholder="Search by name, ID or version..."
+              value={deviceSearchQuery}
+              onChangeText={setDeviceSearchQuery}
+              autoFocus={true}
+            />
+            {deviceSearchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setDeviceSearchQuery('')}>
+                <Ionicons name="close" size={18} color="#94A3B8" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <ScrollView style={styles.modalContent} contentContainerStyle={styles.modalScrollContent}>
+            {filteredDeviceUsers.length === 0 ? (
+                <View style={styles.emptyState}>
+                    <Ionicons name="search-outline" size={48} color="#F1F5F9" />
+                    <Text style={styles.emptyStateText}>No users found for "{deviceSearchQuery}"</Text>
+                </View>
+            ) : (
+                filteredDeviceUsers.map(p => (
+                    <TouchableOpacity 
+                      key={p.id} 
+                      style={styles.deviceUserRow}
+                      onPress={() => {
+                        logger.logAction('Insights_Click_Modal_User', { userId: p.id, platform: selectedPlatform });
+                        const userBaseUrl = `https://acetrack-suggested.onrender.com/api/diagnostics?userId=${p.id}`;
+                        
+                        // Use native Alert to offer options
+                        const options = [
+                          { text: 'Cancel', style: 'cancel' },
+                          { 
+                            text: 'Investigate in Admin Hub', 
+                            onPress: () => {
+                                setDeviceModalVisible(false);
+                                setDeviceSearchQuery('');
+                                navigation.navigate('Admin', { 
+                                    autoSelectUser: p.id, 
+                                    autoSelectSubTab: 'diagnostics' 
+                                });
+                            }
+                          }
+                        ];
+                        
+                        // If they have a phone, we could offer more, but diagnostic API is what was requested
+                        Alert.alert(
+                          `User: ${p.name || p.id}`,
+                          `Technical ID: ${p.id}\nPlatform: ${selectedPlatform === 'ios' ? 'iPhone' : 'Android'}\nVersion: v${p.appVersion}`,
+                          options
+                        );
+                      }}
+                    >
+                        <View style={styles.flexItem}>
+                            <Text style={styles.deviceUserName}>{p.name}</Text>
+                            <Text style={styles.deviceUserId}>ID: {p.id}</Text>
+                        </View>
+                        <View style={styles.appVersionBadge}>
+                            <Text style={styles.appVersionText}>v{p.appVersion}</Text>
+                        </View>
+                    </TouchableOpacity>
+                ))
+            )}
+            <View style={{ height: 40 }} />
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </ScrollView>
   );
 };
@@ -572,6 +826,31 @@ const styles = StyleSheet.create({
   dot: { width: 10, height: 10, borderRadius: 5, marginRight: 12 },
   geoName: { flex: 1, fontSize: 14, fontWeight: '600', color: '#334155' },
   geoCount: { fontSize: 13, fontWeight: '700', color: '#1E293B' },
+  deviceDetailContainer: { marginTop: 10 },
+  deviceSplitRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  deviceCol: { flex: 1, backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12 },
+  deviceTitle: { fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase' },
+  deviceCount: { fontSize: 18, fontWeight: '800', color: '#1E293B' },
+  deviceUserRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12, marginBottom: 8 },
+  deviceUserName: { fontSize: 13, fontWeight: '700', color: '#334155' },
+  deviceUserId: { fontSize: 10, color: '#94A3B8', marginTop: 2 },
+  appVersionBadge: { backgroundColor: '#EEF2FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  appVersionText: { fontSize: 10, fontWeight: '800', color: '#6366F1' },
+  platformIconBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', padding: 10, borderRadius: 12, flex: 1, marginRight: 10, justifyContent: 'center' },
+  platformIconText: { fontSize: 12, fontWeight: '700', color: '#334155', marginLeft: 8 },
+  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  tapToSearch: { fontSize: 9, fontWeight: '700', color: '#6366F1', marginTop: 4, fontStyle: 'italic' },
+  modalFullContainer: { flex: 1, backgroundColor: '#FFFFFF' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  modalTitle: { fontSize: 22, fontWeight: '800', color: '#1E293B' },
+  modalSubtitle: { fontSize: 11, color: '#94A3B8', fontWeight: '700', textTransform: 'uppercase', marginTop: 2 },
+  searchBarWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', margin: 24, marginTop: 12, marginBottom: 12, paddingHorizontal: 16, borderRadius: 14, height: 48, borderWidth: 1, borderColor: '#F1F5F9' },
+  modalSearchInput: { flex: 1, height: '100%', fontSize: 14, color: '#1E293B', fontWeight: '600' },
+  searchIcon: { marginRight: 10 },
+  modalContent: { flex: 1 },
+  modalScrollContent: { padding: 24, paddingTop: 0 },
+  emptyState: { alignItems: 'center', justifyContent: 'center', marginTop: 100 },
+  emptyStateText: { fontSize: 14, color: '#94A3B8', marginTop: 16, fontWeight: '600' },
 });
 
 export default InsightsScreen;

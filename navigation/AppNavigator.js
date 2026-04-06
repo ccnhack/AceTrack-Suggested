@@ -100,7 +100,7 @@ const AdminHubWrapper = memo((props) => {
   const { user, onLogout } = useAuth();
   const { isCloudOnline, ...data } = useAppData();
   const actions = useAppActions();
-  return <AdminHubScreen {...props} {...data} user={user} onLogout={onLogout} isCloudOnline={isCloudOnline} {...actions} Sport={Sport} SkillLevel={SkillLevel} TournamentStructure={TournamentStructure} TournamentFormat={TournamentFormat} />;
+  return <AdminHubScreen {...props} {...data} tickets={data.supportTickets} user={user} onLogout={onLogout} isCloudOnline={isCloudOnline} {...actions} Sport={Sport} SkillLevel={SkillLevel} TournamentStructure={TournamentStructure} TournamentFormat={TournamentFormat} />;
 });
 
 const InsightsWrapper = memo((props) => {
@@ -130,7 +130,7 @@ const ProfileWrapper = memo((props) => {
   const { 
     onManualSync, onUploadLogs, isUploadingLogs, onSaveTicket, 
     onReplyTicket, onUpdateUser, onTopUp, setIsProfileEditActive, 
-    onToggleCloud, onVerifyAccount 
+    onToggleCloud, onVerifyAccount, onUpdateTicketStatus
   } = useAppActions();
 
   return (
@@ -154,6 +154,7 @@ const ProfileWrapper = memo((props) => {
       setIsProfileEditActive={setIsProfileEditActive}
       onToggleCloud={onToggleCloud}
       onVerifyAccount={onVerifyAccount}
+      onUpdateTicketStatus={onUpdateTicketStatus}
       Sport={Sport} 
       SkillLevel={SkillLevel} 
       TournamentStructure={TournamentStructure} 
@@ -319,7 +320,7 @@ const LiveScoringWrapper = memo((props) => {
 });
 
 export default function AppNavigator({ 
-  user, role, players, tournaments, matchVideos, matches, tickets, evaluations, 
+  user, role, players, tournaments, matchVideos, matches, supportTickets, evaluations, 
   seenAdminActionIds, visitedAdminSubTabs, setVisitedAdminSubTabs, 
   reschedulingFrom, auditLogs, onLogout, handlers, appVersion, socketRef,
   matchmaking, onUpdateMatchmaking, sendUserNotification,
@@ -330,11 +331,11 @@ export default function AppNavigator({
   }), [user?.id, user?.avatar, user?.isEmailVerified, user?.isPhoneVerified, role, onLogout]);
 
   const dataParams = useMemo(() => ({
-    players, tournaments, matchVideos, matches, tickets, evaluations,
+    players, tournaments, matchVideos, matches, supportTickets, evaluations,
     seenAdminActionIds, visitedAdminSubTabs, reschedulingFrom, auditLogs,
     appVersion, matchmaking, isCloudOnline, isUsingCloud, lastSyncTime
   }), [
-    players, tournaments, matchVideos, matches, tickets, evaluations,
+    players, tournaments, matchVideos, matches, supportTickets, evaluations,
     seenAdminActionIds, visitedAdminSubTabs, reschedulingFrom, auditLogs,
     appVersion, matchmaking, isCloudOnline, isUsingCloud, lastSyncTime
   ]);

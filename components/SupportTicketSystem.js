@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Swipeable } from 'react-native-gesture-handler';
+import { generateAIResponse } from '../services/aiService';
 
 const TICKET_TYPES = [
   'Technical Issue', 'Bug', 'Refund', 'Enhancement Request',
@@ -22,7 +23,8 @@ const statusColors = {
 
 export const SupportTicketSystem = ({
   userId, userName, tickets = [], onCreateTicket, onSendMessage, 
-  onTypingStart, onTypingStop, onResolvePrompt, onToggleSupport
+  onTypingStart, onTypingStop, onResolvePrompt, onToggleSupport,
+  onUpdateStatus, onReply
 }) => {
   const [view, setView] = useState('list');
   const [selectedTicket, setSelectedTicket] = useState(null);
@@ -32,13 +34,19 @@ export const SupportTicketSystem = ({
   const [isAdminTyping, setIsAdminTyping] = useState(false);
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const [showTypePicker, setShowTypePicker] = useState(false);
+  const [listTab, setListTab] = useState('Open'); // 'Open' or 'Closed'
 
   const [formData, setFormData] = useState({
     type: 'Other',
     title: '',
     description: ''
   });
+  const [showClosureModal, setShowClosureModal] = useState(false);
+  const [closureReason, setClosureReason] = useState('');
+  const [isClosing, setIsClosing] = useState(false);
   const scrollViewRef = useRef(null);
+  const textInputRef = useRef(null);
+  const messageYOffsets = useRef({}); // 📍 Track message coordinates (v2.6.27)
 
   const myTickets = (tickets || []).filter(t => t.userId === userId);
 
@@ -53,6 +61,15 @@ export const SupportTicketSystem = ({
       if (updated) setSelectedTicket(updated);
     }
   }, [tickets]);
+
+  // 📜 Auto-scroll on Open/Update (v2.6.25)
+  useEffect(() => {
+    if (view === 'detail' && selectedTicket && scrollViewRef.current && typeof scrollViewRef.current.scrollToEnd === 'function') {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [view, selectedTicket?.messages?.length]);
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -97,11 +114,21 @@ export const SupportTicketSystem = ({
 
   const renderMessageReply = (reply) => {
     if (!reply) return null;
+    const targetY = messageYOffsets.current[reply.id || reply.timestamp];
+    
     return (
-      <View style={styles.msgReplyPreview}>
+      <TouchableOpacity 
+        style={styles.msgReplyPreview}
+        onPress={() => {
+          if (targetY !== undefined) {
+            scrollViewRef.current?.scrollTo({ y: targetY, animated: true });
+          }
+        }}
+        activeOpacity={0.7}
+      >
         <Text style={styles.msgReplyUser}>{reply.senderId === userId ? 'You' : 'Admin'}</Text>
         <Text style={styles.msgReplyText} numberOfLines={1}>{reply.text}</Text>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -115,9 +142,26 @@ export const SupportTicketSystem = ({
     const senderId = msg?.senderId || userId;
     const isMe = String(senderId) === String(userId);
     
+    // 🛡️ Format internal system/event messages for the user
+    if (msg.type === 'event' || senderId === 'system') {
+      return (
+        <View 
+          key={msg.id || msg.timestamp || index} 
+          style={styles.eventCard}
+          onLayout={(e) => { messageYOffsets.current[msg.id || msg.timestamp] = e.nativeEvent.layout.y; }}
+        >
+          <Text style={styles.eventText}>{text}</Text>
+        </View>
+      );
+    }
+
     if (msg.type === 'prompt') {
       return (
-        <View key={msg.id || index} style={styles.promptCard}>
+        <View 
+          key={msg.id || msg.timestamp || index} 
+          style={styles.promptCard}
+          onLayout={(e) => { messageYOffsets.current[msg.id || msg.timestamp] = e.nativeEvent.layout.y; }}
+        >
           <Text style={styles.promptText}>{msg.text}</Text>
           <View style={styles.promptActions}>
             <TouchableOpacity onPress={() => onResolvePrompt(selectedTicket.id, 'Yes')} style={styles.promptBtnYes}>
@@ -133,7 +177,11 @@ export const SupportTicketSystem = ({
 
     if (msg.type === 'restart') {
       return (
-        <View key={msg.id || index} style={styles.systemNote}>
+        <View 
+          key={msg.id || msg.timestamp || index} 
+          style={styles.systemNote}
+          onLayout={(e) => { messageYOffsets.current[msg.id || msg.timestamp] = e.nativeEvent.layout.y; }}
+        >
           <Text style={styles.systemNoteText}>{msg.text}</Text>
           <TouchableOpacity onPress={() => setView('create')} style={styles.restartBtn}>
             <Text style={styles.restartBtnText}>Restart Chat</Text>
@@ -149,27 +197,80 @@ export const SupportTicketSystem = ({
     );
 
     return (
-      <Swipeable
-        key={msg.id || index}
-        renderRightActions={isMe ? renderRightActions : undefined}
-        renderLeftActions={!isMe ? renderRightActions : undefined}
-        onSwipeableOpen={() => setReplyToMsg(msg)}
+      <View 
+        key={msg.id || msg.timestamp || index} 
+        onLayout={(e) => { messageYOffsets.current[msg.id || msg.timestamp] = e.nativeEvent.layout.y; }}
       >
-        <View style={[styles.messageBubble, isMe ? styles.myBubble : styles.otherBubble]}>
-          {!isMe && <Text style={styles.adminLabel}>Admin Support</Text>}
-          {renderMessageReply(msg.replyTo)}
-          {msg.image && (
-            <Image source={{ uri: msg.image }} style={styles.msgImage} resizeMode="contain" />
-          )}
-          <Text style={[styles.messageText, isMe ? styles.myText : styles.otherText]}>
-            {text}
-          </Text>
-          <Text style={styles.timestamp}>
-            {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Text>
-        </View>
-      </Swipeable>
+        <Swipeable
+          renderRightActions={isMe ? renderRightActions : undefined}
+          renderLeftActions={!isMe ? renderRightActions : undefined}
+          onSwipeableOpen={() => {
+            setReplyToMsg(msg);
+            // 🛡️ Auto-focus and scroll to bottom on reply (v2.6.25)
+            setTimeout(() => {
+              scrollViewRef.current?.scrollToEnd({ animated: true });
+              textInputRef.current?.focus();
+            }, 100);
+          }}
+        >
+          <View style={[styles.messageBubble, isMe ? styles.myBubble : styles.otherBubble]}>
+            {!isMe && <Text style={styles.adminLabel}>Admin Support</Text>}
+            {renderMessageReply(msg.replyTo)}
+            {msg.image && (
+              <Image source={{ uri: msg.image }} style={styles.msgImage} resizeMode="contain" />
+            )}
+            <Text style={[styles.messageText, isMe ? styles.myText : styles.otherText]}>
+              {text?.startsWith('CLOSURE_REQUEST_EVENT:') 
+                ? `Requested Closure: ${text.replace('CLOSURE_REQUEST_EVENT:', '').trim()}` 
+                : text}
+            </Text>
+            <Text style={styles.timestamp}>
+              {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+          </View>
+        </Swipeable>
+      </View>
     );
+  };
+
+  const handleUserClosure = async () => {
+    if (!selectedTicket) return;
+    setIsClosing(true);
+    
+    try {
+      // 📝 1. Post the closure message with a neutral identifier
+      if (closureReason.trim()) {
+        onReply(selectedTicket.id, `CLOSURE_REQUEST_EVENT: ${closureReason.trim()}`);
+      }
+
+      // 🤖 2. Generate AI Summary (same logic as admin)
+      const history = (selectedTicket.messages || []).map(m => 
+        `${m.senderId === 'admin' ? 'Admin' : (m.senderId === userId ? 'User' : 'Other')}: ${m.text || ''}`
+      ).join('\n');
+
+      const prompt = [
+        { role: 'system', text: "You are a professional support analyst. Read the conversation history and summarize it into exactly 3 concise sentences. 1) The original issue. 2) The actions taken. 3) The resolution summary. Be clear and objective." },
+        { role: 'user', text: `History:\n${history}\n\nClient Resolution Message: ${closureReason.trim() || 'No additional details'}` }
+      ];
+
+      const aiSummary = await generateAIResponse(prompt);
+      
+      // 🏁 3. Finish Closure
+      onUpdateStatus(selectedTicket.id, 'Closed', aiSummary);
+      setShowClosureModal(false);
+      setClosureReason('');
+    } catch (e) {
+      console.error("User-initiated closure failed:", e);
+      // Fallback: simple closure without summary if AI fails
+      onUpdateStatus(selectedTicket.id, 'Closed');
+    } finally {
+      setIsClosing(false);
+    }
+  };
+
+  const handleReopen = () => {
+    if (!selectedTicket) return;
+    onUpdateStatus(selectedTicket.id, 'In Progress');
   };
 
   if (view === 'list') {
@@ -186,53 +287,106 @@ export const SupportTicketSystem = ({
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-          {myTickets.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Ionicons name="chatbubble-ellipses-outline" size={48} color="#E2E8F0" />
-              <Text style={styles.emptyTitle}>No support tickets yet</Text>
-              <Text style={styles.emptySubtitle}>Create a new ticket to get help</Text>
-            </View>
-          ) : (
-            myTickets.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(ticket => {
-              const lastMessage = ticket.messages[ticket.messages.length - 1];
-              const isAdminReply = lastMessage && lastMessage.senderId !== userId;
-              const hasUnread = isAdminReply && ticket.status === 'Awaiting Response';
-              const st = statusColors[ticket.status] || statusColors['Open'];
+        <View style={styles.tabContainer}>
+          <TouchableOpacity 
+            onPress={() => setListTab('Open')}
+            style={[styles.tabBtn, listTab === 'Open' && styles.tabBtnActive]}
+          >
+            <Text style={[styles.tabBtnText, listTab === 'Open' && styles.tabBtnTextActive]}>Open</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => setListTab('Closed')}
+            style={[styles.tabBtn, listTab === 'Closed' && styles.tabBtnActive]}
+          >
+            <Text style={[styles.tabBtnText, listTab === 'Closed' && styles.tabBtnTextActive]}>Resolved/Closed</Text>
+          </TouchableOpacity>
+        </View>
 
+        <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+          {(() => {
+            const openStatuses = ['Open', 'In Progress', 'Awaiting Response'];
+            const filtered = myTickets.filter(t => {
+              const status = t.status || 'Open';
+              return listTab === 'Open' 
+                ? openStatuses.includes(status)
+                : (status === 'Resolved' || status === 'Closed');
+            });
+
+            if (filtered.length === 0) {
               return (
-                <TouchableOpacity
-                  key={ticket.id}
-                  onPress={() => { setSelectedTicket(ticket); setView('detail'); }}
-                  style={[styles.ticketCard, hasUnread && styles.ticketCardUnread]}
-                >
-                  <View style={styles.ticketCardHeader}>
-                    <Text style={[styles.ticketTitle, { flex: 1 }]} numberOfLines={1}>{ticket.title}</Text>
-                    <View style={[styles.statusBadge, { backgroundColor: st.bg, borderColor: st.border }]}>
-                      <Text style={[styles.statusBadgeText, { color: st.text }]}>{ticket.status}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.ticketCardFooter}>
-                    <Text style={styles.ticketType}>{ticket.type}</Text>
-                    <Text style={styles.ticketDate}>
-                      {new Date(ticket.createdAt).toLocaleDateString()}
-                    </Text>
-                  </View>
-                  {lastMessage && (
-                    <Text style={styles.lastMessage} numberOfLines={1}>
-                      {isAdminReply ? '🔴 Admin: ' : 'You: '}{lastMessage.text}
-                    </Text>
-                  )}
-                  {hasUnread && (
-                    <View style={styles.unreadTag}>
-                      <View style={styles.unreadDot} />
-                      <Text style={styles.unreadText}>New Reply</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="chatbubble-ellipses-outline" size={48} color="#E2E8F0" />
+                  <Text style={styles.emptyTitle}>No {listTab === 'Open' ? 'open' : 'resolved'} tickets</Text>
+                  <Text style={styles.emptySubtitle}>
+                    {listTab === 'Open' ? 'When you need help, your active tickets will appear here.' : 'Your resolved or history tickets will appear here.'}
+                  </Text>
+                </View>
               );
-            })
-          )}
+            }
+
+            return filtered
+              .sort((a, b) => {
+                const aLast = a.messages?.[a.messages.length - 1];
+                const bLast = b.messages?.[b.messages.length - 1];
+                const aUnread = aLast && aLast.senderId !== userId && aLast.senderId !== 'system' && a.status === 'Awaiting Response';
+                const bUnread = bLast && bLast.senderId !== userId && bLast.senderId !== 'system' && b.status === 'Awaiting Response';
+                
+                if (aUnread && !bUnread) return -1;
+                if (!aUnread && bUnread) return 1;
+                return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+              })
+              .map(ticket => {
+                const lastMessage = ticket.messages?.[ticket.messages.length - 1];
+                const isSystem = lastMessage?.senderId === 'system';
+                const isAdminReply = lastMessage && !isSystem && lastMessage.senderId !== userId;
+                const hasUnread = isAdminReply && ticket.status === 'Awaiting Response';
+                const st = statusColors[ticket.status || 'Open'] || statusColors['Open'];
+
+                return (
+                  <TouchableOpacity
+                    key={ticket.id}
+                    onPress={() => { setSelectedTicket(ticket); setView('detail'); }}
+                    style={[styles.ticketCard, hasUnread && styles.ticketCardUnread]}
+                  >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <Text style={styles.ticketDatePrefix}>
+                        Date:- {new Date(ticket.createdAt).toLocaleDateString()}
+                      </Text>
+                      <Text style={[styles.ticketDatePrefix, { fontWeight: '900', color: '#0F172A' }]}>
+                        ID: {ticket.id}
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.ticketCardMainRow}>
+                      <Text style={styles.ticketTitle} numberOfLines={1}>{ticket.title}</Text>
+                      <View style={[styles.statusBadge, { backgroundColor: st.bg, borderColor: st.border }]}>
+                        <Text style={[styles.statusBadgeText, { color: st.text }]}>{ticket.status || 'Open'}</Text>
+                      </View>
+                    </View>
+
+                    <Text style={styles.ticketTypeParens}>({ticket.type})</Text>
+
+                    {lastMessage && (
+                      <View style={styles.lastMessageContainer}>
+                        <Text style={styles.lastMessage} numberOfLines={1}>
+                          {isSystem ? '' : (isAdminReply ? '🔴 Admin: ' : 'You: ')}
+                          {lastMessage.text?.startsWith('CLOSURE_REQUEST_EVENT:') 
+                            ? `Requested Closure: ${lastMessage.text.replace('CLOSURE_REQUEST_EVENT:', '').trim()}` 
+                            : lastMessage.text}
+                        </Text>
+                      </View>
+                    )}
+
+                    {hasUnread && (
+                      <View style={styles.unreadTag}>
+                        <View style={styles.unreadDot} />
+                        <Text style={styles.unreadText}>New Reply</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              });
+          })()}
         </ScrollView>
       </View>
     );
@@ -329,20 +483,53 @@ export const SupportTicketSystem = ({
     const isClosed = selectedTicket.status === 'Closed' || selectedTicket.status === 'Resolved';
     const st = statusColors[selectedTicket.status] || statusColors['Open'];
 
+    const canReopen = (() => {
+        if (!selectedTicket.closedAt) return false;
+        const diff = Date.now() - new Date(selectedTicket.closedAt).getTime();
+        return diff < (3 * 24 * 60 * 60 * 1000); // 3 days
+    })();
+
+    const renderDateHeader = (dateStr) => {
+      const date = new Date(dateStr);
+      const today = new Date();
+      const yesterday = new Date();
+      yesterday.setDate(today.getDate() - 1);
+
+      let label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      if (date.toDateString() === today.toDateString()) label = 'Today';
+      else if (date.toDateString() === yesterday.toDateString()) label = 'Yesterday';
+
+      return (
+        <View style={styles.dateHeader}>
+          <Text style={styles.dateHeaderText}>{label}</Text>
+        </View>
+      );
+    };
+
     return (
       <View style={styles.container}>
-        <View style={[styles.header, { borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }]}>
-            <TouchableOpacity onPress={() => { setView('list'); setSelectedTicket(null); }} style={styles.backBtn}>
-                <Ionicons name="arrow-back" size={20} color="#0F172A" />
-            </TouchableOpacity>
-            <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.ticketTitleDetail} numberOfLines={1}>{selectedTicket.title}</Text>
-                <View style={styles.detailBadgeRow}>
-                    <Text style={styles.typeTag}>{selectedTicket.type}</Text>
-                    <View style={[styles.statusBadge, { backgroundColor: st.bg, borderColor: st.border }]}>
-                        <Text style={[styles.statusBadgeText, { color: st.text, fontSize: 8 }]}>{selectedTicket.status}</Text>
+        <View style={[styles.header, { borderBottomWidth: 1, borderBottomColor: '#F1F5F9', justifyContent: 'space-between' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                <TouchableOpacity onPress={() => { setView('list'); setSelectedTicket(null); }} style={styles.backBtn}>
+                    <Ionicons name="arrow-back" size={20} color="#0F172A" />
+                </TouchableOpacity>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={styles.ticketTitleDetail} numberOfLines={1}>{selectedTicket.title}</Text>
+                      <Text style={[styles.typeTag, { backgroundColor: '#F8FAFC', color: '#64748B' }]}>ID: {selectedTicket.id}</Text>
                     </View>
+                    <Text style={styles.typeTag}>{selectedTicket.type}</Text>
                 </View>
+            </View>
+            <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                <View style={[styles.statusBadge, { backgroundColor: st.bg, borderColor: st.border }]}>
+                    <Text style={[styles.statusBadgeText, { color: st.text, fontSize: 8 }]}>{selectedTicket.status}</Text>
+                </View>
+                {!isClosed && (
+                    <TouchableOpacity onPress={() => setShowClosureModal(true)} style={styles.reqCloseBtn}>
+                        <Text style={styles.reqCloseBtnText}>Request Closure</Text>
+                    </TouchableOpacity>
+                )}
             </View>
         </View>
         <KeyboardAvoidingView 
@@ -356,7 +543,29 @@ export const SupportTicketSystem = ({
             contentContainerStyle={styles.chatContent}
             onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
           >
-            {selectedTicket.messages.map((msg, index) => renderMessage(msg, index))}
+            {selectedTicket.closureSummary && (
+              <View style={styles.resolutionCard}>
+                <View style={styles.resHeader}>
+                  <Ionicons name="shield-checkmark" size={16} color="#059669" />
+                  <Text style={styles.resTitle}>Closure Summary</Text>
+                </View>
+                <Text style={styles.resText}>{selectedTicket.closureSummary}</Text>
+              </View>
+            )}
+            
+            {(selectedTicket.messages || []).map((msg, index) => {
+              const currentMsgDate = new Date(msg.timestamp).toDateString();
+              const prevMsgDate = index > 0 ? new Date(selectedTicket.messages[index-1].timestamp).toDateString() : null;
+              const showDateHeader = currentMsgDate !== prevMsgDate;
+
+              return (
+                <React.Fragment key={index}>
+                  {showDateHeader && renderDateHeader(msg.timestamp)}
+                  {renderMessage(msg, index)}
+                </React.Fragment>
+              );
+            })}
+            
             {isAdminTyping && (
               <View style={styles.typingIndicator}>
                 <Text style={styles.typingText}>Admin is typing...</Text>
@@ -405,6 +614,7 @@ export const SupportTicketSystem = ({
                 )}
 
                 <TextInput
+                  ref={textInputRef}
                   value={newMessage}
                   onChangeText={(txt) => {
                     setNewMessage(txt);
@@ -426,11 +636,60 @@ export const SupportTicketSystem = ({
               </View>
             ) : (
               <View style={styles.closedNote}>
-                <Text style={styles.closedNoteText}>This ticket is {selectedTicket.status.toLowerCase()}</Text>
+                <Text style={styles.closedNoteText}>
+                    {canReopen 
+                        ? "This Ticket is Closed" 
+                        : "This Ticket is Closed and cannot be reopened"}
+                </Text>
+                {canReopen && (
+                    <TouchableOpacity onPress={handleReopen} style={styles.reopenButtonBox}>
+                        <Text style={styles.reopenButtonText}>Reopen</Text>
+                    </TouchableOpacity>
+                )}
               </View>
             )}
           </View>
         </KeyboardAvoidingView>
+
+        <Modal transparent visible={showClosureModal} animationType="fade">
+            <View style={styles.modalOverlay}>
+                <View style={styles.closureBox}>
+                    <View style={styles.confirmIcon}>
+                        <Ionicons name="checkmark-done-circle" size={32} color="#16A34A" />
+                    </View>
+                    <Text style={styles.confirmTitle}>Request Closure</Text>
+                    <Text style={styles.confirmSub}>If your issue is resolved, providing a brief detail helps us improve!</Text>
+                    
+                    <TextInput
+                        value={closureReason}
+                        onChangeText={setClosureReason}
+                        placeholder="Resolution details (optional)..."
+                        style={styles.closureInput}
+                        multiline
+                        numberOfLines={3}
+                    />
+
+                    <View style={styles.confirmActions}>
+                        <TouchableOpacity 
+                           onPress={() => {
+                             setShowClosureModal(false);
+                             setClosureReason('');
+                           }} 
+                           style={styles.confirmNo}
+                        >
+                            <Text style={styles.confirmNoText}>Cancel</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                           onPress={handleUserClosure} 
+                           disabled={isClosing}
+                           style={[styles.confirmYes, { backgroundColor: '#16A34A' }]}
+                        >
+                            {isClosing ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.confirmYesText}>Submit & Close</Text>}
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        </Modal>
       </View>
     );
   }
@@ -441,6 +700,58 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabBtnActive: {
+    borderBottomColor: '#EF4444',
+  },
+  tabBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#94A3B8',
+  },
+  tabBtnTextActive: {
+    color: '#EF4444',
+  },
+  eventCard: {
+    alignItems: 'center',
+    marginVertical: 16,
+    paddingHorizontal: 20,
+  },
+  eventText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  dateHeader: {
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  dateHeaderText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 10,
+    textTransform: 'uppercase',
   },
   flex: {
     flex: 1,
@@ -509,14 +820,35 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 2,
+  },
+  ticketDatePrefix: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  ticketCardMainRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  ticketTypeParens: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '500',
+    marginBottom: 12,
+  },
+  lastMessageContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F8FAFC',
   },
   iconContainer: {
     width: 48,
@@ -1023,5 +1355,163 @@ const styles = StyleSheet.create({
   pickerItemTextActive: {
     color: '#3B82F6',
     fontWeight: '700',
+  },
+  resolutionCard: {
+    backgroundColor: '#ECFDF5',
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+  },
+  resHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  resTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#059669',
+    textTransform: 'uppercase',
+  },
+  resText: {
+    fontSize: 13,
+    color: '#064E3B',
+    lineHeight: 20,
+    fontWeight: '500',
+  },
+  closedNote: {
+    padding: 24,
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#F8FAFC',
+  },
+  closedNoteText: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+  reopenButtonBox: {
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1D4ED8',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  reopenButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 13,
+    textTransform: 'uppercase',
+  },
+  reqCloseBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  reqCloseBtnText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#64748B',
+    textTransform: 'uppercase',
+  },
+  closureBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    width: '90%',
+    maxWidth: 340,
+    alignItems: 'center',
+    marginBottom: 40, // offset for keyboard
+  },
+  closureInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 13,
+    color: '#0F172A',
+    width: '100%',
+    height: 80,
+    textAlignVertical: 'top',
+    marginVertical: 16,
+  },
+  confirmNo: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+  },
+  confirmNoText: {
+    color: '#64748B',
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    fontSize: 12,
+  },
+  confirmYes: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#2563EB',
+  },
+  confirmYesText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    fontSize: 12,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  confirmTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginBottom: 8,
+  },
+  confirmSub: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 24,
+  },
+  confirmIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  flex: {
+    flex: 1,
   },
 });

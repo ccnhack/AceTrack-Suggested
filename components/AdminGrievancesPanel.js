@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Swipeable } from 'react-native-gesture-handler';
+import { generateAIResponse } from '../services/aiService';
 
 const statusColors = {
   'Open': { bg: '#EFF6FF', text: '#2563EB', border: '#DBEAFE' },
@@ -18,23 +19,38 @@ const statusColors = {
 const statusOptions = ['Open', 'In Progress', 'Awaiting Response', 'Resolved', 'Closed'];
 
 export const AdminGrievancesPanel = ({
-  tickets, players, onReply, onUpdateStatus, onTypingStart, onTypingStop
+  tickets, players, onReply, onUpdateStatus, onTypingStart, onTypingStop, search
 }) => {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [replyText, setReplyText] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
   const [replyToMsg, setReplyToMsg] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
   const [isUserTyping, setIsUserTyping] = useState(false);
   const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [showStatusConfirm, setShowStatusConfirm] = useState(false);
+  const [showReopenModal, setShowReopenModal] = useState(false);
+  const [reopenJustification, setReopenJustification] = useState('');
+  const [pendingReopenStatus, setPendingReopenStatus] = useState(null);
+  const [pendingStatus, setPendingStatus] = useState(null);
   const scrollViewRef = useRef(null);
+  const textInputRef = useRef(null);
+  const messageYOffsets = useRef({}); // 📍 Track message coordinates (v2.6.27)
 
+  // 📜 Auto-scroll on Open/Update (v2.6.26)
   useEffect(() => {
     if (selectedTicket && scrollViewRef.current && typeof scrollViewRef.current.scrollToEnd === 'function') {
-        scrollViewRef.current.scrollToEnd({ animated: true });
+      // 🛡️ Staged scroll for Android robustness: immediate + slight delay
+      scrollViewRef.current.scrollToEnd({ animated: false });
+      
+      const timer = setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 200); // Increased delay for Android layout stability
+
+      return () => clearTimeout(timer);
     }
-  }, [selectedTicket?.messages]);
+  }, [selectedTicket?.id, selectedTicket?.messages?.length]);
 
   useEffect(() => {
     if (selectedTicket) {
@@ -43,17 +59,101 @@ export const AdminGrievancesPanel = ({
     }
   }, [tickets]);
 
+  const handleStatusChangeRequest = (status) => {
+    // ⚡ Resolved -> Closed shortcut: bypassing confirmation if it's already resolved.
+    if (selectedTicket?.status === 'Resolved' && status === 'Closed') {
+      onUpdateStatus(selectedTicket.id, status);
+      return;
+    }
+
+    // 🛡️ Justification Prompt: Moving from Resolved back to Active status
+    const activeStates = ['Open', 'In Progress', 'Awaiting Response'];
+    if (selectedTicket?.status === 'Resolved' && activeStates.includes(status)) {
+      setPendingReopenStatus(status);
+      setShowReopenModal(true);
+      return;
+    }
+
+    if (status === 'Resolved' || status === 'Closed') {
+      setPendingStatus(status);
+      setShowStatusConfirm(true);
+    } else {
+      onUpdateStatus(selectedTicket.id, status);
+    }
+  };
+
+  const handleReopenSubmit = () => {
+    if (!reopenJustification.trim()) {
+      alert("Please provide a justification for reopening this ticket.");
+      return;
+    }
+    onUpdateStatus(selectedTicket.id, pendingReopenStatus);
+    onReply(selectedTicket.id, `REOPEN JUSTIFICATION: ${reopenJustification.trim()}`);
+    
+    setShowReopenModal(false);
+    setReopenJustification('');
+    setPendingReopenStatus(null);
+  };
+
+  const processStatusConfirmation = async (confirmed) => {
+    if (!selectedTicket || !pendingStatus) {
+      setShowStatusConfirm(false);
+      setPendingStatus(null);
+      return;
+    }
+
+    if (!confirmed) {
+      setShowStatusConfirm(false);
+      setPendingStatus(null);
+      return;
+    }
+
+    setShowStatusConfirm(false);
+    setIsGeneratingSummary(true);
+
+    try {
+      // 🤖 Analysis Prompt for Groq: Extract issue, troubleshooting, and fix.
+      const history = (selectedTicket.messages || []).map(m => 
+        `${m.senderId === 'admin' ? 'Admin' : (players.find(p => p.id === m.senderId)?.name || 'User')}: ${m.text || ''}`
+      ).join('\n');
+
+      const prompt = [
+        { role: 'system', text: "You are a professional support analyst. Read the conversation history and summarize it into exactly 3 concise sentences. 1) The original issue. 2) The troubleshooting steps taken. 3) The final fix/resolution. Be clear and objective." },
+        { role: 'user', text: `History:\n${history}` }
+      ];
+
+      const aiSummary = await generateAIResponse(prompt);
+      onUpdateStatus(selectedTicket.id, pendingStatus, aiSummary);
+    } catch (e) {
+      console.error("AI Resolution Summary Failed:", e);
+      // Fallback: resolution without summary
+      onUpdateStatus(selectedTicket.id, pendingStatus);
+    } finally {
+      setIsGeneratingSummary(false);
+      setPendingStatus(null);
+    }
+  };
+
   const getUserName = (userId) => (players || []).find(pl => pl.id === userId)?.name || userId;
   const getUserRole = (userId) => (players || []).find(pl => pl.id === userId)?.role || 'user';
 
   const filteredTickets = (tickets || [])
-    .filter(t => filterStatus === 'All' || t.status === filterStatus)
     .filter(t => {
-      if (!searchQuery) return true;
-      const q = searchQuery.toLowerCase();
-      const userName = getUserName(t.userId).toLowerCase();
-      const userId = t.userId.toLowerCase();
-      return t.title.toLowerCase().includes(q) || t.id.toLowerCase().includes(q) || userName.includes(q) || userId.includes(q);
+      const status = t?.status || 'Open';
+      return filterStatus === 'All' || status === filterStatus;
+    })
+    .filter(t => {
+      if (!search) return true;
+      const q = search.toLowerCase();
+      const userName = (getUserName(t.userId) || '').toLowerCase();
+      const userId = (String(t.userId || '')).toLowerCase();
+      const title = (t.title || '').toLowerCase();
+      const tid = (String(t.id || '')).toLowerCase();
+      
+      // 💬 Deep Search: Check all messages in the conversation
+      const conversation = (t.messages || []).some(m => (m.text || '').toLowerCase().includes(q));
+      
+      return title.includes(q) || tid.includes(q) || userName.includes(q) || userId.includes(q) || conversation;
     });
 
   const pickImage = async () => {
@@ -79,10 +179,37 @@ export const AdminGrievancesPanel = ({
 
   const renderMessageReply = (reply) => {
     if (!reply) return null;
+    const targetY = messageYOffsets.current[reply.id || reply.timestamp];
+    
     return (
-      <View style={styles.msgReplyPreview}>
+      <TouchableOpacity 
+        style={styles.msgReplyPreview}
+        onPress={() => {
+          if (targetY !== undefined) {
+             scrollViewRef.current?.scrollTo({ y: targetY, animated: true });
+          }
+        }}
+        activeOpacity={0.7}
+      >
         <Text style={styles.msgReplyUser}>{reply.senderId === 'admin' ? 'Admin' : getUserName(reply.senderId)}</Text>
         <Text style={styles.msgReplyText} numberOfLines={1}>{reply.text}</Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderDateHeader = (dateStr) => {
+    const date = new Date(dateStr);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    let label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    if (date.toDateString() === today.toDateString()) label = 'Today';
+    else if (date.toDateString() === yesterday.toDateString()) label = 'Yesterday';
+
+    return (
+      <View style={styles.dateHeader}>
+        <Text style={styles.dateHeaderText}>{label}</Text>
       </View>
     );
   };
@@ -96,6 +223,18 @@ export const AdminGrievancesPanel = ({
     const isMe = senderId === 'admin';
     const senderName = isMe ? 'Admin Support' : getUserName(senderId);
 
+    if (msg.type === 'event' || senderId === 'system') {
+      return (
+        <View 
+          key={msg.id || msg.timestamp || index} 
+          style={styles.eventCard}
+          onLayout={(e) => { messageYOffsets.current[msg.id || msg.timestamp] = e.nativeEvent.layout.y; }}
+        >
+          <Text style={styles.eventText}>{text}</Text>
+        </View>
+      );
+    }
+
     const renderRightActions = () => (
       <View style={styles.swipeToReplyAction}>
         <Ionicons name="arrow-undo" size={20} color="#64748B" />
@@ -103,12 +242,22 @@ export const AdminGrievancesPanel = ({
     );
 
     return (
-      <Swipeable
-        key={msg.id || index}
-        renderRightActions={isMe ? renderRightActions : undefined}
-        renderLeftActions={!isMe ? renderRightActions : undefined}
-        onSwipeableOpen={() => setReplyToMsg(msg)}
+      <View 
+        key={msg.id || msg.timestamp || index} 
+        onLayout={(e) => { messageYOffsets.current[msg.id || msg.timestamp] = e.nativeEvent.layout.y; }}
       >
+        <Swipeable
+          renderRightActions={isMe ? renderRightActions : undefined}
+          renderLeftActions={!isMe ? renderRightActions : undefined}
+          onSwipeableOpen={() => {
+            setReplyToMsg(msg);
+            // 🛡️ Auto-focus and scroll to bottom on reply (v2.6.25)
+            setTimeout(() => {
+              scrollViewRef.current?.scrollToEnd({ animated: true });
+              textInputRef.current?.focus();
+            }, 100);
+          }}
+        >
         <View style={[styles.messageBubble, isMe ? styles.myBubble : styles.otherBubble]}>
           {renderMessageReply(msg.replyTo)}
           {!isMe && <Text style={styles.senderLabel}>{senderName}</Text>}
@@ -116,231 +265,320 @@ export const AdminGrievancesPanel = ({
             <Image source={{ uri: msg.image }} style={styles.msgImage} resizeMode="contain" />
           )}
           <Text style={[styles.messageText, isMe ? styles.myText : styles.otherText]}>
-            {text}
+            {text?.startsWith('CLOSURE_REQUEST_EVENT:') 
+              ? `User requested closure: ${text.replace('CLOSURE_REQUEST_EVENT:', '').trim()}` 
+              : text}
           </Text>
           <Text style={styles.timestamp}>
             {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
         </View>
       </Swipeable>
+    </View>
     );
   };
 
-  if (selectedTicket) {
-    const userRole = getUserRole(selectedTicket.userId);
-    const isClosed = selectedTicket.status === 'Closed';
-    const st = statusColors[selectedTicket.status] || statusColors['Open'];
-
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => setSelectedTicket(null)} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={20} color="#0F172A" />
-          </TouchableOpacity>
-          <View style={styles.headerInfo}>
-            <Text style={styles.headerTitle} numberOfLines={1}>{selectedTicket.title}</Text>
-            <Text style={styles.headerId}>#{selectedTicket.id}</Text>
-          </View>
-        </View>
-
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-          style={styles.flex}
-        >
-          <ScrollView style={styles.detailList} showsVerticalScrollIndicator={false}>
-            <View style={styles.infoCard}>
-              <View style={styles.infoGrid}>
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>User</Text>
-                  <Text style={styles.infoValue}>{getUserName(selectedTicket.userId)}</Text>
-                </View>
-                <View style={[styles.infoItem, { alignItems: 'flex-end' }]}>
-                  <Text style={styles.infoLabel}>Role</Text>
-                  <View style={[styles.roleBadge, userRole === 'academy' ? styles.roleAcademy : styles.roleCoach]}>
-                    <Text style={styles.roleText}>{userRole}</Text>
-                  </View>
-                </View>
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>Type</Text>
-                  <Text style={styles.infoValue}>{selectedTicket.type}</Text>
-                </View>
-                <View style={[styles.infoItem, { alignItems: 'flex-end' }]}>
-                  <Text style={styles.infoLabel}>Created</Text>
-                  <Text style={styles.infoValue}>{new Date(selectedTicket.createdAt).toLocaleDateString()}</Text>
-                </View>
-              </View>
-
-              <View style={styles.statusControl}>
-                <Text style={styles.infoLabel}>Update Status</Text>
-                <View style={styles.statusBtnRow}>
-                  {statusOptions.map(s => (
-                    <TouchableOpacity
-                      key={s}
-                      onPress={() => onUpdateStatus(selectedTicket.id, s)}
-                      style={[
-                        styles.statusToggleBtn, 
-                        selectedTicket.status === s ? { backgroundColor: statusColors[s].bg, borderColor: statusColors[s].border } : styles.statusToggleBtnOff
-                      ]}
-                    >
-                      <Text style={[styles.statusToggleText, { color: selectedTicket.status === s ? statusColors[s].text : '#94A3B8' }]}>{s}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            </View>
-          </ScrollView>
-
-          <View style={styles.chatContainer}>
-            <ScrollView 
-              ref={scrollViewRef} 
-              style={styles.chatScroll} 
-              onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-            >
-              {(selectedTicket?.messages || []).map((msg, index) => renderMessage(msg, index))}
-              {isUserTyping && (
-                <View style={styles.typingIndicator}>
-                  <Text style={styles.typingText}>User is typing...</Text>
-                </View>
-              )}
-            </ScrollView>
-
-            <View style={styles.inputArea}>
-              {replyToMsg && (
-                <View style={styles.replyPreviewBar}>
-                  <View style={styles.replyPreviewInner}>
-                    <Text style={styles.replyPreviewUser}>Replying to {replyToMsg.senderId === 'admin' ? 'yourself' : getUserName(replyToMsg.senderId)}</Text>
-                    <Text style={styles.replyPreviewText} numberOfLines={1}>{replyToMsg.text}</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => setReplyToMsg(null)}>
-                    <Ionicons name="close-circle" size={20} color="#64748B" />
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {selectedImage && (
-                <View style={styles.imagePreviewBar}>
-                  <Image source={{ uri: selectedImage }} style={styles.imagePreviewThumb} />
-                  <TouchableOpacity style={styles.removeImageBtn} onPress={() => setSelectedImage(null)}>
-                    <Ionicons name="close-circle" size={20} color="#EF4444" />
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {!isClosed ? (
-                <View style={styles.chatInputRow}>
-                  <TouchableOpacity 
-                    onPress={() => setShowPlusMenu(!showPlusMenu)} 
-                    style={styles.plusBtn}
-                  >
-                    <Ionicons name="add-circle" size={28} color="#2563EB" />
-                  </TouchableOpacity>
-
-                  {showPlusMenu && (
-                    <View style={styles.plusMenu}>
-                      <TouchableOpacity style={styles.plusMenuItem} onPress={pickImage}>
-                        <Ionicons name="image" size={18} color="#2563EB" />
-                        <Text style={styles.plusMenuText}>Gallery</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-
-                  <TextInput
-                    style={styles.chatInput}
-                    value={replyText}
-                    onChangeText={(txt) => {
-                      setReplyText(txt);
-                      if (txt.length > 0) onTypingStart?.(selectedTicket.id);
-                      else onTypingStop?.(selectedTicket.id);
-                    }}
-                    onBlur={() => onTypingStop?.(selectedTicket.id)}
-                    placeholder="Type a reply..."
-                    multiline
-                  />
-                  <TouchableOpacity 
-                    style={[styles.sendBtn, (!replyText.trim() && !selectedImage) && styles.sendDisabled]} 
-                    disabled={!replyText.trim() && !selectedImage}
-                    onPress={handleSendReply}
-                  >
-                    <Ionicons name="send" size={18} color="#FFFFFF" />
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <View style={styles.closedNote}>
-                  <Text style={styles.closedNoteText}>This ticket is closed</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      <View style={styles.statsGrid}>
-        <View style={[styles.statBox, { backgroundColor: '#EFF6FF' }]}>
-          <Text style={styles.statLabel}>Open</Text>
-          <Text style={[styles.statValue, { color: '#2563EB' }]}>{(tickets || []).filter(t => t && t.status === 'Open').length}</Text>
-        </View>
-        <View style={[styles.statBox, { backgroundColor: '#FFFBEB' }]}>
-          <Text style={styles.statLabel}>Active</Text>
-          <Text style={[styles.statValue, { color: '#D97706' }]}>{(tickets || []).filter(t => t && t.status === 'In Progress').length}</Text>
-        </View>
-        <View style={[styles.statBox, { backgroundColor: '#F0FDF4' }]}>
-          <Text style={styles.statLabel}>Done</Text>
-          <Text style={[styles.statValue, { color: '#16A34A' }]}>{(tickets || []).filter(t => t && (t.status === 'Resolved' || t.status === 'Closed')).length}</Text>
-        </View>
-      </View>
-
-      <View style={styles.searchBox}>
-        <Ionicons name="search" size={18} color="#94A3B8" />
-        <TextInput
-          placeholder="Search tickets..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          style={styles.searchField}
-        />
-      </View>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterTabs}>
-        {['All', ...statusOptions].map(s => (
-          <TouchableOpacity 
-            key={s} 
-            onPress={() => setFilterStatus(s)}
-            style={[styles.filterTab, filterStatus === s && styles.filterTabActive]}
-          >
-            <Text style={[styles.filterTabText, filterStatus === s && styles.filterTabTextActive]}>{s}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-        {(filteredTickets || []).map(ticket => {
-          const st = statusColors[ticket.status] || statusColors['Open'];
-          return (
-            <TouchableOpacity 
-              key={ticket.id} 
-              onPress={() => setSelectedTicket(ticket)}
-              style={styles.ticketCard}
-            >
-              <View style={styles.ticketTop}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.ticketTitle} numberOfLines={1}>{ticket.title}</Text>
-                  <Text style={styles.ticketMeta}>{getUserName(ticket.userId)} • #{ticket.id}</Text>
-                </View>
-                <View style={[styles.statusBadge, { backgroundColor: st.bg, borderColor: st.border }]}>
-                  <Text style={[styles.statusBadgeText, { color: st.text }]}>{ticket.status}</Text>
-                </View>
-              </View>
-              <View style={styles.ticketBottom}>
-                <Text style={styles.ticketType}>{ticket.type}</Text>
-                <Text style={styles.ticketDate}>{new Date(ticket.createdAt).toLocaleDateString()}</Text>
-              </View>
+      {selectedTicket ? (
+        <>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => setSelectedTicket(null)} style={styles.backBtn}>
+              <Ionicons name="arrow-back" size={20} color="#0F172A" />
             </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+            <View style={styles.headerInfo}>
+              <Text style={styles.headerTitle} numberOfLines={1}>{selectedTicket.title}</Text>
+              <Text style={styles.headerId}>ID: {selectedTicket.id}</Text>
+            </View>
+          </View>
+
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+            style={styles.flex}
+          >
+            <ScrollView style={styles.detailList} showsVerticalScrollIndicator={false}>
+              <View style={styles.infoCard}>
+                <View style={styles.infoGrid}>
+                  <View style={styles.infoItem}>
+                    <Text style={styles.infoLabel}>User</Text>
+                    <Text style={styles.infoValue}>{getUserName(selectedTicket.userId)}</Text>
+                  </View>
+                  <View style={[styles.infoItem, { alignItems: 'flex-end' }]}>
+                    <Text style={styles.infoLabel}>Role</Text>
+                    <View style={[styles.roleBadge, getUserRole(selectedTicket.userId) === 'academy' ? styles.roleAcademy : styles.roleCoach]}>
+                      <Text style={styles.roleText}>{getUserRole(selectedTicket.userId)}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.infoItem}>
+                    <Text style={styles.infoLabel}>Type</Text>
+                    <Text style={styles.infoValue}>{selectedTicket.type}</Text>
+                  </View>
+                  <View style={[styles.infoItem, { alignItems: 'flex-end' }]}>
+                    <Text style={styles.infoLabel}>Created</Text>
+                    <Text style={styles.infoValue}>{new Date(selectedTicket.createdAt).toLocaleDateString()}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.statusControl}>
+                  <Text style={styles.infoLabel}>Update Status</Text>
+                  <View style={styles.statusBtnRow}>
+                    {statusOptions.map(s => (
+                      <TouchableOpacity
+                        key={s}
+                        onPress={() => handleStatusChangeRequest(s)}
+                        style={[
+                          styles.statusToggleBtn, 
+                          selectedTicket.status === s ? { backgroundColor: statusColors[s].bg, borderColor: statusColors[s].border } : styles.statusToggleBtnOff
+                        ]}
+                      >
+                        <Text style={[styles.statusToggleText, { color: selectedTicket.status === s ? statusColors[s].text : '#94A3B8' }]}>{s}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            </ScrollView>
+
+            {selectedTicket.closureSummary && (
+              <View style={styles.resolutionCard}>
+                <View style={styles.resHeader}>
+                  <Ionicons name="shield-checkmark" size={16} color="#059669" />
+                  <Text style={styles.resTitle}>Closure Summary</Text>
+                </View>
+                <Text style={styles.resText}>{selectedTicket.closureSummary}</Text>
+              </View>
+            )}
+
+            <View style={styles.chatContainer}>
+              <ScrollView 
+                ref={scrollViewRef} 
+                style={styles.chatScroll} 
+                onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+              >
+                {(selectedTicket?.messages || []).map((msg, index) => {
+                  const currentMsgDate = new Date(msg.timestamp).toDateString();
+                  const prevMsgDate = index > 0 ? new Date(selectedTicket.messages[index-1].timestamp).toDateString() : null;
+                  const showDateHeader = currentMsgDate !== prevMsgDate;
+
+                  return (
+                    <React.Fragment key={index}>
+                      {showDateHeader && renderDateHeader(msg.timestamp)}
+                      {renderMessage(msg, index)}
+                    </React.Fragment>
+                  );
+                })}
+                {isUserTyping && (
+                  <View style={styles.typingIndicator}>
+                    <Text style={styles.typingText}>User is typing...</Text>
+                  </View>
+                )}
+              </ScrollView>
+
+              <View style={styles.inputArea}>
+                {replyToMsg && (
+                  <View style={styles.replyPreviewBar}>
+                    <View style={styles.replyPreviewInner}>
+                      <Text style={styles.replyPreviewUser}>Replying to {replyToMsg.senderId === 'admin' ? 'yourself' : getUserName(replyToMsg.senderId)}</Text>
+                      <Text style={styles.replyPreviewText} numberOfLines={1}>{replyToMsg.text}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setReplyToMsg(null)}>
+                      <Ionicons name="close-circle" size={20} color="#64748B" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {selectedImage && (
+                  <View style={styles.imagePreviewBar}>
+                    <Image source={{ uri: selectedImage }} style={styles.imagePreviewThumb} />
+                    <TouchableOpacity style={styles.removeImageBtn} onPress={() => setSelectedImage(null)}>
+                      <Ionicons name="close-circle" size={20} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {selectedTicket.status !== 'Closed' && selectedTicket.status !== 'Resolved' ? (
+                  <View style={styles.chatInputRow}>
+                    <TouchableOpacity 
+                      onPress={() => setShowPlusMenu(!showPlusMenu)} 
+                      style={styles.plusBtn}
+                    >
+                      <Ionicons name="add-circle" size={28} color="#2563EB" />
+                    </TouchableOpacity>
+
+                    {showPlusMenu && (
+                      <View style={styles.plusMenu}>
+                        <TouchableOpacity style={styles.plusMenuItem} onPress={pickImage}>
+                          <Ionicons name="image" size={18} color="#2563EB" />
+                          <Text style={styles.plusMenuText}>Gallery</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    <TextInput
+                      ref={textInputRef}
+                      style={styles.chatInput}
+                      value={replyText}
+                      onChangeText={(txt) => {
+                        setReplyText(txt);
+                        if (txt.length > 0) onTypingStart?.(selectedTicket.id);
+                        else onTypingStop?.(selectedTicket.id);
+                      }}
+                      onBlur={() => onTypingStop?.(selectedTicket.id)}
+                      placeholder="Type a reply..."
+                      multiline
+                    />
+                    <TouchableOpacity 
+                      style={[styles.sendBtn, (!replyText.trim() && !selectedImage) && styles.sendDisabled]} 
+                      disabled={!replyText.trim() && !selectedImage}
+                      onPress={handleSendReply}
+                    >
+                      <Ionicons name="send" size={18} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.closedNote}>
+                    <Text style={styles.closedNoteText}>This ticket is resolved/closed</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </>
+      ) : (
+        <>
+          <View style={styles.statsGrid}>
+            <View style={[styles.statBox, { backgroundColor: '#EFF6FF' }]}>
+              <Text style={styles.statLabel}>Open</Text>
+              <Text style={[styles.statValue, { color: '#2563EB' }]}>{(tickets || []).filter(t => t && (t.status === 'Open' || !t.status)).length}</Text>
+            </View>
+            <View style={[styles.statBox, { backgroundColor: '#FFFBEB' }]}>
+              <Text style={styles.statLabel}>Active</Text>
+              <Text style={[styles.statValue, { color: '#D97706' }]}>{(tickets || []).filter(t => t && t.status === 'In Progress').length}</Text>
+            </View>
+            <View style={[styles.statBox, { backgroundColor: '#F0FDF4' }]}>
+              <Text style={styles.statLabel}>Done</Text>
+              <Text style={[styles.statValue, { color: '#16A34A' }]}>{(tickets || []).filter(t => t && (t.status === 'Resolved' || t.status === 'Closed')).length}</Text>
+            </View>
+          </View>
+
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterTabs}>
+            {['All', ...statusOptions].map(s => (
+              <TouchableOpacity 
+                key={s} 
+                onPress={() => setFilterStatus(s)}
+                style={[styles.filterTab, filterStatus === s && styles.filterTabActive]}
+              >
+                <Text style={[styles.filterTabText, filterStatus === s && styles.filterTabTextActive]}>{s}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+            {(filteredTickets || []).map((ticket, idx) => {
+              const status = ticket.status || 'Open';
+              const st = statusColors[status] || statusColors['Open'];
+              const date = ticket.createdAt ? new Date(ticket.createdAt) : null;
+              return (
+                <TouchableOpacity 
+                  key={ticket.id || `temp-${idx}`} 
+                  onPress={() => setSelectedTicket(ticket)}
+                  style={styles.ticketCard}
+                >
+                  <View style={styles.ticketTop}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.ticketTitle} numberOfLines={1}>{ticket.title || 'Untitled Ticket'}</Text>
+                      <Text style={styles.ticketMeta}>{getUserName(ticket.userId)} • ID: {ticket.id || 'NO-ID'}</Text>
+                    </View>
+                    <View style={[styles.statusBadge, { backgroundColor: st.bg, borderColor: st.border }]}>
+                      <Text style={[styles.statusBadgeText, { color: st.text }]}>{status}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.ticketBottom}>
+                    <Text style={styles.ticketType}>{ticket.type || 'General'}</Text>
+                    <Text style={styles.ticketDate}>{date && !isNaN(date) ? date.toLocaleDateString() : 'Invalid Date'}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </>
+      )}
+
+      {/* Resolution Confirmation Prompt */}
+      {showStatusConfirm && (
+        <Modal transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.confirmBox}>
+              <View style={styles.confirmIcon}>
+                <Ionicons name="help-circle" size={32} color="#2563EB" />
+              </View>
+              <Text style={styles.confirmTitle}>Issue Resolved?</Text>
+              <Text style={styles.confirmSub}>ACE AI will automatically generate a closure summary from the conversation history.</Text>
+              <View style={styles.confirmActions}>
+                <TouchableOpacity onPress={() => processStatusConfirmation(false)} style={styles.confirmNo}>
+                  <Text style={styles.confirmNoText}>No</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => processStatusConfirmation(true)} style={styles.confirmYes}>
+                  <Text style={styles.confirmYesText}>Yes</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Reopen Justification Modal */}
+      {showReopenModal && (
+        <Modal transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.confirmBox}>
+              <View style={styles.confirmIcon}>
+                <Ionicons name="refresh-circle" size={32} color="#EF4444" />
+              </View>
+              <Text style={styles.confirmTitle}>Reopen Ticket?</Text>
+              <Text style={styles.confirmSub}>Please provide a justification for moving this ticket back to {pendingReopenStatus?.toLowerCase()}.</Text>
+              
+              <TextInput
+                value={reopenJustification}
+                onChangeText={setReopenJustification}
+                placeholder="Reason for reopening..."
+                style={styles.reopenInput}
+                multiline
+                numberOfLines={3}
+              />
+
+              <View style={styles.confirmActions}>
+                <TouchableOpacity 
+                   onPress={() => {
+                     setShowReopenModal(false);
+                     setReopenJustification('');
+                     setPendingReopenStatus(null);
+                   }} 
+                   style={styles.confirmNo}
+                >
+                  <Text style={styles.confirmNoText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleReopenSubmit} style={styles.confirmYes}>
+                  <Text style={styles.confirmYesText}>Reopen</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* AI Processing Overlay */}
+      {isGeneratingSummary && (
+        <Modal transparent>
+          <View style={styles.modalOverlay}>
+            <View style={styles.loadingBox}>
+              <ActivityIndicator color="#2563EB" size="large" />
+              <Text style={styles.loadingText}>ACE AI Analyzing Conversation...</Text>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 };
@@ -349,6 +587,34 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+  },
+  eventCard: {
+    alignItems: 'center',
+    marginVertical: 12,
+    paddingHorizontal: 20,
+  },
+  eventText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    textAlign: 'center',
+  },
+  dateHeader: {
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  dateHeaderText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 10,
+    textTransform: 'uppercase',
   },
   flex: {
     flex: 1,
@@ -857,5 +1123,131 @@ const styles = StyleSheet.create({
   ticketDate: {
     fontSize: 8,
     color: '#CBD5E1',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  confirmBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    maxWidth: 320,
+    alignItems: 'center',
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 15,
+  },
+  confirmIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  confirmTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginBottom: 8,
+  },
+  confirmSub: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 24,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  confirmNo: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+  },
+  confirmNoText: {
+    color: '#64748B',
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    fontSize: 12,
+  },
+  confirmYes: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#2563EB',
+  },
+  confirmYesText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    fontSize: 12,
+  },
+  reopenInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 13,
+    color: '#0F172A',
+    width: '100%',
+    height: 80,
+    textAlignVertical: 'top',
+    marginVertical: 16,
+  },
+  loadingBox: {
+    backgroundColor: '#FFFFFF',
+    padding: 32,
+    borderRadius: 24,
+    alignItems: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0F172A',
+    textTransform: 'uppercase',
+  },
+  resolutionCard: {
+    backgroundColor: '#ECFDF5',
+    margin: 16,
+    marginTop: 0,
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+  },
+  resHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  resTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#059669',
+    textTransform: 'uppercase',
+  },
+  resText: {
+    fontSize: 13,
+    color: '#064E3B',
+    lineHeight: 20,
+    fontWeight: '500',
   },
 });

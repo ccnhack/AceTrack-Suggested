@@ -30,8 +30,9 @@ const AdminHubScreen = ({
   isUsingCloud, onOptOut, onLogFailedOtp, onLogTrace, setPlayers, onToggleFavourite,
   isCloudOnline, lastSyncTime, onBatchUpdate, onUploadLogs, isUploadingLogs,
   onVerifyAccount, onToggleCloud, setIsProfileEditActive, appVersion, socketRef,
-  navigation, ...restProps
+  navigation, route, ...restProps
 }) => {
+
   const { width: windowWidth } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
   const isMobileWeb = isWeb && windowWidth < 1024;
@@ -126,6 +127,90 @@ const AdminHubScreen = ({
   const [isDownloading, setIsDownloading] = useState(false);
   const [isPullingLive, setIsPullingLive] = useState(false);
   const [onlineDevices, setOnlineDevices] = useState({});
+
+  // 🛠️ REFACTOR (v2.6.25): Centralized player selection for diagnostics
+  const handleSelectDiagPlayer = async (p) => {
+    if (!p) return;
+    setSelectedDiagUser(p);
+    setUserDiagFiles([]); // Clear immediately to avoid stale data UI
+    setSelectedDiagFile(null);
+    setDiagContent(null);
+    setIsFetchingDiags(true);
+    
+    // PING NATIVE DEVICE TO CHECK PRESENCE
+    const socket = socketRef?.current;
+    
+    // 🛡️ SYNC HARDENING (v2.6.18): Better null/disconnected check
+    if (socket) {
+      console.log(`🏓 ADMIN PING: target=${p.id}, socketConnected=${socket.connected}`);
+      
+      // CLEAR STALE ONLINE STATUS FOR THIS USER BEFORE PINGING
+      setOnlineDevices(prev => {
+        const next = { ...prev };
+        delete next[p.id];
+        if (p.devices && Array.isArray(p.devices)) {
+          p.devices.forEach(d => { if (d && d.id) delete next[d.id]; });
+        }
+        return next;
+      });
+
+      if (socket.connected) {
+        socket.emit('admin_ping_device', { targetUserId: p.id });
+        setTimeout(() => socket?.emit('admin_ping_device', { targetUserId: p.id }), 1000);
+        setTimeout(() => socket?.emit('admin_ping_device', { targetUserId: p.id }), 2000);
+      }
+    }
+    
+    // FETCH LOG LIST FROM API
+    const url = `${activeApiUrl}/api/diagnostics?userId=${p.id}`;
+    try {
+      const res = await fetch(url, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
+      if (res.ok) {
+        const data = await res.json();
+        const pNameRaw = (p.name || '').toLowerCase();
+        const firstName = (pNameRaw || 'user').split(' ')[0];
+        const safeName = pNameRaw.replace(/[^a-z0-9]/gi, '_');
+        
+        // Filter files that match this specific user
+        const fs = (data.files || []).filter(f => {
+          const lf = f.toLowerCase();
+          return lf.includes(p.id.toLowerCase()) || lf.includes(safeName) || lf.includes(firstName);
+        });
+
+        // Sort by timestamp if possible
+        const getTs = (f) => {
+          const m = f.match(/(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})|(\d{8}_\d{6})/);
+          return m ? m[0].replace(/[-_]/g, '') : f;
+        };
+        setUserDiagFiles(fs.sort((a, b) => getTs(b).localeCompare(getTs(a))));
+      }
+    } catch (e) {
+      console.warn("[AdminHub] Failed to fetch diagnostic list:", e);
+    } finally {
+      setIsFetchingDiags(false);
+    }
+  };
+
+  // Deep-Link Handler (v2.6.25): Automatically select user/subtab from route params
+  useEffect(() => {
+    if (route.params?.autoSelectSubTab) {
+      setSubTab(route.params.autoSelectSubTab);
+    }
+    if (route.params?.autoSelectUser) {
+      const targetId = route.params.autoSelectUser;
+      // 🛠️ FIX (v2.6.25): Find the actual player object for full selection
+      const player = (players || []).find(p => p.id === targetId);
+      if (player) {
+         setDiagUserSearch(targetId); // Auto-filter the list to only show this user
+         handleSelectDiagPlayer(player);
+      }
+    }
+    
+    // Clear params after consuming them to prevent re-triggering
+    if (route.params?.autoSelectSubTab || route.params?.autoSelectUser) {
+      navigation.setParams({ autoSelectSubTab: undefined, autoSelectUser: undefined });
+    }
+  }, [route.params, players]); // Re-run if players list updates (in case it wasn't loaded yet)
   const [pullingDeviceIds, setPullingDeviceIds] = useState({});
   const [isSearchingFilenames, setIsSearchingFilenames] = useState(false);
   const [cloudMatchFiles, setCloudMatchFiles] = useState([]);
@@ -524,7 +609,7 @@ const AdminHubScreen = ({
       <View style={styles.searchBar}>
         <Ionicons name="search" size={16} color="#94A3B8" />
         <TextInput 
-          placeholder={`Search ${subTab}...`}
+          placeholder={subTab === 'grievances' ? "Search grievances (ID, user, conversation)..." : `Search ${subTab}...`}
           value={search}
           onChangeText={setSearch}
           style={styles.searchInput}
@@ -829,6 +914,7 @@ const AdminHubScreen = ({
             players={players}
             onReply={onReplyTicket}
             onUpdateStatus={onUpdateTicketStatus}
+            search={search}
           />
         )}
 
@@ -910,118 +996,7 @@ const AdminHubScreen = ({
                   .map(p => (
                     <TouchableOpacity 
                       key={p.id} 
-                      onPress={async () => {
-                        setSelectedDiagUser(p);
-                        setUserDiagFiles([]); // Clear immediately to avoid stale data UI
-                        setSelectedDiagFile(null);
-                        setDiagContent(null);
-                        setIsFetchingDiags(true);
-                        
-                        // PING NATIVE DEVICE TO CHECK PRESENCE (3 retries at 1s intervals)
-                        const socket = socketRef?.current;
-                        
-                        // 🛡️ SYNC HARDENING (v2.6.18): Better null/disconnected check
-                        if (!socketRef) {
-                          console.error('❌ [AdminHub] socketRef prop is MISSING!');
-                          Alert.alert('Connection Error', 'Socket reference missing. Please restart the app.');
-                        } else if (!socket) {
-                          console.log('⚠️ [AdminHub] socket.current is null! Socket might still be initializing...');
-                          Alert.alert('Sync Starting', 'Please wait a moment for the connection to warm up.');
-                        } else {
-                          const isConnected = socket.connected;
-                          const socketId = socket.id;
-                          console.log(`🏓 ADMIN PING: target=${p.id}, socketConnected=${isConnected}, socketId=${socketId}`);
-                          
-                          // CLEAR STALE ONLINE STATUS FOR THIS USER BEFORE PINGING
-                          setOnlineDevices(prev => {
-                            const next = { ...prev };
-                            delete next[p.id];
-                            if (p.devices && Array.isArray(p.devices)) {
-                              p.devices.forEach(d => { if (d && d.id) delete next[d.id]; });
-                            }
-                            return next;
-                          });
-
-                          if (!isConnected) {
-                            console.warn('⚠️ Socket NOT connected! Attempting manual reconnect (v2.6.20)...');
-                            
-                            // 🛡️ SYNC HARDENING (v2.6.20): Detailed error logging for manual connect
-                            const errHandler = (err) => {
-                              console.error(`❌ Socket RECONNECT_ERROR: ${err.message}`);
-                              logger.logAction('WS_RECONNECT_ERROR', { error: err.message, message: err.toString() });
-                            };
-                            socket.once('connect_error', errHandler);
-                            
-                            socket.connect();
-                            // 🛡️ SYNC HARDENING (v2.6.20): Wait up to 1500ms for connection
-                            await new Promise(resolve => {
-                              const timeout = setTimeout(resolve, 1500);
-                              socket.once('connect', () => {
-                                clearTimeout(timeout);
-                                socket.off('connect_error', errHandler);
-                                resolve();
-                              });
-                            });
-                            
-                            if (!socket.connected) {
-                              Alert.alert('Reconnecting', 'WebSocket failed to authenticate or connect. Please check your internet or try again.');
-                              socket.off('connect_error', errHandler);
-                              return;
-                            }
-                            console.log('✅ Reconnected successfully (v2.6.20). Proceeding with ping.');
-                          }
-
-                          // Send initial ping plus retries
-                          socket.emit('admin_ping_device', { targetUserId: p.id });
-                          setTimeout(() => socket?.emit('admin_ping_device', { targetUserId: p.id }), 1000);
-                          setTimeout(() => socket?.emit('admin_ping_device', { targetUserId: p.id }), 2000);
-                        }
-                        
-                        const url = `${activeApiUrl}/api/diagnostics?userId=${p.id}`;
-                        try {
-                          const res = await fetch(url, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
-                          if (res.ok) {
-                            const data = await res.json();
-                            const pName = (p.name || '').toLowerCase();
-                            const pId = String(p.id || '').toLowerCase();
-                            const pEmailRaw = (p.email || '');
-                            const firstName = (pName || 'user').split(' ')[0];
-
-                            const safeName = p.name ? p.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() : '';
-                            const safeId = p.id ? String(p.id).replace(/[^a-z0-9]/gi, '_').toLowerCase() : '';
-                            const pEmailPrefix = p.email ? p.email.split('@')[0] : '';
-                            const safeEmail = pEmailPrefix.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-                            
-                            // Check for files matching name, id, email or even parts
-                            let fs = (data?.files || []).filter(f => {
-                              if (!f) return false;
-                              const low = f.toLowerCase();
-                              return (safeName && low.startsWith(safeName + '_')) || 
-                                     (safeId && low.startsWith(safeId + '_')) ||
-                                     (safeEmail && low.startsWith(safeEmail + '_')) ||
-                                     (safeName && low.startsWith('admin_requested_' + safeName + '_')) ||
-                                     (safeName && low.startsWith('profile_manual_' + safeName + '_')) ||
-                                     (safeName && low.includes(`_${safeName}_`)) ||
-                                     (firstName.length > 3 && low.includes(firstName.toLowerCase()));
-                            });
-                            
-                            // Improved sort: extract YYYY-MM-DD_HH-MM-SS or YYYYMMDD_HHMMSS and sort descending
-                            const getTs = (f) => {
-                              const m = f.match(/(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})|(\d{8}_\d{6})/);
-                              return m ? m[0].replace(/[-_]/g, '') : f;
-                            };
-                            fs = fs.sort((a, b) => getTs(b).localeCompare(getTs(a))).slice(0, 5);
-                            setUserDiagFiles(fs);
-                            logger.logAction('DIAGNOSTICS_FETCH_SUCCESS', { user: p.name, fileCount: fs.length });
-                          }
-                        } catch (e) {
-                          setUserDiagFiles([]);
-                          logger.logAction('DIAGNOSTICS_FETCH_ERROR', { error: e.message });
-                          if (String(p.id).length >= 20) Alert.alert("Error", "Failed to fetch files.");
-                        } finally {
-                          setIsFetchingDiags(false);
-                        }
-                      }}
+                      onPress={() => handleSelectDiagPlayer(p)}
                       style={[styles.miniUserCard, selectedDiagUser?.id === p.id && styles.miniUserCardActive]}
                     >
                       <Image 
