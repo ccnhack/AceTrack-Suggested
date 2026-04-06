@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, Image, FlatList,
   StyleSheet, Modal, TextInput, Alert,
-  KeyboardAvoidingView, Platform, InteractionManager 
+  KeyboardAvoidingView, Platform, InteractionManager, SafeAreaView
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
