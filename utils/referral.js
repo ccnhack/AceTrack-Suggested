@@ -65,7 +65,7 @@ export const applyReferralReward = (players, referrerId, refereeId, rewardAmount
  */
 export const findPlayerByReferralCode = (players, code) => {
   const clean = String(code).toUpperCase();
-  return players.find(p => generateReferralCode(p.username) === clean) || null;
+  return players.find(p => (p.referralCode && p.referralCode.toUpperCase() === clean) || generateReferralCode(p.username) === clean) || null;
 };
 
 /**
@@ -76,7 +76,7 @@ export const findPlayerByReferralCode = (players, code) => {
 export const getReferralStats = (player) => {
   const history = player.referralHistory || [];
   return {
-    code: generateReferralCode(player.username),
+    code: player.referralCode || generateReferralCode(player.username),
     totalReferrals: history.length,
     totalEarned: history.reduce((sum, r) => sum + r.amount, 0),
     recentReferrals: history.slice(-5).reverse(),

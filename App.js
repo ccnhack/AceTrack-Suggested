@@ -47,7 +47,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = '2.6.23'; // 🛡️ Hotfix: ProfileScreen SafeAreaView (v2.6.23)
+const APP_VERSION = '2.6.24'; // 🛡️ Referral Stability (v2.6.24)
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
