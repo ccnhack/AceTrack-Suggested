@@ -114,12 +114,15 @@ const ProfileMenuSection = memo(({
             logger.logAction('MANUAL_OTA_CHECK_START');
             const update = await Updates.checkForUpdateAsync();
             if (update.isAvailable) {
+              logger.logAction('MANUAL_OTA_UPDATE_FOUND', { version: update.updateId });
               Alert.alert("Update Found", "New version detected. Downloading...");
               await Updates.fetchUpdateAsync();
+              logger.logAction('MANUAL_OTA_UPDATE_DOWNLOADED');
               Alert.alert("Success", "Update downloaded. Restarting app...", [
                 { text: "OK", onPress: () => Updates.reloadAsync() }
               ]);
             } else {
+              logger.logAction('MANUAL_OTA_CHECK_UP_TO_DATE');
               Alert.alert("Up to Date", "You are already on the latest version.");
             }
           } catch (e) {

@@ -392,7 +392,10 @@ export default function App() {
       
       if (status.latestAppVersion) {
         setLatestAppVersion(status.latestAppVersion);
-        if (isVersionObsolete(APP_VERSION, status.latestAppVersion)) {
+        const obsolete = isVersionObsolete(APP_VERSION, status.latestAppVersion);
+        console.log(`📊 Version Check: Local=${APP_VERSION}, Remote=${status.latestAppVersion}, Obsolete=${obsolete}`);
+        if (obsolete) {
+          logger.logAction('VERSION_OBSOLETE_TRIGGERED', { local: APP_VERSION, remote: status.latestAppVersion });
           setShowForceUpdate(true);
           return; // Abort further syncs if obsolete
         }

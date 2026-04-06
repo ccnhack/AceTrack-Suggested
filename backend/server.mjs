@@ -468,11 +468,11 @@ router.get('/health', (req, res) => {
 // GET /api/v1/data
 router.get('/data', apiKeyGuard, async (req, res) => {
   try {
-    const state = await AppState.findOne().sort({ lastUpdated: -1 });
+    const state = await AppState.findOne().sort({ lastUpdated: -1 }).lean();
     if (!state || !state.data) return res.json({});
-    const sanitizedData = JSON.parse(JSON.stringify(state.data));
-    res.json({ ...sanitizedData, lastUpdated: state.lastUpdated, version: state.version || 1 });
+    res.json({ ...state.data, lastUpdated: state.lastUpdated, version: state.version || 1 });
   } catch (error) {
+    console.error('❌ Data Fetch Error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
