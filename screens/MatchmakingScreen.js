@@ -229,6 +229,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
 
     try {
       const response = await fetch(geoapifyUrl);
+      if (!response.ok) throw new Error(`Geoapify error: ${response.status}`);
       const data = await response.json();
       if (data.features) {
         const newVenues = data.features.map(f => {
@@ -270,7 +271,6 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
           }
           return unique.sort((a, b) => (parseFloat(a.distance) || 999) - (parseFloat(b.distance) || 999));
         });
-        setIsFetchingVenues(false);
       }
     } catch (error) {
       console.error('Error fetching Geoapify fallback:', error);
@@ -314,11 +314,15 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
 
   React.useEffect(() => {
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return;
 
-      let location = await Location.getCurrentPositionAsync({});
-      setUserLocation(location.coords);
+        let location = await Location.getCurrentPositionAsync({});
+        setUserLocation(location.coords);
+      } catch (e) {
+        console.warn("Location fetch suppressed in Matchmaking:", e.message);
+      }
     })();
   }, []);
 
@@ -1079,14 +1083,18 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                      </View>
                      <ScrollView style={styles.venueList} nestedScrollEnabled={true}>
                         {nearbyVenues
-                          .filter(v => {
-                             const q = venueDropdownSearchQuery.toLowerCase();
-                             const matchesSearch = (v.venueName?.toLowerCase() || "").includes(q) || 
-                                                  (v.area?.toLowerCase() || "").includes(q) || 
-                                                  (v.sport?.toLowerCase() || "").includes(q);
-                             const matchesSport = v.sport?.toLowerCase().includes(selectedSport.toLowerCase());
-                             return matchesSearch && matchesSport;
-                          })
+                            .filter(v => {
+                               const q = (venueDropdownSearchQuery || "").toLowerCase();
+                               const matchesSearch = (v.venueName?.toLowerCase() || "").includes(q) || 
+                                                    (v.area?.toLowerCase() || "").includes(q) || 
+                                                    (v.sport?.toLowerCase() || "").includes(q);
+                               
+                               // 🛡️ Safe check for sport matching
+                               const targetSport = (selectedSport || 'All').toLowerCase();
+                               const matchesSport = (v.sport?.toLowerCase() || "").includes(targetSport) || v.sport === "" || !v.sport;
+                               
+                               return matchesSearch && matchesSport;
+                            })
                           .map((venue, idx) => (
                            <TouchableOpacity 
                              key={`venue-${idx}`}
@@ -1517,11 +1525,15 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                       <ScrollView style={styles.venueList} nestedScrollEnabled={true}>
                           {nearbyVenues
                             .filter(v => {
-                               const q = venueDropdownSearchQuery.toLowerCase();
+                               const q = (venueDropdownSearchQuery || "").toLowerCase();
                                const matchesSearch = (v.venueName?.toLowerCase() || "").includes(q) || 
                                                     (v.area?.toLowerCase() || "").includes(q) || 
                                                     (v.sport?.toLowerCase() || "").includes(q);
-                               const matchesSport = v.sport?.toLowerCase().includes(selectedChallenge?.sport?.toLowerCase());
+                               
+                               // 🛡️ Safe check for sport matching in counter modal
+                               const targetSport = (selectedChallenge?.sport || 'All').toLowerCase();
+                               const matchesSport = (v.sport?.toLowerCase() || "").includes(targetSport) || v.sport === "" || !v.sport;
+                               
                                return matchesSearch && matchesSport;
                             })
                             .map((venue, idx) => (

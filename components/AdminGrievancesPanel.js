@@ -34,6 +34,7 @@ export const AdminGrievancesPanel = ({
   const [showReopenModal, setShowReopenModal] = useState(false);
   const [reopenJustification, setReopenJustification] = useState('');
   const [pendingStatus, setPendingStatus] = useState(null);
+  const [pendingReopenStatus, setPendingReopenStatus] = useState(null);
   const [isSearchingChat, setIsSearchingChat] = useState(false);
   const [chatSearchText, setChatSearchText] = useState('');
   const [searchMatchIndices, setSearchMatchIndices] = useState([]);
@@ -134,11 +135,19 @@ export const AdminGrievancesPanel = ({
       return;
     }
 
-    // 🛡️ Justification Prompt: Moving from Resolved back to Active status
+    // 🛡️ Justification Prompt: Moving from Resolved/Closed back to Active status
     const activeStates = ['Open', 'In Progress', 'Awaiting Response'];
-    if (selectedTicket?.status === 'Resolved' && activeStates.includes(status)) {
+    const isInactive = selectedTicket?.status === 'Resolved' || selectedTicket?.status === 'Closed';
+    
+    if (isInactive && activeStates.includes(status)) {
       setPendingReopenStatus(status);
       setShowReopenModal(true);
+      return;
+    }
+
+    // ⚡ Closed -> Resolved shortcut: bypassing AI summary if it's already closed.
+    if (selectedTicket?.status === 'Closed' && status === 'Resolved') {
+      onUpdateStatus(selectedTicket.id, status);
       return;
     }
 
@@ -287,6 +296,9 @@ export const AdminGrievancesPanel = ({
   };
 
   const renderDateHeader = (dateStr) => {
+    // 🚀 ACE TRACK STABILITY VERSION (v2.6.46)
+    const APP_VERSION = "2.6.46"; 
+    const currentAppVersion = APP_VERSION;
     const date = new Date(dateStr);
     const today = new Date();
     const yesterday = new Date();

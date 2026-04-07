@@ -253,7 +253,6 @@ const ExploreScreen = (props) => {
       return { ...t, distance: distance ? parseFloat(distance) : 99999 };
     });
   }, [tournaments, userRole, userSports, reschedulingFrom, cityFilter, user?.gender, user?.id, sportFilter, userLocation]);
-
   const filteredTournaments = processedTournaments;
 
   const displayTournaments = filteredTournaments;
@@ -478,44 +477,46 @@ const ExploreScreen = (props) => {
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
-          <View style={styles.main}>
-            {recommendedTournaments.length > 0 && !reschedulingFrom && userRole !== 'coach' && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Recommended for you</Text>
-                {recommendedTournaments.map(t => (
-                  <TournamentCard 
-                    key={`rec-${t.id}`}
-                    tournament={t}
-                    isRec={true}
-                    onPress={() => setSelectedTournament(t)}
-                    userId={userId}
-                    userRole={userRole}
-                  />
-                ))}
-              </View>
-            )}
+          sortedTournaments.length > 0 ? (
+            <View style={styles.main}>
+              {recommendedTournaments.length > 0 && !reschedulingFrom && userRole !== 'coach' && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Recommended for you</Text>
+                  {recommendedTournaments.map(t => (
+                    <TournamentCard 
+                      key={`rec-${t.id}`}
+                      tournament={t}
+                      isRec={true}
+                      onPress={() => setSelectedTournament(t)}
+                      userId={userId}
+                      userRole={userRole}
+                    />
+                  ))}
+                </View>
+              )}
 
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>
-                {reschedulingFrom ? 'Pick a new arena' : userRole === 'coach' ? 'Coaching Opportunities' : 'Upcoming Arenas'}
-              </Text>
-              <View style={styles.liveBadge}>
-                <Text style={styles.liveBadgeText}>Live Slots</Text>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>
+                  {reschedulingFrom ? 'Pick a new arena' : userRole === 'coach' ? 'Coaching Opportunities' : 'Upcoming Arenas'}
+                </Text>
+                <View style={styles.liveBadge}>
+                  <Text style={styles.liveBadgeText}>Live Slots</Text>
+                </View>
               </View>
+
+              {reschedulingFrom && (
+                <View style={styles.rescheduleAlert}>
+                  <Text style={styles.rescheduleAlertText}>Rescheduling in progress. Please select your new arena below.</Text>
+                  <TouchableOpacity onPress={onCancelReschedule} style={styles.cancelBox}>
+                    <Text style={styles.cancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
-
-            {reschedulingFrom && (
-              <View style={styles.rescheduleAlert}>
-                <Text style={styles.rescheduleAlertText}>Rescheduling in progress. Please select your new arena below.</Text>
-                <TouchableOpacity onPress={onCancelReschedule} style={styles.cancelBox}>
-                  <Text style={styles.cancelText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
+          ) : null
         }
         ListEmptyComponent={
-          <View style={styles.main}>
+          <View style={[styles.main, { flex: 1, justifyContent: 'center', alignItems: 'center' }]}>
             <View style={styles.emptyContainer}>
               <View style={styles.emptyIconCircle}>
                 <Ionicons name="search" size={40} color="#EF4444" />
@@ -550,7 +551,10 @@ const ExploreScreen = (props) => {
             </View>
           </View>
         }
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={[
+          { paddingBottom: 40 },
+          sortedTournaments.length === 0 && { flexGrow: 1 }
+        ]}
       />
 
 
@@ -672,7 +676,7 @@ const styles = StyleSheet.create({
   sportChipTextActive: { color: '#fff' },
   main: {
     padding: 24,
-    paddingBottom: 100,
+    paddingBottom: 20,
   },
   distanceIndicator: {
     fontSize: 10,
