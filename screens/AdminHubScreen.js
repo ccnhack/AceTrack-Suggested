@@ -646,13 +646,20 @@ const AdminHubScreen = ({
       {subTab === 'grievances' ? (
         <View style={styles.content}>
           <AdminGrievancesPanel 
-            tickets={supportTickets}
-            players={players}
+            tickets={supportTickets || []}
+            players={players || []}
             onReply={onReplyTicket}
             onUpdateStatus={onUpdateTicketStatus}
             onRetryMessage={onRetryMessage}
-            onMarkSeen={onMarkSeen}
-            search={search}
+            onMarkSeen={(id) => {
+               onMarkSeen?.(id);
+               setSeenAdminActionIds?.(prev => {
+                 const next = new Set(prev);
+                 next.add(String(id));
+                 return next;
+               });
+            }}
+            seenAdminActionIds={seenAdminActionIds}
             onDetailToggle={setIsGrievanceDetailOpen}
             autoSelectUser={autoSelectUser}
             autoSelectTicketId={autoSelectTicketId}

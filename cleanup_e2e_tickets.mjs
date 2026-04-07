@@ -29,10 +29,10 @@ async function cleanup() {
 
     console.log(`🗑️  Removing ${removedCount} test tickets...`);
 
-    // 3. Sync Cleaned State back to Cloud (v2.6.47 Hardened Sync)
+    // 3. Sync Cleaned State back to Cloud (v2.6.48 Master Purge)
     const savePayload = {
       supportTickets: cleanedTickets,
-      version: (state.version || 0) + 1,
+      version: 10001, // 🛡️ Master Version Jump (10,001)
       atomicKeys: ['supportTickets'] 
     };
 

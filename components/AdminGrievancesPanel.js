@@ -219,9 +219,17 @@ export const AdminGrievancesPanel = ({
   const getUserRole = (userId) => (players || []).find(pl => pl.id === userId)?.role || 'user';
 
   const isTicketUnread = (ticket) => {
-    if (!ticket || !ticket.messages) return false;
-    // Unread if any message from a user (non-admin) is NOT 'seen'
-    return ticket.messages.some(m => m && m.senderId !== 'admin' && m.status !== 'seen');
+    if (!ticket) return false;
+    
+    // 🛡️ SYNC (v2.6.49): Alignment with AdminHub badge logic
+    const status = ticket.status || 'Open';
+    const isUnseenStatus = (status === 'Open' || status === 'Awaiting Response');
+    const wasOpenedByAdmin = restProps.seenAdminActionIds?.has ? restProps.seenAdminActionIds.has(String(ticket.id)) : false;
+    
+    // Unread if: contains unread user messages OR is an unseen 'Open'/'Awaiting' status
+    const hasUnreadMessages = (ticket.messages || []).some(m => m && m.senderId !== 'admin' && m.status !== 'seen');
+    
+    return hasUnreadMessages || (isUnseenStatus && !wasOpenedByAdmin);
   };
 
   const filteredTickets = (tickets || [])
