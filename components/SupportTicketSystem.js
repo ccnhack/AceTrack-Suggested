@@ -153,11 +153,19 @@ export const SupportTicketSystem = ({
       type: formData.type,
       title: formData.title,
       description: formData.description,
-      messages: [{
-        senderId: userId,
-        text: formData.description,
-        timestamp: new Date().toISOString()
-      }]
+      messages: [
+        {
+          senderId: userId,
+          text: formData.description,
+          timestamp: new Date().toISOString()
+        },
+        {
+          senderId: 'admin',
+          text: "Thanks for reaching out to AceTrack Support Team, Our team will look into the issue and provide an update shortly",
+          timestamp: new Date(Date.now() + 1000).toISOString(),
+          status: 'delivered'
+        }
+      ]
     });
     setFormData({ type: 'Other', title: '', description: '' });
     setView('list');
@@ -1446,16 +1454,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
   },
   closedNote: {
-    padding: 12,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
+    padding: 24,
     alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#F8FAFC',
   },
   closedNoteText: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#94A3B8',
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '800',
     textTransform: 'uppercase',
+    textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,
