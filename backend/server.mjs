@@ -57,8 +57,8 @@ try {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.51)
-const APP_VERSION = "2.6.51"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.52)
+const APP_VERSION = "2.6.52"; 
 const currentAppVersion = APP_VERSION;
 
 // ═══════════════════════════════════════════════════════════════
@@ -988,7 +988,7 @@ app.use((err, req, res, next) => {
   
   res.status(status).json({
     "slug": "acetrack-mobile",
-    "version": "2.6.51",
+    "version": "2.6.52",
     "sdkVersion": "50.0.0",
     "timestamp": new Date().toISOString()
   });

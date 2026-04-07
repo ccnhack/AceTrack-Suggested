@@ -47,8 +47,8 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.51)
-const APP_VERSION = "2.6.51"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.52)
+const APP_VERSION = "2.6.52"; 
 const currentAppVersion = APP_VERSION;
 
 export default function App() {
@@ -2325,6 +2325,7 @@ export default function App() {
           supportTickets={supportTickets}
           evaluations={evaluations}
           seenAdminActionIds={seenAdminActionIds}
+          setSeenAdminActionIds={setSeenAdminActionIds}
           visitedAdminSubTabs={visitedAdminSubTabs}
           setVisitedAdminSubTabs={setVisitedAdminSubTabs}
           reschedulingFrom={reschedulingFrom}

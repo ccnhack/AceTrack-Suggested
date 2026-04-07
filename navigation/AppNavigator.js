@@ -322,7 +322,7 @@ const LiveScoringWrapper = memo((props) => {
 
 export default function AppNavigator({ 
   user, role, players, tournaments, matchVideos, matches, supportTickets, evaluations, 
-  seenAdminActionIds, visitedAdminSubTabs, setVisitedAdminSubTabs, 
+  seenAdminActionIds, setSeenAdminActionIds, visitedAdminSubTabs, setVisitedAdminSubTabs, 
   reschedulingFrom, auditLogs, onLogout, handlers, appVersion, socketRef,
   matchmaking, onUpdateMatchmaking, sendUserNotification,
   isCloudOnline, isUsingCloud, lastSyncTime
@@ -343,11 +343,12 @@ export default function AppNavigator({
 
   const actionParams = useMemo(() => ({
     ...handlers, 
+    setSeenAdminActionIds,
     setVisitedAdminSubTabs, 
     socketRef, 
     onUpdateMatchmaking, 
     sendUserNotification
-  }), [handlers, setVisitedAdminSubTabs, socketRef, onUpdateMatchmaking, sendUserNotification]);
+  }), [handlers, setSeenAdminActionIds, setVisitedAdminSubTabs, socketRef, onUpdateMatchmaking, sendUserNotification]);
 
   // Legacy support for any screen still using useNavigationParams
   const legacyParams = useMemo(() => ({
