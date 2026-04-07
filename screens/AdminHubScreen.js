@@ -1658,7 +1658,13 @@ const AdminHubScreen = ({
               { id: 'coach_assignments', label: 'Coach Assignments', icon: 'clipboard-outline', count: (tournaments || []).filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today) && (seenAdminActionIds?.has ? !seenAdminActionIds.has(t.id) : true)).length },
               { id: 'recordings', label: 'Recordings', icon: 'videocam-outline', count: (matchVideos || []).filter(v => v.adminStatus === 'Deletion Requested' && (seenAdminActionIds?.has ? !seenAdminActionIds.has(v.id) : true)).length },
               { id: 'insights', label: 'Insights & Analytics', icon: 'bar-chart-outline' },
-              { id: 'grievances', label: 'Grievances', icon: 'warning-outline', count: (supportTickets || []).filter(t => t.status === 'Open').length },
+              { id: 'grievances', label: 'Grievances', icon: 'chatbubbles-outline', count: (supportTickets || []).filter(t => {
+                const status = t.status || 'Open';
+                const isUnseenStatus = (status === 'Open' || status === 'Awaiting Response');
+                const wasOpenedByAdmin = seenAdminActionIds?.has ? seenAdminActionIds.has(String(t.id)) : false;
+                const hasUnreadMessages = (t.messages || []).some(m => m && m.senderId !== 'admin' && m.status !== 'seen');
+                return hasUnreadMessages || (isUnseenStatus && !wasOpenedByAdmin);
+              }).length },
               { id: 'audit', label: 'Audit Logs', icon: 'book-outline' },
               { id: 'diagnostics', label: 'Diagnostics', icon: 'desktop-outline' }
             ].map(tab => {
