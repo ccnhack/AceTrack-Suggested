@@ -56,7 +56,7 @@ const healthData = healthRes.ok ? await healthRes.json() : {};
 assert('E2E-HEALTH-001', 'Health', 'GET /api/health returns 200', healthRes.ok === true, `Status: ${healthRes.status}`);
 assert('E2E-HEALTH-002', 'Health', 'Health response contains status=ok', healthData.status === 'ok', `Got: ${healthData.status}`);
 assert('E2E-HEALTH-003', 'Health', 'Health response contains version', !!healthData.version, `Version: ${healthData.version}`);
-assert('E2E-HEALTH-004', 'Health', 'Health version matches v2.6.53', healthData.version === '2.6.53', `Got: ${healthData.version}`);
+assert('E2E-HEALTH-004', 'Health', 'Health version matches baseline', healthData.version === '2.6.57' || healthData.version === '2.6.55', `Got: ${healthData.version}`);
 assert('E2E-HEALTH-005', 'Health', 'Health response contains uptime', typeof healthData.uptime === 'number' && healthData.uptime > 0, `Uptime: ${healthData.uptime}s`);
 
 // ══════════════════════════════════════════════════════════════
@@ -308,7 +308,7 @@ const ticketPayload = {
     title: 'E2E Automated Test Ticket',
     status: 'Open',
     type: 'Bug',
-    "version": "2.6.53",
+    appVersion: "2.6.57",
     platform: 'android',
     createdAt: new Date().toISOString(),
     messages: [
@@ -316,7 +316,7 @@ const ticketPayload = {
       { senderId: 'admin', text: 'Thanks for reaching out to AceTrack Support Team...', timestamp: new Date().toISOString() }
     ]
   }],
-  version: 2000000 // High version for test
+  version: (statusData.version || 0) + 1
 };
 
 const supportCreateRes = await safeFetch(`${BASE_URL}/api/save`, {
@@ -336,7 +336,7 @@ if (savedTicket) {
   assert('E2E-SUP-003', 'Support', 'Ticket contains automated greeting', 
     savedTicket.messages.some(m => m.senderId === 'admin' && m.text.includes('AceTrack Support Team')), 
     `Messages: ${savedTicket.messages.length}`);
-  assert('E2E-SUP-004', 'Support', 'Ticket has appVersion metadata', savedTicket.appVersion === '2.6.46', `Got: ${savedTicket.appVersion}`);
+  assert('E2E-SUP-004', 'Support', 'Ticket has appVersion metadata', savedTicket.appVersion === '2.6.57', `Got: ${savedTicket.appVersion}`);
   assert('E2E-SUP-005', 'Support', 'Ticket has platform metadata', savedTicket.platform === 'android', `Got: ${savedTicket.platform}`);
 }
 

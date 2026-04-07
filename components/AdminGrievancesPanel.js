@@ -541,7 +541,7 @@ export const AdminGrievancesPanel = ({
 
                     return (
                       <View 
-                        key={msg.id || msg.timestamp || idx} 
+                        key={`${msg.timestamp || 'no-ts'}-${idx}`} 
                         style={isHighlighted && styles.highlightedMessage}
                         onLayout={(e) => { messageYOffsets.current[msg.id || msg.timestamp] = e.nativeEvent.layout.y; }}
                       >
