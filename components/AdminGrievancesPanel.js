@@ -20,7 +20,7 @@ const statusColors = {
 const statusOptions = ['Open', 'In Progress', 'Awaiting Response', 'Resolved', 'Closed'];
 
 export const AdminGrievancesPanel = ({
-  tickets, players, onReply, onUpdateStatus, onTypingStart, onTypingStop, search, onRetryMessage, onMarkSeen, onDetailToggle, autoSelectUser, autoSelectTicketId
+  tickets, players, onReply, onUpdateStatus, onTypingStart, onTypingStop, search, onRetryMessage, onMarkSeen, onDetailToggle, autoSelectUser, autoSelectTicketId, ...restProps
 }) => {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [replyText, setReplyText] = useState('');
