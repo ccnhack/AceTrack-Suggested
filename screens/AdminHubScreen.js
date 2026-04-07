@@ -45,6 +45,7 @@ const AdminHubScreen = ({
   const [subTab, setSubTab] = useState('individuals');
   const [isGrievanceDetailOpen, setIsGrievanceDetailOpen] = useState(false);
   const [autoSelectUser, setAutoSelectUser] = useState(null);
+  const [autoSelectTicketId, setAutoSelectTicketId] = useState(null);
   const today = new Date().toISOString().split('T')[0];
   const [search, setSearch] = useState('');
   const [coachSubTab, setCoachSubTab] = useState('pending');
@@ -91,8 +92,15 @@ const AdminHubScreen = ({
         if (route.params.autoSelectUser) {
             setAutoSelectUser(route.params.autoSelectUser);
         }
+        if (route.params.autoSelectTicketId) {
+            setAutoSelectTicketId(route.params.autoSelectTicketId);
+        }
         // Reset params to avoid re-triggering
-        navigation.setParams({ subTab: undefined, autoSelectUser: undefined });
+        navigation.setParams({ 
+            subTab: undefined, 
+            autoSelectUser: undefined,
+            autoSelectTicketId: undefined 
+        });
     }
   }, [route.params]);
 
@@ -647,6 +655,7 @@ const AdminHubScreen = ({
             search={search}
             onDetailToggle={setIsGrievanceDetailOpen}
             autoSelectUser={autoSelectUser}
+            autoSelectTicketId={autoSelectTicketId}
           />
         </View>
       ) : (

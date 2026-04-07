@@ -20,7 +20,7 @@ const statusColors = {
 const statusOptions = ['Open', 'In Progress', 'Awaiting Response', 'Resolved', 'Closed'];
 
 export const AdminGrievancesPanel = ({
-  tickets, players, onReply, onUpdateStatus, onTypingStart, onTypingStop, search, onRetryMessage, onMarkSeen, onDetailToggle, autoSelectUser
+  tickets, players, onReply, onUpdateStatus, onTypingStart, onTypingStop, search, onRetryMessage, onMarkSeen, onDetailToggle, autoSelectUser, autoSelectTicketId
 }) => {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [replyText, setReplyText] = useState('');
@@ -54,11 +54,14 @@ export const AdminGrievancesPanel = ({
 
   // Handle deep-linking auto-selection
   useEffect(() => {
-    if (autoSelectUser && tickets) {
-        const userTicket = tickets.find(t => t.userId === autoSelectUser);
+    if (autoSelectTicketId && tickets) {
+        const ticket = (tickets || []).find(t => t.id === autoSelectTicketId);
+        if (ticket) setSelectedTicket(ticket);
+    } else if (autoSelectUser && tickets) {
+        const userTicket = (tickets || []).find(t => t.userId === autoSelectUser);
         if (userTicket) setSelectedTicket(userTicket);
     }
-  }, [autoSelectUser, tickets?.length]);
+  }, [autoSelectUser, autoSelectTicketId, tickets?.length]);
 
   // 📜 Auto-scroll on Open/Update (v2.6.26)
   useEffect(() => {

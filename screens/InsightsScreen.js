@@ -30,6 +30,8 @@ const InsightsScreen = ({
   const [deviceSearchQuery, setDeviceSearchQuery] = useState('');
   const [platformTicketsModalVisible, setPlatformTicketsModalVisible] = useState(false);
   const [selectedPlatformForTickets, setSelectedPlatformForTickets] = useState(null); // 'ios' | 'android'
+  const [autoSelectUser, setAutoSelectUser] = useState(null);
+  const [autoSelectTicketId, setAutoSelectTicketId] = useState(null);
 
   const statusColors = {
     'Open': { bg: '#EFF6FF', text: '#2563EB' },
@@ -314,7 +316,7 @@ const InsightsScreen = ({
     });
   }, []);
 
-  // 14. 🧪 Platform Specific Ticket Breakdown Logic (v2.6.36)
+  // 14. 🧪 Platform Specific Ticket Breakdown Logic (v2.6.39)
   const platformBreakdownData = useMemo(() => {
     if (!selectedPlatformForTickets) return null;
     
@@ -756,7 +758,6 @@ const InsightsScreen = ({
                       style={styles.deviceUserRow}
                       onPress={() => {
                         logger.logAction('Insights_Click_Modal_User', { userId: p.id, platform: selectedPlatform });
-                        const userBaseUrl = `https://acetrack-suggested.onrender.com/api/diagnostics?userId=${p.id}`;
                         
                         // Use native Alert to offer options
                         const options = [
@@ -858,7 +859,10 @@ const InsightsScreen = ({
                                 { text: "Cancel", style: "cancel" },
                                 { text: "Open", onPress: () => {
                                     setPlatformTicketsModalVisible(false);
-                                    navigation.navigate('Admin', { subTab: 'grievances', autoSelectUser: t.userId });
+                                    navigation.navigate('Admin', { 
+                                        subTab: 'grievances', 
+                                        autoSelectTicketId: t.id 
+                                    });
                                 }}
                             ]
                         );
