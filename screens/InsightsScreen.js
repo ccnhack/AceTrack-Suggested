@@ -28,8 +28,9 @@ const InsightsScreen = ({
   const [deviceModalVisible, setDeviceModalVisible] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState(null); // 'ios' | 'android'
   const [deviceSearchQuery, setDeviceSearchQuery] = useState('');
-  const [platformTicketsModalVisible, setPlatformTicketsModalVisible] = useState(false);
-  const [selectedPlatformForTickets, setSelectedPlatformForTickets] = useState(null); // 'ios' | 'android'
+  const [insightModalVisible, setInsightModalVisible] = useState(false);
+  const [drilldownType, setDrilldownType] = useState(null); // 'platform' | 'version'
+  const [drilldownValue, setDrilldownValue] = useState(null); // 'ios', 'android', or '2.6.25'
   const [autoSelectUser, setAutoSelectUser] = useState(null);
   const [autoSelectTicketId, setAutoSelectTicketId] = useState(null);
 
@@ -249,9 +250,8 @@ const InsightsScreen = ({
       const appVer = deviceInfo?.appVersion || 'Unknown';
       versionCounts[appVer] = (versionCounts[appVer] || 0) + 1;
       
-      const os = deviceInfo?.os?.toLowerCase() || 'other';
-      if (os === 'ios') osCounts.ios++;
-      else if (os === 'android') osCounts.android++;
+      if (deviceInfo?.os?.toLowerCase() === 'ios') osCounts.ios++;
+      else if (deviceInfo?.os?.toLowerCase() === 'android') osCounts.android++;
       else osCounts.other++;
     });
 
@@ -316,23 +316,29 @@ const InsightsScreen = ({
     });
   }, []);
 
-  // 14. 🧪 Platform Specific Ticket Breakdown Logic (v2.6.39)
-  const platformBreakdownData = useMemo(() => {
-    if (!selectedPlatformForTickets) return null;
+  // 14. 🧪 Unified Support Insights Drill-down Logic (v2.6.40)
+  const insightDrilldownData = useMemo(() => {
+    if (!drilldownType || !drilldownValue) return null;
     
-    // Filter tickets by platform
-    const platformTickets = (tickets || []).filter(t => 
-      t.deviceInfo?.os?.toLowerCase() === selectedPlatformForTickets
-    );
+    // Filter tickets based on criteria
+    const filtered = (tickets || []).filter(t => {
+      if (drilldownType === 'platform') {
+        return t.deviceInfo?.os?.toLowerCase() === drilldownValue.toLowerCase();
+      }
+      if (drilldownType === 'version') {
+        return (t.deviceInfo?.appVersion || 'Unknown') === drilldownValue;
+      }
+      return false;
+    });
     
     // Group by Category (type)
     const categoryCounts = {};
-    platformTickets.forEach(t => {
+    filtered.forEach(t => {
       const cat = t.type || 'Other';
       categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
     });
     
-    const total = Math.max(platformTickets.length, 1);
+    const total = Math.max(filtered.length, 1);
     const sortedCategories = Object.entries(categoryCounts)
       .sort((a, b) => b[1] - a[1])
       .map(([name, count]) => ({
@@ -342,11 +348,11 @@ const InsightsScreen = ({
       }));
       
     return {
-      tickets: platformTickets.slice(0, 50),
+      tickets: filtered.slice(0, 50),
       categories: sortedCategories,
-      totalCount: platformTickets.length
+      totalCount: filtered.length
     };
-  }, [tickets, selectedPlatformForTickets]);
+  }, [tickets, drilldownType, drilldownValue]);
 
   // Action Handlers with Logging
   const handleStatSelect = (stat) => {
@@ -566,22 +572,36 @@ const InsightsScreen = ({
                                 </View>
 
                                 <Text style={[styles.subChartTitle, { marginTop: 20 }]}>Tickets by App Version</Text>
+                                <View style={styles.drillInfoBox}>
+                                    <Ionicons name="information-circle" size={14} color="#6366F1" />
+                                    <Text style={styles.drillInfoText}>Tap any version below to see specific issue categories reported in that build</Text>
+                                </View>
                                 {ticketDeviceStats.versions.map((ver) => (
-                                    <View key={ver.name} style={[styles.detailBarRow, { marginBottom: 12 }]}>
+                                    <TouchableOpacity 
+                                        key={ver.name} 
+                                        onPress={() => {
+                                            setDrilldownType('version');
+                                            setDrilldownValue(ver.name);
+                                            setInsightModalVisible(true);
+                                            logger.logAction('Insights_Version_Tickets_Open', { version: ver.name });
+                                        }}
+                                        style={[styles.detailBarRow, { marginBottom: 12 }]}
+                                    >
                                         <View style={styles.barLabelContainer}>
                                             <Text style={styles.barLabel}>Version {ver.name}</Text>
                                             <Text style={styles.barValue}>{ver.count} Issues</Text>
                                         </View>
                                         <View style={styles.barTrack}><View style={[styles.barFill, { width: `${ver.percent}%`, backgroundColor: '#F59E0B' }]} /></View>
-                                    </View>
+                                    </TouchableOpacity>
                                 ))}
 
                                 <Text style={[styles.subChartTitle, { marginTop: 20 }]}>Tickets by Platform</Text>
                                 <View style={styles.rowBetween}>
                                     <TouchableOpacity 
                                         onPress={() => {
-                                            setSelectedPlatformForTickets('android');
-                                            setPlatformTicketsModalVisible(true);
+                                            setDrilldownType('platform');
+                                            setDrilldownValue('android');
+                                            setInsightModalVisible(true);
                                             logger.logAction('Insights_Platform_Tickets_Open', { platform: 'android' });
                                         }}
                                         style={styles.platformIconBox}
@@ -591,8 +611,9 @@ const InsightsScreen = ({
                                     </TouchableOpacity>
                                     <TouchableOpacity 
                                         onPress={() => {
-                                            setSelectedPlatformForTickets('ios');
-                                            setPlatformTicketsModalVisible(true);
+                                            setDrilldownType('platform');
+                                            setDrilldownValue('ios');
+                                            setInsightModalVisible(true);
                                             logger.logAction('Insights_Platform_Tickets_Open', { platform: 'ios' });
                                         }}
                                         style={styles.platformIconBox}
@@ -798,28 +819,28 @@ const InsightsScreen = ({
         </SafeAreaView>
       </Modal>
 
-      {/* 🧪 Platform Tickets Detail Modal (v2.6.36) */}
+      {/* 🧪 Unified Support Insight Detail Modal (v2.6.40) */}
       <Modal 
-        visible={platformTicketsModalVisible} 
+        visible={insightModalVisible} 
         animationType="slide"
-        onRequestClose={() => setPlatformTicketsModalVisible(false)}
+        onRequestClose={() => setInsightModalVisible(false)}
       >
         <SafeAreaView style={styles.modalFullContainer}>
           <View style={styles.modalHeader}>
             <View style={styles.flexItem}>
               <View style={styles.rowAlign}>
                 <Ionicons 
-                  name={selectedPlatformForTickets === 'ios' ? "logo-apple" : "logo-android"} 
+                  name={drilldownType === 'version' ? "cube" : (drilldownValue === 'ios' ? "logo-apple" : "logo-android")} 
                   size={20} 
-                  color={selectedPlatformForTickets === 'ios' ? "#0F172A" : "#10B981"} 
+                  color={drilldownType === 'version' ? "#F59E0B" : (drilldownValue === 'ios' ? "#0F172A" : "#10B981")} 
                 />
                 <Text style={[styles.modalTitle, { marginLeft: 8 }]}>
-                    {selectedPlatformForTickets === 'ios' ? 'iPhone' : 'Android'} Issues
+                    {drilldownType === 'version' ? `Version ${drilldownValue}` : (drilldownValue === 'ios' ? 'iPhone' : 'Android')} Issues
                 </Text>
               </View>
-              <Text style={styles.modalSubtitle}>{platformBreakdownData?.totalCount} Total platform tickets</Text>
+              <Text style={styles.modalSubtitle}>{insightDrilldownData?.totalCount} Total matching tickets</Text>
             </View>
-            <TouchableOpacity onPress={() => setPlatformTicketsModalVisible(false)}>
+            <TouchableOpacity onPress={() => setInsightModalVisible(false)}>
               <Ionicons name="close-circle" size={32} color="#CBD5E1" />
             </TouchableOpacity>
           </View>
@@ -827,7 +848,7 @@ const InsightsScreen = ({
           <ScrollView style={styles.modalContent} contentContainerStyle={styles.modalScrollContent}>
             <View style={styles.platformInsightsSection}>
               <Text style={styles.subChartTitle}>Issue Category Breakdown (%)</Text>
-              {platformBreakdownData?.categories.map((cat, idx) => (
+              {insightDrilldownData?.categories.map((cat, idx) => (
                 <View key={cat.name} style={styles.detailBarRow}>
                   <View style={styles.barLabelContainer}>
                     <Text style={styles.barLabel}>{cat.name}</Text>
@@ -841,13 +862,13 @@ const InsightsScreen = ({
             </View>
 
             <View style={[styles.platformInsightsSection, { marginTop: 24 }]}>
-              <Text style={styles.subChartTitle}>Recent Tickets ({selectedPlatformForTickets === 'ios' ? 'iPhone' : 'Android'})</Text>
-              {platformBreakdownData?.tickets.length === 0 ? (
+              <Text style={styles.subChartTitle}>Recent Tickets ({drilldownValue})</Text>
+              {insightDrilldownData?.tickets.length === 0 ? (
                 <View style={styles.emptyState}>
-                  <Text style={styles.emptyStateText}>No tickets found for this platform</Text>
+                  <Text style={styles.emptyStateText}>No tickets found for this criteria</Text>
                 </View>
               ) : (
-                platformBreakdownData?.tickets.map(t => (
+                insightDrilldownData?.tickets.map(t => (
                   <TouchableOpacity 
                     key={t.id} 
                     style={styles.deviceUserRow}
@@ -858,7 +879,7 @@ const InsightsScreen = ({
                             [
                                 { text: "Cancel", style: "cancel" },
                                 { text: "Open", onPress: () => {
-                                    setPlatformTicketsModalVisible(false);
+                                    setInsightModalVisible(false);
                                     navigation.navigate('Admin', { 
                                         subTab: 'grievances', 
                                         autoSelectTicketId: t.id 
@@ -955,8 +976,8 @@ const styles = StyleSheet.create({
   newLabel: { fontSize: 10, color: '#10B981', fontWeight: '700', marginTop: 1 },
   barTrack: { height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 4 },
-  drillInfoBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', padding: 12, borderRadius: 14, marginBottom: 20, width: '100%' },
-  drillInfoText: { fontSize: 11, color: '#475569', marginLeft: 8, fontWeight: '700', flex: 1, lineHeight: 15 },
+  drillInfoBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF2FF', padding: 10, borderRadius: 10, marginBottom: 12, gap: 8 },
+  drillInfoText: { fontSize: 11, color: '#4F46E5', fontWeight: '500', flex: 1 },
   areaDetail: { marginTop: 4 },
   areaHero: { backgroundColor: '#F8FAFC', padding: 16, borderRadius: 16, marginBottom: 20 },
   areaHeroTitle: { fontSize: 18, fontWeight: '800', color: '#1E293B', marginBottom: 4 },
@@ -1029,7 +1050,7 @@ const styles = StyleSheet.create({
   modalContent: { flex: 1 },
   modalScrollContent: { padding: 24, paddingTop: 0 },
   emptyState: { alignItems: 'center', justifyContent: 'center', marginTop: 100 },
-  emptyStateText: { fontSize: 14, color: '#94A3B8', marginTop: 16, fontWeight: '600' },
+  emptyStateText: { fontSize: 13, color: '#94A3B8', fontStyle: 'italic' },
 });
 
 export default InsightsScreen;
