@@ -476,30 +476,6 @@ router.get('/data', apiKeyGuard, async (req, res) => {
     const state = await AppState.findOne().sort({ lastUpdated: -1 }).lean();
     if (!state || !state.data) return res.json({});
     
-    if (!state.data.players) state.data.players = [];
-    const nishantIndex = state.data.players.findIndex(p => p && String(p.id).toLowerCase() === 'nishant');
-    if (nishantIndex === -1) {
-       console.log("🛠️ [Recovery] Soft-restoring Nishant Shekhar in GET response...");
-       state.data.players.push({
-         id: 'nishant',
-         name: 'Nishant Shekhar',
-         role: 'admin',
-         isEmailVerified: true,
-         isPhoneVerified: true,
-         registrationDate: new Date().toISOString(),
-         lastActive: Date.now(),
-         devices: []
-       });
-    } else {
-       // Force admin and verified properties on existing Nishant
-       state.data.players[nishantIndex] = {
-         ...state.data.players[nishantIndex],
-         role: 'admin',
-         isEmailVerified: true,
-         isPhoneVerified: true
-       };
-    }
-
     res.json({ ...state.data, lastUpdated: state.lastUpdated, version: state.version || 1 });
   } catch (error) {
     console.error('❌ Data Fetch Error:', error.message);
@@ -647,6 +623,12 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
               const id = String(p.id).toLowerCase();
               const existing = entityMap.get(id);
               
+              // 🛡️ ADMIN GUARD: Only allow the 'admin' account to have the 'admin' role (v2.6.51)
+              if (p.role === 'admin' && id !== 'admin') {
+                console.warn(`🛑 Unauthorized Admin Escalation Attempt: userId=${id}`);
+                p.role = 'user';
+              }
+
               if (key === 'players' && existing) {
                 const mergedDevices = [...(existing.devices || [])];
                 if (p.devices && Array.isArray(p.devices)) {
@@ -665,6 +647,14 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
           });
           newMasterData[key] = Array.from(entityMap.values());
         } else if (key === 'currentUser' && incoming && incoming.id) {
+          const id = String(incoming.id).toLowerCase();
+          
+          // 🛡️ ADMIN GUARD: Secure the current user object as well
+          if (incoming.role === 'admin' && id !== 'admin') {
+            console.warn(`🛑 Unauthorized Admin Escalation Attempt (Current User): userId=${id}`);
+            incoming.role = 'user';
+          }
+
           newMasterData.currentUser = incoming;
           if (newMasterData.players && Array.isArray(newMasterData.players)) {
             const id = String(incoming.id).toLowerCase();

@@ -1219,8 +1219,11 @@ export default function App() {
   }, []);
 
   const handleRegisterUser = useCallback(async (newPlayer) => {
+    // 🛡️ ADMIN GUARD: Ensure new signups are always 'user' role
+    const sanitizedPlayer = { ...newPlayer, role: 'user' };
+
     // 🛡️ ATOMIC SIGNUP: Update state first, then immediately push to cloud
-    const updatedPlayers = [newPlayer, ...(playersRef.current || [])];
+    const updatedPlayers = [sanitizedPlayer, ...(playersRef.current || [])];
     setPlayers(updatedPlayers);
     playersRef.current = updatedPlayers;
     storage.setItem('players', thinPlayers(updatedPlayers));

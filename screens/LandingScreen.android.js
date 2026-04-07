@@ -11,7 +11,7 @@ const LandingScreen = ({ onLogin = () => {}, onJoinCircle = () => {} }) => {
   
   useEffect(() => {
     // DIAGNOSTIC LOGGING - To help find the ratio issue
-    console.log(`📱 [DIAGNOSTIC] LandingScreen Dimensions: ${JSON.stringify({
+    console.log(`📱 [DIAGNOSTIC] LandingScreen (Android) Dimensions: ${JSON.stringify({
       window: { width, height },
       screen: { 
         width: Dimensions.get('screen').width, 
@@ -24,7 +24,7 @@ const LandingScreen = ({ onLogin = () => {}, onJoinCircle = () => {} }) => {
     })}`);
   }, []);
 
-  const isShortScreen = height < 750; // Increased threshold for better coverage
+  const isShortScreen = height < 750;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -99,14 +99,14 @@ const styles = StyleSheet.create({
   },
   fullImage: {
     position: 'absolute',
-    bottom: height < 750 ? 30 : 20, // Universal shift UP to clear icons from buttons
+    bottom: height < 750 ? 30 : 20, 
     left: 0,
     width: '100%',
     height: '100%',
   },
   logoOverlay: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 60 : (height < 750 ? 20 : 40),
+    top: height < 750 ? 20 : 40,
     left: 24,
     zIndex: 100,
   },
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : (height < 750 ? 10 : 25),
+    paddingBottom: height < 750 ? 10 : 25,
   },
   buttonContainer: {
     gap: height < 750 ? 6 : 12,
@@ -179,7 +179,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 24,
     right: 24,
-    // Using TOP anchor to ensure text stays in the dark zone between athletes and icons
     top: height < 750 ? (height * 0.38) : (height * 0.45), 
     zIndex: 10,
   },
