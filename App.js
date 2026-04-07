@@ -47,8 +47,8 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.46)
-const APP_VERSION = "2.6.46"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.47)
+const APP_VERSION = "2.6.47"; 
 const currentAppVersion = APP_VERSION;
 
 export default function App() {
@@ -446,7 +446,7 @@ export default function App() {
         storage.getItem('matchmaking')
       ]);
 
-      // 🛡️ STORAGE NUKE: For version 2.4.9+, force-clear any 'false' setting one time
+      // 🛡️ STORAGE NUKE: "version": "2.6.47", force-clear any 'false' setting one time
       const hasNuked = await AsyncStorage.getItem('cloud_nuke_v249');
       let effectiveIwc = iuc;
       if (!hasNuked) {

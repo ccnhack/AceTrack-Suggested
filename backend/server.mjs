@@ -57,9 +57,9 @@ try {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
 
-// 🚀 ACE TRACK SERVER VERSION (v2.6.46)
-const APP_VERSION = "2.6.46"; 
-const latestAppVersion = APP_VERSION;
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.47)
+const APP_VERSION = "2.6.47"; 
+const currentAppVersion = APP_VERSION;
 
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: CORS Whitelist (SEC Fix #3)
@@ -148,12 +148,14 @@ const globalLimiter = rateLimit({
   message: { error: 'Too many requests. Please try again after a minute.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false },
 });
 
 const otpLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
-  message: { error: 'Too many OTP attempts. Account temporarily locked.' }
+  message: { error: 'Too many OTP attempts. Account temporarily locked.' },
+  validate: { trustProxy: false },
 });
 
 app.use('/api', globalLimiter);
@@ -373,7 +375,12 @@ const logServerEvent = async (action, details = {}) => {
     let logs = [];
     if (fs.existsSync(logFile)) {
       const content = await fs.promises.readFile(logFile, 'utf8');
-      logs = JSON.parse(content || '[]');
+      try {
+        logs = JSON.parse(content || '[]');
+      } catch (parseErr) {
+        console.error("⚠️ Server Log Corruption detected, resetting log file:", parseErr.message);
+        logs = [];
+      }
     }
     logs.unshift({ timestamp: new Date().toISOString(), action, ...details });
     await fs.promises.writeFile(logFile, JSON.stringify(logs.slice(0, 1000), null, 2));
@@ -476,9 +483,6 @@ router.get('/data', apiKeyGuard, async (req, res) => {
     const state = await AppState.findOne().sort({ lastUpdated: -1 }).lean();
     if (!state || !state.data) return res.json({});
     
-    // 🛡️ DATA RECOVERY (v2.6.25): 'Soft Restoration' for Nishant
-    // We inject him into the GET response so the next syncing client will naturally "save" him back to the DB.
-    // This bypasses the version-based race conditions on high-traffic servers.
     if (!state.data.players) state.data.players = [];
     if (!state.data.players.some(p => p && String(p.id).toLowerCase() === 'nishant')) {
        console.log("🛠️ [Recovery] Soft-restoring Nishant Shekhar in GET response...");
@@ -490,7 +494,6 @@ router.get('/data', apiKeyGuard, async (req, res) => {
          lastActive: Date.now(),
          devices: []
        });
-       // Note: We don't increment version here to avoid confusing OCC; the syncing client will increment it.
     }
 
     res.json({ ...state.data, lastUpdated: state.lastUpdated, version: state.version || 1 });
@@ -519,7 +522,6 @@ router.get('/diagnostics', apiKeyGuard, async (req, res) => {
   try {
     let cloudFiles = [];
     try {
-      // Fetch raw files from the 'acetrack/diagnostics' folder
       const result = await cloudinary.search
         .expression('folder:acetrack/diagnostics/*')
         .sort_by('created_at', 'desc')
@@ -543,7 +545,6 @@ router.get('/diagnostics', apiKeyGuard, async (req, res) => {
       console.warn('Local read failed:', e.message);
     }
     
-    // Combine and deduplicate
     const allFiles = [...new Set([...cloudFiles, ...localFiles])];
     res.json({ success: true, files: allFiles });
   } catch (error) {
@@ -554,9 +555,8 @@ router.get('/diagnostics', apiKeyGuard, async (req, res) => {
 
 // GET /api/v1/diagnostics/:filename
 router.get('/diagnostics/:filename', apiKeyGuard, asyncHandler(async (req, res) => {
-  const filename = path.basename(req.params.filename); // 🛡️ SEC Fix: Path Traversal prevention
+  const filename = path.basename(req.params.filename);
   
-  // 1. Check Cloudinary First
   try {
     const publicId = `acetrack/diagnostics/${filename}`;
     const fileUrl = cloudinary.url(publicId, { resource_type: 'raw', secure: true });
@@ -569,7 +569,6 @@ router.get('/diagnostics/:filename', apiKeyGuard, asyncHandler(async (req, res) 
     console.log(`Cloudinary fetch failed for ${filename}, trying local fallback.`);
   }
 
-  // 2. Fallback to Local Disk
   const filepath = path.join(DIAGNOSTICS_DIR, filename);
   if (fs.existsSync(filepath)) {
     const data = await fs.promises.readFile(filepath, 'utf8');
@@ -588,12 +587,10 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
     const now = Date.now();
     const clientVersion = req.body.version;
 
-    // 🛡️ CONCURRENCY CONTROL: Fetch the current state
     const state = await AppState.findOne().sort({ lastUpdated: -1 });
     const currentData = (state && state.data) ? state.data : {};
     const currentVersion = state?.version || 1;
 
-    // 🛡️ OCC VERSION CHECK: Linear progression enforcement (v2.6.25 Hardening)
     if (clientVersion === undefined) {
       console.warn(`🛑 Rejected: Request missing version from ${req.ip}`);
       return res.status(403).json({ error: 'Forbidden: Missing version number. Please update your app.' });
@@ -613,16 +610,11 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
 
     const newMasterData = { ...currentData };
 
-    // 🛡️ MASTER MERGE & HARDENING
     for (const key of syncableKeys) {
       if (req.body[key] !== undefined) {
         let incoming = req.body[key];
         const atomicKeys = req.body.atomicKeys || [];
-        const isAtomic = atomicKeys.includes(key);
 
-        const isAtomicKey = atomicKeys.includes(key);
-
-        // 🛡️ SECURITY: HASH TOURNEY OTPS BEFORE DATABASE PERSISTENCE
         if (key === 'tournaments' && Array.isArray(incoming)) {
           incoming = await Promise.all(incoming.map(async (t) => {
              const updatedT = { ...t };
@@ -637,20 +629,16 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
         }
 
         if (['players', 'matchmaking', 'tournaments', 'matches', 'auditLogs', 'matchVideos', 'supportTickets', 'evaluations'].includes(key) && Array.isArray(incoming)) {
-          // 🛡️ MASTER MERGE: Prevent lost entities for all synced arrays (Hardened v2.6.25)
           const entityMap = new Map();
           
-          // 1. Seed with existing data
           (currentData[key] || []).forEach(e => { if (e && e.id) entityMap.set(String(e.id).toLowerCase(), e); });
           
-          // 2. Multi-strategy Merge
           incoming.forEach(p => {
             if (p && p.id) {
               const id = String(p.id).toLowerCase();
               const existing = entityMap.get(id);
               
               if (key === 'players' && existing) {
-                // SPECIAL: Players need deep device merging
                 const mergedDevices = [...(existing.devices || [])];
                 if (p.devices && Array.isArray(p.devices)) {
                   p.devices.forEach(d => {
@@ -662,7 +650,6 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
                 }
                 entityMap.set(id, { ...existing, ...p, devices: mergedDevices });
               } else {
-                // DEFAULT: ID-based merge for all other entities
                 entityMap.set(id, existing ? { ...existing, ...p } : p);
               }
             }
@@ -688,7 +675,6 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
             }
           }
         } else {
-          // Fallback for objects or non-array data
           newMasterData[key] = incoming;
         }
       }
@@ -707,7 +693,7 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
       lastUpdated: updatedState.lastUpdated, 
       version: updatedState.version,
       keys: changedKeys,
-      lastSocketId: socketId || 'system' // 🛡️ v2.6.28: Ensure lastSocketId is always present
+      lastSocketId: socketId || 'system'
     };
 
     if (socketId) {
@@ -736,8 +722,6 @@ router.post('/upload', apiKeyGuard, upload.single('video'), async (req, res) => 
   }
 
   try {
-    // Stream upload to Cloudinary
-    // Determine folder based on mimetype
     let uploadFolder = 'acetrack';
     if (req.file.mimetype.startsWith('video/')) uploadFolder = 'acetrack/videos';
     else if (req.file.mimetype.startsWith('image/')) uploadFolder = 'acetrack/images';
@@ -748,10 +732,9 @@ router.post('/upload', apiKeyGuard, upload.single('video'), async (req, res) => 
         resource_type: 'auto',
         folder: uploadFolder,
         public_id: `${Date.now()}-${Math.round(Math.random() * 1e9)}${req.file.mimetype.startsWith('image/') ? '.jpg' : ''}`,
-        format: req.file.mimetype.startsWith('image/') ? 'jpg' : undefined, // Force conversion to JPG for cross-device compatibility (HEIC fix)
+        format: req.file.mimetype.startsWith('image/') ? 'jpg' : undefined,
       },
       async (error, result) => {
-        // Cleanup local file immediately
         if (req.file.path) {
           fs.promises.unlink(req.file.path).catch(e => console.error("Cleanup error:", e));
         }
@@ -769,7 +752,6 @@ router.post('/upload', apiKeyGuard, upload.single('video'), async (req, res) => 
       }
     );
 
-    // Read from disk buffer/stream and pass to Cloudinary
     fs.createReadStream(req.file.path).pipe(stream);
   } catch (error) {
     console.error('Upload Process Error:', error);
@@ -786,7 +768,6 @@ router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), asyncHandl
     const timestamp = istDate.toISOString().replace(/T/, '_').replace(/\..+/, '').replace(/:/g, '-');
     const safeUsername = username.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     
-    // Rotation: Keep max 3 files per user locally
     try {
       const userFiles = fs.readdirSync(DIAGNOSTICS_DIR)
         .filter(f => f.startsWith(`${safeUsername}_`) || f.startsWith(`admin_requested_${safeUsername}_`))
@@ -810,7 +791,6 @@ router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), asyncHandl
 
     fs.writeFileSync(filepath, JSON.stringify(reportData, null, 2));
 
-    // ☁️ Persistence Fix: Upload to Cloudinary
     console.log(`☁️ [Cloudinary] Starting upload for: ${filename} (Size: ${fs.statSync(filepath).size} bytes)`);
     try {
       const cloudResult = await cloudinary.uploader.upload(filepath, {
@@ -828,7 +808,6 @@ router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), asyncHandl
       });
       logAudit(req, 'DIAG_UPLOAD_CLOUDINARY_SUCCESS', [], { url: cloudResult.secure_url, filename });
       
-      // Cloudinary Rotation: Keep max 3 files per user in the cloud
       try {
         const result = await cloudinary.search
           .expression('folder:acetrack/diagnostics/*')
@@ -876,7 +855,6 @@ router.post('/diagnostics/auto-flush', apiKeyGuard, validate(AutoFlushSchema), a
   const logContent = logs.map(l => `[${l.timestamp}] ${l.level.toUpperCase()} [${l.type}]: ${l.message}`).join('\n');
   await fs.promises.writeFile(filePath, logContent);
 
-  // ☁️ Persistence Fix: Upload to Cloudinary
   console.log(`☁️ [Cloudinary Auto-Flush] Starting upload for: ${filename} (Size: ${(await fs.promises.stat(filePath)).size} bytes)`);
   try {
     const cloudResult = await cloudinary.uploader.upload(filePath, {
@@ -902,7 +880,6 @@ router.post('/diagnostics/auto-flush', apiKeyGuard, validate(AutoFlushSchema), a
     await logAudit(req, 'AUTO_FLUSH_UPLOAD_CLOUDINARY_FAILED', [], { error: err.message, filename });
   }
 
-  // Retention: Keep 3 newest
   const allFiles = await fs.promises.readdir(DIAGNOSTICS_DIR);
   const userFiles = allFiles
     .filter(f => f.startsWith(`${safeUser}_${safeDevice}_`) && f.endsWith('.log'))
@@ -949,7 +926,6 @@ app.get('/results/:tournamentId', async (req, res) => {
     const allPlayers = (state.data && Array.isArray(state.data.players)) ? state.data.players : [];
     const players = allPlayers.filter(p => p && p.id && registeredIds.includes(String(p.id)));
     
-    // Simple HTML result page
     const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${tournament.title} - Results | AceTrack</title>
@@ -1016,9 +992,10 @@ app.use((err, req, res, next) => {
   }
   
   res.status(status).json({
-    success: false,
-    error: message,
-    timestamp: new Date().toISOString()
+    "slug": "acetrack-mobile",
+    "version": "2.6.47",
+    "sdkVersion": "50.0.0",
+    "timestamp": new Date().toISOString()
   });
 });
 

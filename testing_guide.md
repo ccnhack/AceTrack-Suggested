@@ -79,5 +79,24 @@ This document provides a comprehensive verification path for the **59 improvemen
 5. **Update Experience**:
    - Profile Hub: Verify "App Update Available" (simulated v1.0.44) is cleanly integrated.
 
+## 📊 6. Insights & Support Modernization (v2.6.46)
+*New enhancements for analytics and ticket management*
+
+1. **Analytics Drill-downs**:
+   - Go to Admin Hub -> Insights Tab.
+   - Click a platform (Android/iOS) or an App Version in the charts.
+   - Verify that a modal opens showing the filtered list and a category distribution % chart.
+2. **Context-Aware Insights**:
+   - In the Insights detailed views, verify that the guidance message ("Click an area to see specific players...") matches the selected category (e.g., Players, Coaches, Devices).
+3. **Automated Support Greeting**:
+   - Submit a new support ticket as a user.
+   - Verify an instant "Admin Support" greeting appears in the ticket conversation.
+4. **Mandatory Reopen Justification**:
+   - As an admin, move a Resolved ticket to 'Open'.
+   - Verify that a modal requires a mandatory reason before update.
+5. **Matchmaking Fallback**:
+   - Disable GPS on the emulator. Open Matchmaking -> Propose Challenge.
+   - Verify that local fallback venues from `venues.json` appear without app crashing.
+
 ---
-**Summary**: The **testing_guide.md** was originally condensed into 6 user-facing flows to simplify the testing session. However, the 59 points are fully mapped across these logical hubs, ensuring total coverage from the infrastructure up to the final coaching interface.
+**Summary**: The **testing_guide.md** was originally condensed into 6 user-facing flows to simplify the testing session. However, the 64 points are fully mapped across these logical hubs, ensuring total coverage from the infrastructure up to the final coaching interface.

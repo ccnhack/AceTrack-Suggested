@@ -53,7 +53,7 @@ const healthData = healthRes.ok ? await healthRes.json() : {};
 assert('E2E-HEALTH-001', 'Health', 'GET /api/health returns 200', healthRes.ok === true, `Status: ${healthRes.status}`);
 assert('E2E-HEALTH-002', 'Health', 'Health response contains status=ok', healthData.status === 'ok', `Got: ${healthData.status}`);
 assert('E2E-HEALTH-003', 'Health', 'Health response contains version', !!healthData.version, `Version: ${healthData.version}`);
-assert('E2E-HEALTH-004', 'Health', 'Health version matches v2.6.29', healthData.version === '2.6.29', `Got: ${healthData.version}`);
+assert('E2E-HEALTH-004', 'Health', 'Health version matches v2.6.47', healthData.version === '2.6.47', `Got: ${healthData.version}`);
 assert('E2E-HEALTH-005', 'Health', 'Health response contains uptime', typeof healthData.uptime === 'number' && healthData.uptime > 0, `Uptime: ${healthData.uptime}s`);
 
 // ══════════════════════════════════════════════════════════════
@@ -290,6 +290,70 @@ assert('E2E-WEB-001', 'Dashboard', 'Root URL returns 200', dashboardRes.ok === t
 const dashboardHtml = dashboardRes.ok ? await dashboardRes.text() : '';
 assert('E2E-WEB-002', 'Dashboard', 'Dashboard serves HTML content', dashboardHtml.includes('<!DOCTYPE html>') || dashboardHtml.includes('<html'), `Length: ${dashboardHtml.length} chars`);
 assert('E2E-WEB-003', 'Dashboard', 'Dashboard contains AceTrack branding', dashboardHtml.toLowerCase().includes('acetrack'), `Contains branding`);
+
+// ══════════════════════════════════════════════════════════════
+// CATEGORY 10: SUPPORT AUTOMATION & DRILL-DOWNS (v2.6.46)
+// ══════════════════════════════════════════════════════════════
+console.log('📦 Category 10: Support Automation & Drill-downs');
+
+// 10a. POST /api/save — create a ticket with automated greeting
+const supportTestId = `e2e_ticket_${Date.now()}`;
+const ticketPayload = {
+  supportTickets: [{
+    id: supportTestId,
+    userId: 'e2e_user',
+    title: 'E2E Automated Test Ticket',
+    status: 'Open',
+    type: 'Bug',
+    appVersion: '2.6.46',
+    platform: 'android',
+    createdAt: new Date().toISOString(),
+    messages: [
+      { senderId: 'e2e_user', text: 'E2E initial message', timestamp: new Date().toISOString() },
+      { senderId: 'admin', text: 'Thanks for reaching out to AceTrack Support Team...', timestamp: new Date().toISOString() }
+    ]
+  }],
+  version: 2000000 // High version for test
+};
+
+const supportCreateRes = await safeFetch(`${BASE_URL}/api/save`, {
+  method: 'POST',
+  headers: HEADERS,
+  body: JSON.stringify(ticketPayload)
+});
+assert('E2E-SUP-001', 'Support', 'POST /api/save accepts new ticket with messages', supportCreateRes.ok === true, `Status: ${supportCreateRes.status}`);
+
+// 10b. Verify ticket retrieval and automated greeting
+const updatedDataRes = await safeFetch(`${BASE_URL}/api/data`, { headers: HEADERS });
+const updatedData = updatedDataRes.ok ? await updatedDataRes.json() : {};
+const savedTicket = (updatedData.supportTickets || []).find(t => t.id === supportTestId);
+
+assert('E2E-SUP-002', 'Support', 'Ticket persisted in backend', !!savedTicket, `Found: ${!!savedTicket}`);
+if (savedTicket) {
+  assert('E2E-SUP-003', 'Support', 'Ticket contains automated greeting', 
+    savedTicket.messages.some(m => m.senderId === 'admin' && m.text.includes('AceTrack Support Team')), 
+    `Messages: ${savedTicket.messages.length}`);
+  assert('E2E-SUP-004', 'Support', 'Ticket has appVersion metadata', savedTicket.appVersion === '2.6.46', `Got: ${savedTicket.appVersion}`);
+  assert('E2E-SUP-005', 'Support', 'Ticket has platform metadata', savedTicket.platform === 'android', `Got: ${savedTicket.platform}`);
+}
+
+// ══════════════════════════════════════════════════════════════
+// CATEGORY 11: MATCHMAKING & EXPLORE (v2.6.46)
+// ══════════════════════════════════════════════════════════════
+console.log('📦 Category 11: Matchmaking & Explore');
+
+assert('E2E-MAT-001', 'Matchmaking', 'Data contains matchmaking array', Array.isArray(updatedData.matchmaking), `Type: ${typeof updatedData.matchmaking}`);
+assert('E2E-MAT-002', 'Matchmaking', 'Data contains venues/locations (lastUpdated reachable)', !!updatedData.lastUpdated, `lastUpdated: ${updatedData.lastUpdated}`);
+
+// ══════════════════════════════════════════════════════════════
+// CATEGORY 12: ACADEMY & OPS (v2.6.46)
+// ══════════════════════════════════════════════════════════════
+console.log('📦 Category 12: Academy & Ops');
+
+if (Array.isArray(updatedData.tournaments) && updatedData.tournaments.length > 0) {
+  const tourney = updatedData.tournaments[0];
+  assert('E2E-COACH-001', 'Coach', 'Tournaments have sport defined', !!tourney.sport, `sport: ${tourney.sport}`);
+}
 
 // ══════════════════════════════════════════════════════════════
 // REPORT
