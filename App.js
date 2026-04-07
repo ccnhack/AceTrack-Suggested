@@ -47,8 +47,8 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.53)
-const APP_VERSION = "2.6.53"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.54)
+const APP_VERSION = "2.6.54"; 
 const currentAppVersion = APP_VERSION;
 
 export default function App() {
@@ -1011,9 +1011,11 @@ export default function App() {
   const syncTimeoutRef = useRef(null);
 
   const syncAndSaveData = useCallback(async (updates, isAtomic = false) => {
+    const now = Date.now();
+    const needsTimestampUpdate = now - lastActiveUpdateRef.current > 20 * 60 * 1000;
+    
     if (updates.currentUser && localDeviceIdRef.current) {
       // 🛡️ v2.6.29: Increase heartbeat window to 20 mins to prevent 429 storms
-      const needsTimestampUpdate = now - lastActiveUpdateRef.current > 20 * 60 * 1000;
       
       const sanitizeUser = (u) => {
         const { devices, lastActive, ...rest } = u || {};
