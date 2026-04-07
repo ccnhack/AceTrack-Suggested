@@ -629,8 +629,13 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
         }
 
         if (['players', 'matchmaking', 'tournaments', 'matches', 'auditLogs', 'matchVideos', 'supportTickets', 'evaluations'].includes(key) && Array.isArray(incoming)) {
+          const atomicKeys = req.body.atomicKeys || [];
+          if (atomicKeys.includes(key)) {
+            // 🛡️ ATOMIC SYNC: Direct Overwrite (v2.6.47 Fix for Deletions)
+            newMasterData[key] = incoming;
+            continue; 
+          }
           const entityMap = new Map();
-          
           (currentData[key] || []).forEach(e => { if (e && e.id) entityMap.set(String(e.id).toLowerCase(), e); });
           
           incoming.forEach(p => {
