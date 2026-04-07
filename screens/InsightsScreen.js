@@ -28,6 +28,8 @@ const InsightsScreen = ({
   const [deviceModalVisible, setDeviceModalVisible] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState(null); // 'ios' | 'android'
   const [deviceSearchQuery, setDeviceSearchQuery] = useState('');
+  const [platformTicketsModalVisible, setPlatformTicketsModalVisible] = useState(false);
+  const [selectedPlatformForTickets, setSelectedPlatformForTickets] = useState(null); // 'ios' | 'android'
 
   // Initial Diagnostic Log
   useEffect(() => {
@@ -304,6 +306,38 @@ const InsightsScreen = ({
     });
   }, []);
 
+  // 14. 🧪 Platform Specific Ticket Breakdown Logic (v2.6.36)
+  const platformBreakdownData = useMemo(() => {
+    if (!selectedPlatformForTickets) return null;
+    
+    // Filter tickets by platform
+    const platformTickets = (tickets || []).filter(t => 
+      t.deviceInfo?.os?.toLowerCase() === selectedPlatformForTickets
+    );
+    
+    // Group by Category (type)
+    const categoryCounts = {};
+    platformTickets.forEach(t => {
+      const cat = t.type || 'Other';
+      categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+    });
+    
+    const total = Math.max(platformTickets.length, 1);
+    const sortedCategories = Object.entries(categoryCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({
+        name,
+        count,
+        percent: Math.round((count / total) * 100)
+      }));
+      
+    return {
+      tickets: platformTickets.slice(0, 50),
+      categories: sortedCategories,
+      totalCount: platformTickets.length
+    };
+  }, [tickets, selectedPlatformForTickets]);
+
   // Action Handlers with Logging
   const handleStatSelect = (stat) => {
     const newVal = selectedStat === stat ? null : stat;
@@ -534,14 +568,28 @@ const InsightsScreen = ({
 
                                 <Text style={[styles.subChartTitle, { marginTop: 20 }]}>Tickets by Platform</Text>
                                 <View style={styles.rowBetween}>
-                                    <View style={styles.platformIconBox}>
+                                    <TouchableOpacity 
+                                        onPress={() => {
+                                            setSelectedPlatformForTickets('android');
+                                            setPlatformTicketsModalVisible(true);
+                                            logger.logAction('Insights_Platform_Tickets_Open', { platform: 'android' });
+                                        }}
+                                        style={styles.platformIconBox}
+                                    >
                                         <Ionicons name="logo-android" size={18} color="#10B981" />
                                         <Text style={styles.platformIconText}>{ticketDeviceStats.platforms.android} Android</Text>
-                                    </View>
-                                    <View style={styles.platformIconBox}>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity 
+                                        onPress={() => {
+                                            setSelectedPlatformForTickets('ios');
+                                            setPlatformTicketsModalVisible(true);
+                                            logger.logAction('Insights_Platform_Tickets_Open', { platform: 'ios' });
+                                        }}
+                                        style={styles.platformIconBox}
+                                    >
                                         <Ionicons name="logo-apple" size={18} color="#0F172A" />
                                         <Text style={styles.platformIconText}>{ticketDeviceStats.platforms.ios} iPhone</Text>
-                                    </View>
+                                    </TouchableOpacity>
                                 </View>
                             </View>
                         )}
@@ -637,12 +685,17 @@ const InsightsScreen = ({
                 <View style={styles.growthBadge}><Ionicons name="flash" size={14} color="#6366F1" /><Text style={styles.growthBadgeText}>Active</Text></View>
             </View>
             <View style={styles.growthContainer}>
-                {growthStats.map((item, index) => (
-                    <View key={index} style={styles.growthColumn}>
-                        <View style={styles.pctContainer}>{item.pct > 0 && <Text style={styles.pctText}>+{item.pct}%</Text>}</View>
-                        <View style={[styles.growthBar, { height: item.val }]} /><Text style={styles.growthLabel}>{item.p}</Text>
-                    </View>
-                ))}
+                {growthStats.map((item, index) => {
+                    const maxHeight = 100;
+                    const visualHeight = Math.min((item.val / 110) * maxHeight, maxHeight);
+                    return (
+                        <View key={index} style={styles.growthColumn}>
+                            <View style={styles.pctContainer}>{item.pct > 0 && <Text style={styles.pctText}>+{item.pct}%</Text>}</View>
+                            <View style={[styles.growthBar, { height: visualHeight }]} />
+                            <Text style={styles.growthLabel}>{item.p}</Text>
+                        </View>
+                    );
+                })}
             </View>
         </View>
 
@@ -735,6 +788,89 @@ const InsightsScreen = ({
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      {/* 🧪 Platform Tickets Detail Modal (v2.6.36) */}
+      <Modal 
+        visible={platformTicketsModalVisible} 
+        animationType="slide"
+        onRequestClose={() => setPlatformTicketsModalVisible(false)}
+      >
+        <SafeAreaView style={styles.modalFullContainer}>
+          <View style={styles.modalHeader}>
+            <View style={styles.flexItem}>
+              <View style={styles.rowAlign}>
+                <Ionicons 
+                  name={selectedPlatformForTickets === 'ios' ? "logo-apple" : "logo-android"} 
+                  size={20} 
+                  color={selectedPlatformForTickets === 'ios' ? "#0F172A" : "#10B981"} 
+                />
+                <Text style={[styles.modalTitle, { marginLeft: 8 }]}>
+                    {selectedPlatformForTickets === 'ios' ? 'iPhone' : 'Android'} Issues
+                </Text>
+              </View>
+              <Text style={styles.modalSubtitle}>{platformBreakdownData?.totalCount} Total platform tickets</Text>
+            </View>
+            <TouchableOpacity onPress={() => setPlatformTicketsModalVisible(false)}>
+              <Ionicons name="close-circle" size={32} color="#CBD5E1" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalContent} contentContainerStyle={styles.modalScrollContent}>
+            <View style={styles.platformInsightsSection}>
+              <Text style={styles.subChartTitle}>Issue Category Breakdown (%)</Text>
+              {platformBreakdownData?.categories.map((cat, idx) => (
+                <View key={cat.name} style={styles.detailBarRow}>
+                  <View style={styles.barLabelContainer}>
+                    <Text style={styles.barLabel}>{cat.name}</Text>
+                    <Text style={styles.barValue}>{cat.percent}%</Text>
+                  </View>
+                  <View style={styles.barTrack}>
+                    <View style={[styles.barFill, { width: `${cat.percent}%`, backgroundColor: idx === 0 ? '#6366F1' : '#94A3B8' }]} />
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            <View style={[styles.platformInsightsSection, { marginTop: 24 }]}>
+              <Text style={styles.subChartTitle}>Recent Tickets ({selectedPlatformForTickets === 'ios' ? 'iPhone' : 'Android'})</Text>
+              {platformBreakdownData?.tickets.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateText}>No tickets found for this platform</Text>
+                </View>
+              ) : (
+                platformBreakdownData?.tickets.map(t => (
+                  <TouchableOpacity 
+                    key={t.id} 
+                    style={styles.deviceUserRow}
+                    onPress={() => {
+                        Alert.alert(
+                            "View Ticket",
+                            `Would you like to open Ticket #${t.id} in the Support Center?`,
+                            [
+                                { text: "Cancel", style: "cancel" },
+                                { text: "Open", onPress: () => {
+                                    setPlatformTicketsModalVisible(false);
+                                    navigation.navigate('Admin', { subTab: 'tickets', autoSelectUser: t.userId });
+                                }}
+                            ]
+                        );
+                    }}
+                  >
+                    <View style={styles.flexItem}>
+                      <Text style={styles.deviceUserName}>{t.title}</Text>
+                      <View style={styles.rowAlign}>
+                         <Text style={styles.deviceUserId}>ID: {t.id} • {t.type}</Text>
+                      </View>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+            <View style={{ height: 40 }} />
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </ScrollView>
   );
 };
@@ -815,8 +951,15 @@ const styles = StyleSheet.create({
   playerName: { flex: 1, fontSize: 13, fontWeight: '600', color: '#334155', marginLeft: 10 },
   playerTag: { backgroundColor: '#EEF2FF', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   playerTagText: { fontSize: 9, fontWeight: '700', color: '#6366F1' },
-  growthContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 110, marginTop: 4 },
+  growthContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 160, marginTop: 4 },
   growthColumn: { alignItems: 'center', width: (screenWidth - 80) / 6 },
+  platformInsightsSection: {
+    backgroundColor: '#F8FAFC',
+    padding: 16,
+    borderRadius: 20,
+    marginTop: 8
+  },
+  rowAlign: { flexDirection: 'row', alignItems: 'center' },
   growthBar: { width: 14, backgroundColor: '#6366F1', borderRadius: 6, opacity: 0.8 },
   growthLabel: { fontSize: 10, color: '#94A3B8', marginTop: 8, fontWeight: '700' },
   growthBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF2FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
