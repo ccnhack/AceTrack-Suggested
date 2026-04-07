@@ -476,6 +476,19 @@ router.get('/data', apiKeyGuard, async (req, res) => {
     const state = await AppState.findOne().sort({ lastUpdated: -1 }).lean();
     if (!state || !state.data) return res.json({});
     
+    if (state.data.players && Array.isArray(state.data.players)) {
+      state.data.players = state.data.players.map(p => {
+        if (p && p.role === 'admin' && String(p.id).toLowerCase() !== 'admin') {
+          return { ...p, role: 'user' };
+        }
+        return p;
+      });
+    }
+
+    if (state.data.currentUser && state.data.currentUser.role === 'admin' && String(state.data.currentUser.id).toLowerCase() !== 'admin') {
+      state.data.currentUser.role = 'user';
+    }
+
     res.json({ ...state.data, lastUpdated: state.lastUpdated, version: state.version || 1 });
   } catch (error) {
     console.error('❌ Data Fetch Error:', error.message);
