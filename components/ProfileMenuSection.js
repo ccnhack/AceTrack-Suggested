@@ -78,15 +78,20 @@ const ProfileMenuSection = memo(({
 
       <TouchableOpacity 
         onPress={() => {
-          logger.logAction('MODAL_OPEN', { modal: 'Support' });
-          onSupport();
+          if (user?.role === 'admin') {
+            logger.logAction('NAVIGATE_ADMIN_GRIEVANCES');
+            onSupport('admin_hub'); // Special signal to ProfileScreen
+          } else {
+            logger.logAction('MODAL_OPEN', { modal: 'Support' });
+            onSupport();
+          }
         }}
         style={styles.menuItem}
       >
         <View style={[styles.menuIcon, { backgroundColor: '#EFF6FF' }]}>
           <Ionicons name="help-buoy" size={20} color="#3B82F6" />
         </View>
-        <Text style={styles.menuLabel}>Help & Support</Text>
+        <Text style={styles.menuLabel}>{user?.role === 'admin' ? 'Support Center' : 'Help & Support'}</Text>
         <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
       </TouchableOpacity>
 

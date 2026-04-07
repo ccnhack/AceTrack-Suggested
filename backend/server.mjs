@@ -57,7 +57,9 @@ try {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
 
-const APP_VERSION = '2.6.27'; // AceTrack Suggested — v2.6.27 Insights & Web-Activity_Fixed Deployment
+// 🚀 ACE TRACK SERVER VERSION (v2.6.35)
+const APP_VERSION = "2.6.35"; 
+const latestAppVersion = APP_VERSION;
 
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: CORS Whitelist (SEC Fix #3)
@@ -705,12 +707,14 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
       lastUpdated: updatedState.lastUpdated, 
       version: updatedState.version,
       keys: changedKeys,
-      lastSocketId: socketId || 'system'
+      lastSocketId: socketId || 'system' // 🛡️ v2.6.28: Ensure lastSocketId is always present
     };
 
     if (socketId) {
+      logServerEvent('BROADCAST_EXCLUDING_SENDER', { socketId, version: broadcastPayload.version });
       io.except(socketId).emit('data_updated', broadcastPayload);
     } else {
+      logServerEvent('BROADCAST_GLOBAL', { version: broadcastPayload.version });
       io.emit('data_updated', broadcastPayload);
     }
     

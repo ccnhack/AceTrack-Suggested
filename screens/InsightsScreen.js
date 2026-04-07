@@ -31,12 +31,16 @@ const InsightsScreen = ({
 
   // Initial Diagnostic Log
   useEffect(() => {
-    logger.logAction('Insights_Mount', { 
-        playerCount: (players || []).length, 
-        tournamentCount: (tournaments || []).length, 
-        videoCount: (matchVideos || []).length,
-        coachCount: (players || []).filter(p => (p || {}).role === 'coach').length
-    });
+    try {
+        logger.logAction('Insights_Mount', { 
+            playerCount: (players || []).length, 
+            tournamentCount: (tournaments || []).length, 
+            videoCount: (matchVideos || []).length,
+            coachCount: (players || []).filter(p => (p || {}).role === 'coach').length
+        });
+    } catch (e) {
+        console.warn('Insights log failed silently', e);
+    }
   }, []);
 
   // 1. Process Sports Distribution (General)
@@ -765,8 +769,21 @@ const styles = StyleSheet.create({
   welcomeText: { fontSize: 26, fontWeight: '800', color: '#1E293B' },
   subText: { fontSize: 13, color: '#64748B', marginTop: 2 },
   refreshBtn: { width: 46, height: 46, borderRadius: 14, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', ...designSystem.shadows?.sm },
-  statsGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 10 },
-  statBox: { backgroundColor: '#fff', width: (screenWidth - 40 - 10) / 2 - 5, padding: 14, borderRadius: 20, ...designSystem.shadows?.sm },
+  statsGrid: { 
+    flexDirection: 'row', 
+    justifyContent: 'flex-start', 
+    marginBottom: 24, 
+    flexWrap: 'wrap', 
+    gap: 10,
+    width: '100%',
+  },
+  statBox: { 
+    backgroundColor: '#fff', 
+    width: '48.5%', // Use percentage for more robust 2-per-row layout on Android
+    padding: 14, 
+    borderRadius: 20, 
+    ...designSystem.shadows?.sm 
+  },
   iconCircle: { width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
   statValue: { fontSize: 20, fontWeight: '800', color: '#1E293B' },
   statTitle: { fontSize: 10, color: '#94A3B8', fontWeight: '700', textTransform: 'uppercase', marginBottom: 6 },

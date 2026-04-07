@@ -25,7 +25,7 @@ const AdminHubScreen = ({
   onApproveCoach, onAssignCoach, onRemoveCoach, onUpdateVideoStatus, 
   onBulkUpdateVideoStatus, onForceRefundVideo, onApproveDeleteVideo, 
   onRejectDeleteVideo, onPermanentDeleteVideo, onBulkPermanentDeleteVideos, 
-  onReplyTicket, 
+  onReplyTicket, onRetryMessage, onMarkSeen, 
   onUpdateTicketStatus, onManualSync, seenAdminActionIds = new Set(),
   setSeenAdminActionIds, visitedAdminSubTabs = new Set(), setVisitedAdminSubTabs,
   isUsingCloud, onOptOut, onLogFailedOtp, onLogTrace, setPlayers, onToggleFavourite,
@@ -43,6 +43,8 @@ const AdminHubScreen = ({
   const activeApiUrl = isUsingCloud ? targetCloudUrl : config.API_BASE_URL;
 
   const [subTab, setSubTab] = useState('individuals');
+  const [isGrievanceDetailOpen, setIsGrievanceDetailOpen] = useState(false);
+  const [autoSelectUser, setAutoSelectUser] = useState(null);
   const today = new Date().toISOString().split('T')[0];
   const [search, setSearch] = useState('');
   const [coachSubTab, setCoachSubTab] = useState('pending');
@@ -81,6 +83,18 @@ const AdminHubScreen = ({
       fetchRecentLogs();
     }
   }, [subTab]);
+
+  // Handle incoming navigation params (v2.6.31)
+  useEffect(() => {
+    if (route.params?.subTab) {
+        setSubTab(route.params.subTab);
+        if (route.params.autoSelectUser) {
+            setAutoSelectUser(route.params.autoSelectUser);
+        }
+        // Reset params to avoid re-triggering
+        navigation.setParams({ subTab: undefined, autoSelectUser: undefined });
+    }
+  }, [route.params]);
 
   const handleDiagSearchChange = (txt) => {
     setDiagUserSearch(txt);
@@ -239,25 +253,20 @@ const AdminHubScreen = ({
     }, [subTab]);
 
     React.useEffect(() => {
-      // Re-check periodically if socket not yet available, OR register immediately
-      const timer = setInterval(() => {
-        if (socketRef && socketRef.current && !isRegistered.current) {
-          console.log("🔗 [AdminHub] Registering global device_pong_relay listener. SocketID:", socketRef.current.id);
-          
-          // Use a named wrapper to include logging for web debugging
-          const handlePongWithLog = (data) => {
-            if (Platform.OS === 'web') {
-              console.log("🏓 [AdminHub Web] Pong received:", data.deviceId, "for user:", data.targetUserId);
-            }
-            handlePong(data);
-          };
+      const socket = socketRef?.current;
+      if (!socket) return;
 
-          socketRef.current.on('device_pong_relay', handlePongWithLog);
-          isRegistered.current = true;
-          clearInterval(timer);
+      console.log("🔗 [AdminHub] Registering device status listeners. SocketID:", socket.id);
+      
+      const handleRelay = (data) => {
+        if (Platform.OS === 'web') {
+          console.log("🏓 [AdminHub Web] Pong received:", data.deviceId, "for user:", data.targetUserId);
         }
-      }, 1000);
+        handlePong(data);
+      };
 
+      socket.on('device_pong_relay', handleRelay);
+      
       // FLUSH TIMER: Update UI state from buffer every 500ms to keep it snappy
       const flushTimer = setInterval(() => {
         if (Object.keys(pongBufferRef.current).length > 0) {
@@ -267,14 +276,10 @@ const AdminHubScreen = ({
       }, 500);
 
       return () => {
-        clearInterval(timer);
         clearInterval(flushTimer);
-        if (socketRef && socketRef.current) {
-          socketRef.current.off('device_pong_relay', handlePong);
-          isRegistered.current = false;
-        }
+        socket.off('device_pong_relay', handleRelay);
       };
-    }, []); // Run once, but timer handles late socket arrival
+    }, [socketRef?.current]); // Re-run if socket instance changes
 
   const handleDownloadDiagnostic = async () => {
     if (!diagContent || isDownloading) return;
@@ -617,36 +622,57 @@ const AdminHubScreen = ({
       </View>
       )}
 
-      <View style={styles.searchBar}>
-        <Ionicons name="search" size={16} color="#94A3B8" />
-        <TextInput 
-          placeholder={subTab === 'grievances' ? "Search grievances (ID, user, conversation)..." : `Search ${subTab}...`}
-          value={search}
-          onChangeText={setSearch}
-          style={styles.searchInput}
-        />
-      </View>
+      {/* 🛡️ FOCUS MODE: Hide global search bar when viewing specific ticket detail (v2.6.32) */}
+      {!(subTab === 'grievances' && isGrievanceDetailOpen) && (
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={16} color="#94A3B8" />
+          <TextInput 
+            placeholder={subTab === 'grievances' ? "Search grievances (ID, user, conversation)..." : `Search ${subTab}...`}
+            value={search}
+            onChangeText={setSearch}
+            style={styles.searchInput}
+          />
+        </View>
+      )}
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {subTab === 'individuals' && (
-          <PlayerDashboardView players={filteredIndividuals} tournaments={tournaments} title="Individuals" />
-        )}
+      {subTab === 'grievances' ? (
+        <View style={styles.content}>
+          <AdminGrievancesPanel 
+            tickets={supportTickets}
+            players={players}
+            onReply={onReplyTicket}
+            onUpdateStatus={onUpdateTicketStatus}
+            onRetryMessage={onRetryMessage}
+            onMarkSeen={onMarkSeen}
+            search={search}
+            onDetailToggle={setIsGrievanceDetailOpen}
+            autoSelectUser={autoSelectUser}
+          />
+        </View>
+      ) : (
+        <ScrollView 
+          style={styles.content} 
+          showsVerticalScrollIndicator={false}
+        >
+          {subTab === 'individuals' && (
+            <PlayerDashboardView players={filteredIndividuals} tournaments={tournaments} title="Individuals" />
+          )}
 
-        {subTab === 'coaches' && (
-          <View>
-            <View style={styles.coachSubTabs}>
-              {['pending', 'approved', 'revoked', 'rejected_addendum'].map(t => (
-                <TouchableOpacity 
-                  key={t} 
-                  onPress={() => setCoachSubTab(t)}
-                  style={[styles.coachSubTab, coachSubTab === t && styles.coachSubTabActive]}
-                >
-                  <Text style={[styles.coachSubTabText, coachSubTab === t && styles.coachSubTabTextActive]}>
-                    {t === 'rejected_addendum' ? 'Rejected/Addendum' : t.charAt(0).toUpperCase() + t.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+          {subTab === 'coaches' && (
+            <View>
+              <View style={styles.coachSubTabs}>
+                {['pending', 'approved', 'revoked', 'rejected_addendum'].map(t => (
+                  <TouchableOpacity 
+                    key={t} 
+                    onPress={() => setCoachSubTab(t)}
+                    style={[styles.coachSubTab, coachSubTab === t && styles.coachSubTabActive]}
+                  >
+                    <Text style={[styles.coachSubTabText, coachSubTab === t && styles.coachSubTabTextActive]}>
+                      {t === 'rejected_addendum' ? 'Rejected/Addendum' : t.charAt(0).toUpperCase() + t.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             {renderCoachList()}
           </View>
         )}
@@ -919,15 +945,7 @@ const AdminHubScreen = ({
           />
         )}
 
-        {subTab === 'grievances' && (
-          <AdminGrievancesPanel 
-            tickets={supportTickets}
-            players={players}
-            onReply={onReplyTicket}
-            onUpdateStatus={onUpdateTicketStatus}
-            search={search}
-          />
-        )}
+          {/* Moved Grievances outside ScrollView above */}
 
         {subTab === 'audit' && (
           <AdminAuditLogsPanel auditLogs={auditLogs} players={players} search={search} />
@@ -1369,7 +1387,8 @@ const AdminHubScreen = ({
             )}
           </View>
         )}
-      </ScrollView>
+        </ScrollView>
+      )}
 
       {/* Rejection Modal */}
       <Modal visible={!!rejectingCoachId} transparent animationType="fade">

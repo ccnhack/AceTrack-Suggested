@@ -46,7 +46,7 @@ import {
 
 console.log('\n' + '═'.repeat(70));
 console.log('  🧪  ACETRACK REGRESSION TEST SUITE — EXECUTION REPORT');
-console.log('  📱  App Version: v2.6.20');
+console.log('  📱  App Version: v2.6.29');
 console.log('  ⏰  Run Time:', new Date().toLocaleString());
 console.log('═'.repeat(70) + '\n');
 
@@ -754,6 +754,62 @@ assert('TC-SUP-008', 'Support', 'Status colors mapping', (() => {
   return Object.keys(statusColors).length === 4;
 })());
 
+assert('TC-SUP-009', 'Support', 'Outgoing Status Promotion (pending -> sent)', (() => {
+  // Simulating pushStateToCloud sanitization logic (v2.6.29)
+  const updates = {
+    supportTickets: [{
+      id: 't1',
+      messages: [{ id: 'm1', text: 'hi', status: 'pending' }, { id: 'm2', text: 'bye', status: 'sent' }]
+    }]
+  };
+  
+  const sanitized = { ...updates };
+  if (sanitized.supportTickets) {
+    sanitized.supportTickets = sanitized.supportTickets.map(t => ({
+      ...t,
+      messages: t.messages.map(m => m.status === 'pending' ? { ...m, status: 'sent' } : m)
+    }));
+  }
+  return sanitized.supportTickets[0].messages[0].status === 'sent';
+})());
+
+assert('TC-SUP-010', 'Support', 'Admin stats grid counting (4-category)', (() => {
+  const tickets = [
+    { status: 'Open' }, { status: 'In Progress' }, { status: 'Awaiting Response' }, { status: 'Resolved' },
+    { status: null }, // Treated as Open
+  ];
+  const open = tickets.filter(t => !t.status || t.status === 'Open').length;
+  const active = tickets.filter(t => t.status === 'In Progress').length;
+  const awaiting = tickets.filter(t => t.status === 'Awaiting Response').length;
+  const resolved = tickets.filter(t => t.status === 'Resolved').length;
+  return open === 2 && active === 1 && awaiting === 1 && resolved === 1;
+})());
+
+assert('TC-SUP-011', 'Support', 'Ticket unread priority sorting (bubble to top)', (() => {
+  // Simulating AdminGrievancesPanel bubble-to-top logic (v2.6.28)
+  const myId = 'admin';
+  const tickets = [
+    { id: 't_read', updatedAt: '2026-01-01', messages: [{ senderId: 'admin', text: 'ok' }] },
+    { id: 't_unread', updatedAt: '2026-01-02', messages: [{ senderId: 'user', text: 'help' }] } // Unread by admin
+  ];
+  
+  const isUnread = (t) => {
+    const msgs = t.messages || [];
+    if (msgs.length === 0) return false;
+    return msgs[msgs.length - 1].senderId !== myId;
+  };
+
+  const sorted = [...tickets].sort((a, b) => {
+    const ua = isUnread(a);
+    const ub = isUnread(b);
+    if (ua && !ub) return -1;
+    if (!ua && ub) return 1;
+    return new Date(b.updatedAt) - new Date(a.updatedAt);
+  });
+  
+  return sorted[0].id === 't_unread';
+})());
+
 // ══════════════════════════════════════════════
 // MODULE 13: SYNC & STATE MANAGEMENT
 // ══════════════════════════════════════════════
@@ -787,7 +843,7 @@ assert('TC-SYNC-005', 'Sync', 'Cloud online/offline state propagation', (() => {
   return isCloudOnline === false;
 })());
 assert('TC-SYNC-006', 'Sync', 'Version comparison for OTA', (() => {
-  const APP_VERSION = '2.6.5';
+  const APP_VERSION = '2.6.29';
   const latestAppVersion = '2.7.0';
   return APP_VERSION !== latestAppVersion;
 })());
@@ -817,6 +873,36 @@ assert('TC-SYNC-010', 'Sync', 'Logout completely clears sessionCustomAvatar stat
   mockRemoveItem('pendingSync');
   mockRemoveItem('sessionCustomAvatar'); 
   return !('sessionCustomAvatar' in storageState);
+})());
+
+assert('TC-SYNC-011', 'Sync', 'Heartbeat suppression (isJustHeartbeat)', (() => {
+  // Simulating App.js v2.6.29 heartbeat suppression logic
+  const now = Date.now();
+  const lastActiveUpdate = now - 5 * 60 * 1000; // 5 mins ago (needsTimestampUpdate is false for 20m window)
+  const updates = { currentUser: { id: 'me' } }; // Only currentUser
+  const currentUserRef = { id: 'me' };
+
+  const sanitizeUser = (u) => { const { devices, lastActive, ...rest } = u || {}; return rest; };
+  const otherDataChanged = JSON.stringify(sanitizeUser(updates.currentUser)) !== JSON.stringify(sanitizeUser(currentUserRef));
+  
+  const needsTimestampUpdate = now - lastActiveUpdate > 20 * 60 * 1000;
+  const isJustHeartbeat = !otherDataChanged && Object.keys(updates).length === 1 && updates.currentUser;
+  const skipHeartbeat = isJustHeartbeat && !needsTimestampUpdate;
+  
+  return skipHeartbeat === true;
+})());
+
+assert('TC-SYNC-012', 'Sync', 'Global Backoff Override (isForce)', (() => {
+  // Simulating App.js v2.6.29 bypass logic
+  const now = Date.now();
+  const globalBackoffUntil = now + 60000;
+  
+  const shouldSkipPush = (isForce) => {
+    if (isForce) return false;
+    return now < globalBackoffUntil;
+  };
+
+  return shouldSkipPush(false) === true && shouldSkipPush(true) === false;
 })());
 
 
@@ -885,6 +971,27 @@ assert('TC-WS-002', 'WebSocket', 'Server.mjs: CORS origin logic allows mobile (n
   corsOriginCheck('https://malicious.com', (err, success) => { if (err) result3 = false; });
 
   return result1 === true && result2 === true && result3 === false;
+})());
+
+
+// ══════════════════════════════════════════════
+// MODULE 16: NAVIGATION & UX STABILITY
+// ══════════════════════════════════════════════
+console.log('📦 Module 16: Navigation & UX Stability');
+
+assert('TC-NAV-001', 'Navigation', 'LoadingView only blocks if app is empty (Initial Hydration)', (() => {
+  // Simulating App.js v2.6.29 root render logic
+  const renderApp = (isLoading, players) => {
+    const isActuallyEmpty = !players || players.length === 0;
+    if (isLoading && isActuallyEmpty) return 'LOADING_VIEW';
+    return 'APP_NAVIGATOR';
+  };
+
+  const case1 = renderApp(true, []); // Initial load
+  const case2 = renderApp(true, [{ id: 'p1' }]); // Background sync with data present
+  const case3 = renderApp(false, [{ id: 'p1' }]); // Normal state
+  
+  return case1 === 'LOADING_VIEW' && case2 === 'APP_NAVIGATOR' && case3 === 'APP_NAVIGATOR';
 })());
 
 

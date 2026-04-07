@@ -130,7 +130,8 @@ const ProfileWrapper = memo((props) => {
   const { 
     onManualSync, onUploadLogs, isUploadingLogs, onSaveTicket, 
     onReplyTicket, onUpdateUser, onTopUp, setIsProfileEditActive, 
-    onToggleCloud, onVerifyAccount, onUpdateTicketStatus
+    onToggleCloud, onVerifyAccount, onUpdateTicketStatus,
+    onRetryMessage, onMarkSeen
   } = useAppActions();
 
   return (

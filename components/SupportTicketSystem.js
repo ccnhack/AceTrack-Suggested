@@ -24,7 +24,7 @@ const statusColors = {
 export const SupportTicketSystem = ({
   userId, userName, tickets = [], onCreateTicket, onSendMessage, 
   onTypingStart, onTypingStop, onResolvePrompt, onToggleSupport,
-  onUpdateStatus, onReply
+  onUpdateStatus, onReply, onRetryMessage, onMarkSeen
 }) => {
   const [view, setView] = useState('list');
   const [selectedTicket, setSelectedTicket] = useState(null);
@@ -44,9 +44,20 @@ export const SupportTicketSystem = ({
   const [showClosureModal, setShowClosureModal] = useState(false);
   const [closureReason, setClosureReason] = useState('');
   const [isClosing, setIsClosing] = useState(false);
+  const [isSearchingChat, setIsSearchingChat] = useState(false);
+  const [chatSearchText, setChatSearchText] = useState('');
+  const [searchMatchIndices, setSearchMatchIndices] = useState([]);
+  const [activeMatchIndex, setActiveMatchIndex] = useState(0);
   const scrollViewRef = useRef(null);
   const textInputRef = useRef(null);
   const messageYOffsets = useRef({}); // 📍 Track message coordinates (v2.6.27)
+
+  // 🛡️ [Tick System] Mark as 'Seen' when ticket is opened (v2.6.28)
+  useEffect(() => {
+    if (selectedTicket && selectedTicket.id) {
+      onMarkSeen?.(selectedTicket.id);
+    }
+  }, [selectedTicket?.id]);
 
   const myTickets = (tickets || []).filter(t => t.userId === userId);
 
@@ -66,10 +77,58 @@ export const SupportTicketSystem = ({
   useEffect(() => {
     if (view === 'detail' && selectedTicket && scrollViewRef.current && typeof scrollViewRef.current.scrollToEnd === 'function') {
       setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
+        if (!isSearchingChat) scrollViewRef.current?.scrollToEnd({ animated: true });
       }, 100);
     }
   }, [view, selectedTicket?.messages?.length]);
+
+  // 🔍 Conversational Search Logic (v2.6.34)
+  useEffect(() => {
+    if (chatSearchText.trim() && selectedTicket?.messages) {
+      const q = chatSearchText.toLowerCase();
+      const matches = [];
+      selectedTicket.messages.forEach((msg, idx) => {
+        if ((msg.text || '').toLowerCase().includes(q)) {
+           matches.push(idx);
+        }
+      });
+      setSearchMatchIndices(matches);
+      setActiveMatchIndex(0);
+      
+      // Auto-jump to first match
+      if (matches.length > 0) {
+        setTimeout(() => jumpToMatch(0, matches), 100);
+      }
+    } else {
+      setSearchMatchIndices([]);
+      setActiveMatchIndex(0);
+    }
+  }, [chatSearchText, selectedTicket?.id]);
+
+  const jumpToMatch = (idx, matchesOverride = null) => {
+    const matches = matchesOverride || searchMatchIndices;
+    if (matches.length === 0) return;
+    const msgIdx = matches[idx];
+    const msg = selectedTicket.messages[msgIdx];
+    const targetY = messageYOffsets.current[msg.id || msg.timestamp];
+    if (targetY !== undefined) {
+      scrollViewRef.current?.scrollTo({ y: targetY - 50, animated: true });
+    }
+  };
+
+  const handleNextMatch = () => {
+    if (searchMatchIndices.length === 0) return;
+    const nextIdx = (activeMatchIndex + 1) % searchMatchIndices.length;
+    setActiveMatchIndex(nextIdx);
+    jumpToMatch(nextIdx);
+  };
+
+  const handlePrevMatch = () => {
+    if (searchMatchIndices.length === 0) return;
+    const prevIdx = (activeMatchIndex - 1 + searchMatchIndices.length) % searchMatchIndices.length;
+    setActiveMatchIndex(prevIdx);
+    jumpToMatch(prevIdx);
+  };
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -224,9 +283,27 @@ export const SupportTicketSystem = ({
                 ? `Requested Closure: ${text.replace('CLOSURE_REQUEST_EVENT:', '').trim()}` 
                 : text}
             </Text>
-            <Text style={styles.timestamp}>
-              {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
+            <View style={styles.msgFooter}>
+              <Text style={styles.timestamp}>
+                {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+              {isMe && (
+                <View style={styles.statusContainer}>
+                  {msg.status === 'pending' ? (
+                    <TouchableOpacity onPress={() => onRetryMessage?.(selectedTicket.id, msg.id)}>
+                      <Ionicons name="alert-circle" size={14} color="#94A3B8" />
+                    </TouchableOpacity>
+                  ) : (
+                    <Ionicons 
+                      name={['delivered', 'seen'].includes(msg.status) ? "checkmark-done" : "checkmark"} 
+                      size={12} 
+                      color={msg.status === 'seen' ? "#3B82F6" : (msg.status === 'delivered' ? "#10B981" : "#94A3B8")} 
+                      style={{ marginLeft: 4, opacity: msg.status === 'pending' ? 0.3 : 1 }} 
+                    />
+                  )}
+                </View>
+              )}
+            </View>
           </View>
         </Swipeable>
       </View>
@@ -326,20 +403,28 @@ export const SupportTicketSystem = ({
 
             return filtered
               .sort((a, b) => {
-                const aLast = a.messages?.[a.messages.length - 1];
-                const bLast = b.messages?.[b.messages.length - 1];
-                const aUnread = aLast && aLast.senderId !== userId && aLast.senderId !== 'system' && a.status === 'Awaiting Response';
-                const bUnread = bLast && bLast.senderId !== userId && bLast.senderId !== 'system' && b.status === 'Awaiting Response';
+                const aMsgs = (a.messages || []);
+                const bMsgs = (b.messages || []);
+                const aLast = aMsgs[aMsgs.length - 1];
+                const bLast = bMsgs[bMsgs.length - 1];
+                
+                // 🛡️ [v2.6.35] UNREAD LOGIC: Last message from admin && NOT seen
+                const aUnread = aLast && aLast.senderId !== userId && aLast.senderId !== 'system' && aLast.status !== 'seen';
+                const bUnread = bLast && bLast.senderId !== userId && bLast.senderId !== 'system' && bLast.status !== 'seen';
                 
                 if (aUnread && !bUnread) return -1;
                 if (!aUnread && bUnread) return 1;
-                return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                
+                // Secondary sort: newest first
+                const timeA = new Date(a.updatedAt || a.createdAt).getTime();
+                const timeB = new Date(b.updatedAt || b.createdAt).getTime();
+                return timeB - timeA;
               })
               .map(ticket => {
                 const lastMessage = ticket.messages?.[ticket.messages.length - 1];
                 const isSystem = lastMessage?.senderId === 'system';
                 const isAdminReply = lastMessage && !isSystem && lastMessage.senderId !== userId;
-                const hasUnread = isAdminReply && ticket.status === 'Awaiting Response';
+                const hasUnread = isAdminReply && lastMessage.status !== 'seen';
                 const st = statusColors[ticket.status || 'Open'] || statusColors['Open'];
 
                 return (
@@ -508,27 +593,76 @@ export const SupportTicketSystem = ({
 
     return (
       <View style={styles.container}>
-        <View style={[styles.header, { borderBottomWidth: 1, borderBottomColor: '#F1F5F9', justifyContent: 'space-between' }]}>
+        <View style={[styles.header, { borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                <TouchableOpacity onPress={() => { setView('list'); setSelectedTicket(null); }} style={styles.backBtn}>
+                <TouchableOpacity 
+                   onPress={() => { 
+                      setView('list'); 
+                      setSelectedTicket(null); 
+                      setIsSearchingChat(false);
+                      setChatSearchText('');
+                   }} 
+                   style={styles.backBtn}
+                >
                     <Ionicons name="arrow-back" size={20} color="#0F172A" />
                 </TouchableOpacity>
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={styles.ticketTitleDetail} numberOfLines={1}>{selectedTicket.title}</Text>
-                      <Text style={[styles.typeTag, { backgroundColor: '#F8FAFC', color: '#64748B' }]}>ID: {selectedTicket.id}</Text>
-                    </View>
-                    <Text style={styles.typeTag}>{selectedTicket.type}</Text>
+                    {isSearchingChat ? (
+                      <View style={styles.headerSearchRow}>
+                         <TextInput
+                            style={styles.headerSearchInput}
+                            placeholder="Search messages..."
+                            value={chatSearchText}
+                            onChangeText={setChatSearchText}
+                            autoFocus
+                         />
+                         {searchMatchIndices.length > 0 && (
+                           <View style={styles.headerSearchNav}>
+                             <Text style={styles.matchCount}>{activeMatchIndex + 1}/{searchMatchIndices.length}</Text>
+                             <View style={styles.navArrows}>
+                               <TouchableOpacity onPress={handlePrevMatch} style={styles.navArrowBtn}>
+                                 <Ionicons name="chevron-up" size={16} color="#64748B" />
+                               </TouchableOpacity>
+                               <TouchableOpacity onPress={handleNextMatch} style={styles.navArrowBtn}>
+                                 <Ionicons name="chevron-down" size={16} color="#64748B" />
+                               </TouchableOpacity>
+                             </View>
+                           </View>
+                         )}
+                      </View>
+                    ) : (
+                      <>
+                        <Text style={styles.ticketTitleDetail} numberOfLines={1}>{selectedTicket.title}</Text>
+                        <View style={{ marginTop: 2 }}>
+                            <Text style={styles.typeTag}>{selectedTicket.type}</Text>
+                            <Text style={[styles.typeTag, { fontSize: 8, color: '#94A3B8', marginTop: 1 }]}>ID: {selectedTicket.id}</Text>
+                        </View>
+                      </>
+                    )}
                 </View>
             </View>
-            <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                <View style={[styles.statusBadge, { backgroundColor: st.bg, borderColor: st.border }]}>
-                    <Text style={[styles.statusBadgeText, { color: st.text, fontSize: 8 }]}>{selectedTicket.status}</Text>
-                </View>
-                {!isClosed && (
-                    <TouchableOpacity onPress={() => setShowClosureModal(true)} style={styles.reqCloseBtn}>
-                        <Text style={styles.reqCloseBtnText}>Request Closure</Text>
-                    </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TouchableOpacity 
+                  onPress={() => {
+                    setIsSearchingChat(!isSearchingChat);
+                    if (isSearchingChat) setChatSearchText('');
+                  }}
+                  style={styles.headerSearchBtn}
+                >
+                  <Ionicons name={isSearchingChat ? "close-circle" : "search-outline"} size={20} color={isSearchingChat ? "#EF4444" : "#64748B"} />
+                </TouchableOpacity>
+                
+                {!isSearchingChat && (
+                  <View style={{ alignItems: 'flex-end', justifyContent: 'center', gap: 4 }}>
+                      <View style={styles.statusBadgeUnified}>
+                          <Text style={[styles.statusBadgeTextUnified, { color: st.text }]}>{selectedTicket.status}</Text>
+                      </View>
+                      {!isClosed && (
+                          <TouchableOpacity onPress={() => setShowClosureModal(true)} style={styles.reqCloseBtnUnified}>
+                              <Text style={styles.reqCloseBtnText}>Request Closure</Text>
+                          </TouchableOpacity>
+                      )}
+                  </View>
                 )}
             </View>
         </View>
@@ -553,16 +687,21 @@ export const SupportTicketSystem = ({
               </View>
             )}
             
-            {(selectedTicket.messages || []).map((msg, index) => {
+            {(selectedTicket.messages || []).map((msg, idx) => {
               const currentMsgDate = new Date(msg.timestamp).toDateString();
-              const prevMsgDate = index > 0 ? new Date(selectedTicket.messages[index-1].timestamp).toDateString() : null;
+              const prevMsgDate = idx > 0 ? new Date(selectedTicket.messages[idx-1].timestamp).toDateString() : null;
               const showDateHeader = currentMsgDate !== prevMsgDate;
+              const isHighlighted = searchMatchIndices[activeMatchIndex] === idx;
 
               return (
-                <React.Fragment key={index}>
-                  {showDateHeader && renderDateHeader(msg.timestamp)}
-                  {renderMessage(msg, index)}
-                </React.Fragment>
+                <View 
+                   key={idx} 
+                   style={isHighlighted && styles.highlightedMessage}
+                   onLayout={(e) => { messageYOffsets.current[msg.id || msg.timestamp] = e.nativeEvent.layout.y; }}
+                >
+                  {showDateHeader && !chatSearchText && renderDateHeader(msg.timestamp)}
+                  {renderMessage(msg, idx)}
+                </View>
               );
             })}
             
@@ -825,6 +964,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 2,
+  },
+  ticketCardUnread: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#3B82F6',
+    borderWidth: 2,
   },
   ticketDatePrefix: {
     fontSize: 12,
@@ -1316,7 +1460,8 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   pickerSheet: {
     backgroundColor: '#FFFFFF',
@@ -1384,19 +1529,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '500',
   },
-  closedNote: {
-    padding: 24,
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#F8FAFC',
-  },
-  closedNoteText: {
-    color: '#64748B',
-    fontSize: 12,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    textAlign: 'center',
-  },
   reopenButtonBox: {
     backgroundColor: '#2563EB',
     paddingHorizontal: 24,
@@ -1416,19 +1548,95 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textTransform: 'uppercase',
   },
-  reqCloseBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+  statusBadgeUnified: {
+    width: 100,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FEF3C7',
+  },
+  reqCloseBtnUnified: {
+    width: 100,
+    height: 24,
     borderRadius: 6,
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusBadgeTextUnified: {
+    fontSize: 8,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  highlightedMessage: {
+    backgroundColor: '#FEF9C3',
+    borderRadius: 12,
+  },
+  headerSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  headerSearchInput: {
+    flex: 1,
+    height: 32,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    fontSize: 12,
+    color: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  headerSearchNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+    gap: 4,
+  },
+  matchCount: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#64748B',
+    minWidth: 28,
+    textAlign: 'center',
+  },
+  navArrows: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    borderRadius: 10,
+    paddingHorizontal: 2,
+  },
+  navArrowBtn: {
+    padding: 2,
+  },
+  headerSearchBtn: {
+    padding: 6,
   },
   reqCloseBtnText: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '800',
     color: '#64748B',
     textTransform: 'uppercase',
+  },
+  closedNote: {
+    padding: 24,
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#F8FAFC',
+  },
+  closedNoteText: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    textAlign: 'center',
   },
   closureBox: {
     backgroundColor: '#FFFFFF',

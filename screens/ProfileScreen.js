@@ -102,7 +102,9 @@ const ProfileScreen = ({
   onVerifyAccount,
   onUploadLogs,
   isUploadingLogs,
-  appVersion
+  appVersion,
+  onRetryMessage,
+  onMarkSeen
 }) => {
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
@@ -485,7 +487,13 @@ const ProfileScreen = ({
           onDiagnostics={() => setShowDiagnostics(true)}
           onChangePassword={() => setShowChangePassword(true)}
           onReferral={() => setShowReferralModal(true)}
-          onSupport={() => setShowSupport(true)}
+          onSupport={(signal) => {
+             if (signal === 'admin_hub') {
+               navigation.navigate('Admin', { subTab: 'grievances' });
+             } else {
+               setShowSupport(true);
+             }
+          }}
           onCoachOnboarding={() => setShowCoachOnboarding(true)}
           onLogout={onLogout}
         />
@@ -527,6 +535,8 @@ const ProfileScreen = ({
                     onSendMessage={onReplyTicket}
                     onReply={onReplyTicket}
                     onUpdateStatus={onUpdateTicketStatus}
+                    onRetryMessage={onRetryMessage}
+                    onMarkSeen={onMarkSeen}
                 />
               ) : <Text>Support System Unavailable</Text>}
           </SafeAreaView>

@@ -47,7 +47,9 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = '2.6.27'; // 📊 Insights & Web-Activity_Fixed (v2.6.27)
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.35)
+// RELIABILITY: Resolving infinite sync loops & 429 Rate Limits
+const APP_VERSION = "2.6.35"; 
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -104,6 +106,7 @@ export default function App() {
   const matchesRef = React.useRef(matches);
   const tournamentsRef = React.useRef(tournaments);
   const lastBackgroundSyncRef = React.useRef(0); 
+  const lastUpdateCheckRef = useRef(0); // 🛡️ SYNC HARDENING: Throttle status checks (v2.6.28)
   const updateCheckTimeoutRef = React.useRef(null); // DEBOUNCE: Groups WebSocket signals
   const syncLockRef = React.useRef(false); // MUTEX: Ensures push and pull don't overlap
   const [cloudVersion, setCloudVersion] = useState(0);
@@ -170,18 +173,11 @@ export default function App() {
       logger.logAction('WS_DISCONNECTED', { reason });
     });
 
-    // CATCH-ALL: Log every single event the socket receives for diagnostics
-    socketRef.current.onAny((eventName, ...args) => {
-      if (eventName === 'SYNC_READY' || eventName === 'DATA_UPDATE') {
-        clearTimeout(updateCheckTimeoutRef.current);
-        updateCheckTimeoutRef.current = setTimeout(() => checkForUpdates(), 500); 
-      }
-    });
+    // 🛡️ v2.6.28: Removed redundant catch-all onAny listener that was triggering extra update calls.
 
     socketRef.current.on('data_updated', (payload) => {
-      // 🛡️ SYNC HARDENING (v2.6.2): Strictly ignore updates originating from OUR OWN socket.
-      // This prevents the "Hydration War" where a local push triggers an immediate pull
-      // that might return stale data before cloud propagation is complete.
+      // 🛡️ SYNC HARDENING (v2.6.28): Strictly ignore updates originating from OUR OWN socket.
+      // This is the primary defense against the 429 sync loop.
       if (payload?.lastSocketId && socketRef.current?.id && payload.lastSocketId === socketRef.current.id) {
         console.log("🛡️ [SyncEngine] Skipping self-originated cloud update.");
         return;
@@ -195,7 +191,8 @@ export default function App() {
       updateCheckTimeoutRef.current = setTimeout(() => {
         updateCheckTimeoutRef.current = null;
         if (!syncLockRef.current) {
-          checkForUpdates(); 
+          // 🛡️ v2.6.28: Real-time signals now trigger a SOFT PULL to respect current sync mutex.
+          checkForUpdates(false); 
         } else {
           console.log("⏳ Sync in progress, queueing update check...");
           pendingUpdateCheckRef.current = true;
@@ -357,19 +354,22 @@ export default function App() {
     }
   };
 
-  const checkForUpdates = useCallback(async () => {
+  const checkForUpdates = useCallback(async (isForce = false) => {
     try {
       if (isSyncingRef.current) return;
 
-      const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout for status check
+      const now = Date.now();
+      const throttleWindow = 10000; // ⚡ 10s minimum between status checks (v2.6.28)
+      if (!isForce && (now - lastUpdateCheckRef.current < throttleWindow)) {
+        console.log("🛡️ [SyncEngine] Throttling status check (too soon).");
+        return;
+      }
+      lastUpdateCheckRef.current = now;
 
+      const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
       const response = await fetch(`${activeApiUrl}/api/status`, {
-        signal: controller.signal,
         headers: { 'x-ace-api-key': config.ACE_API_KEY }
       });
-      clearTimeout(timeoutId);
       
       if (response.status === 429) {
         console.log("🛑 Rate limited on status check, skipping.");
@@ -417,13 +417,14 @@ export default function App() {
       if (status.lastUpdated && status.lastUpdated !== lastServerUpdateRef.current) {
         console.log("🆕 New cloud data available! Auto-refreshing...");
         logger.logAction('CLOUD_UPDATE_DETECTED', { lastUpdated: status.lastUpdated });
-        await loadData(true, true);
+        // 🛡️ v2.6.28: Defaulting to soft-pull to avoid infinite hydration loops.
+        await loadData(isForce, isForce); 
       }
     } catch (error) {
       console.log("⚠️ Update check failed (silent):", error.message);
       logger.logAction('CHECK_UPDATES_FAILED', { error: error.message });
     }
-  }, [loadData]); // Note: loadData is stable via useCallback
+  }, [loadData]); 
 
   const hydrateFromStorage = async () => {
     console.log("📦 Hydrating app state from local storage...");
@@ -531,7 +532,7 @@ export default function App() {
     }
   };
 
-  const syncPendingData = useCallback(async () => {
+  const syncPendingData = useCallback(async (isForce = false) => {
     // Read directly from storage to ensure we have the absolute latest pending list
     const latestPending = await storage.getItem('pendingSync') || [];
     if (latestPending.length === 0) return true;
@@ -543,7 +544,7 @@ export default function App() {
       if (data) updates[key] = data;
     }
 
-    const success = await pushStateToCloud(updates, true);
+    const success = await pushStateToCloud(updates, isForce);
     if (success) {
       setPendingSync([]);
       pendingSyncRef.current = [];
@@ -595,7 +596,10 @@ export default function App() {
       return false;
     }
 
-    if (!forceNoLoading) setIsLoading(true);
+    // 🛡️ v2.6.29: Only show full-screen loading if it's the very first pull (empty players)
+    // or if explicitly forced for a foreground reload.
+    const isInitialHydration = !playersRef.current || playersRef.current.length === 0;
+    if (!forceNoLoading || isInitialHydration) setIsLoading(true);
     const versionAtStart = ++syncVersion.current;
 
     try {
@@ -776,8 +780,31 @@ export default function App() {
         storage.setItem('matchmaking', cloudData.matchmaking);
       }
       if (cloudData.supportTickets && !pendingSyncRef.current.includes('supportTickets')) {
-        setSupportTickets(cloudData.supportTickets);
-        storage.setItem('supportTickets', cloudData.supportTickets);
+        const myId = currentUserRef.current?.id || 'admin';
+        let statusChanged = false;
+        const processedTickets = cloudData.supportTickets.map(t => {
+          if (t && t.messages) {
+            const updatedMsgs = t.messages.map(m => {
+              if (m.senderId !== myId && m.status === 'sent') {
+                statusChanged = true;
+                return { ...m, status: 'delivered' };
+              }
+              return m;
+            });
+            if (statusChanged) return { ...t, messages: updatedMsgs };
+          }
+          return t;
+        });
+
+        if (statusChanged) {
+          setSupportTickets(processedTickets);
+          storage.setItem('supportTickets', processedTickets);
+          // 🛡️ [Tick System] Loopback Sync: Propagate 'delivered' status back to sender IMMEDIATELY (v2.6.29)
+          syncAndSaveData({ supportTickets: processedTickets }, true); // Atomic push to avoid loop
+        } else {
+          setSupportTickets(cloudData.supportTickets);
+          storage.setItem('supportTickets', cloudData.supportTickets);
+        }
       }
       if (cloudData.evaluations && !pendingSyncRef.current.includes('evaluations')) {
         setEvaluations(cloudData.evaluations);
@@ -830,7 +857,7 @@ export default function App() {
       }
     }
   }, [syncPendingData, checkForUpdates]);
-  const pushStateToCloud = useCallback(async (updates) => {
+  const pushStateToCloud = useCallback(async (updates, isForce = false) => {
     if (!isUsingCloudRef.current) return;
     
     if (syncLockRef.current) {
@@ -839,7 +866,7 @@ export default function App() {
     }
 
     const now = Date.now();
-    if (now < globalBackoffUntilRef.current) {
+    if (!isForce && now < globalBackoffUntilRef.current) {
       console.log("⏳ Backoff active, skipping push.");
       return false;
     }
@@ -854,6 +881,20 @@ export default function App() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout for push
 
+      // 🛡️ [Tick System] Sanitize Support Tickets (v2.6.29)
+      // Any message marked 'pending' is promoted to 'sent' for the cloud push.
+      // This ensures the database always reflects a successful delivery once the POST reaches the server.
+      const sanitizedUpdates = { ...updates };
+      if (sanitizedUpdates.supportTickets && Array.isArray(sanitizedUpdates.supportTickets)) {
+        sanitizedUpdates.supportTickets = sanitizedUpdates.supportTickets.map(t => {
+          if (t && t.messages) {
+            const promotedMsgs = t.messages.map(m => m.status === 'pending' ? { ...m, status: 'sent' } : m);
+            return { ...t, messages: promotedMsgs };
+          }
+          return t;
+        });
+      }
+
       const response = await fetch(`${activeApiUrl}/api/save`, {
         method: 'POST',
         signal: controller.signal,
@@ -863,7 +904,7 @@ export default function App() {
           'x-socket-id': socketRef.current?.id || ''
         },
         body: JSON.stringify({
-          ...updates,
+          ...sanitizedUpdates,
           version: cloudVersionRef.current
         })
       });
@@ -901,9 +942,25 @@ export default function App() {
       
       const result = await response.json();
       
-      // Clear pending keys ONCE cloud confirms success
+      // ✅ SUCCESS! Clear pending keys and promote message status (v2.6.28)
       if (updates && typeof updates === 'object' && !Array.isArray(updates)) {
         const keys = Object.keys(updates).filter(k => k !== 'atomicKeys');
+        
+        // 🛡️ [Tick System] If supportTickets was pushed, promote 'pending' messages to 'sent'
+        if (keys.includes('supportTickets')) {
+          setSupportTickets(prev => {
+            const updated = (prev || []).map(t => {
+              if (t && t.messages) {
+                const refreshedMsgs = t.messages.map(m => (m.status === 'pending') ? { ...m, status: 'sent' } : m);
+                return { ...t, messages: refreshedMsgs };
+              }
+              return t;
+            });
+            storage.setItem('supportTickets', updated);
+            return updated;
+          });
+        }
+
         setPendingSync(prev => {
           const next = (prev || []).filter(k => !keys.includes(k));
           storage.setItem('pendingSync', next);
@@ -955,16 +1012,22 @@ export default function App() {
 
   const syncAndSaveData = useCallback(async (updates, isAtomic = false) => {
     if (updates.currentUser && localDeviceIdRef.current) {
-      const now = Date.now();
-      const needsTimestampUpdate = now - lastActiveUpdateRef.current > 5 * 60 * 1000;
+      // 🛡️ v2.6.29: Increase heartbeat window to 20 mins to prevent 429 storms
+      const needsTimestampUpdate = now - lastActiveUpdateRef.current > 20 * 60 * 1000;
       
       const sanitizeUser = (u) => {
         const { devices, lastActive, ...rest } = u || {};
         return rest;
       };
+      // 🛡️ Strict deep comparison to avoid redundant syncs on trivial data
       const otherDataChanged = JSON.stringify(sanitizeUser(updates.currentUser)) !== JSON.stringify(sanitizeUser(currentUserRef.current));
 
-      if (needsTimestampUpdate || otherDataChanged) {
+      // 🛡️ If ONLY currentUser is present and it's JUST a heartbeat (no data changed), 
+      // we can skip the heavy cloud-push logic if it's too frequent.
+      const isJustHeartbeat = !otherDataChanged && Object.keys(updates).length === 1 && updates.currentUser;
+      const skipHeartbeat = isJustHeartbeat && !needsTimestampUpdate;
+
+      if (!skipHeartbeat && (needsTimestampUpdate || otherDataChanged)) {
         lastActiveUpdateRef.current = now;
         const myTracker = {
           id: localDeviceIdRef.current,
@@ -1542,32 +1605,77 @@ export default function App() {
        });
      },
     onReplyTicket: (id, text, image, replyToMsg) => {
-       setSupportTickets(prev => {
-         const msgText = typeof text === 'string' ? text : (text?.text || String(text || ''));
-         const senderId = currentUserRef.current?.id || 'admin';
-         const isAdmin = userRole === 'admin';
-         
-         const msg = { id: `m-${Date.now()}`, senderId, text: msgText, timestamp: new Date().toISOString() };
-         if (image) msg.image = image;
-         if (replyToMsg) msg.replyTo = { id: replyToMsg.id, timestamp: replyToMsg.timestamp, text: replyToMsg.text || '', senderId: replyToMsg.senderId || '' };
-         
-         const updated = (prev || []).map(t => {
-           if (t && t.id === id) {
-             const newStatus = (!isAdmin && t.status === 'Awaiting Response') ? 'In Progress' : t.status;
-             return { 
-               ...t, 
-               status: newStatus,
-               messages: [...(t.messages || []), msg],
-               updatedAt: new Date().toISOString() 
-             };
-           }
-           return t;
-         });
-         
-         syncAndSaveData({ supportTickets: updated });
-         return updated;
-       });
-     },
+      setSupportTickets(prev => {
+        const msgText = typeof text === 'string' ? text : (text?.text || String(text || ''));
+        const senderId = currentUserRef.current?.id || 'admin';
+        const isAdmin = userRole === 'admin';
+        
+        const msg = { 
+          id: `m-${Date.now()}`, 
+          senderId, 
+          text: msgText, 
+          timestamp: new Date().toISOString(),
+          status: 'pending' // 🛡️ [Tick System] Start as pending (v2.6.28)
+        };
+        if (image) msg.image = image;
+        if (replyToMsg) msg.replyTo = { id: replyToMsg.id, timestamp: replyToMsg.timestamp, text: replyToMsg.text || '', senderId: replyToMsg.senderId || '' };
+        
+        const updated = (prev || []).map(t => {
+          if (t && t.id === id) {
+            const newStatus = (!isAdmin && t.status === 'Awaiting Response') ? 'In Progress' : t.status;
+            return { 
+              ...t, 
+              status: newStatus,
+              messages: [...(t.messages || []), msg],
+              updatedAt: new Date().toISOString() 
+            };
+          }
+          return t;
+        });
+        
+        syncAndSaveData({ supportTickets: updated });
+        return updated;
+      });
+    },
+    onRetryMessage: (ticketId, msgId) => {
+      // 🛡️ [Tick System] Explicit retry for a failed message (v2.6.28)
+      console.log(`🛡️ Retrying sync for message ${msgId} in ticket ${ticketId}`);
+      setPendingSync(prev => {
+        const next = Array.from(new Set([...(prev || []), 'supportTickets']));
+        storage.setItem('pendingSync', next);
+        pendingSyncRef.current = next;
+        return next;
+      });
+      syncPendingData(true); // 🛡️ Force sync for manual retry (v2.6.29)
+    },
+    onMarkSeen: (ticketId) => {
+      // 🛡️ [Tick System] Mark all incoming messages in a ticket as 'seen' (v2.6.28)
+      setSupportTickets(prev => {
+        let changed = false;
+        const myId = currentUserRef.current?.id || 'admin';
+        const updated = (prev || []).map(t => {
+          if (t && t.id === ticketId && t.messages) {
+            const newMsgs = t.messages.map(m => {
+              if (m.senderId !== myId && m.status !== 'seen') {
+                changed = true;
+                return { ...m, status: 'seen' };
+              }
+              return m;
+            });
+            if (changed) return { ...t, messages: newMsgs, updatedAt: new Date().toISOString() };
+          }
+          return t;
+        });
+
+        if (changed) {
+          syncAndSaveData({ supportTickets: updated }, true); // 🛡️ Loopback Sync: Propagate 'seen' IMMEDIATELY (v2.6.29)
+          // 🛡️ v2.6.29: Trigger a silent update check after a small delay to catch other incoming messages
+          setTimeout(() => checkForUpdates(false), 2000);
+          return updated;
+        }
+        return prev;
+      });
+    },
     onUpdateTicketStatus: (id, status, summary) => {
       setSupportTickets(prev => {
         const updated = (prev || []).map(t => {
@@ -2086,11 +2194,37 @@ export default function App() {
     }
   }, [isLoading, supportTickets.length]);
 
+  useEffect(() => {
+    // 🛡️ High-frequency sync for active tickets (v2.6.29)
+    // Runs every 10s if any support ticket exists to ensure read statuses (ticks) propagate fast.
+    if (supportTickets && supportTickets.length > 0) {
+      const pollTimer = setInterval(() => {
+        if (!isSyncingRef.current && isCloudOnline) {
+          checkForUpdates(false);
+        }
+      }, 10000); 
+      return () => clearInterval(pollTimer);
+    }
+  }, [supportTickets.length, isCloudOnline]);
+
+  useEffect(() => {
+    // 🛡️ Global Background Polling (v2.6.20 - v2.6.29)
+    const interval = setInterval(() => {
+      if (!isSyncingRef.current && isCloudOnline) {
+        checkForUpdates(false);
+      }
+    }, 120000); // 2 min fallback
+    return () => clearInterval(interval);
+  }, [isCloudOnline, checkForUpdates]);
+
   if (!isFullyConnected) {
     return <OfflineScreen />;
   }
 
-  if (isLoading) {
+  // 🛡️ v2.6.29: Only block with a full-screen loading overlay if we have no critical data.
+  // This prevents the navigation stack from being unmounted during background syncs.
+  const isActuallyEmpty = !players || players.length === 0;
+  if (isLoading && isActuallyEmpty) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#EF4444" />

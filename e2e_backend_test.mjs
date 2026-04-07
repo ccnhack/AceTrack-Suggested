@@ -53,7 +53,7 @@ const healthData = healthRes.ok ? await healthRes.json() : {};
 assert('E2E-HEALTH-001', 'Health', 'GET /api/health returns 200', healthRes.ok === true, `Status: ${healthRes.status}`);
 assert('E2E-HEALTH-002', 'Health', 'Health response contains status=ok', healthData.status === 'ok', `Got: ${healthData.status}`);
 assert('E2E-HEALTH-003', 'Health', 'Health response contains version', !!healthData.version, `Version: ${healthData.version}`);
-assert('E2E-HEALTH-004', 'Health', 'Health version matches v2.6.20', healthData.version === '2.6.20', `Got: ${healthData.version}`);
+assert('E2E-HEALTH-004', 'Health', 'Health version matches v2.6.29', healthData.version === '2.6.29', `Got: ${healthData.version}`);
 assert('E2E-HEALTH-005', 'Health', 'Health response contains uptime', typeof healthData.uptime === 'number' && healthData.uptime > 0, `Uptime: ${healthData.uptime}s`);
 
 // ══════════════════════════════════════════════════════════════

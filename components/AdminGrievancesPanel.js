@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Swipeable } from 'react-native-gesture-handler';
 import { generateAIResponse } from '../services/aiService';
+import logger from '../utils/logger';
 
 const statusColors = {
   'Open': { bg: '#EFF6FF', text: '#2563EB', border: '#DBEAFE' },
@@ -19,7 +20,7 @@ const statusColors = {
 const statusOptions = ['Open', 'In Progress', 'Awaiting Response', 'Resolved', 'Closed'];
 
 export const AdminGrievancesPanel = ({
-  tickets, players, onReply, onUpdateStatus, onTypingStart, onTypingStop, search
+  tickets, players, onReply, onUpdateStatus, onTypingStart, onTypingStop, search, onRetryMessage, onMarkSeen, onDetailToggle, autoSelectUser
 }) => {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [replyText, setReplyText] = useState('');
@@ -32,25 +33,89 @@ export const AdminGrievancesPanel = ({
   const [showStatusConfirm, setShowStatusConfirm] = useState(false);
   const [showReopenModal, setShowReopenModal] = useState(false);
   const [reopenJustification, setReopenJustification] = useState('');
-  const [pendingReopenStatus, setPendingReopenStatus] = useState(null);
   const [pendingStatus, setPendingStatus] = useState(null);
+  const [isSearchingChat, setIsSearchingChat] = useState(false);
+  const [chatSearchText, setChatSearchText] = useState('');
+  const [searchMatchIndices, setSearchMatchIndices] = useState([]);
+  const [activeMatchIndex, setActiveMatchIndex] = useState(0); // 0-indexed internal, 1-indexed UI
   const scrollViewRef = useRef(null);
   const textInputRef = useRef(null);
   const messageYOffsets = useRef({}); // 📍 Track message coordinates (v2.6.27)
 
+  // 🛡️ [Tick System] Mark as 'Seen' when ticket is opened (v2.6.28)
+  useEffect(() => {
+    if (selectedTicket && selectedTicket.id) {
+      onMarkSeen?.(selectedTicket.id);
+      onDetailToggle?.(true); // Lock parent scroll
+    } else {
+      onDetailToggle?.(false); // Unlock parent scroll
+    }
+  }, [selectedTicket?.id]);
+
+  // Handle deep-linking auto-selection
+  useEffect(() => {
+    if (autoSelectUser && tickets) {
+        const userTicket = tickets.find(t => t.userId === autoSelectUser);
+        if (userTicket) setSelectedTicket(userTicket);
+    }
+  }, [autoSelectUser, tickets?.length]);
+
   // 📜 Auto-scroll on Open/Update (v2.6.26)
   useEffect(() => {
     if (selectedTicket && scrollViewRef.current && typeof scrollViewRef.current.scrollToEnd === 'function') {
-      // 🛡️ Staged scroll for Android robustness: immediate + slight delay
-      scrollViewRef.current.scrollToEnd({ animated: false });
-      
-      const timer = setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 200); // Increased delay for Android layout stability
-
-      return () => clearTimeout(timer);
+      setTimeout(() => {
+        if (!isSearchingChat) scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
     }
-  }, [selectedTicket?.id, selectedTicket?.messages?.length]);
+  }, [selectedTicket?.messages?.length]);
+
+  // 🔍 Conversational Search Logic (v2.6.33)
+  useEffect(() => {
+    if (chatSearchText.trim() && selectedTicket?.messages) {
+      const q = chatSearchText.toLowerCase();
+      const matches = [];
+      selectedTicket.messages.forEach((msg, idx) => {
+        if ((msg.text || '').toLowerCase().includes(q)) {
+           matches.push(idx);
+        }
+      });
+      setSearchMatchIndices(matches);
+      setActiveMatchIndex(0);
+      
+      // Auto-jump to first match
+      if (matches.length > 0) {
+        setTimeout(() => jumpToMatch(0, matches), 100);
+      }
+    } else {
+      setSearchMatchIndices([]);
+      setActiveMatchIndex(0);
+    }
+  }, [chatSearchText, selectedTicket?.id]);
+
+  const jumpToMatch = (idx, matchesOverride = null) => {
+    const matches = matchesOverride || searchMatchIndices;
+    if (matches.length === 0) return;
+    const msgIdx = matches[idx];
+    const msg = selectedTicket.messages[msgIdx];
+    const targetY = messageYOffsets.current[msg.id || msg.timestamp];
+    if (targetY !== undefined) {
+      scrollViewRef.current?.scrollTo({ y: targetY - 50, animated: true });
+    }
+  };
+
+  const handleNextMatch = () => {
+    if (searchMatchIndices.length === 0) return;
+    const nextIdx = (activeMatchIndex + 1) % searchMatchIndices.length;
+    setActiveMatchIndex(nextIdx);
+    jumpToMatch(nextIdx);
+  };
+
+  const handlePrevMatch = () => {
+    if (searchMatchIndices.length === 0) return;
+    const prevIdx = (activeMatchIndex - 1 + searchMatchIndices.length) % searchMatchIndices.length;
+    setActiveMatchIndex(prevIdx);
+    jumpToMatch(prevIdx);
+  };
 
   useEffect(() => {
     if (selectedTicket) {
@@ -134,8 +199,18 @@ export const AdminGrievancesPanel = ({
     }
   };
 
-  const getUserName = (userId) => (players || []).find(pl => pl.id === userId)?.name || userId;
+  const getUserName = (userId) => {
+    const p = (players || []).find(pl => pl.id === userId);
+    if (!p) return userId;
+    return p.username ? `${p.name} (${p.username})` : p.name;
+  };
   const getUserRole = (userId) => (players || []).find(pl => pl.id === userId)?.role || 'user';
+
+  const isTicketUnread = (ticket) => {
+    if (!ticket || !ticket.messages) return false;
+    // Unread if any message from a user (non-admin) is NOT 'seen'
+    return ticket.messages.some(m => m && m.senderId !== 'admin' && m.status !== 'seen');
+  };
 
   const filteredTickets = (tickets || [])
     .filter(t => {
@@ -154,6 +229,17 @@ export const AdminGrievancesPanel = ({
       const conversation = (t.messages || []).some(m => (m.text || '').toLowerCase().includes(q));
       
       return title.includes(q) || tid.includes(q) || userName.includes(q) || userId.includes(q) || conversation;
+    })
+    .sort((a, b) => {
+      const aUnread = isTicketUnread(a);
+      const bUnread = isTicketUnread(b);
+      if (aUnread && !bUnread) return -1;
+      if (!aUnread && bUnread) return 1;
+      
+      // Secondary sort: newest first
+      const dateA = new Date(a.updatedAt || a.createdAt || 0);
+      const dateB = new Date(b.updatedAt || b.createdAt || 0);
+      return dateB - dateA;
     });
 
   const pickImage = async () => {
@@ -269,9 +355,27 @@ export const AdminGrievancesPanel = ({
               ? `User requested closure: ${text.replace('CLOSURE_REQUEST_EVENT:', '').trim()}` 
               : text}
           </Text>
-          <Text style={styles.timestamp}>
-            {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Text>
+          <View style={styles.msgFooter}>
+            <Text style={styles.timestamp}>
+              {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+            {isMe && (
+              <View style={styles.statusContainer}>
+                {msg.status === 'pending' ? (
+                  <TouchableOpacity onPress={() => onRetryMessage?.(selectedTicket.id, msg.id)}>
+                    <Ionicons name="alert-circle" size={14} color="#94A3B8" />
+                  </TouchableOpacity>
+                ) : (
+                <Ionicons 
+                  name={['delivered', 'seen'].includes(msg.status) ? "checkmark-done" : "checkmark"} 
+                  size={15} 
+                  color={msg.status === 'seen' ? "#34B7F1" : "#94A3B8"} 
+                  style={{ marginLeft: 4, opacity: msg.status === 'pending' ? 0.3 : 1 }} 
+                />
+                )}
+              </View>
+            )}
+          </View>
         </View>
       </Swipeable>
     </View>
@@ -283,20 +387,60 @@ export const AdminGrievancesPanel = ({
       {selectedTicket ? (
         <>
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => setSelectedTicket(null)} style={styles.backBtn}>
+            <TouchableOpacity 
+              onPress={() => {
+                setSelectedTicket(null);
+                setIsSearchingChat(false);
+                setChatSearchText('');
+              }} 
+              style={styles.backBtn}
+            >
               <Ionicons name="arrow-back" size={20} color="#0F172A" />
             </TouchableOpacity>
             <View style={styles.headerInfo}>
-              <Text style={styles.headerTitle} numberOfLines={1}>{selectedTicket.title}</Text>
-              <Text style={styles.headerId}>ID: {selectedTicket.id}</Text>
+              {isSearchingChat ? (
+                <View style={styles.headerSearchRow}>
+                   <TextInput
+                      style={styles.headerSearchInput}
+                      placeholder="Search messages..."
+                      value={chatSearchText}
+                      onChangeText={setChatSearchText}
+                      autoFocus
+                   />
+                   {searchMatchIndices.length > 0 && (
+                     <View style={styles.headerSearchNav}>
+                       <Text style={styles.matchCount}>{activeMatchIndex + 1}/{searchMatchIndices.length}</Text>
+                       <View style={styles.navArrows}>
+                         <TouchableOpacity onPress={handlePrevMatch} style={styles.navArrowBtn}>
+                           <Ionicons name="chevron-up" size={18} color="#64748B" />
+                         </TouchableOpacity>
+                         <TouchableOpacity onPress={handleNextMatch} style={styles.navArrowBtn}>
+                           <Ionicons name="chevron-down" size={18} color="#64748B" />
+                         </TouchableOpacity>
+                       </View>
+                     </View>
+                   )}
+                </View>
+              ) : (
+                <>
+                  <Text style={styles.headerTitle} numberOfLines={1}>{selectedTicket.title}</Text>
+                  <Text style={styles.headerId}>ID: {selectedTicket.id}</Text>
+                </>
+              )}
             </View>
+            <TouchableOpacity 
+              onPress={() => {
+                setIsSearchingChat(!isSearchingChat);
+                if (isSearchingChat) setChatSearchText('');
+              }}
+              style={styles.headerSearchBtn}
+            >
+              <Ionicons name={isSearchingChat ? "close-circle" : "search-outline"} size={20} color={isSearchingChat ? "#EF4444" : "#64748B"} />
+            </TouchableOpacity>
           </View>
 
-          <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-            style={styles.flex}
-          >
-            <ScrollView style={styles.detailList} showsVerticalScrollIndicator={false}>
+                    <View style={styles.detailHeaderScrollWrapper}>
+            <ScrollView style={styles.detailHeaderList} showsVerticalScrollIndicator={false}>
               <View style={styles.infoCard}>
                 <View style={styles.infoGrid}>
                   <View style={styles.infoItem}>
@@ -337,36 +481,52 @@ export const AdminGrievancesPanel = ({
                   </View>
                 </View>
               </View>
-            </ScrollView>
 
-            {selectedTicket.closureSummary && (
-              <View style={styles.resolutionCard}>
-                <View style={styles.resHeader}>
-                  <Ionicons name="shield-checkmark" size={16} color="#059669" />
-                  <Text style={styles.resTitle}>Closure Summary</Text>
+              {selectedTicket.closureSummary && (
+                <View style={styles.resolutionCard}>
+                  <View style={styles.resHeader}>
+                    <Ionicons name="shield-checkmark" size={16} color="#059669" />
+                    <Text style={styles.resTitle}>Closure Summary</Text>
+                  </View>
+                  <Text style={styles.resText}>{selectedTicket.closureSummary}</Text>
                 </View>
-                <Text style={styles.resText}>{selectedTicket.closureSummary}</Text>
-              </View>
-            )}
+              )}
+            </ScrollView>
+          </View>
 
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+            style={styles.flex}
+          >
             <View style={styles.chatContainer}>
               <ScrollView 
                 ref={scrollViewRef} 
                 style={styles.chatScroll} 
-                onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+                contentContainerStyle={styles.chatScrollContent}
+                onContentSizeChange={() => {
+                  if (!isSearchingChat) scrollViewRef.current?.scrollToEnd({ animated: true });
+                }}
+                showsVerticalScrollIndicator={true}
               >
-                {(selectedTicket?.messages || []).map((msg, index) => {
-                  const currentMsgDate = new Date(msg.timestamp).toDateString();
-                  const prevMsgDate = index > 0 ? new Date(selectedTicket.messages[index-1].timestamp).toDateString() : null;
-                  const showDateHeader = currentMsgDate !== prevMsgDate;
+                {(selectedTicket?.messages || [])
+                  .map((msg, idx) => {
+                    const currentMsgDate = new Date(msg.timestamp).toDateString();
+                    const prevMsgDate = idx > 0 ? new Date(selectedTicket.messages[idx-1].timestamp).toDateString() : null;
+                    const showDateHeader = currentMsgDate !== prevMsgDate;
+                    const isHighlighted = searchMatchIndices[activeMatchIndex] === idx;
 
-                  return (
-                    <React.Fragment key={index}>
-                      {showDateHeader && renderDateHeader(msg.timestamp)}
-                      {renderMessage(msg, index)}
-                    </React.Fragment>
-                  );
-                })}
+                    return (
+                      <View 
+                        key={msg.id || msg.timestamp || idx} 
+                        style={isHighlighted && styles.highlightedMessage}
+                        onLayout={(e) => { messageYOffsets.current[msg.id || msg.timestamp] = e.nativeEvent.layout.y; }}
+                      >
+                        {showDateHeader && !chatSearchText && renderDateHeader(msg.timestamp)}
+                        {renderMessage(msg, idx)}
+                      </View>
+                    );
+                  })}
                 {isUserTyping && (
                   <View style={styles.typingIndicator}>
                     <Text style={styles.typingText}>User is typing...</Text>
@@ -455,23 +615,33 @@ export const AdminGrievancesPanel = ({
               <Text style={styles.statLabel}>Active</Text>
               <Text style={[styles.statValue, { color: '#D97706' }]}>{(tickets || []).filter(t => t && t.status === 'In Progress').length}</Text>
             </View>
+            <View style={[styles.statBox, { backgroundColor: '#FAF5FF' }]}>
+              <Text style={styles.statLabel}>Awaiting</Text>
+              <Text style={[styles.statValue, { color: '#9333EA' }]}>{(tickets || []).filter(t => t && t.status === 'Awaiting Response').length}</Text>
+            </View>
             <View style={[styles.statBox, { backgroundColor: '#F0FDF4' }]}>
-              <Text style={styles.statLabel}>Done</Text>
-              <Text style={[styles.statValue, { color: '#16A34A' }]}>{(tickets || []).filter(t => t && (t.status === 'Resolved' || t.status === 'Closed')).length}</Text>
+              <Text style={styles.statLabel}>Resolved</Text>
+              <Text style={[styles.statValue, { color: '#16A34A' }]}>{(tickets || []).filter(t => t && t.status === 'Resolved').length}</Text>
             </View>
           </View>
 
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterTabs}>
-            {['All', ...statusOptions].map(s => (
-              <TouchableOpacity 
-                key={s} 
-                onPress={() => setFilterStatus(s)}
-                style={[styles.filterTab, filterStatus === s && styles.filterTabActive]}
-              >
-                <Text style={[styles.filterTabText, filterStatus === s && styles.filterTabTextActive]}>{s}</Text>
-              </TouchableOpacity>
-            ))}
+            {['All', ...statusOptions].map(s => {
+              const count = (tickets || []).filter(t => s === 'All' ? true : (t.status || 'Open') === s).length;
+              const isActive = filterStatus === s;
+              return (
+                <TouchableOpacity 
+                  key={s} 
+                  onPress={() => setFilterStatus(s)}
+                  style={[styles.filterTab, isActive && styles.filterTabActive]}
+                >
+                  <Text style={[styles.filterTabText, isActive && styles.filterTabTextActive]}>
+                    {s} {count > 0 ? `(${count})` : ''}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
 
           <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
@@ -479,11 +649,12 @@ export const AdminGrievancesPanel = ({
               const status = ticket.status || 'Open';
               const st = statusColors[status] || statusColors['Open'];
               const date = ticket.createdAt ? new Date(ticket.createdAt) : null;
+              const isUnread = isTicketUnread(ticket);
               return (
                 <TouchableOpacity 
                   key={ticket.id || `temp-${idx}`} 
                   onPress={() => setSelectedTicket(ticket)}
-                  style={styles.ticketCard}
+                  style={[styles.ticketCard, isUnread && styles.unreadCard]}
                 >
                   <View style={styles.ticketTop}>
                     <View style={{ flex: 1 }}>
@@ -636,8 +807,50 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerInfo: {
-    marginLeft: 12,
     flex: 1,
+    marginLeft: 12,
+  },
+  headerSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  headerSearchInput: {
+    flex: 1,
+    height: 36,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    fontSize: 13,
+    color: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  headerSearchNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+    gap: 4,
+  },
+  matchCount: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#64748B',
+    minWidth: 30,
+    textAlign: 'center',
+  },
+  navArrows: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    borderRadius: 12,
+    paddingHorizontal: 2,
+  },
+  navArrowBtn: {
+    padding: 4,
+  },
+  headerSearchBtn: {
+    padding: 8,
   },
   headerTitle: {
     fontSize: 14,
@@ -883,6 +1096,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F1F5F9',
   },
+  unreadCard: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#DBEAFE',
+    borderLeftWidth: 4,
+    borderLeftColor: '#3B82F6',
+  },
   ticketTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -903,12 +1122,22 @@ const styles = StyleSheet.create({
   chatContainer: {
     flex: 1,
     backgroundColor: '#F8FAFC',
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    overflow: 'hidden',
   },
   chatScroll: {
     flex: 1,
+  },
+  chatScrollContent: {
     padding: 16,
+    paddingBottom: 24,
+  },
+  detailHeaderScrollWrapper: {
+    maxHeight: 180,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  detailHeaderList: {
+    flexGrow: 0,
   },
   messageBubble: {
     padding: 12,
@@ -946,8 +1175,19 @@ const styles = StyleSheet.create({
   timestamp: {
     fontSize: 9,
     color: '#94A3B8',
-    alignSelf: 'flex-end',
-    marginTop: 4,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  msgFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginTop: 2,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 4,
   },
   msgImage: {
     width: 200,
@@ -1008,6 +1248,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#0F172A',
     maxHeight: 100,
+  },
+  highlightedMessage: {
+    backgroundColor: '#FEF9C3', // Amber highlight
+    borderRadius: 12,
   },
   plusBtn: {
     paddingHorizontal: 4,
