@@ -24,7 +24,8 @@ This document tracks critical rules and workflows to ensure stability across mob
 - **Focus**: Always investigate `ReferenceError`, `TransformError`, and `HYDRATION` events in logs.
 
 ## 📜 Last 5 Major Objectives Summary
-1.  **v2.6.61 Deployment**: **Admin Hub Sync & Badge Resolution**. Decoupled badge state from user profile, implemented server-side Union Merge for acknowledgments, and resolved the "Phantom Ticket Generator" bug. Deduped support tickets globally.
+1.  **v2.6.62 Deployment**: **Landing Page & Security Hardening**. Split iOS/Android landing pages, fixed iPhone layout overlap, and implemented the "Ultimate Admin Guard" to restrict admin privileges to the System Admin ID only.
+2.  **v2.6.61 Deployment**: **Admin Hub Sync & Badge Resolution**. Decoupled badge state from user profile, implemented server-side Union Merge for acknowledgments, and resolved the "Phantom Ticket Generator" bug. Deduped support tickets globally.
 2.  **v2.6.51 Deployment**: **Security Hardening & Admin Guard**. Restricted 'admin' role privileges strictly to the System Admin account (ID: admin). Implemented a server-side role guard that automatically demotes unauthorized admin escalations and removed legacy recovery helpers.
 2.  **v2.6.27 Deployment**: **Insights & Web-Activity_Fixed**. Integrated Insights Tab into Admin Hub for Web/Mobile, hardened WebSocket device status reporting for browser consistency, and synchronized versions across platform.
 2.  **v2.6.26 Deployment**: **Working_Enhanced_Support_Center**. Implemented "Jump to Original Message" (Reply-scroll), Unified Deep Search in Admin Hub, and Draggable AI ChatBot.
