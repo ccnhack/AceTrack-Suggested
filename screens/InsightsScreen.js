@@ -493,9 +493,17 @@ const InsightsScreen = ({
                 ) : (
                     <View>
                         <View style={styles.drillInfoBox}>
-                            <Ionicons name="location" size={14} color="#6366F1" />
+                            <Ionicons 
+                                name={selectedStat === 'Players' ? 'location' : selectedStat === 'Coaches' ? 'people' : 'analytics'} 
+                                size={14} 
+                                color="#6366F1" 
+                            />
                             <Text style={styles.drillInfoText}>
-                                {selectedStat === 'Coaches' ? 'Click a coach to see their judging history and specialties' : 'Click an area to see specific players and their sports'}
+                                {selectedStat === 'Coaches' ? 'Tap a coach to review judging history and specialized categories' : 
+                                 selectedStat === 'Players' ? 'Tap a neighborhood for local engagement and sport hotspots' :
+                                 selectedStat === 'Tournaments' ? 'Tap a tournament for participant lists and bracket summaries' :
+                                 selectedStat === 'Matches' ? 'Review global match activity and regional scoring trends' :
+                                 'Select an item below to see more detailed sub-tab metrics'}
                             </Text>
                         </View>
                         {statDrillDownData?.map((item, index) => (
@@ -524,6 +532,10 @@ const InsightsScreen = ({
                         {/* Device Detail View */}
                         {selectedStat === 'Devices' && (
                             <View style={styles.deviceDetailContainer}>
+                                <View style={styles.drillInfoBox}>
+                                    <Ionicons name="phone-portrait" size={14} color="#6366F1" />
+                                    <Text style={styles.drillInfoText}>Tap a platform to search and filter specific players by their device hardware</Text>
+                                </View>
                                 <Text style={styles.subChartTitle}>Android vs iPhone (by Players)</Text>
                                 <View style={styles.deviceSplitRow}>
                                     <TouchableOpacity 
