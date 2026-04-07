@@ -47,8 +47,8 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.47)
-const APP_VERSION = "2.6.47"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.48)
+const APP_VERSION = "2.6.48"; 
 const currentAppVersion = APP_VERSION;
 
 export default function App() {
@@ -2449,7 +2449,6 @@ const appStyles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     width: '100%',
     borderRadius: 32,
-    padding: 32,
     alignItems: 'center',
     elevation: 20,
     shadowColor: '#000',

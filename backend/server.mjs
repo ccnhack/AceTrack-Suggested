@@ -57,8 +57,8 @@ try {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.47)
-const APP_VERSION = "2.6.47"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.48)
+const APP_VERSION = "2.6.48"; 
 const currentAppVersion = APP_VERSION;
 
 // ═══════════════════════════════════════════════════════════════
@@ -371,19 +371,9 @@ export const compareOtp = async (plainOtp, hashedOtp) => {
 // ═══════════════════════════════════════════════════════════════
 const logServerEvent = async (action, details = {}) => {
   try {
-    const logFile = path.join(DIAGNOSTICS_DIR, 'server_events.json');
-    let logs = [];
-    if (fs.existsSync(logFile)) {
-      const content = await fs.promises.readFile(logFile, 'utf8');
-      try {
-        logs = JSON.parse(content || '[]');
-      } catch (parseErr) {
-        console.error("⚠️ Server Log Corruption detected, resetting log file:", parseErr.message);
-        logs = [];
-      }
-    }
-    logs.unshift({ timestamp: new Date().toISOString(), action, ...details });
-    await fs.promises.writeFile(logFile, JSON.stringify(logs.slice(0, 1000), null, 2));
+    const logFile = path.join(DIAGNOSTICS_DIR, 'server_events.jsonl'); // 🛡️ Switched to JSONL (v2.6.48)
+    const entry = JSON.stringify({ timestamp: new Date().toISOString(), action, ...details }) + '\n';
+    await fs.promises.appendFile(logFile, entry);
     console.log(`📡 [Server Log] ${action}:`, details);
   } catch (e) {
     console.error("❌ Failed to write server log:", e.message);
@@ -689,8 +679,8 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
 
     const updatedState = await AppState.findOneAndUpdate(
       {},
-      { $set: { data: newMasterData, lastUpdated: now, version: nextVersion } },
-      { upsert: true, new: true, sort: { lastUpdated: -1 } }
+      { $set: { data: newMasterData, version: clientVersion, lastUpdated: now } },
+      { upsert: true, returnDocument: 'after' } // 🛡️ Modern Mongoose (v2.6.48)
     );
 
     const socketId = req.headers['x-socket-id'];
