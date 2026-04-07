@@ -17,6 +17,7 @@ import ParticipantsModal from '../components/ParticipantsModal';
 import config from '../config';
 import logger from '../utils/logger';
 import ProfileScreen from './ProfileScreen';
+import InsightsScreen from './InsightsScreen';
 import designSystem from '../theme/designSystem';
 
 const AdminHubScreen = ({ 
@@ -241,8 +242,17 @@ const AdminHubScreen = ({
       // Re-check periodically if socket not yet available, OR register immediately
       const timer = setInterval(() => {
         if (socketRef && socketRef.current && !isRegistered.current) {
-          console.log("🔗 [AdminHub] Registering device_pong_relay listener");
-          socketRef.current.on('device_pong_relay', handlePong);
+          console.log("🔗 [AdminHub] Registering global device_pong_relay listener. SocketID:", socketRef.current.id);
+          
+          // Use a named wrapper to include logging for web debugging
+          const handlePongWithLog = (data) => {
+            if (Platform.OS === 'web') {
+              console.log("🏓 [AdminHub Web] Pong received:", data.deviceId, "for user:", data.targetUserId);
+            }
+            handlePong(data);
+          };
+
+          socketRef.current.on('device_pong_relay', handlePongWithLog);
           isRegistered.current = true;
           clearInterval(timer);
         }
@@ -547,6 +557,7 @@ const AdminHubScreen = ({
             { id: 'coach_assignments', label: 'Assignments', icon: 'people', count: (tournaments || []).filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration' || t.coachStatus === 'Awaiting Assignment') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today) && (seenAdminActionIds?.has ? !seenAdminActionIds.has(String(t.id)) : true)).length },
             { id: 'recordings', label: 'Videos', icon: 'videocam', count: (matchVideos || []).filter(v => v.adminStatus === 'Deletion Requested' && (seenAdminActionIds?.has ? !seenAdminActionIds.has(String(v.id)) : true)).length },
             { id: 'grievances', label: 'Tickets', icon: 'chatbubbles', count: (supportTickets || []).filter(t => (t.status === 'Open' || t.status === 'Awaiting Response') && (seenAdminActionIds?.has ? !seenAdminActionIds.has(String(t.id)) : true)).length },
+            { id: 'insights', label: 'Insights', icon: 'bar-chart' },
             { id: 'audit', label: 'Audit', icon: 'list' },
             { id: 'diagnostics', label: 'Diag', icon: 'pulse' }
           ].map(tab => {
@@ -920,6 +931,18 @@ const AdminHubScreen = ({
 
         {subTab === 'audit' && (
           <AdminAuditLogsPanel auditLogs={auditLogs} players={players} search={search} />
+        )}
+
+        {subTab === 'insights' && (
+          <InsightsScreen 
+            role="admin"
+            user={user}
+            players={players}
+            tournaments={tournaments}
+            matchVideos={matchVideos}
+            supportTickets={supportTickets}
+            auditLogs={auditLogs}
+          />
         )}
 
         {subTab === 'diagnostics' && (
@@ -1598,6 +1621,7 @@ const AdminHubScreen = ({
               { id: 'tournaments', label: 'Tournaments', icon: 'trophy-outline' },
               { id: 'coach_assignments', label: 'Coach Assignments', icon: 'clipboard-outline', count: (tournaments || []).filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today) && (seenAdminActionIds?.has ? !seenAdminActionIds.has(t.id) : true)).length },
               { id: 'recordings', label: 'Recordings', icon: 'videocam-outline', count: (matchVideos || []).filter(v => v.adminStatus === 'Deletion Requested' && (seenAdminActionIds?.has ? !seenAdminActionIds.has(v.id) : true)).length },
+              { id: 'insights', label: 'Insights & Analytics', icon: 'bar-chart-outline' },
               { id: 'grievances', label: 'Grievances', icon: 'warning-outline', count: (supportTickets || []).filter(t => t.status === 'Open').length },
               { id: 'audit', label: 'Audit Logs', icon: 'book-outline' },
               { id: 'diagnostics', label: 'Diagnostics', icon: 'desktop-outline' }

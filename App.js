@@ -47,7 +47,7 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-const APP_VERSION = '2.6.26'; // 🛡️ Working_Enhanced_Support_Center (v2.6.26)
+const APP_VERSION = '2.6.27'; // 📊 Insights & Web-Activity_Fixed (v2.6.27)
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
