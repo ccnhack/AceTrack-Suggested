@@ -953,6 +953,7 @@ const AdminHubScreen = ({
 
         {subTab === 'insights' && (
           <InsightsScreen 
+            navigation={navigation}
             role="admin"
             user={user}
             players={players}

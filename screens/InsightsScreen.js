@@ -31,6 +31,14 @@ const InsightsScreen = ({
   const [platformTicketsModalVisible, setPlatformTicketsModalVisible] = useState(false);
   const [selectedPlatformForTickets, setSelectedPlatformForTickets] = useState(null); // 'ios' | 'android'
 
+  const statusColors = {
+    'Open': { bg: '#EFF6FF', text: '#2563EB' },
+    'In Progress': { bg: '#FFFBEB', text: '#D97706' },
+    'Awaiting Response': { bg: '#FAF5FF', text: '#9333EA' },
+    'Resolved': { bg: '#F0FDF4', text: '#16A34A' },
+    'Closed': { bg: '#F1F5F9', text: '#64748B' },
+  };
+
   // Initial Diagnostic Log
   useEffect(() => {
     try {
@@ -686,7 +694,7 @@ const InsightsScreen = ({
             </View>
             <View style={styles.growthContainer}>
                 {growthStats.map((item, index) => {
-                    const maxHeight = 100;
+                    const maxHeight = 90; // Reduced for safer vertical padding
                     const visualHeight = Math.min((item.val / 110) * maxHeight, maxHeight);
                     return (
                         <View key={index} style={styles.growthColumn}>
@@ -850,14 +858,19 @@ const InsightsScreen = ({
                                 { text: "Cancel", style: "cancel" },
                                 { text: "Open", onPress: () => {
                                     setPlatformTicketsModalVisible(false);
-                                    navigation.navigate('Admin', { subTab: 'tickets', autoSelectUser: t.userId });
+                                    navigation.navigate('Admin', { subTab: 'grievances', autoSelectUser: t.userId });
                                 }}
                             ]
                         );
                     }}
                   >
                     <View style={styles.flexItem}>
-                      <Text style={styles.deviceUserName}>{t.title}</Text>
+                      <View style={styles.rowBetween}>
+                        <Text style={styles.deviceUserName}>{t.title}</Text>
+                        <View style={[styles.statusMiniBadge, { backgroundColor: statusColors[t.status]?.bg || '#F1F5F9' }]}>
+                           <Text style={[styles.statusMiniText, { color: statusColors[t.status]?.text || '#64748B' }]}>{t.status}</Text>
+                        </View>
+                      </View>
                       <View style={styles.rowAlign}>
                          <Text style={styles.deviceUserId}>ID: {t.id} • {t.type}</Text>
                       </View>
@@ -951,8 +964,8 @@ const styles = StyleSheet.create({
   playerName: { flex: 1, fontSize: 13, fontWeight: '600', color: '#334155', marginLeft: 10 },
   playerTag: { backgroundColor: '#EEF2FF', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   playerTagText: { fontSize: 9, fontWeight: '700', color: '#6366F1' },
-  growthContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 160, marginTop: 4 },
-  growthColumn: { alignItems: 'center', width: (screenWidth - 80) / 6 },
+  growthContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 160, marginTop: 4, paddingHorizontal: 4 },
+  growthColumn: { alignItems: 'center', flex: 1 },
   platformInsightsSection: {
     backgroundColor: '#F8FAFC',
     padding: 16,
@@ -960,6 +973,8 @@ const styles = StyleSheet.create({
     marginTop: 8
   },
   rowAlign: { flexDirection: 'row', alignItems: 'center' },
+  statusMiniBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 },
+  statusMiniText: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase' },
   growthBar: { width: 14, backgroundColor: '#6366F1', borderRadius: 6, opacity: 0.8 },
   growthLabel: { fontSize: 10, color: '#94A3B8', marginTop: 8, fontWeight: '700' },
   growthBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF2FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },

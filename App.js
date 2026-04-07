@@ -47,9 +47,8 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.36)
-// RELIABILITY: Resolving infinite sync loops & 429 Rate Limits
-const APP_VERSION = "2.6.36"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.38)
+const APP_VERSION = "2.6.38"; 
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
