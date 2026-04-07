@@ -39,6 +39,9 @@ async function safeFetch(url, options = {}) {
 
 console.log('\n' + '═'.repeat(70));
 console.log('  🧪  ACETRACK BACKEND E2E TEST SUITE');
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.53)
+const APP_VERSION = "2.6.53"; 
+const currentAppVersion = APP_VERSION;
 console.log(`  🌐  Target: ${BASE_URL}`);
 console.log(`  ⏰  Run Time: ${new Date().toLocaleString()}`);
 console.log('═'.repeat(70) + '\n');
@@ -53,7 +56,7 @@ const healthData = healthRes.ok ? await healthRes.json() : {};
 assert('E2E-HEALTH-001', 'Health', 'GET /api/health returns 200', healthRes.ok === true, `Status: ${healthRes.status}`);
 assert('E2E-HEALTH-002', 'Health', 'Health response contains status=ok', healthData.status === 'ok', `Got: ${healthData.status}`);
 assert('E2E-HEALTH-003', 'Health', 'Health response contains version', !!healthData.version, `Version: ${healthData.version}`);
-assert('E2E-HEALTH-004', 'Health', 'Health version matches v2.6.47', healthData.version === '2.6.47', `Got: ${healthData.version}`);
+assert('E2E-HEALTH-004', 'Health', 'Health version matches v2.6.53', healthData.version === '2.6.53', `Got: ${healthData.version}`);
 assert('E2E-HEALTH-005', 'Health', 'Health response contains uptime', typeof healthData.uptime === 'number' && healthData.uptime > 0, `Uptime: ${healthData.uptime}s`);
 
 // ══════════════════════════════════════════════════════════════
@@ -292,7 +295,7 @@ assert('E2E-WEB-002', 'Dashboard', 'Dashboard serves HTML content', dashboardHtm
 assert('E2E-WEB-003', 'Dashboard', 'Dashboard contains AceTrack branding', dashboardHtml.toLowerCase().includes('acetrack'), `Contains branding`);
 
 // ══════════════════════════════════════════════════════════════
-// CATEGORY 10: SUPPORT AUTOMATION & DRILL-DOWNS (v2.6.46)
+// CATEGORY 10: SUPPORT AUTOMATION & DRILL-DOWNS (v2.6.53)
 // ══════════════════════════════════════════════════════════════
 console.log('📦 Category 10: Support Automation & Drill-downs');
 
@@ -305,7 +308,7 @@ const ticketPayload = {
     title: 'E2E Automated Test Ticket',
     status: 'Open',
     type: 'Bug',
-    appVersion: '2.6.46',
+    "version": "2.6.53",
     platform: 'android',
     createdAt: new Date().toISOString(),
     messages: [
@@ -362,7 +365,50 @@ if (Array.isArray(updatedData.tournaments) && updatedData.tournaments.length > 0
 }
 
 // ══════════════════════════════════════════════════════════════
-// REPORT
+// CATEGORY 13: AUTOMATED PURGE (Sanitization)
+// ══════════════════════════════════════════════════════════════
+async function purgeTestData() {
+  console.log('\n🧼 Category 13: Automated Purge');
+  
+  try {
+    const dataRes = await safeFetch(`${BASE_URL}/api/data`, { headers: HEADERS });
+    if (!dataRes.ok) throw new Error('Failed to fetch data for purge');
+    const appData = await dataRes.json();
+    
+    const initialTicketCount = (appData.supportTickets || []).length;
+    const sanitizedTickets = (appData.supportTickets || []).filter(t => t.userId !== 'e2e_user' && !String(t.id).startsWith('e2e_'));
+    const purgedCount = initialTicketCount - sanitizedTickets.length;
+
+    if (purgedCount > 0) {
+      console.log(`🧹 Found ${purgedCount} test tickets. Performing atomic purge...`);
+      
+      const purgePayload = {
+        supportTickets: sanitizedTickets,
+        atomicKeys: ['supportTickets'],
+        version: appData.version + 1
+      };
+
+      const purgeRes = await safeFetch(`${BASE_URL}/api/save`, {
+        method: 'POST',
+        headers: HEADERS,
+        body: JSON.stringify(purgePayload)
+      });
+
+      if (purgeRes.ok) {
+        console.log('✅ Purge successful. Cloud sanitized.');
+      } else {
+        console.error(`❌ Purge failed: ${purgeRes.status}`);
+      }
+    } else {
+      console.log('✨ No test data found. Cloud is already clean.');
+    }
+  } catch (e) {
+    console.error(`❌ Automated Purge Error: ${e.message}`);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// REPORT & CLEANUP
 // ══════════════════════════════════════════════════════════════
 console.log('\n' + '═'.repeat(70));
 console.log('  📊  BACKEND E2E TEST RESULTS');
@@ -379,6 +425,9 @@ if (failed > 0) {
     console.log(`  ${r.status}  ${r.testId} — ${r.scenario}${r.detail ? ` (${r.detail})` : ''}`);
   });
 }
+
+// 🧪 ALWAYS PURGE TEST DATA BEFORE FINISHING
+await purgeTestData();
 
 console.log('\n' + '═'.repeat(70));
 console.log(`  🏁  Run completed at ${new Date().toLocaleTimeString()}`);
