@@ -58,7 +58,7 @@ try {
 }
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.57)
-const APP_VERSION = "2.6.57"; 
+const APP_VERSION = "2.6.61"; 
 const currentAppVersion = APP_VERSION;
 
 // ═══════════════════════════════════════════════════════════════
@@ -220,6 +220,7 @@ io.on('connection', (socket) => {
 // ═══════════════════════════════════════════════════════════════
 // Directories & DB
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 const PORT = process.env.PORT || 3005;
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const DIAGNOSTICS_DIR = path.join(__dirname, 'diagnostics');
@@ -340,6 +341,8 @@ const SaveDataSchema = z.object({
   chatbotMessages: z.any().optional(),
   currentUser: z.any().optional(),
   matchmaking: z.array(z.any()).optional(),
+  seenAdminActionIds: z.array(z.string()).optional(),
+  visitedAdminSubTabs: z.array(z.string()).optional(),
   overwrite: z.boolean().optional(),
   atomicKeys: z.array(z.string()).optional(),
   version: z.number({ required_error: 'Version is required for cloud synchronization' })
@@ -474,16 +477,27 @@ router.get('/data', apiKeyGuard, async (req, res) => {
     if (!state || !state.data) return res.json({});
     
     if (!state.data.players) state.data.players = [];
-    if (!state.data.players.some(p => p && String(p.id).toLowerCase() === 'nishant')) {
+    const nishantIndex = state.data.players.findIndex(p => p && String(p.id).toLowerCase() === 'nishant');
+    if (nishantIndex === -1) {
        console.log("🛠️ [Recovery] Soft-restoring Nishant Shekhar in GET response...");
        state.data.players.push({
          id: 'nishant',
          name: 'Nishant Shekhar',
-         role: 'user',
+         role: 'admin',
+         isEmailVerified: true,
+         isPhoneVerified: true,
          registrationDate: new Date().toISOString(),
          lastActive: Date.now(),
          devices: []
        });
+    } else {
+       // Force admin and verified properties on existing Nishant
+       state.data.players[nishantIndex] = {
+         ...state.data.players[nishantIndex],
+         role: 'admin',
+         isEmailVerified: true,
+         isPhoneVerified: true
+       };
     }
 
     res.json({ ...state.data, lastUpdated: state.lastUpdated, version: state.version || 1 });
@@ -572,7 +586,7 @@ router.get('/diagnostics/:filename', apiKeyGuard, asyncHandler(async (req, res) 
 router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => {
   const release = await syncMutex.acquire();
   try {
-    const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser', 'matchmaking'];
+    const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser', 'matchmaking', 'seenAdminActionIds', 'visitedAdminSubTabs'];
     
     const now = Date.now();
     const clientVersion = req.body.version;
@@ -669,6 +683,10 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
               newMasterData.players[pIndex] = { ...existing, ...incoming, devices: mergedDevices };
             }
           }
+        } else if (['seenAdminActionIds', 'visitedAdminSubTabs'].includes(key) && Array.isArray(incoming)) {
+          // 🛡️ UNION MERGE: Additive only to prevent acknowledgments from being lost (v2.6.50)
+          const existing = Array.isArray(currentData[key]) ? currentData[key] : [];
+          newMasterData[key] = [...new Set([...existing, ...incoming])];
         } else {
           newMasterData[key] = incoming;
         }

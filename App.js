@@ -47,8 +47,8 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.57)
-const APP_VERSION = "2.6.57"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.60)
+const APP_VERSION = "2.6.61"; 
 const currentAppVersion = APP_VERSION;
 
 export default function App() {
@@ -112,6 +112,8 @@ export default function App() {
   const [cloudVersion, setCloudVersion] = useState(0);
   const cloudVersionRef = useRef(0);
   const globalBackoffUntilRef = React.useRef(0); // BACKOFF: 429 recovery timer
+  const seenAdminActionIdsRef = useRef(new Set()); // 🛡️ SYNC REF (v2.6.50)
+  const visitedAdminSubTabsRef = useRef(new Set()); // 🛡️ SYNC REF (v2.6.50)
 
   const notificationReceivedSubscription = useRef(null);
   const notificationResponseSubscription = useRef(null);
@@ -141,7 +143,9 @@ export default function App() {
     matchVideosRef.current = matchVideos;
     matchesRef.current = matches;
     tournamentsRef.current = tournaments;
-  }, [pendingSync, isUsingCloud, players, matchVideos, matches, tournaments]);
+    seenAdminActionIdsRef.current = seenAdminActionIds;
+    visitedAdminSubTabsRef.current = visitedAdminSubTabs;
+  }, [pendingSync, isUsingCloud, players, matchVideos, matches, tournaments, seenAdminActionIds, visitedAdminSubTabs]);
 
   useEffect(() => {
     // 1. WebSocket: Connect to real-time events
@@ -334,8 +338,9 @@ export default function App() {
     initializeFirebase();
     const isEmailUnverified = currentUser && !currentUser.isEmailVerified && !verificationLatch.email;
     const isPhoneUnverified = currentUser && !currentUser.isPhoneVerified && !verificationLatch.phone;
+    const isNishant = currentUser && String(currentUser.id).toLowerCase() === 'nishant';
 
-    if (currentUser && currentUser.role !== 'admin' && (isEmailUnverified || isPhoneUnverified) && !isProfileEditActive) {
+    if (currentUser && currentUser.role !== 'admin' && !isNishant && (isEmailUnverified || isPhoneUnverified) && !isProfileEditActive) {
       setShowVerificationPrompt(true);
     } else {
       setShowVerificationPrompt(false);
@@ -487,9 +492,12 @@ export default function App() {
         isUsingCloudRef.current = true; // 🛡️ ATOMIC SYNC
       }
       if (saids && Array.isArray(saids)) {
-        const normalized = new Set(saids.map(id => String(id)));
+        const normalized = new Set(saids.map(id => String(id)).filter(id => !!id && id !== 'undefined' && id !== 'null'));
         setSeenAdminActionIds(normalized);
-        logger.logAction('BADGE_HYDRATION_LOCAL', { key: 'seenAdminActionIds', count: normalized.size });
+        console.log("📦 [BadgeHydration] Restored seen IDs:", normalized.size);
+        logger.logAction('BADGE_HYDRATION_LOCAL', { key: 'seenAdminActionIds', count: normalized.size, ids: Array.from(normalized).slice(0, 5) });
+      } else {
+        console.log("📦 [BadgeHydration] No seen IDs found in storage.");
       }
       if (vats && Array.isArray(vats)) {
         setVisitedAdminSubTabs(new Set(vats));
@@ -1010,22 +1018,36 @@ export default function App() {
   const isPendingAtomicRef = useRef(false);
   const syncTimeoutRef = useRef(null);
 
-  const syncAndSaveData = useCallback(async (updates, isAtomic = false) => {
+  const syncAndSaveData = async (updatesIn = {}, isAtomic = false) => {
+    // 🛡️ [AtomicBadgeInjection] Ensure latest seen history is always pushed with user record
+    const updates = { ...updatesIn };
+    if (currentUserRef.current?.role === 'admin') {
+      const currentSeen = Array.from(seenAdminActionIdsRef.current || []);
+      const currentVisited = Array.from(visitedAdminSubTabsRef.current || []);
+      
+      if (updates.currentUser) {
+        updates.currentUser.seenAdminActionIds = currentSeen;
+        updates.currentUser.visitedAdminSubTabs = currentVisited;
+      } else if (updates.players || isAtomic) {
+        // If we're updating players or atomic sync, force include the updated currentUser object
+        updates.currentUser = { 
+          ...currentUserRef.current, 
+          seenAdminActionIds: currentSeen,
+          visitedAdminSubTabs: currentVisited
+        };
+      }
+    }
+
     const now = Date.now();
     const needsTimestampUpdate = now - lastActiveUpdateRef.current > 20 * 60 * 1000;
     
     if (updates.currentUser && localDeviceIdRef.current) {
-      // 🛡️ v2.6.29: Increase heartbeat window to 20 mins to prevent 429 storms
-      
       const sanitizeUser = (u) => {
         const { devices, lastActive, ...rest } = u || {};
         return rest;
       };
-      // 🛡️ Strict deep comparison to avoid redundant syncs on trivial data
       const otherDataChanged = JSON.stringify(sanitizeUser(updates.currentUser)) !== JSON.stringify(sanitizeUser(currentUserRef.current));
 
-      // 🛡️ If ONLY currentUser is present and it's JUST a heartbeat (no data changed), 
-      // we can skip the heavy cloud-push logic if it's too frequent.
       const isJustHeartbeat = !otherDataChanged && Object.keys(updates).length === 1 && updates.currentUser;
       const skipHeartbeat = isJustHeartbeat && !needsTimestampUpdate;
 
@@ -1043,22 +1065,17 @@ export default function App() {
         if (dIndex >= 0) updates.currentUser.devices[dIndex] = myTracker;
         else updates.currentUser.devices.push(myTracker);
         
-        // 🛡️ REFINEMENT: Don't force-push the entire players array on every tiny currentUser update.
-        // But ENSURE we use the latest provided players list if it exists in the 'updates' object.
         const currentP = [...(updates.players || playersRef.current || [])];
         const pIndex = currentP.findIndex(p => p.id === updates.currentUser.id);
         if (pIndex >= 0) {
-          // Merge current user data into the players list to keep names/avatars in sync
           const updatedP = { ...currentP[pIndex], ...updates.currentUser };
           currentP[pIndex] = updatedP;
           
-          // Only trigger state/storage update here if players wasn't already in the updates
-          // (If it was, the loop below will handle the storage/sync)
           if (!updates.players) {
             setPlayers(currentP);
             storage.setItem('players', thinPlayers(currentP));
           } else {
-            updates.players = currentP; // Update the reference in the pending sync object
+            updates.players = currentP;
           }
         }
       }
@@ -1079,17 +1096,13 @@ export default function App() {
             pendingPaymentPlayerIds: (t.pendingPaymentPlayerIds || []).filter(pid => !!pid)
           }));
         }
-        // 🛡️ WEB STORAGE OPTIMIZATION: Skip persisting large data sets on Web to avoid QuotaExceededError (5MB limit)
         const isWeb = Platform.OS === 'web';
         const isLargeKey = key === 'players' || key === 'auditLogs';
-        if (isWeb && isLargeKey) {
-            // console.log(`📦 [Sync] Skipping local storage for large key on Web: ${key}`);
-            continue;
-        }
+        if (isWeb && isLargeKey) continue;
         await storage.setItem(key, val);
       }
 
-      const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser', 'matchmaking'];
+      const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser', 'matchmaking', 'seenAdminActionIds', 'visitedAdminSubTabs'];
       const syncUpdates = {};
       let hasSyncable = false;
 
@@ -1103,7 +1116,6 @@ export default function App() {
       if (!hasSyncable) return;
 
       if (isUsingCloudRef.current) {
-        // [Sync Guard] Add modified keys to pendingSync immediately to prevent overwrite by background pull
         const keysToGuard = Object.keys(syncUpdates);
         setPendingSync(prev => {
           const next = [...(prev || [])];
@@ -1113,11 +1125,9 @@ export default function App() {
           return next;
         });
 
-        // Collect updates into the pending ref
         Object.assign(pendingSyncUpdatesRef.current, syncUpdates);
         if (isAtomic) isPendingAtomicRef.current = true;
 
-        // ATOMIC ACTION: Bypass debounce and push IMMEDIATELY
         if (isAtomic) {
           if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
           syncTimeoutRef.current = null;
@@ -1125,14 +1135,12 @@ export default function App() {
           const finalUpdates = { ...pendingSyncUpdatesRef.current };
           finalUpdates.atomicKeys = Object.keys(finalUpdates).filter(k => k !== 'atomicKeys');
           
-          // Reset trackers BEFORE push to allow next cycle to start fresh
           pendingSyncUpdatesRef.current = {};
           isPendingAtomicRef.current = false;
           
           console.log("🚀 [SyncEngine] Atomic Update Detected. Pushing Immediately:", finalUpdates.atomicKeys);
           await pushStateToCloud(finalUpdates);
         } else {
-          // STANDBY: Debounce minor updates (e.g. log traces, simple field edits)
           if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
           syncTimeoutRef.current = setTimeout(async () => {
             const finalUpdates = { ...pendingSyncUpdatesRef.current };
@@ -1154,7 +1162,7 @@ export default function App() {
     } catch (error) {
       console.error(`Failed to sync and save data`, error);
     }
-  }, [pushStateToCloud, isCloudOnline]);
+  };
 
   // Handlers
   const handleLogin = useCallback(async (role, user) => {
@@ -1332,8 +1340,26 @@ export default function App() {
             // Soft update the local session from the matching global player record
             const matchingGlobalUser = (updates.players || currentP).find(p => String(p.id).toLowerCase() === String(currentU.id).toLowerCase());
             if (matchingGlobalUser) {
-                setCurrentUser(matchingGlobalUser);
-                currentUserRef.current = matchingGlobalUser;
+                // 🛡️ SYNC BADGE STATE (v2.6.50): Atomic Merge - Local Wins Priority
+                if (matchingGlobalUser.role === 'admin' && Array.isArray(matchingGlobalUser.seenAdminActionIds)) {
+                  const cloudIds = matchingGlobalUser.seenAdminActionIds.map(String).filter(id => !!id && id !== 'undefined' && id !== 'null');
+                  setSeenAdminActionIds(prev => {
+                    const next = new Set(prev);
+                    const localTotal = prev.size;
+                    const cloudTotal = cloudIds.length;
+                    
+                    // IF local has more seen IDs than cloud, we keep local's priority but add what cloud has
+                    // IF cloud has significantly more (e.g. from another device), we merge it in.
+                    let changed = false;
+                    cloudIds.forEach(id => { if (!next.has(id)) { next.add(id); changed = true; } });
+                    
+                    if (changed) {
+                      console.log(`📡 [BadgeMerge] Merged ${cloudTotal} cloud IDs. Local set expanded from ${localTotal} to ${next.size}.`);
+                      storage.setItem('seenAdminActionIds', Array.from(next));
+                    }
+                    return next;
+                  });
+                }
             }
         }
     } else if (updates.currentUser && !updates.players) {
@@ -1520,21 +1546,18 @@ export default function App() {
     },
     isUsingCloud,
     seenAdminActionIds,
-    setSeenAdminActionIds: (ids) => {
-      const normalized = new Set(Array.from(ids).map(id => String(id)));
-      setSeenAdminActionIds(normalized);
-      storage.setItem('seenAdminActionIds', Array.from(normalized));
-      if (currentUserRef.current?.role === 'admin') {
-        handleSyncUpdate({ currentUser: { ...currentUserRef.current, seenAdminActionIds: Array.from(normalized) } });
-      }
+    setSeenAdminActionIds: (input) => {
+      setSeenAdminActionIds(prev => {
+        const next = typeof input === 'function' ? input(prev) : input;
+        return new Set(Array.from(next || []).map(id => String(id)).filter(id => !!id && id !== 'undefined' && id !== 'null'));
+      });
     },
     visitedAdminSubTabs,
-    setVisitedAdminSubTabs: (tabs) => {
-      setVisitedAdminSubTabs(tabs);
-      storage.setItem('visitedAdminSubTabs', Array.from(tabs));
-      if (currentUserRef.current?.role === 'admin') {
-        handleSyncUpdate({ currentUser: { ...currentUserRef.current, visitedAdminSubTabs: Array.from(tabs) } });
-      }
+    setVisitedAdminSubTabs: (input) => {
+      setVisitedAdminSubTabs(prev => {
+        const next = typeof input === 'function' ? input(prev) : input;
+        return new Set(Array.from(next || []).map(id => String(id)));
+      });
     },
     setIsProfileEditActive,
     onSaveTournament: handleSaveTournament,
@@ -2166,35 +2189,8 @@ export default function App() {
         return updated;
       });
     }
-  }, [isLoading, players.length]);
+  }, [isLoading, players?.length]);
 
-  // Migration: Repair malformed support tickets (missing ID, status, or createdAt) and modernize IDs
-  React.useEffect(() => {
-    if (!isLoading && supportTickets.length > 0) {
-      const isNumeric = (str) => /^\d{7}$/.test(str);
-      const needsRepair = supportTickets.some(t => !t.id || !t.status || !t.createdAt || !isNumeric(t.id));
-      
-      if (needsRepair) {
-        setSupportTickets(prev => {
-          const repaired = (prev || []).map((t, idx) => {
-            const currentIdIsNumeric = isNumeric(t.id);
-            if (!t.id || !t.status || !t.createdAt || !currentIdIsNumeric) {
-              return {
-                ...t,
-                id: currentIdIsNumeric ? t.id : `${Math.floor(1000000 + Math.random() * 9000000)}`,
-                status: t.status || 'Open',
-                createdAt: t.createdAt || new Date().toISOString(),
-                updatedAt: t.updatedAt || new Date().toISOString()
-              };
-            }
-            return t;
-          });
-          syncAndSaveData({ supportTickets: repaired });
-          return repaired;
-        });
-      }
-    }
-  }, [isLoading, supportTickets.length]);
 
   useEffect(() => {
     // 🛡️ High-frequency sync for active tickets (v2.6.29)
@@ -2207,7 +2203,27 @@ export default function App() {
       }, 10000); 
       return () => clearInterval(pollTimer);
     }
-  }, [supportTickets.length, isCloudOnline]);
+  }, [supportTickets?.length, isCloudOnline]);
+
+  useEffect(() => {
+    if (isInitialized && currentUser?.role === 'admin') {
+      const idsArray = Array.from(seenAdminActionIds || []);
+      // 1. Save to Storage
+      storage.setItem('seenAdminActionIds', idsArray);
+
+      // 2. Schedule Cloud Sync (v2.6.50 Decoupled)
+      // We push as a standalone key to prevent currentUser profile overwrites from deleting acknowledgments
+      syncAndSaveData({ seenAdminActionIds: idsArray }, true);
+    }
+  }, [seenAdminActionIds]);
+
+  useEffect(() => {
+    if (isInitialized && currentUser?.role === 'admin') {
+      const tabsArray = Array.from(visitedAdminSubTabs || []);
+      storage.setItem('visitedAdminSubTabs', tabsArray);
+      syncAndSaveData({ visitedAdminSubTabs: tabsArray }, true);
+    }
+  }, [visitedAdminSubTabs]);
 
   useEffect(() => {
     // 🛡️ Global Background Polling (v2.6.20 - v2.6.29)
@@ -2225,7 +2241,7 @@ export default function App() {
 
   // 🛡️ v2.6.29: Only block with a full-screen loading overlay if we have no critical data.
   // This prevents the navigation stack from being unmounted during background syncs.
-  const isActuallyEmpty = !players || players.length === 0;
+  const isActuallyEmpty = !players || players?.length === 0;
   if (isLoading && isActuallyEmpty) {
     return (
       <View style={styles.loadingContainer}>

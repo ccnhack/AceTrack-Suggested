@@ -675,7 +675,7 @@ export const SupportTicketSystem = ({
             </View>
         </View>
         <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
           keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
           style={styles.flex}
         >

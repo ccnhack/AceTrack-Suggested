@@ -212,6 +212,14 @@ const saveRes = await safeFetch(`${BASE_URL}/api/save`, {
 // This should succeed (200) or fail with concurrency conflict
 assert('E2E-SAVE-002', 'Save', 'POST /api/save with valid payload returns 200 or concurrency guard', saveRes.status === 200 || saveRes.status === 409, `Status: ${saveRes.status}`);
 
+// 5c. POST /api/save — concurrency conflict (sending version 1)
+const conflictSaveRes = await safeFetch(`${BASE_URL}/api/save`, {
+  method: 'POST',
+  headers: HEADERS,
+  body: JSON.stringify({ version: 1, players: [] })
+});
+assert('E2E-SAVE-003', 'Save', 'POST /api/save with old version returns 409 Conflict', conflictSaveRes.status === 409, `Status: ${conflictSaveRes.status}`);
+
 // ══════════════════════════════════════════════════════════════
 // CATEGORY 6: AUDIT LOGS
 // ══════════════════════════════════════════════════════════════
@@ -365,26 +373,83 @@ if (Array.isArray(updatedData.tournaments) && updatedData.tournaments.length > 0
 }
 
 // ══════════════════════════════════════════════════════════════
-// CATEGORY 13: AUTOMATED PURGE (Sanitization)
+// CATEGORY 13: FILE UPLOAD ENDPOINT
+// ══════════════════════════════════════════════════════════════
+console.log('📦 Category 13: File Upload Endpoint');
+
+// 13a. POST /api/upload — missing file
+const uploadMissingRes = await safeFetch(`${BASE_URL}/api/upload`, {
+  method: 'POST',
+  headers: { 'x-ace-api-key': API_KEY } // no file in body
+});
+assert('E2E-UPL-001', 'Upload', 'POST /api/upload without file returns 400', uploadMissingRes.status === 400, `Status: ${uploadMissingRes.status}`);
+
+// ══════════════════════════════════════════════════════════════
+// CATEGORY 14: DEEP MERGE LOGIC
+// ══════════════════════════════════════════════════════════════
+console.log('📦 Category 14: Deep Merge Logic');
+
+const e2ePlayerId = `e2e_player_${Date.now()}`;
+const playerCreatePayload = {
+  players: [{ id: e2ePlayerId, name: 'E2E Merge Test', devices: [{ id: 'dev1' }] }],
+  version: (statusData.version || 0) + 1
+};
+const mergeCreateRes = await safeFetch(`${BASE_URL}/api/save`, { method: 'POST', headers: HEADERS, body: JSON.stringify(playerCreatePayload) });
+assert('E2E-MRG-001', 'Merge', 'Create test player returns 200', mergeCreateRes.ok === true, `Status: ${mergeCreateRes.status}`);
+
+if (mergeCreateRes.ok) {
+  const playerUpdatePayload = {
+    players: [{ id: e2ePlayerId, devices: [{ id: 'dev2' }] }], // Update adds a device, should not wipe name
+    version: (statusData.version || 0) + 2
+  };
+  await safeFetch(`${BASE_URL}/api/save`, { method: 'POST', headers: HEADERS, body: JSON.stringify(playerUpdatePayload) });
+  
+  const mergedDataRes = await safeFetch(`${BASE_URL}/api/data`, { headers: HEADERS });
+  const mergedData = mergedDataRes.ok ? await mergedDataRes.json() : {};
+  const testPlayer = (mergedData.players || []).find(p => p.id === e2ePlayerId);
+  
+  assert('E2E-MRG-002', 'Merge', 'Test player persisted', !!testPlayer, `Found: ${!!testPlayer}`);
+  if (testPlayer) {
+    assert('E2E-MRG-003', 'Merge', 'Merge retained existing data', testPlayer.name === 'E2E Merge Test', `Name: ${testPlayer.name}`);
+    assert('E2E-MRG-004', 'Merge', 'Merge appended array data', testPlayer.devices && testPlayer.devices.some(d => d.id === 'dev2'), `Devices: ${JSON.stringify(testPlayer.devices)}`);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// CATEGORY 15: WEBSOCKET POLLING
+// ══════════════════════════════════════════════════════════════
+console.log('📦 Category 15: WebSocket Availability');
+const wsRes = await safeFetch(`${BASE_URL}/socket.io/?EIO=4&transport=polling`);
+assert('E2E-WS-001', 'WebSocket', 'Socket.IO endpoint is reachable', wsRes.status === 200 || wsRes.status === 400, `Status: ${wsRes.status}`);
+
+// ══════════════════════════════════════════════════════════════
+// CATEGORY 16: AUTOMATED PURGE (Sanitization)
 // ══════════════════════════════════════════════════════════════
 async function purgeTestData() {
-  console.log('\n🧼 Category 13: Automated Purge');
+  console.log('\n🧼 Category 16: Automated Purge');
   
   try {
     const dataRes = await safeFetch(`${BASE_URL}/api/data`, { headers: HEADERS });
     if (!dataRes.ok) throw new Error('Failed to fetch data for purge');
     const appData = await dataRes.json();
     
+    // Purge logic for support tickets
     const initialTicketCount = (appData.supportTickets || []).length;
     const sanitizedTickets = (appData.supportTickets || []).filter(t => t.userId !== 'e2e_user' && !String(t.id).startsWith('e2e_'));
-    const purgedCount = initialTicketCount - sanitizedTickets.length;
+    const purgedTicketCount = initialTicketCount - sanitizedTickets.length;
 
-    if (purgedCount > 0) {
-      console.log(`🧹 Found ${purgedCount} test tickets. Performing atomic purge...`);
+    // Purge logic for players
+    const initialPlayerCount = (appData.players || []).length;
+    const sanitizedPlayers = (appData.players || []).filter(p => !String(p.id).startsWith('e2e_'));
+    const purgedPlayerCount = initialPlayerCount - sanitizedPlayers.length;
+
+    if (purgedTicketCount > 0 || purgedPlayerCount > 0) {
+      console.log(`🧹 Found ${purgedTicketCount} tickets and ${purgedPlayerCount} test players. Performing atomic purge...`);
       
       const purgePayload = {
         supportTickets: sanitizedTickets,
-        atomicKeys: ['supportTickets'],
+        players: sanitizedPlayers,
+        atomicKeys: ['supportTickets', 'players'],
         version: appData.version + 1
       };
 

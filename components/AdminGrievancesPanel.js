@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Swipeable } from 'react-native-gesture-handler';
+import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { generateAIResponse } from '../services/aiService';
 import logger from '../utils/logger';
 
@@ -18,6 +18,27 @@ const statusColors = {
 };
 
 const statusOptions = ['Open', 'In Progress', 'Awaiting Response', 'Resolved', 'Closed'];
+const getOrdinalSuffix = (day) => {
+  if (day > 3 && day < 21) return 'th';
+  switch (day % 10) {
+    case 1: return 'st';
+    case 2: return 'nd';
+    case 3: return 'rd';
+    default: return 'th';
+  }
+};
+const formatTicketDateFull = (dateStr) => {
+  if (!dateStr) return 'N/A';
+  const date = new Date(dateStr);
+  if (isNaN(date)) return 'Invalid Date';
+  const day = date.getDate();
+  const month = date.toLocaleDateString('en-US', { month: 'short' });
+  const year = date.getFullYear();
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  const dayStr = day < 10 ? `0${day}` : `${day}`;
+  return `${dayStr}${getOrdinalSuffix(day)} ${month}, ${year} ${hours}:${minutes}`;
+};
 
 export const AdminGrievancesPanel = ({
   tickets, players, onReply, onUpdateStatus, onTypingStart, onTypingStop, search, onRetryMessage, onMarkSeen, onDetailToggle, autoSelectUser, autoSelectTicketId, ...restProps
@@ -42,6 +63,8 @@ export const AdminGrievancesPanel = ({
   const scrollViewRef = useRef(null);
   const textInputRef = useRef(null);
   const messageYOffsets = useRef({}); // 📍 Track message coordinates (v2.6.27)
+  const swipeableRefs = useRef({}); // 🛡️ Track swipeable instances for snap-back (v2.6.35)
+  const [tempHighlightedId, setTempHighlightedId] = useState(null); // 🔦 Temporary highlight on jump
 
   // 🛡️ [Tick System] Mark as 'Seen' when ticket is opened (v2.6.28)
   useEffect(() => {
@@ -104,6 +127,10 @@ export const AdminGrievancesPanel = ({
     const targetY = messageYOffsets.current[msg.id || msg.timestamp];
     if (targetY !== undefined) {
       scrollViewRef.current?.scrollTo({ y: targetY - 50, animated: true });
+      // 🔦 Trigger temporary highlight (v2.6.35)
+      const msgId = msg.id || msg.timestamp;
+      setTempHighlightedId(msgId);
+      setTimeout(() => setTempHighlightedId(null), 2000);
     }
   };
 
@@ -292,7 +319,11 @@ export const AdminGrievancesPanel = ({
         style={styles.msgReplyPreview}
         onPress={() => {
           if (targetY !== undefined) {
-             scrollViewRef.current?.scrollTo({ y: targetY, animated: true });
+             scrollViewRef.current?.scrollTo({ y: targetY - 50, animated: true });
+             // 🔦 Trigger temporary highlight (v2.6.35)
+             const msgId = reply.id || reply.timestamp;
+             setTempHighlightedId(msgId);
+             setTimeout(() => setTempHighlightedId(null), 2000);
           }
         }}
         activeOpacity={0.7}
@@ -336,7 +367,7 @@ export const AdminGrievancesPanel = ({
       return (
         <View 
           key={msg.id || msg.timestamp || index} 
-          style={styles.eventCard}
+          style={[styles.eventCard, (tempHighlightedId === (msg.id || msg.timestamp)) && styles.highlightedMessage]}
           onLayout={(e) => { messageYOffsets.current[msg.id || msg.timestamp] = e.nativeEvent.layout.y; }}
         >
           <Text style={styles.eventText}>{text}</Text>
@@ -356,10 +387,14 @@ export const AdminGrievancesPanel = ({
         onLayout={(e) => { messageYOffsets.current[msg.id || msg.timestamp] = e.nativeEvent.layout.y; }}
       >
         <Swipeable
+          ref={ref => { swipeableRefs.current[msg.id || msg.timestamp] = ref; }}
           renderRightActions={isMe ? renderRightActions : undefined}
           renderLeftActions={!isMe ? renderRightActions : undefined}
           onSwipeableOpen={() => {
             setReplyToMsg(msg);
+            // 🛡️ Snap-back: Close swipeable once action is registered (v2.6.35)
+            swipeableRefs.current[msg.id || msg.timestamp]?.close();
+            
             // 🛡️ Auto-focus and scroll to bottom on reply (v2.6.25)
             setTimeout(() => {
               scrollViewRef.current?.scrollToEnd({ animated: true });
@@ -367,7 +402,11 @@ export const AdminGrievancesPanel = ({
             }, 100);
           }}
         >
-        <View style={[styles.messageBubble, isMe ? styles.myBubble : styles.otherBubble]}>
+        <View style={[
+          styles.messageBubble, 
+          isMe ? styles.myBubble : styles.otherBubble,
+          (tempHighlightedId === (msg.id || msg.timestamp)) && styles.highlightedMessage
+        ]}>
           {renderMessageReply(msg.replyTo)}
           {!isMe && <Text style={styles.senderLabel}>{senderName}</Text>}
           {msg.image && (
@@ -407,297 +446,310 @@ export const AdminGrievancesPanel = ({
 
   return (
     <View style={styles.container}>
-      {selectedTicket ? (
-        <>
-          <View style={styles.header}>
-            <TouchableOpacity 
-              onPress={() => {
-                setSelectedTicket(null);
-                setIsSearchingChat(false);
-                setChatSearchText('');
-              }} 
-              style={styles.backBtn}
-            >
-              <Ionicons name="arrow-back" size={20} color="#0F172A" />
-            </TouchableOpacity>
-            <View style={styles.headerInfo}>
-              {isSearchingChat ? (
-                <View style={styles.headerSearchRow}>
-                   <TextInput
-                      style={styles.headerSearchInput}
-                      placeholder="Search messages..."
-                      value={chatSearchText}
-                      onChangeText={setChatSearchText}
-                      autoFocus
-                   />
-                   {searchMatchIndices.length > 0 && (
-                     <View style={styles.headerSearchNav}>
-                       <Text style={styles.matchCount}>{activeMatchIndex + 1}/{searchMatchIndices.length}</Text>
-                       <View style={styles.navArrows}>
-                         <TouchableOpacity onPress={handlePrevMatch} style={styles.navArrowBtn}>
-                           <Ionicons name="chevron-up" size={18} color="#64748B" />
-                         </TouchableOpacity>
-                         <TouchableOpacity onPress={handleNextMatch} style={styles.navArrowBtn}>
-                           <Ionicons name="chevron-down" size={18} color="#64748B" />
-                         </TouchableOpacity>
-                       </View>
-                     </View>
-                   )}
-                </View>
-              ) : (
-                <>
-                  <Text style={styles.headerTitle} numberOfLines={1}>{selectedTicket.title}</Text>
-                  <Text style={styles.headerId}>ID: {selectedTicket.id}</Text>
-                </>
-              )}
-            </View>
-            <TouchableOpacity 
-              onPress={() => {
-                setIsSearchingChat(!isSearchingChat);
-                if (isSearchingChat) setChatSearchText('');
-              }}
-              style={styles.headerSearchBtn}
-            >
-              <Ionicons name={isSearchingChat ? "close-circle" : "search-outline"} size={20} color={isSearchingChat ? "#EF4444" : "#64748B"} />
-            </TouchableOpacity>
-          </View>
-
-                    <View style={styles.detailHeaderScrollWrapper}>
-            <ScrollView style={styles.detailHeaderList} showsVerticalScrollIndicator={false}>
-              <View style={styles.infoCard}>
-                <View style={styles.infoGrid}>
-                  <View style={styles.infoItem}>
-                    <Text style={styles.infoLabel}>User</Text>
-                    <Text style={styles.infoValue}>{getUserName(selectedTicket.userId)}</Text>
-                  </View>
-                  <View style={[styles.infoItem, { alignItems: 'flex-end' }]}>
-                    <Text style={styles.infoLabel}>Role</Text>
-                    <View style={[styles.roleBadge, getUserRole(selectedTicket.userId) === 'academy' ? styles.roleAcademy : styles.roleCoach]}>
-                      <Text style={styles.roleText}>{getUserRole(selectedTicket.userId)}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.infoItem}>
-                    <Text style={styles.infoLabel}>Type</Text>
-                    <Text style={styles.infoValue}>{selectedTicket.type}</Text>
-                  </View>
-                  <View style={[styles.infoItem, { alignItems: 'flex-end' }]}>
-                    <Text style={styles.infoLabel}>Created</Text>
-                    <Text style={styles.infoValue}>{new Date(selectedTicket.createdAt).toLocaleDateString()}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.statusControl}>
-                  <Text style={styles.infoLabel}>Update Status</Text>
-                  <View style={styles.statusBtnRow}>
-                    {statusOptions.map(s => (
-                      <TouchableOpacity
-                        key={s}
-                        onPress={() => handleStatusChangeRequest(s)}
-                        style={[
-                          styles.statusToggleBtn, 
-                          selectedTicket.status === s ? { backgroundColor: statusColors[s].bg, borderColor: statusColors[s].border } : styles.statusToggleBtnOff
-                        ]}
-                      >
-                        <Text style={[styles.statusToggleText, { color: selectedTicket.status === s ? statusColors[s].text : '#94A3B8' }]}>{s}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              </View>
-
-              {selectedTicket.closureSummary && (
-                <View style={styles.resolutionCard}>
-                  <View style={styles.resHeader}>
-                    <Ionicons name="shield-checkmark" size={16} color="#059669" />
-                    <Text style={styles.resTitle}>Closure Summary</Text>
-                  </View>
-                  <Text style={styles.resText}>{selectedTicket.closureSummary}</Text>
-                </View>
-              )}
-            </ScrollView>
-          </View>
-
-          <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-            style={styles.flex}
-          >
-            <View style={styles.chatContainer}>
-              <ScrollView 
-                ref={scrollViewRef} 
-                style={styles.chatScroll} 
-                contentContainerStyle={styles.chatScrollContent}
-                onContentSizeChange={() => {
-                  if (!isSearchingChat) scrollViewRef.current?.scrollToEnd({ animated: true });
-                }}
-                showsVerticalScrollIndicator={true}
-              >
-                {(selectedTicket?.messages || [])
-                  .map((msg, idx) => {
-                    const currentMsgDate = new Date(msg.timestamp).toDateString();
-                    const prevMsgDate = idx > 0 ? new Date(selectedTicket.messages[idx-1].timestamp).toDateString() : null;
-                    const showDateHeader = currentMsgDate !== prevMsgDate;
-                    const isHighlighted = searchMatchIndices[activeMatchIndex] === idx;
-
-                    return (
-                      <View 
-                        key={`${msg.timestamp || 'no-ts'}-${idx}`} 
-                        style={isHighlighted && styles.highlightedMessage}
-                        onLayout={(e) => { messageYOffsets.current[msg.id || msg.timestamp] = e.nativeEvent.layout.y; }}
-                      >
-                        {showDateHeader && !chatSearchText && renderDateHeader(msg.timestamp)}
-                        {renderMessage(msg, idx)}
+      <Modal
+        visible={!!selectedTicket}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => {
+          setSelectedTicket(null);
+          setIsSearchingChat(false);
+          setChatSearchText('');
+        }}
+      >
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <SafeAreaView style={styles.fullScreenModal}>
+            {selectedTicket && (
+              <>
+                <View style={styles.header}>
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setSelectedTicket(null);
+                      setIsSearchingChat(false);
+                      setChatSearchText('');
+                    }} 
+                    style={styles.backBtn}
+                  >
+                    <Ionicons name="arrow-back" size={20} color="#0F172A" />
+                  </TouchableOpacity>
+                  <View style={styles.headerInfo}>
+                    {isSearchingChat ? (
+                      <View style={styles.headerSearchRow}>
+                         <TextInput
+                            style={styles.headerSearchInput}
+                            placeholder="Search messages..."
+                            value={chatSearchText}
+                            onChangeText={setChatSearchText}
+                            autoFocus
+                         />
+                         {searchMatchIndices.length > 0 && (
+                           <View style={styles.headerSearchNav}>
+                             <Text style={styles.matchCount}>{activeMatchIndex + 1}/{searchMatchIndices.length}</Text>
+                             <View style={styles.navArrows}>
+                               <TouchableOpacity onPress={handlePrevMatch} style={styles.navArrowBtn}>
+                                 <Ionicons name="chevron-up" size={18} color="#64748B" />
+                               </TouchableOpacity>
+                               <TouchableOpacity onPress={handleNextMatch} style={styles.navArrowBtn}>
+                                 <Ionicons name="chevron-down" size={18} color="#64748B" />
+                               </TouchableOpacity>
+                             </View>
+                           </View>
+                         )}
                       </View>
-                    );
-                  })}
-                {isUserTyping && (
-                  <View style={styles.typingIndicator}>
-                    <Text style={styles.typingText}>User is typing...</Text>
+                    ) : (
+                      <>
+                        <Text style={styles.headerTitle} numberOfLines={1}>{selectedTicket.title}</Text>
+                        <Text style={styles.headerId}>ID: {selectedTicket.id}</Text>
+                      </>
+                    )}
                   </View>
-                )}
-              </ScrollView>
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setIsSearchingChat(!isSearchingChat);
+                      if (isSearchingChat) setChatSearchText('');
+                    }}
+                    style={styles.headerSearchBtn}
+                  >
+                    <Ionicons name={isSearchingChat ? "close-circle" : "search-outline"} size={20} color={isSearchingChat ? "#EF4444" : "#64748B"} />
+                  </TouchableOpacity>
+                </View>
 
-              <View style={styles.inputArea}>
-                {replyToMsg && (
-                  <View style={styles.replyPreviewBar}>
-                    <View style={styles.replyPreviewInner}>
-                      <Text style={styles.replyPreviewUser}>Replying to {replyToMsg.senderId === 'admin' ? 'yourself' : getUserName(replyToMsg.senderId)}</Text>
-                      <Text style={styles.replyPreviewText} numberOfLines={1}>{replyToMsg.text}</Text>
+                <View style={styles.detailHeaderScrollWrapper}>
+                  <ScrollView style={styles.detailHeaderList} showsVerticalScrollIndicator={false}>
+                    <View style={styles.infoCard}>
+                      <View style={styles.infoGrid}>
+                        <View style={styles.infoItem}>
+                          <Text style={styles.infoLabel}>User</Text>
+                          <Text style={styles.infoValue}>{getUserName(selectedTicket.userId)}</Text>
+                        </View>
+                        <View style={[styles.infoItem, { alignItems: 'flex-end' }]}>
+                          <Text style={styles.infoLabel}>Role</Text>
+                          <View style={[styles.roleBadge, getUserRole(selectedTicket.userId) === 'academy' ? styles.roleAcademy : styles.roleCoach]}>
+                            <Text style={styles.roleText}>{getUserRole(selectedTicket.userId)}</Text>
+                          </View>
+                        </View>
+                        <View style={styles.infoItem}>
+                          <Text style={styles.infoLabel}>Type</Text>
+                          <Text style={styles.infoValue}>{selectedTicket.type}</Text>
+                        </View>
+                        <View style={[styles.infoItem, { alignItems: 'flex-end' }]}>
+                          <Text style={styles.infoLabel}>Created</Text>
+                          <Text style={styles.infoValue}>{formatTicketDateFull(selectedTicket.createdAt)}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.statusControl}>
+                        <Text style={styles.infoLabel}>Update Status</Text>
+                        <View style={styles.statusBtnRow}>
+                          {statusOptions.map(s => (
+                            <TouchableOpacity
+                              key={s}
+                              onPress={() => handleStatusChangeRequest(s)}
+                              style={[
+                                styles.statusToggleBtn, 
+                                selectedTicket.status === s ? { backgroundColor: statusColors[s].bg, borderColor: statusColors[s].border } : styles.statusToggleBtnOff
+                              ]}
+                            >
+                              <Text style={[styles.statusToggleText, { color: selectedTicket.status === s ? statusColors[s].text : '#94A3B8' }]}>{s}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
                     </View>
-                    <TouchableOpacity onPress={() => setReplyToMsg(null)}>
-                      <Ionicons name="close-circle" size={20} color="#64748B" />
-                    </TouchableOpacity>
-                  </View>
-                )}
 
-                {selectedImage && (
-                  <View style={styles.imagePreviewBar}>
-                    <Image source={{ uri: selectedImage }} style={styles.imagePreviewThumb} />
-                    <TouchableOpacity style={styles.removeImageBtn} onPress={() => setSelectedImage(null)}>
-                      <Ionicons name="close-circle" size={20} color="#EF4444" />
-                    </TouchableOpacity>
-                  </View>
-                )}
-
-                {selectedTicket.status !== 'Closed' && selectedTicket.status !== 'Resolved' ? (
-                  <View style={styles.chatInputRow}>
-                    <TouchableOpacity 
-                      onPress={() => setShowPlusMenu(!showPlusMenu)} 
-                      style={styles.plusBtn}
-                    >
-                      <Ionicons name="add-circle" size={28} color="#2563EB" />
-                    </TouchableOpacity>
-
-                    {showPlusMenu && (
-                      <View style={styles.plusMenu}>
-                        <TouchableOpacity style={styles.plusMenuItem} onPress={pickImage}>
-                          <Ionicons name="image" size={18} color="#2563EB" />
-                          <Text style={styles.plusMenuText}>Gallery</Text>
-                        </TouchableOpacity>
+                    {selectedTicket.closureSummary && (
+                      <View style={styles.resolutionCard}>
+                        <View style={styles.resHeader}>
+                          <Ionicons name="shield-checkmark" size={16} color="#059669" />
+                          <Text style={styles.resTitle}>Closure Summary</Text>
+                        </View>
+                        <Text style={styles.resText}>{selectedTicket.closureSummary}</Text>
                       </View>
                     )}
+                  </ScrollView>
+                </View>
 
-                    <TextInput
-                      ref={textInputRef}
-                      style={styles.chatInput}
-                      value={replyText}
-                      onChangeText={(txt) => {
-                        setReplyText(txt);
-                        if (txt.length > 0) onTypingStart?.(selectedTicket.id);
-                        else onTypingStop?.(selectedTicket.id);
+                <KeyboardAvoidingView 
+                  behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+                  keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+                  style={styles.flex}
+                >
+                  <View style={styles.chatContainer}>
+                    <ScrollView 
+                      ref={scrollViewRef} 
+                      style={styles.chatScroll} 
+                      contentContainerStyle={styles.chatScrollContent}
+                      onContentSizeChange={() => {
+                        if (!isSearchingChat) scrollViewRef.current?.scrollToEnd({ animated: true });
                       }}
-                      onBlur={() => onTypingStop?.(selectedTicket.id)}
-                      placeholder="Type a reply..."
-                      multiline
-                    />
-                    <TouchableOpacity 
-                      style={[styles.sendBtn, (!replyText.trim() && !selectedImage) && styles.sendDisabled]} 
-                      disabled={!replyText.trim() && !selectedImage}
-                      onPress={handleSendReply}
+                      showsVerticalScrollIndicator={true}
                     >
-                      <Ionicons name="send" size={18} color="#FFFFFF" />
-                    </TouchableOpacity>
+                      {(selectedTicket?.messages || [])
+                        .map((msg, idx) => {
+                          const currentMsgDate = new Date(msg.timestamp).toDateString();
+                          const prevMsgDate = idx > 0 ? new Date(selectedTicket.messages[idx-1].timestamp).toDateString() : null;
+                          const showDateHeader = currentMsgDate !== prevMsgDate;
+                          const isHighlighted = searchMatchIndices[activeMatchIndex] === idx;
+
+                          return (
+                            <View 
+                              key={`${msg.timestamp || 'no-ts'}-${idx}`} 
+                              style={isHighlighted && styles.highlightedMessage}
+                              onLayout={(e) => { messageYOffsets.current[msg.id || msg.timestamp] = e.nativeEvent.layout.y; }}
+                            >
+                              {showDateHeader && !chatSearchText && renderDateHeader(msg.timestamp)}
+                              {renderMessage(msg, idx)}
+                            </View>
+                          );
+                        })}
+                      {isUserTyping && (
+                        <View style={styles.typingIndicator}>
+                          <Text style={styles.typingText}>User is typing...</Text>
+                        </View>
+                      )}
+                    </ScrollView>
+
+                    <View style={styles.inputArea}>
+                      {replyToMsg && (
+                        <View style={styles.replyPreviewBar}>
+                          <View style={styles.replyPreviewInner}>
+                            <Text style={styles.replyPreviewUser}>Replying to {replyToMsg.senderId === 'admin' ? 'yourself' : getUserName(replyToMsg.senderId)}</Text>
+                            <Text style={styles.replyPreviewText} numberOfLines={1}>{replyToMsg.text}</Text>
+                          </View>
+                          <TouchableOpacity onPress={() => setReplyToMsg(null)}>
+                            <Ionicons name="close-circle" size={20} color="#64748B" />
+                          </TouchableOpacity>
+                        </View>
+                      )}
+
+                      {selectedImage && (
+                        <View style={styles.imagePreviewBar}>
+                          <Image source={{ uri: selectedImage }} style={styles.imagePreviewThumb} />
+                          <TouchableOpacity style={styles.removeImageBtn} onPress={() => setSelectedImage(null)}>
+                            <Ionicons name="close-circle" size={20} color="#EF4444" />
+                          </TouchableOpacity>
+                        </View>
+                      )}
+
+                      {selectedTicket.status !== 'Closed' && selectedTicket.status !== 'Resolved' ? (
+                        <View style={styles.chatInputRow}>
+                          <TouchableOpacity 
+                            onPress={() => setShowPlusMenu(!showPlusMenu)} 
+                            style={styles.plusBtn}
+                          >
+                            <Ionicons name="add-circle" size={28} color="#2563EB" />
+                          </TouchableOpacity>
+
+                          {showPlusMenu && (
+                            <View style={styles.plusMenu}>
+                              <TouchableOpacity style={styles.plusMenuItem} onPress={pickImage}>
+                                <Ionicons name="image" size={18} color="#2563EB" />
+                                <Text style={styles.plusMenuText}>Gallery</Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+
+                          <TextInput
+                            ref={textInputRef}
+                            style={styles.chatInput}
+                            value={replyText}
+                            onChangeText={(txt) => {
+                              setReplyText(txt);
+                              if (txt.length > 0) onTypingStart?.(selectedTicket.id);
+                              else onTypingStop?.(selectedTicket.id);
+                            }}
+                            onBlur={() => onTypingStop?.(selectedTicket.id)}
+                            placeholder="Type a reply..."
+                            multiline
+                          />
+                          <TouchableOpacity 
+                            style={[styles.sendBtn, (!replyText.trim() && !selectedImage) && styles.sendDisabled]} 
+                            disabled={!replyText.trim() && !selectedImage}
+                            onPress={handleSendReply}
+                          >
+                            <Ionicons name="send" size={18} color="#FFFFFF" />
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <View style={styles.closedNote}>
+                          <Text style={styles.closedNoteText}>This ticket is resolved/closed</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
-                ) : (
-                  <View style={styles.closedNote}>
-                    <Text style={styles.closedNoteText}>This ticket is resolved/closed</Text>
-                  </View>
-                )}
+                </KeyboardAvoidingView>
+              </>
+            )}
+          </SafeAreaView>
+        </GestureHandlerRootView>
+      </Modal>
+
+      <View style={styles.statsGrid}>
+        <View style={[styles.statBox, { backgroundColor: '#EFF6FF' }]}>
+          <Text style={styles.statLabel}>Open</Text>
+          <Text style={[styles.statValue, { color: '#2563EB' }]}>{(tickets || []).filter(t => t && (t.status === 'Open' || !t.status)).length}</Text>
+        </View>
+        <View style={[styles.statBox, { backgroundColor: '#FFFBEB' }]}>
+          <Text style={styles.statLabel}>Active</Text>
+          <Text style={[styles.statValue, { color: '#D97706' }]}>{(tickets || []).filter(t => t && t.status === 'In Progress').length}</Text>
+        </View>
+        <View style={[styles.statBox, { backgroundColor: '#FAF5FF' }]}>
+          <Text style={styles.statLabel}>Awaiting</Text>
+          <Text style={[styles.statValue, { color: '#9333EA' }]}>{(tickets || []).filter(t => t && t.status === 'Awaiting Response').length}</Text>
+        </View>
+        <View style={[styles.statBox, { backgroundColor: '#F0FDF4' }]}>
+          <Text style={styles.statLabel}>Resolved</Text>
+          <Text style={[styles.statValue, { color: '#16A34A' }]}>{(tickets || []).filter(t => t && t.status === 'Resolved').length}</Text>
+        </View>
+      </View>
+
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterTabs}>
+        {['All', ...statusOptions].map(s => {
+          const count = (tickets || []).filter(t => s === 'All' ? true : (t.status || 'Open') === s).length;
+          const isActive = filterStatus === s;
+          return (
+            <TouchableOpacity 
+              key={s} 
+              onPress={() => setFilterStatus(s)}
+              style={[styles.filterTab, isActive && styles.filterTabActive]}
+            >
+              <Text style={[styles.filterTabText, isActive && styles.filterTabTextActive]}>
+                {s} {count > 0 ? `(${count})` : ''}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+        {(filteredTickets || []).map((ticket, idx) => {
+          const status = ticket.status || 'Open';
+          const st = statusColors[status] || statusColors['Open'];
+          const date = ticket.createdAt ? new Date(ticket.createdAt) : null;
+          const isUnread = isTicketUnread(ticket);
+          return (
+            <TouchableOpacity 
+              key={ticket.id || `temp-${idx}`} 
+              onPress={() => setSelectedTicket(ticket)}
+              style={[styles.ticketCard, isUnread && styles.unreadCard]}
+            >
+              <View style={styles.ticketTop}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.ticketTitle} numberOfLines={1}>{ticket.title || 'Untitled Ticket'}</Text>
+                  <Text style={styles.ticketMeta}>{getUserName(ticket.userId)} • ID: {ticket.id || 'NO-ID'}</Text>
+                </View>
+                <View style={[styles.statusBadge, { backgroundColor: st.bg, borderColor: st.border }]}>
+                  <Text style={[styles.statusBadgeText, { color: st.text }]}>{status}</Text>
+                </View>
               </View>
-            </View>
-          </KeyboardAvoidingView>
-        </>
-      ) : (
-        <>
-          <View style={styles.statsGrid}>
-            <View style={[styles.statBox, { backgroundColor: '#EFF6FF' }]}>
-              <Text style={styles.statLabel}>Open</Text>
-              <Text style={[styles.statValue, { color: '#2563EB' }]}>{(tickets || []).filter(t => t && (t.status === 'Open' || !t.status)).length}</Text>
-            </View>
-            <View style={[styles.statBox, { backgroundColor: '#FFFBEB' }]}>
-              <Text style={styles.statLabel}>Active</Text>
-              <Text style={[styles.statValue, { color: '#D97706' }]}>{(tickets || []).filter(t => t && t.status === 'In Progress').length}</Text>
-            </View>
-            <View style={[styles.statBox, { backgroundColor: '#FAF5FF' }]}>
-              <Text style={styles.statLabel}>Awaiting</Text>
-              <Text style={[styles.statValue, { color: '#9333EA' }]}>{(tickets || []).filter(t => t && t.status === 'Awaiting Response').length}</Text>
-            </View>
-            <View style={[styles.statBox, { backgroundColor: '#F0FDF4' }]}>
-              <Text style={styles.statLabel}>Resolved</Text>
-              <Text style={[styles.statValue, { color: '#16A34A' }]}>{(tickets || []).filter(t => t && t.status === 'Resolved').length}</Text>
-            </View>
-          </View>
-
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterTabs}>
-            {['All', ...statusOptions].map(s => {
-              const count = (tickets || []).filter(t => s === 'All' ? true : (t.status || 'Open') === s).length;
-              const isActive = filterStatus === s;
-              return (
-                <TouchableOpacity 
-                  key={s} 
-                  onPress={() => setFilterStatus(s)}
-                  style={[styles.filterTab, isActive && styles.filterTabActive]}
-                >
-                  <Text style={[styles.filterTabText, isActive && styles.filterTabTextActive]}>
-                    {s} {count > 0 ? `(${count})` : ''}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-
-          <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-            {(filteredTickets || []).map((ticket, idx) => {
-              const status = ticket.status || 'Open';
-              const st = statusColors[status] || statusColors['Open'];
-              const date = ticket.createdAt ? new Date(ticket.createdAt) : null;
-              const isUnread = isTicketUnread(ticket);
-              return (
-                <TouchableOpacity 
-                  key={ticket.id || `temp-${idx}`} 
-                  onPress={() => setSelectedTicket(ticket)}
-                  style={[styles.ticketCard, isUnread && styles.unreadCard]}
-                >
-                  <View style={styles.ticketTop}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.ticketTitle} numberOfLines={1}>{ticket.title || 'Untitled Ticket'}</Text>
-                      <Text style={styles.ticketMeta}>{getUserName(ticket.userId)} • ID: {ticket.id || 'NO-ID'}</Text>
-                    </View>
-                    <View style={[styles.statusBadge, { backgroundColor: st.bg, borderColor: st.border }]}>
-                      <Text style={[styles.statusBadgeText, { color: st.text }]}>{status}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.ticketBottom}>
-                    <Text style={styles.ticketType}>{ticket.type || 'General'}</Text>
-                    <Text style={styles.ticketDate}>{date && !isNaN(date) ? date.toLocaleDateString() : 'Invalid Date'}</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </>
-      )}
+              <View style={styles.ticketBottom}>
+                <Text style={styles.ticketType}>{ticket.type || 'General'}</Text>
+                <Text style={styles.ticketDate}>{formatTicketDateFull(ticket.createdAt)}</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
 
       {/* Resolution Confirmation Prompt */}
       {showStatusConfirm && (
@@ -778,6 +830,10 @@ export const AdminGrievancesPanel = ({
 };
 
 const styles = StyleSheet.create({
+  fullScreenModal: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',

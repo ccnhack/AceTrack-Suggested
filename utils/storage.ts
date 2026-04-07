@@ -76,14 +76,14 @@ export const thinPlayer = (p: any) => {
     id, name, avatar, rating, trueSkillRating, role, 
     matchesPlayed, wins, losses, skillLevel, city, sport,
     isApprovedCoach, coachStatus, preferredFormat, mostPlayedVenue,
-    referralCode
+    referralCode, devices
   } = p;
   
   return { 
     id, name, avatar, rating, trueSkillRating, role, 
     matchesPlayed, wins, losses, skillLevel, city, sport,
     isApprovedCoach, coachStatus, preferredFormat, mostPlayedVenue,
-    referralCode,
+    referralCode, devices,
     _thinned: true // Meta-flag for diagnostics
   };
 };

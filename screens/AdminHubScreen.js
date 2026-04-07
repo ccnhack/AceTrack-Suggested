@@ -85,6 +85,26 @@ const AdminHubScreen = ({
     }
   }, [subTab]);
 
+  // 🛡️ BADGE DIAGNOSTIC (v2.6.36): Track exactly why the ticket badge is showing a count
+  useEffect(() => {
+    if (supportTickets && Array.isArray(supportTickets)) {
+      const qualifying = supportTickets.filter(t => t && (t.status === 'Open' || t.status === 'Awaiting Response'));
+      const unseen = qualifying.filter(t => !seenAdminActionIds.has(String(t.id)));
+      
+      if (unseen.length > 0) {
+        const diagnosticData = {
+          totalQualifying: qualifying.length,
+          unseenCount: unseen.length,
+          unseenIds: unseen.map(t => t.id),
+          seenSetSize: seenAdminActionIds.size,
+          statuses: unseen.map(t => `${t.id}: ${t.status}`)
+        };
+        console.log("📊 [BadgeDiagnostic] Tickets badge details:", diagnosticData);
+        logger.logAction('BADGE_COUNT_DIAGNOSTIC', diagnosticData);
+      }
+    }
+  }, [supportTickets?.length, seenAdminActionIds.size]);
+
   // Handle incoming navigation params (v2.6.31)
   useEffect(() => {
     if (route.params?.subTab) {
@@ -212,6 +232,24 @@ const AdminHubScreen = ({
     } finally {
       setIsFetchingDiags(false);
     }
+  };
+
+  const handleOpenTicket = (ticket) => {
+    if (!ticket) return;
+    
+    // 🛡️ [BadgeAutoClear] Mark ticket as seen instantly when viewed
+    if (setSeenAdminActionIds) {
+      setSeenAdminActionIds(prev => {
+        const next = new Set(prev);
+        if (!next.has(String(ticket.id))) {
+          next.add(String(ticket.id));
+          return next;
+        }
+        return prev;
+      });
+    }
+    setSelectedTicket(ticket);
+    setTicketModalVisible(true);
   };
 
   // Deep-Link Handler (v2.6.25): Automatically select user/subtab from route params
@@ -597,22 +635,22 @@ const AdminHubScreen = ({
                     if (tab.id === 'coaches') {
                       (players || []).filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus)).forEach(p => {
                         const pid = String(p.id);
-                        if (!newSeenIds.has(pid)) { newSeenIds.add(pid); added = true; }
+                        if (pid && pid !== 'undefined' && pid !== 'null' && !newSeenIds.has(pid)) { newSeenIds.add(pid); added = true; }
                       });
                     } else if (tab.id === 'recordings') {
                       (matchVideos || []).filter(v => v.adminStatus === 'Deletion Requested').forEach(v => {
                         const vid = String(v.id);
-                        if (!newSeenIds.has(vid)) { newSeenIds.add(vid); added = true; }
+                        if (vid && vid !== 'undefined' && vid !== 'null' && !newSeenIds.has(vid)) { newSeenIds.add(vid); added = true; }
                       });
                     } else if (tab.id === 'coach_assignments') {
-                      (tournaments || []).filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today)).forEach(t => {
+                      (tournaments || []).filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration' || t.coachStatus === 'Awaiting Assignment') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today)).forEach(t => {
                         const tid = String(t.id);
-                        if (!newSeenIds.has(tid)) { newSeenIds.add(tid); added = true; }
+                        if (tid && tid !== 'undefined' && tid !== 'null' && !newSeenIds.has(tid)) { newSeenIds.add(tid); added = true; }
                       });
                     } else if (tab.id === 'grievances') {
                       (supportTickets || []).filter(t => t.status === 'Open' || t.status === 'Awaiting Response').forEach(t => {
                         const sid = String(t.id);
-                        if (!newSeenIds.has(sid)) { newSeenIds.add(sid); added = true; }
+                        if (sid && sid !== 'undefined' && sid !== 'null' && !newSeenIds.has(sid)) { newSeenIds.add(sid); added = true; }
                       });
                     }
                     if (added) setSeenAdminActionIds(newSeenIds);

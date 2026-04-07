@@ -24,7 +24,8 @@ This document tracks critical rules and workflows to ensure stability across mob
 - **Focus**: Always investigate `ReferenceError`, `TransformError`, and `HYDRATION` events in logs.
 
 ## 📜 Last 5 Major Objectives Summary
-1.  **v2.6.27 Deployment**: **Insights & Web-Activity_Fixed**. Integrated Insights Tab into Admin Hub for Web/Mobile, hardened WebSocket device status reporting for browser consistency, and synchronized versions across platform.
+1.  **v2.6.61 Deployment**: **Admin Hub Sync & Badge Resolution**. Decoupled badge state from user profile, implemented server-side Union Merge for acknowledgments, and resolved the "Phantom Ticket Generator" bug. Deduped support tickets globally.
+2.  **v2.6.27 Deployment**: **Insights & Web-Activity_Fixed**. Integrated Insights Tab into Admin Hub for Web/Mobile, hardened WebSocket device status reporting for browser consistency, and synchronized versions across platform.
 2.  **v2.6.26 Deployment**: **Working_Enhanced_Support_Center**. Implemented "Jump to Original Message" (Reply-scroll), Unified Deep Search in Admin Hub, and Draggable AI ChatBot.
 3.  **v2.3.2 Deployment**: Implemented Tournament Interest Workflow, added real-time reactivity to modals, and refined UI font sizes/labels.
 4.  **v2.3.1 Deployment**: Fixed Matchmaking real-time sync, resolved WebSocket race conditions, and hardened identity management.

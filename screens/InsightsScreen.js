@@ -965,7 +965,7 @@ const styles = StyleSheet.create({
   },
   statBox: { 
     backgroundColor: '#fff', 
-    width: '48.5%', // Use percentage for more robust 2-per-row layout on Android
+    width: '47%', // Use safer percentage for 2-per-row layout on narrower Androids
     padding: 14, 
     borderRadius: 20, 
     ...designSystem.shadows?.sm 
