@@ -1111,7 +1111,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                          </TouchableOpacity>
                        )}
                      </View>
-                     <View style={[styles.venueList, { height: 200 }]} nestedScrollEnabled={true}>
+                     <ScrollView style={[styles.venueList, { height: 200 }]} nestedScrollEnabled={true}>
                         {nearbyVenues
                             .filter(v => {
                                const q = (venueDropdownSearchQuery || "").toLowerCase();
@@ -1134,7 +1134,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                               onSelect={setSelectedAcademyForVenue}
                             />
                         ))}
-                     </View>
+                     </ScrollView>
                   </View>
                 ) : (
                   <View style={styles.emptyVenueContainer}>
@@ -1508,7 +1508,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                           </TouchableOpacity>
                         )}
                       </View>
-                      <View style={[styles.venueList, { height: 200 }]} nestedScrollEnabled={true}>
+                      <ScrollView style={[styles.venueList, { height: 200 }]} nestedScrollEnabled={true}>
                           {nearbyVenues
                             .filter(v => {
                                const q = (venueDropdownSearchQuery || "").toLowerCase();
@@ -1529,8 +1529,8 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                                 onSelect={setSelectedAcademyForVenue}
                              />
                           ))}
-                      </View>
-                    </View>
+                      </ScrollView>
+                   </View>
                   ) : (
                     <View style={styles.emptyVenueContainer}>
                       <Text style={styles.emptyVenueText}>No Local Venues Found Matching Your Search</Text>
