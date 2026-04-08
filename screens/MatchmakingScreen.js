@@ -12,6 +12,69 @@ import { Sport } from '../types';
 import { Calendar } from 'react-native-calendars';
 import venuesData from '../data/venues.json';
 
+// Performance: Memoized Sub-components for long list rendering
+const TimeSlotItem = React.memo(({ slot, isBlocked, isInPast, isSelBase, isExpanded, onExpand, onSelect, expandedSlot }) => {
+  return (
+    <View style={[styles.slotWrapper, { zIndex: isExpanded ? 100 : 1 }]}>
+      <TouchableOpacity 
+        disabled={isBlocked || isInPast}
+        style={[
+          styles.slotBtn, 
+          isSelBase && styles.slotBtnActive,
+          (isBlocked || isInPast) && { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0', opacity: 0.5 }
+        ]}
+        onPress={() => onExpand(isExpanded ? null : slot)}
+      >
+        <Text style={[
+          styles.slotText, 
+          isSelBase && styles.slotTextActive,
+          isBlocked && { color: '#94A3B8' }
+        ]}>{isSelBase ? (onSelect.targetTime || slot) : slot}</Text>
+      </TouchableOpacity>
+
+      {isExpanded && !isBlocked && (
+        <View style={styles.subIntervalsPopup}>
+           {[':00', ':15', ':30', ':45'].map((mins, subIndex) => {
+             const fullTime = slot.replace(':00', mins);
+             const isSel = onSelect.targetTime === fullTime;
+             return (
+               <TouchableOpacity 
+                 key={`mins-${subIndex}`}
+                 style={[styles.subBtn, isSel && styles.subBtnActive]}
+                 onPress={() => onSelect(fullTime)}
+               >
+                 <Text style={[styles.subBtnText, isSel && styles.subBtnTextActive]}>{fullTime}</Text>
+               </TouchableOpacity>
+             );
+           })}
+        </View>
+      )}
+    </View>
+  );
+});
+
+const VenueItem = React.memo(({ venue, isSelected, onSelect, selectedSport }) => {
+  return (
+    <TouchableOpacity 
+      style={[styles.venueItem, isSelected && styles.venueItemSelected]}
+      onPress={() => onSelect(venue)}
+    >
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={[styles.venueName, isSelected && styles.venueNameSelected]}>
+            {venue.venueName}{venue.area ? ` - ${venue.area}` : ''}
+          </Text>
+          <Text style={styles.venueDistance}>{venue.distance ? `${venue.distance} km` : ''}</Text>
+        </View>
+        {venue.sport && <Text style={styles.venueSportText}>({venue.sport})</Text>}
+        <Text style={styles.venueAddress} numberOfLines={1}>{venue.address}</Text>
+      </View>
+      {isSelected && <Ionicons name="checkmark-circle" size={20} color="#6366F1" />}
+    </TouchableOpacity>
+  );
+});
+
+
 // Mock tournament hostings to check for busy slots
 const MOCK_ACADEMY_TOURNAMENTS = [
   { id: 't1', academyId: 'a1', date: '2026-03-27', startTime: '10:00 AM', duration: 4 }, // 10 AM to 2 PM
@@ -146,52 +209,42 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
   const [isFetchingVenues, setIsFetchingVenues] = useState(false);
   const [venueDropdownSearchQuery, setVenueDropdownSearchQuery] = useState('');
 
-  // MEMOIZED CALENDAR MARKING - CHALLENGE MODAL
-  const challengeMarkedDates = React.useMemo(() => {
+  // PERFORMANCE: Separate Static Marks from Dynamic Selection to prevent Calendar Lag
+  const staticChallengeMarks = React.useMemo(() => {
     if (!isChallengeModalVisible) return {};
     const marks = {};
-    
-    // Mark Mock Tournament Dates
     MOCK_ACADEMY_TOURNAMENTS.forEach(t => {
-      if (t.academyId === selectedOpponent?.id) {
-        marks[t.date] = { marked: true, dotColor: '#EF4444' };
-      }
+      if (t.academyId === selectedOpponent?.id) marks[t.date] = { marked: true, dotColor: '#EF4444' };
     });
-
-    // Mark Existing Matchmaking Dates
     matchmaking.forEach(m => {
        if ((m.senderId === user?.id && m.receiverId === selectedOpponent?.id) ||
            (m.senderId === selectedOpponent?.id && m.receiverId === user?.id)) {
          const mDate = m.proposedDate || m.time?.split(',')[0]?.trim();
-         if (mDate) {
-           marks[mDate] = { marked: true, dotColor: designSystem.colors.primary };
-         }
+         if (mDate) marks[mDate] = { marked: true, dotColor: designSystem.colors.primary };
        }
     });
-
-    // Mark Selected Date
-    if (challengeDate) {
-      marks[challengeDate] = { ...marks[challengeDate], selected: true, selectedColor: '#6366F1' };
-    }
     return marks;
-  }, [isChallengeModalVisible, selectedOpponent?.id, matchmaking, challengeDate, user?.id]);
+  }, [isChallengeModalVisible, selectedOpponent?.id, matchmaking, user?.id]);
+
+  const challengeMarkedDates = React.useMemo(() => {
+    if (!challengeDate) return staticChallengeMarks;
+    return { ...staticChallengeMarks, [challengeDate]: { ...staticChallengeMarks[challengeDate], selected: true, selectedColor: '#6366F1' } };
+  }, [staticChallengeMarks, challengeDate]);
 
   // MEMOIZED CALENDAR MARKING - COUNTER MODAL
-  const counterMarkedDates = React.useMemo(() => {
+  const staticCounterMarks = React.useMemo(() => {
     if (!isCounterModalVisible) return {};
     const marks = {};
-    
     MOCK_ACADEMY_TOURNAMENTS.forEach(t => {
-       if (t.academyId === selectedChallenge?.academyId) {
-         marks[t.date] = { marked: true, dotColor: '#EF4444' };
-       }
+       if (t.academyId === selectedChallenge?.academyId) marks[t.date] = { marked: true, dotColor: '#EF4444' };
     });
-
-    if (counterDate) {
-      marks[counterDate] = { ...marks[counterDate], selected: true, selectedColor: '#6366F1' };
-    }
     return marks;
-  }, [isCounterModalVisible, selectedChallenge?.academyId, counterDate]);
+  }, [isCounterModalVisible, selectedChallenge?.academyId]);
+
+  const counterMarkedDates = React.useMemo(() => {
+    if (!counterDate) return staticCounterMarks;
+    return { ...staticCounterMarks, [counterDate]: { ...staticCounterMarks[counterDate], selected: true, selectedColor: '#6366F1' } };
+  }, [staticCounterMarks, counterDate]);
 
   const getDistance = (lat1, lon1, lat2, lon2) => {
     if (!lat1 || !lon1 || !lat2 || !lon2) return null;
@@ -1016,44 +1069,19 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                     const isSelBase = challengeTime && challengeTime.split(':')[0] === slotHour && challengeTime.slice(-2) === slotAmPm;
                     
                     return (
-                      <View key={`slot-prop-${index}`} style={[styles.slotWrapper, { zIndex: isExpanded ? 100 : 1 }]}>
-                        <TouchableOpacity 
-                          disabled={isBlocked || isInPast}
-                          style={[
-                            styles.slotBtn, 
-                            isSelBase && styles.slotBtnActive,
-                            (isBlocked || isInPast) && { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0', opacity: 0.5 }
-                          ]}
-                          onPress={() => setExpandedSlot(isExpanded ? null : slot)}
-                        >
-                          <Text style={[
-                            styles.slotText, 
-                            isSelBase && styles.slotTextActive,
-                            isBlocked && { color: '#94A3B8' }
-                          ]}>{isSelBase ? challengeTime : slot}</Text>
-                        </TouchableOpacity>
-
-                        {isExpanded && !isBlocked && (
-                          <View style={styles.subIntervalsPopup}>
-                             {[':00', ':15', ':30', ':45'].map((mins, subIndex) => {
-                               const fullTime = slot.replace(':00', mins);
-                               const isSel = challengeTime === fullTime;
-                               return (
-                                 <TouchableOpacity 
-                                   key={`mins-prop-${subIndex}`}
-                                   style={[styles.subBtn, isSel && styles.subBtnActive]}
-                                   onPress={() => {
-                                     setChallengeTime(fullTime);
-                                     setExpandedSlot(null);
-                                   }}
-                                 >
-                                   <Text style={[styles.subBtnText, isSel && styles.subBtnTextActive]}>{fullTime}</Text>
-                                 </TouchableOpacity>
-                               );
-                             })}
-                          </View>
-                        )}
-                      </View>
+                      <TimeSlotItem 
+                        key={`slot-prop-${index}`}
+                        slot={slot}
+                        isBlocked={isBlocked}
+                        isInPast={isInPast}
+                        isSelBase={isSelBase}
+                        isExpanded={isExpanded}
+                        onExpand={setExpandedSlot}
+                        onSelect={Object.assign((time) => {
+                          setChallengeTime(time);
+                          setExpandedSlot(null);
+                        }, { targetTime: challengeTime })}
+                      />
                     );
                   })}
               </View>
@@ -1081,7 +1109,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                          </TouchableOpacity>
                        )}
                      </View>
-                     <ScrollView style={styles.venueList} nestedScrollEnabled={true}>
+                     <View style={[styles.venueList, { height: 200 }]} nestedScrollEnabled={true}>
                         {nearbyVenues
                             .filter(v => {
                                const q = (venueDropdownSearchQuery || "").toLowerCase();
@@ -1089,42 +1117,22 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                                                     (v.area?.toLowerCase() || "").includes(q) || 
                                                     (v.sport?.toLowerCase() || "").includes(q);
                                
-                               // 🛡️ Safe check for sport matching
                                const targetSport = (selectedSport || 'All').toLowerCase();
                                const matchesSport = (v.sport?.toLowerCase() || "").includes(targetSport) || v.sport === "" || !v.sport;
                                
                                return matchesSearch && matchesSport;
                             })
+                          .slice(0, 15) // Performance: Limit rendered venues
                           .map((venue, idx) => (
-                           <TouchableOpacity 
-                             key={`venue-${idx}`}
-                             style={[styles.venueItem, selectedAcademyForVenue?.venueName === venue.venueName && styles.venueItemSelected]}
-                             onPress={() => setSelectedAcademyForVenue(venue)}
-                           >
-                             <View style={{ flex: 1 }}>
-                               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                 <Text style={[styles.venueName, selectedAcademyForVenue?.venueName === venue.venueName && styles.venueNameSelected]}>
-                                   {venue.venueName}{venue.area ? ` - ${venue.area}` : ''}
-                                 </Text>
-                                 <Text style={styles.venueDistance}>{venue.distance ? `${venue.distance} km` : ''}</Text>
-                               </View>
-                               {venue.sport && (
-                                 <Text style={styles.venueSportText}>({venue.sport})</Text>
-                               )}
-                               <Text style={styles.venueAddress} numberOfLines={1}>{venue.address}</Text>
-                                 {(venue.phone || venue.email) && (
-                                   <View style={{ flexDirection: 'row', marginTop: 4, gap: 8 }}>
-                                     {venue.phone && <Text style={styles.venueContactText}>📞 {venue.phone}</Text>}
-                                     {venue.email && <Text style={styles.venueContactText}>✉️ {venue.email}</Text>}
-                                   </View>
-                                 )}
-                               </View>
-                             {selectedAcademyForVenue?.label === venue.label && (
-                               <Ionicons name="checkmark-circle" size={20} color={designSystem.colors.primary} />
-                             )}
-                           </TouchableOpacity>
+                            <VenueItem 
+                              key={`venue-${idx}`}
+                              venue={venue}
+                              isSelected={selectedAcademyForVenue?.venueName === venue.venueName}
+                              selectedSport={selectedSport}
+                              onSelect={setSelectedAcademyForVenue}
+                            />
                         ))}
-                     </ScrollView>
+                     </View>
                   </View>
                 ) : (
                   <View style={styles.emptyVenueContainer}>
@@ -1401,7 +1409,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
 
               <Text style={styles.sectionLabel}>Proposed Time</Text>
               <View style={styles.timeSlots}>
-                 {TIME_SLOTS.map((slot, index) => {
+                  {TIME_SLOTS.map((slot, index) => {
                     const isBlocked = isTimeSlotBlocked(counterDate, slot, selectedChallenge?.academyId);
                     const isInPast = isTimeInPast(counterDate, slot);
                     const isExpanded = expandedSlot === slot;
@@ -1410,46 +1418,21 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                     const isSelBase = counterTime && counterTime.split(':')[0] === slotHour && counterTime.slice(-2) === slotAmPm;
                     
                     return (
-                      <View key={`slot-counter-${index}`} style={[styles.slotWrapper, { zIndex: isExpanded ? 100 : 1 }]}>
-                        <TouchableOpacity
-                          disabled={isBlocked || isInPast}
-                          style={[
-                            styles.slotBtn,
-                            isSelBase && styles.slotBtnActive,
-                            (isBlocked || isInPast) && { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0', opacity: 0.5 }
-                          ]}
-                          onPress={() => setExpandedSlot(isExpanded ? null : slot)}
-                        >
-                          <Text style={[
-                            styles.slotText,
-                            isSelBase && styles.slotTextActive,
-                            isBlocked && { color: '#94A3B8' }
-                          ]}>{isSelBase ? counterTime : slot}</Text>
-                        </TouchableOpacity>
-
-                        {isExpanded && !isBlocked && (
-                          <View style={styles.subIntervalsPopup}>
-                             {[':00', ':15', ':30', ':45'].map((mins, subIndex) => {
-                               const fullTime = slot.replace(':00', mins);
-                               const isSel = counterTime === fullTime;
-                               return (
-                                 <TouchableOpacity 
-                                   key={`mins-counter-${subIndex}`}
-                                   style={[styles.subBtn, isSel && styles.subBtnActive]}
-                                   onPress={() => {
-                                     setCounterTime(fullTime);
-                                     setExpandedSlot(null);
-                                   }}
-                                 >
-                                   <Text style={[styles.subBtnText, isSel && styles.subBtnTextActive]}>{fullTime}</Text>
-                                 </TouchableOpacity>
-                               );
-                             })}
-                          </View>
-                        )}
-                      </View>
+                      <TimeSlotItem 
+                        key={`slot-counter-${index}`}
+                        slot={slot}
+                        isBlocked={isBlocked}
+                        isInPast={isInPast}
+                        isSelBase={isSelBase}
+                        isExpanded={isExpanded}
+                        onExpand={setExpandedSlot}
+                        onSelect={Object.assign((time) => {
+                          setCounterTime(time);
+                          setExpandedSlot(null);
+                        }, { targetTime: counterTime })}
+                      />
                     );
-                 })}
+                  })}
               </View>
 
               <Text style={styles.sectionLabel}>Proposed Venue</Text>
@@ -1522,50 +1505,28 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                           </TouchableOpacity>
                         )}
                       </View>
-                      <ScrollView style={styles.venueList} nestedScrollEnabled={true}>
+                      <View style={[styles.venueList, { height: 200 }]} nestedScrollEnabled={true}>
                           {nearbyVenues
                             .filter(v => {
                                const q = (venueDropdownSearchQuery || "").toLowerCase();
                                const matchesSearch = (v.venueName?.toLowerCase() || "").includes(q) || 
                                                     (v.area?.toLowerCase() || "").includes(q) || 
                                                     (v.sport?.toLowerCase() || "").includes(q);
-                               
-                               // 🛡️ Safe check for sport matching in counter modal
                                const targetSport = (selectedChallenge?.sport || 'All').toLowerCase();
                                const matchesSport = (v.sport?.toLowerCase() || "").includes(targetSport) || v.sport === "" || !v.sport;
-                               
                                return matchesSearch && matchesSport;
                             })
+                            .slice(0, 15) // Performance: Limit rendered venues
                             .map((venue, idx) => (
-                            <TouchableOpacity 
-                               key={`venue-counter-${idx}`}
-                               style={[styles.venueItem, selectedAcademyForVenue?.venueName === venue.venueName && styles.venueItemSelected]}
-                               onPress={() => setSelectedAcademyForVenue(venue)}
-                            >
-                               <View style={{ flex: 1 }}>
-                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                   <Text style={[styles.venueName, selectedAcademyForVenue?.venueName === venue.venueName && styles.venueNameSelected]}>
-                                     {venue.venueName}{venue.area ? ` - ${venue.area}` : ''}
-                                   </Text>
-                                   <Text style={styles.venueDistance}>{venue.distance ? `${venue.distance} km` : ''}</Text>
-                                 </View>
-                                 {venue.sport && (
-                                   <Text style={styles.venueSportText}>({venue.sport})</Text>
-                                 )}
-                                 <Text style={styles.venueAddress} numberOfLines={1}>{venue.address}</Text>
-                                 {(venue.phone || venue.email) && (
-                                   <View style={{ flexDirection: 'row', marginTop: 4, gap: 8 }}>
-                                     {venue.phone && <Text style={styles.venueContactText}>📞 {venue.phone}</Text>}
-                                     {venue.email && <Text style={styles.venueContactText}>✉️ {venue.email}</Text>}
-                                   </View>
-                                 )}
-                               </View>
-                               {selectedAcademyForVenue?.label === venue.label && (
-                                 <Ionicons name="checkmark-circle" size={20} color={designSystem.colors.primary} />
-                               )}
-                            </TouchableOpacity>
+                             <VenueItem 
+                                key={`venue-counter-${idx}`}
+                                venue={venue}
+                                isSelected={selectedAcademyForVenue?.venueName === venue.venueName}
+                                selectedSport={selectedChallenge?.sport}
+                                onSelect={setSelectedAcademyForVenue}
+                             />
                           ))}
-                      </ScrollView>
+                      </View>
                     </View>
                   ) : (
                     <View style={styles.emptyVenueContainer}>
