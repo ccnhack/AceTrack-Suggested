@@ -57,9 +57,11 @@ try {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.74)
-const APP_VERSION = "2.6.75"; 
-const currentAppVersion = APP_VERSION;
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.76 — Emergency Fix)
+const APP_VERSION = "2.6.76"; 
+
+const app = express();
+app.set('trust proxy', true);
 
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: CORS Whitelist (SEC Fix #3)
@@ -72,17 +74,27 @@ const ALLOWED_ORIGINS = [
   'http://localhost:19006',
   'http://localhost:3005',
   'http://localhost:8082',
-  'null' // 🛡️ SYNC HARDENING (v2.6.74): Explicitly allow null origin for mobile webviews
+  'null' 
 ];
 
-const app = express();
-app.set('trust proxy', true);
+// 🛡️ STABILITY FIX (v2.6.76): Root-level health checks MUST be handled BEFORE global middleware
+// This prevents security headers or rate limiters from accidental blocking of Render/Cloudflare probes.
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
+app.get('/', (req, res, next) => {
+  if (req.headers.accept?.includes('application/json')) {
+    return res.json({ status: 'ok', version: APP_VERSION });
+  }
+  next();
+});
 
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: Helmet for HTTP headers (SEC)
 // ═══════════════════════════════════════════════════════════════
 app.use(helmet({
-  contentSecurityPolicy: false, // Disabled for SPA compatibility
+  contentSecurityPolicy: false, 
   crossOriginEmbedderPolicy: false
 }));
 
@@ -1066,9 +1078,10 @@ app.use((err, req, res, next) => {
 
 // 🚀 Start
 // ═══════════════════════════════════════════════════════════════
-httpServer.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 AceTrack Suggested Backend v${APP_VERSION} on port ${PORT} (0.0.0.0)`);
+const server = httpServer.listen(PORT, '0.0.0.0', () => {
+  const addr = server.address();
+  console.log(`🚀 AceTrack Suggested Backend v${APP_VERSION} listening on ${typeof addr === 'string' ? addr : `${addr.address}:${addr.port}`}`);
   console.log(`📡 WebSocket: Active`);
   console.log(`🔗 Database: Cloud MongoDB Atlas`);
-  console.log(`🔐 Security: Rate Limiting ✅ | CORS Whitelist ✅ | Helmet ✅ | Zod Validation ✅ | Audit Logging ✅`);
+  console.log(`🔐 Port Config: process.env.PORT=${process.env.PORT || 'undefined'} (using ${PORT})`);
 });
