@@ -58,7 +58,7 @@ try {
 }
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.57)
-const APP_VERSION = "2.6.67"; 
+const APP_VERSION = "2.6.68"; 
 const currentAppVersion = APP_VERSION;
 
 // ═══════════════════════════════════════════════════════════════

@@ -1145,22 +1145,28 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
 
               <View style={styles.upcomingChallengesSection}>
                 <Text style={styles.sectionLabel}>Upcoming Challenges</Text>
-                {matchmaking.filter(m => 
-                  ((m.senderId === user?.id && m.receiverId === selectedOpponent?.id) ||
-                   (m.senderId === selectedOpponent?.id && m.receiverId === user?.id)) &&
-                  (m.status === 'Pending' || m.status === 'Accepted') &&
-                  (!challengeDate || (m.proposedDate || m.time?.split(',')[0]?.trim()) === challengeDate)
-                ).length === 0 ? (
+                {matchmaking.filter(m => {
+                  const mDate = m.proposedDate || m.time?.split(',')[0]?.trim();
+                  const mTime = m.proposedTime || m.time?.split(',')[1]?.trim();
+                  return ((m.senderId === user?.id && m.receiverId === selectedOpponent?.id) ||
+                         (m.senderId === selectedOpponent?.id && m.receiverId === user?.id)) &&
+                        (m.status === 'Pending' || m.status === 'Accepted') &&
+                        (!challengeDate || mDate === challengeDate) &&
+                        !isTimeInPast(mDate, mTime);
+                }).length === 0 ? (
                   <Text style={styles.emptyUpcomingText}>
                     {challengeDate ? `No Challenges For ${challengeDate}` : 'No Upcoming Challenges With This Player'}
                   </Text>
                 ) : (
-                  matchmaking.filter(m => 
-                    ((m.senderId === user?.id && m.receiverId === selectedOpponent?.id) ||
-                     (m.senderId === selectedOpponent?.id && m.receiverId === user?.id)) &&
-                    (m.status === 'Pending' || m.status === 'Accepted') &&
-                    (!challengeDate || (m.proposedDate || m.time?.split(',')[0]?.trim()) === challengeDate)
-                  ).sort((a, b) => new Date(a.proposedDate || a.time?.split(',')[0]) - new Date(b.proposedDate || b.time?.split(',')[0]))
+                  matchmaking.filter(m => {
+                    const mDate = m.proposedDate || m.time?.split(',')[0]?.trim();
+                    const mTime = m.proposedTime || m.time?.split(',')[1]?.trim();
+                    return ((m.senderId === user?.id && m.receiverId === selectedOpponent?.id) ||
+                           (m.senderId === selectedOpponent?.id && m.receiverId === user?.id)) &&
+                          (m.status === 'Pending' || m.status === 'Accepted') &&
+                          (!challengeDate || mDate === challengeDate) &&
+                          !isTimeInPast(mDate, mTime);
+                  }).sort((a, b) => new Date(a.proposedDate || a.time?.split(',')[0]) - new Date(b.proposedDate || b.time?.split(',')[0]))
                    .map((m, idx) => (
                     <View key={`upcoming-${idx}`} style={styles.upcomingChallengeRow}>
                       <View style={styles.challengeMeta}>
