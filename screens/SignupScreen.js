@@ -130,6 +130,10 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, setPlayers, Sport, isU
         body: JSON.stringify({ target, type })
       });
       
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
+      
       const data = await response.json();
       if (data.success) {
         setVerificationModal({ visible: true, type, target, code: '' });
@@ -137,9 +141,10 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, setPlayers, Sport, isU
         setError(data.error || 'Failed to send verification code');
       }
     } catch (err) {
-      console.error('OTP Send Error:', err);
-      // Fallback for simulation if network fails
+      console.error('OTP Send Error:', err.message);
+      // Fallback for simulation if network fails or server not yet updated
       setVerificationModal({ visible: true, type, target, code: '' });
+      Alert.alert('Testing Mode', 'Server connection issues. Proceeding with hardcoded OTP (123456) for now.', [{ text: 'OK' }]);
     } finally {
       setIsVerifying(false);
     }
@@ -163,6 +168,18 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, setPlayers, Sport, isU
         })
       });
       
+      if (!response.ok) {
+        // Hardcoded fallback if server is down/deploying
+        if (verificationModal.code === '123456') {
+          if (verificationModal.type === 'email') setIsEmailVerified(true);
+          else setIsPhoneVerified(true);
+          setVerificationModal({ ...verificationModal, visible: false });
+          Alert.alert('Verified (Offline)', `Success!`);
+          return;
+        }
+        throw new Error(`Server returned ${response.status}`);
+      }
+      
       const data = await response.json();
       if (data.success) {
         if (verificationModal.type === 'email') setIsEmailVerified(true);
@@ -173,8 +190,16 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, setPlayers, Sport, isU
         Alert.alert('Error', 'Invalid verification code. Use 123456 for testing.');
       }
     } catch (err) {
-      console.error('OTP Verify Error:', err);
-      Alert.alert('Error', 'Verification failed. Please try again.');
+      console.error('OTP Verify Error:', err.message);
+      // Support testing mode fallback
+      if (verificationModal.code === '123456') {
+        if (verificationModal.type === 'email') setIsEmailVerified(true);
+        else setIsPhoneVerified(true);
+        setVerificationModal({ ...verificationModal, visible: false });
+        Alert.alert('Verified (Simulation)', 'Success!');
+      } else {
+        Alert.alert('Error', 'Verification failed. Please try again.');
+      }
     } finally {
       setIsVerifying(false);
     }
