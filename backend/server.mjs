@@ -57,8 +57,8 @@ try {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.71)
-const APP_VERSION = "2.6.71"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.72)
+const APP_VERSION = "2.6.72"; 
 const currentAppVersion = APP_VERSION;
 
 // ═══════════════════════════════════════════════════════════════
@@ -221,7 +221,7 @@ io.on('connection', (socket) => {
 // Directories & DB
 // ═══════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════
-const PORT = process.env.PORT || 3005;
+const PORT = process.env.PORT || 10000;
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const DIAGNOSTICS_DIR = path.join(__dirname, 'diagnostics');
 
@@ -237,9 +237,12 @@ if (!MONGODB_URI) {
     maxPoolSize: 50,
     serverSelectionTimeoutMS: 5000,
     socketTimeoutMS: 45000,
-  })
-    .then(() => console.log("✅ Connected to MongoDB Atlas"))
-    .catch(err => console.error("❌ MongoDB Connection Error:", err));
+  }).then(() => {
+    console.log('✅ MongoDB Connected Successfully');
+  }).catch(err => {
+    console.error('❌ MongoDB Connection Error:', err.message);
+    logServerEvent('DB_CONNECTION_FAILED', { error: err.message });
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1030,7 +1033,7 @@ app.use((err, req, res, next) => {
   
   res.status(status).json({
     "slug": "acetrack-mobile",
-    "version": "2.6.70",
+    "version": "2.6.72",
     "sdkVersion": "50.0.0",
     "timestamp": new Date().toISOString()
   });
@@ -1038,8 +1041,8 @@ app.use((err, req, res, next) => {
 
 // 🚀 Start
 // ═══════════════════════════════════════════════════════════════
-httpServer.listen(PORT, () => {
-  console.log(`🚀 AceTrack Suggested Backend v${APP_VERSION} on port ${PORT}`);
+httpServer.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 AceTrack Suggested Backend v${APP_VERSION} on port ${PORT} (0.0.0.0)`);
   console.log(`📡 WebSocket: Active`);
   console.log(`🔗 Database: Cloud MongoDB Atlas`);
   console.log(`🔐 Security: Rate Limiting ✅ | CORS Whitelist ✅ | Helmet ✅ | Zod Validation ✅ | Audit Logging ✅`);
