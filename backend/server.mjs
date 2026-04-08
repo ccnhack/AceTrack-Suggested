@@ -33,32 +33,43 @@ cloudinary.config({
 console.log('☁️ Cloudinary initialized');
 
 // ═══════════════════════════════════════════════════════════════
-// 🔥 FIREBASE: Initialize Admin SDK (SEC Fix #1)
-// ═══════════════════════════════════════════════════════════════
-const serviceAccountPath = path.join(__dirname, 'firebase-service-account.json');
-try {
-  let serviceAccount;
-  if (fs.existsSync(serviceAccountPath)) {
-    serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
-  } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-  }
+// 🛡️ STABILITY: FIREBASE BOOT GUARD
+const initFirebase = async () => {
+  const serviceAccountPath = path.join(__dirname, 'firebase-service-account.json');
+  try {
+    let serviceAccount;
+    if (fs.existsSync(serviceAccountPath)) {
+      serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+    } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    }
 
-  if (serviceAccount) {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      storageBucket: 'acetrack-ad98e.firebasestorage.app'
-    });
-    console.log('🔥 Firebase Admin initialized');
-  } else {
-    console.warn('⚠️ Firebase Admin NOT initialized: No service account found');
+    if (serviceAccount) {
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        storageBucket: 'acetrack-ad98e.firebasestorage.app'
+      });
+      console.log('🔥 Firebase Admin initialized');
+    }
+  } catch (error) {
+    console.error('❌ Firebase Init Delayed:', error.message);
   }
-} catch (error) {
-  console.error('❌ Failed to initialize Firebase Admin:', error.message);
-}
+};
+initFirebase();
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.76 — Emergency Fix)
-const APP_VERSION = "2.6.77"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.78 — IMMORTAL BOOT)
+const APP_VERSION = "2.6.78"; 
+
+// 🛡️ STABILITY: Panic Handlers to prevent 521 connection refusal on unexpected errors
+process.on('uncaughtException', (err) => {
+  console.error('🔥 [PANIC] Uncaught Exception:', err);
+  // Keep process alive for diagnostics
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('🔥 [PANIC] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+let dbStatus = 'connecting';
 
 const app = express();
 app.set('trust proxy', true);
@@ -148,6 +159,18 @@ app.use(mongoSanitize());
 app.use((req, res, next) => {
   if (req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'] !== 'https' && process.env.NODE_ENV === 'production') {
     return res.redirect(301, 'https://' + req.hostname + req.url);
+  }
+  next();
+});
+
+// 🛡️ STABILITY: Database Readiness Guard
+app.use((req, res, next) => {
+  if (dbStatus !== 'connected' && req.path.startsWith('/api') && !req.path.endsWith('/health') && !req.path.endsWith('/status')) {
+    return res.status(503).json({ 
+      error: "Service Warming Up", 
+      message: "Database connection in progress. Please retry in a few seconds.",
+      status: dbStatus
+    });
   }
   next();
 });
@@ -242,22 +265,29 @@ const DIAGNOSTICS_DIR = path.join(__dirname, 'diagnostics');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR);
 if (!fs.existsSync(DIAGNOSTICS_DIR)) fs.mkdirSync(DIAGNOSTICS_DIR);
 
-// MongoDB Connection
-const MONGODB_URI = process.env.MONGODB_URI;
-if (!MONGODB_URI) {
-  console.error("❌ MONGODB_URI is not defined in .env!");
-} else {
+// 🛡️ STABILITY: Asynchronous Startup Block
+const startServices = async () => {
+  const MONGODB_URI = process.env.MONGODB_URI;
+  if (!MONGODB_URI) {
+    console.error("❌ MONGODB_URI is missing - Backend will stay in 503 state.");
+    dbStatus = 'error_config';
+    return;
+  }
+
+  console.log('📡 Connecting to MongoDB Atlas...');
   mongoose.connect(MONGODB_URI, {
     maxPoolSize: 50,
-    serverSelectionTimeoutMS: 5000,
+    serverSelectionTimeoutMS: 10000,
     socketTimeoutMS: 45000,
   }).then(() => {
     console.log('✅ MongoDB Connected Successfully');
+    dbStatus = 'connected';
   }).catch(err => {
     console.error('❌ MongoDB Connection Error:', err.message);
-    logServerEvent('DB_CONNECTION_FAILED', { error: err.message });
+    dbStatus = 'error_connection';
   });
-}
+};
+startServices();
 
 // ═══════════════════════════════════════════════════════════════
 // 📊 Schemas (SE Fix: Database indexing)
@@ -1076,12 +1106,12 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 🚀 Start
+// 🚀 Start: 'Immortal' Listener (v2.6.78)
 // ═══════════════════════════════════════════════════════════════
 const server = httpServer.listen(PORT, '0.0.0.0', () => {
   const addr = server.address();
-  console.log(`🚀 AceTrack Suggested Backend v${APP_VERSION} listening on ${typeof addr === 'string' ? addr : `${addr.address}:${addr.port}`}`);
-  console.log(`📡 WebSocket: Active`);
-  console.log(`🔗 Database: Cloud MongoDB Atlas`);
-  console.log(`🔐 Port Config: process.env.PORT=${process.env.PORT || 'undefined'} (using ${PORT})`);
+  const actualPort = typeof addr === 'string' ? addr : addr.port;
+  console.log(`🚀 AceTrack IMMORTAL BOOT v${APP_VERSION} listening on ${actualPort}`);
+  console.log(`🛡️  Database Initial State: ${dbStatus}`);
+  console.log(`🔗 Target: ${process.env.MONGODB_URI ? 'Cloud (provided)' : 'MISSING'}`);
 });
