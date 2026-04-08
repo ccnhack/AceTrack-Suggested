@@ -48,7 +48,7 @@ if (Platform.OS === 'web') {
 }
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.60)
-const APP_VERSION = "2.6.68"; 
+const APP_VERSION = "2.6.69"; 
 const currentAppVersion = APP_VERSION;
 
 export default function App() {
@@ -331,21 +331,11 @@ export default function App() {
     });
   }, [isUsingCloud]);
 
-  // 4. PERSISTENT VERIFICATION PROMPT: Ensure it shows up if unverified
-  // Fix: Don't show if user is admin OR already in the Edit Profile modal OR recently verified (latch)
+  // 4. LEGACY VERIFICATION PROMPT (v2.6.68): Handled during Signup now.
   useEffect(() => {
-    // Initialize Firebase
     initializeFirebase();
-    const isEmailUnverified = currentUser && !currentUser.isEmailVerified && !verificationLatch.email;
-    const isPhoneUnverified = currentUser && !currentUser.isPhoneVerified && !verificationLatch.phone;
-    const isNishant = currentUser && String(currentUser.id).toLowerCase() === 'nishant';
-
-    if (currentUser && currentUser.role !== 'admin' && !isNishant && (isEmailUnverified || isPhoneUnverified) && !isProfileEditActive) {
-      setShowVerificationPrompt(true);
-    } else {
-      setShowVerificationPrompt(false);
-    }
-  }, [currentUser?.id, currentUser?.role, currentUser?.isEmailVerified, currentUser?.isPhoneVerified, isProfileEditActive, verificationLatch]);
+    setShowVerificationPrompt(false);
+  }, [currentUser?.id]);
   const isVersionObsolete = (local, remote) => {
     try {
       const [c1, c2, c3] = local.split('.').map(Number);

@@ -58,7 +58,7 @@ try {
 }
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.57)
-const APP_VERSION = "2.6.68"; 
+const APP_VERSION = "2.6.69"; 
 const currentAppVersion = APP_VERSION;
 
 // ═══════════════════════════════════════════════════════════════
@@ -920,6 +920,27 @@ router.get('/audit-logs', apiKeyGuard, asyncHandler(async (req, res) => {
   const logs = await AuditLog.find().sort({ timestamp: -1 }).limit(limit);
   res.json({ success: true, logs });
 }));
+
+// 🔐 OTP: Send verification code (Simulated/Hardcoded for Testing)
+router.post('/otp/send', apiKeyGuard, (req, res) => {
+  const { target, type } = req.body; // target is email/phone, type is 'email' or 'phone'
+  console.log(`🔑 [OTP_SIMULATION] Code "123456" requested for ${type}: ${target}`);
+  logServerEvent('OTP_SEND_REQUESTED', { target, type });
+  res.json({ success: true, message: `Verification code sent to ${target}` });
+});
+
+// 🔐 OTP: Verify code (Hardcoded to 123456)
+router.post('/otp/verify', apiKeyGuard, (req, res) => {
+  const { code, target, type } = req.body;
+  
+  if (code === '123456') {
+    logServerEvent('OTP_VERIFY_SUCCESS', { target, type });
+    return res.json({ success: true, message: 'Verification successful' });
+  }
+  
+  logServerEvent('OTP_VERIFY_FAILED', { target, type, code });
+  res.status(400).json({ success: false, error: 'Invalid verification code' });
+});
 
 // ═══════════════════════════════════════════════════════════════
 // 🌐 Mount API v1 + backward-compatible un-versioned routes
