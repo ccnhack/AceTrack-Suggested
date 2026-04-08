@@ -58,7 +58,7 @@ try {
 }
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.76 — Emergency Fix)
-const APP_VERSION = "2.6.76"; 
+const APP_VERSION = "2.6.77"; 
 
 const app = express();
 app.set('trust proxy', true);
