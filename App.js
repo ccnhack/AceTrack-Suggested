@@ -48,7 +48,7 @@ if (Platform.OS === 'web') {
 }
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.73)
-const APP_VERSION = "2.6.73"; 
+const APP_VERSION = "2.6.74"; 
 const currentAppVersion = APP_VERSION;
 
 export default function App() {
@@ -839,6 +839,16 @@ export default function App() {
         }
       } else {
         console.log("⏳ Sync delayed by network/latency, keeping state.");
+        // 🛡️ SYNC HARDENING (v2.6.74): If aborted/timeout, trigger a soft re-pull after 2 seconds
+        // to recover from transient Render cold starts or proxy blips.
+        if (isTimeout) {
+          setTimeout(() => {
+            if (!isSyncingRef.current && isStartupCompleteRef.current) {
+               console.log("🔄 [Sync] Attempting recovery pull after abort...");
+               loadData(true);
+            }
+          }, 2000);
+        }
       }
       return false;
     } finally {

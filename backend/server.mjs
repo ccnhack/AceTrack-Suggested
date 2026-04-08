@@ -57,8 +57,8 @@ try {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.73)
-const APP_VERSION = "2.6.73"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.74)
+const APP_VERSION = "2.6.74"; 
 const currentAppVersion = APP_VERSION;
 
 // ═══════════════════════════════════════════════════════════════
@@ -71,7 +71,8 @@ const ALLOWED_ORIGINS = [
   'http://localhost:8081',
   'http://localhost:19006',
   'http://localhost:3005',
-  'http://localhost:8082'
+  'http://localhost:8082',
+  'null' // 🛡️ SYNC HARDENING (v2.6.74): Explicitly allow null origin for mobile webviews
 ];
 
 const app = express();
@@ -90,14 +91,16 @@ app.use(helmet({
 // ═══════════════════════════════════════════════════════════════
 app.use(cors({
   origin: (origin, callback) => {
-    // 🛡️ SYNC HARDENING (v2.6.20): Allow mobile apps (no origin)
-    if (!origin) return callback(null, true);
+    // 🛡️ SYNC HARDENING (v2.6.20/74): Allow mobile apps (no origin) or null string
+    if (!origin || origin === 'null') return callback(null, true);
     if (ALLOWED_ORIGINS.includes(origin)) {
       return callback(null, true);
     }
-    // 🛡️ DIAGNOSTIC: Log blocked origin to help identify required whitelist additions
+    // 🛡️ DIAGNOSTIC: Blocked origin log (throttled/non-looping)
     console.warn(`🛑 CORS Blocked: origin=${origin}`);
-    return callback(new Error(`Not allowed by CORS: ${origin}`));
+    const err = new Error(`Not allowed by CORS: ${origin}`);
+    err.status = 403; // Ensure 403 status is explicitly set to avoid 500 loop
+    return callback(err);
   },
   allowedHeaders: ['Content-Type', 'x-ace-api-key', 'x-socket-id', 'Authorization'],
   credentials: true
@@ -1025,15 +1028,17 @@ app.use((err, req, res, next) => {
   const status = err.status || 500;
   const message = err.message || 'Internal Server Error';
   
-  if (status === 500) {
+  // 🛡️ SYNC HARDENING (v2.6.74): Only log "CRITICAL" for actual 500s or unexpected crashes.
+  // 401, 403, and 404 are "expected" security rejections and shouldn't trigger heavy disk I/O logging.
+  if (status >= 500) {
     console.error(`❌ [SERVER_ERROR] ${req.method} ${req.url}:`, err.stack);
     logServerEvent('CRITICAL_ERROR', { url: req.url, error: message });
   }
   
   res.status(status).json({
-    "slug": "acetrack-mobile",
-    "version": "2.6.73",
-    "sdkVersion": "50.0.0",
+    "success": false,
+    "error": message,
+    "version": "2.6.74",
     "timestamp": new Date().toISOString()
   });
 });
