@@ -47,8 +47,8 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.70)
-const APP_VERSION = "2.6.70"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.71)
+const APP_VERSION = "2.6.71"; 
 const currentAppVersion = APP_VERSION;
 
 export default function App() {
@@ -375,30 +375,32 @@ export default function App() {
       setIsCloudOnline(true);
       setLastSyncTime(new Date().toLocaleTimeString());
       
+      // 🛡️ v2.6.70 Harden: Check content-type before parsing JSON to avoid "Unexpected <" errors
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        const snippet = text.substring(0, 100).replace(/\n/g, ' ');
+        console.log(`⚠️ Status Check: Received HTML/Plain (possible reboot). Snippet: ${snippet}`);
+        setIsCloudOnline(false); // Assume temporary offline during reboot
+        return;
+      }
+
       let status;
       try {
         status = await response.json();
       } catch (jsonErr) {
-        // Fallback for non-JSON content (e.g. HTML error pages)
-        const text = await response.text();
-        const snippet = text.substring(0, 100).replace(/\n/g, ' ');
-        console.warn(`⚠️ Update check received non-JSON (${response.status}): ${snippet}`);
-        logger.logAction('CHECK_UPDATES_PARSE_ERROR', { 
-            status: response.status, 
-            url: response.url,
-            bodyPrefix: snippet 
-        });
-        return; // Silent fail for background check
+        console.warn(`⚠️ Update check JSON parse failed: ${jsonErr.message}`);
+        return; 
       }
       
-      if (status.latestAppVersion) {
+      if (status && status.latestAppVersion) {
         setLatestAppVersion(status.latestAppVersion);
         const obsolete = isVersionObsolete(APP_VERSION, status.latestAppVersion);
         console.log(`📊 Version Check: Local=${APP_VERSION}, Remote=${status.latestAppVersion}, Obsolete=${obsolete}`);
         if (obsolete) {
           logger.logAction('VERSION_OBSOLETE_TRIGGERED', { local: APP_VERSION, remote: status.latestAppVersion });
           setShowForceUpdate(true);
-          return; // Abort further syncs if obsolete
+          return; 
         }
       }
 

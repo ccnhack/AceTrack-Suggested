@@ -57,8 +57,8 @@ try {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.70)
-const APP_VERSION = "2.6.70"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.71)
+const APP_VERSION = "2.6.71"; 
 const currentAppVersion = APP_VERSION;
 
 // ═══════════════════════════════════════════════════════════════
