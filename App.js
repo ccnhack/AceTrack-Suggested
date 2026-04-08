@@ -48,7 +48,7 @@ if (Platform.OS === 'web') {
 }
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.60)
-const APP_VERSION = "2.6.62"; 
+const APP_VERSION = "2.6.63"; 
 const currentAppVersion = APP_VERSION;
 
 export default function App() {
@@ -472,8 +472,8 @@ export default function App() {
       if (matchmakingFromStorage) setMatchmaking(matchmakingFromStorage);
       
         // 🛡️ STALE SYNC GUARD REMOVED in v2.5.1 in favor of Master Merge
-        setPendingSync(ps);
-        pendingSyncRef.current = ps;
+        setPendingSync(ps || []);
+        pendingSyncRef.current = ps || [];
       if (typeof effectiveIwc === 'boolean') {
         console.log("☁️ Hydrated isUsingCloud:", effectiveIwc);
         logger.logAction('HYDRATION_IS_USING_CLOUD', { value: effectiveIwc });
