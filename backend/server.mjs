@@ -57,8 +57,8 @@ const initFirebase = async () => {
 };
 initFirebase();
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.78 — IMMORTAL BOOT)
-const APP_VERSION = "2.6.78"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.79 — PORT ALIGNMENT)
+const APP_VERSION = "2.6.79"; 
 
 // 🛡️ STABILITY: Panic Handlers to prevent 521 connection refusal on unexpected errors
 process.on('uncaughtException', (err) => {
@@ -1106,12 +1106,20 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 🚀 Start: 'Immortal' Listener (v2.6.78)
+// 🚀 Start: 'Immortal' Listener (v2.6.79)
 // ═══════════════════════════════════════════════════════════════
 const server = httpServer.listen(PORT, '0.0.0.0', () => {
   const addr = server.address();
   const actualPort = typeof addr === 'string' ? addr : addr.port;
-  console.log(`🚀 AceTrack IMMORTAL BOOT v${APP_VERSION} listening on ${actualPort}`);
+  console.log(`🚀 AceTrack PORT ALIGNMENT v${APP_VERSION} listening on ${actualPort}`);
   console.log(`🛡️  Database Initial State: ${dbStatus}`);
-  console.log(`🔗 Target: ${process.env.MONGODB_URI ? 'Cloud (provided)' : 'MISSING'}`);
+});
+
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') {
+    console.error(`❌ FATAL: Port ${PORT} already in use. Retrying in 5s...`);
+    setTimeout(() => { server.close(); server.listen(PORT); }, 5000);
+  } else {
+    console.error('❌ Server binding error:', e);
+  }
 });
