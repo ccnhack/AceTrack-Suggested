@@ -48,8 +48,8 @@ if (Platform.OS === 'web') {
 }
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.73)
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.81)
-const APP_VERSION = "2.6.81"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.83)
+const APP_VERSION = "2.6.83"; 
 const currentAppVersion = APP_VERSION;
 
 export default function App() {
@@ -110,6 +110,7 @@ export default function App() {
   const lastUpdateCheckRef = useRef(0); // 🛡️ SYNC HARDENING: Throttle status checks (v2.6.28)
   const updateCheckTimeoutRef = React.useRef(null); // DEBOUNCE: Groups WebSocket signals
   const syncLockRef = React.useRef(false); // MUTEX: Ensures push and pull don't overlap
+  const activeLoadControllerRef = React.useRef(null); // 🛡️ [SyncEngine] Track active fetch to prevent instant aborts (v2.6.83)
   const [cloudVersion, setCloudVersion] = useState(0);
   const cloudVersionRef = useRef(0);
   const globalBackoffUntilRef = React.useRef(0); // BACKOFF: 429 recovery timer
@@ -611,10 +612,15 @@ export default function App() {
       if (forceSync && currentUserRef.current) {
         // When manually forcing a sync, also push our latest device info to the cloud
         logger.logAction('MANUAL_SYNC_PUSH_DEVICE_INFO');
-        syncAndSaveData({ currentUser: currentUserRef.current });
+        // 🛡️ [SyncEngine] Pass isInternal=true to bypass the lock we just set
+        syncAndSaveData({ currentUser: currentUserRef.current }, false, true); 
       }
 
+      // 🛡️ [SyncEngine] Abort any existing fetch before starting a new one
+      if (activeLoadControllerRef.current) activeLoadControllerRef.current.abort();
+
       const controller = new AbortController();
+      activeLoadControllerRef.current = controller;
       const timeoutId = setTimeout(() => controller.abort(), 60000); // 🛡️ Increased to 60s for Render cold starts
 
       const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
@@ -627,6 +633,14 @@ export default function App() {
         }
       });
       clearTimeout(timeoutId);
+
+      // 🛡️ [SyncEngine] JSON GUARD: Prevent SyntaxError on HTML error pages (521/504)
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error("🛑 Non-JSON response received (fetch):", text.substring(0, 100));
+        throw new Error(`Cloud fetch returned non-JSON response (${response.status})`);
+      }
 
       if (!response.ok) throw new Error("Cloud fetch failed");
       
@@ -869,10 +883,11 @@ export default function App() {
       }
     }
   }, [syncPendingData, checkForUpdates]);
-  const pushStateToCloud = useCallback(async (updates, isForce = false) => {
+  const pushStateToCloud = useCallback(async (updates, isForce = false, isInternal = false) => {
     if (!isUsingCloudRef.current) return;
     
-    if (syncLockRef.current) {
+    // 🛡️ [SyncEngine] Allow internal calls (from loadData) to bypass the lock
+    if (syncLockRef.current && !isInternal) {
       console.log("📡 Sync Mutex active, skipping push.");
       return false;
     }
@@ -891,7 +906,7 @@ export default function App() {
       
       const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout for push
+      const timeoutId = setTimeout(() => controller.abort(), 45000); // 🛡️ [SyncEngine] Increased to 45s for resilience (v2.6.83)
 
       // 🛡️ [Tick System] Sanitize Support Tickets (v2.6.29)
       // Any message marked 'pending' is promoted to 'sent' for the cloud push.
@@ -921,6 +936,14 @@ export default function App() {
         })
       });
       clearTimeout(timeoutId);
+
+      // 🛡️ [SyncEngine] JSON GUARD: Prevent SyntaxError on HTML error pages (521/504)
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error("🛑 Non-JSON response received (push):", text.substring(0, 100));
+        throw new Error(`Server returned non-JSON response (${response.status})`);
+      }
 
       if (response.status === 429) {
         console.log("🛑 Server Rate Limit (429). Engaging 60s Global Backoff.");
@@ -1022,7 +1045,7 @@ export default function App() {
   const isPendingAtomicRef = useRef(false);
   const syncTimeoutRef = useRef(null);
 
-  const syncAndSaveData = async (updatesIn = {}, isAtomic = false) => {
+  const syncAndSaveData = async (updatesIn = {}, isAtomic = false, isInternal = false) => {
     // 🛡️ [AtomicBadgeInjection] Ensure latest seen history is always pushed with user record
     const updates = { ...updatesIn };
     if (currentUserRef.current?.role === 'admin') {
@@ -1143,7 +1166,7 @@ export default function App() {
           isPendingAtomicRef.current = false;
           
           console.log("🚀 [SyncEngine] Atomic Update Detected. Pushing Immediately:", finalUpdates.atomicKeys);
-          await pushStateToCloud(finalUpdates);
+          await pushStateToCloud(finalUpdates, false, isInternal);
         } else {
           if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
           syncTimeoutRef.current = setTimeout(async () => {
@@ -1159,7 +1182,7 @@ export default function App() {
             }
             
             console.log("⏱️ [SyncEngine] Debounced Push Executing...");
-            await pushStateToCloud(finalUpdates);
+            await pushStateToCloud(finalUpdates, false, isInternal);
           }, 3000); 
         }
       }

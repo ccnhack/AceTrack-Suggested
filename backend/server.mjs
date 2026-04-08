@@ -57,8 +57,8 @@ const initFirebase = async () => {
 };
 initFirebase();
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.82)
-const APP_VERSION = "2.6.82"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.83)
+const APP_VERSION = "2.6.83"; 
 
 // 🛡️ STABILITY: Panic Handlers to prevent 521 connection refusal on unexpected errors
 process.on('uncaughtException', (err) => {
@@ -627,7 +627,11 @@ router.get('/diagnostics/:filename', apiKeyGuard, asyncHandler(async (req, res) 
 
 // POST /api/v1/save
 router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => {
+  const waitStart = Date.now();
   const release = await syncMutex.acquire();
+  const waitTime = Date.now() - waitStart;
+  if (waitTime > 2000) console.warn(`⚠️ Save Mutex Wait: ${waitTime}ms from ${req.ip}`);
+
   try {
     const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser', 'matchmaking', 'seenAdminActionIds', 'visitedAdminSubTabs'];
     
@@ -666,9 +670,11 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
           incoming = await Promise.all(incoming.map(async (t) => {
              const updatedT = { ...t };
              if (t.startOtp && String(t.startOtp).length === 6 && !String(t.startOtp).startsWith('$2')) {
+                console.log(`🔐 Hashing Start OTP for tournament: ${t.id || 'new'}`);
                 updatedT.startOtp = await hashOtp(t.startOtp);
              }
              if (t.endOtp && String(t.endOtp).length === 6 && !String(t.endOtp).startsWith('$2')) {
+                console.log(`🔐 Hashing End OTP for tournament: ${t.id || 'new'}`);
                 updatedT.endOtp = await hashOtp(t.endOtp);
              }
              return updatedT;
