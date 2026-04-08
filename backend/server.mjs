@@ -57,8 +57,8 @@ const initFirebase = async () => {
 };
 initFirebase();
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.79 — PORT ALIGNMENT)
-const APP_VERSION = "2.6.80"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.81 — PORT 3000 SHIFT)
+const APP_VERSION = "2.6.81"; 
 
 // 🛡️ STABILITY: Panic Handlers to prevent 521 connection refusal on unexpected errors
 process.on('uncaughtException', (err) => {
@@ -258,7 +258,7 @@ io.on('connection', (socket) => {
 // Directories & DB
 // ═══════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 3000;
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const DIAGNOSTICS_DIR = path.join(__dirname, 'diagnostics');
 
@@ -1106,12 +1106,12 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 🚀 Start: 'Immortal' Listener (v2.6.79)
+// 🚀 Start: 'Immortal' Listener (v2.6.81 — Standard Port)
 // ═══════════════════════════════════════════════════════════════
-const server = httpServer.listen(PORT, '0.0.0.0', () => {
+const server = httpServer.listen(PORT, () => {
   const addr = server.address();
   const actualPort = typeof addr === 'string' ? addr : addr.port;
-  console.log(`🚀 AceTrack PORT ALIGNMENT v${APP_VERSION} listening on ${actualPort}`);
+  console.log(`🚀 AceTrack PORT 3000 SHIFT v${APP_VERSION} listening on ${actualPort}`);
   console.log(`🛡️  Database Initial State: ${dbStatus}`);
 });
 
