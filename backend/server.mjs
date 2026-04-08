@@ -58,7 +58,7 @@ try {
 }
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.74)
-const APP_VERSION = "2.6.74"; 
+const APP_VERSION = "2.6.75"; 
 const currentAppVersion = APP_VERSION;
 
 // ═══════════════════════════════════════════════════════════════
@@ -299,9 +299,10 @@ const AuditLog = mongoose.model('AuditLog', AuditLogSchema);
 // 🔐 SECURITY: API KEY Configuration (SEC Fix)
 // In production, failure is mandatory if key is missing.
 const ACE_API_KEY = process.env.ACE_API_KEY || (process.env.NODE_ENV === 'production' ? null : 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=');
-if (!ACE_API_KEY) {
+if (!ACE_API_KEY && process.env.NODE_ENV === 'production') {
   console.error("❌ CRITICAL: ACE_API_KEY is missing in production environment!");
-  process.exit(1); 
+  // 🛡️ STABILITY FIX (v2.6.75): Don't exit process, just log error. 
+  // Exiting causes Render crash loops which are harder to diagnose than 500 errors.
 }
 
 const apiKeyGuard = (req, res, next) => {
@@ -520,11 +521,17 @@ router.get('/diagnostics', apiKeyGuard, async (req, res) => {
   try {
     let cloudFiles = [];
     try {
+      // 🛡️ STABILITY FIX (v2.6.75): Added timeout to prevent event loop hang
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout for Cloudinary search
+
       const result = await cloudinary.search
         .expression('folder:acetrack/diagnostics/*')
         .sort_by('created_at', 'desc')
         .max_results(500)
-        .execute();
+        .execute({ signal: controller.signal });
+      
+      clearTimeout(timeoutId);
         
       cloudFiles = result.resources.map(file => {
         const parts = file.public_id.split('/');
@@ -951,6 +958,20 @@ router.post('/otp/verify', apiKeyGuard, (req, res) => {
 // 🌐 Mount API v1 + backward-compatible un-versioned routes
 // ═══════════════════════════════════════════════════════════════
 app.use('/api', router);
+
+// 🛡️ STABILITY FIX (v2.6.75): Dedicated Root Health Check for Render Load Balancer
+// This bypasses complex middleware to ensure the service stays "Up" during heavy load.
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
+// Root catch-all for legacy health monitors
+app.get('/', (req, res, next) => {
+  if (req.headers.accept?.includes('application/json')) {
+    return res.json({ status: 'ok', version: APP_VERSION });
+  }
+  next();
+});
 
 // ═══════════════════════════════════════════════════════════════
 // 🌐 Public Tournament Results (OWNER Fix: public URL)

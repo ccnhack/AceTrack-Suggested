@@ -7,6 +7,8 @@ services:
     startCommand: node server.mjs
     envVars:
       - key: PORT
-        value: 3005
+        value: 10000
       - key: MONGODB_URI
         sync: false # User must set this in Render UI
+      - key: healthCheckPath
+        value: /health

@@ -48,7 +48,8 @@ if (Platform.OS === 'web') {
 }
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.73)
-const APP_VERSION = "2.6.74"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.75)
+const APP_VERSION = "2.6.75"; 
 const currentAppVersion = APP_VERSION;
 
 export default function App() {
@@ -380,7 +381,8 @@ export default function App() {
       if (!contentType || !contentType.includes('application/json')) {
         const text = await response.text();
         const snippet = text.substring(0, 100).replace(/\n/g, ' ');
-        console.log(`⚠️ Status Check: Received HTML/Plain (possible reboot). Snippet: ${snippet}`);
+        console.log(`⚠️ Status Check: Received HTML/Plain (possible reboot). Status: ${response.status}. Snippet: ${snippet}`);
+        logger.logAction('STATUS_CHECK_NON_JSON', { status: response.status, snippet });
         setIsCloudOnline(false); // Assume temporary offline during reboot
         return;
       }
