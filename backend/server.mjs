@@ -57,8 +57,8 @@ try {
   console.error('❌ Failed to initialize Firebase Admin:', error.message);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.72)
-const APP_VERSION = "2.6.72"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.73)
+const APP_VERSION = "2.6.73"; 
 const currentAppVersion = APP_VERSION;
 
 // ═══════════════════════════════════════════════════════════════
@@ -97,7 +97,6 @@ app.use(cors({
     }
     // 🛡️ DIAGNOSTIC: Log blocked origin to help identify required whitelist additions
     console.warn(`🛑 CORS Blocked: origin=${origin}`);
-    logServerEvent('CORS_BLOCKED', { origin });
     return callback(new Error(`Not allowed by CORS: ${origin}`));
   },
   allowedHeaders: ['Content-Type', 'x-ace-api-key', 'x-socket-id', 'Authorization'],
@@ -1033,7 +1032,7 @@ app.use((err, req, res, next) => {
   
   res.status(status).json({
     "slug": "acetrack-mobile",
-    "version": "2.6.72",
+    "version": "2.6.73",
     "sdkVersion": "50.0.0",
     "timestamp": new Date().toISOString()
   });

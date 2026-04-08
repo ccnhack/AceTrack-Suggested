@@ -39,8 +39,8 @@ async function safeFetch(url, options = {}) {
 
 console.log('\n' + '═'.repeat(70));
 console.log('  🧪  ACETRACK BACKEND E2E TEST SUITE');
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.53)
-const APP_VERSION = "2.6.53"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.73)
+const APP_VERSION = "2.6.73"; 
 const currentAppVersion = APP_VERSION;
 console.log(`  🌐  Target: ${BASE_URL}`);
 console.log(`  ⏰  Run Time: ${new Date().toLocaleString()}`);
@@ -52,11 +52,18 @@ console.log('═'.repeat(70) + '\n');
 console.log('📦 Category 1: Health & Availability');
 
 const healthRes = await safeFetch(`${BASE_URL}/api/health`);
-const healthData = healthRes.ok ? await healthRes.json() : {};
+const healthText = await healthRes.text();
+let healthData = {};
+try {
+  healthData = JSON.parse(healthText);
+} catch (e) {
+  healthData = {};
+}
 assert('E2E-HEALTH-001', 'Health', 'GET /api/health returns 200', healthRes.ok === true, `Status: ${healthRes.status}`);
+assert('E2E-HEALTH-001b', 'Health', 'Response is valid JSON (Not HTML/521)', !healthText.trim().startsWith('<'), `Snippet: ${healthText.substring(0, 30)}`);
 assert('E2E-HEALTH-002', 'Health', 'Health response contains status=ok', healthData.status === 'ok', `Got: ${healthData.status}`);
 assert('E2E-HEALTH-003', 'Health', 'Health response contains version', !!healthData.version, `Version: ${healthData.version}`);
-assert('E2E-HEALTH-004', 'Health', 'Health version matches baseline', healthData.version === '2.6.57' || healthData.version === '2.6.55', `Got: ${healthData.version}`);
+assert('E2E-HEALTH-004', 'Health', 'Health version matches baseline', healthData.version === '2.6.72' || healthData.version === '2.6.71', `Got: ${healthData.version}`);
 assert('E2E-HEALTH-005', 'Health', 'Health response contains uptime', typeof healthData.uptime === 'number' && healthData.uptime > 0, `Uptime: ${healthData.uptime}s`);
 
 // ══════════════════════════════════════════════════════════════
@@ -471,6 +478,41 @@ async function purgeTestData() {
     console.error(`❌ Automated Purge Error: ${e.message}`);
   }
 }
+
+// ══════════════════════════════════════════════════════════════
+// CATEGORY 17: OTP & PRE-SIGNUP VERIFICATION (v2.6.72)
+// ══════════════════════════════════════════════════════════════
+console.log('📦 Category 17: OTP & Pre-Signup Verification');
+
+// 17a. POST /api/otp/send — simulation test
+const otpSendRes = await safeFetch(`${BASE_URL}/api/otp/send`, {
+  method: 'POST',
+  headers: HEADERS,
+  body: JSON.stringify({ target: 'e2e_test@example.com', type: 'email' })
+});
+const otpSendData = otpSendRes.ok ? await otpSendRes.json() : {};
+assert('E2E-OTP-001', 'OTP', 'POST /api/otp/send (Simulation) returns 200', otpSendRes.ok === true, `Status: ${otpSendRes.status}`);
+assert('E2E-OTP-002', 'OTP', 'OTP Send returns success=true', otpSendData.success === true, `Got: ${otpSendData.success}`);
+
+// 17b. POST /api/otp/verify — simulation success (123456)
+const otpVerifyRes = await safeFetch(`${BASE_URL}/api/otp/verify`, {
+  method: 'POST',
+  headers: HEADERS,
+  body: JSON.stringify({ target: 'e2e_test@example.com', type: 'email', code: '123456' })
+});
+const otpVerifyData = otpVerifyRes.ok ? await otpVerifyRes.json() : {};
+assert('E2E-OTP-003', 'OTP', 'POST /api/otp/verify with 123456 returns 200', otpVerifyRes.ok === true, `Status: ${otpVerifyRes.status}`);
+assert('E2E-OTP-004', 'OTP', 'OTP Verify returns success=true', otpVerifyData.success === true, `Got: ${otpVerifyData.success}`);
+
+// 17c. POST /api/otp/verify — simulation failure (wrong code)
+const otpFailRes = await safeFetch(`${BASE_URL}/api/otp/verify`, {
+  method: 'POST',
+  headers: HEADERS,
+  body: JSON.stringify({ target: 'e2e_test@example.com', type: 'email', code: 'wrong_code' })
+});
+const otpFailData = otpFailRes.ok ? await otpFailRes.json() : {};
+assert('E2E-OTP-005', 'OTP', 'POST /api/otp/verify with wrong code returns 400', otpFailRes.status === 400, `Status: ${otpFailRes.status}`);
+assert('E2E-OTP-006', 'OTP', 'OTP Verify returns success=false for wrong code', otpFailData.success === false, `Got: ${otpFailData.success}`);
 
 // ══════════════════════════════════════════════════════════════
 // REPORT & CLEANUP
