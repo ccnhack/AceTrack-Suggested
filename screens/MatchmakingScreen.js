@@ -13,7 +13,8 @@ import { Calendar } from 'react-native-calendars';
 import venuesData from '../data/venues.json';
 
 // Performance: Memoized Sub-components for long list rendering
-const TimeSlotItem = React.memo(({ slot, isBlocked, isInPast, isSelBase, isExpanded, onExpand, onSelect, expandedSlot }) => {
+const TimeSlotItem = React.memo(({ index, slot, isBlocked, isInPast, isSelBase, isExpanded, onExpand, onSelect, expandedSlot }) => {
+  const isRightSide = index % 4 >= 2;
   return (
     <View style={[styles.slotWrapper, { zIndex: isExpanded ? 100 : 1 }]}>
       <TouchableOpacity 
@@ -33,7 +34,7 @@ const TimeSlotItem = React.memo(({ slot, isBlocked, isInPast, isSelBase, isExpan
       </TouchableOpacity>
 
       {isExpanded && !isBlocked && (
-        <View style={styles.subIntervalsPopup}>
+        <View style={[styles.subIntervalsPopup, isRightSide ? { left: undefined, right: 0 } : { left: 0 }]}>
            {[':00', ':15', ':30', ':45'].map((mins, subIndex) => {
              const fullTime = slot.replace(':00', mins);
              const isSel = onSelect.targetTime === fullTime;
@@ -1070,7 +1071,8 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                     
                     return (
                       <TimeSlotItem 
-                        key={`slot-prop-${index}`}
+                        key={`slot-challenge-${index}`}
+                        index={index}
                         slot={slot}
                         isBlocked={isBlocked}
                         isInPast={isInPast}
@@ -1420,6 +1422,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
                     return (
                       <TimeSlotItem 
                         key={`slot-counter-${index}`}
+                        index={index}
                         slot={slot}
                         isBlocked={isBlocked}
                         isInPast={isInPast}
