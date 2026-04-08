@@ -1,12 +1,13 @@
 {
   "name": "acetrack---sports-tournament-platform",
   "private": true,
-  "version": "2.6.78",
+  "version": "2.6.80",
   "engines": {
     "node": ">=18.0.0"
   },
   "type": "module",
   "scripts": {
+    "start": "node server.mjs",
     "dev": "vite",
     "server": "node server.mjs",
     "dev:all": "concurrently \"npm run server\" \"npm run dev\"",

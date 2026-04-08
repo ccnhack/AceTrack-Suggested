@@ -7,6 +7,8 @@ services:
     startCommand: node server.mjs
     healthCheckPath: /health
     envVars:
+      - key: NODE_VERSION
+        value: 20
       - key: PORT
         value: 10000
       - key: MONGODB_URI

@@ -58,7 +58,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.79 — PORT ALIGNMENT)
-const APP_VERSION = "2.6.79"; 
+const APP_VERSION = "2.6.80"; 
 
 // 🛡️ STABILITY: Panic Handlers to prevent 521 connection refusal on unexpected errors
 process.on('uncaughtException', (err) => {
