@@ -18,29 +18,45 @@ cron.schedule('0 * * * *', async () => {
     const tournaments = state.data.tournaments;
     const players = state.data.players || [];
     const now = new Date();
-    const twentyFourHoursFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    const twentyFiveHoursFromNow = new Date(now.getTime() + 25 * 60 * 60 * 1000);
+    
+    // Windows for 24h and 48h reminders
+    const windows = [
+      { 
+        hours: 24, 
+        start: new Date(now.getTime() + 24 * 60 * 60 * 1000), 
+        end: new Date(now.getTime() + 25 * 60 * 60 * 1000),
+        title: 'Tournament Reminder! 🏆',
+        body: (t) => `Your tournament "${t}" starts in 24 hours. Get ready!`
+      },
+      { 
+        hours: 48, 
+        start: new Date(now.getTime() + 48 * 60 * 60 * 1000), 
+        end: new Date(now.getTime() + 49 * 60 * 60 * 1000),
+        title: 'Tournament Coming Up! 🎾',
+        body: (t) => `Your tournament "${t}" starts in 2 days. Mark your calendar!`
+      }
+    ];
 
     for (const tournament of tournaments) {
       const tournamentDate = new Date(tournament.date);
       
-      // Check if tournament starts in the next 24-25 hours window
-      if (tournamentDate >= twentyFourHoursFromNow && tournamentDate < twentyFiveHoursFromNow) {
-        console.log(`🔔 Sending reminders for tournament: ${tournament.title}`);
-        
-        const registeredPlayerIds = tournament.registeredPlayerIds || [];
-        const tokensToNotify = players
-          .filter(p => registeredPlayerIds.includes(p.id) && p.pushToken)
-          .map(p => p.pushToken);
+      for (const window of windows) {
+        if (tournamentDate >= window.start && tournamentDate < window.end) {
+          console.log(`🔔 Sending ${window.hours}h reminders for: ${tournament.title}`);
+          
+          const registeredPlayerIds = tournament.registeredPlayerIds || [];
+          const tokensToNotify = players
+            .filter(p => registeredPlayerIds.includes(p.id) && p.pushTokens && Array.isArray(p.pushTokens))
+            .flatMap(p => p.pushTokens);
 
-        if (tokensToNotify.length > 0) {
-          const tickets = await sendPushNotification(
-            tokensToNotify,
-            'Tournament Reminder! 🏆',
-            `Your tournament "${tournament.title}" starts in 24 hours. Get ready!`,
-            { tournamentId: tournament.id, type: 'TOURNAMENT_REMINDER' }
-          );
-          console.log(`✅ Sent ${tokensToNotify.length} reminders for tourney ${tournament.id}. Tickets:`, tickets.length);
+          if (tokensToNotify.length > 0) {
+            await sendPushNotification(
+              tokensToNotify,
+              window.title,
+              window.body(tournament.title),
+              { tournamentId: tournament.id, type: 'TOURNAMENT_REMINDER', hours: window.hours }
+            );
+          }
         }
       }
     }

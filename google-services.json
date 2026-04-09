@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "688435885108",
+    "project_id": "acetrack-c626f",
+    "storage_bucket": "acetrack-c626f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:688435885108:android:45b77e4168a93b827e0661",
+        "android_client_info": {
+          "package_name": "com.acetrack"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCYXW9Io9JfE7hi4yr2-9ju2urilAn8jD8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

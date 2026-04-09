@@ -16,6 +16,8 @@ import mongoSanitize from 'express-mongo-sanitize';
 import helmet from 'helmet';
 import admin from 'firebase-admin';
 import compression from 'compression';
+import { sendPushNotification } from './notifications.js';
+import './reminders.mjs';
 
 dotenv.config();
 
@@ -625,6 +627,40 @@ router.get('/diagnostics/:filename', apiKeyGuard, asyncHandler(async (req, res) 
   res.status(404).json({ error: 'File not found in cloud or local storage' });
 }));
 
+// POST /api/v1/register-push-token
+router.post('/register-push-token', apiKeyGuard, async (req, res) => {
+  const { userId, pushToken } = req.body;
+  if (!userId || !pushToken) return res.status(400).json({ error: 'Missing userId or pushToken' });
+
+  try {
+    const state = await AppState.findOne().sort({ lastUpdated: -1 });
+    if (!state || !state.data) return res.status(404).json({ error: 'System state not found' });
+
+    const players = state.data.players || [];
+    const playerIndex = players.findIndex(p => p.id === userId);
+
+    if (playerIndex >= 0) {
+      const player = players[playerIndex];
+      const tokens = player.pushTokens || [];
+      if (!tokens.includes(pushToken)) {
+        tokens.push(pushToken);
+        players[playerIndex] = { ...player, pushTokens: tokens };
+        
+        await AppState.updateOne(
+          { _id: state._id },
+          { $set: { "data.players": players, lastUpdated: Date.now() } }
+        );
+        console.log(`📱 [PushReg] Token registered for ${userId}: ${pushToken}`);
+      }
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ error: 'User not found' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /api/v1/save
 router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => {
   const waitStart = Date.now();
@@ -782,6 +818,90 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
     
     logServerEvent('DATA_SAVE_SUCCESS', { lastUpdated: updatedState.lastUpdated, version: updatedState.version, keys: broadcastPayload.keys });
     res.json({ success: true, lastUpdated: updatedState.lastUpdated, version: updatedState.version });
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🔔 NOTIFICATION HOOKS (v2.6.84)
+    // ═══════════════════════════════════════════════════════════════
+    try {
+      // 1. New Match Challenges
+      if (changedKeys.includes('matches')) {
+        const incomingMatches = req.body.matches || [];
+        const existingMatches = currentData.matches || [];
+        const newMatches = incomingMatches.filter(m => !existingMatches.some(em => em.id === m.id));
+        
+        for (const match of newMatches) {
+          if (match.status === 'scheduled' || match.status === 'Pending') {
+            const opponentId = match.player2Id || match.opponentId;
+            const challengerId = match.player1Id || match.challengerId;
+            const opponent = newMasterData.players.find(p => p.id === opponentId);
+            const challenger = newMasterData.players.find(p => p.id === challengerId);
+            
+            if (opponent && opponent.pushTokens?.length > 0) {
+              sendPushNotification(
+                opponent.pushTokens, 
+                "New Match Challenge! 🎾", 
+                `${challenger?.name || 'Someone'} challenged you to a match.`,
+                { matchId: match.id, type: 'MATCH_CHALLENGE' }
+              );
+            }
+          }
+        }
+      }
+
+      // 2. Video Approvals
+      if (changedKeys.includes('matchVideos')) {
+        const incomingVideos = req.body.matchVideos || [];
+        const existingVideos = currentData.matchVideos || [];
+        
+        for (const video of incomingVideos) {
+          const existing = existingVideos.find(ev => ev.id === video.id);
+          const justApproved = video.adminStatus === 'Active' && (!existing || existing.adminStatus !== 'Active');
+          
+          if (justApproved && video.playerIds) {
+            video.playerIds.forEach(pId => {
+              const player = newMasterData.players.find(p => p.id === pId);
+              if (player && player.pushTokens?.length > 0) {
+                sendPushNotification(
+                  player.pushTokens, 
+                  "New Match Recording! 🎥", 
+                  "A recording of your recent match is now available to view.",
+                  { videoId: video.id, type: 'VIDEO_AVAILABLE' }
+                );
+              }
+            });
+          }
+        }
+      }
+
+      // 3. Support Ticket Replies
+      if (changedKeys.includes('supportTickets')) {
+        const incomingTickets = req.body.supportTickets || [];
+        const existingTickets = currentData.supportTickets || [];
+        
+        for (const ticket of incomingTickets) {
+          const existing = existingTickets.find(et => et.id === ticket.id);
+          const newMessages = (ticket.messages || []).slice(existing ? existing.messages.length : 0);
+          
+          for (const msg of newMessages) {
+            // If sender is NOT the ticket owner, it's an admin reply
+            if (msg.senderId !== ticket.userId) {
+              const user = newMasterData.players.find(p => p.id === ticket.userId);
+              if (user && user.pushTokens?.length > 0) {
+                sendPushNotification(
+                  user.pushTokens, 
+                  "Support Ticket Reply ✉️", 
+                  `New reply regarding your ticket: "${ticket.title}"`,
+                  { ticketId: ticket.id, type: 'SUPPORT_REPLY' }
+                );
+              }
+              break; // Only notify once per sync batch
+            }
+          }
+        }
+      }
+    } catch (notifErr) {
+      console.error("❌ Notification Hook Error:", notifErr);
+    }
   } catch (error) {
     console.error("❌ Save Error:", error);
     res.status(500).json({ error: error.message });

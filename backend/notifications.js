@@ -11,11 +11,15 @@ let expo = new Expo();
  * @param {Object} data - Optional data payload
  */
 export async function sendPushNotification(tokens, title, body, data = {}) {
+  const uniqueTokens = [...new Set(tokens)];
   let messages = [];
-  for (let pushToken of tokens) {
+  
+  for (let pushToken of uniqueTokens) {
+    if (!pushToken) continue;
+    
     // Check that all your push tokens appear to be valid Expo push tokens
     if (!Expo.isExpoPushToken(pushToken)) {
-      console.error(`Push token ${pushToken} is not a valid Expo push token`);
+      console.error(`🛑 Push token ${pushToken} is not valid.`);
       continue;
     }
 
@@ -40,6 +44,10 @@ export async function sendPushNotification(tokens, title, body, data = {}) {
     } catch (error) {
       console.error('❌ Expo Push Error:', error);
     }
+  }
+
+  if (tickets.length > 0) {
+    console.log(`✅ Push Dispatch: Sent ${messages.length} messages, received ${tickets.length} tickets.`);
   }
 
   // In a production app, you would later check the tickets for errors.

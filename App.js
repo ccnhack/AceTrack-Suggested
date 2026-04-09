@@ -277,6 +277,14 @@ export default function App() {
         localDeviceIdRef.current = hardwareId;
 
         if (Platform.OS !== 'web') {
+          // 1. Listen for clicks on notifications
+          notificationResponseSubscription.current = Notifications.addNotificationResponseReceivedListener(response => {
+            const data = response.notification.request.content.data;
+            console.log('🔔 Notification Response Received:', data);
+            logger.logAction('NOTIFICATION_CLICKED', { data });
+          });
+
+          // 2. Register for Token
           registerForPushNotificationsAsync().then(token => {
             if (token) {
               storage.setItem('push_token', token);
@@ -308,6 +316,9 @@ export default function App() {
         // they can call .connect() on if needed.
       }
       subscription.remove();
+      if (notificationResponseSubscription.current) {
+        notificationResponseSubscription.current.remove();
+      }
     };
   }, [isUsingCloud]); // 🔄 SYNC HARDENING (v2.6.19): Re-init socket when cloud mode toggles
 
@@ -1267,6 +1278,12 @@ export default function App() {
         pendingSyncRef.current = next;
         return next;
       });
+    }
+
+    // 🔔 Register push token for the new user immediately
+    const pushToken = await storage.getItem('push_token');
+    if (pushToken && sanitizedPlayer.id) {
+      sendTokenToBackend(sanitizedPlayer.id, pushToken);
     }
     return success;
   }, [syncAndSaveData]);
