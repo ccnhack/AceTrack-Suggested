@@ -19,7 +19,7 @@ import { AcademyAnalytics } from '../components/AcademyAnalytics';
 const { width, height } = Dimensions.get('window');
 
 export const AcademyScreen = ({ 
-  academyId, user, tournaments, players, matchVideos, matches, evaluations,
+  academyId, user, tournaments = [], players = [], matchVideos = [], matches = [], evaluations = [],
   onSaveTournament, onUpdateTournament, onSaveVideo, onCancelVideo, onRequestDeletion,
   onUpdateUser, onReplyTicket, onUpdateTicketStatus, onTopUp, onRegister, onReschedule, onLogTrace,
   setPlayers, isSyncing, onBatchUpdate, onDeleteTournament

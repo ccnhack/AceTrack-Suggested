@@ -91,9 +91,9 @@ const RankingWrapper = memo((props) => {
 
 const AcademyWrapper = memo((props) => {
   const { user } = useAuth();
-  const { matches, tournaments } = useAppData();
+  const data = useAppData();
   const actions = useAppActions();
-  return <AcademyScreen {...props} {...actions} academyId={user?.id} tournaments={tournaments} matches={matches} Sport={Sport} SkillLevel={SkillLevel} TournamentStructure={TournamentStructure} TournamentFormat={TournamentFormat} />;
+  return <AcademyScreen {...props} {...data} {...actions} academyId={user?.id} Sport={Sport} SkillLevel={SkillLevel} TournamentStructure={TournamentStructure} TournamentFormat={TournamentFormat} />;
 });
 
 const AdminHubWrapper = memo((props) => {
