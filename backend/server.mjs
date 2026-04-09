@@ -17,6 +17,7 @@ import helmet from 'helmet';
 import admin from 'firebase-admin';
 import compression from 'compression';
 import { sendPushNotification } from './notifications.js';
+import './reminders.mjs';
 
 dotenv.config();
 
@@ -1229,8 +1230,6 @@ app.use((err, req, res, next) => {
     "version": "2.6.74",
     "timestamp": new Date().toISOString()
   });
-// 🕓 Initialize Scheduled Reminders (v2.6.84)
-import './reminders.mjs';
 
 // 🚀 Start: 'Immortal' Listener (v2.6.81 — Standard Port)
 // ═══════════════════════════════════════════════════════════════
