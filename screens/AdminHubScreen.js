@@ -1044,37 +1044,6 @@ const AdminHubScreen = ({
               />
             </View>
 
-            {recentLogFiles.length > 0 && !diagUserSearch && (
-              <View style={{ marginBottom: 12 }}>
-                <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#64748B', marginLeft: 4, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Recent System Activity</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {recentLogFiles.map(file => (
-                    <TouchableOpacity 
-                      key={file}
-                      onPress={async () => {
-                        setSelectedDiagUser(null);
-                        setSelectedDiagFile(file);
-                        setDiagContent(null);
-                        setIsDownloading(true);
-                        try {
-                          const res = await fetch(`${activeApiUrl}/api/diagnostics/${file}`, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
-                          if (res.ok) {
-                            const text = await res.text();
-                            setDiagContent(text);
-                            setDiagFileSize(text.length);
-                          }
-                        } catch (e) { Alert.alert("Error", "Could not fetch file."); }
-                        finally { setIsDownloading(false); }
-                      }}
-                      style={{ backgroundColor: '#F0F9FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, marginRight: 8, borderWidth: 1, borderColor: '#BAE6FD', flexDirection: 'row', alignItems: 'center' }}
-                    >
-                      <Ionicons name="document-text-outline" size={12} color="#0369A1" style={{ marginRight: 4 }} />
-                      <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#0369A1' }}>{(file || '').split('_')[0] || 'Report'}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
 
             <View style={styles.userListScroll}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
