@@ -1230,6 +1230,7 @@ app.use((err, req, res, next) => {
     "version": "2.6.74",
     "timestamp": new Date().toISOString()
   });
+});
 
 // 🚀 Start: 'Immortal' Listener (v2.6.81 — Standard Port)
 // ═══════════════════════════════════════════════════════════════
