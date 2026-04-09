@@ -24,6 +24,16 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// 🕓 Utility: Get current IST timestamp for filenames (v2.6.84)
+const getISTTimestamp = () => {
+  const now = new Date();
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  return new Date(now.getTime() + istOffset).toISOString()
+    .replace(/T/, '_')
+    .replace(/\..+/, '')
+    .replace(/:/g, '-');
+};
+
 // ═══════════════════════════════════════════════════════════════
 // ☁️ Cloudinary Configuration
 // ═══════════════════════════════════════════════════════════════
@@ -563,11 +573,12 @@ router.get('/status', apiKeyGuard, async (req, res) => {
 // GET /api/v1/diagnostics
 router.get('/diagnostics', apiKeyGuard, async (req, res) => {
   try {
-    let cloudFiles = [];
+    let allFilesWithMeta = [];
+
+    // 1. Fetch Cloud Files with metadata
     try {
-      // 🛡️ STABILITY FIX (v2.6.75): Added timeout to prevent event loop hang
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout for Cloudinary search
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
 
       const result = await cloudinary.search
         .expression('folder:acetrack/diagnostics/*')
@@ -577,25 +588,47 @@ router.get('/diagnostics', apiKeyGuard, async (req, res) => {
       
       clearTimeout(timeoutId);
         
-      cloudFiles = result.resources.map(file => {
+      result.resources.forEach(file => {
         const parts = file.public_id.split('/');
-        return parts[parts.length - 1];
+        allFilesWithMeta.push({
+          name: parts[parts.length - 1],
+          timestamp: new Date(file.created_at).getTime()
+        });
       });
     } catch (e) {
-      console.warn('Cloudinary search failed, fetching only local files:', e.message);
+      console.warn('Cloudinary search failed:', e.message);
     }
     
-    let localFiles = [];
+    // 2. Fetch Local Files with metadata
     try {
       if (fs.existsSync(DIAGNOSTICS_DIR)) {
-        localFiles = fs.readdirSync(DIAGNOSTICS_DIR);
+        const localFiles = fs.readdirSync(DIAGNOSTICS_DIR);
+        localFiles.forEach(file => {
+          const stats = fs.statSync(path.join(DIAGNOSTICS_DIR, file));
+          allFilesWithMeta.push({
+            name: file,
+            timestamp: stats.mtime.getTime()
+          });
+        });
       }
     } catch (e) {
-      console.warn('Local read failed:', e.message);
+      console.warn('Local diagnostic read failed:', e.message);
     }
     
-    const allFiles = [...new Set([...cloudFiles, ...localFiles])];
-    res.json({ success: true, files: allFiles });
+    // 3. De-duplicate and Sort Global List (Latest First)
+    const uniqueFilesMap = new Map();
+    allFilesWithMeta.forEach(f => {
+      // Keep the one with the latest timestamp if duplicates exist
+      if (!uniqueFilesMap.has(f.name) || uniqueFilesMap.get(f.name) < f.timestamp) {
+        uniqueFilesMap.set(f.name, f.timestamp);
+      }
+    });
+
+    const sortedFiles = Array.from(uniqueFilesMap.entries())
+      .sort((a, b) => b[1] - a[1]) // Descending
+      .map(entry => entry[0]);
+
+    res.json({ success: true, files: sortedFiles });
   } catch (error) {
     console.error('Diagnostics Fetch Error:', error);
     res.status(500).json({ error: error.message });
@@ -958,10 +991,7 @@ router.post('/upload', apiKeyGuard, upload.single('video'), async (req, res) => 
 // POST /api/v1/diagnostics
 router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), asyncHandler(async (req, res) => {
   const { username, logs, prefix, deviceId } = req.body;
-    const now = new Date();
-    const istOffset = 5.5 * 60 * 60 * 1000;
-    const istDate = new Date(now.getTime() + istOffset);
-    const timestamp = istDate.toISOString().replace(/T/, '_').replace(/\..+/, '').replace(/:/g, '-');
+    const timestamp = getISTTimestamp();
     const safeUsername = username.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     
     try {
@@ -1044,7 +1074,7 @@ router.post('/diagnostics/auto-flush', apiKeyGuard, validate(AutoFlushSchema), a
   const { username, deviceId, logs } = req.body;
   const safeUser = String(username || 'unknown').replace(/[^a-zA-Z0-9-]/gi, '_');
   const safeDevice = String(deviceId || 'unknown').replace(/[^a-zA-Z0-9-]/gi, '_');
-  const timestamp = Date.now();
+  const timestamp = getISTTimestamp();
   const filename = `${safeUser}_${safeDevice}_${timestamp}.log`;
   
   const filePath = path.join(DIAGNOSTICS_DIR, filename);
