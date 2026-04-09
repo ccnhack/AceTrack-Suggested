@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, Image, StyleSheet, Dimensions
 import { Ionicons } from '@expo/vector-icons';
 import designSystem from '../theme/designSystem';
 import { getSafeAvatar } from '../utils/imageUtils';
+import SafeAvatar from './SafeAvatar';
 
 const PlayerDashboardView = ({ players, tournaments, title }) => {
   const [selectedPlayerId, setSelectedPlayerId] = useState(null);
@@ -25,8 +26,11 @@ const PlayerDashboardView = ({ players, tournaments, title }) => {
             ]}
           >
             <View style={styles.cardHeader}>
-              <Image 
-                source={getSafeAvatar(p.avatar, p.name)}
+              <SafeAvatar 
+                uri={p.avatar} 
+                name={p.name} 
+                size={44}
+                borderRadius={14}
                 style={styles.avatar} 
               />
               <View style={styles.info}>

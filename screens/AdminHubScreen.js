@@ -9,6 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { getSafeAvatar } from '../utils/imageUtils';
+import SafeAvatar from '../components/SafeAvatar';
 import PlayerDashboardView from '../components/PlayerDashboardView';
 import AdminAuditLogsPanel from '../components/AdminAuditLogsPanel';
 import AdminRecordingsDashboard from '../components/AdminRecordingsDashboard';
@@ -1064,8 +1065,11 @@ const AdminHubScreen = ({
                       onPress={() => handleSelectDiagPlayer(p)}
                       style={[styles.miniUserCard, selectedDiagUser?.id === p.id && styles.miniUserCardActive]}
                     >
-                      <Image 
-                        source={getSafeAvatar(p.avatar, p.name)} 
+                      <SafeAvatar 
+                        uri={p.avatar} 
+                        name={p.name} 
+                        size={44}
+                        borderRadius={14}
                         style={styles.miniAvatar} 
                       />
                       <View style={{ alignItems: 'center' }}>

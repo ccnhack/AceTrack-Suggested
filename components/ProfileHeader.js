@@ -2,32 +2,9 @@ import React, { memo } from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getSafeAvatar } from '../utils/imageUtils';
+import SafeAvatar from './SafeAvatar';
 
-const getInitials = (name) => {
-  if (!name) return 'AT';
-  return name
-    .split(' ')
-    .map(n => n[0])
-    .join('')
-    .toUpperCase()
-    .substring(0, 2);
-};
-
-const AvatarPlaceholder = ({ name, size = 80 }) => {
-  const initials = getInitials(name);
-  const colors = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'];
-  const colorIndex = (name || '').length % colors.length;
-  const backgroundColor = colors[colorIndex];
-
-  return (
-    <View style={[
-      styles.avatarPlaceholder, 
-      { width: size, height: size, borderRadius: size / 2, backgroundColor }
-    ]}>
-      <Text style={[styles.avatarInitials, { fontSize: size * 0.4 }]}>{initials}</Text>
-    </View>
-  );
-};
+// SafeAvatar handles these fallbacks internally now
 
 const ProfileHeader = memo(({ 
   user, 
@@ -54,22 +31,18 @@ const ProfileHeader = memo(({
   return (
     <View style={styles.header}>
       <View style={styles.avatarContainer}>
-        {user?.avatar && !imageError && !localImageError ? (
-          <Image 
-            key={user.avatar}
-            source={getSafeAvatar(user.avatar, user.name)}
-            style={styles.avatar} 
-            onError={() => {
-              console.log("ProfileHeader: Profile image failed to load, falling back to placeholder");
-              setLocalImageError(true);
-            }}
-          />
-        ) : user?.role === 'admin' ? (
+        {user?.role === 'admin' ? (
           <View style={[styles.avatar, { backgroundColor: '#0F172A', borderWidth: 2, borderColor: '#3B82F6', justifyContent: 'center', alignItems: 'center' }]}>
             <Image source={require('../assets/icon.png')} style={{width: 50, height: 50, resizeMode: 'contain'}} />
           </View>
         ) : (
-          <AvatarPlaceholder name={user?.name} size={80} />
+          <SafeAvatar 
+            uri={user?.avatar} 
+            name={user?.name} 
+            size={80} 
+            borderRadius={40} 
+            style={styles.avatar} 
+          />
         )}
         <TouchableOpacity 
           style={styles.editBtn} 
@@ -299,5 +272,5 @@ const styles = StyleSheet.create({
   },
 });
 
-export { AvatarPlaceholder, getInitials };
+export { SafeAvatar as AvatarPlaceholder };
 export default ProfileHeader;
