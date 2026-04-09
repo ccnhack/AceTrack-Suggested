@@ -49,7 +49,7 @@ if (Platform.OS === 'web') {
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.73)
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.83)
-const APP_VERSION = "2.6.83"; 
+const APP_VERSION = "2.6.84"; 
 const currentAppVersion = APP_VERSION;
 
 export default function App() {
