@@ -24,8 +24,8 @@ import storage from '../utils/storage';
 import ProfileHeader, { AvatarPlaceholder, getInitials } from '../components/ProfileHeader';
 import ProfileMenuSection from '../components/ProfileMenuSection';
 
-const calculateAcademyTier = (uid, tournaments) => {
-  const hostedCount = tournaments.filter(t => t.creatorId === uid).length;
+const calculateAcademyTier = (uid, tournaments = []) => {
+  const hostedCount = (tournaments || []).filter(t => t.creatorId === uid).length;
   if (hostedCount >= 5) return 'Gold';
   if (hostedCount >= 2) return 'Silver';
   return 'Bronze';
@@ -91,8 +91,8 @@ const NotificationsModal = ({ visible, onClose, notifications, onClear, onNotifi
 };
 
 const ProfileScreen = ({ 
-  user, players, tournaments, onUpdateUser, onLogout, 
-  supportTickets, onSaveTicket, onUpdateTicketStatus, onReplyTicket,
+  user, players = [], tournaments = [], onUpdateUser, onLogout, 
+  supportTickets = [], onSaveTicket, onUpdateTicketStatus, onReplyTicket,
   onTopUp, navigation,  isCloudOnline,
   lastSyncTime,
   onManualSync,

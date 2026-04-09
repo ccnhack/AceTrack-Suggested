@@ -45,7 +45,7 @@ const POPULAR_CITIES = ['All', ...Object.keys(CITY_COORDS)];
 
 const ExploreScreen = (props) => {
   const { 
-    tournaments, onSelect, reschedulingFrom, onCancelReschedule, userId, 
+    tournaments = [], onSelect, reschedulingFrom, onCancelReschedule, userId, 
     userRole, userSports, players = [], Sport, SkillLevel, user,
     onRegister, onAssignCoach, isSyncing, onUpdateTournament
   } = props;

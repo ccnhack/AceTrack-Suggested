@@ -53,10 +53,12 @@ const Tab = createBottomTabNavigator();
 // Stable Screen Wrappers to prevent unmounting
 const ExploreWrapper = memo((props) => {
   const { user, role } = useAuth();
+  const data = useAppData();
   const actions = useAppActions();
   return (
     <ExploreScreen 
       {...props} 
+      {...data}
       {...actions} 
       userId={user?.id}
       userRole={role}
@@ -126,7 +128,10 @@ const MatchmakingWrapper = memo((props) => {
 
 const ProfileWrapper = memo((props) => {
   const { user, onLogout } = useAuth();
-  const { isCloudOnline, isUsingCloud, lastSyncTime, appVersion, supportTickets, players } = useAppData();
+  const { 
+    isCloudOnline, isUsingCloud, lastSyncTime, appVersion, 
+    supportTickets, players, tournaments 
+  } = useAppData();
   const { 
     onManualSync, onUploadLogs, isUploadingLogs, onSaveTicket, 
     onReplyTicket, onUpdateUser, onTopUp, setIsProfileEditActive, 
@@ -145,6 +150,7 @@ const ProfileWrapper = memo((props) => {
       appVersion={appVersion}
       supportTickets={supportTickets}
       players={players}
+      tournaments={tournaments}
       onManualSync={onManualSync}
       onUploadLogs={onUploadLogs}
       isUploadingLogs={isUploadingLogs}
