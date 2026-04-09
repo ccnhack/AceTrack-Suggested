@@ -1008,6 +1008,7 @@ router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), asyncHandl
     const filename = `${filePrefix}${safeUsername}${safeDeviceId}_${timestamp}.json`;
     const filepath = path.join(DIAGNOSTICS_DIR, filename);
 
+    const istDate = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
     const reportData = {
       username,
       deviceId: deviceId || 'Unknown Device',
