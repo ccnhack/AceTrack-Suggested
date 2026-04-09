@@ -16,14 +16,14 @@
       "backgroundColor": "#0F172A"
     },
     "android": {
-      "package": "com.hacker1717.acetrackmobile.suggested",
+      "package": "com.acetrack",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#0F172A"
       }
     },
     "ios": {
-      "bundleIdentifier": "com.hacker1717.acetrackmobile.suggested"
+      "bundleIdentifier": "com.acetrack"
     },
     "runtimeVersion": "2.0.0",
     "plugins": [
