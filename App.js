@@ -49,7 +49,7 @@ if (Platform.OS === 'web') {
 }
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.101)
-const APP_VERSION = "2.6.101"; 
+const APP_VERSION = "2.6.102"; 
 const currentAppVersion = APP_VERSION;
 
 export default function App() {
@@ -2139,7 +2139,14 @@ export default function App() {
               ...item,
               registeredPlayerIds: [...new Set([...(item.registeredPlayerIds || []), userId])],
               pendingPaymentPlayerIds: (item.pendingPaymentPlayerIds || []).filter(pid => pid !== userId),
-              waitlistedPlayerIds: (item.waitlistedPlayerIds || []).filter(pid => pid !== userId)
+              waitlistedPlayerIds: (item.waitlistedPlayerIds || []).filter(pid => pid !== userId),
+              // 🛡️ v2.6.102: Clear opted-out status on re-registration
+              optedOutPlayerIds: (item.optedOutPlayerIds || []).filter(pid => pid !== userId),
+              playerStatuses: (() => {
+                const rest = { ...(item.playerStatuses || {}) };
+                delete rest[userId]; // Reset to default/registered status
+                return rest;
+              })()
             };
           }
           return item;
@@ -2209,7 +2216,17 @@ export default function App() {
       setTournaments(prevT => {
         const updated = (prevT || []).map(item => 
           item && item.id === t.id 
-            ? { ...item, waitlistedPlayerIds: [...new Set([...(item.waitlistedPlayerIds || []), userId])] } 
+            ? { 
+                ...item, 
+                waitlistedPlayerIds: [...new Set([...(item.waitlistedPlayerIds || []), userId])],
+                // 🛡️ v2.6.102: Clear opted-out status when re-joining waitlist
+                optedOutPlayerIds: (item.optedOutPlayerIds || []).filter(pid => pid !== userId),
+                playerStatuses: (() => {
+                  const rest = { ...(item.playerStatuses || {}) };
+                  delete rest[userId];
+                  return rest;
+                })()
+              } 
             : item
         );
         syncAndSaveData({ tournaments: updated });
@@ -2255,7 +2272,14 @@ export default function App() {
               pendingPaymentPlayerIds: isPaid 
                 ? [...new Set([...(updatedItem.pendingPaymentPlayerIds || []), promotedPlayerId])] 
                 : (item.pendingPaymentPlayerIds || []),
-              waitlistedPlayerIds: updatedItem.waitlistedPlayerIds.filter(pid => pid !== promotedPlayerId)
+              waitlistedPlayerIds: updatedItem.waitlistedPlayerIds.filter(pid => pid !== promotedPlayerId),
+              // 🛡️ v2.6.102: Clear opted-out status for the promoted player
+              optedOutPlayerIds: (updatedItem.optedOutPlayerIds || []).filter(pid => pid !== promotedPlayerId),
+              playerStatuses: (() => {
+                const rest = { ...(updatedItem.playerStatuses || {}) };
+                delete rest[promotedPlayerId];
+                return rest;
+              })()
             };
             
             // Send notification to promoted player

@@ -56,7 +56,7 @@ async function safeFetch(url, options = {}) {
 console.log('\n' + '═'.repeat(70));
 console.log('  🧪  ACETRACK BACKEND E2E TEST SUITE');
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.101)
-const APP_VERSION = "2.6.101"; 
+const APP_VERSION = "2.6.102"; 
 const currentAppVersion = APP_VERSION;
 console.log(`  🌐  Target: ${BASE_URL}`);
 console.log(`  ⏰  Run Time: ${new Date().toLocaleString()}`);
@@ -545,7 +545,7 @@ const otpFailRes = await safeFetch(`${BASE_URL}/api/otp/verify`, {
   headers: HEADERS,
   body: JSON.stringify({ target: 'e2e_test@example.com', type: 'email', code: 'wrong_code' })
 });
-const otpFailData = otpFailRes.ok ? await otpFailRes.json() : {};
+const otpFailData = await otpFailRes.json();
 assert('E2E-OTP-005', 'OTP', 'POST /api/otp/verify with wrong code returns 400', otpFailRes.status === 400, `Status: ${otpFailRes.status}`);
 assert('E2E-OTP-006', 'OTP', 'OTP Verify returns success=false for wrong code', otpFailData.success === false, `Got: ${otpFailData.success}`);
 
