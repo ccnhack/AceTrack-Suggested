@@ -695,7 +695,9 @@ router.post('/register-push-token', apiKeyGuard, async (req, res) => {
 
     if (playerIndex >= 0) {
       const player = players[playerIndex];
-      const tokens = player.pushTokens || [];
+      // 🛡️ [NOTIFY_DEBUG] Sanitize tokens (remove nulls/empty)
+      let tokens = (player.pushTokens || []).filter(t => !!t && typeof t === 'string');
+      
       if (!tokens.includes(pushToken)) {
         tokens.push(pushToken);
         players[playerIndex] = { ...player, pushTokens: tokens };
@@ -704,10 +706,13 @@ router.post('/register-push-token', apiKeyGuard, async (req, res) => {
           { _id: state._id },
           { $set: { "data.players": players, lastUpdated: Date.now() } }
         );
-        console.log(`📱 [PUSH_TRACE] Registered ${pushToken} for ${userId}. Total tokens: ${tokens.length}`);
+        console.log(`📱 [NOTIFY_DEBUG] Token Registered: ${pushToken.substring(0, 15)}... for user ${userId}. Total: ${tokens.length}`);
+      } else {
+        console.log(`📱 [NOTIFY_DEBUG] Token already exists for user ${userId}`);
       }
       res.json({ success: true });
     } else {
+      console.warn(`🛑 [NOTIFY_DEBUG] Registration failed: User ${userId} not found`);
       res.status(404).json({ error: 'User not found' });
     }
   } catch (error) {
