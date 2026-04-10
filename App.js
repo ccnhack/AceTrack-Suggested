@@ -48,8 +48,8 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.99)
-const APP_VERSION = "2.6.99"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.101)
+const APP_VERSION = "2.6.101"; 
 const currentAppVersion = APP_VERSION;
 
 export default function App() {
@@ -2244,9 +2244,17 @@ export default function App() {
           // 🛡️ v2.6.99: Auto-promote first waitlisted player when a registered slot opens
           if (wasRegistered && (updatedItem.waitlistedPlayerIds || []).length > 0) {
             const promotedPlayerId = updatedItem.waitlistedPlayerIds[0];
+            // 🛡️ v2.6.100: Check if payment is required (v2.6.101 Hardened Check)
+            const isPaid = (updatedItem.entryFee || 0) > 0;
+            
             updatedItem = {
               ...updatedItem,
-              registeredPlayerIds: [...(updatedItem.registeredPlayerIds || []), promotedPlayerId],
+              registeredPlayerIds: isPaid 
+                ? (updatedItem.registeredPlayerIds || []) 
+                : [...new Set([...(updatedItem.registeredPlayerIds || []), promotedPlayerId])],
+              pendingPaymentPlayerIds: isPaid 
+                ? [...new Set([...(updatedItem.pendingPaymentPlayerIds || []), promotedPlayerId])] 
+                : (item.pendingPaymentPlayerIds || []),
               waitlistedPlayerIds: updatedItem.waitlistedPlayerIds.filter(pid => pid !== promotedPlayerId)
             };
             
@@ -2257,7 +2265,9 @@ export default function App() {
                 const notification = {
                   id: `notif_promote_${Date.now()}`,
                   title: 'Slot Opened!',
-                  message: `A slot opened up in "${item.title}". You have been promoted from the waitlist and are now registered!`,
+                  message: isPaid 
+                    ? `A slot opened up in "${item.title}". You have been promoted from the waitlist! Please complete payment to finalize registration.`
+                    : `A slot opened up in "${item.title}". You have been promoted from the waitlist and are now registered!`,
                   date: new Date().toISOString(),
                   read: false,
                   type: 'tournament_registration',
@@ -2266,7 +2276,10 @@ export default function App() {
                 const updatedPromoted = {
                   ...promoted,
                   notifications: [notification, ...(promoted.notifications || [])],
-                  registeredTournamentIds: [...new Set([...(promoted.registeredTournamentIds || []), item.id])]
+                  // Skip adding to registeredTournamentIds if payment is pending
+                  registeredTournamentIds: isPaid 
+                    ? (promoted.registeredTournamentIds || []) 
+                    : [...new Set([...(promoted.registeredTournamentIds || []), item.id])]
                 };
                 const updatedPlayers = prevPlayers.map(p => 
                   String(p.id).toLowerCase() === String(promotedPlayerId).toLowerCase() ? updatedPromoted : p

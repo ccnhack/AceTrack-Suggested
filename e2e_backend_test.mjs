@@ -55,8 +55,8 @@ async function safeFetch(url, options = {}) {
 
 console.log('\n' + '═'.repeat(70));
 console.log('  🧪  ACETRACK BACKEND E2E TEST SUITE');
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.99)
-const APP_VERSION = "2.6.99"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.101)
+const APP_VERSION = "2.6.101"; 
 const currentAppVersion = APP_VERSION;
 console.log(`  🌐  Target: ${BASE_URL}`);
 console.log(`  ⏰  Run Time: ${new Date().toLocaleString()}`);
@@ -425,10 +425,11 @@ const playerCreatePayload = {
   players: [{ id: e2ePlayerId, name: 'E2E Merge Test', devices: [{ id: 'dev1' }] }],
   version: (statusData.version || 0) + 1
 };
+let mergeCreateRes = { ok: false };
 if (isProduction && !BYPASS_PROD_SAFETY) {
   assert('E2E-MRG-001', 'Merge', 'Create test player SKIPPED due to Production Safety', true, 'Safety Block Active');
 } else {
-  const mergeCreateRes = await safeFetch(`${BASE_URL}/api/save`, { method: 'POST', headers: HEADERS, body: JSON.stringify(playerCreatePayload) });
+  mergeCreateRes = await safeFetch(`${BASE_URL}/api/save`, { method: 'POST', headers: HEADERS, body: JSON.stringify(playerCreatePayload) });
   assert('E2E-MRG-001', 'Merge', 'Create test player returns 200', mergeCreateRes.ok === true, `Status: ${mergeCreateRes.status}`);
 }
 
@@ -469,6 +470,7 @@ async function purgeTestData() {
     console.log('🔒 Purge SKIPPED on Production (Safety Active)');
     return;
   }
+  try {
     const dataRes = await safeFetch(`${BASE_URL}/api/data`, { headers: HEADERS });
     if (!dataRes.ok) throw new Error('Failed to fetch data for purge');
     const appData = await dataRes.json();
