@@ -26,13 +26,32 @@ const TournamentCard = ({
   
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const deadline = t.registrationDeadline ? new Date(t.registrationDeadline) : null;
+
+  // 🛡️ [RegEngine] Robust Parsing for regional formats (DD-MM-YYYY)
+  const parseDate = (d) => {
+    if (!d) return null;
+    let date = new Date(d);
+    if (isNaN(date.getTime())) {
+      const parts = d.split('-');
+      if (parts.length === 3) {
+        if (parts[2].length === 4) return new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+        if (parts[0].length === 4) return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      }
+    }
+    return isNaN(date.getTime()) ? null : date;
+  };
+
+  const deadline = parseDate(t.registrationDeadline);
   if (deadline) deadline.setHours(0, 0, 0, 0);
+  
   const diffTime = deadline ? deadline.getTime() - today.getTime() : null;
   const diffDays = diffTime !== null ? Math.ceil(diffTime / (1000 * 60 * 60 * 24)) : null;
 
   let registrationMessage = '';
-  if (diffDays !== null) {
+  // 🛡️ [RegEngine] Status Guard: Close registration if already started or status not upcoming
+  if (t.tournamentStarted || t.status !== 'upcoming') {
+    registrationMessage = 'Registration Closed';
+  } else if (diffDays !== null) {
     if (diffDays < 0) registrationMessage = 'Registration Closed';
     else if (diffDays === 0) registrationMessage = 'Hurry Up! Registration closes today.';
     else if (diffDays <= 3) registrationMessage = `Hurry Up! Registration closes in ${diffDays} day${diffDays === 1 ? '' : 's'}.`;

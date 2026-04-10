@@ -419,7 +419,7 @@ export const AcademyScreen = ({
                     <View style={styles.modalOverlay}>
                         <View style={styles.pickerSheet}>
                             <View style={[styles.pickerHeader, { marginBottom: 12 }]}>
-                                <Text style={styles.pickerTitle}>Select Deadline</Text>
+                                <Text style={styles.pickerTitle}>Select Reg. Deadline</Text>
                                 <TouchableOpacity onPress={() => setActivePicker(null)}>
                                     <Ionicons name="close" size={24} color="#0F172A" />
                                 </TouchableOpacity>
@@ -975,13 +975,13 @@ export const AcademyScreen = ({
                             </TouchableOpacity>
                         </View>
                         <View style={[styles.inputGroup, styles.flex]}>
-                            <Text style={styles.fieldLabel}>Deadline</Text>
+                            <Text style={styles.fieldLabel}>Reg. Deadline</Text>
                             <TouchableOpacity 
                                 disabled={isReadOnly}
                                 onPress={() => setActivePicker('deadline')}
                                 style={styles.pickerBtn}
                             >
-                                <Text style={styles.pickerBtnText}>{formRegDeadline || 'Select Deadline'}</Text>
+                                <Text style={styles.pickerBtnText}>{formRegDeadline || 'Select Reg. Deadline'}</Text>
                                 <Ionicons name="time-outline" size={16} color="#94A3B8" />
                             </TouchableOpacity>
                         </View>

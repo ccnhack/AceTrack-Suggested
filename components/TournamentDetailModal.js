@@ -72,13 +72,35 @@ const TournamentDetailModal = ({
   
   // DATE-BASED CLOSURE: Check if deadline has passed or tournament started
   const isClosed = (() => {
-    if (tournament.tournamentStarted || tournament.status !== 'ongoing') return true;
+    // 🛡️ [RegEngine] Status Guard: ONLY allow registration for upcoming tournaments
+    // Ongoing tournaments (already started) or completed ones are closed.
+    if (tournament.tournamentStarted || tournament.status !== 'upcoming') return true;
+    
     if (tournament.registrationDeadline) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const deadline = new Date(tournament.registrationDeadline);
-      deadline.setHours(23, 59, 59, 999);
-      if (today > deadline) return true;
+
+      // 🛡️ [RegEngine] Robust Parsing for regional formats (DD-MM-YYYY)
+      const parseDate = (d) => {
+        if (!d) return null;
+        let date = new Date(d);
+        if (isNaN(date.getTime())) {
+          const parts = d.split('-');
+          if (parts.length === 3) {
+            // Check if DD-MM-YYYY (parts[2] is year)
+            if (parts[2].length === 4) return new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+            // Check if YYYY-MM-DD (parts[0] is year)
+            if (parts[0].length === 4) return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+          }
+        }
+        return isNaN(date.getTime()) ? null : date;
+      };
+
+      const deadline = parseDate(tournament.registrationDeadline);
+      if (deadline) {
+        deadline.setHours(23, 59, 59, 999);
+        if (today > deadline) return true;
+      }
     }
     return false;
   })();
