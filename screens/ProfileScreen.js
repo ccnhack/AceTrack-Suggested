@@ -48,6 +48,7 @@ const ProfileScreen = ({
   onUploadLogs,
   isUploadingLogs,
   appVersion,
+  pushStatus,
   onRetryMessage,
   onMarkSeen,
   onToggleNotifications
@@ -445,6 +446,26 @@ const ProfileScreen = ({
 
         <View style={styles.footer}>
             <Text style={styles.versionText}>AceTrack v{appVersion || '2.0.1'} (Mobile)</Text>
+            
+            {/* 🛡️ [NOTIFY_DEBUG] Push Status Indicator (v2.6.96) */}
+            <View style={styles.pushStatusContainer}>
+                <View style={[
+                    styles.pushStatusDot, 
+                    { backgroundColor: pushStatus?.status === 'success' ? '#22C55E' : 
+                                       pushStatus?.status === 'requesting' ? '#3B82F6' : 
+                                       pushStatus?.status === 'failed' || pushStatus?.status === 'error' ? '#EF4444' : '#94A3B8' }
+                ]} />
+                <Text style={styles.pushStatusText}>
+                    Push Delivery: {
+                        pushStatus?.status === 'idle' ? 'Not Started' :
+                        pushStatus?.status === 'requesting' ? 'Requesting Token...' :
+                        pushStatus?.status === 'success' ? 'Active & Healthy' :
+                        pushStatus?.status === 'failed' ? 'Registration Failed' :
+                        pushStatus?.status === 'error' ? `Critical Error: ${pushStatus?.error || 'Unknown'}` : 'Unknown'
+                    }
+                </Text>
+            </View>
+
             <Text style={styles.legalText}>Privacy Policy • Terms of Service</Text>
         </View>
 
@@ -2045,6 +2066,31 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     color: '#64748B',
+  },
+  pushStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginTop: 8,
+    marginBottom: 4,
+    gap: 8,
+    alignSelf: 'center',
+  },
+  pushStatusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  pushStatusText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#475569',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
 });
 

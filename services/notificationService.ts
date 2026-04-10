@@ -51,17 +51,23 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     try {
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       finalStatus = existingStatus;
+      console.log(`✅ [NOTIFY_DEBUG] Existing permission status: ${existingStatus}`);
+      
       if (existingStatus !== 'granted') {
+        console.log('⚠️ [NOTIFY_DEBUG] Permissions not granted, requesting...');
         const { status } = await Notifications.requestPermissionsAsync();
         finalStatus = status;
+        console.log(`✅ [NOTIFY_DEBUG] Requested permission status: ${status}`);
       }
     } catch (error) {
-      console.warn('Notification permissions check failed:', error.message);
+      console.warn('❌ [NOTIFY_DEBUG] Notification permissions check failed:', error.message);
+      logger.logAction('PUSH_PERMISSIONS_EXCEPTION', { error: error.message });
       return null;
     }
     
     if (finalStatus !== 'granted') {
-      console.log('Failed to get push token for push notification!');
+      console.log('❌ [NOTIFY_DEBUG] Failed to get push token: permission denied');
+      logger.logAction('PUSH_PERMISSIONS_DENIED', { finalStatus });
       return null;
     }
 
@@ -74,10 +80,11 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 
     try {
       token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-      console.log('Expo Push Token generated successfully.');
-      logger.logAction('PUSH_TOKEN_GENERATED', { token });
+      console.log(`✅ [NOTIFY_DEBUG] Expo Push Token: ${token}`);
+      logger.logAction('PUSH_TOKEN_GENERATED', { token, projectId });
     } catch (e) {
-      console.warn('Error getting push token. Is the native module missing?', e.message);
+      console.warn('❌ [NOTIFY_DEBUG] Error getting push token:', e.message);
+      logger.logAction('PUSH_TOKEN_GENERATION_ERROR', { error: e.message });
       return null;
     }
   } else {
@@ -103,14 +110,15 @@ export async function sendTokenToBackend(userId: string, token: string) {
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      console.log('Failed to register push token on backend:', errorData.message);
-      logger.logAction('PUSH_TOKEN_BACKEND_SYNC_FAIL', { status: response.status, error: errorData.message });
+      const errorData = await response.json().catch(() => ({ message: 'No JSON body' }));
+      console.log(`❌ [NOTIFY_DEBUG] Failed to register token on backend (${response.status}):`, errorData.message);
+      logger.logAction('PUSH_TOKEN_BACKEND_SYNC_FAIL', { status: response.status, error: errorData.message, userId });
     } else {
-      console.log('Push token successfully registered on backend.');
-      logger.logAction('PUSH_TOKEN_BACKEND_SYNC_SUCCESS');
+      console.log(`✅ [NOTIFY_DEBUG] Push token successfully registered for ${userId}`);
+      logger.logAction('PUSH_TOKEN_BACKEND_SYNC_SUCCESS', { userId });
     }
   } catch (error) {
-    console.log('Error sending push token to backend:', error);
+    console.log('❌ [NOTIFY_DEBUG] Exception sending push token to backend:', error.message);
+    logger.logAction('PUSH_TOKEN_BACKEND_SYNC_EXCEPTION', { error: error.message, userId });
   }
 }

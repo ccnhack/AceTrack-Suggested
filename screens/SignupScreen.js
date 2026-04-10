@@ -275,7 +275,7 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, setPlayers, Sport, isU
       preferredFormat: 'Singles',
       city: isAcademy ? formData.city : 'Bangalore',
       state: isAcademy ? formData.state : 'Karnataka',
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(isAcademy ? formData.academyName : `${formData.firstName} ${formData.lastName}`)}&background=random&color=fff`,
+      avatar: '',
       credits: 0,
       cancelledTournamentIds: [],
       rescheduleCounts: {},

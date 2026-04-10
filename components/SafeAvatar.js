@@ -62,7 +62,9 @@ const SafeAvatar = memo(({ uri, name, size = 44, borderRadius = 14, style, textS
         source={{ uri }}
         style={[styles.avatar, { width: size, height: size, borderRadius }, style]}
         onError={() => {
-          console.log(`[SafeAvatar] Failed to load image: ${uri}. Falling back to initials.`);
+          if (!uri.includes('ui-avatars.com')) {
+            console.log(`[SafeAvatar] Failed to load image: ${uri}. Falling back to initials.`);
+          }
           setHasError(true);
         }}
       />

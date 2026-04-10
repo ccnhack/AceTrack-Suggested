@@ -130,7 +130,7 @@ const ProfileWrapper = memo((props) => {
   const { user, onLogout } = useAuth();
   const { 
     isCloudOnline, isUsingCloud, lastSyncTime, appVersion, 
-    supportTickets, players, tournaments 
+    supportTickets, players, tournaments, pushStatus 
   } = useAppData();
   const { 
     onManualSync, onUploadLogs, isUploadingLogs, onSaveTicket, 
@@ -151,6 +151,7 @@ const ProfileWrapper = memo((props) => {
       supportTickets={supportTickets}
       players={players}
       tournaments={tournaments}
+      pushStatus={pushStatus}
       onManualSync={onManualSync}
       onUploadLogs={onUploadLogs}
       isUploadingLogs={isUploadingLogs}
@@ -331,21 +332,21 @@ export default function AppNavigator({
   user, role, players, tournaments, matchVideos, matches, supportTickets, evaluations, 
   seenAdminActionIds, setSeenAdminActionIds, visitedAdminSubTabs, setVisitedAdminSubTabs, 
   reschedulingFrom, auditLogs, onLogout, handlers, appVersion, socketRef,
-  matchmaking, onUpdateMatchmaking, sendUserNotification,
+  matchmaking, onUpdateMatchmaking, sendUserNotification, pushStatus,
   isCloudOnline, isUsingCloud, lastSyncTime
 }) {
   const authParams = useMemo(() => ({
     user, role, onLogout
-  }), [user?.id, user?.avatar, user?.isEmailVerified, user?.isPhoneVerified, role, onLogout]);
+  }), [user?.id, user?.avatar, user?.notifications, user?.isEmailVerified, user?.isPhoneVerified, role, onLogout]);
 
   const dataParams = useMemo(() => ({
     players, tournaments, matchVideos, matches, supportTickets, evaluations,
     seenAdminActionIds, visitedAdminSubTabs, reschedulingFrom, auditLogs,
-    appVersion, matchmaking, isCloudOnline, isUsingCloud, lastSyncTime
+    appVersion, matchmaking, isCloudOnline, isUsingCloud, lastSyncTime, pushStatus
   }), [
     players, tournaments, matchVideos, matches, supportTickets, evaluations,
     seenAdminActionIds, visitedAdminSubTabs, reschedulingFrom, auditLogs,
-    appVersion, matchmaking, isCloudOnline, isUsingCloud, lastSyncTime
+    appVersion, matchmaking, isCloudOnline, isUsingCloud, lastSyncTime, pushStatus
   ]);
 
   const actionParams = useMemo(() => ({

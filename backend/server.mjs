@@ -69,8 +69,8 @@ const initFirebase = async () => {
 };
 initFirebase();
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.88)
-const APP_VERSION = "2.6.91"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.96)
+const APP_VERSION = "2.6.96"; 
 
 // 🕓 Utility: Get current IST timestamp (v2.6.89)
 const getISTDate = () => {
@@ -704,7 +704,7 @@ router.post('/register-push-token', apiKeyGuard, async (req, res) => {
           { _id: state._id },
           { $set: { "data.players": players, lastUpdated: Date.now() } }
         );
-        console.log(`📱 [PushReg] Token registered for ${userId}: ${pushToken}`);
+        console.log(`📱 [PUSH_TRACE] Registered ${pushToken} for ${userId}. Total tokens: ${tokens.length}`);
       }
       res.json({ success: true });
     } else {
@@ -757,6 +757,7 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
         const atomicKeys = req.body.atomicKeys || [];
 
         if (key === 'tournaments' && Array.isArray(incoming)) {
+          console.log(`[SYNC_DEBUG] Processing ${incoming.length} incoming tournaments`);
           incoming = await Promise.all(incoming.map(async (t) => {
              const updatedT = { ...t };
              if (t.startOtp && String(t.startOtp).length === 6 && !String(t.startOtp).startsWith('$2')) {
@@ -774,6 +775,7 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
         if (['players', 'matchmaking', 'tournaments', 'matches', 'auditLogs', 'matchVideos', 'supportTickets', 'evaluations'].includes(key) && Array.isArray(incoming)) {
           const atomicKeys = req.body.atomicKeys || [];
           if (atomicKeys.includes(key)) {
+            console.log(`[SYNC_DEBUG] Atomic Overwrite for key: ${key} (${incoming.length} items)`);
             // 🛡️ ATOMIC SYNC: Direct Overwrite (v2.6.47 Fix for Deletions)
             newMasterData[key] = incoming;
             continue; 
@@ -810,6 +812,7 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
                   
                   if (!existing || statusChanged || slotChanged) {
                     p.isNew = true;
+                    console.log(`[SYNC_DEBUG] Marking matchmaking ${p.id} as isNew=true (Status/Slot update)`);
                   }
                   
                   const merged = existing ? { ...existing, ...p } : p;
@@ -903,6 +906,7 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
           if (match.status === 'scheduled' || match.status === 'Pending') {
             const opponentId = match.player2Id || match.opponentId;
             const challengerId = match.player1Id || match.challengerId;
+            console.log(`[NOTIFY_DEBUG] Processing match ${match.id} (Status: ${match.status}) for opponent ${opponentId}`);
             const opponent = newMasterData.players.find(p => p.id === opponentId);
             const challenger = newMasterData.players.find(p => p.id === challengerId);
             
@@ -998,6 +1002,64 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
               
               if (player.pushTokens?.length > 0) {
                 sendPushNotification(player.pushTokens, title, body, { tournamentId: tournament.id, type: 'TOURNAMENT_REGISTRATION' });
+              }
+            }
+          }
+        }
+      }
+
+      // 5. Matchmaking Challenges (New in v2.6.92)
+      if (changedKeys.includes('matchmaking')) {
+        const incomingMatchmaking = req.body.matchmaking || [];
+        const existingMatchmaking = currentData.matchmaking || [];
+        
+        console.log(`[NOTIFY_DEBUG] Auditing ${incomingMatchmaking.length} matchmaking requests for notifications`);
+        
+        for (const mm of incomingMatchmaking) {
+          const existing = existingMatchmaking.find(emm => emm.id === mm.id);
+          const isNewItem = !existing;
+          const statusChanged = existing && mm.status !== existing.status;
+          const slotChanged = existing && (mm.proposedDate !== existing.proposedDate || mm.proposedTime !== existing.proposedTime);
+          
+          if (isNewItem || statusChanged || slotChanged) {
+            // Determine recipient
+            let recipientId = null;
+            let title = "";
+            let body = "";
+            
+            if (isNewItem && mm.status === 'Pending') {
+              recipientId = mm.receiverId;
+              title = "New Match Challenge! 🎾";
+              body = `${mm.senderName || 'Someone'} challenged you to a match on ${mm.proposedDate} at ${mm.proposedTime}.`;
+            } else if (statusChanged || slotChanged) {
+              // Notify the other party
+              recipientId = (mm.lastUpdatedBy === mm.senderId) ? mm.receiverId : mm.senderId;
+              
+              if (mm.status === 'Countered') {
+                title = "Counter Proposal Received! 🔄";
+                body = `${mm.lastUpdatedByName || 'The opponent'} suggested a new time: ${mm.proposedDate} at ${mm.proposedTime}.`;
+              } else if (mm.status === 'Accepted') {
+                title = "Match Accepted! ✅";
+                body = `Your match for ${mm.proposedDate} at ${mm.proposedTime} has been confirmed.`;
+              } else if (mm.status === 'Declined') {
+                title = "Challenge Declined ❌";
+                body = `The match challenge for ${mm.proposedDate} has been declined.`;
+              }
+            }
+            
+            if (recipientId) {
+              const recipient = newMasterData.players.find(p => p.id === recipientId);
+              if (recipient) {
+                console.log(`[NOTIFY_DEBUG] Triggering matchmaking notify for ${recipientId}: ${title}`);
+                addInAppNotification(recipient, title, body, { mmId: mm.id, type: 'MATCHMAKING_UPDATE' });
+                
+                if (recipient.pushTokens?.length > 0) {
+                  sendPushNotification(recipient.pushTokens, title, body, { mmId: mm.id, type: 'MATCHMAKING_UPDATE' });
+                } else {
+                  console.warn(`[NOTIFY_DEBUG] No push tokens found for recipient ${recipientId}`);
+                }
+              } else {
+                console.warn(`[NOTIFY_DEBUG] Recipient ${recipientId} not found in player master list`);
               }
             }
           }

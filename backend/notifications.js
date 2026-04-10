@@ -46,9 +46,16 @@ export async function sendPushNotification(tokens, title, body, data = {}) {
     }
   }
 
-  if (tickets.length > 0) {
-    console.log(`✅ Push Dispatch: Sent ${messages.length} messages, received ${tickets.length} tickets.`);
-  }
+    if (tickets.length > 0) {
+      console.log(`✅ [NOTIFY_DEBUG] Push Dispatch: Sent ${messages.length} messages, received ${tickets.length} tickets.`);
+      tickets.forEach((t, i) => {
+        if (t.status === 'error') {
+          console.error(`❌ [NOTIFY_DEBUG] Ticket ${i} Error: ${t.message}`);
+        } else {
+          console.log(`🎫 [NOTIFY_DEBUG] Ticket ${i} Success: ${t.id}`);
+        }
+      });
+    }
 
   // In a production app, you would later check the tickets for errors.
   return tickets;

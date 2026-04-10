@@ -2,7 +2,7 @@
   "expo": {
     "name": "AceTrack",
     "slug": "acetrack-mobile",
-    "version": "2.6.91",
+    "version": "2.6.96",
     "sdkVersion": "50.0.0",
     "platforms": [
       "ios",
@@ -28,7 +28,14 @@
     },
     "runtimeVersion": "2.0.0",
     "plugins": [
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#3B82F6"
+        }
+      ]
     ],
     "extra": {
       "eas": {

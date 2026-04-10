@@ -48,8 +48,8 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.87)
-const APP_VERSION = "2.6.91"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.96)
+const APP_VERSION = "2.6.96"; 
 const currentAppVersion = APP_VERSION;
 
 export default function App() {
@@ -93,6 +93,7 @@ export default function App() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [pendingSync, setPendingSync] = useState([]); // Keys that need to be pushed to cloud
   const [visitedAdminSubTabs, setVisitedAdminSubTabs] = useState(new Set());
+  const [pushStatus, setPushStatus] = useState({ status: 'idle', token: null, error: null }); // 🛡️ [NOTIFY_DEBUG] v2.6.96
   const isSyncingRef = useRef(false);
   const isStartupCompleteRef = useRef(false);
   const lastSyncRef = React.useRef(0);
@@ -308,19 +309,37 @@ export default function App() {
             loadData(true);
           });
 
-          // 3. Register for Token
-          registerForPushNotificationsAsync().then(token => {
-            if (token) {
-              storage.setItem('push_token', token);
-              if (currentUserRef.current) sendTokenToBackend(currentUserRef.current.id, token);
-            }
-          });
+          // 3. Register for Token (POSTPONED to after hydration)
+          // registerForPushNotificationsAsync().then(...) - moved below
         }
         
         await hydrateFromStorage();
         isStartupCompleteRef.current = true;
         await loadData(true); 
         setIsInitialized(true); 
+
+        // 🔔 v2.6.95/96: Initiate push registration AFTER hydration and loadData
+        // to ensure currentUserRef.current is populated.
+        if (Platform.OS !== 'web') {
+          setPushStatus(prev => ({ ...prev, status: 'requesting' }));
+          registerForPushNotificationsAsync().then(token => {
+            if (token) {
+              setPushStatus({ status: 'success', token, error: null });
+              storage.setItem('push_token', token);
+              if (currentUserRef.current) {
+                console.log(`📡 [NOTIFY_DEBUG] Syncing token for ${currentUserRef.current.id}`);
+                sendTokenToBackend(currentUserRef.current.id, token);
+              } else {
+                console.warn('⚠️ [NOTIFY_DEBUG] Token generated but no user found to sync.');
+              }
+            } else {
+              setPushStatus({ status: 'failed', token: null, error: 'Token generation failed' });
+            }
+          }).catch(err => {
+            console.error('❌ [NOTIFY_DEBUG] Push Registration Exception:', err);
+            setPushStatus({ status: 'error', token: null, error: err.message });
+          });
+        }
 
       } catch (e) {
         console.error("❌ Critical Startup Error:", e);
@@ -1482,6 +1501,7 @@ export default function App() {
   }, [syncAndSaveData]);
 
   const handleSendUserNotification = useCallback((targetUserId, notification) => {
+    console.log(`[CLIENT_NOTIFY] UI-triggered notification to ${targetUserId}:`, notification.title);
     setPlayers(prevPlayers => {
       const currentP = prevPlayers || [];
       const updatedPlayers = currentP.map(p => {
@@ -2417,6 +2437,7 @@ export default function App() {
           matches={matches}
           supportTickets={supportTickets}
           evaluations={evaluations}
+          pushStatus={pushStatus}
           seenAdminActionIds={seenAdminActionIds}
           setSeenAdminActionIds={setSeenAdminActionIds}
           visitedAdminSubTabs={visitedAdminSubTabs}
@@ -2450,26 +2471,31 @@ export default function App() {
           onClose={() => setShowNotificationsModal(false)}
           notifications={currentUser?.notifications || []}
           onClear={async () => {
-             const updatedUser = { 
-               ...currentUser, 
-               notifications: (currentUser?.notifications || []).map(n => ({ ...n, read: true }))
-             };
-             setCurrentUser(updatedUser);
-             // Sync to cloud
-             memoizedHandlers.onUpdateUser(updatedUser, true);
+             setCurrentUser(prevUser => {
+               if (!prevUser) return null;
+               const updatedUser = { 
+                 ...prevUser, 
+                 notifications: (prevUser.notifications || []).map(n => ({ ...n, read: true }))
+               };
+               currentUserRef.current = updatedUser;
+               memoizedHandlers.onUpdateUser(updatedUser, true);
+               return updatedUser;
+             });
           }}
           onNotificationClick={(notif) => {
             setShowNotificationsModal(false);
             
             // 🛡️ v2.6.85: Mark notification as read on click
-            const updatedNotifications = (currentUser?.notifications || []).map(n => 
-              n.id === notif.id ? { ...n, read: true } : n
-            );
-            const updatedUser = { ...currentUser, notifications: updatedNotifications };
-            
-            setCurrentUser(updatedUser);
-            currentUserRef.current = updatedUser;
-            memoizedHandlers.onUpdateUser(updatedUser, true); // Sync to cloud
+            setCurrentUser(prevUser => {
+              if (!prevUser) return null;
+              const updatedNotifications = (prevUser.notifications || []).map(n => 
+                n.id === notif.id ? { ...n, read: true } : n
+              );
+              const updatedUser = { ...prevUser, notifications: updatedNotifications };
+              currentUserRef.current = updatedUser;
+              memoizedHandlers.onUpdateUser(updatedUser, true); // Sync to cloud
+              return updatedUser;
+            });
 
             if (navigationRef.current) {
                const type = (notif.type || '').toLowerCase();
