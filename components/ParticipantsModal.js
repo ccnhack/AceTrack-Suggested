@@ -206,6 +206,7 @@ const ParticipantsModal = ({
                 const combinedIds = Array.from(new Set([
                   ...(tournament.registeredPlayerIds || []),
                   ...(tournament.pendingPaymentPlayerIds || []),
+                  ...(tournament.waitlistedPlayerIds || []),
                   ...(tournament.interestedPlayerIds || []),
                   ...Object.keys(tournament.playerStatuses || {})
                 ])).filter(pid => !!pid);
@@ -224,6 +225,7 @@ const ParticipantsModal = ({
                   const status = tournament.playerStatuses?.[pid];
                   const isRegistered = (tournament.registeredPlayerIds || []).includes(pid);
                   const isPending = (tournament.pendingPaymentPlayerIds || []).includes(pid);
+                  const isWaitlisted = (tournament.waitlistedPlayerIds || []).includes(pid);
                   const isInterested = (tournament.interestedPlayerIds || []).includes(pid);
 
                   if (!p) {
@@ -264,7 +266,7 @@ const ParticipantsModal = ({
                                   <View style={[styles.verdictTag, { backgroundColor: verdict.bg }]}>
                                       <Text style={[styles.verdictText, { color: verdict.color }]}>{verdict.label}</Text>
                                   </View>
-                                  {(status || isRegistered || isPending || isInterested) && (
+                                  {(status || isRegistered || isPending || isWaitlisted || isInterested) && (
                                       <View style={[
                                           styles.verdictTag, 
                                           { 
@@ -273,6 +275,7 @@ const ParticipantsModal = ({
                                                   status === 'Denied' ? '#FEE2E2' : 
                                                   status === 'Opted-Out' ? '#F1F5F9' : 
                                                   isPending ? '#FEF3C7' : 
+                                                  isWaitlisted ? '#E2E8F0' :
                                                   isInterested ? '#FFEDD5' : '#F1F5F9'
                                           }
                                       ]}>
@@ -284,10 +287,11 @@ const ParticipantsModal = ({
                                                       status === 'Denied' ? '#DC2626' : 
                                                       status === 'Opted-Out' ? '#64748B' : 
                                                       isPending ? '#D97706' : 
+                                                      isWaitlisted ? '#475569' :
                                                       isInterested ? '#EA580C' : '#64748B'
                                               }
                                           ]}>
-                                              {status || (isRegistered ? 'Registered' : isPending ? 'Pending' : isInterested ? 'Interested' : '')}
+                                              {status || (isRegistered ? 'Registered' : isPending ? 'Pending' : isWaitlisted ? 'Waitlisted' : isInterested ? 'Interested' : '')}
                                           </Text>
                                       </View>
                                   )}

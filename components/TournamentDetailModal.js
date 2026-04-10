@@ -13,6 +13,7 @@ const TournamentDetailModal = ({
   role,
   players = [],
   onRegister,
+  onJoinWaitlist,
   onCoachOptIn,
   onUpdateTournament,
 }) => {
@@ -27,6 +28,7 @@ const TournamentDetailModal = ({
 
   const isRegistered = user && (tournament.registeredPlayerIds || []).includes(user.id);
   const isPendingPayment = user && (tournament.pendingPaymentPlayerIds || []).includes(user.id);
+  const isWaitlisted = user && (tournament.waitlistedPlayerIds || []).includes(user.id);
   const isInterested = user && (tournament.interestedPlayerIds || []).includes(user.id);
   const isRejected = user && (tournament.rejectedPlayerIds || []).includes(user.id);
 
@@ -70,7 +72,7 @@ const TournamentDetailModal = ({
   
   // DATE-BASED CLOSURE: Check if deadline has passed or tournament started
   const isClosed = (() => {
-    if (tournament.tournamentStarted || tournament.status !== 'upcoming') return true;
+    if (tournament.tournamentStarted || tournament.status !== 'ongoing') return true;
     if (tournament.registrationDeadline) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -92,6 +94,14 @@ const TournamentDetailModal = ({
         [{ text: "OK" }]
       );
       return;
+    }
+
+    if (isFull && !isAlreadyRegistered && !isPendingPayment) {
+      if (onJoinWaitlist) {
+        onJoinWaitlist(tournament);
+        onClose();
+        return;
+      }
     }
 
     if (!onRegister) {
@@ -116,12 +126,13 @@ const TournamentDetailModal = ({
 
   const getRegisterBtnLabel = () => {
     if (isPendingPayment) return 'Pay Now';
+    if (isWaitlisted) return 'Already Waitlisted';
     if (isClosed) return 'Registration Closed';
-    if (isFull && !isAlreadyRegistered) return 'Slots Full';
+    if (isFull && !isAlreadyRegistered) return 'Join Waitlist';
     return `Register for ₹${tournament.entryFee}`;
   };
 
-  const isRegisterDisabled = (isAlreadyRegistered && !isPendingPayment) || (isClosed && !isPendingPayment) || (isFull && !isAlreadyRegistered && !isPendingPayment);
+  const isRegisterDisabled = (isAlreadyRegistered && !isPendingPayment) || (isClosed && !isPendingPayment) || (isWaitlisted && !isPendingPayment) || (isFull && !isAlreadyRegistered && !isPendingPayment && !onJoinWaitlist);
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
@@ -196,6 +207,9 @@ const TournamentDetailModal = ({
                 {isAlreadyRegistered && !isPendingPayment && (
                   <Text style={styles.alreadyRegistered}>You are already registered</Text>
                 )}
+                {isWaitlisted && !isPendingPayment && (
+                  <Text style={styles.alreadyRegistered}>You are in the waitlist</Text>
+                )}
                 {isClosed && !isAlreadyRegistered && !isPendingPayment && (
                   <View style={styles.closedContactContainer}>
                     <Text style={styles.closedMessageTitle}>Registration Closed.</Text>
@@ -246,8 +260,8 @@ const TournamentDetailModal = ({
                     )}
                   </View>
                 )}
-                {isFull && !isAlreadyRegistered && !isPendingPayment && !isClosed && (
-                  <Text style={styles.alreadyRegistered}>Slots Full</Text>
+                {isFull && !isAlreadyRegistered && !isPendingPayment && !isClosed && !isWaitlisted && (
+                  <Text style={styles.alreadyRegistered}>Slots Full - Waitlist Available</Text>
                 )}
                 <TouchableOpacity
                   onPress={handleRegister}
@@ -255,6 +269,7 @@ const TournamentDetailModal = ({
                   style={[
                     styles.registerBtn,
                     isPendingPayment && { backgroundColor: '#F97316' },
+                    isWaitlisted && { backgroundColor: '#64748B' },
                     isRegisterDisabled && styles.registerBtnDisabled,
                   ]}
                 >

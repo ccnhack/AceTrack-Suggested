@@ -47,7 +47,7 @@ const ExploreScreen = (props) => {
   const { 
     tournaments = [], onSelect, reschedulingFrom, onCancelReschedule, userId, 
     userRole, userSports, players = [], Sport, SkillLevel, user,
-    onRegister, onAssignCoach, isSyncing, onUpdateTournament
+    onRegister, onJoinWaitlist, onAssignCoach, isSyncing, onUpdateTournament
   } = props;
   const [sportFilter, setSportFilter] = useState('All');
   const [cityFilter, setCityFilter] = useState('All');
@@ -567,6 +567,7 @@ const ExploreScreen = (props) => {
         role={userRole}
         players={players}
         onRegister={(t) => setRegPaymentTarget(t)}
+        onJoinWaitlist={onJoinWaitlist}
         onCoachOptIn={(t) => onAssignCoach(t.id, userId)}
         onUpdateTournament={onUpdateTournament}
       />

@@ -170,6 +170,7 @@ export const AcademyScreen = ({
   const participantIds = new Set(myTournaments.flatMap(t => [
     ...(t.registeredPlayerIds || []), 
     ...(t.pendingPaymentPlayerIds || []),
+    ...(t.waitlistedPlayerIds || []),
     ...Object.keys(t.playerStatuses || {})
   ].filter(pid => !!pid)));
   const myParticipants = players.filter(p => participantIds.has(p.id));
@@ -627,7 +628,14 @@ export const AcademyScreen = ({
                     </View>
                     <View style={styles.infoGridItem}>
                         <Text style={styles.infoGridLabel}>Participants</Text>
-                        <Text style={styles.infoGridValue}>{(t.registeredPlayerIds || []).length} / {t.maxPlayers}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Text style={styles.infoGridValue}>{(t.registeredPlayerIds || []).length} / {t.maxPlayers}</Text>
+                            {(t.waitlistedPlayerIds || []).length > 0 && (
+                                <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 4, borderRadius: 4 }}>
+                                    <Text style={{ fontSize: 9, color: '#64748B', fontWeight: 'bold' }}>+{t.waitlistedPlayerIds.length} Wait</Text>
+                                </View>
+                            )}
+                        </View>
                     </View>
                     <View style={styles.infoGridItem}>
                         <Text style={styles.infoGridLabel}>Entry Fee</Text>

@@ -69,8 +69,8 @@ const initFirebase = async () => {
 };
 initFirebase();
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.96)
-const APP_VERSION = "2.6.96"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.97)
+const APP_VERSION = "2.6.97"; 
 
 // 🕓 Utility: Get current IST timestamp (v2.6.89)
 const getISTDate = () => {
@@ -869,6 +869,45 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
         }
       }
     }
+    
+    // ═══════════════════════════════════════════════════════════════
+    // 🏆 WAITLIST PROMOTION LOGIC (v2.6.97)
+    // ═══════════════════════════════════════════════════════════════
+    if (newMasterData.tournaments && Array.isArray(newMasterData.tournaments)) {
+      newMasterData.tournaments = newMasterData.tournaments.map(tournament => {
+        if (!tournament) return tournament;
+        const updatedT = { ...tournament };
+        const max = updatedT.maxPlayers || 0;
+        const registered = updatedT.registeredPlayerIds || [];
+        const pending = updatedT.pendingPaymentPlayerIds || [];
+        const waitlisted = updatedT.waitlistedPlayerIds || [];
+
+        let availableSlots = max - (registered.length + pending.length);
+        
+        if (availableSlots > 0 && waitlisted.length > 0) {
+          console.log(`📡 [WAITLIST_ENGINE] Tournament "${updatedT.title}" has ${availableSlots} slots and ${waitlisted.length} on waitlist.`);
+          const promotedIds = [];
+          while (availableSlots > 0 && waitlisted.length > 0) {
+            const nextId = waitlisted.shift();
+            pending.push(nextId);
+            promotedIds.push(nextId);
+            availableSlots--;
+            
+            // 🛡️ [NOTIFY_DEBUG] v2.6.97: Persist in-app notification BEFORE save
+            const player = (newMasterData.players || []).find(p => String(p.id) === String(nextId));
+            if (player) {
+              addInAppNotification(player, "Off the Waitlist! 🎾", `A slot opened up in ${tournament.title}. Pay now to secure your spot!`, { tournamentId: tournament.id, type: 'TOURNAMENT_PROMOTION' });
+            }
+          }
+          updatedT.waitlistedPlayerIds = waitlisted;
+          updatedT.pendingPaymentPlayerIds = pending;
+          
+          // 🛡️ [NOTIFY_DEBUG] Track promotedIds for the push notification hook below
+          updatedT._justPromotedIds = promotedIds; 
+        }
+        return updatedT;
+      });
+    }
 
     const nextVersion = currentVersion + 1;
 
@@ -1016,7 +1055,30 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
         }
       }
 
-      // 5. Matchmaking Challenges (New in v2.6.92)
+      // 5. Waitlist Promotions (New in v2.6.97)
+      if (newMasterData.tournaments && Array.isArray(newMasterData.tournaments)) {
+        for (const tournament of newMasterData.tournaments) {
+          if (tournament && tournament._justPromotedIds && tournament._justPromotedIds.length > 0) {
+            console.log(`📡 [NOTIFY_DEBUG] Dispatching promotion notifications for ${tournament._justPromotedIds.length} players in ${tournament.title}`);
+            for (const playerId of tournament._justPromotedIds) {
+              const player = newMasterData.players.find(p => String(p.id) === String(playerId));
+              if (player) {
+                const title = "Off the Waitlist! 🎾";
+                const body = `A slot opened up in ${tournament.title}. Pay now to secure your spot!`;
+                
+                // 🛡️ [NOTIFY_DEBUG] In-app notification already persisted before save
+                
+                if (player.pushTokens?.length > 0) {
+                  sendPushNotification(player.pushTokens, title, body, { tournamentId: tournament.id, type: 'TOURNAMENT_PROMOTION' });
+                }
+              }
+            }
+            delete tournament._justPromotedIds; // Cleanup temporary field
+          }
+        }
+      }
+
+      // 6. Matchmaking Challenges (New in v2.6.92)
       if (changedKeys.includes('matchmaking')) {
         const incomingMatchmaking = req.body.matchmaking || [];
         const existingMatchmaking = currentData.matchmaking || [];

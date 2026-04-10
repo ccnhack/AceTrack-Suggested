@@ -232,7 +232,8 @@ const MatchesScreen = ({
     }
     return (tournaments || []).filter(t => 
       (t.registeredPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase()) || 
-      (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase())
+      (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase()) ||
+      (t.waitlistedPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase())
     );
   }, [isCoach, tournaments, user.id]);
 

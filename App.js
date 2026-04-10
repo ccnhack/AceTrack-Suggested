@@ -48,8 +48,8 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.96)
-const APP_VERSION = "2.6.96"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.97)
+const APP_VERSION = "2.6.97"; 
 const currentAppVersion = APP_VERSION;
 
 export default function App() {
@@ -2137,7 +2137,9 @@ export default function App() {
           if (item && item.id === t.id) {
             return {
               ...item,
-              registeredPlayerIds: [...new Set([...(item.registeredPlayerIds || []), userId])]
+              registeredPlayerIds: [...new Set([...(item.registeredPlayerIds || []), userId])],
+              pendingPaymentPlayerIds: (item.pendingPaymentPlayerIds || []).filter(pid => pid !== userId),
+              waitlistedPlayerIds: (item.waitlistedPlayerIds || []).filter(pid => pid !== userId)
             };
           }
           return item;
@@ -2164,7 +2166,6 @@ export default function App() {
 
           let updatedPlayers = (prevP || []).map(p => p && String(p.id).toLowerCase() === String(userId).toLowerCase() ? updatedUser : p);
           
-          // If referral bonus applies, also reward the referrer
           if (referralBonus > 0 && currentUserRef.current.referredBy) {
             const referrerId = currentUserRef.current.referredBy;
             updatedPlayers = updatedPlayers.map(p => {
@@ -2201,6 +2202,21 @@ export default function App() {
         return updatedT;
       });
     },
+    onJoinWaitlist: (t) => {
+      if (!currentUserRef.current || !t) return;
+      const userId = currentUserRef.current.id;
+      
+      setTournaments(prevT => {
+        const updated = (prevT || []).map(item => 
+          item && item.id === t.id 
+            ? { ...item, waitlistedPlayerIds: [...new Set([...(item.waitlistedPlayerIds || []), userId])] } 
+            : item
+        );
+        syncAndSaveData({ tournaments: updated });
+        return updated;
+      });
+      Alert.alert("Waitlisted", "You have been added to the waitlist. We will notify you if a slot opens up!");
+    },
     onReschedule: (t) => setReschedulingFrom(t.id),
     onCancelReschedule: () => setReschedulingFrom(null),
     onOptOut: (t) => {
@@ -2209,7 +2225,12 @@ export default function App() {
       
       setTournaments(prevT => {
         const updatedTournaments = (prevT || []).map(item => 
-          item && item.id === t.id ? { ...item, registeredPlayerIds: (item.registeredPlayerIds || []).filter(pid => pid !== userId) } : item
+          item && item.id === t.id ? { 
+            ...item, 
+            registeredPlayerIds: (item.registeredPlayerIds || []).filter(pid => pid !== userId),
+            pendingPaymentPlayerIds: (item.pendingPaymentPlayerIds || []).filter(pid => pid !== userId),
+            waitlistedPlayerIds: (item.waitlistedPlayerIds || []).filter(pid => pid !== userId)
+          } : item
         );
         
         setPlayers(prevP => {

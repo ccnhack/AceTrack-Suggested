@@ -18,6 +18,7 @@ const MatchCard = ({
   navigation
 }) => {
   const isPendingPayment = user?.id && (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
+  const isWaitlisted = user?.id && (t.waitlistedPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
 
   return (
     <View style={styles.matchCard}>
@@ -30,15 +31,20 @@ const MatchCard = ({
           styles.statusBadge,
           viewMode === 'requests' ? styles.statusYellow :
             isPendingPayment ? styles.statusOrange :
-              viewMode === 'upcoming' ? styles.statusRed : styles.statusSlate
+              isWaitlisted ? styles.statusSlate :
+                viewMode === 'upcoming' ? styles.statusRed : styles.statusSlate
         ]}>
           <Text style={[
             styles.statusText,
             viewMode === 'requests' ? styles.textYellow :
               isPendingPayment ? styles.textOrange :
-                viewMode === 'upcoming' ? styles.textRed : styles.textSlate
+                isWaitlisted ? styles.textSlate :
+                  viewMode === 'upcoming' ? styles.textRed : styles.textSlate
           ]}>
-            {viewMode === 'requests' ? 'Requested' : isPendingPayment ? 'Pending Payment' : viewMode === 'upcoming' ? 'Confirmed' : 'Completed'}
+            {viewMode === 'requests' ? 'Requested' : 
+             isPendingPayment ? 'Pending Payment' : 
+             isWaitlisted ? 'Waitlisted' :
+             viewMode === 'upcoming' ? 'Confirmed' : 'Completed'}
           </Text>
         </View>
       </View>
@@ -138,7 +144,16 @@ const MatchCard = ({
                   <Text style={styles.buttonText}>Pay Now</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => onOptOut(t)} style={[styles.actionButton, styles.buttonWhite]}>
-                  <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Cancel Request</Text>
+                  <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Opt-out</Text>
+                </TouchableOpacity>
+              </>
+            ) : isWaitlisted ? (
+              <>
+                <View style={[styles.actionButton, styles.buttonSlate, { opacity: 0.7 }]}>
+                  <Text style={styles.buttonText}>Waitlisted</Text>
+                </View>
+                <TouchableOpacity onPress={() => onOptOut(t)} style={[styles.actionButton, styles.buttonWhite]}>
+                  <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Opt-out</Text>
                 </TouchableOpacity>
               </>
             ) : (
