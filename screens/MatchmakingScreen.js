@@ -154,12 +154,15 @@ export default function MatchmakingScreen({ route, user, matchmaking = [], onUpd
 
   // Derived states from global matchmaking prop
   const sentRequests = React.useMemo(() => 
-    (matchmaking || []).filter(m => m.senderId === user?.id && m.status !== 'Accepted' && m.status !== 'Cancelled' && m.status !== 'Declined' && m.status !== 'Countered'),
+    (matchmaking || []).filter(m => m.senderId === user?.id && m.status === 'Pending'),
     [matchmaking, user?.id]
   );
   
   const receivedRequests = React.useMemo(() => 
-    (matchmaking || []).filter(m => m.receiverId === user?.id && m.status === 'Pending'),
+    (matchmaking || []).filter(m => 
+      (m.receiverId === user?.id && m.status === 'Pending') || 
+      (m.senderId === user?.id && m.status === 'Countered')
+    ),
     [matchmaking, user?.id]
   );
 
@@ -648,6 +651,7 @@ export default function MatchmakingScreen({ route, user, matchmaking = [], onUpd
     const updated = matchmaking.map(m => m.id === req.id ? {
       ...m,
       status: 'Accepted',
+      isNew: false,
       lastUpdatedBy: user.id,
       lastUpdatedByName: user.name,
       proposedDate: finalDate,

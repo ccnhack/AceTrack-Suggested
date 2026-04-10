@@ -70,7 +70,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.88)
-const APP_VERSION = "2.6.90"; 
+const APP_VERSION = "2.6.91"; 
 
 // 🕓 Utility: Get current IST timestamp (v2.6.89)
 const getISTDate = () => {
@@ -804,10 +804,23 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
                 }
                 entityMap.set(id, { ...existing, ...p, devices: mergedDevices });
               } else {
-                if (key === 'matchmaking' && !existing) {
-                  p.isNew = true;
+                if (key === 'matchmaking') {
+                  const statusChanged = existing && p.status && p.status !== existing.status;
+                  const slotChanged = existing && (p.proposedDate !== existing.proposedDate || p.proposedTime !== existing.proposedTime);
+                  
+                  if (!existing || statusChanged || slotChanged) {
+                    p.isNew = true;
+                  }
+                  
+                  const merged = existing ? { ...existing, ...p } : p;
+                  // 🛡️ SYNC PROTECTION (v2.6.91): Preserve 'isNew: true' if client update doesn't explicitly clear it
+                  if (existing && existing.isNew && p.isNew === undefined) {
+                    merged.isNew = true;
+                  }
+                  entityMap.set(id, merged);
+                } else {
+                  entityMap.set(id, existing ? { ...existing, ...p } : p);
                 }
-                entityMap.set(id, existing ? { ...existing, ...p } : p);
               }
             }
           });
