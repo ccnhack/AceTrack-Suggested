@@ -48,8 +48,8 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.85)
-const APP_VERSION = "2.6.85"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.86)
+const APP_VERSION = "2.6.86"; 
 const currentAppVersion = APP_VERSION;
 
 export default function App() {
@@ -2472,11 +2472,19 @@ export default function App() {
             memoizedHandlers.onUpdateUser(updatedUser, true); // Sync to cloud
 
             if (navigationRef.current) {
-               if (notif.type === 'video') navigationRef.current.navigate('Recordings');
-               else if (notif.type === 'support') navigationRef.current.navigate('Profile');
-               else if (notif.type === 'challenge' || notif.type === 'booking') navigationRef.current.navigate('Matchmaking');
-               else if (notif.type === 'tournament' || notif.type === 'tournament_invite') navigationRef.current.navigate('Matches');
-               else navigationRef.current.navigate('Explore');
+               const type = (notif.type || '').toLowerCase();
+               if (type === 'video' || type === 'video_available') 
+                 navigationRef.current.navigate('Recordings');
+               else if (type === 'support' || type === 'support_reply') 
+                 navigationRef.current.navigate('Profile');
+               else if (type === 'challenge' || type === 'booking' || type === 'match_challenge') {
+                 const initialTab = currentUser?.role === 'coach' ? 'New Bookings' : 'Requests';
+                 navigationRef.current.navigate('Matchmaking', { initialTab });
+               }
+               else if (type === 'tournament' || type === 'tournament_invite' || type === 'tournament_registration') 
+                 navigationRef.current.navigate('Matches', { viewMode: 'upcoming' });
+               else 
+                 navigationRef.current.navigate('Explore');
             }
           }}
         />

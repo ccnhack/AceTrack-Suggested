@@ -161,13 +161,14 @@ const RosterRow = memo(({
 });
 
 const MatchesScreen = ({
+  route,
   navigation, tournaments, user, onReschedule, onOptOut, onLogFailedOtp,
   players, evaluations, matchVideos, onSaveEvaluation,
   onConfirmCoachRequest, onDeclineCoachRequest, onStartTournament,
   onEndTournament, onUpdateTournament, onSaveCoachComment, onRegister, Sport,
   supportTickets, onSaveTicket, onReplyTicket
 }) => {
-  const [viewMode, setViewMode] = useState('upcoming');
+  const [viewMode, setViewMode] = useState(route?.params?.viewMode || 'upcoming');
   const [showOtpModal, setShowOtpModal] = useState(null);
   const [otpInput, setOtpInput] = useState('');
   const [viewingPlayersFor, setViewingPlayersFor] = useState(null);

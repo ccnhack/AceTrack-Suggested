@@ -70,7 +70,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.83)
-const APP_VERSION = "2.6.85"; 
+const APP_VERSION = "2.6.86"; 
 
 // 🛡️ STABILITY: Panic Handlers to prevent 521 connection refusal on unexpected errors
 process.on('uncaughtException', (err) => {
@@ -1285,7 +1285,7 @@ app.use((err, req, res, next) => {
   res.status(status).json({
     "success": false,
     "error": message,
-    "version": "2.6.85",
+    "version": "2.6.86",
     "timestamp": new Date().toISOString()
   });
 });

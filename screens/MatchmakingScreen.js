@@ -123,7 +123,7 @@ const isTimeInPast = (date, timeSlot) => {
   return slotMinutes <= nowMinutes;
 };
 
-export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatchmaking, players = [], sendUserNotification, onManualSync }) {
+export default function MatchmakingScreen({ route, user, matchmaking = [], onUpdateMatchmaking, players = [], sendUserNotification, onManualSync }) {
   
   const lastSyncRef = React.useRef(0);
   const insets = useSafeAreaInsets();
@@ -143,7 +143,7 @@ export default function MatchmakingScreen({ user, matchmaking = [], onUpdateMatc
     }, [onManualSync])
   );
   const role = user?.role || 'user';
-  const [activeTab, setActiveTab] = useState(role === 'coach' ? 'New Bookings' : 'Challenge'); // Challenge, Requests, Accepted, History
+  const [activeTab, setActiveTab] = useState(route?.params?.initialTab || (role === 'coach' ? 'New Bookings' : 'Challenge')); // Challenge, Requests, Accepted, History
 
   // Derived states from global matchmaking prop
   const sentRequests = React.useMemo(() => 
