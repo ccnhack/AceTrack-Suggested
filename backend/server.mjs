@@ -70,7 +70,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.88)
-const APP_VERSION = "2.6.89"; 
+const APP_VERSION = "2.6.90"; 
 
 // 🕓 Utility: Get current IST timestamp (v2.6.89)
 const getISTDate = () => {
@@ -804,6 +804,9 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
                 }
                 entityMap.set(id, { ...existing, ...p, devices: mergedDevices });
               } else {
+                if (key === 'matchmaking' && !existing) {
+                  p.isNew = true;
+                }
                 entityMap.set(id, existing ? { ...existing, ...p } : p);
               }
             }
@@ -1313,7 +1316,7 @@ app.use((err, req, res, next) => {
   res.status(status).json({
     "success": false,
     "error": message,
-    "version": "2.6.89",
+    "version": "2.6.90",
     "timestamp": getISTDate()
   });
 });

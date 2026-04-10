@@ -559,7 +559,7 @@ export default function MatchmakingScreen({ route, user, matchmaking = [], onUpd
           text: "Decline", 
           style: "destructive",
           onPress: () => {
-            const updated = matchmaking.map(m => m.id === req.id ? { ...m, status: 'Declined', lastUpdatedBy: user?.id } : m);
+            const updated = matchmaking.map(m => m.id === req.id ? { ...m, status: 'Declined', isNew: false, lastUpdatedBy: user?.id } : m);
             onUpdateMatchmaking(updated);
             
             // Send Notification to sender
@@ -582,6 +582,7 @@ export default function MatchmakingScreen({ route, user, matchmaking = [], onUpd
     const updated = matchmaking.map(m => m.id === req.id ? {
       ...m,
       status: 'Accepted',
+      isNew: false, // Mark as read on action
       lastUpdatedBy: user.id,
       lastUpdatedByName: user.name,
       time: m.time || `${m.proposedDate}, ${m.proposedTime}`,
@@ -624,6 +625,7 @@ export default function MatchmakingScreen({ route, user, matchmaking = [], onUpd
               const updated = matchmaking.map(m => m.id === req.id ? {
                 ...m,
                 status: 'Accepted',
+                isNew: false,
                 lastUpdatedBy: user.id,
                 lastUpdatedByName: user.name,
                 proposedDate: origDate,
@@ -660,6 +662,12 @@ export default function MatchmakingScreen({ route, user, matchmaking = [], onUpd
   const openDetails = (challenge) => {
     setSelectedChallenge(challenge);
     setIsDetailsModalVisible(true);
+    
+    // 🛡️ v2.6.90: Automatically mark as read when clicking to view details
+    if (challenge.isNew) {
+      const updated = matchmaking.map(m => m.id === challenge.id ? { ...m, isNew: false } : m);
+      onUpdateMatchmaking(updated);
+    }
   };
 
   const handleCounter = (req) => {
@@ -716,6 +724,7 @@ export default function MatchmakingScreen({ route, user, matchmaking = [], onUpd
       myCounterTime: counterTime,
       counterComment: counterComment.trim() || null,
       status: 'Countered',
+      isNew: false,
       lastUpdatedBy: user.id,
       lastUpdatedByName: user.name,
       hasUserResponse: false
@@ -735,6 +744,7 @@ export default function MatchmakingScreen({ route, user, matchmaking = [], onUpd
     const updated = matchmaking.map(m => m.id === req.id ? {
       ...m,
       status: 'Accepted',
+      isNew: false,
       lastUpdatedBy: user.id,
       lastUpdatedByName: user.name,
       proposedDate: req.userProposedDate || req.proposedDate,
@@ -831,7 +841,11 @@ export default function MatchmakingScreen({ route, user, matchmaking = [], onUpd
             <Text style={styles.emptyText}>No Requests Received</Text>
           ) : (
             receivedRequests.map((req, index) => (
-              <TouchableOpacity key={req.id || `received-${index}`} style={styles.requestCard} onPress={() => openDetails(req)}>
+              <TouchableOpacity 
+                key={req.id || `received-${index}`} 
+                style={[styles.requestCard, req.isNew && styles.unreadRequestCard]} 
+                onPress={() => openDetails(req)}
+              >
                 <View style={styles.info}>
                   <Text style={styles.name}>{getOpponentName(req)}</Text>
                   <Text style={[styles.details, req.status === 'Counter Proposed' && { color: '#D97706' }]}>
@@ -975,14 +989,14 @@ export default function MatchmakingScreen({ route, user, matchmaking = [], onUpd
              >
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</Text>
-                  {tab === 'Requests' && receivedRequests.length > 0 && (
+                  {tab === 'Requests' && receivedRequests.filter(r => r.isNew).length > 0 && (
                     <View style={styles.tabBadge}>
-                      <Text style={styles.tabBadgeText}>{receivedRequests.length}</Text>
+                      <Text style={styles.tabBadgeText}>{receivedRequests.filter(r => r.isNew).length}</Text>
                     </View>
                   )}
-                  {tab === 'New Bookings' && sentRequests.length > 0 && role === 'coach' && (
+                  {tab === 'New Bookings' && sentRequests.filter(r => r.isNew).length > 0 && role === 'coach' && (
                     <View style={styles.tabBadge}>
-                      <Text style={styles.tabBadgeText}>{sentRequests.length}</Text>
+                      <Text style={styles.tabBadgeText}>{sentRequests.filter(r => r.isNew).length}</Text>
                     </View>
                   )}
                 </View>
@@ -1921,5 +1935,10 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  unreadRequestCard: {
+    backgroundColor: '#EFF6FF', // Very light blue background
+    borderLeftWidth: 4,
+    borderLeftColor: '#3B82F6', // Solid blue indicator
   },
 });
