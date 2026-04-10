@@ -1,15 +1,31 @@
 /**
- * 🧪 AceTrack Backend E2E Test Suite v1.0
- * Tests all API endpoints of the live Render.com backend.
+ * 🧪 AceTrack Backend E2E Test Suite v1.1
+ * Hardened for safety: Defaults to LOCAL testing to prevent production corruption.
  * Covers: Health, Auth/Security, CRUD, Diagnostics, WebSocket, Error Handling.
  */
 
-const BASE_URL = 'https://acetrack-suggested.onrender.com';
-const API_KEY = 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=';
+// 🛡️ SAFETY ADVISORY: Always test against LOCALHOST (3000) before targeting Render.
+// To override Target: export TEST_URL='https://acetrack-suggested.onrender.com'
+// To allow POST/PURGE on Production: export BYPASS_PROD_SAFETY=true
+const BASE_URL = process.env.TEST_URL || 'http://localhost:3000';
+const API_KEY = process.env.ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=';
+const BYPASS_PROD_SAFETY = process.env.BYPASS_PROD_SAFETY === 'true';
+
 const HEADERS = {
   'Content-Type': 'application/json',
   'x-ace-api-key': API_KEY
 };
+
+const isProduction = BASE_URL.includes('render.com');
+
+if (isProduction) {
+  console.log('\n⚠️  WARNING: TARGETING PRODUCTION (RENDER).');
+  if (!BYPASS_PROD_SAFETY) {
+    console.log('🔒 PRODUCTION SAFETY ENABLED: All write operations (POST /api/save) and Purges will be SKIPPED.\n');
+  } else {
+    console.log('🔓 PRODUCTION SAFETY BYPASSED: Write operations are ENABLED. PROCEED WITH EXTREME CAUTION.\n');
+  }
+}
 
 let passed = 0;
 let failed = 0;
@@ -39,8 +55,8 @@ async function safeFetch(url, options = {}) {
 
 console.log('\n' + '═'.repeat(70));
 console.log('  🧪  ACETRACK BACKEND E2E TEST SUITE');
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.83)
-const APP_VERSION = "2.6.83"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.99)
+const APP_VERSION = "2.6.99"; 
 const currentAppVersion = APP_VERSION;
 console.log(`  🌐  Target: ${BASE_URL}`);
 console.log(`  ⏰  Run Time: ${new Date().toLocaleString()}`);
@@ -63,7 +79,7 @@ assert('E2E-HEALTH-001', 'Health', 'GET /api/health returns 200', healthRes.ok =
 assert('E2E-HEALTH-001b', 'Health', 'Response is valid JSON (Not HTML/521)', !healthText.trim().startsWith('<'), `Snippet: ${healthText.substring(0, 30)}`);
 assert('E2E-HEALTH-002', 'Health', 'Health response contains status=ok', healthData.status === 'ok', `Got: ${healthData.status}`);
 assert('E2E-HEALTH-003', 'Health', 'Health response contains version', !!healthData.version, `Version: ${healthData.version}`);
-assert('E2E-HEALTH-004', 'Health', 'Health version matches baseline', healthData.version === '2.6.83', `Got: ${healthData.version}`);
+assert('E2E-HEALTH-004', 'Health', 'Health version matches baseline', healthData.version === APP_VERSION, `Got: ${healthData.version}`);
 assert('E2E-HEALTH-005', 'Health', 'Health response contains uptime', typeof healthData.uptime === 'number' && healthData.uptime > 0, `Uptime: ${healthData.uptime}s`);
 
 // ══════════════════════════════════════════════════════════════
@@ -207,17 +223,21 @@ const saveBadRes = await safeFetch(`${BASE_URL}/api/save`, {
 assert('E2E-SAVE-001', 'Save', 'POST /api/save rejects empty payload (Zod validation)', saveBadRes.status === 400, `Status: ${saveBadRes.status}`);
 
 // 5b. POST /api/save — valid minimal payload with only version + data
-const savePayload = {
-  players: [],  // At least one syncable key required by Zod .refine()
-  version: 999999 // Use a very high version to avoid overwriting real data — concurrency guard will handle this
-};
-const saveRes = await safeFetch(`${BASE_URL}/api/save`, {
-  method: 'POST',
-  headers: HEADERS,
-  body: JSON.stringify(savePayload)
-});
-// This should succeed (200) or fail with concurrency conflict
-assert('E2E-SAVE-002', 'Save', 'POST /api/save with valid payload returns 200 or concurrency guard', saveRes.status === 200 || saveRes.status === 409, `Status: ${saveRes.status}`);
+if (isProduction && !BYPASS_PROD_SAFETY) {
+  assert('E2E-SAVE-002', 'Save', 'POST /api/save SKIPPED due to Production Safety', true, 'Safety Block Active');
+} else {
+  const savePayload = {
+    players: [],  // At least one syncable key required by Zod .refine()
+    version: 999999 // Use a very high version to avoid overwriting real data — concurrency guard will handle this
+  };
+  const saveRes = await safeFetch(`${BASE_URL}/api/save`, {
+    method: 'POST',
+    headers: HEADERS,
+    body: JSON.stringify(savePayload)
+  });
+  // This should succeed (200) or fail with concurrency conflict
+  assert('E2E-SAVE-002', 'Save', 'POST /api/save with valid payload returns 200 or concurrency guard', saveRes.status === 200 || saveRes.status === 409, `Status: ${saveRes.status}`);
+}
 
 // 5c. POST /api/save — concurrency conflict (sending version 1)
 const conflictSaveRes = await safeFetch(`${BASE_URL}/api/save`, {
@@ -334,12 +354,16 @@ const ticketPayload = {
   version: (statusData.version || 0) + 1
 };
 
-const supportCreateRes = await safeFetch(`${BASE_URL}/api/save`, {
-  method: 'POST',
-  headers: HEADERS,
-  body: JSON.stringify(ticketPayload)
-});
-assert('E2E-SUP-001', 'Support', 'POST /api/save accepts new ticket with messages', supportCreateRes.ok === true, `Status: ${supportCreateRes.status}`);
+if (isProduction && !BYPASS_PROD_SAFETY) {
+  assert('E2E-SUP-001', 'Support', 'POST /api/save create ticket SKIPPED due to Production Safety', true, 'Safety Block Active');
+} else {
+  const supportCreateRes = await safeFetch(`${BASE_URL}/api/save`, {
+    method: 'POST',
+    headers: HEADERS,
+    body: JSON.stringify(ticketPayload)
+  });
+  assert('E2E-SUP-001', 'Support', 'POST /api/save accepts new ticket with messages', supportCreateRes.ok === true, `Status: ${supportCreateRes.status}`);
+}
 
 // 10b. Verify ticket retrieval and automated greeting
 const updatedDataRes = await safeFetch(`${BASE_URL}/api/data`, { headers: HEADERS });
@@ -401,15 +425,21 @@ const playerCreatePayload = {
   players: [{ id: e2ePlayerId, name: 'E2E Merge Test', devices: [{ id: 'dev1' }] }],
   version: (statusData.version || 0) + 1
 };
-const mergeCreateRes = await safeFetch(`${BASE_URL}/api/save`, { method: 'POST', headers: HEADERS, body: JSON.stringify(playerCreatePayload) });
-assert('E2E-MRG-001', 'Merge', 'Create test player returns 200', mergeCreateRes.ok === true, `Status: ${mergeCreateRes.status}`);
+if (isProduction && !BYPASS_PROD_SAFETY) {
+  assert('E2E-MRG-001', 'Merge', 'Create test player SKIPPED due to Production Safety', true, 'Safety Block Active');
+} else {
+  const mergeCreateRes = await safeFetch(`${BASE_URL}/api/save`, { method: 'POST', headers: HEADERS, body: JSON.stringify(playerCreatePayload) });
+  assert('E2E-MRG-001', 'Merge', 'Create test player returns 200', mergeCreateRes.ok === true, `Status: ${mergeCreateRes.status}`);
+}
 
 if (mergeCreateRes.ok) {
   const playerUpdatePayload = {
     players: [{ id: e2ePlayerId, devices: [{ id: 'dev2' }] }], // Update adds a device, should not wipe name
     version: (statusData.version || 0) + 2
   };
-  await safeFetch(`${BASE_URL}/api/save`, { method: 'POST', headers: HEADERS, body: JSON.stringify(playerUpdatePayload) });
+  if (!isProduction || BYPASS_PROD_SAFETY) {
+    await safeFetch(`${BASE_URL}/api/save`, { method: 'POST', headers: HEADERS, body: JSON.stringify(playerUpdatePayload) });
+  }
   
   const mergedDataRes = await safeFetch(`${BASE_URL}/api/data`, { headers: HEADERS });
   const mergedData = mergedDataRes.ok ? await mergedDataRes.json() : {};
@@ -435,7 +465,10 @@ assert('E2E-WS-001', 'WebSocket', 'Socket.IO endpoint is reachable', wsRes.statu
 async function purgeTestData() {
   console.log('\n🧼 Category 16: Automated Purge');
   
-  try {
+  if (isProduction && !BYPASS_PROD_SAFETY) {
+    console.log('🔒 Purge SKIPPED on Production (Safety Active)');
+    return;
+  }
     const dataRes = await safeFetch(`${BASE_URL}/api/data`, { headers: HEADERS });
     if (!dataRes.ok) throw new Error('Failed to fetch data for purge');
     const appData = await dataRes.json();

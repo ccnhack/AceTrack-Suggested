@@ -67,21 +67,23 @@ const RosterRow = memo(({
 
         const isEliminated = playerStatuses[pid] === 'Eliminated';
         const isQualified = playerStatuses[pid] === 'Qualified';
+        const isOptedOut = playerStatuses[pid] === 'Opted-Out';
         const isPendingPayment = activeTournament?.pendingPaymentPlayerIds?.some(id => String(id).toLowerCase() === String(pid).toLowerCase());
 
         return (
           <View key={pid} style={[
             styles.rosterItem, 
             isPendingPayment && { opacity: 0.7, backgroundColor: '#FFF7ED' },
-            isEliminated && { opacity: 0.6, backgroundColor: '#F1F5F9' }
+            isEliminated && { opacity: 0.6, backgroundColor: '#F1F5F9' },
+            isOptedOut && { opacity: 0.5, backgroundColor: '#F8FAFC' }
           ]}>
             <Image 
               source={getSafeAvatar(playerObj.avatar, playerObj.name)}
-              style={[styles.rosterAvatar, isEliminated && { grayscale: 1 }]}
+              style={[styles.rosterAvatar, (isEliminated || isOptedOut) && { grayscale: 1 }]}
             />
             <View style={styles.rosterInfo}>
               <View style={styles.nameRow}>
-                  <Text style={[styles.rosterName, isEliminated && { color: '#64748B', textDecorationLine: 'line-through' }]} numberOfLines={1}>
+                  <Text style={[styles.rosterName, (isEliminated || isOptedOut) && { color: '#64748B', textDecorationLine: 'line-through' }]} numberOfLines={1}>
                     {playerObj.name || `Player ${pid}`}
                   </Text>
                 {isPendingPayment && (
@@ -92,6 +94,11 @@ const RosterRow = memo(({
                 {isEliminated && (
                   <View style={[styles.miniBadge, { backgroundColor: '#FEE2E2', marginLeft: 8 }]}>
                     <Text style={[styles.miniBadgeText, { color: '#DC2626' }]}>Eliminated</Text>
+                  </View>
+                )}
+                {isOptedOut && (
+                  <View style={[styles.miniBadge, { backgroundColor: '#F1F5F9', marginLeft: 8, borderWidth: 1, borderColor: '#E2E8F0' }]}>
+                    <Text style={[styles.miniBadgeText, { color: '#64748B' }]}>Opted Out</Text>
                   </View>
                 )}
                 {isQualified && !decision && (
@@ -107,7 +114,7 @@ const RosterRow = memo(({
                 <>
                   <TouchableOpacity 
                     onPress={() => handleOpenEvaluation(playerObj, activeTournament)}
-                    style={[styles.evalButton, isEliminated && { backgroundColor: '#64748B' }]}
+                    style={[styles.evalButton, (isEliminated || isOptedOut) && { backgroundColor: '#64748B' }]}
                   >
                     <Text style={styles.evalButtonText}>Eval</Text>
                   </TouchableOpacity>
@@ -619,10 +626,18 @@ const MatchesScreen = ({
                 const currentRoundDecisions = roundDecisions[currentRound] || {};
 
                 const activePlayerIds = (activeTournament?.registeredPlayerIds || []).filter(id => playerStatuses[id] !== 'Eliminated');
+                
+                // 🛡️ v2.6.99: Include opted-out players in roster view for visibility
+                const optedOutIds = (activeTournament?.optedOutPlayerIds || []).filter(id => 
+                  !(activeTournament?.registeredPlayerIds || []).includes(id)
+                );
+                const allRosterIds = [...activePlayerIds, ...optedOutIds];
 
                 const teams = [];
                 if (isDoubles) {
-                  const playerRatings = activePlayerIds.map(id => {
+                  // Only pair active (non-opted-out) players into doubles teams
+                  const doublesActiveIds = activePlayerIds.filter(id => playerStatuses[id] !== 'Opted-Out');
+                  const playerRatings = doublesActiveIds.map(id => {
                     const p = players.find(player => String(player.id).toLowerCase() === String(id).toLowerCase()) || (String(id).toLowerCase() === String(user?.id).toLowerCase() ? user : null);
                     if (!p) return { id, rating: 0 };
                     
@@ -645,8 +660,13 @@ const MatchesScreen = ({
                     const teamPlayerIds = p1 === p2 ? [p1] : [p1, p2];
                     teams.push({ id: teamId, name: `Team ${String.fromCharCode(65 + i)}`, playerIds: teamPlayerIds, isPending: false });
                   }
+                  // Append opted-out players as individual entries for visibility
+                  optedOutIds.forEach(id => {
+                    const p = players.find(player => String(player.id).toLowerCase() === String(id).toLowerCase());
+                    teams.push({ id: `optout_${id}`, name: p?.name || `Player ${id}`, playerIds: [id], isPending: false });
+                  });
                 } else {
-                  activePlayerIds.forEach(id => {
+                  allRosterIds.forEach(id => {
                     const p = players.find(player => String(player.id).toLowerCase() === String(id).toLowerCase()) || (String(id).toLowerCase() === String(user?.id).toLowerCase() ? user : null);
                     teams.push({ id, name: p?.name || `Player ${id}`, playerIds: [id], isPending: false });
                   });

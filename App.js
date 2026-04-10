@@ -48,8 +48,8 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.97)
-const APP_VERSION = "2.6.98"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.99)
+const APP_VERSION = "2.6.99"; 
 const currentAppVersion = APP_VERSION;
 
 export default function App() {
@@ -2224,14 +2224,63 @@ export default function App() {
       const userId = currentUserRef.current.id;
       
       setTournaments(prevT => {
-        const updatedTournaments = (prevT || []).map(item => 
-          item && item.id === t.id ? { 
+        const updatedTournaments = (prevT || []).map(item => {
+          if (!(item && item.id === t.id)) return item;
+          
+          // 🛡️ v2.6.99: Track opted-out status for academy roster display
+          const wasRegistered = (item.registeredPlayerIds || []).some(pid => String(pid).toLowerCase() === String(userId).toLowerCase());
+          const wasWaitlisted = (item.waitlistedPlayerIds || []).some(pid => String(pid).toLowerCase() === String(userId).toLowerCase());
+          
+          let updatedItem = { 
             ...item, 
             registeredPlayerIds: (item.registeredPlayerIds || []).filter(pid => pid !== userId),
             pendingPaymentPlayerIds: (item.pendingPaymentPlayerIds || []).filter(pid => pid !== userId),
-            waitlistedPlayerIds: (item.waitlistedPlayerIds || []).filter(pid => pid !== userId)
-          } : item
-        );
+            waitlistedPlayerIds: (item.waitlistedPlayerIds || []).filter(pid => pid !== userId),
+            // Track the opt-out in dedicated arrays for roster UI
+            optedOutPlayerIds: [...new Set([...(item.optedOutPlayerIds || []), userId])],
+            playerStatuses: { ...(item.playerStatuses || {}), [userId]: 'Opted-Out' }
+          };
+          
+          // 🛡️ v2.6.99: Auto-promote first waitlisted player when a registered slot opens
+          if (wasRegistered && (updatedItem.waitlistedPlayerIds || []).length > 0) {
+            const promotedPlayerId = updatedItem.waitlistedPlayerIds[0];
+            updatedItem = {
+              ...updatedItem,
+              registeredPlayerIds: [...(updatedItem.registeredPlayerIds || []), promotedPlayerId],
+              waitlistedPlayerIds: updatedItem.waitlistedPlayerIds.filter(pid => pid !== promotedPlayerId)
+            };
+            
+            // Send notification to promoted player
+            setPlayers(prevPlayers => {
+              const promoted = (prevPlayers || []).find(p => String(p.id).toLowerCase() === String(promotedPlayerId).toLowerCase());
+              if (promoted) {
+                const notification = {
+                  id: `notif_promote_${Date.now()}`,
+                  title: 'Slot Opened!',
+                  message: `A slot opened up in "${item.title}". You have been promoted from the waitlist and are now registered!`,
+                  date: new Date().toISOString(),
+                  read: false,
+                  type: 'tournament_registration',
+                  tournamentId: item.id
+                };
+                const updatedPromoted = {
+                  ...promoted,
+                  notifications: [notification, ...(promoted.notifications || [])],
+                  registeredTournamentIds: [...new Set([...(promoted.registeredTournamentIds || []), item.id])]
+                };
+                const updatedPlayers = prevPlayers.map(p => 
+                  String(p.id).toLowerCase() === String(promotedPlayerId).toLowerCase() ? updatedPromoted : p
+                );
+                // Sync promoted player data (will be merged with the main sync below)
+                syncAndSaveData({ players: updatedPlayers });
+                return updatedPlayers;
+              }
+              return prevPlayers;
+            });
+          }
+          
+          return updatedItem;
+        });
         
         setPlayers(prevP => {
           if (!currentUserRef.current) return prevP || [];

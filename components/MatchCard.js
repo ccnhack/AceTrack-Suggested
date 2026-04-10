@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const MatchCard = ({
@@ -19,6 +19,18 @@ const MatchCard = ({
 }) => {
   const isPendingPayment = user?.id && (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
   const isWaitlisted = user?.id && (t.waitlistedPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
+
+  // 🛡️ v2.6.99: Confirmation dialog before opt-out to prevent accidental withdrawals
+  const handleOptOut = () => {
+    Alert.alert(
+      "Confirm Opt-Out",
+      `Are you sure you want to opt out of "${t.title}"? This action cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Yes, Opt Out", style: "destructive", onPress: () => onOptOut(t) }
+      ]
+    );
+  };
 
   return (
     <View style={styles.matchCard}>
@@ -129,7 +141,7 @@ const MatchCard = ({
                     <Text style={styles.buttonText}>End Event</Text>
                   </TouchableOpacity>
                 ) : (
-                  <TouchableOpacity onPress={() => onOptOut(t)} style={[styles.actionButton, styles.buttonWhite]}>
+                  <TouchableOpacity onPress={handleOptOut} style={[styles.actionButton, styles.buttonWhite]}>
                     <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Cancel Assignment</Text>
                   </TouchableOpacity>
                 )}
@@ -143,7 +155,7 @@ const MatchCard = ({
                 <TouchableOpacity onPress={() => setRegPaymentTarget(t)} style={[styles.actionButton, styles.buttonOrange]}>
                   <Text style={styles.buttonText}>Pay Now</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => onOptOut(t)} style={[styles.actionButton, styles.buttonWhite]}>
+                <TouchableOpacity onPress={handleOptOut} style={[styles.actionButton, styles.buttonWhite]}>
                   <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Opt-out</Text>
                 </TouchableOpacity>
               </>
@@ -152,7 +164,7 @@ const MatchCard = ({
                 <View style={[styles.actionButton, styles.buttonSlate, { opacity: 0.7 }]}>
                   <Text style={styles.buttonText}>Waitlisted</Text>
                 </View>
-                <TouchableOpacity onPress={() => onOptOut(t)} style={[styles.actionButton, styles.buttonWhite]}>
+                <TouchableOpacity onPress={handleOptOut} style={[styles.actionButton, styles.buttonWhite]}>
                   <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Opt-out</Text>
                 </TouchableOpacity>
               </>
@@ -167,7 +179,7 @@ const MatchCard = ({
                 >
                   <Text style={styles.buttonText}>Reschedule</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => onOptOut(t)} style={[styles.actionButton, styles.buttonWhite]}>
+                <TouchableOpacity onPress={handleOptOut} style={[styles.actionButton, styles.buttonWhite]}>
                   <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Opt-out</Text>
                 </TouchableOpacity>
               </>
