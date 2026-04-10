@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, Modal, ScrollView,
   StyleSheet, Alert
@@ -18,6 +18,42 @@ const TournamentDetailModal = ({
   onUpdateTournament,
 }) => {
   const [showAcademyDetails, setShowAcademyDetails] = useState(false);
+  const [timeLeft, setTimeLeft] = useState('');
+
+  // 🕒 [RegEngine] Timer Logic: 30-minute reservation countdown
+  useEffect(() => {
+    if (!tournament || !user || !(tournament.pendingPaymentPlayerIds || []).includes(user.id)) {
+      setTimeLeft('');
+      return;
+    }
+
+    const promoTimeStr = tournament.pendingPaymentTimestamps?.[user.id];
+    if (!promoTimeStr) {
+      setTimeLeft('');
+      return;
+    }
+
+    const promoTime = new Date(promoTimeStr).getTime();
+    const expiryTime = promoTime + (30 * 60 * 1000); // 30 minutes
+
+    const updateTimer = () => {
+      const now = Date.now();
+      const diff = expiryTime - now;
+
+      if (diff <= 0) {
+        setTimeLeft('00:00');
+        return;
+      }
+
+      const mins = Math.floor(diff / 1000 / 60);
+      const secs = Math.floor((diff / 1000) % 60);
+      setTimeLeft(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [tournament, user]);
 
   if (!tournament) return null;
 
@@ -150,9 +186,10 @@ const TournamentDetailModal = ({
 
   const getRegisterBtnLabel = () => {
     if (isPendingPayment) return 'Pay Now';
-    if (isWaitlisted) return 'Already Waitlisted';
+    const waitlistedCount = (tournament.waitlistedPlayerIds || []).length;
+    if (isWaitlisted) return `Already Waitlisted (#${waitlistedCount})`;
     if (isClosed) return 'Registration Closed';
-    if (isFull && !isAlreadyRegistered) return 'Join Waitlist';
+    if (isFull && !isAlreadyRegistered) return `Join Waitlist (${waitlistedCount} in line)`;
     return `Register for ₹${tournament.entryFee}`;
   };
 
@@ -205,10 +242,14 @@ const TournamentDetailModal = ({
                 <Text style={styles.gridLabel}>Players</Text>
                 <Text style={styles.gridValue}>
                   {isAdminUser || isAcademyUser 
-                    ? `${registeredCount}/${tournament.maxPlayers}${pendingCount > 0 ? ` (+${pendingCount} Wait)` : ''}`
+                    ? `${registeredCount}/${tournament.maxPlayers}${pendingCount > 0 ? ` (+${pendingCount}P)` : ''}`
                     : `${registeredCount + pendingCount}/${tournament.maxPlayers}`
                   }
                 </Text>
+              </View>
+              <View style={styles.gridItem}>
+                <Text style={styles.gridLabel}>Waitlisted</Text>
+                <Text style={styles.gridValue}>{(tournament.waitlistedPlayerIds || []).length}</Text>
               </View>
               <View style={styles.gridItem}>
                 <Text style={styles.gridLabel}>Level</Text>
@@ -290,7 +331,15 @@ const TournamentDetailModal = ({
                   </View>
                 )}
                 {isFull && !isAlreadyRegistered && !isPendingPayment && !isClosed && !isWaitlisted && (
-                  <Text style={styles.alreadyRegistered}>Slots Full - Waitlist Available</Text>
+                  <Text style={styles.alreadyRegistered}>
+                    Slots Full - {(tournament.waitlistedPlayerIds || []).length} people on Waitlist
+                  </Text>
+                )}
+                {isPendingPayment && timeLeft !== '' && (
+                  <View style={styles.timerBadge}>
+                    <Ionicons name="time" size={14} color="#F97316" />
+                    <Text style={styles.timerText}>Reservation expires in: {timeLeft}</Text>
+                  </View>
                 )}
                 <TouchableOpacity
                   onPress={handleRegister}
@@ -686,6 +735,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     color: '#0F172A',
+  },
+  timerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF7ED',
+    paddingVertical: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    gap: 8,
+    marginBottom: 4,
+  },
+  timerText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#EA580C',
+    textTransform: 'uppercase',
   },
 });
 

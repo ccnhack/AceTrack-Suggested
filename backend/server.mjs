@@ -70,7 +70,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.101)
-const APP_VERSION = "2.6.102"; 
+const APP_VERSION = "2.6.103"; 
 
 // 🕓 Utility: Get current IST timestamp (v2.6.89)
 const getISTDate = () => {
@@ -509,6 +509,80 @@ const storageConfig = multer.diskStorage({
   }
 });
 
+// 🚀 v2.6.103: SHARED PROMOTION & PRIORITY HUB
+export const processTournamentWaitlist = (tournament, masterPlayers = []) => {
+  if (!tournament) return tournament;
+  const updatedT = { ...tournament };
+  
+  const max = updatedT.maxPlayers || 0;
+  const registered = Array.isArray(updatedT.registeredPlayerIds) ? updatedT.registeredPlayerIds.filter(pid => !!pid) : [];
+  const pending = Array.isArray(updatedT.pendingPaymentPlayerIds) ? updatedT.pendingPaymentPlayerIds.filter(pid => !!pid) : [];
+  const waitlisted = Array.isArray(updatedT.waitlistedPlayerIds) ? updatedT.waitlistedPlayerIds.filter(pid => !!pid) : [];
+  const timestamps = updatedT.pendingPaymentTimestamps || {};
+
+  const availableSlots = Math.max(0, max - registered.length);
+  
+  // 🛡️ [Race-Loser Demotion]: If tournament is now FULL, push all 'Pending' back to Waitlist FRONT
+  if (availableSlots <= 0 && pending.length > 0) {
+    console.log(`📡 [PROMOTION_HUB] Tournament "${updatedT.title}" is full. Moving ${pending.length} pending losers back to FRONT of waitlist.`);
+    
+    // Maintain priority: pending[0] was 1st in waitlist, so it should stay 1st.
+    updatedT.waitlistedPlayerIds = [...pending, ...waitlisted];
+    updatedT.pendingPaymentPlayerIds = [];
+    
+    // Clear timestamps for these people so they get a fresh 30m later
+    pending.forEach(pid => delete timestamps[pid]);
+    updatedT.pendingPaymentTimestamps = timestamps;
+    return updatedT;
+  }
+
+  // 🛡️ [Group Promotion]: If slots are open, maintain exactly 3 "Pending" users if waitlist has them
+  // This facilitates the "3-person race for however many slots are open" logic.
+  if (availableSlots > 0 && waitlisted.length > 0 && pending.length < 3) {
+    const slotsToFill = 3 - pending.length;
+    const promotedIds = waitlisted.splice(0, slotsToFill);
+    
+    console.log(`📡 [PROMOTION_HUB] Promoting batch of ${promotedIds.length} for tournament "${updatedT.title}".`);
+    
+    promotedIds.forEach(pid => {
+      pending.push(pid);
+      timestamps[pid] = Date.now();
+      
+      // Add in-app notification (persisted in player object)
+      const pIndex = masterPlayers.findIndex(p => String(p.id) === String(pid));
+      if (pIndex >= 0) {
+          const player = masterPlayers[pIndex];
+          const title = "Off the Waitlist! 🎾";
+          const body = `A slot opened up in ${updatedT.title}. You're in a priority batch of 3—pay now to secure your spot!`;
+          
+          player.notifications = [
+              {
+                  id: `notif-${Date.now()}-${pid}`,
+                  title,
+                  message: body,
+                  date: new Date().toISOString(),
+                  read: false,
+                  type: 'TOURNAMENT_PROMOTION',
+                  tournamentId: updatedT.id
+              },
+              ...(player.notifications || [])
+          ].slice(0, 50);
+          
+          masterPlayers[pIndex] = { ...player };
+          updatedT._justPromotedIds = updatedT._justPromotedIds || [];
+          updatedT._justPromotedIds.push(pid);
+      }
+    });
+
+    updatedT.waitlistedPlayerIds = waitlisted;
+    updatedT.pendingPaymentPlayerIds = pending;
+    updatedT.pendingPaymentTimestamps = timestamps;
+  }
+
+  return updatedT;
+};
+
+// ... existing code ...
 const upload = multer({ 
   storage: storageConfig,
   limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
@@ -871,46 +945,11 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
     }
     
     // ═══════════════════════════════════════════════════════════════
-    // 🏆 WAITLIST PROMOTION LOGIC (v2.6.97)
-    // ═══════════════════════════════════════════════════════════════
+    // 🏆 WAITLIST PROMOTION & PRIORITY LOGIC (v2.6.103)
     if (newMasterData.tournaments && Array.isArray(newMasterData.tournaments)) {
-      newMasterData.tournaments = newMasterData.tournaments.map(tournament => {
-        if (!tournament) return tournament;
-        const updatedT = { ...tournament };
-        const max = updatedT.maxPlayers || 0;
-        const registered = updatedT.registeredPlayerIds || [];
-        const pending = updatedT.pendingPaymentPlayerIds || [];
-        const waitlisted = updatedT.waitlistedPlayerIds || [];
-
-        let availableSlots = max - (registered.length + pending.length);
-        
-        if (availableSlots > 0 && waitlisted.length > 0) {
-          console.log(`📡 [WAITLIST_ENGINE] Tournament "${updatedT.title}" has ${availableSlots} slots and ${waitlisted.length} on waitlist.`);
-          const promotedIds = [];
-          while (availableSlots > 0 && waitlisted.length > 0) {
-            const nextId = waitlisted.shift();
-            pending.push(nextId);
-            promotedIds.push(nextId);
-            availableSlots--;
-            
-            // 🛡️ v2.6.102: Track promotion time for 30-minute expiry
-            if (!updatedT.pendingPaymentTimestamps) updatedT.pendingPaymentTimestamps = {};
-            updatedT.pendingPaymentTimestamps[nextId] = Date.now();
-            
-            // 🛡️ [NOTIFY_DEBUG] v2.6.97: Persist in-app notification BEFORE save
-            const player = (newMasterData.players || []).find(p => String(p.id) === String(nextId));
-            if (player) {
-              addInAppNotification(player, "Off the Waitlist! 🎾", `A slot opened up in ${tournament.title}. Pay now to secure your spot!`, { tournamentId: tournament.id, type: 'TOURNAMENT_PROMOTION' });
-            }
-          }
-          updatedT.waitlistedPlayerIds = waitlisted;
-          updatedT.pendingPaymentPlayerIds = pending;
-          
-          // 🛡️ [NOTIFY_DEBUG] Track promotedIds for the push notification hook below
-          updatedT._justPromotedIds = promotedIds; 
-        }
-        return updatedT;
-      });
+      newMasterData.tournaments = newMasterData.tournaments.map(t => 
+        processTournamentWaitlist(t, newMasterData.players || [])
+      );
     }
 
     const nextVersion = currentVersion + 1;

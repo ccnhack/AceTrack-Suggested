@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, Image, 
   StyleSheet, Modal, TextInput, SafeAreaView, Dimensions 
@@ -17,6 +17,41 @@ const ParticipantsModal = ({
   const [newPlayerName, setNewPlayerName] = useState('');
   const [newPlayerPhone, setNewPlayerPhone] = useState('');
   const [expandedPlayerId, setExpandedPlayerId] = useState(null);
+
+  // 🕒 [RegEngine] Roster Timer Component (v2.6.103)
+  const PendingTimer = ({ playerId, timestamps }) => {
+    const [display, setDisplay] = useState('');
+
+    useEffect(() => {
+      const promoTimeStr = timestamps?.[playerId];
+      if (!promoTimeStr) return;
+
+      const expiry = new Date(promoTimeStr).getTime() + (30 * 60 * 1000);
+      
+      const update = () => {
+        const diff = expiry - Date.now();
+        if (diff <= 0) {
+          setDisplay('Expiring...');
+          return;
+        }
+        const m = Math.floor(diff / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+        setDisplay(`${m}:${s.toString().padStart(2, '0')}`);
+      };
+
+      update();
+      const interval = setInterval(update, 1000);
+      return () => clearInterval(interval);
+    }, [playerId, timestamps]);
+
+    if (!display) return null;
+    return (
+      <View style={styles.rosterTimer}>
+        <Ionicons name="time-outline" size={10} color="#EA580C" />
+        <Text style={styles.rosterTimerText}>{display}</Text>
+      </View>
+    );
+  };
 
   if (!tournament) return null;
 
@@ -295,6 +330,7 @@ const ParticipantsModal = ({
                                           </Text>
                                       </View>
                                   )}
+                                  {isPending && <PendingTimer playerId={pid} timestamps={tournament.pendingPaymentTimestamps} />}
                               </View>
                           </View>
                           <Ionicons name={expandedPlayerId === pid ? "chevron-up" : "chevron-down"} size={16} color="#94A3B8" />
@@ -708,6 +744,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '900',
     textTransform: 'uppercase',
+  },
+  rosterTimer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+  },
+  rosterTimerText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#EA580C',
   },
 });
 

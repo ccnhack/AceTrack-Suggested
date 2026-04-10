@@ -143,8 +143,17 @@ const TournamentCard = ({
                 const reg = (t.registeredPlayerIds || []).filter(Boolean).length;
                 const pen = (t.pendingPaymentPlayerIds || []).filter(Boolean).length;
                 const isStaff = userRole === 'admin' || userRole === 'academy';
-                if (isStaff) return `${reg}/${t.maxPlayers}${pen > 0 ? ` (+${pen} Wait)` : ''}`;
-                return `${reg + pen}/${t.maxPlayers}`;
+                
+                if (isStaff) {
+                   const wait = (t.waitlistedPlayerIds || []).filter(Boolean).length;
+                   return `${reg}/${t.maxPlayers}${pen > 0 ? ` (+${pen}P)` : ''}${wait > 0 ? ` [${wait}W]` : ''}`;
+                }
+                
+                const combined = reg + pen;
+                if (combined >= t.maxPlayers) {
+                  return 'Full';
+                }
+                return `${combined}/${t.maxPlayers}`;
               })()}
             </Text>
           </View>

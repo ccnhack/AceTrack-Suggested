@@ -48,8 +48,9 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.101)
-const APP_VERSION = "2.6.102"; 
+// 🚀 ACE TRACK STABILITY
+const APP_VERSION = "2.6.103"; 
+const TOURNAMENT_VERSION = '2.6.103'; 
 const currentAppVersion = APP_VERSION;
 
 export default function App() {
@@ -503,7 +504,7 @@ export default function App() {
         storage.getItem('matchmaking')
       ]);
 
-      // 🛡️ STORAGE NUKE: "version": "2.6.85", force-clear any 'false' setting one time
+      // 🛡️ STORAGE NUKE: "version": "2.6.103",
       const hasNuked = await AsyncStorage.getItem('cloud_nuke_v249');
       let effectiveIwc = iuc;
       if (!hasNuked) {

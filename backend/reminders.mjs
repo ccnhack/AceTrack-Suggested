@@ -1,13 +1,16 @@
 import cron from 'node-cron';
 import mongoose from 'mongoose';
 import { sendPushNotification } from './notifications.js';
+import { processTournamentWaitlist } from './server.mjs';
+
+// ... existing reminders code ...
 
 /**
- * Scheduled task to send tournament reminders 24 hours before they start.
- * Runs every hour.
+ * 🛡️ v2.6.103: HARDENED BATCH EXPIRY & PROMOTION
+ * Runs every 5 minutes to sweep stagnant payments AND immediately promote the next batch.
  */
-cron.schedule('0 * * * *', async () => {
-  console.log('⏰ Running Tournament Reminders Job...');
+cron.schedule('*/5 * * * *', async () => {
+  console.log('⏰ Running Batch Expiry & Promotion Job...');
   
   try {
     const AppState = mongoose.model('AppState');
@@ -17,69 +20,6 @@ cron.schedule('0 * * * *', async () => {
 
     const tournaments = state.data.tournaments;
     const players = state.data.players || [];
-    const now = new Date();
-    
-    // Windows for 24h and 48h reminders
-    const windows = [
-      { 
-        hours: 24, 
-        start: new Date(now.getTime() + 24 * 60 * 60 * 1000), 
-        end: new Date(now.getTime() + 25 * 60 * 60 * 1000),
-        title: 'Tournament Reminder! 🏆',
-        body: (t) => `Your tournament "${t}" starts in 24 hours. Get ready!`
-      },
-      { 
-        hours: 48, 
-        start: new Date(now.getTime() + 48 * 60 * 60 * 1000), 
-        end: new Date(now.getTime() + 49 * 60 * 60 * 1000),
-        title: 'Tournament Coming Up! 🎾',
-        body: (t) => `Your tournament "${t}" starts in 2 days. Mark your calendar!`
-      }
-    ];
-
-    for (const tournament of tournaments) {
-      const tournamentDate = new Date(tournament.date);
-      
-      for (const window of windows) {
-        if (tournamentDate >= window.start && tournamentDate < window.end) {
-          console.log(`🔔 Sending ${window.hours}h reminders for: ${tournament.title}`);
-          
-          const registeredPlayerIds = tournament.registeredPlayerIds || [];
-          const tokensToNotify = players
-            .filter(p => registeredPlayerIds.includes(p.id) && p.pushTokens && Array.isArray(p.pushTokens))
-            .flatMap(p => p.pushTokens);
-
-          if (tokensToNotify.length > 0) {
-            await sendPushNotification(
-              tokensToNotify,
-              window.title,
-              window.body(tournament.title),
-              { tournamentId: tournament.id, type: 'TOURNAMENT_REMINDER', hours: window.hours }
-            );
-          }
-        }
-      }
-    }
-  } catch (error) {
-    console.error('❌ Error in Tournament Reminders Job:', error.message);
-  }
-});
-
-
-/**
- * 🛡️ v2.6.102: EXPIRE STAGNANT PENDING PAYMENTS
- * Runs every 5 minutes to sweep and clear users who didn't pay within the 30-min window.
- */
-cron.schedule('*/5 * * * *', async () => {
-  console.log('⏰ Running Pending Payment Expiry Job...');
-  
-  try {
-    const AppState = mongoose.model('AppState');
-    const state = await AppState.findOne().sort({ lastUpdated: -1 });
-    
-    if (!state || !state.data || !state.data.tournaments) return;
-
-    const tournaments = state.data.tournaments;
     const now = Date.now();
     const THIRTY_MINS = 30 * 60 * 1000;
     let changed = false;
@@ -87,6 +27,7 @@ cron.schedule('*/5 * * * *', async () => {
     const updatedTournaments = tournaments.map(t => {
       const timestamps = t.pendingPaymentTimestamps || {};
       const pending = t.pendingPaymentPlayerIds || [];
+      const waitlist = t.waitlistedPlayerIds || [];
       
       const toExpire = pending.filter(pid => {
         const ts = timestamps[pid];
@@ -94,37 +35,47 @@ cron.schedule('*/5 * * * *', async () => {
       });
 
       if (toExpire.length > 0) {
-        console.log(`🧹 Expiring ${toExpire.length} pending users for tournament: ${t.title}`);
+        console.log(`🧹 [EXPIRY_JOB] Expiring ${toExpire.length} users in "${t.title}".`);
         changed = true;
+        
+        // Remove expired users entirely (per user request)
         const newPending = pending.filter(pid => !toExpire.includes(pid));
         const newTimestamps = { ...timestamps };
         toExpire.forEach(pid => delete newTimestamps[pid]);
 
-        return {
+        const updatedT = {
           ...t,
           pendingPaymentPlayerIds: newPending,
           pendingPaymentTimestamps: newTimestamps,
-          // Re-add to waitlist? User said: "removed from the tournament and again see the option to register"
-          // So we don't move them back to waitlist automatically.
           playerStatuses: (() => {
             const ps = { ...(t.playerStatuses || {}) };
             toExpire.forEach(pid => delete ps[pid]);
             return ps;
           })()
         };
+        
+        // Immediately promote next batch of 3
+        return processTournamentWaitlist(updatedT, players);
       }
-      return t;
+      
+      // Even if none expired, check if we need to top up the "3-person race" pool
+      // (e.g., if someone just registered or opted out)
+      const refinedT = processTournamentWaitlist(t, players);
+      if (JSON.stringify(refinedT) !== JSON.stringify(t)) changed = true;
+      return refinedT;
     });
 
     if (changed) {
       state.data.tournaments = updatedTournaments;
+      state.data.players = players; // Save potentially updated player notification arrays
       state.markModified('data.tournaments');
+      state.markModified('data.players');
       state.lastUpdated = new Date();
       await state.save();
-      console.log('✅ Expired payments cleared globally.');
+      console.log('✅ Batch Expiry & Promotion sweep complete.');
     }
   } catch (error) {
-    console.error('❌ Error in Pending Expiry Job:', error.message);
+    console.error('❌ Error in Batch Expiry Job:', error.message);
   }
 });
 
