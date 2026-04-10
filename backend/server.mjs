@@ -967,16 +967,19 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
           const newMessages = (ticket.messages || []).slice(existing ? existing.messages.length : 0);
           
           for (const msg of newMessages) {
-            // If sender is NOT the ticket owner, it's an admin reply
-            if (msg.senderId !== ticket.userId) {
-              const user = newMasterData.players.find(p => p.id === ticket.userId);
+            // 🛡️ [NOTIFY_DEBUG] v2.6.96: Harden identity comparison (String coercion)
+            if (String(msg.senderId) !== String(ticket.userId)) {
+              const user = newMasterData.players.find(p => String(p.id) === String(ticket.userId));
               if (user && user.pushTokens?.length > 0) {
+                console.log(`📡 [NOTIFY_DEBUG] Admin reply detected for ticket ${ticket.id}. Dispatching push to user ${user.id} (${user.pushTokens.length} tokens)`);
                 sendPushNotification(
                   user.pushTokens, 
                   "Support Ticket Reply ✉️", 
                   `New reply regarding your ticket: "${ticket.title}"`,
                   { ticketId: ticket.id, type: 'SUPPORT_REPLY' }
                 );
+              } else {
+                console.log(`📡 [NOTIFY_DEBUG] Admin reply detected, but no push tokens found for user ${ticket.userId}`);
               }
               break; // Only notify once per sync batch
             }
