@@ -18,6 +18,8 @@ import { FlatList } from 'react-native';
 // Styles
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+
+
 // Virtualized Roster Row Component
 const RosterRow = memo(({ 
   team, 
@@ -169,6 +171,13 @@ const MatchesScreen = ({
   supportTickets, onSaveTicket, onReplyTicket
 }) => {
   const [viewMode, setViewMode] = useState(route?.params?.viewMode || 'upcoming');
+  
+  // 🛡️ v2.6.87: Reactively update viewMode when params change (Fix for deep-linking when screen is already mounted)
+  useEffect(() => {
+    if (route?.params?.viewMode) {
+      setViewMode(route.params.viewMode);
+    }
+  }, [route?.params?.viewMode]);
   const [showOtpModal, setShowOtpModal] = useState(null);
   const [otpInput, setOtpInput] = useState('');
   const [viewingPlayersFor, setViewingPlayersFor] = useState(null);

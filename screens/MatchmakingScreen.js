@@ -144,6 +144,13 @@ export default function MatchmakingScreen({ route, user, matchmaking = [], onUpd
   );
   const role = user?.role || 'user';
   const [activeTab, setActiveTab] = useState(route?.params?.initialTab || (role === 'coach' ? 'New Bookings' : 'Challenge')); // Challenge, Requests, Accepted, History
+  
+  // 🛡️ v2.6.87: Reactively update tab when params change (Fix for deep-linking when screen is already mounted)
+  React.useEffect(() => {
+    if (route?.params?.initialTab) {
+      setActiveTab(route.params.initialTab);
+    }
+  }, [route?.params?.initialTab]);
 
   // Derived states from global matchmaking prop
   const sentRequests = React.useMemo(() => 

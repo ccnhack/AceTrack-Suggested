@@ -48,8 +48,8 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.86)
-const APP_VERSION = "2.6.86"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.87)
+const APP_VERSION = "2.6.88"; 
 const currentAppVersion = APP_VERSION;
 
 export default function App() {
