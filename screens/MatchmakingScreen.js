@@ -973,7 +973,19 @@ export default function MatchmakingScreen({ route, user, matchmaking = [], onUpd
                  setActiveTab(tab);
                }}
              >
-               <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</Text>
+                  {tab === 'Requests' && receivedRequests.length > 0 && (
+                    <View style={styles.tabBadge}>
+                      <Text style={styles.tabBadgeText}>{receivedRequests.length}</Text>
+                    </View>
+                  )}
+                  {tab === 'New Bookings' && sentRequests.length > 0 && role === 'coach' && (
+                    <View style={styles.tabBadge}>
+                      <Text style={styles.tabBadgeText}>{sentRequests.length}</Text>
+                    </View>
+                  )}
+                </View>
              </TouchableOpacity>
            ))}
         </View>
@@ -1894,5 +1906,20 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     padding: 0,
     fontWeight: '500',
+  },
+  tabBadge: {
+    backgroundColor: '#EF4444',
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 6,
+    paddingHorizontal: 4,
+  },
+  tabBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 });

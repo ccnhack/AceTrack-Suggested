@@ -70,9 +70,30 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.88)
-const APP_VERSION = "2.6.88"; 
+const APP_VERSION = "2.6.89"; 
 
-// 🛡️ STABILITY: Panic Handlers to prevent 521 connection refusal on unexpected errors
+// 🕓 Utility: Get current IST timestamp (v2.6.89)
+const getISTDate = () => {
+  const now = new Date();
+  return new Date(now.getTime() + (5.5 * 60 * 60 * 1000)).toISOString();
+};
+
+// 🛡️ Helper: Persistent In-App Notifications (v2.6.89)
+const addInAppNotification = (player, title, message, data = {}) => {
+  if (!player) return;
+  if (!player.notifications) player.notifications = [];
+  player.notifications.unshift({
+    id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    title,
+    message,
+    date: getISTDate(),
+    read: false,
+    ...data
+  });
+  if (player.notifications.length > 50) player.notifications = player.notifications.slice(0, 50);
+};
+
+// 🛡️ STABILITY: Panic Handlers
 process.on('uncaughtException', (err) => {
   console.error('🔥 [PANIC] Uncaught Exception:', err);
   // Keep process alive for diagnostics
@@ -869,13 +890,16 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
             const opponent = newMasterData.players.find(p => p.id === opponentId);
             const challenger = newMasterData.players.find(p => p.id === challengerId);
             
-            if (opponent && opponent.pushTokens?.length > 0) {
-              sendPushNotification(
-                opponent.pushTokens, 
-                "New Match Challenge! 🎾", 
-                `${challenger?.name || 'Someone'} challenged you to a match.`,
-                { matchId: match.id, type: 'MATCH_CHALLENGE' }
-              );
+            if (opponent) {
+              const challengerName = challenger?.name || 'Someone';
+              const title = "New Match Challenge! 🎾";
+              const body = `${challengerName} challenged you to a match.`;
+              
+              addInAppNotification(opponent, title, body, { matchId: match.id, type: 'MATCH_CHALLENGE' });
+              
+              if (opponent.pushTokens?.length > 0) {
+                sendPushNotification(opponent.pushTokens, title, body, { matchId: match.id, type: 'MATCH_CHALLENGE' });
+              }
             }
           }
         }
@@ -893,13 +917,15 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
           if (justApproved && video.playerIds) {
             video.playerIds.forEach(pId => {
               const player = newMasterData.players.find(p => p.id === pId);
-              if (player && player.pushTokens?.length > 0) {
-                sendPushNotification(
-                  player.pushTokens, 
-                  "New Match Recording! 🎥", 
-                  "A recording of your recent match is now available to view.",
-                  { videoId: video.id, type: 'VIDEO_AVAILABLE' }
-                );
+              if (player) {
+                const title = "New Match Recording! 🎥";
+                const body = "A recording of your recent match is now available to view.";
+                
+                addInAppNotification(player, title, body, { videoId: video.id, type: 'VIDEO_AVAILABLE' });
+                
+                if (player.pushTokens?.length > 0) {
+                  sendPushNotification(player.pushTokens, title, body, { videoId: video.id, type: 'VIDEO_AVAILABLE' });
+                }
               }
             });
           }
@@ -948,13 +974,15 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
 
           for (const playerId of newRegIds) {
             const player = newMasterData.players.find(p => p.id === playerId);
-            if (player && player.pushTokens?.length > 0) {
-              sendPushNotification(
-                player.pushTokens,
-                "Registration Confirmed! 🏆",
-                `You're officially registered for ${tournament.title}. Good luck!`,
-                { tournamentId: tournament.id, type: 'TOURNAMENT_REGISTRATION' }
-              );
+            if (player) {
+              const title = "Registration Confirmed! 🏆";
+              const body = `You're officially registered for ${tournament.title}. Good luck!`;
+              
+              addInAppNotification(player, title, body, { tournamentId: tournament.id, type: 'TOURNAMENT_REGISTRATION' });
+              
+              if (player.pushTokens?.length > 0) {
+                sendPushNotification(player.pushTokens, title, body, { tournamentId: tournament.id, type: 'TOURNAMENT_REGISTRATION' });
+              }
             }
           }
         }
@@ -1285,8 +1313,8 @@ app.use((err, req, res, next) => {
   res.status(status).json({
     "success": false,
     "error": message,
-    "version": "2.6.88",
-    "timestamp": new Date().toISOString()
+    "version": "2.6.89",
+    "timestamp": getISTDate()
   });
 });
 
