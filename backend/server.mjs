@@ -70,7 +70,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.83)
-const APP_VERSION = "2.6.84"; 
+const APP_VERSION = "2.6.85"; 
 
 // 🛡️ STABILITY: Panic Handlers to prevent 521 connection refusal on unexpected errors
 process.on('uncaughtException', (err) => {
@@ -932,6 +932,33 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
           }
         }
       }
+
+      // 4. Tournament Registrations (New in v2.6.84)
+      if (changedKeys.includes('tournaments')) {
+        const incomingTournaments = req.body.tournaments || [];
+        const existingTournaments = currentData.tournaments || [];
+
+        for (const tournament of incomingTournaments) {
+          const existing = existingTournaments.find(et => et.id === tournament.id);
+          const incomingRegIds = tournament.registeredPlayerIds || [];
+          const existingRegIds = existing ? (existing.registeredPlayerIds || []) : [];
+          
+          // Find newly registered players
+          const newRegIds = incomingRegIds.filter(id => !existingRegIds.includes(id));
+
+          for (const playerId of newRegIds) {
+            const player = newMasterData.players.find(p => p.id === playerId);
+            if (player && player.pushTokens?.length > 0) {
+              sendPushNotification(
+                player.pushTokens,
+                "Registration Confirmed! 🏆",
+                `You're officially registered for ${tournament.title}. Good luck!`,
+                { tournamentId: tournament.id, type: 'TOURNAMENT_REGISTRATION' }
+              );
+            }
+          }
+        }
+      }
     } catch (notifErr) {
       console.error("❌ Notification Hook Error:", notifErr);
     }
@@ -1258,7 +1285,7 @@ app.use((err, req, res, next) => {
   res.status(status).json({
     "success": false,
     "error": message,
-    "version": "2.6.74",
+    "version": "2.6.85",
     "timestamp": new Date().toISOString()
   });
 });

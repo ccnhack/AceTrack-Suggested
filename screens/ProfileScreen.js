@@ -34,61 +34,6 @@ const calculateAcademyTier = (uid, tournaments = []) => {
 
 
 
-const NotificationsModal = ({ visible, onClose, notifications, onClear, onNotificationClick }) => {
-  return (
-    <Modal visible={visible} animationType="slide" transparent={true}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.notificationsModalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Notifications</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Ionicons name="close" size={24} color="#0F172A" />
-            </TouchableOpacity>
-          </View>
-          
-          <FlatList
-            data={notifications}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item: notif }) => (
-              <TouchableOpacity 
-                style={[styles.notificationItem, !notif.read && styles.unreadNotification]}
-                onPress={() => onNotificationClick(notif)}
-              >
-                <View style={styles.notificationIcon}>
-                  <Ionicons 
-                    name={notif.type === 'video' ? 'play-circle' : notif.type === 'support' ? 'help-buoy' : 'notifications'} 
-                    size={24} 
-                    color={notif.read ? '#94A3B8' : '#3B82F6'} 
-                  />
-                </View>
-                <View style={styles.notificationText}>
-                  <Text style={[styles.notificationTitle, !notif.read && styles.boldText]}>{notif.title}</Text>
-                  <Text style={styles.notificationMessage}>{notif.message}</Text>
-                  <Text style={styles.notificationDate}>{new Date(notif.date).toLocaleDateString()}</Text>
-                </View>
-                {!notif.read && <View style={styles.unreadDot} />}
-              </TouchableOpacity>
-            )}
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Ionicons name="notifications-off-outline" size={48} color="#CBD5E1" />
-                <Text style={styles.emptyText}>No notifications yet</Text>
-              </View>
-            }
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={notifications?.length === 0 ? { flex: 1, justifyContent: 'center' } : { paddingBottom: 20 }}
-          />
-          
-          {notifications && notifications.some(n => !n.read) && (
-            <TouchableOpacity onPress={onClear} style={styles.clearBtn}>
-              <Text style={styles.clearBtnText}>Mark all as read</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-    </Modal>
-  );
-};
 
 const ProfileScreen = ({ 
   user, players = [], tournaments = [], onUpdateUser, onLogout, 
@@ -104,7 +49,8 @@ const ProfileScreen = ({
   isUploadingLogs,
   appVersion,
   onRetryMessage,
-  onMarkSeen
+  onMarkSeen,
+  onToggleNotifications
 }) => {
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
@@ -113,7 +59,6 @@ const ProfileScreen = ({
       logger.logAction('SCREEN_VIEW', { screen: 'Profile' });
     }
   }, [isFocused]);
-  const [showNotifications, setShowNotifications] = useState(false);
   const [showCoachOnboarding, setShowCoachOnboarding] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
@@ -418,7 +363,7 @@ const ProfileScreen = ({
           lastSyncTime={lastSyncTime}
           onManualSync={onManualSync}
           onAvatarPress={() => setShowAvatarPicker(true)}
-          onNotificationPress={() => setShowNotifications(true)}
+          onNotificationPress={() => onToggleNotifications()}
           onWalletPress={() => setShowWalletModal(true)}
           logger={logger}
         />
@@ -1064,47 +1009,6 @@ const ProfileScreen = ({
         </Modal>
       )}
 
-      {showNotifications && (
-        <NotificationsModal 
-          visible={showNotifications}
-          onClose={() => setShowNotifications(false)}
-          notifications={user.notifications || []}
-          onClear={() => {
-            const updated = (user.notifications || []).map(n => ({ ...n, read: true }));
-            onUpdateUser({ ...user, notifications: updated });
-          }}
-          onNotificationClick={(notif) => {
-              // Mark as read
-              const updated = (user.notifications || []).map(n => n.id === notif.id ? { ...n, read: true } : n);
-              onUpdateUser({ ...user, notifications: updated });
-              setShowNotifications(false);
-              
-              // LOG: Logging in-app notification click
-              logger.logAction('IN_APP_NOTIFICATION_CLICKED', {
-                  id: notif.id,
-                  type: notif.type,
-                  title: notif.title,
-                  timestamp: new Date().toISOString()
-              });
-              
-              // Navigate based on type
-              if (notif.type === 'video') {
-                  navigation.navigate('Recordings');
-              } else if (notif.type === 'support') {
-                  setShowSupport(true);
-              } else if (notif.type === 'tournament' || notif.type === 'tournament_invite') {
-                  navigation.navigate('Matches');
-              } else if (notif.type === 'challenge') {
-                  navigation.navigate('Matchmaking');
-              } else if (notif.type === 'booking') {
-                  navigation.navigate('CoachDiscovery');
-              } else if (notif.type === 'general') {
-                  // If it's a general invite without specific type
-                  if (notif.title === 'Tournament Invitation') navigation.navigate('Matches');
-              }
-          }}
-        />
-      )}
             {/* Calendar Modal */}
             {isCalendarModalVisible && (
               <Modal visible={isCalendarModalVisible} animationType="slide" transparent>

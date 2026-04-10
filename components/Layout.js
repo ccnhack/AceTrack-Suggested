@@ -1,12 +1,14 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useAppActions } from '../navigation/AppNavigator';
 
 const Layout = ({ 
   children, activeTab, setActiveTab, title, onBack, role, 
   onNotificationClick, hasUnreadNotifications, notificationCount, 
   adminActionCount, recordingsCount 
 }) => {
+  const { onToggleNotifications } = useAppActions();
   const showHeader = activeTab !== 'explore';
 
   return (
@@ -23,7 +25,7 @@ const Layout = ({
           </View>
           <TouchableOpacity 
             style={styles.notificationButton}
-            onPress={onNotificationClick}
+            onPress={onNotificationClick || onToggleNotifications}
           >
             <Ionicons name="notifications-outline" size={24} color="#EF4444" />
             {hasUnreadNotifications && (

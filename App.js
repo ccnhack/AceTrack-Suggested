@@ -21,6 +21,7 @@ import NetInfo from '@react-native-community/netinfo';
 import OfflineScreen from './components/OfflineScreen';
 import AppNavigator from './navigation/AppNavigator';
 import ChatBot from './components/ChatBot';
+import NotificationsModal from './components/NotificationsModal';
 import * as Updates from 'expo-updates';
 import logger from './utils/logger';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,9 +48,8 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.73)
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.83)
-const APP_VERSION = "2.6.84"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.85)
+const APP_VERSION = "2.6.85"; 
 const currentAppVersion = APP_VERSION;
 
 export default function App() {
@@ -89,6 +89,7 @@ export default function App() {
   
   const localDeviceIdRef = useRef(null);
   const [isProfileEditActive, setIsProfileEditActive] = useState(false); // New state to track if profile edit is open
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [pendingSync, setPendingSync] = useState([]); // Keys that need to be pushed to cloud
   const [visitedAdminSubTabs, setVisitedAdminSubTabs] = useState(new Set());
@@ -98,6 +99,9 @@ export default function App() {
   const lastManualSyncTimeRef = React.useRef(0);
   const pendingSyncRef = React.useRef([]);
   const pendingUpdateCheckRef = React.useRef(false); // New: Track missed WebSocket signals
+  const notificationResponseSubscription = useRef();
+  const notificationReceivedSubscription = useRef();
+  const navigationRef = useRef();
   const lastServerUpdateRef = React.useRef(null);
   const syncVersion = React.useRef(0);
   const isUsingCloudRef = React.useRef(true);
@@ -116,10 +120,6 @@ export default function App() {
   const globalBackoffUntilRef = React.useRef(0); // BACKOFF: 429 recovery timer
   const seenAdminActionIdsRef = useRef(new Set()); // 🛡️ SYNC REF (v2.6.50)
   const visitedAdminSubTabsRef = useRef(new Set()); // 🛡️ SYNC REF (v2.6.50)
-
-  const notificationReceivedSubscription = useRef(null);
-  const notificationResponseSubscription = useRef(null);
-  const navigationRef = useRef(null);
 
   // Synchronous helper to update isSyncing state AND ref atomically
   const setSyncingState = (val) => {
@@ -277,14 +277,38 @@ export default function App() {
         localDeviceIdRef.current = hardwareId;
 
         if (Platform.OS !== 'web') {
-          // 1. Listen for clicks on notifications
+          // 1. Listen for background/killed notification clicks (Deep Linking)
           notificationResponseSubscription.current = Notifications.addNotificationResponseReceivedListener(response => {
             const data = response.notification.request.content.data;
             console.log('🔔 Notification Response Received:', data);
             logger.logAction('NOTIFICATION_CLICKED', { data });
+            
+            // Handle Navigation based on type
+            if (navigationRef.current) {
+              if (data.type === 'MATCH_CHALLENGE') {
+                navigationRef.current.navigate('Matches');
+              } else if (data.type === 'VIDEO_AVAILABLE' || data.type === 'video') {
+                navigationRef.current.navigate('Recordings');
+              } else if (data.type === 'SUPPORT_REPLY' || data.type === 'support') {
+                navigationRef.current.navigate('Profile');
+              } else if (data.type === 'TOURNAMENT_REGISTRATION') {
+                navigationRef.current.navigate('Explore');
+              }
+            }
           });
 
-          // 2. Register for Token
+          // 2. Listen for FOREGROUND notifications (v2.6.84)
+          notificationReceivedSubscription.current = Notifications.addNotificationReceivedListener(notification => {
+            console.log('🔔 Foreground Notification Received');
+            logger.logAction('NOTIFICATION_FOREGROUND_RECEIVED', { 
+              id: notification.request.identifier,
+              title: notification.request.content.title 
+            });
+            // Force a data pull to refresh the in-app notification list
+            loadData(true);
+          });
+
+          // 3. Register for Token
           registerForPushNotificationsAsync().then(token => {
             if (token) {
               storage.setItem('push_token', token);
@@ -318,6 +342,9 @@ export default function App() {
       subscription.remove();
       if (notificationResponseSubscription.current) {
         notificationResponseSubscription.current.remove();
+      }
+      if (notificationReceivedSubscription.current) {
+        notificationReceivedSubscription.current.remove();
       }
     };
   }, [isUsingCloud]); // 🔄 SYNC HARDENING (v2.6.19): Re-init socket when cloud mode toggles
@@ -457,7 +484,7 @@ export default function App() {
         storage.getItem('matchmaking')
       ]);
 
-      // 🛡️ STORAGE NUKE: "version": "2.6.47", force-clear any 'false' setting one time
+      // 🛡️ STORAGE NUKE: "version": "2.6.85", force-clear any 'false' setting one time
       const hasNuked = await AsyncStorage.getItem('cloud_nuke_v249');
       let effectiveIwc = iuc;
       if (!hasNuked) {
@@ -1094,7 +1121,7 @@ export default function App() {
         const myTracker = {
           id: localDeviceIdRef.current,
           name: Constants.deviceName || Platform.OS,
-          appVersion: APP_VERSION,
+          appVersion: "2.6.85",
           platformVersion: Platform.OS === 'ios' ? `iOS ${Platform.Version}` : `Android ${Platform.constants?.Release || Platform.Version} (API ${Platform.Version})`,
           lastActive: now
         };
@@ -1502,7 +1529,7 @@ export default function App() {
         deviceInfo: ticket.deviceInfo || {
           os: Platform.OS,
           osVersion: Platform.Version,
-          appVersion: APP_VERSION,
+          appVersion: "2.6.85",
           deviceName: Constants.deviceName || 'Device'
         }
       };
@@ -1581,6 +1608,7 @@ export default function App() {
     sendUserNotification: handleSendUserNotification,
     loadData: () => loadData(true, true), // 🛡️ FORCE SYNC: Ensure LoginScreen can fetch cloud records
     onManualSync: () => loadData(true, true),
+    onToggleNotifications: () => setShowNotificationsModal(true),
     onRegisterUser: handleRegisterUser,
     onToggleCloud: () => {
       setIsUsingCloud(prev => {
@@ -2416,6 +2444,42 @@ export default function App() {
             onSaveTicket={memoizedHandlers.onSaveTicket}
           />
         )}
+
+        <NotificationsModal 
+          visible={showNotificationsModal}
+          onClose={() => setShowNotificationsModal(false)}
+          notifications={currentUser?.notifications || []}
+          onClear={async () => {
+             const updatedUser = { 
+               ...currentUser, 
+               notifications: (currentUser?.notifications || []).map(n => ({ ...n, read: true }))
+             };
+             setCurrentUser(updatedUser);
+             // Sync to cloud
+             memoizedHandlers.onUpdateUser(updatedUser, true);
+          }}
+          onNotificationClick={(notif) => {
+            setShowNotificationsModal(false);
+            
+            // 🛡️ v2.6.85: Mark notification as read on click
+            const updatedNotifications = (currentUser?.notifications || []).map(n => 
+              n.id === notif.id ? { ...n, read: true } : n
+            );
+            const updatedUser = { ...currentUser, notifications: updatedNotifications };
+            
+            setCurrentUser(updatedUser);
+            currentUserRef.current = updatedUser;
+            memoizedHandlers.onUpdateUser(updatedUser, true); // Sync to cloud
+
+            if (navigationRef.current) {
+               if (notif.type === 'video') navigationRef.current.navigate('Recordings');
+               else if (notif.type === 'support') navigationRef.current.navigate('Profile');
+               else if (notif.type === 'challenge' || notif.type === 'booking') navigationRef.current.navigate('Matchmaking');
+               else if (notif.type === 'tournament' || notif.type === 'tournament_invite') navigationRef.current.navigate('Matches');
+               else navigationRef.current.navigate('Explore');
+            }
+          }}
+        />
 
         {/* Verification Prompt Modal */}
         <Modal

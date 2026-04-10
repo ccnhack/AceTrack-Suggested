@@ -136,7 +136,7 @@ const ProfileWrapper = memo((props) => {
     onManualSync, onUploadLogs, isUploadingLogs, onSaveTicket, 
     onReplyTicket, onUpdateUser, onTopUp, setIsProfileEditActive, 
     onToggleCloud, onVerifyAccount, onUpdateTicketStatus,
-    onRetryMessage, onMarkSeen
+    onRetryMessage, onMarkSeen, onToggleNotifications
   } = useAppActions();
 
   return (
@@ -162,6 +162,7 @@ const ProfileWrapper = memo((props) => {
       onToggleCloud={onToggleCloud}
       onVerifyAccount={onVerifyAccount}
       onUpdateTicketStatus={onUpdateTicketStatus}
+      onToggleNotifications={onToggleNotifications}
       Sport={Sport} 
       SkillLevel={SkillLevel} 
       TournamentStructure={TournamentStructure} 
