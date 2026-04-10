@@ -68,7 +68,9 @@ const TournamentDetailModal = ({
 
   const isAlreadyRegistered = user && (tournament.registeredPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
   const isAssignedCoach = user && String(tournament.assignedCoachId).toLowerCase() === String(user.id).toLowerCase();
-  const isFull = tournament.registeredPlayerIds?.length >= tournament.maxPlayers;
+  const registeredCount = (tournament.registeredPlayerIds || []).length;
+  const pendingCount = (tournament.pendingPaymentPlayerIds || []).length;
+  const isFull = (registeredCount + pendingCount) >= tournament.maxPlayers;
   
   // DATE-BASED CLOSURE: Check if deadline has passed or tournament started
   const isClosed = (() => {
@@ -201,7 +203,12 @@ const TournamentDetailModal = ({
               </View>
               <View style={styles.gridItem}>
                 <Text style={styles.gridLabel}>Players</Text>
-                <Text style={styles.gridValue}>{tournament.registeredPlayerIds?.length || 0}/{tournament.maxPlayers}</Text>
+                <Text style={styles.gridValue}>
+                  {isAdminUser || isAcademyUser 
+                    ? `${registeredCount}/${tournament.maxPlayers}${pendingCount > 0 ? ` (+${pendingCount} Wait)` : ''}`
+                    : `${registeredCount + pendingCount}/${tournament.maxPlayers}`
+                  }
+                </Text>
               </View>
               <View style={styles.gridItem}>
                 <Text style={styles.gridLabel}>Level</Text>

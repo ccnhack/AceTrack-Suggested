@@ -65,4 +65,68 @@ cron.schedule('0 * * * *', async () => {
   }
 });
 
+
+/**
+ * 🛡️ v2.6.102: EXPIRE STAGNANT PENDING PAYMENTS
+ * Runs every 5 minutes to sweep and clear users who didn't pay within the 30-min window.
+ */
+cron.schedule('*/5 * * * *', async () => {
+  console.log('⏰ Running Pending Payment Expiry Job...');
+  
+  try {
+    const AppState = mongoose.model('AppState');
+    const state = await AppState.findOne().sort({ lastUpdated: -1 });
+    
+    if (!state || !state.data || !state.data.tournaments) return;
+
+    const tournaments = state.data.tournaments;
+    const now = Date.now();
+    const THIRTY_MINS = 30 * 60 * 1000;
+    let changed = false;
+
+    const updatedTournaments = tournaments.map(t => {
+      const timestamps = t.pendingPaymentTimestamps || {};
+      const pending = t.pendingPaymentPlayerIds || [];
+      
+      const toExpire = pending.filter(pid => {
+        const ts = timestamps[pid];
+        return ts && (now - ts) > THIRTY_MINS;
+      });
+
+      if (toExpire.length > 0) {
+        console.log(`🧹 Expiring ${toExpire.length} pending users for tournament: ${t.title}`);
+        changed = true;
+        const newPending = pending.filter(pid => !toExpire.includes(pid));
+        const newTimestamps = { ...timestamps };
+        toExpire.forEach(pid => delete newTimestamps[pid]);
+
+        return {
+          ...t,
+          pendingPaymentPlayerIds: newPending,
+          pendingPaymentTimestamps: newTimestamps,
+          // Re-add to waitlist? User said: "removed from the tournament and again see the option to register"
+          // So we don't move them back to waitlist automatically.
+          playerStatuses: (() => {
+            const ps = { ...(t.playerStatuses || {}) };
+            toExpire.forEach(pid => delete ps[pid]);
+            return ps;
+          })()
+        };
+      }
+      return t;
+    });
+
+    if (changed) {
+      state.data.tournaments = updatedTournaments;
+      state.markModified('data.tournaments');
+      state.lastUpdated = new Date();
+      await state.save();
+      console.log('✅ Expired payments cleared globally.');
+    }
+  } catch (error) {
+    console.error('❌ Error in Pending Expiry Job:', error.message);
+  }
+});
+
 console.log('📅 Tournament Reminders Job initialized (Hourly)');
+console.log('📅 Pending Payment Expiry Job initialized (5-Min)');

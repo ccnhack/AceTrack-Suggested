@@ -893,6 +893,10 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
             promotedIds.push(nextId);
             availableSlots--;
             
+            // 🛡️ v2.6.102: Track promotion time for 30-minute expiry
+            if (!updatedT.pendingPaymentTimestamps) updatedT.pendingPaymentTimestamps = {};
+            updatedT.pendingPaymentTimestamps[nextId] = Date.now();
+            
             // 🛡️ [NOTIFY_DEBUG] v2.6.97: Persist in-app notification BEFORE save
             const player = (newMasterData.players || []).find(p => String(p.id) === String(nextId));
             if (player) {

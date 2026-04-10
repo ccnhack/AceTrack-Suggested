@@ -139,7 +139,13 @@ const TournamentCard = ({
               <Text style={styles.infoLabel}>Slots</Text>
             </View>
             <Text style={styles.infoValue}>
-              {(t.registeredPlayerIds || []).filter(Boolean).length}/{t.maxPlayers}
+              {(() => {
+                const reg = (t.registeredPlayerIds || []).filter(Boolean).length;
+                const pen = (t.pendingPaymentPlayerIds || []).filter(Boolean).length;
+                const isStaff = userRole === 'admin' || userRole === 'academy';
+                if (isStaff) return `${reg}/${t.maxPlayers}${pen > 0 ? ` (+${pen} Wait)` : ''}`;
+                return `${reg + pen}/${t.maxPlayers}`;
+              })()}
             </Text>
           </View>
           <View style={styles.divider} />

@@ -832,11 +832,26 @@ export default function App() {
       }
 
       if (Array.isArray(cloudData.tournaments) && !pendingSyncRef.current.includes('tournaments')) {
-        const cleaned = cloudData.tournaments.map(t => ({
-          ...t,
-          registeredPlayerIds: Array.isArray(t.registeredPlayerIds) ? t.registeredPlayerIds.filter(pid => !!pid) : [],
-          pendingPaymentPlayerIds: Array.isArray(t.pendingPaymentPlayerIds) ? t.pendingPaymentPlayerIds.filter(pid => !!pid) : []
-        })).filter(t => t.status !== 'deleted' && !t.isDeleted);
+        const now = Date.now();
+        const THIRTY_MINS = 30 * 60 * 1000;
+        
+        const cleaned = cloudData.tournaments.map(t => {
+          const timestamps = t.pendingPaymentTimestamps || {};
+          const pendingIds = Array.isArray(t.pendingPaymentPlayerIds) ? t.pendingPaymentPlayerIds.filter(pid => !!pid) : [];
+          
+          // 🛡️ v2.6.102: Client-side Lazy Cleanup for stale pending slots
+          const validPendingIds = pendingIds.filter(pid => {
+            const ts = timestamps[pid];
+            if (!ts) return true; // Keep if no timestamp (legacy or just promoted)
+            return (now - ts) < THIRTY_MINS;
+          });
+
+          return {
+            ...t,
+            registeredPlayerIds: Array.isArray(t.registeredPlayerIds) ? t.registeredPlayerIds.filter(pid => !!pid) : [],
+            pendingPaymentPlayerIds: validPendingIds
+          };
+        }).filter(t => t.status !== 'deleted' && !t.isDeleted);
         setTournaments(cleaned);
         storage.setItem('tournaments', cleaned);
       }
@@ -2133,12 +2148,51 @@ export default function App() {
       const userId = currentUserRef.current.id;
       
       setTournaments(prevT => {
+        // 🛡️ v2.6.102: Atomic Capacity Guard
+        const currentTournament = (prevT || []).find(item => item.id === t.id);
+        if (currentTournament) {
+          const registered = (currentTournament.registeredPlayerIds || []).length;
+          const isFull = registered >= (currentTournament.maxPlayers || Infinity);
+          const wasAlreadyRegistered = (currentTournament.registeredPlayerIds || []).includes(userId);
+
+          if (isFull && !wasAlreadyRegistered) {
+            console.log(`🛑 Registration Aborted: Tournament ${t.title} reached capacity during payment.`);
+            Alert.alert("Slots Full", "Oops!! Another user registered faster than you. Slots are full!");
+            
+            // Cleanup: remove from pending payment
+            return (prevT || []).map(item => {
+              if (item.id === t.id) {
+                return {
+                  ...item,
+                  pendingPaymentPlayerIds: (item.pendingPaymentPlayerIds || []).filter(pid => pid !== userId),
+                  pendingPaymentTimestamps: (() => {
+                    const ts = { ...(item.pendingPaymentTimestamps || {}) };
+                    delete ts[userId];
+                    return ts;
+                  })(),
+                  playerStatuses: (() => {
+                    const ps = { ...(item.playerStatuses || {}) };
+                    delete ps[userId];
+                    return ps;
+                  })()
+                };
+              }
+              return item;
+            });
+          }
+        }
+
         const updatedT = (prevT || []).map(item => {
           if (item && item.id === t.id) {
             return {
               ...item,
               registeredPlayerIds: [...new Set([...(item.registeredPlayerIds || []), userId])],
               pendingPaymentPlayerIds: (item.pendingPaymentPlayerIds || []).filter(pid => pid !== userId),
+              pendingPaymentTimestamps: (() => {
+                const ts = { ...(item.pendingPaymentTimestamps || {}) };
+                delete ts[userId];
+                return ts;
+              })(),
               waitlistedPlayerIds: (item.waitlistedPlayerIds || []).filter(pid => pid !== userId),
               // 🛡️ v2.6.102: Clear opted-out status on re-registration
               optedOutPlayerIds: (item.optedOutPlayerIds || []).filter(pid => pid !== userId),
@@ -2272,6 +2326,11 @@ export default function App() {
               pendingPaymentPlayerIds: isPaid 
                 ? [...new Set([...(updatedItem.pendingPaymentPlayerIds || []), promotedPlayerId])] 
                 : (item.pendingPaymentPlayerIds || []),
+              // 🛡️ v2.6.102: Record promotion timestamp
+              pendingPaymentTimestamps: {
+                ...(updatedItem.pendingPaymentTimestamps || {}),
+                [promotedPlayerId]: isPaid ? Date.now() : undefined
+              },
               waitlistedPlayerIds: updatedItem.waitlistedPlayerIds.filter(pid => pid !== promotedPlayerId),
               // 🛡️ v2.6.102: Clear opted-out status for the promoted player
               optedOutPlayerIds: (updatedItem.optedOutPlayerIds || []).filter(pid => pid !== promotedPlayerId),
