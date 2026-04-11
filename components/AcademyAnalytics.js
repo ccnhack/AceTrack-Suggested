@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Modal, SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import designSystem from '../theme/designSystem';
+import { formatDateIST } from '../utils/tournamentUtils';
+
 
 const { width, height } = Dimensions.get('window');
 
@@ -164,7 +166,7 @@ export const AcademyAnalytics = ({
                         <View key={item.tournament.id} style={styles.historyCard}>
                             <View style={styles.historyHeader}>
                                 <Text style={styles.historyTTitle}>{item.tournament.title}</Text>
-                                <Text style={styles.historyDate}>{new Date(item.tournament.date).toLocaleDateString()}</Text>
+                                <Text style={styles.historyDate}>{formatDateIST(item.tournament.date)}</Text>
                             </View>
 
                             <View style={styles.historySection}>

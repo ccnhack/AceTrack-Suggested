@@ -1,6 +1,9 @@
-import React, { memo } from 'react';
+import React, { memo, useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useAppData } from '../navigation/AppNavigator';
+import { formatDateIST } from '../utils/tournamentUtils';
+
 
 const MatchCard = ({
   match: t,
@@ -14,11 +17,50 @@ const MatchCard = ({
   onReschedule,
   onOptOut,
   setViewingPlayersFor,
-  setRosterTab,
   navigation
 }) => {
+  const { serverClockOffset } = useAppData();
   const isPendingPayment = user?.id && (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
   const isWaitlisted = user?.id && (t.waitlistedPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
+  const [timeLeft, setTimeLeft] = useState('');
+
+
+  // 🕒 [RegEngine] Timer Logic: 30-minute reservation countdown (v2.6.103)
+  useEffect(() => {
+    if (!isPendingPayment || !user?.id) {
+      setTimeLeft('');
+      return;
+    }
+
+    const promoTimeStr = t.pendingPaymentTimestamps?.[user.id];
+    if (!promoTimeStr) {
+      setTimeLeft('');
+      return;
+    }
+
+    const promoTime = new Date(promoTimeStr).getTime();
+    const expiryTime = promoTime + (30 * 60 * 1000);
+
+    const updateTimer = () => {
+      const now = Date.now() + (serverClockOffset || 0);
+      const diff = expiryTime - now;
+
+
+      if (diff <= 0) {
+        setTimeLeft('00:00');
+        return;
+      }
+
+      const mins = Math.floor(diff / 1000 / 60);
+      const secs = Math.floor((diff / 1000) % 60);
+      setTimeLeft(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [isPendingPayment, t.pendingPaymentTimestamps, user?.id, serverClockOffset]);
+
 
   // 🛡️ v2.6.99: Confirmation dialog before opt-out to prevent accidental withdrawals
   const handleOptOut = () => {
@@ -39,33 +81,48 @@ const MatchCard = ({
           <Text style={styles.matchTitle}>{t.title}</Text>
           <Text style={styles.matchLocation}>{t.location}</Text>
         </View>
-        <View style={[
-          styles.statusBadge,
-          viewMode === 'requests' ? styles.statusYellow :
-            isPendingPayment ? styles.statusOrange :
-              isWaitlisted ? styles.statusSlate :
-                viewMode === 'upcoming' ? styles.statusRed : styles.statusSlate
-        ]}>
-          <Text style={[
-            styles.statusText,
-            viewMode === 'requests' ? styles.textYellow :
-              isPendingPayment ? styles.textOrange :
-                isWaitlisted ? styles.textSlate :
-                  viewMode === 'upcoming' ? styles.textRed : styles.textSlate
+        <View style={{ alignItems: 'flex-end' }}>
+          <View style={[
+            styles.statusBadge,
+            viewMode === 'requests' ? styles.statusYellow :
+              isPendingPayment ? styles.statusOrange :
+                isWaitlisted ? styles.statusSlate :
+                  viewMode === 'upcoming' ? styles.statusRed : styles.statusSlate
           ]}>
-            {viewMode === 'requests' ? 'Requested' : 
-             isPendingPayment ? 'Pending Payment' : 
-             isWaitlisted ? 'Waitlisted' :
-             viewMode === 'upcoming' ? 'Confirmed' : 'Completed'}
-          </Text>
+            <Text style={[
+              styles.statusText,
+              viewMode === 'requests' ? styles.textYellow :
+                isPendingPayment ? styles.textOrange :
+                  isWaitlisted ? styles.textSlate :
+                    viewMode === 'upcoming' ? styles.textRed : styles.textSlate
+            ]}>
+              {viewMode === 'requests' ? 'Requested' : 
+               isPendingPayment ? 'Pending Payment' : 
+               isWaitlisted ? 'Waitlisted' :
+               viewMode === 'upcoming' ? 'Confirmed' : 'Completed'}
+            </Text>
+          </View>
+          {isPendingPayment && timeLeft !== '' && (
+            <View style={styles.cardTimer}>
+              <Ionicons name="time-outline" size={10} color="#EA580C" />
+              <Text style={styles.cardTimerText}>{timeLeft}</Text>
+            </View>
+          )}
         </View>
       </View>
 
       <View style={styles.matchDetails}>
         <View style={styles.detailBox}>
           <Text style={styles.detailLabel}>Date</Text>
-          <Text style={styles.detailValue}>{t.date}</Text>
+          <Text 
+            style={styles.detailValue} 
+            numberOfLines={1} 
+            adjustsFontSizeToFit
+          >
+            {formatDateIST(t.date)}
+          </Text>
         </View>
+
         <View style={styles.detailBox}>
           <Text style={styles.detailLabel}>Time</Text>
           <Text style={styles.detailValue}>{t.time}</Text>
@@ -254,7 +311,7 @@ const styles = StyleSheet.create({
   detailBox: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    padding: 16,
+    padding: 12,
     borderRadius: 24,
     alignItems: 'center',
     elevation: 1,
@@ -300,6 +357,24 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     textTransform: 'uppercase',
     letterSpacing: 2,
+  },
+  cardTimer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    marginTop: 8,
+    alignSelf: 'flex-end',
+  },
+  cardTimerText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#EA580C',
   },
 });
 

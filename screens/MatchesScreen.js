@@ -420,19 +420,25 @@ const MatchesScreen = ({
                     </View>
 
                     <View style={styles.paymentSummary}>
-                        <View style={styles.summaryRow}>
-                            <View>
-                                <Text style={styles.summaryLabel}>Registration Fee</Text>
-                                <Text style={[styles.summaryValue, { color: '#EF4444' }]}>
-                                    ₹{totalAdjustedCost}
-                                </Text>
-                            </View>
-                            <View style={{ alignItems: 'flex-end' }}>
-                                <Text style={styles.summaryLabel}>Wallet Balance</Text>
-                                <Text style={[styles.summaryValueSmall, !canPayWithCredits && { color: '#EF4444' }]}>
-                                    ₹{user?.credits || 0}
-                                </Text>
-                            </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <Text style={[styles.summaryLabel, { flex: 1 }]}>Registration Fee</Text>
+                            <Text style={[styles.summaryLabel, { flex: 1, textAlign: 'right' }]}>Wallet Balance</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <Text 
+                                style={[styles.summaryValue, { flex: 1, color: '#EF4444' }]}
+                                adjustsFontSizeToFit
+                                numberOfLines={1}
+                            >
+                                ₹{totalAdjustedCost}
+                            </Text>
+                            <Text 
+                                style={[styles.summaryValue, { flex: 1, textAlign: 'right', color: '#334155' }, !canPayWithCredits && { color: '#EF4444' }]}
+                                adjustsFontSizeToFit
+                                numberOfLines={1}
+                            >
+                                ₹{user?.credits || 0}
+                            </Text>
                         </View>
                         {!canPayWithCredits && (
                             <Text style={styles.insufficientText}>Insufficient AceTrack credits</Text>
@@ -1508,7 +1514,8 @@ const styles = StyleSheet.create({
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: 16,
   },
   summaryLabel: {
     fontSize: 10,
@@ -1516,15 +1523,15 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   summaryValue: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '900',
     letterSpacing: -1,
   },
   summaryValueSmall: {
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: '900',
     color: '#334155',
   },

@@ -15,6 +15,9 @@ import { Sport, SkillLevel, TournamentStructure, TournamentFormat } from '../typ
 import logger from '../utils/logger';
 import BroadcastTools from '../components/BroadcastTools';
 import { AcademyAnalytics } from '../components/AcademyAnalytics';
+import { formatDateIST } from '../utils/tournamentUtils';
+import { useAppData } from '../navigation/AppNavigator';
+
 
 const { width, height } = Dimensions.get('window');
 
@@ -24,6 +27,7 @@ export const AcademyScreen = ({
   onUpdateUser, onReplyTicket, onUpdateTicketStatus, onTopUp, onRegister, onReschedule, onLogTrace,
   setPlayers, isSyncing, onBatchUpdate, onDeleteTournament
 }) => {
+  const { serverClockOffset } = useAppData();
   const [subTab, setSubTab] = useState('tournaments');
   const [tFilter, setTFilter] = useState('upcoming');
   const [isDeleting, setIsDeleting] = useState(false);
@@ -177,7 +181,7 @@ export const AcademyScreen = ({
 
   const filteredTournaments = myTournaments.filter(t => {
       const tDate = new Date(t.date);
-      const today = new Date();
+      const today = new Date(Date.now() + (serverClockOffset || 0));
       today.setHours(0,0,0,0);
       if (tFilter === 'upcoming') {
         return t.status !== 'completed' && !t.tournamentConcluded && (tDate >= today || t.tournamentStarted);
@@ -186,7 +190,8 @@ export const AcademyScreen = ({
       }
   });
 
-  const isReadOnly = (editingT?.date ? new Date(editingT.date).getTime() < new Date().setHours(0,0,0,0) : false) || editingT?.status === 'completed' || editingT?.tournamentConcluded;
+  const nowSync = Date.now() + (serverClockOffset || 0);
+  const isReadOnly = (editingT?.date ? new Date(editingT.date).getTime() < new Date(nowSync).setHours(0,0,0,0) : false) || editingT?.status === 'completed' || editingT?.tournamentConcluded;
 
   const handleFormSubmit = () => {
     if (isReadOnly || isSubmitting) return;
@@ -624,7 +629,13 @@ export const AcademyScreen = ({
                 <View style={styles.premiumTInfoGrid}>
                     <View style={styles.infoGridItem}>
                         <Text style={styles.infoGridLabel}>Date</Text>
-                        <Text style={styles.infoGridValue}>{t.date}</Text>
+                        <Text 
+                            style={styles.infoGridValue}
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
+                        >
+                            {formatDateIST(t.date)}
+                        </Text>
                     </View>
                     <View style={styles.infoGridItem}>
                         <Text style={styles.infoGridLabel}>Participants</Text>

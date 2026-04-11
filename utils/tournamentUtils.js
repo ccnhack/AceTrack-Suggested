@@ -338,6 +338,35 @@ export const getVisibleTournaments = ({
   });
 };
 
+/**
+ * 🇮🇳 Standardize date to Indian format (DD-MM-YYYY)
+ * @param {string|Date} d 
+ * @returns {string}
+ */
+export const formatDateIST = (d) => {
+  if (!d) return "";
+  const date = parseTournamentDate(d);
+  if (!date) return String(d);
+  
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const yyyy = date.getFullYear();
+  
+  return `${dd}-${mm}-${yyyy}`;
+};
+
+/**
+ * 🕒 Calculate clock offset between local and server
+ * @param {string} serverDateHeader - Date header from server response
+ * @returns {number} Offset in ms
+ */
+export const calculateServerOffset = (serverDateHeader) => {
+  if (!serverDateHeader) return 0;
+  const serverTime = new Date(serverDateHeader).getTime();
+  const localTime = Date.now();
+  return serverTime - localTime;
+};
+
 export default {
   cloneTournament,
   addToWaitlist,
@@ -349,4 +378,7 @@ export default {
   isTournamentPast,
   parseTournamentDate,
   getVisibleTournaments,
+  formatDateIST,
+  calculateServerOffset,
 };
+

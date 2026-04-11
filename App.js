@@ -37,6 +37,8 @@ import SignupScreen from './screens/SignupScreen';
 import { initializeFirebase } from './utils/firebaseAuth';
 import { registerForPushNotificationsAsync, sendTokenToBackend } from './services/notificationService';
 import * as Notifications from 'expo-notifications';
+import { formatDateIST, calculateServerOffset } from './utils/tournamentUtils';
+
 
 if (Platform.OS === 'web') {
   const iconFontStyles = `@font-face {
@@ -49,7 +51,7 @@ if (Platform.OS === 'web') {
 }
 
 // 🚀 ACE TRACK STABILITY
-const APP_VERSION = "2.6.103"; 
+const APP_VERSION = "2.6.104"; 
 const TOURNAMENT_VERSION = '2.6.103'; 
 const currentAppVersion = APP_VERSION;
 
@@ -87,6 +89,9 @@ export default function App() {
   const [viewingLanding, setViewingLanding] = useState(true); // Default to landing for new users
   const [showSignup, setShowSignup] = useState(false);
   const [isFullyConnected, setIsFullyConnected] = useState(true); // Tracks true internet availability
+  const [serverClockOffset, setServerClockOffset] = useState(0); 
+  const serverClockOffsetRef = useRef(0);
+
   
   const localDeviceIdRef = useRef(null);
   const [isProfileEditActive, setIsProfileEditActive] = useState(false); // New state to track if profile edit is open
@@ -435,6 +440,13 @@ export default function App() {
       setIsCloudOnline(true);
       setLastSyncTime(new Date().toLocaleTimeString());
       
+      const serverOffset = calculateServerOffset(response.headers.get('Date'));
+      if (Math.abs(serverOffset) > 1000) { // Only update if > 1s drift to avoid jitter
+        setServerClockOffset(serverOffset);
+        serverClockOffsetRef.current = serverOffset;
+      }
+
+      
       // 🛡️ v2.6.70 Harden: Check content-type before parsing JSON to avoid "Unexpected <" errors
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
@@ -706,6 +718,13 @@ export default function App() {
       // We set this even if the version below is stale, to ensure UI accuracy.
       setIsCloudOnline(true);
       setLastSyncTime(new Date().toLocaleTimeString());
+
+      const serverOffset = calculateServerOffset(response.headers.get('Date'));
+      if (Math.abs(serverOffset) > 1000) {
+        setServerClockOffset(serverOffset);
+        serverClockOffsetRef.current = serverOffset;
+      }
+
 
       const cloudData = await response.json();
       if (!cloudData || typeof cloudData !== 'object') {
@@ -2618,7 +2637,9 @@ export default function App() {
           onUpdateMatchmaking={memoizedHandlers.onUpdateMatchmaking}
           sendUserNotification={memoizedHandlers.sendUserNotification}
           onManualSync={loadData}
+          serverClockOffset={serverClockOffset}
         />
+
         {currentUser && (
           <ChatBot 
             user={currentUser} 

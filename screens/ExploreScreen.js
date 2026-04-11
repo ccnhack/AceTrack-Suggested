@@ -10,10 +10,12 @@ import logger from '../utils/logger';
 import TournamentDetailModal from '../components/TournamentDetailModal';
 import TournamentCard from '../components/TournamentCard';
 import designSystem from '../theme/designSystem';
-import { isTournamentPast, getVisibleTournaments } from '../utils/tournamentUtils';
+import { isTournamentPast, getVisibleTournaments, formatDateIST } from '../utils/tournamentUtils';
 import { useIsFocused } from '@react-navigation/native';
+import { useAppData } from '../navigation/AppNavigator';
 
 const { width } = Dimensions.get('window');
+
 
 const deg2rad = (deg) => deg * (Math.PI / 180);
 
@@ -44,6 +46,7 @@ const CITY_COORDS = {
 const POPULAR_CITIES = ['All', ...Object.keys(CITY_COORDS)];
 
 const ExploreScreen = (props) => {
+  const { serverClockOffset } = useAppData();
   const { 
     tournaments = [], onSelect, reschedulingFrom, onCancelReschedule, userId, 
     userRole, userSports, players = [], Sport, SkillLevel, user,
@@ -220,19 +223,6 @@ const ExploreScreen = (props) => {
     }
   };
 
-  const parseDate = (d) => {
-    if (!d) return null;
-    const date = new Date(d);
-    if (isNaN(date.getTime())) {
-      // Handle DD-MM-YYYY format
-      const parts = d.split('-');
-      if (parts.length === 3) {
-        return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
-      }
-    }
-    return date;
-  };
-
   const availableSports = userRole === 'coach' && userSports ? userSports : Object.values(Sport);
   const currentUser = userId ? (players || []).find(p => p.id === userId) : null;
 
@@ -246,6 +236,7 @@ const ExploreScreen = (props) => {
       cityFilter,
       sportFilter,
       reschedulingFrom,
+      now: new Date(Date.now() + (serverClockOffset || 0))
     });
 
     return (visible || []).map(t => {
@@ -284,8 +275,8 @@ const ExploreScreen = (props) => {
         return a.distance - b.distance;
       }
       // Fallback: stay consistent with distance but add secondary sorting (e.g. date)
-      const dateA = parseDate(a.date)?.getTime() || 0;
-      const dateB = parseDate(b.date)?.getTime() || 0;
+      const dateA = parseTournamentDate(a.date)?.getTime() || 0;
+      const dateB = parseTournamentDate(b.date)?.getTime() || 0;
       return dateA - dateB;
     });
   }, [displayTournaments, userLocation]);
@@ -339,19 +330,25 @@ const ExploreScreen = (props) => {
                     </View>
 
                     <View style={styles.paymentSummary}>
-                        <View style={styles.summaryRow}>
-                            <View>
-                                <Text style={styles.summaryLabel}>Total Adjustment</Text>
-                                <Text style={[styles.summaryValue, { color: totalAdjustedCost < 0 ? '#16A34A' : '#EF4444' }]}>
-                                    ₹{Math.abs(totalAdjustedCost)}
-                                </Text>
-                            </View>
-                            <View style={{ alignItems: 'flex-end' }}>
-                                <Text style={styles.summaryLabel}>Wallet Balance</Text>
-                                <Text style={[styles.summaryValueSmall, !canPayWithCredits && totalAdjustedCost > 0 && { color: '#EF4444' }]}>
-                                    ₹{user?.credits || 0}
-                                </Text>
-                            </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <Text style={[styles.summaryLabel, { flex: 1 }]}>Total Adjustment</Text>
+                            <Text style={[styles.summaryLabel, { flex: 1, textAlign: 'right' }]}>Wallet Balance</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <Text 
+                                style={[styles.summaryValue, { flex: 1, color: totalAdjustedCost < 0 ? '#16A34A' : '#EF4444' }]}
+                                adjustsFontSizeToFit
+                                numberOfLines={1}
+                            >
+                                ₹{Math.abs(totalAdjustedCost)}
+                            </Text>
+                            <Text 
+                                style={[styles.summaryValue, { flex: 1, textAlign: 'right', color: '#334155' }, !canPayWithCredits && totalAdjustedCost > 0 && { color: '#EF4444' }]}
+                                adjustsFontSizeToFit
+                                numberOfLines={1}
+                            >
+                                ₹{user?.credits || 0}
+                            </Text>
                         </View>
                         {!canPayWithCredits && totalAdjustedCost > 0 && (
                             <Text style={styles.insufficientText}>Insufficient AceTrack credits</Text>
@@ -1099,7 +1096,8 @@ const styles = StyleSheet.create({
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: 16,
   },
   summaryLabel: {
     fontSize: 10,
@@ -1107,15 +1105,15 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   summaryValue: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '900',
     letterSpacing: -1,
   },
   summaryValueSmall: {
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: '900',
     color: '#334155',
   },

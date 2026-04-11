@@ -1,6 +1,8 @@
 import React, { memo } from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useAppData } from '../navigation/AppNavigator';
+import { formatDateIST } from '../utils/tournamentUtils';
 
 const { width } = Dimensions.get('window');
 
@@ -20,12 +22,14 @@ const TournamentCard = ({
   userRole,
   isRec = false 
 }) => {
+  const { serverClockOffset } = useAppData();
   const isRegistered = userId && (t.registeredPlayerIds || []).some(id => String(id).toLowerCase() === String(userId).toLowerCase());
   const isPendingPayment = userId && (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(userId).toLowerCase());
   const isAssignedCoach = userId && (t.assignedCoachIds || []).includes(userId);
   
-  const today = new Date();
+  const today = new Date(Date.now() + (serverClockOffset || 0));
   today.setHours(0, 0, 0, 0);
+
 
   // 🛡️ [RegEngine] Robust Parsing for regional formats (DD-MM-YYYY)
   const parseDate = (d) => {
@@ -75,7 +79,7 @@ const TournamentCard = ({
         <View style={styles.recCardFooter}>
           <View style={styles.recInfoItem}>
             <Ionicons name="time-outline" size={12} color="#94A3B8" />
-            <Text style={styles.recInfoText}>{t.date}</Text>
+            <Text style={styles.recInfoText}>{formatDateIST(t.date)}</Text>
           </View>
           <View style={styles.recInfoItem}>
             <Ionicons name="cash-outline" size={12} color="#94A3B8" />
@@ -130,7 +134,13 @@ const TournamentCard = ({
               <Ionicons name="calendar-outline" size={12} color="#94A3B8" />
               <Text style={styles.infoLabel}>Date</Text>
             </View>
-            <Text style={styles.infoValue}>{t.date}</Text>
+            <Text 
+              style={styles.infoValue}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
+              {formatDateIST(t.date)}
+            </Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.infoCol}>

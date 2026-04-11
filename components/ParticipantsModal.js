@@ -5,6 +5,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import TournamentBracket from './TournamentBracket';
+import { formatDateIST } from '../utils/tournamentUtils';
+import { useAppData } from '../navigation/AppNavigator';
 import { getReliabilityVerdict } from '../utils/verdict';
 
 const { width } = Dimensions.get('window');
@@ -12,6 +14,7 @@ const { width } = Dimensions.get('window');
 const ParticipantsModal = ({ 
   tournament, players, evaluations = [], onClose, onAddPlayer, onRemovePendingPlayer, user, onRequireVerification, onManageInterested
 }) => {
+  const { serverClockOffset } = useAppData();
   const [tab, setTab] = useState('roster');
   const [isAddingPlayer, setIsAddingPlayer] = useState(false);
   const [newPlayerName, setNewPlayerName] = useState('');
@@ -29,7 +32,8 @@ const ParticipantsModal = ({
       const expiry = new Date(promoTimeStr).getTime() + (30 * 60 * 1000);
       
       const update = () => {
-        const diff = expiry - Date.now();
+        const now = Date.now() + (serverClockOffset || 0);
+        const diff = expiry - now;
         if (diff <= 0) {
           setDisplay('Expiring...');
           return;
@@ -38,6 +42,7 @@ const ParticipantsModal = ({
         const s = Math.floor((diff % 60000) / 1000);
         setDisplay(`${m}:${s.toString().padStart(2, '0')}`);
       };
+
 
       update();
       const interval = setInterval(update, 1000);

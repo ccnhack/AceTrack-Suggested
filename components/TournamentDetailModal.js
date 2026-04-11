@@ -4,6 +4,8 @@ import {
   StyleSheet, Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useAppData } from '../navigation/AppNavigator';
+import { formatDateIST } from '../utils/tournamentUtils';
 
 const TournamentDetailModal = ({
   tournament,
@@ -17,8 +19,10 @@ const TournamentDetailModal = ({
   onCoachOptIn,
   onUpdateTournament,
 }) => {
+  const { serverClockOffset } = useAppData();
   const [showAcademyDetails, setShowAcademyDetails] = useState(false);
   const [timeLeft, setTimeLeft] = useState('');
+
 
   // 🕒 [RegEngine] Timer Logic: 30-minute reservation countdown
   useEffect(() => {
@@ -37,7 +41,7 @@ const TournamentDetailModal = ({
     const expiryTime = promoTime + (30 * 60 * 1000); // 30 minutes
 
     const updateTimer = () => {
-      const now = Date.now();
+      const now = Date.now() + (serverClockOffset || 0);
       const diff = expiryTime - now;
 
       if (diff <= 0) {
@@ -115,7 +119,7 @@ const TournamentDetailModal = ({
     if (tournament.tournamentStarted || tournament.status !== 'upcoming') return true;
     
     if (tournament.registrationDeadline) {
-      const today = new Date();
+      const today = new Date(Date.now() + (serverClockOffset || 0));
       today.setHours(0, 0, 0, 0);
 
       // 🛡️ [RegEngine] Robust Parsing for regional formats (DD-MM-YYYY)
@@ -232,7 +236,13 @@ const TournamentDetailModal = ({
               </View>
               <View style={styles.gridItem}>
                 <Text style={styles.gridLabel}>Date</Text>
-                <Text style={styles.gridValue}>{tournament.date}</Text>
+                <Text 
+                  style={styles.gridValue}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  {formatDateIST(tournament.date)}
+                </Text>
               </View>
               <View style={styles.gridItem}>
                 <Text style={styles.gridLabel}>Venue</Text>

@@ -109,9 +109,9 @@ const parseTime = (timeStr) => {
   return parseInt(hours, 10) * 60 + parseInt(minutes, 10);
 };
 
-const isTimeInPast = (date, timeSlot) => {
+const isTimeInPast = (date, timeSlot, serverOffset = 0) => {
   if (!date) return false;
-  const now = new Date();
+  const now = new Date(Date.now() + serverOffset);
   const todayStr = now.toISOString().split('T')[0];
   if (date < todayStr) return true;
   if (date > todayStr) return false;
@@ -123,7 +123,10 @@ const isTimeInPast = (date, timeSlot) => {
   return slotMinutes <= nowMinutes;
 };
 
-export default function MatchmakingScreen({ route, user, matchmaking = [], onUpdateMatchmaking, players = [], sendUserNotification, onManualSync }) {
+export default function MatchmakingScreen({ 
+  route, user, matchmaking = [], onUpdateMatchmaking, players = [], 
+  sendUserNotification, onManualSync, serverClockOffset 
+}) {
   
   const lastSyncRef = React.useRef(0);
   const insets = useSafeAreaInsets();
@@ -154,21 +157,37 @@ export default function MatchmakingScreen({ route, user, matchmaking = [], onUpd
 
   // Derived states from global matchmaking prop
   const sentRequests = React.useMemo(() => 
-    (matchmaking || []).filter(m => m.senderId === user?.id && m.status === 'Pending'),
-    [matchmaking, user?.id]
+    (matchmaking || []).filter(m => 
+      m.senderId === user?.id && m.status === 'Pending' &&
+      !isTimeInPast(m.proposedDate || m.time?.split(',')[0]?.trim(), m.proposedTime || m.time?.split(',')[1]?.trim(), serverClockOffset)
+    ),
+    [matchmaking, user?.id, serverClockOffset]
   );
   
   const receivedRequests = React.useMemo(() => 
     (matchmaking || []).filter(m => 
-      (m.receiverId === user?.id && m.status === 'Pending') || 
-      (m.senderId === user?.id && m.status === 'Countered')
+      ((m.receiverId === user?.id && m.status === 'Pending') || 
+      (m.senderId === user?.id && m.status === 'Countered')) &&
+      !isTimeInPast(m.proposedDate || m.time?.split(',')[0]?.trim(), m.proposedTime || m.time?.split(',')[1]?.trim(), serverClockOffset)
     ),
-    [matchmaking, user?.id]
+    [matchmaking, user?.id, serverClockOffset]
   );
 
   const counteredRequests = React.useMemo(() => 
-    (matchmaking || []).filter(m => (m.senderId === user?.id || m.receiverId === user?.id) && m.status === 'Countered'),
-    [matchmaking, user?.id]
+    (matchmaking || []).filter(m => 
+      (m.senderId === user?.id || m.receiverId === user?.id) && m.status === 'Countered' &&
+      !isTimeInPast(m.proposedDate || m.time?.split(',')[0]?.trim(), m.proposedTime || m.time?.split(',')[1]?.trim(), serverClockOffset)
+    ),
+    [matchmaking, user?.id, serverClockOffset]
+  );
+  
+  const expiredRequests = React.useMemo(() => 
+    (matchmaking || []).filter(m => 
+      (m.senderId === user?.id || m.receiverId === user?.id) && 
+      (m.status === 'Pending' || m.status === 'Countered') && 
+      isTimeInPast(m.proposedDate || m.time?.split(',')[0]?.trim(), m.proposedTime || m.time?.split(',')[1]?.trim(), serverClockOffset)
+    ),
+    [matchmaking, user?.id, serverClockOffset]
   );
   
   const acceptedMatches = React.useMemo(() => 
@@ -182,17 +201,17 @@ export default function MatchmakingScreen({ route, user, matchmaking = [], onUpd
     return acceptedMatches.filter(m => {
       const date = m.proposedDate || m.time?.split(',')[0]?.trim();
       const time = m.proposedTime || m.time?.split(',')[1]?.trim();
-      return !isTimeInPast(date, time);
+      return !isTimeInPast(date, time, serverClockOffset);
     });
-  }, [acceptedMatches]);
+  }, [acceptedMatches, serverClockOffset]);
 
   const pastMatches = React.useMemo(() => {
     return acceptedMatches.filter(m => {
       const date = m.proposedDate || m.time?.split(',')[0]?.trim();
       const time = m.proposedTime || m.time?.split(',')[1]?.trim();
-      return isTimeInPast(date, time);
+      return isTimeInPast(date, time, serverClockOffset);
     });
-  }, [acceptedMatches]);
+  }, [acceptedMatches, serverClockOffset]);
 
   const [history, setHistory] = useState([
     { id: 'h1', name: 'Sameer P.', sport: 'Badminton', date: 'Mar 20, 2024' }
@@ -743,6 +762,45 @@ export default function MatchmakingScreen({ route, user, matchmaking = [], onUpd
     Alert.alert("Counter Proposal Sent", `You suggested ${counterDate} at ${counterTime} at ${venueLabel}.`);
   };
 
+  const handleRemoveExpired = (id) => {
+    Alert.alert(
+      "Remove Expired Challenge",
+      "Are you sure you want to remove this expired request?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Remove", 
+          style: "destructive",
+          onPress: () => {
+            const updated = matchmaking.filter(m => m.id !== id);
+            onUpdateMatchmaking(updated);
+          }
+        }
+      ]
+    );
+  };
+
+  const handleRemoveAllExpired = () => {
+    if (expiredRequests.length === 0) return;
+    Alert.alert(
+      "Remove All Expired",
+      `Are you sure you want to remove all ${expiredRequests.length} expired requests?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Remove All", 
+          style: "destructive",
+          onPress: () => {
+            const expiredIds = new Set(expiredRequests.map(m => m.id));
+            const updated = matchmaking.filter(m => !expiredIds.has(m.id));
+            onUpdateMatchmaking(updated);
+            Alert.alert("Success", "All expired requests have been removed.");
+          }
+        }
+      ]
+    );
+  };
+
   const handleConfirmBooking = (req) => {
     const oppName = getOpponentName(req);
     const updated = matchmaking.map(m => m.id === req.id ? {
@@ -919,6 +977,58 @@ export default function MatchmakingScreen({ route, user, matchmaking = [], onUpd
     );
   };
 
+  const renderExpired = () => {
+    return (
+      <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Expired Requests</Text>
+            {expiredRequests.length > 0 && (
+              <TouchableOpacity onPress={handleRemoveAllExpired} style={[styles.smallBtn, { backgroundColor: '#FEE2E2' }]}>
+                <Text style={[styles.smallBtnText, { color: '#E11D48' }]}>Remove All</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          {expiredRequests.length === 0 && <Text style={styles.emptyText}>No Expired Requests Found</Text>}
+          {expiredRequests.map((req, index) => {
+            const isUnread = !req.isExpiredRead;
+            return (
+              <TouchableOpacity 
+                key={req.id || `expired-${index}`} 
+                style={[
+                  styles.requestCard, 
+                  { borderLeftColor: '#94A3B8' },
+                  isUnread && styles.unreadRequestCard
+                ]} 
+                onPress={() => {
+                  if (isUnread) {
+                    const updated = matchmaking.map(m => m.id === req.id ? { ...m, isExpiredRead: true } : m);
+                    onUpdateMatchmaking(updated);
+                  }
+                  openDetails(req);
+                }}
+              >
+                <View style={styles.info}>
+                  <Text style={styles.name} numberOfLines={1}>{getOpponentName(req)}</Text>
+                  <Text style={styles.details}>{req.sport} • {req.proposedDate} at {req.proposedTime}</Text>
+                  <Text style={[styles.details, { color: '#EF4444', fontSize: 10, fontWeight: '700' }]}>EXPIRED</Text>
+                </View>
+                <View style={styles.actionRow}>
+                  <TouchableOpacity 
+                    style={[styles.smallBtn, { backgroundColor: '#F1F5F9' }]} 
+                    onPress={() => handleRemoveExpired(req.id)}
+                  >
+                    <Ionicons name="trash-outline" size={16} color="#64748B" />
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </ScrollView>
+    );
+  };
+
   const renderAccepted = () => (
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
       {upcomingMatches.length === 0 && <Text style={styles.emptyText}>No Upcoming Matches Found</Text>}
@@ -983,7 +1093,7 @@ export default function MatchmakingScreen({ route, user, matchmaking = [], onUpd
       <View style={styles.header}>
         <Text style={styles.title}>{role === 'coach' ? 'Coach Bookings' : (role === 'academy' ? 'Academy Matchmaking' : 'Matchmaking')}</Text>
         <View style={styles.tabs}>
-           {(role === 'coach' ? ['New Bookings', 'Accepted', 'History'] : ['Challenge', 'Requests', 'Accepted', 'History']).map((tab, index) => (
+           {(role === 'coach' ? ['New Bookings', 'Accepted', 'Expired', 'History'] : ['Challenge', 'Requests', 'Accepted', 'Expired', 'History']).map((tab, index) => (
              <TouchableOpacity
                key={`tab-${index}`}
                style={[styles.tab, activeTab === tab && styles.activeTab]}
@@ -1001,6 +1111,11 @@ export default function MatchmakingScreen({ route, user, matchmaking = [], onUpd
                   {tab === 'New Bookings' && sentRequests.filter(r => r.isNew).length > 0 && role === 'coach' && (
                     <View style={styles.tabBadge}>
                       <Text style={styles.tabBadgeText}>{sentRequests.filter(r => r.isNew).length}</Text>
+                    </View>
+                  )}
+                  {tab === 'Expired' && expiredRequests.filter(r => !r.isExpiredRead).length > 0 && (
+                    <View style={styles.tabBadge}>
+                      <Text style={styles.tabBadgeText}>{expiredRequests.filter(r => !r.isExpiredRead).length}</Text>
                     </View>
                   )}
                 </View>
@@ -1042,6 +1157,7 @@ export default function MatchmakingScreen({ route, user, matchmaking = [], onUpd
       )}
       {(activeTab === 'Requests' || (role === 'coach' && activeTab === 'New Bookings')) && renderRequested()}
       {activeTab === 'Accepted' && renderAccepted()}
+      {activeTab === 'Expired' && renderExpired()}
       {activeTab === 'History' && renderHistory()}
 
       {/* Challenge Propose Modal */}

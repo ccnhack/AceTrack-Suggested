@@ -333,7 +333,7 @@ export default function AppNavigator({
   seenAdminActionIds, setSeenAdminActionIds, visitedAdminSubTabs, setVisitedAdminSubTabs, 
   reschedulingFrom, auditLogs, onLogout, handlers, appVersion, socketRef,
   matchmaking, onUpdateMatchmaking, sendUserNotification, pushStatus,
-  isCloudOnline, isUsingCloud, lastSyncTime
+  isCloudOnline, isUsingCloud, lastSyncTime, serverClockOffset
 }) {
   const authParams = useMemo(() => ({
     user, role, onLogout
@@ -342,12 +342,15 @@ export default function AppNavigator({
   const dataParams = useMemo(() => ({
     players, tournaments, matchVideos, matches, supportTickets, evaluations,
     seenAdminActionIds, visitedAdminSubTabs, reschedulingFrom, auditLogs,
-    appVersion, matchmaking, isCloudOnline, isUsingCloud, lastSyncTime, pushStatus
+    appVersion, matchmaking, isCloudOnline, isUsingCloud, lastSyncTime, pushStatus,
+    serverClockOffset
   }), [
     players, tournaments, matchVideos, matches, supportTickets, evaluations,
     seenAdminActionIds, visitedAdminSubTabs, reschedulingFrom, auditLogs,
-    appVersion, matchmaking, isCloudOnline, isUsingCloud, lastSyncTime, pushStatus
+    appVersion, matchmaking, isCloudOnline, isUsingCloud, lastSyncTime, pushStatus,
+    serverClockOffset
   ]);
+
 
   const actionParams = useMemo(() => ({
     ...handlers, 
