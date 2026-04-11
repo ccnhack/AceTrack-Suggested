@@ -1076,7 +1076,7 @@ const AdminHubScreen = ({
                         <Text style={[styles.miniUserName, selectedDiagUser?.id === p.id && styles.miniUserNameActive]} numberOfLines={1}>
                           {(p.name || 'User').split(' ')[0]}
                         </Text>
-                        <Text style={{ fontSize: 8, color: selectedDiagUser?.id === p.id ? '#FFFFFF' : '#94A3B8', fontWeight: 'bold' }}>
+                        <Text style={[styles.miniUserId, { color: selectedDiagUser?.id === p.id ? '#FFFFFF' : '#94A3B8' }]} numberOfLines={1}>
                           ({p.id})
                         </Text>
                       </View>
@@ -1170,7 +1170,7 @@ const AdminHubScreen = ({
                       <View key={d.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
                         <View style={{ flex: 1, paddingRight: 6 }}>
                           <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0F172A' }} numberOfLines={1}>{d.name}</Text>
-                          <Text style={{ fontSize: 9, color: '#64748B' }}>ID: {d.id}</Text>
+                          <Text style={{ fontSize: 9, color: '#64748B' }} numberOfLines={1}>ID: {d.id}</Text>
                           <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
                             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: onlineDevices[d.id] ? '#10B981' : '#EF4444' }} />
                             <Text style={{ fontSize: 10, color: onlineDevices[d.id] ? '#10B981' : '#EF4444', fontWeight: 'bold' }}>
@@ -1867,11 +1867,12 @@ const styles = StyleSheet.create({
   diagSearchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', paddingHorizontal: 16, borderRadius: 16, ...designSystem.shadows.sm, marginBottom: 16 },
   diagSearchInput: { flex: 1, paddingVertical: 12, marginLeft: 10, fontSize: 14, color: '#1E293B' },
   userListScroll: { marginBottom: 24 },
-  miniUserCard: { alignItems: 'center', padding: 12, marginRight: 12, borderRadius: 20, backgroundColor: '#FFF', width: 85, ...designSystem.shadows.sm },
+  miniUserCard: { alignItems: 'center', padding: 12, marginRight: 16, borderRadius: 20, backgroundColor: '#FFF', width: 100, ...designSystem.shadows.sm, overflow: 'hidden' },
   miniUserCardActive: { backgroundColor: '#6366F1' },
   miniAvatar: { width: 44, height: 44, borderRadius: 14, marginBottom: 8 },
-  miniUserName: { fontSize: 10, fontWeight: '700', color: '#64748B' },
+  miniUserName: { fontSize: 10, fontWeight: '700', color: '#64748B', textAlign: 'center', width: '100%' },
   miniUserNameActive: { color: '#FFFFFF' },
+  miniUserId: { fontSize: 8, fontWeight: 'bold', textAlign: 'center', width: '100%' },
   diagFileSection: { marginTop: 8 },
   diagLabel: { fontSize: 14, fontWeight: '800', color: '#1E293B', marginBottom: 16 },
   diagFileGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
