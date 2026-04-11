@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import mongoose from 'mongoose';
 import { sendPushNotification } from './notifications.js';
-import { processTournamentWaitlist } from './server.mjs';
+import { processTournamentWaitlist } from './promotion_logic.mjs';
 
 // ... existing reminders code ...
 
