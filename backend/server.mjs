@@ -70,7 +70,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.101)
-const APP_VERSION = "2.6.112"; 
+const APP_VERSION = "2.6.113"; 
 
 // 🕓 Utility: Get current IST timestamp (v2.6.89)
 const getISTDate = () => {
@@ -555,7 +555,7 @@ const storageConfig = multer.diskStorage({
 });
 
 
-// 🕓 v2.6.112: Start background jobs AFTER all exports are initialized
+// 🕓 v2.6.113: Start background jobs AFTER all exports are initialized
 import './reminders.mjs';
 
 
