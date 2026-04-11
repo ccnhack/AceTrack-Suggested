@@ -685,19 +685,19 @@ export const AdminGrievancesPanel = ({
 
       <View style={styles.statsGrid}>
         <View style={[styles.statBox, { backgroundColor: '#EFF6FF' }]}>
-          <Text style={styles.statLabel}>Open</Text>
+          <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>Open</Text>
           <Text style={[styles.statValue, { color: '#2563EB' }]}>{(tickets || []).filter(t => t && (t.status === 'Open' || !t.status)).length}</Text>
         </View>
         <View style={[styles.statBox, { backgroundColor: '#FFFBEB' }]}>
-          <Text style={styles.statLabel}>Active</Text>
+          <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>Active</Text>
           <Text style={[styles.statValue, { color: '#D97706' }]}>{(tickets || []).filter(t => t && t.status === 'In Progress').length}</Text>
         </View>
         <View style={[styles.statBox, { backgroundColor: '#FAF5FF' }]}>
-          <Text style={styles.statLabel}>Awaiting</Text>
+          <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>Awaiting</Text>
           <Text style={[styles.statValue, { color: '#9333EA' }]}>{(tickets || []).filter(t => t && t.status === 'Awaiting Response').length}</Text>
         </View>
         <View style={[styles.statBox, { backgroundColor: '#F0FDF4' }]}>
-          <Text style={styles.statLabel}>Resolved</Text>
+          <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>Resolved</Text>
           <Text style={[styles.statValue, { color: '#16A34A' }]}>{(tickets || []).filter(t => t && t.status === 'Resolved').length}</Text>
         </View>
       </View>
@@ -1098,21 +1098,27 @@ const styles = StyleSheet.create({
   },
   statsGrid: {
     flexDirection: 'row',
-    gap: 12,
-    padding: 16,
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 16,
   },
   statBox: {
     flex: 1,
-    padding: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 2,
     borderRadius: 16,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 64,
   },
   statLabel: {
     fontSize: 8,
     fontWeight: '900',
     color: '#64748B',
     textTransform: 'uppercase',
-    marginBottom: 4,
+    marginBottom: 2,
+    textAlign: 'center',
+    letterSpacing: -0.2,
   },
   statValue: {
     fontSize: 18,

@@ -707,6 +707,7 @@ const AdminHubScreen = ({
       ) : (
         <ScrollView 
           style={styles.content} 
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
         >
           {subTab === 'individuals' && (
@@ -715,7 +716,12 @@ const AdminHubScreen = ({
 
           {subTab === 'coaches' && (
             <View>
-              <View style={styles.coachSubTabs}>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                style={styles.coachSubTabsWrapper}
+                contentContainerStyle={styles.coachSubTabs}
+              >
                 {['pending', 'approved', 'revoked', 'rejected_addendum'].map(t => (
                   <TouchableOpacity 
                     key={t} 
@@ -727,7 +733,7 @@ const AdminHubScreen = ({
                     </Text>
                   </TouchableOpacity>
                 ))}
-              </View>
+              </ScrollView>
             {renderCoachList()}
           </View>
         )}
@@ -823,7 +829,12 @@ const AdminHubScreen = ({
 
         {subTab === 'tournaments' && (
           <View>
-            <View style={styles.coachSubTabs}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              style={styles.coachSubTabsWrapper}
+              contentContainerStyle={styles.coachSubTabs}
+            >
               {['upcoming', 'past'].map(st => (
                 <TouchableOpacity 
                   key={st} 
@@ -835,7 +846,7 @@ const AdminHubScreen = ({
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
+            </ScrollView>
             {filteredTournaments.length === 0 ? (
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>No {tournamentSubTab} tournaments found</Text>
@@ -1814,7 +1825,8 @@ const styles = StyleSheet.create({
   addendumBtn: { backgroundColor: '#FEF9C3' },
   fullActionBtn: { height: 48, borderRadius: 16, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center', marginTop: 20 },
   fullActionBtnText: { fontSize: 14, fontWeight: '800', color: '#64748B' },
-  coachSubTabs: { flexDirection: 'row', marginBottom: 20, gap: 8 },
+  coachSubTabsWrapper: { marginBottom: 20 },
+  coachSubTabs: { flexDirection: 'row', gap: 8, paddingBottom: 4 },
   coachSubTab: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: '#FFF', ...designSystem.shadows.sm },
   coachSubTabActive: { backgroundColor: '#6366F1' },
   coachSubTabText: { fontSize: 11, fontWeight: '800', color: '#64748B' },
