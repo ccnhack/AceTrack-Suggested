@@ -26,6 +26,7 @@ const TournamentCard = ({
   const isRegistered = userId && (t.registeredPlayerIds || []).some(id => String(id).toLowerCase() === String(userId).toLowerCase());
   const isPendingPayment = userId && (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(userId).toLowerCase());
   const isAssignedCoach = userId && (t.assignedCoachIds || []).includes(userId);
+  const isWaitlisted = userId && (t.waitlistedPlayerIds || []).some(id => String(id).toLowerCase() === String(userId).toLowerCase());
   
   const today = new Date(Date.now() + (serverClockOffset || 0));
   today.setHours(0, 0, 0, 0);
@@ -52,8 +53,25 @@ const TournamentCard = ({
   const diffDays = diffTime !== null ? Math.ceil(diffTime / (1000 * 60 * 60 * 24)) : null;
 
   let registrationMessage = '';
-  // 🛡️ [RegEngine] Status Guard: Close registration if already started or status not upcoming
-  if (t.tournamentStarted || t.status !== 'upcoming') {
+  // 🛡️ [RegEngine] Status-Specific Messages for Participants
+  if (isRegistered || isPendingPayment || isWaitlisted) {
+    if (isPendingPayment) {
+      registrationMessage = 'Action Required: Complete payment to secure your spot!';
+    } else if (isWaitlisted) {
+      registrationMessage = 'Hold tight! We\'ll notify you if a slot opens up.';
+    } else if (isRegistered) {
+      const startDate = parseDate(t.date);
+      if (startDate) {
+        startDate.setHours(0, 0, 0, 0);
+        const startDiff = Math.ceil((startDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        if (startDiff === 0) registrationMessage = 'Today is the Day! Good luck!';
+        else if (startDiff < 0) registrationMessage = 'Tournament in Progress';
+        else registrationMessage = `Buckle Up! Tournament begins in ${startDiff} day${startDiff === 1 ? '' : 's'}.`;
+      } else {
+        registrationMessage = 'You are registered! Get ready.';
+      }
+    }
+  } else if (t.tournamentStarted || t.status !== 'upcoming') {
     registrationMessage = 'Registration Closed';
   } else if (diffDays !== null) {
     if (diffDays < 0) registrationMessage = 'Registration Closed';
@@ -112,6 +130,11 @@ const TournamentCard = ({
             {isPendingPayment && userRole !== 'coach' && (
               <View style={[styles.statusBadge, { backgroundColor: '#F97316' }]}>
                 <Text style={styles.statusBadgeText}>Pending Payment</Text>
+              </View>
+            )}
+            {isWaitlisted && userRole !== 'coach' && (
+              <View style={[styles.statusBadge, { backgroundColor: '#D97706' }]}>
+                <Text style={styles.statusBadgeText}>Waitlisted</Text>
               </View>
             )}
             {isAssignedCoach && userRole === 'coach' && (
@@ -182,7 +205,12 @@ const TournamentCard = ({
             {userRole !== 'coach' ? (
               <Text style={[
                 styles.regMessage, 
-                diffDays < 0 ? { color: '#94A3B8' } : diffDays <= 3 ? { color: '#EF4444' } : { color: '#16A34A' }
+                isRegistered ? { color: '#0EA5E9' } :
+                isPendingPayment ? { color: '#F97316' } :
+                isWaitlisted ? { color: '#D97706' } :
+                diffDays < 0 ? { color: '#94A3B8' } : 
+                diffDays <= 3 ? { color: '#EF4444' } : 
+                { color: '#16A34A' }
               ]}>
                 {registrationMessage}
               </Text>
@@ -403,10 +431,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
   },
   cardFooter: {
-    marginTop: 16,
-    paddingTop: 16,
+    marginTop: 12,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F8FAFC',
+    borderTopColor: '#F1F5F9', // Slightly darker for premium definition
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',

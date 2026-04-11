@@ -70,7 +70,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.101)
-const APP_VERSION = "2.6.104"; 
+const APP_VERSION = "2.6.109"; 
 
 // 🕓 Utility: Get current IST timestamp (v2.6.89)
 const getISTDate = () => {
@@ -450,6 +450,51 @@ export const compareOtp = async (plainOtp, hashedOtp) => {
   return bcrypt.compare(String(plainOtp), hashedOtp);
 };
 
+// ═════════════════════════════════════════  // 🛡️ [Group Promotion] (v2.6.109): Dynamic batch size = availableSlots + 2 (redundancy)
+  const targetPendingCount = availableSlots + 2;
+  if (availableSlots > 0 && waitlisted.length > 0 && pending.length < targetPendingCount) {
+    const slotsToFill = targetPendingCount - pending.length;
+    const promotedIds = waitlisted.splice(0, slotsToFill);
+    
+    console.log(`📡 [PROMOTION_HUB] Promoting batch of ${promotedIds.length} for tournament "${updatedT.title}". (Target: ${targetPendingCount})`);
+    
+    promotedIds.forEach(pid => {
+      pending.push(pid);
+      timestamps[pid] = Date.now();
+      
+      // Add in-app notification (persisted in player object)
+      const pIndex = masterPlayers.findIndex(p => String(p.id) === String(pid));
+      if (pIndex >= 0) {
+          const player = masterPlayers[pIndex];
+          const title = "Boom! 🎾 Slot Alert!";
+          const body = `Academy has just increased the slots for ${updatedT.title}! 🚀 Pay now to secure your spot before this batch finishes!`;
+          
+          player.notifications = [
+              {
+                  id: `notif-${Date.now()}-${pid}`,
+                  title,
+                  message: body,
+                  date: new Date().toISOString(),
+                  read: false,
+                  type: 'TOURNAMENT_PROMOTION',
+                  tournamentId: updatedT.id
+              },
+              ...(player.notifications || [])
+          ].slice(0, 50);
+          
+          masterPlayers[pIndex] = { ...player };
+
+          // 🛡️ Trigger Push Notification (v2.6.109)
+          if (player.pushTokens && player.pushTokens.length > 0) {
+              sendPushNotification(player.pushTokens, title, body, { 
+                  type: 'TOURNAMENT_PROMOTION', 
+                  tournamentId: updatedT.id 
+              });
+          }
+      }
+    });
+  }
+
 // ═══════════════════════════════════════════════════════════════
 // Helpers
 // ═══════════════════════════════════════════════════════════════
@@ -526,6 +571,39 @@ export const processTournamentWaitlist = (tournament, masterPlayers = []) => {
   if (availableSlots <= 0 && pending.length > 0) {
     console.log(`📡 [PROMOTION_HUB] Tournament "${updatedT.title}" is full. Moving ${pending.length} pending losers back to FRONT of waitlist.`);
     
+    // 🔔 Notify the losers of the race
+    pending.forEach(pid => {
+        const pIndex = masterPlayers.findIndex(p => String(p.id) === String(pid));
+        if (pIndex >= 0) {
+            const player = masterPlayers[pIndex];
+            const title = "Oops! Slot Grabbed! 🎾";
+            const body = `Someone else just grabbed the last slot in ${updatedT.title}. Don't worry, you're back at the front of the waitlist!`;
+            
+            player.notifications = [
+                {
+                    id: `notif-race-loss-${Date.now()}-${pid}`,
+                    title,
+                    message: body,
+                    date: new Date().toISOString(),
+                    read: false,
+                    type: 'TOURNAMENT_RACE_LOSS',
+                    tournamentId: updatedT.id
+                },
+                ...(player.notifications || [])
+            ].slice(0, 50);
+            
+            masterPlayers[pIndex] = { ...player };
+            
+            // 🛡️ Trigger Push Notification (v2.6.107)
+            if (player.pushTokens && player.pushTokens.length > 0) {
+                sendPushNotification(player.pushTokens, title, body, { 
+                    type: 'TOURNAMENT_RACE_LOSS', 
+                    tournamentId: updatedT.id 
+                });
+            }
+        }
+    });
+
     // Maintain priority: pending[0] was 1st in waitlist, so it should stay 1st.
     updatedT.waitlistedPlayerIds = [...pending, ...waitlisted];
     updatedT.pendingPaymentPlayerIds = [];
@@ -536,13 +614,13 @@ export const processTournamentWaitlist = (tournament, masterPlayers = []) => {
     return updatedT;
   }
 
-  // 🛡️ [Group Promotion]: If slots are open, maintain exactly 3 "Pending" users if waitlist has them
-  // This facilitates the "3-person race for however many slots are open" logic.
-  if (availableSlots > 0 && waitlisted.length > 0 && pending.length < 3) {
-    const slotsToFill = 3 - pending.length;
+  // 🛡️ [Group Promotion] (v2.6.109): Dynamic batch size = availableSlots + 2 (redundancy)
+  const targetPendingCount = availableSlots + 2;
+  if (availableSlots > 0 && waitlisted.length > 0 && pending.length < targetPendingCount) {
+    const slotsToFill = targetPendingCount - pending.length;
     const promotedIds = waitlisted.splice(0, slotsToFill);
     
-    console.log(`📡 [PROMOTION_HUB] Promoting batch of ${promotedIds.length} for tournament "${updatedT.title}".`);
+    console.log(`📡 [PROMOTION_HUB] Promoting batch of ${promotedIds.length} for tournament "${updatedT.title}". (Target: ${targetPendingCount})`);
     
     promotedIds.forEach(pid => {
       pending.push(pid);
@@ -552,8 +630,8 @@ export const processTournamentWaitlist = (tournament, masterPlayers = []) => {
       const pIndex = masterPlayers.findIndex(p => String(p.id) === String(pid));
       if (pIndex >= 0) {
           const player = masterPlayers[pIndex];
-          const title = "Off the Waitlist! 🎾";
-          const body = `A slot opened up in ${updatedT.title}. You're in a priority batch of 3—pay now to secure your spot!`;
+          const title = "Boom! 🎾 Slot Alert!";
+          const body = `Academy has just increased the slots for ${updatedT.title}! 🚀 Pay now to secure your spot before this batch finishes!`;
           
           player.notifications = [
               {
@@ -569,8 +647,18 @@ export const processTournamentWaitlist = (tournament, masterPlayers = []) => {
           ].slice(0, 50);
           
           masterPlayers[pIndex] = { ...player };
+
+          // Track for response if needed
           updatedT._justPromotedIds = updatedT._justPromotedIds || [];
           updatedT._justPromotedIds.push(pid);
+
+          // 🛡️ Trigger Push Notification (v2.6.109)
+          if (player.pushTokens && player.pushTokens.length > 0) {
+              sendPushNotification(player.pushTokens, title, body, { 
+                  type: 'TOURNAMENT_PROMOTION', 
+                  tournamentId: updatedT.id 
+              });
+          }
       }
     });
 
@@ -867,6 +955,31 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
               const id = String(p.id).toLowerCase();
               const existing = entityMap.get(id);
               
+              // 🛡️ [SLOT_GUARD] (v2.6.107): Prevent over-registration if max reached
+              if (key === 'tournaments' && existing) {
+                const incomingReg = (p.registeredPlayerIds || []).filter(Boolean).length;
+                const existingReg = (existing.registeredPlayerIds || []).filter(Boolean).length;
+                
+                // If this is a status change from Pending -> Registered
+                const currentUserId = String(req.headers['x-user-id'] || '').toLowerCase();
+                const isUserRegistering = (p.registeredPlayerIds || []).includes(currentUserId) && 
+                                        !(existing.registeredPlayerIds || []).includes(currentUserId);
+
+                if (isUserRegistering && existingReg >= (existing.maxPlayers || 0)) {
+                  console.warn(`🛑 [SLOT_GUARD] Rejecting registration for ${currentUserId} in tournament ${p.id}. Slot already taken.`);
+                  
+                  // Revert to original state (which should be Pending)
+                  // processTournamentWaitlist will later handle demoting them to Waitlist + Notification
+                  p.registeredPlayerIds = [...(existing.registeredPlayerIds || [])];
+                  p.pendingPaymentPlayerIds = [...(existing.pendingPaymentPlayerIds || [])];
+                  if (!p.pendingPaymentPlayerIds.includes(currentUserId)) {
+                    p.pendingPaymentPlayerIds.push(currentUserId);
+                  }
+                  p.waitlistedPlayerIds = [...(existing.waitlistedPlayerIds || [])];
+                  p.pendingPaymentTimestamps = { ...(existing.pendingPaymentTimestamps || {}) };
+                }
+              }
+
               // 🛡️ ADMIN GUARD: Only allow the 'admin' account to have the 'admin' role (v2.6.51)
               if (p.role === 'admin' && id !== 'admin') {
                 console.warn(`🛑 Unauthorized Admin Escalation Attempt: userId=${id}`);

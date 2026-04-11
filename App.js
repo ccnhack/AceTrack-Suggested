@@ -51,7 +51,7 @@ if (Platform.OS === 'web') {
 }
 
 // 🚀 ACE TRACK STABILITY
-const APP_VERSION = "2.6.104"; 
+const APP_VERSION = "2.6.109"; 
 const TOURNAMENT_VERSION = '2.6.103'; 
 const currentAppVersion = APP_VERSION;
 
@@ -2695,7 +2695,13 @@ export default function App() {
                  const initialTab = currentUser?.role === 'coach' ? 'New Bookings' : 'Requests';
                  navigationRef.current.navigate('Matchmaking', { initialTab });
                }
-               else if (type === 'tournament' || type === 'tournament_invite' || type === 'tournament_registration') 
+               else if (
+                 type === 'tournament' || 
+                 type === 'tournament_invite' || 
+                 type === 'tournament_registration' || 
+                 (notif.message && notif.message.toLowerCase().includes('waitlist')) ||
+                 (notif.title && notif.title.toLowerCase().includes('slot opened'))
+               ) 
                  navigationRef.current.navigate('Matches', { viewMode: 'upcoming' });
                else 
                  navigationRef.current.navigate('Explore');
