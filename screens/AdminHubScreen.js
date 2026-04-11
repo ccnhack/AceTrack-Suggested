@@ -426,7 +426,7 @@ const AdminHubScreen = ({
 
   const renderCoachList = () => {
     const list = filteredCoaches.filter(c => {
-      const status = c.coachStatus || 'pending';
+      const status = c.isApprovedCoach ? 'approved' : (c.coachStatus || 'pending');
       if (coachSubTab === 'rejected_addendum') return status === 'rejected' || status === 'addendum';
       return status === coachSubTab;
     });
@@ -634,7 +634,7 @@ const AdminHubScreen = ({
                     const newSeenIds = new Set(seenAdminActionIds);
                     let added = false;
                     if (tab.id === 'coaches') {
-                      (players || []).filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus)).forEach(p => {
+                      (players || []).filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !p.isApprovedCoach).forEach(p => {
                         const pid = String(p.id);
                         if (pid && pid !== 'undefined' && pid !== 'null' && !newSeenIds.has(pid)) { newSeenIds.add(pid); added = true; }
                       });
@@ -1663,7 +1663,7 @@ const AdminHubScreen = ({
               { id: 'dashboard', label: 'Dashboard', icon: 'speedometer-outline' },
               { id: 'individuals', label: 'Individuals', icon: 'person-outline' },
               { id: 'academies', label: 'Academies', icon: 'business-outline' },
-              { id: 'coaches', label: 'Coaches', icon: 'megaphone-outline', count: (players || []).filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && (seenAdminActionIds?.has ? !seenAdminActionIds.has(p.id) : true)).length },
+              { id: 'coaches', label: 'Coaches', icon: 'megaphone-outline', count: (players || []).filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !p.isApprovedCoach && (seenAdminActionIds?.has ? !seenAdminActionIds.has(String(p.id)) : true)).length },
               { id: 'security', label: 'Security', icon: 'shield-checkmark-outline' },
               { id: 'tournaments', label: 'Tournaments', icon: 'trophy-outline' },
               { id: 'coach_assignments', label: 'Coach Assignments', icon: 'clipboard-outline', count: (tournaments || []).filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today) && (seenAdminActionIds?.has ? !seenAdminActionIds.has(t.id) : true)).length },

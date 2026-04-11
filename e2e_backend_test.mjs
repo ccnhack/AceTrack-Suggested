@@ -56,7 +56,7 @@ async function safeFetch(url, options = {}) {
 console.log('\n' + '═'.repeat(70));
 console.log('  🧪  ACETRACK BACKEND E2E TEST SUITE');
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.101)
-const APP_VERSION = "2.6.103"; 
+const APP_VERSION = "2.6.114"; 
 const currentAppVersion = APP_VERSION;
 console.log(`  🌐  Target: ${BASE_URL}`);
 console.log(`  ⏰  Run Time: ${new Date().toLocaleString()}`);
@@ -343,7 +343,7 @@ const ticketPayload = {
     title: 'E2E Automated Test Ticket',
     status: 'Open',
     type: 'Bug',
-    appVersion: "2.6.83",
+    appVersion: "2.6.114",
     platform: 'android',
     createdAt: new Date().toISOString(),
     messages: [
@@ -356,6 +356,7 @@ const ticketPayload = {
 
 if (isProduction && !BYPASS_PROD_SAFETY) {
   assert('E2E-SUP-001', 'Support', 'POST /api/save create ticket SKIPPED due to Production Safety', true, 'Safety Block Active');
+  assert('E2E-SUP-002', 'Support', 'Ticket persistence SKIPPED due to Production Safety', true, 'Safety Block Active');
 } else {
   const supportCreateRes = await safeFetch(`${BASE_URL}/api/save`, {
     method: 'POST',
@@ -363,26 +364,30 @@ if (isProduction && !BYPASS_PROD_SAFETY) {
     body: JSON.stringify(ticketPayload)
   });
   assert('E2E-SUP-001', 'Support', 'POST /api/save accepts new ticket with messages', supportCreateRes.ok === true, `Status: ${supportCreateRes.status}`);
-}
 
-// 10b. Verify ticket retrieval and automated greeting
-const updatedDataRes = await safeFetch(`${BASE_URL}/api/data`, { headers: HEADERS });
-const updatedData = updatedDataRes.ok ? await updatedDataRes.json() : {};
-const savedTicket = (updatedData.supportTickets || []).find(t => t.id === supportTestId);
+  // 10b. Verify ticket retrieval and automated greeting
+  const updatedDataRes2 = await safeFetch(`${BASE_URL}/api/data`, { headers: HEADERS });
+  const updatedData2 = updatedDataRes2.ok ? await updatedDataRes2.json() : {};
+  const savedTicket = (updatedData2.supportTickets || []).find(t => t.id === supportTestId);
 
-assert('E2E-SUP-002', 'Support', 'Ticket persisted in backend', !!savedTicket, `Found: ${!!savedTicket}`);
-if (savedTicket) {
-  assert('E2E-SUP-003', 'Support', 'Ticket contains automated greeting', 
-    savedTicket.messages.some(m => m.senderId === 'admin' && m.text.includes('AceTrack Support Team')), 
-    `Messages: ${savedTicket.messages.length}`);
-  assert('E2E-SUP-004', 'Support', 'Ticket has appVersion metadata', savedTicket.appVersion === '2.6.83', `Got: ${savedTicket.appVersion}`);
-  assert('E2E-SUP-005', 'Support', 'Ticket has platform metadata', savedTicket.platform === 'android', `Got: ${savedTicket.platform}`);
+  assert('E2E-SUP-002', 'Support', 'Ticket persisted in backend', !!savedTicket, `Found: ${!!savedTicket}`);
+  if (savedTicket) {
+    assert('E2E-SUP-003', 'Support', 'Ticket contains automated greeting', 
+      savedTicket.messages.some(m => m.senderId === 'admin' && m.text.includes('AceTrack Support Team')), 
+      `Messages: ${savedTicket.messages.length}`);
+    assert('E2E-SUP-004', 'Support', 'Ticket has appVersion metadata', savedTicket.appVersion === '2.6.114', `Got: ${savedTicket.appVersion}`);
+    assert('E2E-SUP-005', 'Support', 'Ticket has platform metadata', savedTicket.platform === 'android', `Got: ${savedTicket.platform}`);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
 // CATEGORY 11: MATCHMAKING & EXPLORE (v2.6.46)
 // ══════════════════════════════════════════════════════════════
 console.log('📦 Category 11: Matchmaking & Explore');
+
+// 🛡️ Standalone data fetch for categories 11+ (independent of support ticket block)
+const updatedDataRes = await safeFetch(`${BASE_URL}/api/data`, { headers: HEADERS });
+const updatedData = updatedDataRes.ok ? await updatedDataRes.json() : {};
 
 assert('E2E-MAT-001', 'Matchmaking', 'Data contains matchmaking array', Array.isArray(updatedData.matchmaking), `Type: ${typeof updatedData.matchmaking}`);
 assert('E2E-MAT-002', 'Matchmaking', 'Data contains venues/locations (lastUpdated reachable)', !!updatedData.lastUpdated, `lastUpdated: ${updatedData.lastUpdated}`);
