@@ -2,7 +2,7 @@
   "expo": {
     "name": "AceTrack",
     "slug": "acetrack-mobile",
-    "version": "2.6.111",
+    "version": "2.6.112",
     "sdkVersion": "50.0.0",
     "platforms": [
       "ios",

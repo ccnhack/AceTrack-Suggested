@@ -70,7 +70,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.101)
-const APP_VERSION = "2.6.111"; 
+const APP_VERSION = "2.6.112"; 
 
 // 🕓 Utility: Get current IST timestamp (v2.6.89)
 const getISTDate = () => {
@@ -376,7 +376,7 @@ const AuditLog = mongoose.model('AuditLog', AuditLogSchema);
 const ACE_API_KEY = process.env.ACE_API_KEY || (process.env.NODE_ENV === 'production' ? null : 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=');
 if (!ACE_API_KEY && process.env.NODE_ENV === 'production') {
   console.error("❌ CRITICAL: ACE_API_KEY is missing in production environment!");
-  // 🛡️ STABILITY FIX (v2.6.75): Don't exit process, just log error. 
+  // 🛡️ STABILITY FIX (v2.6.112): Don't exit process, just log error. 
   // Exiting causes Render crash loops which are harder to diagnose than 500 errors.
 }
 
@@ -555,7 +555,7 @@ const storageConfig = multer.diskStorage({
 });
 
 
-// 🕓 v2.6.111: Start background jobs AFTER all exports are initialized
+// 🕓 v2.6.112: Start background jobs AFTER all exports are initialized
 import './reminders.mjs';
 
 
