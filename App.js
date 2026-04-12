@@ -121,7 +121,7 @@ export default function App() {
   const lastUpdateCheckRef = useRef(0); // 🛡️ SYNC HARDENING: Throttle status checks (v2.6.28)
   const updateCheckTimeoutRef = React.useRef(null); // DEBOUNCE: Groups WebSocket signals
   const syncLockRef = React.useRef(false); // MUTEX: Ensures push and pull don't overlap
-  const activeLoadControllerRef = React.useRef(null); // 🛡️ [SyncEngine] Track active fetch to prevent instant aborts (v2.6.114)
+  const activeLoadControllerRef = React.useRef(null); // 🛡️ [SyncEngine] Track active fetch to prevent instant aborts (v2.6.116)
   const [cloudVersion, setCloudVersion] = useState(0);
   const cloudVersionRef = useRef(0);
   const globalBackoffUntilRef = React.useRef(0); // BACKOFF: 429 recovery timer
@@ -691,7 +691,7 @@ export default function App() {
 
       const controller = new AbortController();
       activeLoadControllerRef.current = controller;
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 🛡️ Increased to 60s for Render cold starts (v2.6.114)
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 🛡️ Increased to 60s for Render cold starts (v2.6.116)
 
       const activeApiUrl = isUsingCloudRef.current ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
 
@@ -1175,7 +1175,7 @@ export default function App() {
         const myTracker = {
           id: localDeviceIdRef.current,
           name: Constants.deviceName || Platform.OS,
-          appVersion: "2.6.114",
+          appVersion: APP_VERSION,
           platformVersion: Platform.OS === 'ios' ? `iOS ${Platform.Version}` : `Android ${Platform.constants?.Release || Platform.Version} (API ${Platform.Version})`,
           lastActive: now
         };
