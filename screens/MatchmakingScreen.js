@@ -146,7 +146,7 @@ export default function MatchmakingScreen({
     }, [onManualSync])
   );
   const role = user?.role || 'user';
-  const [activeTab, setActiveTab] = useState(route?.params?.initialTab || (role === 'coach' ? 'New Bookings' : 'Challenge')); // Challenge, Requests, Accepted, History
+  const [activeTab, setActiveTab] = useState(route?.params?.initialTab || (role === 'coach' ? 'Bookings' : 'Challenge')); // Challenge, Requests, Accepted, History
   
   // 🛡️ v2.6.87: Reactively update tab when params change (Fix for deep-linking when screen is already mounted)
   React.useEffect(() => {
@@ -871,31 +871,34 @@ export default function MatchmakingScreen({
 
     return (
       <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Sent</Text>
+        {/* Sent Challenges Section - Hidden for Coaches */}
+        {role !== 'coach' && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Sent</Text>
+            </View>
+            {actualSentRequests.length === 0 && <Text style={styles.emptyText}>No Pending Requests Sent</Text>}
+            {actualSentRequests.map((req, index) => (
+              <TouchableOpacity key={req.id || `sent-${index}`} style={styles.requestCard} onPress={() => openDetails(req)}>
+                <View style={styles.info}>
+                  <Text style={styles.name} numberOfLines={1}>{getOpponentName(req)}</Text>
+                  <Text style={styles.details}>{req.sport} • {req.proposedDate} at {req.proposedTime} • {req.status || 'Pending'}</Text>
+                </View>
+                <View style={styles.actionRow}>
+                  <TouchableOpacity style={styles.smallBtn} onPress={() => handleCounter(req)}>
+                    <Text style={styles.smallBtnText}>Counter</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.smallBtn, { backgroundColor: '#FFEEF2' }]} onPress={() => handleCancelChallenge(req)}>
+                    <Text style={[styles.smallBtnText, { color: '#E11D48' }]}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            ))}
           </View>
-          {actualSentRequests.length === 0 && <Text style={styles.emptyText}>No Pending Requests Sent</Text>}
-          {actualSentRequests.map((req, index) => (
-            <TouchableOpacity key={req.id || `sent-${index}`} style={styles.requestCard} onPress={() => openDetails(req)}>
-              <View style={styles.info}>
-                <Text style={styles.name} numberOfLines={1}>{getOpponentName(req)}</Text>
-                <Text style={styles.details}>{req.sport} • {req.proposedDate} at {req.proposedTime} • {req.status || 'Pending'}</Text>
-              </View>
-              <View style={styles.actionRow}>
-                <TouchableOpacity style={styles.smallBtn} onPress={() => handleCounter(req)}>
-                  <Text style={styles.smallBtnText}>Counter</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.smallBtn, { backgroundColor: '#FFEEF2' }]} onPress={() => handleCancelChallenge(req)}>
-                  <Text style={[styles.smallBtnText, { color: '#E11D48' }]}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+        )}
 
         {/* Received Challenges Section */}
-        <View style={[styles.section, { marginTop: 25 }]}>
+        <View style={[styles.section, role !== 'coach' ? { marginTop: 25 } : null]}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Received</Text>
           </View>
@@ -1093,7 +1096,7 @@ export default function MatchmakingScreen({
       <View style={styles.header}>
         <Text style={styles.title}>{role === 'coach' ? 'Coach Bookings' : (role === 'academy' ? 'Academy Matchmaking' : 'Matchmaking')}</Text>
         <View style={styles.tabs}>
-           {(role === 'coach' ? ['New Bookings', 'Accepted', 'Expired', 'History'] : ['Challenge', 'Requests', 'Accepted', 'Expired', 'History']).map((tab, index) => (
+           {(role === 'coach' ? ['Bookings', 'Accepted', 'Expired', 'History'] : ['Challenge', 'Requests', 'Accepted', 'Expired', 'History']).map((tab, index) => (
              <TouchableOpacity
                key={`tab-${index}`}
                style={[styles.tab, activeTab === tab && styles.activeTab]}
@@ -1108,9 +1111,9 @@ export default function MatchmakingScreen({
                       <Text style={styles.tabBadgeText}>{receivedRequests.filter(r => r.isNew).length}</Text>
                     </View>
                   )}
-                  {tab === 'New Bookings' && sentRequests.filter(r => r.isNew).length > 0 && role === 'coach' && (
+                  {tab === 'Bookings' && receivedRequests.filter(r => r.isNew).length > 0 && role === 'coach' && (
                     <View style={styles.tabBadge}>
-                      <Text style={styles.tabBadgeText}>{sentRequests.filter(r => r.isNew).length}</Text>
+                      <Text style={styles.tabBadgeText}>{receivedRequests.filter(r => r.isNew).length}</Text>
                     </View>
                   )}
                   {tab === 'Expired' && expiredRequests.filter(r => !r.isExpiredRead).length > 0 && (
@@ -1155,7 +1158,7 @@ export default function MatchmakingScreen({
           windowSize={5}
         />
       )}
-      {(activeTab === 'Requests' || (role === 'coach' && activeTab === 'New Bookings')) && renderRequested()}
+      {(activeTab === 'Requests' || (role === 'coach' && activeTab === 'Bookings')) && renderRequested()}
       {activeTab === 'Accepted' && renderAccepted()}
       {activeTab === 'Expired' && renderExpired()}
       {activeTab === 'History' && renderHistory()}
@@ -1724,7 +1727,7 @@ export default function MatchmakingScreen({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9fa' },
   header: { padding: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee' },
-  title: { fontSize: 24, fontWeight: '900', color: designSystem.colors.primary, marginBottom: 15 },
+  title: { fontSize: 22, fontWeight: '900', color: '#0F172A', textTransform: 'uppercase', letterSpacing: -0.5, marginBottom: 15 },
   tabs: { flexDirection: 'row', backgroundColor: '#f0f0f0', borderRadius: 10, padding: 4 },
   tab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
   activeTab: { backgroundColor: '#fff', elevation: 2 },
