@@ -1,14 +1,21 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { 
   View, Text, StyleSheet, FlatList, TouchableOpacity, 
-  Image, Modal, Alert, ScrollView, TextInput, SafeAreaView, Platform 
+  Image, Modal, Alert, ScrollView, TextInput, SafeAreaView, Platform, LayoutAnimation
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { getSafeAvatar } from '../utils/imageUtils';
-import designSystem from '../theme/designSystem';
+import SafeAvatar from '../components/SafeAvatar';
+import { colors, shadows, typography, borderRadius, spacing } from '../theme/designSystem';
 import { Calendar } from 'react-native-calendars';
 
-export default function CoachDirectoryScreen({ user, role, players = [], onUpdateUser, onBatchUpdate, navigation, sendUserNotification }) {
+import { useAuth } from '../context/AuthContext';
+import { usePlayers } from '../context/PlayerContext';
+
+export default function CoachDirectoryScreen({ navigation }) {
+  const { currentUser: user, userRole: role, onUpdateUser } = useAuth();
+  const { players, sendUserNotification } = usePlayers();
   const [search, setSearch] = useState('');
   const [selectedCoach, setSelectedCoach] = useState(null);
   const [bookingModalVisible, setBookingModalVisible] = useState(false);
@@ -91,8 +98,12 @@ export default function CoachDirectoryScreen({ user, role, players = [], onUpdat
 
   const renderCoachCard = useCallback(({ item }) => (
     <TouchableOpacity style={styles.coachCard} onPress={() => handleBook(item)}>
-      <Image 
-        source={getSafeAvatar(item.avatar, item.name)}
+      <SafeAvatar 
+        uri={item.avatar} 
+        name={item.name} 
+        role={item.role} 
+        size={64} 
+        borderRadius={16} 
         style={styles.coachAvatar} 
       />
       <View style={styles.coachInfo}>
@@ -234,21 +245,27 @@ export default function CoachDirectoryScreen({ user, role, players = [], onUpdat
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.pageHeader}>
-        <Text style={styles.pageTitle}>Coach Discovery</Text>
-        <Text style={styles.pageSubtitle}>Expert guidance for your sporting career</Text>
+      <LinearGradient 
+        colors={[colors.primary.base, colors.primary.dark]} 
+        style={styles.pageHeader}
+      >
+        <Text style={[styles.pageTitle, { color: '#FFFFFF' }]}>Coach Discovery</Text>
+        <Text style={[styles.pageSubtitle, { color: 'rgba(255,255,255,0.8)' }]}>Expert guidance for your sporting career</Text>
         
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color="#94A3B8" />
+          <Ionicons name="search" size={20} color={colors.navy[400]} />
           <TextInput 
             placeholder="Search by name or sport..."
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={colors.navy[400]}
             style={styles.searchInput}
             value={search}
-            onChangeText={setSearch}
+            onChangeText={(txt) => {
+                if (Platform.OS !== 'web' && txt.length === 1) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setSearch(txt);
+            }}
           />
         </View>
-      </View>
+      </LinearGradient>
 
       <FlatList 
         data={filteredCoaches}
@@ -356,42 +373,52 @@ export default function CoachDirectoryScreen({ user, role, players = [], onUpdat
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  pageHeader: { padding: 24, backgroundColor: '#FFFFFF', borderBottomLeftRadius: 32, borderBottomRightRadius: 32, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 5 },
-  pageTitle: { fontSize: 28, fontWeight: '900', color: '#0F172A', textTransform: 'uppercase' },
-  pageSubtitle: { fontSize: 13, color: '#64748B', marginTop: 4, fontWeight: '600' },
-  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', borderRadius: 16, paddingHorizontal: 16, marginTop: 20 },
-  searchInput: { flex: 1, paddingVertical: 14, fontSize: 14, color: '#0F172A', fontWeight: '600' },
+  container: { flex: 1, backgroundColor: colors.navy[50] },
+  pageHeader: { padding: 24, paddingBottom: 32, borderBottomLeftRadius: 32, borderBottomRightRadius: 32, ...shadows.md },
+  pageTitle: { ...typography.h1, textTransform: 'uppercase' },
+  pageSubtitle: { fontSize: 13, marginTop: 4, fontWeight: '600' },
+  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 16, paddingHorizontal: 16, marginTop: 20, ...shadows.sm },
+  searchInput: { flex: 1, paddingVertical: 14, fontSize: 14, color: colors.navy[900], fontWeight: '600', marginLeft: 10 },
   coachList: { padding: 20 },
-  coachCard: { flexDirection: 'row', backgroundColor: '#FFFFFF', borderRadius: 24, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9', alignItems: 'center' },
+  coachCard: { 
+    flexDirection: 'row', 
+    backgroundColor: '#FFFFFF', 
+    borderRadius: borderRadius.xl, 
+    padding: 16, 
+    marginBottom: 16, 
+    borderWidth: 1, 
+    borderColor: colors.navy[100], 
+    alignItems: 'center',
+    ...shadows.sm 
+  },
   coachAvatar: { width: 64, height: 64, borderRadius: 16 },
   coachInfo: { flex: 1, marginLeft: 16 },
   nameHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  coachName: { fontSize: 16, fontWeight: '900', color: '#0F172A' },
+  coachName: { ...typography.h3, color: colors.navy[900] },
   ratingBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, gap: 4 },
   ratingText: { fontSize: 10, fontWeight: '900', color: '#D97706' },
-  specialties: { fontSize: 12, color: '#64748B', fontWeight: '700', marginBottom: 6 },
+  specialties: { fontSize: 12, color: colors.navy[500], fontWeight: '700', marginBottom: 6 },
   experienceRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  expText: { fontSize: 11, color: '#6366F1', fontWeight: '800' },
+  expText: { fontSize: 11, color: colors.primary.base, fontWeight: '800' },
   priceTag: { alignItems: 'flex-end', marginLeft: 10 },
-  priceAmount: { fontSize: 16, fontWeight: '900', color: '#0F172A' },
-  priceUnit: { fontSize: 8, fontWeight: '900', color: '#94A3B8' },
+  priceAmount: { fontSize: 16, fontWeight: '900', color: colors.navy[900] },
+  priceUnit: { fontSize: 8, fontWeight: '900', color: colors.navy[400] },
   emptyView: { flex: 1, alignItems: 'center', marginTop: 100 },
-  emptyText: { color: '#94A3B8', fontSize: 14, fontWeight: '700', marginTop: 10 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.7)', justifyContent: 'flex-end' },
+  emptyText: { color: colors.navy[400], fontSize: 14, fontWeight: '700', marginTop: 10 },
+  modalOverlay: { flex: 1, backgroundColor: colors.navy[900] + 'B3', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 40, borderTopRightRadius: 40, height: '90%', padding: 24 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 },
-  modalLabel: { fontSize: 10, fontWeight: '900', color: '#6366F1', letterSpacing: 2 },
-  modalTitle: { fontSize: 24, fontWeight: '900', color: '#0F172A', marginTop: 4 },
+  modalLabel: { ...typography.micro, color: colors.primary.base },
+  modalTitle: { ...typography.h2, color: colors.navy[900], marginTop: 4 },
   modalClose: { padding: 4 },
   calendarBox: { marginBottom: 24 },
-  calLabel: { fontSize: 12, fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 },
+  calLabel: { ...typography.micro, color: colors.navy[400], marginBottom: 12 },
   timeSlots: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 30 },
   slotWrapper: { width: '31%', position: 'relative' },
-  slotBtn: { backgroundColor: '#F1F5F9', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 14, width: '100%', alignItems: 'center' },
-  slotBtnActive: { backgroundColor: '#EEF2FF', borderColor: '#6366F1', borderWidth: 1 },
-  slotText: { fontSize: 12, fontWeight: '900', color: '#64748B' },
-  slotTextActive: { color: '#6366F1' },
+  slotBtn: { backgroundColor: colors.navy[100], paddingVertical: 12, paddingHorizontal: 16, borderRadius: 14, width: '100%', alignItems: 'center' },
+  slotBtnActive: { backgroundColor: '#EEF2FF', borderColor: colors.primary.base, borderWidth: 1 },
+  slotText: { fontSize: 12, fontWeight: '900', color: colors.navy[500] },
+  slotTextActive: { color: colors.primary.base },
   subIntervalsPopup: {
     position: 'absolute',
     top: 55,
@@ -400,54 +427,50 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 10,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
+    ...shadows.lg,
     zIndex: 1000,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: colors.navy[100],
   },
   subBtn: {
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 10,
     marginBottom: 6,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.navy[50],
     alignItems: 'center',
   },
   subBtnActive: {
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.primary.base,
   },
   subBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#64748B',
+    color: colors.navy[500],
   },
   subBtnTextActive: {
     color: '#FFF',
   },
-  confirmBtn: { backgroundColor: '#0F172A', paddingVertical: 18, borderRadius: 20, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
+  confirmBtn: { backgroundColor: colors.navy[900], paddingVertical: 18, borderRadius: 20, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, ...shadows.md },
   confirmBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900', textTransform: 'uppercase' },
-  disclaimer: { textAlign: 'center', color: '#94A3B8', fontSize: 11, marginTop: 12, fontWeight: '600' },
+  disclaimer: { textAlign: 'center', color: colors.navy[400], fontSize: 11, marginTop: 12, fontWeight: '600' },
   content: { flex: 1, padding: 24 },
   statsGrid: { flexDirection: 'row', gap: 16, marginBottom: 30 },
-  statBox: { flex: 1, backgroundColor: '#FFFFFF', padding: 20, borderRadius: 24, alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9' },
-  statNum: { fontSize: 24, fontWeight: '900', color: '#0F172A' },
-  statLab: { fontSize: 10, fontWeight: '900', color: '#64748B', textTransform: 'uppercase', marginTop: 4 },
-  sectionTitle: { fontSize: 18, fontWeight: '900', color: '#0F172A', textTransform: 'uppercase', marginBottom: 16 },
-  dashboardCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9' },
+  statBox: { flex: 1, backgroundColor: '#FFFFFF', padding: 20, borderRadius: 24, alignItems: 'center', borderWidth: 1, borderColor: colors.navy[100] },
+  statNum: { ...typography.h2, color: colors.navy[900] },
+  statLab: { ...typography.micro, color: colors.navy[500], marginTop: 4 },
+  sectionTitle: { ...typography.h3, color: colors.navy[900], textTransform: 'uppercase', marginBottom: 16 },
+  dashboardCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: colors.navy[100] },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  cardTitle: { fontSize: 16, fontWeight: '900', color: '#0F172A' },
-  cardDate: { fontSize: 12, color: '#64748B', fontWeight: '700', marginTop: 2 },
+  cardTitle: { ...typography.h3, color: colors.navy[900] },
+  cardDate: { fontSize: 12, color: colors.navy[500], fontWeight: '700', marginTop: 2 },
   statusTag: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  statusTagText: { fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+  statusTagText: { ...typography.micro, fontWeight: '900' },
   actionRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
   actionBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
   actionBtnText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
-  payBtn: { backgroundColor: '#6366F1', paddingVertical: 14, borderRadius: 16, alignItems: 'center', marginTop: 15 },
+  payBtn: { backgroundColor: colors.primary.base, paddingVertical: 14, borderRadius: 16, alignItems: 'center', marginTop: 15 },
   payBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
-  calendarContainer: { backgroundColor: '#FFFFFF', borderRadius: 24, overflow: 'hidden', padding: 10, borderWidth: 1, borderColor: '#F1F5F9' },
-  calendarHint: { textAlign: 'center', fontSize: 11, color: '#64748B', fontWeight: '600', padding: 10 }
+  calendarContainer: { backgroundColor: '#FFFFFF', borderRadius: 24, overflow: 'hidden', padding: 10, borderWidth: 1, borderColor: colors.navy[100] },
+  calendarHint: { textAlign: 'center', fontSize: 11, color: colors.navy[500], fontWeight: '600', padding: 10 }
 });

@@ -8,9 +8,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Calendar } from 'react-native-calendars';
-import designSystem from '../theme/designSystem';
+import { colors, shadows, typography, borderRadius, spacing } from '../theme/designSystem';
 import { Sport } from '../types';
-import { getSafeAvatar } from '../utils/imageUtils';
+import SafeAvatar from '../components/SafeAvatar';
 import * as ImagePicker from 'expo-image-picker';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Updates from 'expo-updates';
@@ -21,6 +21,7 @@ import DiagnosticsModal from '../components/DiagnosticsModal';
 import config from '../config';
 import logger from '../utils/logger';
 import storage from '../utils/storage';
+import { syncManager } from '../services/SyncManager';
 import ProfileHeader, { AvatarPlaceholder, getInitials } from '../components/ProfileHeader';
 import ProfileMenuSection from '../components/ProfileMenuSection';
 
@@ -35,24 +36,30 @@ const calculateAcademyTier = (uid, tournaments = []) => {
 
 
 
-const ProfileScreen = ({ 
-  user, players = [], tournaments = [], onUpdateUser, onLogout, 
-  supportTickets = [], onSaveTicket, onUpdateTicketStatus, onReplyTicket,
-  onTopUp, navigation,  isCloudOnline,
-  lastSyncTime,
-  onManualSync,
-  isUsingCloud,
-  onToggleCloud,
-  setIsProfileEditActive,
-  onVerifyAccount,
-  onUploadLogs,
-  isUploadingLogs,
-  appVersion,
-  pushStatus,
-  onRetryMessage,
-  onMarkSeen,
-  onToggleNotifications
-}) => {
+import { useAuth } from '../context/AuthContext';
+import { useTournaments } from '../context/TournamentContext';
+import { usePlayers } from '../context/PlayerContext';
+import { useSupport } from '../context/SupportContext';
+import { useSync } from '../context/SyncContext';
+import { useAdmin } from '../context/AdminContext';
+import { useApp } from '../context/AppContext';
+
+const ProfileScreen = ({ navigation }) => {
+  const { 
+    currentUser: user, onUpdateUser, onLogout, onVerifyAccount, onTopUp 
+  } = useAuth();
+  const { tournaments } = useTournaments();
+  const { players } = usePlayers();
+  const { 
+    supportTickets, onSaveTicket, onUpdateTicketStatus, onReplyTicket, onRetryMessage, onMarkSeen 
+  } = useSupport();
+  const { 
+    isCloudOnline, isUsingCloud, lastSyncTime, onManualSync, onToggleCloud, onToggleNotifications 
+  } = useSync();
+  const { onUploadLogs, isUploadingLogs, pushStatus } = useAdmin();
+  const { appVersion } = useApp();
+  
+  const [isProfileEditActive, setIsProfileEditActive] = useState(false);
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   useEffect(() => {
@@ -214,7 +221,7 @@ const ProfileScreen = ({
   allEvents.forEach(event => {
     markedDates[event.date] = { 
         marked: true, 
-        dotColor: event.type === 'booking' ? '#22C55E' : designSystem.colors.primary 
+        dotColor: event.type === 'booking' ? '#22C55E' : colors.primary 
     };
   });
   const [editName, setEditName] = useState(user?.name || '');
@@ -241,7 +248,7 @@ const ProfileScreen = ({
   // Load persisted session avatar on mount
   useEffect(() => {
     const loadSessionAvatar = async () => {
-      const saved = await storage.getItem('sessionCustomAvatar');
+      const saved = await syncManager.getSystemFlag('sessionCustomAvatar');
       if (saved) {
         setSessionCustomAvatar(saved);
         logger.logAction('SESSION_AVATAR_HYDRATED', { url: saved });
@@ -252,9 +259,12 @@ const ProfileScreen = ({
 
   // Save to storage when it changes
   useEffect(() => {
-    if (sessionCustomAvatar) {
-      storage.setItem('sessionCustomAvatar', sessionCustomAvatar);
-    }
+    const saveSessionAvatar = async () => {
+      if (sessionCustomAvatar) {
+        await syncManager.setSystemFlag('sessionCustomAvatar', sessionCustomAvatar);
+      }
+    };
+    saveSessionAvatar();
   }, [sessionCustomAvatar]);
   
   // Handle auto-open for Edit Profile (from global verification prompt)
@@ -354,7 +364,11 @@ const ProfileScreen = ({
 
   const content = (
     <View style={[styles.container, isWeb && { maxWidth: 900, alignSelf: 'center', width: '100%', backgroundColor: '#FFFFFF', padding: 24, marginVertical: 16, borderRadius: 24, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.08, shadowRadius: 40, overflow: 'hidden', flex: 1 }, { paddingTop: Math.max(insets.top, 16) }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        testID="profile.scrollview"
+        contentContainerStyle={styles.scrollContent} 
+        showsVerticalScrollIndicator={false}
+      >
         <ProfileHeader
           user={user}
           academyTier={academyTier}
@@ -467,6 +481,39 @@ const ProfileScreen = ({
             </View>
 
             <Text style={styles.legalText}>Privacy Policy • Terms of Service</Text>
+
+            {/* 🧪 [E2E_BACKDOOR] Hidden test triggers for Detox (v2.6.121) */}
+            {(__DEV__ || process.env.NODE_ENV === 'test') && (
+              <View style={styles.testBackdoor}>
+                <TouchableOpacity 
+                  testID="test.inject.hijack"
+                  onPress={() => global.TEST_API?.injectMaliciousUpdate('admin', 'FAKE ADMIN HIJACK')}
+                >
+                  <Text style={styles.testBackdoorText}>Inject Hijack</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  testID="test.inject.expired"
+                  onPress={() => global.TEST_API?.injectExpiredData(user.id)}
+                >
+                  <Text style={styles.testBackdoorText}>Inject Expired</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  testID="test.inject.unread"
+                  onPress={() => global.TEST_API?.injectSyncEvent('matchmaking', [{ 
+                    id: 'new_e2e_' + Date.now(), 
+                    senderId: 'opponent', 
+                    receiverId: user.id, 
+                    proposedDate: '2026-12-31', 
+                    proposedTime: '11:00 AM', 
+                    sport: 'Tennis', 
+                    status: 'Pending', 
+                    isNew: true 
+                  }])}
+                >
+                  <Text style={styles.testBackdoorText}>Inject Unread</Text>
+                </TouchableOpacity>
+              </View>
+            )}
         </View>
 
       </ScrollView>
@@ -668,8 +715,10 @@ const ProfileScreen = ({
                         {url.includes('ui-avatars.com') ? (
                            <AvatarPlaceholder name={user.name} size={56} />
                         ) : (
-                           <Image 
-                             source={{ uri: url }} 
+                           <SafeAvatar 
+                             uri={url} 
+                             size={56}
+                             borderRadius={28}
                              style={styles.avatarOptionImage} 
                            />
                         )}
@@ -1046,10 +1095,10 @@ const ProfileScreen = ({
                               <Calendar 
                                 onMonthChange={(month) => setCurrentMonth(month.dateString.substring(0, 7))}
                                 theme={{
-                                  todayTextColor: designSystem.colors.primary,
-                                  arrowColor: designSystem.colors.primary,
-                                  dotColor: designSystem.colors.primary,
-                                  selectedDayBackgroundColor: designSystem.colors.primary,
+                                  todayTextColor: colors.primary,
+                                  arrowColor: colors.primary,
+                                  dotColor: colors.primary,
+                                  selectedDayBackgroundColor: colors.primary,
                                 }}
                                 markedDates={markedDates}
                               />
@@ -1516,7 +1565,7 @@ const styles = StyleSheet.create({
   dateDay: {
     fontSize: 20,
     fontWeight: '900',
-    color: designSystem.colors.primary,
+    color: colors.primary,
   },
   dateMonth: {
     fontSize: 10,
@@ -2091,6 +2140,17 @@ const styles = StyleSheet.create({
     color: '#475569',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  testBackdoor: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    padding: 10,
+    marginTop: 20,
+    opacity: 0, // Hidden from users but accessible by Detox
+  },
+  testBackdoorText: {
+    fontSize: 8,
+    color: '#94A3B8',
   },
 });
 

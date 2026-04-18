@@ -6,8 +6,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import designSystem from '../theme/designSystem';
-import { getSafeAvatar, getSafePreview } from '../utils/imageUtils';
+import { shadows } from '../theme/designSystem';
+import SafeAvatar from './SafeAvatar';
+import { getSafePreview } from '../utils/imageUtils';
 
 const { width } = Dimensions.get('window');
 
@@ -294,8 +295,12 @@ const AdminRecordingsDashboard = ({
                             const displayName = p.name || p.username || p.id;
                             return (
                                 <View key={p.id} style={styles.purchaserChip}>
-                                    <Image 
-                                      source={getSafeAvatar(p.avatar, displayName, 'random')} 
+                                    <SafeAvatar 
+                                      uri={p.avatar} 
+                                      name={displayName} 
+                                      role={p.role} 
+                                      size={24} 
+                                      borderRadius={12} 
                                       style={styles.chipAvatar} 
                                     />
                                     <Text style={styles.chipName}>{displayName}</Text>
@@ -544,7 +549,7 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     marginHorizontal: 16,
     marginBottom: 24,
-    ...designSystem.shadows.indigo,
+    ...shadows.lg,
   },
   premiumLabel: {
     color: 'rgba(255, 255, 255, 0.9)',

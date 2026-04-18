@@ -1,7 +1,6 @@
 import React, { memo } from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getSafeAvatar } from '../utils/imageUtils';
 import SafeAvatar from './SafeAvatar';
 
 // SafeAvatar handles these fallbacks internally now
@@ -31,19 +30,14 @@ const ProfileHeader = memo(({
   return (
     <View style={styles.header}>
       <View style={styles.avatarContainer}>
-        {user?.role === 'admin' ? (
-          <View style={[styles.avatar, { backgroundColor: '#0F172A', borderWidth: 2, borderColor: '#3B82F6', justifyContent: 'center', alignItems: 'center' }]}>
-            <Image source={require('../assets/icon.png')} style={{width: 50, height: 50, resizeMode: 'contain'}} />
-          </View>
-        ) : (
-          <SafeAvatar 
-            uri={user?.avatar} 
-            name={user?.name} 
-            size={80} 
-            borderRadius={40} 
-            style={styles.avatar} 
-          />
-        )}
+        <SafeAvatar 
+          uri={user?.avatar} 
+          name={user?.name} 
+          role={user?.role} 
+          size={80} 
+          borderRadius={40} 
+          style={styles.avatar} 
+        />
         <TouchableOpacity 
           style={styles.editBtn} 
           onPress={() => {
@@ -55,7 +49,7 @@ const ProfileHeader = memo(({
         </TouchableOpacity>
       </View>
       <View style={styles.userInfo}>
-        <Text style={styles.userName}>{user?.name}</Text>
+        <Text testID="profile.header.name" style={styles.userName}>{user?.name}</Text>
         {academyTier && (
           <View style={styles.roleRow}>
             <View style={[styles.tierBadge, academyTier === 'Gold' ? styles.tierGold : academyTier === 'Silver' ? styles.tierSilver : styles.tierBronze]}>

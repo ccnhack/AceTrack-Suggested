@@ -12,7 +12,10 @@ const SPORT_CRITERIA = {
   'Table Tennis': ['Reaction Time', 'Spin Control', 'Backhand Drive', 'Service Variety']
 };
 
-export default function LiveScoringScreen({ route, onSaveEvaluation, navigation }) {
+import { useEvaluations } from '../context/EvaluationContext';
+
+export default function LiveScoringScreen({ route, navigation }) {
+  const { onSaveEvaluation } = useEvaluations();
   const { 
     match = { sport: 'Badminton', format: 'Singles' }, 
     player1, player2, team1 = [], team2 = [], tournamentId 
@@ -101,7 +104,14 @@ export default function LiveScoringScreen({ route, onSaveEvaluation, navigation 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity 
+          onPress={() => {
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            }
+          }} 
+          style={styles.backBtn}
+        >
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <View style={styles.headerInfo}>

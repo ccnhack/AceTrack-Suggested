@@ -1,15 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Dimensions, ScrollView, Alert, Modal, ActivityIndicator, Platform, ImageBackground } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Dimensions, ScrollView, Alert, Modal, ActivityIndicator, Platform, ImageBackground, LayoutAnimation } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
+import { colors, shadows, typography, borderRadius, spacing } from '../theme/designSystem';
 import { Ionicons } from '@expo/vector-icons';
 import config from '../config';
 import logger from '../utils/logger';
 
 const { height } = Dimensions.get('window');
 
-const LoginScreen = ({ 
-  onLoginSuccess, onSignup, onResetPassword, onRefreshData, 
-  onBack, players, onToggleCloud, isUsingCloud 
-}) => {
+import { useAuth } from '../context/AuthContext';
+import { usePlayers } from '../context/PlayerContext';
+import { useSync } from '../context/SyncContext';
+
+const LoginScreen = ({ navigation }) => {
+  const { onLogin: onLoginSuccess, onResetPassword, setViewingLanding } = useAuth();
+  const { players } = usePlayers();
+  const { loadData: onRefreshData, onToggleCloud, isUsingCloud } = useSync();
+
+  const onSignup = () => navigation.navigate('Signup');
+  const onBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      setViewingLanding(true);
+    }
+  };
   useEffect(() => {
     // DIAGNOSTIC LOGGING
     console.log(`📱 [DIAGNOSTIC] LoginScreen Dimensions: ${JSON.stringify({
@@ -41,10 +57,8 @@ const LoginScreen = ({
   const handleLogin = async () => {
     logger.logAction('LOGIN_CLICK', { username });
     setError('');
-    setIsLoading(true);
-    setIsSyncing(false);
-
     try {
+      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       // Web Admin Only restriction
       if (Platform.OS === 'web') {
         if (username === 'admin' && password === 'Password@123') {
@@ -112,7 +126,8 @@ const LoginScreen = ({
           hasResult: !!cloudResult, 
           type: typeof cloudResult, 
           hasPlayers: !!(cloudResult && cloudResult.players),
-          playerCount: cloudResult?.players?.length || 0 
+          playerCount: cloudResult?.players?.length || 0,
+          version: cloudResult?.version
         });
         
         // If cloudResult contains players, search in the fresh list immediately
@@ -237,7 +252,7 @@ const LoginScreen = ({
 
     setIsResetting(true);
     const targetId = storedUserToReset ? storedUserToReset.id : forgotUser;
-    const success = await onResetPassword(targetId, newPass);
+    const success = await onResetPassword(targetId, newPass, players);
     setIsResetting(false);
 
     if (success) {
@@ -347,6 +362,7 @@ const LoginScreen = ({
             <View style={styles.inputWrapper}>
               <Ionicons name="person-outline" size={20} color="#64748B" style={styles.inputIcon} />
               <TextInput 
+                testID="auth.login.username.input"
                 style={styles.input}
                 placeholder="Enter your username or email"
                 value={username}
@@ -361,11 +377,13 @@ const LoginScreen = ({
             <View style={styles.inputWrapper}>
               <Ionicons name="lock-closed-outline" size={20} color="#64748B" style={styles.inputIcon} />
               <TextInput 
+                testID="auth.login.password.input"
                 style={styles.input}
                 placeholder="Enter your password"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
+                onSubmitEditing={handleLogin}
               />
             </View>
           </View>
@@ -392,7 +410,12 @@ const LoginScreen = ({
             </TouchableOpacity>
           )}
 
-          <TouchableOpacity onPress={handleLogin} style={styles.loginButton} disabled={isLoading}>
+          <TouchableOpacity 
+            testID="auth.login.submit.button"
+            onPress={handleLogin} 
+            style={styles.loginButton} 
+            disabled={isLoading}
+          >
             {isLoading ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <ActivityIndicator color="#FFFFFF" />
@@ -497,24 +520,24 @@ const LoginScreen = ({
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  container: { flex: 1, backgroundColor: colors.navy[50] },
   headerImageContainer: { height: height < 700 ? height * 0.22 : height * 0.3, width: '100%' },
   image: { width: '100%', height: '100%' },
-  backButton: { position: 'absolute', top: height < 700 ? 30 : 50, left: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0, 0, 0, 0.3)', alignItems: 'center', justifyContent: 'center' },
-  content: { flex: 1, padding: height < 700 ? 20 : 24, marginTop: -30, backgroundColor: '#FFFFFF', borderTopLeftRadius: 30, borderTopRightRadius: 30 },
+  backButton: { position: 'absolute', top: height < 700 ? 30 : 50, left: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0, 0, 0, 0.4)', alignItems: 'center', justifyContent: 'center' },
+  content: { flex: 1, padding: height < 700 ? 20 : 24, marginTop: -30, backgroundColor: '#FFFFFF', borderTopLeftRadius: 40, borderTopRightRadius: 40, ...shadows.lg },
   welcomeSection: { marginBottom: height < 700 ? 16 : 32 },
-  title: { fontSize: height < 700 ? 24 : 28, fontWeight: 'bold', color: '#0F172A', marginBottom: 4 },
-  subtitle: { fontSize: height < 700 ? 14 : 16, color: '#64748B' },
+  title: { ...typography.display, fontSize: height < 700 ? 24 : 32, color: colors.navy[900], marginBottom: 4 },
+  subtitle: { ...typography.body, color: colors.navy[500] },
   form: { gap: height < 700 ? 12 : 20 },
   inputGroup: { gap: height < 700 ? 4 : 8 },
-  inputLabel: { fontSize: 14, fontWeight: '600', color: '#0F172A', marginLeft: 4 },
-  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 16 },
+  inputLabel: { ...typography.micro, color: colors.navy[700], marginLeft: 4 },
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.navy[50], borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.navy[100], paddingHorizontal: 16 },
   inputIcon: { marginRight: 12 },
-  input: { flex: 1, height: 56, color: '#0F172A', fontSize: 16 },
+  input: { flex: 1, height: 56, color: colors.navy[900], fontSize: 16, ...typography.bodyBold },
   forgotPassword: { alignSelf: 'flex-end' },
-  forgotPasswordText: { color: '#3B82F6', fontSize: 14, fontWeight: '600' },
-  errorText: { color: '#EF4444', fontSize: 14, textAlign: 'center', marginTop: 4 },
-  loginButton: { height: 56, backgroundColor: '#EF4444', borderRadius: 16, alignItems: 'center', justifyContent: 'center', elevation: 4, shadowColor: '#EF4444', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, marginTop: 12 },
+  forgotPasswordText: { color: colors.primary.base, fontSize: 14, fontWeight: '700' },
+  errorText: { color: colors.error, fontSize: 14, textAlign: 'center', marginTop: 4 },
+  loginButton: { height: 56, backgroundColor: '#EF4444', borderRadius: borderRadius.lg, alignItems: 'center', justifyContent: 'center', ...shadows.md, marginTop: 12 },
   registerText: {
     color: '#0F172A',
     fontWeight: 'bold',
@@ -611,8 +634,8 @@ const styles = StyleSheet.create({
   devToggleActive: { backgroundColor: '#3B82F6', borderColor: '#2563EB' },
   devToggleText: { fontSize: 10, fontWeight: 'bold', color: '#64748B', textTransform: 'uppercase' },
   devToggleTextActive: { color: '#FFFFFF' },
-  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: height < 700 ? 16 : 32, marginBottom: 20 },
-  footerText: { color: '#64748B', fontSize: 15 },
+  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: height < 700 ? 16 : 32, marginBottom: 40 },
+  footerText: { color: colors.navy[500], fontSize: 15 },
   signUpText: { color: '#EF4444', fontSize: 15, fontWeight: 'bold' },
   
   // Modal Styles

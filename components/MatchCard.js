@@ -1,7 +1,7 @@
 import React, { memo, useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppData } from '../navigation/AppNavigator';
+import { useSync } from '../context/SyncContext';
 import { formatDateIST } from '../utils/tournamentUtils';
 
 
@@ -19,7 +19,7 @@ const MatchCard = ({
   setViewingPlayersFor,
   navigation
 }) => {
-  const { serverClockOffset } = useAppData();
+  const { serverClockOffset } = useSync();
   const isPendingPayment = user?.id && (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
   const isWaitlisted = user?.id && (t.waitlistedPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
   const [timeLeft, setTimeLeft] = useState('');
@@ -69,16 +69,16 @@ const MatchCard = ({
       `Are you sure you want to opt out of "${t.title}"? This action cannot be undone.`,
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Yes, Opt Out", style: "destructive", onPress: () => onOptOut(t) }
+        { text: "Yes, Opt Out", style: "destructive", onPress: () => onOptOut(t.id) }
       ]
     );
   };
 
   return (
-    <View style={styles.matchCard}>
+    <View testID={`match.card.${t.title}`} style={styles.matchCard}>
       <View style={styles.matchCardHeader}>
         <View style={{ flex: 1, paddingRight: 12 }}>
-          <Text style={styles.matchTitle}>{t.title}</Text>
+          <Text testID={`match.card.title`} style={styles.matchTitle}>{t.title}</Text>
           <Text style={styles.matchLocation}>{t.location}</Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
@@ -105,7 +105,7 @@ const MatchCard = ({
           {isPendingPayment && timeLeft !== '' && (
             <View style={styles.cardTimer}>
               <Ionicons name="time-outline" size={10} color="#EA580C" />
-              <Text style={styles.cardTimerText}>{timeLeft}</Text>
+              <Text testID="match.card.timer" style={styles.cardTimerText}>{timeLeft}</Text>
             </View>
           )}
         </View>
@@ -209,19 +209,20 @@ const MatchCard = ({
           <>
             {isPendingPayment ? (
               <>
-                <TouchableOpacity onPress={() => setRegPaymentTarget(t)} style={[styles.actionButton, styles.buttonOrange]}>
+                <TouchableOpacity testID={`match.card.payBtn.${t.title}`} onPress={() => setRegPaymentTarget(t)} style={[styles.actionButton, styles.buttonOrange]}>
                   <Text style={styles.buttonText}>Pay Now</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleOptOut} style={[styles.actionButton, styles.buttonWhite]}>
+
                   <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Opt-out</Text>
                 </TouchableOpacity>
               </>
             ) : isWaitlisted ? (
               <>
-                <View style={[styles.actionButton, styles.buttonSlate, { opacity: 0.7 }]}>
+                <View testID={`match.card.waitlistedBtn.${t.title}`} style={[styles.actionButton, styles.buttonSlate, { opacity: 0.7 }]}>
                   <Text style={styles.buttonText}>Waitlisted</Text>
                 </View>
-                <TouchableOpacity onPress={handleOptOut} style={[styles.actionButton, styles.buttonWhite]}>
+                <TouchableOpacity testID={`match.card.waitlistOptOutBtn.${t.title}`} onPress={handleOptOut} style={[styles.actionButton, styles.buttonWhite]}>
                   <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Opt-out</Text>
                 </TouchableOpacity>
               </>
@@ -236,7 +237,7 @@ const MatchCard = ({
                 >
                   <Text style={styles.buttonText}>Reschedule</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={handleOptOut} style={[styles.actionButton, styles.buttonWhite]}>
+                <TouchableOpacity testID={`match.card.optOutBtn.${t.title}`} onPress={handleOptOut} style={[styles.actionButton, styles.buttonWhite]}>
                   <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Opt-out</Text>
                 </TouchableOpacity>
               </>

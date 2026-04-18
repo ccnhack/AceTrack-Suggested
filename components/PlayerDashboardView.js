@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Image, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import designSystem from '../theme/designSystem';
-import { getSafeAvatar } from '../utils/imageUtils';
 import SafeAvatar from './SafeAvatar';
 
 const PlayerDashboardView = ({ players, tournaments, title }) => {
@@ -29,6 +28,7 @@ const PlayerDashboardView = ({ players, tournaments, title }) => {
               <SafeAvatar 
                 uri={p.avatar} 
                 name={p.name} 
+                role={p.role} 
                 size={44}
                 borderRadius={14}
                 style={styles.avatar} 

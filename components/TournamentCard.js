@@ -1,8 +1,9 @@
 import React, { memo } from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppData } from '../navigation/AppNavigator';
+import { useSync } from '../context/SyncContext';
 import { formatDateIST } from '../utils/tournamentUtils';
+import config from '../config';
 
 const { width } = Dimensions.get('window');
 
@@ -22,7 +23,7 @@ const TournamentCard = ({
   userRole,
   isRec = false 
 }) => {
-  const { serverClockOffset } = useAppData();
+  const { serverClockOffset } = useSync();
   const isRegistered = userId && (t.registeredPlayerIds || []).some(id => String(id).toLowerCase() === String(userId).toLowerCase());
   const isPendingPayment = userId && (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(userId).toLowerCase());
   const isAssignedCoach = userId && (t.assignedCoachIds || []).includes(userId);
@@ -82,7 +83,11 @@ const TournamentCard = ({
 
   if (isRec) {
     return (
-      <TouchableOpacity onPress={onPress} style={styles.recCard}>
+      <TouchableOpacity 
+        testID={`tournament.card.rec.${t.id}`}
+        onPress={onPress} 
+        style={styles.recCard}
+      >
         <View style={styles.recCardHeader}>
           <View>
             <View style={styles.bestMatchBadge}>
@@ -109,10 +114,14 @@ const TournamentCard = ({
   }
 
   return (
-    <TouchableOpacity onPress={onPress} style={styles.card}>
+    <TouchableOpacity 
+      testID={`tournament.card.${t.id}`}
+      onPress={onPress} 
+      style={styles.card}
+    >
       <View style={styles.cardCover}>
         <Image 
-          source={{ uri: getSportImage(t.sport) || "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?q=80&w=1000" }} 
+          source={{ uri: config.sanitizeUrl(getSportImage(t.sport)) || "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?q=80&w=1000" }} 
           style={styles.cardImage} 
         />
         <View style={styles.overlay} />

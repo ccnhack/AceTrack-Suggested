@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getSafeAvatar } from '../utils/imageUtils';
+import SafeAvatar from '../components/SafeAvatar';
 import TournamentBracket from '../components/TournamentBracket';
 import Slider from '@react-native-community/slider';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -77,9 +77,13 @@ const RosterRow = memo(({
             isEliminated && { opacity: 0.6, backgroundColor: '#F1F5F9' },
             isOptedOut && { opacity: 0.5, backgroundColor: '#F8FAFC' }
           ]}>
-            <Image 
-              source={getSafeAvatar(playerObj.avatar, playerObj.name)}
-              style={[styles.rosterAvatar, (isEliminated || isOptedOut) && { grayscale: 1 }]}
+            <SafeAvatar 
+              uri={playerObj.avatar} 
+              name={playerObj.name} 
+              role={playerObj.role} 
+              size={40} 
+              borderRadius={20} 
+              style={[styles.rosterAvatar, (isEliminated || isOptedOut) && { grayscale: 1 }]} 
             />
             <View style={styles.rosterInfo}>
               <View style={styles.nameRow}>
@@ -169,14 +173,25 @@ const RosterRow = memo(({
   );
 });
 
-const MatchesScreen = ({
-  route,
-  navigation, tournaments, user, onReschedule, onOptOut, onLogFailedOtp,
-  players, evaluations, matchVideos, onSaveEvaluation,
-  onConfirmCoachRequest, onDeclineCoachRequest, onStartTournament,
-  onEndTournament, onUpdateTournament, onSaveCoachComment, onRegister, Sport,
-  supportTickets, onSaveTicket, onReplyTicket
-}) => {
+import { useAuth } from '../context/AuthContext';
+import { useTournaments } from '../context/TournamentContext';
+import { usePlayers } from '../context/PlayerContext';
+import { useVideos } from '../context/VideoContext';
+import { useSupport } from '../context/SupportContext';
+import { useAdmin } from '../context/AdminContext';
+
+const MatchesScreen = ({ route, navigation }) => {
+  const { currentUser: user } = useAuth();
+  const { 
+    tournaments, onReschedule, onOptOut, onStartTournament, onEndTournament, 
+    onUpdateTournament, onRegister, onAssignCoach, onConfirmCoachRequest, onDeclineCoachRequest 
+  } = useTournaments();
+  const { players } = usePlayers();
+  const { 
+    evaluations, onSaveEvaluation, matchVideos, onSaveCoachComment 
+  } = useVideos(); // Evaluations are in VideoContext currently
+  const { supportTickets, onSaveTicket, onReplyTicket } = useSupport();
+  const { onLogFailedOtp } = useAdmin();
   const [viewMode, setViewMode] = useState(route?.params?.viewMode || 'upcoming');
   
   // 🛡️ v2.6.87: Reactively update viewMode when params change (Fix for deep-linking when screen is already mounted)
@@ -202,8 +217,21 @@ const MatchesScreen = ({
     logger.logAction('Matches View Mode Changed', { mode: viewMode });
   }, [viewMode]);
 
-  // Coach render log removed
-  // console.log('--- MatchesScreen Render ---', { userRole: user?.role, viewMode, tournaments: tournaments?.length });
+  // 🧪 [E2E DIAGNOSTIC] Temporary debug log to understand Phase 4 data flow
+  console.log('--- MatchesScreen Render ---', { 
+    userId: user?.id, 
+    userRole: user?.role, 
+    viewMode, 
+    totalTournaments: tournaments?.length,
+    tournamentTitles: (tournaments || []).map(t => t.title),
+    assignedCount: (tournaments || []).filter(t => 
+      (t.registeredPlayerIds || []).some(id => String(id).toLowerCase() === String(user?.id).toLowerCase()) ||
+      (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user?.id).toLowerCase())
+    ).length,
+    pendingPaymentMatches: (tournaments || []).filter(t => 
+      (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user?.id).toLowerCase())
+    ).map(t => t.title)
+  });
 
   if (!user) return null;
 
@@ -403,14 +431,22 @@ const MatchesScreen = ({
     const canPayWithCredits = (user?.credits || 0) >= totalAdjustedCost;
 
     const finalize = (method) => {
+        console.log(`🧪 [JS_DEBUG] Finalize called with method: ${method}`);
         onRegister(regPaymentTarget, method, totalAdjustedCost, false, null);
+        console.log('🧪 [JS_DEBUG] onRegister completed, clearing regPaymentTarget');
         setRegPaymentTarget(null);
-        Alert.alert("Success", "Registration successful!");
+        if (!__DEV__) {
+            setTimeout(() => {
+                Alert.alert("Success", "Registration successful!");
+            }, 300);
+        } else {
+            console.log('🧪 [JS_DEBUG] Bypassing native success alert for E2E reliability');
+        }
     };
 
     return (
-        <Modal transparent animationType="fade" visible={!!regPaymentTarget}>
-            <View style={styles.modalOverlay}>
+        <Modal testID="matches.payment.modal" transparent animationType={__DEV__ ? "none" : "fade"} visible={!!regPaymentTarget}>
+            <View testID="matches.payment.modalContent" style={styles.modalOverlay}>
                 <View style={styles.paymentSheet}>
                     <View style={styles.paymentHeader}>
                         <Text style={styles.paymentTitle}>Select Payment</Text>
@@ -447,6 +483,7 @@ const MatchesScreen = ({
 
                     <View style={styles.paymentActions}>
                         <TouchableOpacity 
+                            testID="matches.payment.payBtn"
                             disabled={!canPayWithCredits}
                             onPress={() => finalize('credits')}
                             style={[styles.payBtn, !canPayWithCredits && styles.payBtnDisabled]}
@@ -455,6 +492,7 @@ const MatchesScreen = ({
                         </TouchableOpacity>
                         
                         <TouchableOpacity 
+                            testID="matches.payment.upiBtn"
                             onPress={() => finalize('upi')}
                             style={[styles.payBtn, { backgroundColor: '#EF4444', marginTop: 12 }]}
                         >
@@ -473,7 +511,7 @@ const MatchesScreen = ({
 
 
   return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
+    <View testID="matches.screen.container" style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Matches</Text>
@@ -506,13 +544,14 @@ const MatchesScreen = ({
       </View>
 
       <FlatList
+        testID="matches.list"
         data={displayedMatches}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <View style={styles.empty}>
+          <View testID="matches.empty" style={styles.empty}>
             <Text style={styles.emptyText}>No {viewMode} matches</Text>
           </View>
         }

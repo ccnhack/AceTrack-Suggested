@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView 
 import { Ionicons } from '@expo/vector-icons';
 import designSystem from '../theme/designSystem';
 
-export default function BroadcastTools({ tournaments = [] }) {
+export default function BroadcastTools({ tournaments = [], serverClockOffset = 0 }) {
   const [message, setMessage] = useState('');
   const [selectedTournament, setSelectedTournament] = useState('all');
   const [targetAudience, setTargetAudience] = useState('registered');
@@ -27,13 +27,15 @@ export default function BroadcastTools({ tournaments = [] }) {
 
   const filteredTournaments = (tournaments || []).filter(t => {
     if (categoryFilter === 'all') return true;
-    const tDate = new Date(t.date);
-    const today = new Date();
-    today.setHours(0,0,0,0);
+    
+    // Robust, timezone-agnostic date comparison using YYYY-MM-DD strings
+    const todayStr = new Date(Date.now() + (serverClockOffset || 0)).toISOString().split('T')[0];
+    const isPast = t.date < todayStr;
+    
     if (categoryFilter === 'upcoming') {
-      return t.status !== 'completed' && !t.tournamentConcluded && (tDate >= today || t.tournamentStarted);
+      return t.status !== 'completed' && !t.tournamentConcluded && (!isPast || t.tournamentStarted);
     } else {
-      return t.status === 'completed' || t.tournamentConcluded || (tDate < today && !t.tournamentStarted);
+      return t.status === 'completed' || t.tournamentConcluded || (isPast && !t.tournamentStarted);
     }
   });
 

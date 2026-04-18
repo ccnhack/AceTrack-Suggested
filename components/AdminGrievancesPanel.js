@@ -7,7 +7,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { generateAIResponse } from '../services/aiService';
+import notify from '../utils/notify';
 import logger from '../utils/logger';
+import config from '../config';
 
 const statusColors = {
   'Open': { bg: '#EFF6FF', text: '#2563EB', border: '#DBEAFE' },
@@ -186,17 +188,19 @@ export const AdminGrievancesPanel = ({
     }
   };
 
-  const handleReopenSubmit = () => {
+  const handleReopenSubmit = async () => {
     if (!reopenJustification.trim()) {
       alert("Please provide a justification for reopening this ticket.");
       return;
     }
-    onUpdateStatus(selectedTicket.id, pendingReopenStatus);
-    onReply(selectedTicket.id, `REOPEN JUSTIFICATION: ${reopenJustification.trim()}`);
-    
-    setShowReopenModal(false);
-    setReopenJustification('');
-    setPendingReopenStatus(null);
+    const statusRes = await onUpdateStatus(selectedTicket.id, pendingReopenStatus);
+    if (statusRes.success) {
+      await onReply(selectedTicket.id, `REOPEN JUSTIFICATION: ${reopenJustification.trim()}`);
+      setShowReopenModal(false);
+      setReopenJustification('');
+      setPendingReopenStatus(null);
+    }
+    notify(statusRes);
   };
 
   const processStatusConfirmation = async (confirmed) => {
@@ -216,22 +220,22 @@ export const AdminGrievancesPanel = ({
     setIsGeneratingSummary(true);
 
     try {
-      // 🤖 Analysis Prompt for Groq: Extract issue, troubleshooting, and fix.
       const history = (selectedTicket.messages || []).map(m => 
         `${m.senderId === 'admin' ? 'Admin' : (players.find(p => p.id === m.senderId)?.name || 'User')}: ${m.text || ''}`
       ).join('\n');
-
+    
       const prompt = [
         { role: 'system', text: "You are a professional support analyst. Read the conversation history and summarize it into exactly 3 concise sentences. 1) The original issue. 2) The troubleshooting steps taken. 3) The final fix/resolution. Be clear and objective." },
         { role: 'user', text: `History:\n${history}` }
       ];
-
+    
       const aiSummary = await generateAIResponse(prompt);
-      onUpdateStatus(selectedTicket.id, pendingStatus, aiSummary);
+      const res = await onUpdateStatus(selectedTicket.id, pendingStatus, aiSummary);
+      notify(res);
     } catch (e) {
       console.error("AI Resolution Summary Failed:", e);
-      // Fallback: resolution without summary
-      onUpdateStatus(selectedTicket.id, pendingStatus);
+      const res = await onUpdateStatus(selectedTicket.id, pendingStatus);
+      notify(res);
     } finally {
       setIsGeneratingSummary(false);
       setPendingStatus(null);
@@ -302,12 +306,14 @@ export const AdminGrievancesPanel = ({
     }
   };
 
-  const handleSendReply = () => {
+  const handleSendReply = async () => {
     if ((!replyText.trim() && !selectedImage) || !selectedTicket) return;
-    onReply(selectedTicket.id, replyText, selectedImage, replyToMsg);
-    setReplyText('');
-    setSelectedImage(null);
-    setReplyToMsg(null);
+    const res = await onReply(selectedTicket.id, replyText, selectedImage, replyToMsg);
+    if (res.success) {
+      setReplyText('');
+      setSelectedImage(null);
+      setReplyToMsg(null);
+    }
   };
 
   const renderMessageReply = (reply) => {
@@ -410,7 +416,7 @@ export const AdminGrievancesPanel = ({
           {renderMessageReply(msg.replyTo)}
           {!isMe && <Text style={styles.senderLabel}>{senderName}</Text>}
           {msg.image && (
-            <Image source={{ uri: msg.image }} style={styles.msgImage} resizeMode="contain" />
+            <Image source={{ uri: config.sanitizeUrl(msg.image) }} style={styles.msgImage} resizeMode="contain" />
           )}
           <Text style={[styles.messageText, isMe ? styles.myText : styles.otherText]}>
             {text?.startsWith('CLOSURE_REQUEST_EVENT:') 
@@ -649,6 +655,7 @@ export const AdminGrievancesPanel = ({
                           )}
 
                           <TextInput
+                            testID="admin.support.reply.input"
                             ref={textInputRef}
                             style={styles.chatInput}
                             value={replyText}
@@ -662,6 +669,7 @@ export const AdminGrievancesPanel = ({
                             multiline
                           />
                           <TouchableOpacity 
+                            testID="admin.support.reply.submit"
                             style={[styles.sendBtn, (!replyText.trim() && !selectedImage) && styles.sendDisabled]} 
                             disabled={!replyText.trim() && !selectedImage}
                             onPress={handleSendReply}
@@ -709,6 +717,7 @@ export const AdminGrievancesPanel = ({
           const isActive = filterStatus === s;
           return (
             <TouchableOpacity 
+              testID={`admin.support.filter.${s}`}
               key={s} 
               onPress={() => setFilterStatus(s)}
               style={[styles.filterTab, isActive && styles.filterTabActive]}
@@ -729,6 +738,7 @@ export const AdminGrievancesPanel = ({
           const isUnread = isTicketUnread(ticket);
           return (
             <TouchableOpacity 
+              testID={`admin.support.card.${ticket.id}`}
               key={ticket.id || `temp-${idx}`} 
               onPress={() => setSelectedTicket(ticket)}
               style={[styles.ticketCard, isUnread && styles.unreadCard]}

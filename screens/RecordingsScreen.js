@@ -7,11 +7,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { VideoManagement } from '../components/VideoManagement';
 
-const RecordingsScreen = ({ 
-  user, role, matchVideos = [], tournaments = [], players = [], 
-  onSaveVideo, onUnlockVideo, onPurchaseAiHighlights, onTopUp, onVideoPlay,
-  onToggleFavourite
-}) => {
+import { useAuth } from '../context/AuthContext';
+import { useTournaments } from '../context/TournamentContext';
+import { usePlayers } from '../context/PlayerContext';
+import { useVideos } from '../context/VideoContext';
+
+const RecordingsScreen = () => {
+  const { currentUser: user, userRole: role } = useAuth();
+  const { matchVideos, onSaveVideo, onUnlockVideo, onPurchaseAiHighlights, onToggleFavourite, onVideoPlay } = useVideos();
+  const { tournaments } = useTournaments();
+  const { players } = usePlayers();
+  const { onTopUp } = useAuth(); // onTopUp is in AuthContext
   const [activeFilter, setActiveFilter] = useState('recent');
   const insets = useSafeAreaInsets();
   const isCoach = role === 'coach';

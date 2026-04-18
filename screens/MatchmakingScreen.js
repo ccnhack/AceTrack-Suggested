@@ -1,16 +1,20 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  Image, Modal, TextInput, Alert, ScrollView
+  Image, Modal, TextInput, Alert, ScrollView, Platform, LayoutAnimation
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import designSystem from '../theme/designSystem';
+import { colors, shadows, typography, borderRadius, spacing } from '../theme/designSystem';
 import { Sport } from '../types';
+import SafeAvatar from '../components/SafeAvatar';
 import { Calendar } from 'react-native-calendars';
+import { LinearGradient } from 'expo-linear-gradient';
 import venuesData from '../data/venues.json';
+import { syncManager } from '../services/SyncManager';
 
 // Performance: Memoized Sub-components for long list rendering
 const TimeSlotItem = React.memo(({ index, slot, isBlocked, isInPast, isSelBase, isExpanded, onExpand, onSelect, expandedSlot }) => {
@@ -123,10 +127,19 @@ const isTimeInPast = (date, timeSlot, serverOffset = 0) => {
   return slotMinutes <= nowMinutes;
 };
 
-export default function MatchmakingScreen({ 
-  route, user, matchmaking = [], onUpdateMatchmaking, players = [], 
-  sendUserNotification, onManualSync, serverClockOffset 
-}) {
+import { useAuth } from '../context/AuthContext';
+import { usePlayers } from '../context/PlayerContext';
+import { useSync } from '../context/SyncContext';
+import { useMatchmaking } from '../context/MatchmakingContext';
+import { useTournaments } from '../context/TournamentContext';
+import MatchService from '../services/MatchService';
+
+export default function MatchmakingScreen({ route }) {
+  const { currentUser: user } = useAuth();
+  const { matchmaking, onUpdateMatchmaking } = useMatchmaking();
+  const { players, sendUserNotification } = usePlayers();
+  const { loadData: onManualSync, serverClockOffset } = useSync();
+  const { tournaments } = useTournaments();
   
   const lastSyncRef = React.useRef(0);
   const insets = useSafeAreaInsets();
@@ -146,7 +159,16 @@ export default function MatchmakingScreen({
     }, [onManualSync])
   );
   const role = user?.role || 'user';
-  const [activeTab, setActiveTab] = useState(route?.params?.initialTab || (role === 'coach' ? 'New Bookings' : 'Challenge')); // Challenge, Requests, Accepted, History
+  const [activeTab, setActiveTab] = useState(route?.params?.initialTab || (role === 'coach' ? 'Bookings' : 'Challenge')); // Challenge, Requests, Accepted, History
+  
+  const handleTabChange = (newTab) => {
+    if (newTab === activeTab) return;
+    if (Platform.OS !== 'web') {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    setActiveTab(newTab);
+  };
   
   // 🛡️ v2.6.87: Reactively update tab when params change (Fix for deep-linking when screen is already mounted)
   React.useEffect(() => {
@@ -238,6 +260,8 @@ export default function MatchmakingScreen({
   const [nearbyVenues, setNearbyVenues] = useState([]);
   const [isFetchingVenues, setIsFetchingVenues] = useState(false);
   const [venueDropdownSearchQuery, setVenueDropdownSearchQuery] = useState('');
+  const [reportScoreMatch, setReportScoreMatch] = useState(null);
+  const [reportSets, setReportSets] = useState([{ score1: 0, score2: 0 }]);
 
   // PERFORMANCE: Separate Static Marks from Dynamic Selection to prevent Calendar Lag
   const staticChallengeMarks = React.useMemo(() => {
@@ -250,7 +274,7 @@ export default function MatchmakingScreen({
        if ((m.senderId === user?.id && m.receiverId === selectedOpponent?.id) ||
            (m.senderId === selectedOpponent?.id && m.receiverId === user?.id)) {
          const mDate = m.proposedDate || m.time?.split(',')[0]?.trim();
-         if (mDate) marks[mDate] = { marked: true, dotColor: designSystem.colors.primary };
+         if (mDate) marks[mDate] = { marked: true, dotColor: colors.primary };
        }
     });
     return marks;
@@ -398,6 +422,10 @@ export default function MatchmakingScreen({
   React.useEffect(() => {
     (async () => {
       try {
+        if (__DEV__) {
+          console.log("🧪 [TEST_DEBUG] Bypassing location request in Matchmaking for automated tests.");
+          return;
+        }
         let { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') return;
 
@@ -435,15 +463,35 @@ export default function MatchmakingScreen({
   }, [isChallengeModalVisible, isCounterModalVisible, userLocation]);
 
   const isTimeSlotBlocked = (date, timeSlot, academyId) => {
-    if (!date || !academyId) return false; // Cannot check without date or academyId
+    if (!date || !academyId) return false;
     const slotMinutes = parseTime(timeSlot);
-    return MOCK_ACADEMY_TOURNAMENTS.some(t => {
+
+    // 🛡️ [GUARD 1] Academy Venue Conflict (Static/Mock)
+    const isAcademyBusy = MOCK_ACADEMY_TOURNAMENTS.some(t => {
       if (t.date !== date || t.academyId !== academyId) return false;
       const startMinutes = parseTime(t.startTime);
       const endMinutes = startMinutes + t.duration * 60;
       return slotMinutes >= startMinutes && slotMinutes < endMinutes;
     });
+    if (isAcademyBusy) return true;
+
+    // 🛡️ [GUARD 2] User Schedule Conflict (Real Cloud Logic)
+    if (!user?.id) return false;
+    const isUserBusyAtTournament = (tournaments || []).some(t => {
+      if (t.date !== date) return false;
+      
+      // Check if user is actually playing/registered
+      const isRegistered = (t.registeredPlayerIds || []).includes(user.id);
+      if (!isRegistered) return false;
+
+      const startMinutes = parseTime(t.startTime);
+      const endMinutes = startMinutes + (t.duration || 4) * 60;
+      return slotMinutes >= startMinutes && slotMinutes < endMinutes;
+    });
+
+    return isUserBusyAtTournament;
   };
+
 
   const mySports = user?.managedSports || (user?.certifiedSports) || [Sport.BADMINTON];
 
@@ -507,37 +555,29 @@ export default function MatchmakingScreen({
       setIsSubmitting(false);
       return;
     }
-    const newChallenge = {
-      id: `match_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
-      senderId: user.id,
-      senderName: user.name,
-      receiverId: selectedOpponent.id,
-      receiverName: selectedOpponent.name,
-      name: selectedOpponent.name, // for display compatibility
-      image: selectedOpponent.image,
-      proposedDate: challengeDate,
-      proposedTime: challengeTime,
-      sport: selectedSport,
-      location: selectedAcademyForVenue ? selectedAcademyForVenue.label : 'Local Arena',
-      status: 'Pending',
-      timestamp: new Date().toISOString()
-    };
-    onUpdateMatchmaking([...matchmaking, newChallenge]);
-    setIsChallengeModalVisible(false);
-    setChallengeDate('');
-    setChallengeTime('');
-    setTimeout(() => setIsSubmitting(false), 500);
-    
-    // Send Notification to recipient
-    if (sendUserNotification) {
-      sendUserNotification(selectedOpponent.id, {
-        type: 'challenge',
-        title: 'New Match Challenge',
-        message: `${user.name} has challenged you to a game of ${selectedSport} on ${challengeDate} at ${challengeTime}.`,
-      });
+
+    const response = createChallenge(
+      selectedOpponent, 
+      challengeDate, 
+      challengeTime, 
+      selectedSport, 
+      selectedAcademyForVenue,
+      user?.id,
+      user?.name
+    );
+
+    if (response.success) {
+      setIsChallengeModalVisible(false);
+      setChallengeDate('');
+      setChallengeTime('');
+      
+      if (sendUserNotification && response.notification) {
+        sendUserNotification(selectedOpponent.id, response.notification);
+      }
+      Alert.alert("Challenge Sent!", `Your request to ${selectedOpponent.name} has been sent.`);
     }
 
-    Alert.alert("Challenge Sent!", `Your request to ${selectedOpponent.name} has been sent.`);
+    setTimeout(() => setIsSubmitting(false), 500);
   };
 
   const getOpponentName = (item) => {
@@ -561,8 +601,7 @@ export default function MatchmakingScreen({
           text: "Yes, Cancel", 
           style: "destructive",
           onPress: () => {
-            const updated = matchmaking.map(m => m.id === req.id ? { ...m, status: 'Cancelled', lastUpdatedBy: user?.id } : m);
-            onUpdateMatchmaking(updated);
+            respondToChallenge(req, 'cancel', user?.id, user?.name);
             Alert.alert("Request Cancelled", "Your challenge has been successfully removed.");
           }
         }
@@ -581,16 +620,9 @@ export default function MatchmakingScreen({
           text: "Decline", 
           style: "destructive",
           onPress: () => {
-            const updated = matchmaking.map(m => m.id === req.id ? { ...m, status: 'Declined', isNew: false, lastUpdatedBy: user?.id } : m);
-            onUpdateMatchmaking(updated);
-            
-            // Send Notification to sender
-            if (sendUserNotification) {
-              sendUserNotification(req.senderId, {
-                type: 'challenge',
-                title: 'Challenge Declined',
-                message: `${user.name} has declined your match challenge for ${req.sport}.`,
-              });
+            const response = respondToChallenge(req, 'decline', user.id, user.name);
+            if (response.success && sendUserNotification && response.notification) {
+              sendUserNotification(req.senderId, response.notification);
             }
             Alert.alert("Challenge Declined", "The request has been removed.");
           }
@@ -601,24 +633,10 @@ export default function MatchmakingScreen({
 
   const handleAcceptChallenge = (req) => {
     const oppName = getOpponentName(req);
-    const updated = matchmaking.map(m => m.id === req.id ? {
-      ...m,
-      status: 'Accepted',
-      isNew: false, // Mark as read on action
-      lastUpdatedBy: user.id,
-      lastUpdatedByName: user.name,
-      time: m.time || `${m.proposedDate}, ${m.proposedTime}`,
-      location: m.location || 'Academy Grounds'
-    } : m);
-    onUpdateMatchmaking(updated);
+    const response = respondToChallenge(req, 'accept', user.id, user.name);
     
-    // Send Notification to sender
-    if (sendUserNotification) {
-      sendUserNotification(req.senderId, {
-        type: 'challenge',
-        title: 'Challenge Accepted',
-        message: `${user.name} has accepted your match challenge for ${req.sport}!`,
-      });
+    if (response.success && sendUserNotification && response.notification) {
+      sendUserNotification(req.senderId, response.notification);
     }
 
     Alert.alert("Match Accepted", `You have confirmed the match with ${oppName}.`);
@@ -626,9 +644,8 @@ export default function MatchmakingScreen({
 
   const handleAcceptCountered = (req) => {
     const oppName = getOpponentName(req);
-    // Check if the other party has responded to the counter
+    // 🛡️ Phase 1.3: Check if the other party has responded to the counter
     if (!req.hasUserResponse) {
-      // Other user hasn't responded — confirm with original challenger's slot
       const origDate = req.originalChallengerDate || req.proposedDate;
       const origTime = req.originalChallengerTime || req.proposedTime;
       const myDate = req.myCounterDate || req.proposedDate;
@@ -644,18 +661,12 @@ export default function MatchmakingScreen({
           {
             text: "Yes, Accept",
             onPress: () => {
-              const updated = matchmaking.map(m => m.id === req.id ? {
-                ...m,
-                status: 'Accepted',
-                isNew: false,
-                lastUpdatedBy: user.id,
-                lastUpdatedByName: user.name,
+              const response = MatchService.respond(req, 'accept', user.id, user.name, {
                 proposedDate: origDate,
                 proposedTime: origTime,
-                time: `${origDate}, ${origTime}`,
-                location: req.location || 'Local Arena'
-              } : m);
-              onUpdateMatchmaking(updated);
+                time: `${origDate}, ${origTime}`
+              });
+              syncManager.handleMatchUpdate(response);
               Alert.alert("Challenge Accepted!", `Match confirmed for ${origDate} at ${origTime} with ${oppName}.`);
             }
           }
@@ -667,18 +678,10 @@ export default function MatchmakingScreen({
     // Other user has responded — accept with latest proposed slot
     const finalDate = req.proposedDate;
     const finalTime = req.proposedTime;
-    const updated = matchmaking.map(m => m.id === req.id ? {
-      ...m,
-      status: 'Accepted',
-      isNew: false,
-      lastUpdatedBy: user.id,
-      lastUpdatedByName: user.name,
-      proposedDate: finalDate,
-      proposedTime: finalTime,
-      time: `${finalDate}, ${finalTime}`,
-      location: req.location || 'Local Arena'
-    } : m);
-    onUpdateMatchmaking(updated);
+    const response = MatchService.respond(req, 'accept', user.id, user.name, {
+      time: `${finalDate}, ${finalTime}`
+    });
+    syncManager.handleMatchUpdate(response);
     Alert.alert("Challenge Accepted!", `Match confirmed for ${finalDate} at ${finalTime} with ${oppName}.`);
   };
 
@@ -688,8 +691,8 @@ export default function MatchmakingScreen({
     
     // 🛡️ v2.6.90: Automatically mark as read when clicking to view details
     if (challenge.isNew) {
-      const updated = matchmaking.map(m => m.id === challenge.id ? { ...m, isNew: false } : m);
-      onUpdateMatchmaking(updated);
+      // Small intentional logic skip: isNew is UI-only usually, but we keep the authority for logic
+      syncManager.handleMatchUpdate({ data: { updatedMatch: { ...challenge, isNew: false } } });
     }
   };
 
@@ -731,35 +734,41 @@ export default function MatchmakingScreen({
       setIsSubmitting(false);
       return;
     }
-    const selectedVenueName = selectedAcademyForVenue?.label || selectedAcademyForVenue?.name;
-    const venueLabel = selectedVenueName 
-        ? selectedVenueName 
-        : (role === 'coach' ? 'Coach-suggested Venue' : (negotiatedVenue === 'own' ? 'Our Academy Grounds' : (oppName + ' Grounds')));
-    
-    const counteredItem = {
-      ...selectedChallenge,
-      originalChallengerDate: selectedChallenge.originalChallengerDate || selectedChallenge.proposedDate || selectedChallenge.time?.split(',')[0]?.trim(),
-      originalChallengerTime: selectedChallenge.originalChallengerTime || selectedChallenge.proposedTime || selectedChallenge.time?.split(',')[1]?.trim(),
-      proposedDate: counterDate,
-      proposedTime: counterTime,
-      location: venueLabel,
-      myCounterDate: counterDate,
-      myCounterTime: counterTime,
-      counterComment: counterComment.trim() || null,
-      status: 'Countered',
-      isNew: false,
-      lastUpdatedBy: user.id,
-      lastUpdatedByName: user.name,
-      hasUserResponse: false
-    };
 
-    const updated = matchmaking.map(m => m.id === counteredItem.id ? counteredItem : m);
-    onUpdateMatchmaking(updated);
+    const response = proposeCounter(
+      selectedChallenge, 
+      user.id, 
+      user.name, 
+      counterDate, 
+      counterTime, 
+      selectedAcademyForVenue, 
+      counterComment
+    );
 
-    setIsCounterModalVisible(false);
-    setSelectedChallenge(null);
+    if (response.success) {
+      setIsCounterModalVisible(false);
+      setSelectedChallenge(null);
+      Alert.alert("Counter Proposal Sent", `You suggested ${counterDate} at ${counterTime}.`);
+    }
     setTimeout(() => setIsSubmitting(false), 500);
-    Alert.alert("Counter Proposal Sent", `You suggested ${counterDate} at ${counterTime} at ${venueLabel}.`);
+  };
+
+  const submitScoreReport = () => {
+    if (!reportScoreMatch) return;
+    
+    // Validate sets (simplified: at least one set must have values)
+    if (reportSets.every(s => s.score1 === 0 && s.score2 === 0)) {
+      Alert.alert("Invalid Score", "Please enter scores for the match.");
+      return;
+    }
+
+    const response = finalizeMatch(reportScoreMatch, reportSets, reportScoreMatch.sport);
+    
+    if (response.success) {
+      setReportScoreMatch(null);
+      setIsDetailsModalVisible(false);
+      Alert.alert("Match Finalized", "The match has been updated with the final scores.");
+    }
   };
 
   const handleRemoveExpired = (id) => {
@@ -772,8 +781,8 @@ export default function MatchmakingScreen({
           text: "Remove", 
           style: "destructive",
           onPress: () => {
-            const updated = matchmaking.filter(m => m.id !== id);
-            onUpdateMatchmaking(updated);
+            const response = MatchService.removeExpired(id);
+            syncManager.handleMatchUpdate(response);
           }
         }
       ]
@@ -791,9 +800,8 @@ export default function MatchmakingScreen({
           text: "Remove All", 
           style: "destructive",
           onPress: () => {
-            const expiredIds = new Set(expiredRequests.map(m => m.id));
-            const updated = matchmaking.filter(m => !expiredIds.has(m.id));
-            onUpdateMatchmaking(updated);
+            const response = MatchService.removeAllExpired(expiredRequests.map(m => m.id));
+            syncManager.handleMatchUpdate(response);
             Alert.alert("Success", "All expired requests have been removed.");
           }
         }
@@ -803,18 +811,8 @@ export default function MatchmakingScreen({
 
   const handleConfirmBooking = (req) => {
     const oppName = getOpponentName(req);
-    const updated = matchmaking.map(m => m.id === req.id ? {
-      ...m,
-      status: 'Accepted',
-      isNew: false,
-      lastUpdatedBy: user.id,
-      lastUpdatedByName: user.name,
-      proposedDate: req.userProposedDate || req.proposedDate,
-      proposedTime: req.userProposedTime || req.proposedTime,
-      location: req.location || 'Academy Grounds',
-      time: `${req.userProposedDate || req.proposedDate}, ${req.userProposedTime || req.proposedTime}`
-    } : m);
-    onUpdateMatchmaking(updated);
+    const response = MatchService.confirmBooking(req, user.id, user.name);
+    syncManager.handleMatchUpdate(response);
     Alert.alert("Booking Confirmed", `You have finalized the booking with ${oppName}.`);
   };
 
@@ -829,8 +827,7 @@ export default function MatchmakingScreen({
           text: "Yes, Cancel", 
           style: "destructive",
           onPress: () => {
-            const updated = matchmaking.map(m => m.id === req.id ? { ...m, status: 'Cancelled', lastUpdatedBy: user?.id } : m);
-            onUpdateMatchmaking(updated);
+            respondToChallenge(req, 'cancel', user?.id, user?.name);
             setIsDetailsModalVisible(false);
             Alert.alert("Booking Cancelled", "The booking has been successfully removed.");
           }
@@ -842,12 +839,18 @@ export default function MatchmakingScreen({
   const renderOpponent = useCallback(({ item }) => {
     const isAcademy = role === 'academy';
     const isSent = sentRequests.some(r => r.id === item.id);
-
-    const imageUri = item.image || item.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name || 'User')}&background=007AFF&color=ffffff`;
+    const imageUri = item.avatar || item.headshot || item.profileImage;
 
     return (
       <View style={styles.card}>
-        <Image source={{ uri: imageUri }} style={styles.avatar} />
+        <SafeAvatar 
+          uri={imageUri} 
+          name={item.name} 
+          role={item.role} 
+          size={50} 
+          borderRadius={25} 
+          style={styles.avatar} 
+        />
         <View style={styles.info}>
           <Text style={styles.name}>{item.name}</Text>
           <Text style={styles.details}>
@@ -856,6 +859,7 @@ export default function MatchmakingScreen({
           <Text style={styles.dist}><Ionicons name="location" size={12} /> {item.city || 'Near You'}</Text>
         </View>
         <TouchableOpacity
+          testID="matchmaking.challenge.button"
           style={[styles.btn, isSent && styles.btnSent]}
           onPress={() => isSent ? null : handleChallenge(item)}
         >
@@ -871,31 +875,42 @@ export default function MatchmakingScreen({
 
     return (
       <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Sent</Text>
+        {/* Sent Challenges Section - Hidden for Coaches */}
+        {role !== 'coach' && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Sent</Text>
+            </View>
+            {actualSentRequests.length === 0 && <Text style={styles.emptyText}>No Pending Requests Sent</Text>}
+            {actualSentRequests.map((req, index) => (
+              <TouchableOpacity key={req.id || `sent-${index}`} style={styles.requestCard} onPress={() => openDetails(req)}>
+                <View style={styles.info}>
+                  <Text style={styles.name} numberOfLines={1}>{getOpponentName(req)}</Text>
+                  <Text style={styles.details}>{req.sport} • {req.proposedDate} at {req.proposedTime} • {req.status || 'Pending'}</Text>
+                </View>
+                <View style={styles.actionRow}>
+                  <TouchableOpacity 
+                    testID="matchmaking.counter.button"
+                    style={styles.smallBtn} 
+                    onPress={() => handleCounter(req)}
+                  >
+                    <Text style={styles.smallBtnText}>Counter</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    testID="matchmaking.cancel.button"
+                    style={[styles.smallBtn, { backgroundColor: '#FFEEF2' }]} 
+                    onPress={() => handleCancelChallenge(req)}
+                  >
+                    <Text style={[styles.smallBtnText, { color: '#E11D48' }]}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            ))}
           </View>
-          {actualSentRequests.length === 0 && <Text style={styles.emptyText}>No Pending Requests Sent</Text>}
-          {actualSentRequests.map((req, index) => (
-            <TouchableOpacity key={req.id || `sent-${index}`} style={styles.requestCard} onPress={() => openDetails(req)}>
-              <View style={styles.info}>
-                <Text style={styles.name} numberOfLines={1}>{getOpponentName(req)}</Text>
-                <Text style={styles.details}>{req.sport} • {req.proposedDate} at {req.proposedTime} • {req.status || 'Pending'}</Text>
-              </View>
-              <View style={styles.actionRow}>
-                <TouchableOpacity style={styles.smallBtn} onPress={() => handleCounter(req)}>
-                  <Text style={styles.smallBtnText}>Counter</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.smallBtn, { backgroundColor: '#FFEEF2' }]} onPress={() => handleCancelChallenge(req)}>
-                  <Text style={[styles.smallBtnText, { color: '#E11D48' }]}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+        )}
 
         {/* Received Challenges Section */}
-        <View style={[styles.section, { marginTop: 25 }]}>
+        <View style={[styles.section, role !== 'coach' ? { marginTop: 25 } : null]}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Received</Text>
           </View>
@@ -916,13 +931,25 @@ export default function MatchmakingScreen({
                   </Text>
                 </View>
                 <View style={styles.actionRow}>
-                  <TouchableOpacity style={[styles.smallBtn, { backgroundColor: '#F1F5F9' }]} onPress={() => handleDeclineChallenge(req)}>
+                  <TouchableOpacity 
+                    testID="matchmaking.decline.button"
+                    style={[styles.smallBtn, { backgroundColor: '#F1F5F9' }]} 
+                    onPress={() => handleDeclineChallenge(req)}
+                  >
                     <Text style={[styles.smallBtnText, { color: '#64748B' }]}>Decline</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.smallBtn} onPress={() => handleCounter(req)}>
+                  <TouchableOpacity 
+                    testID="matchmaking.counter.button"
+                    style={styles.smallBtn} 
+                    onPress={() => handleCounter(req)}
+                  >
                     <Text style={styles.smallBtnText}>Counter</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.smallBtn, { backgroundColor: '#22C55E' }]} onPress={() => handleAcceptChallenge(req)}>
+                  <TouchableOpacity 
+                    testID="matchmaking.accept.button"
+                    style={[styles.smallBtn, { backgroundColor: '#22C55E' }]} 
+                    onPress={() => handleAcceptChallenge(req)}
+                  >
                     <Text style={styles.smallBtnText}>{role === 'coach' ? 'Confirm' : 'Accept'}</Text>
                   </TouchableOpacity>
                 </View>
@@ -984,7 +1011,11 @@ export default function MatchmakingScreen({
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Expired Requests</Text>
             {expiredRequests.length > 0 && (
-              <TouchableOpacity onPress={handleRemoveAllExpired} style={[styles.smallBtn, { backgroundColor: '#FEE2E2' }]}>
+              <TouchableOpacity 
+                testID="matchmaking.expired.remove_all"
+                onPress={handleRemoveAllExpired} 
+                style={[styles.smallBtn, { backgroundColor: '#FEE2E2' }]}
+              >
                 <Text style={[styles.smallBtnText, { color: '#E11D48' }]}>Remove All</Text>
               </TouchableOpacity>
             )}
@@ -1002,8 +1033,9 @@ export default function MatchmakingScreen({
                 ]} 
                 onPress={() => {
                   if (isUnread) {
-                    const updated = matchmaking.map(m => m.id === req.id ? { ...m, isExpiredRead: true } : m);
-                    onUpdateMatchmaking(updated);
+                    syncManager.handleMatchUpdate({ 
+                      data: { updatedMatch: { ...req, isExpiredRead: true } } 
+                    });
                   }
                   openDetails(req);
                 }}
@@ -1035,7 +1067,7 @@ export default function MatchmakingScreen({
       {upcomingMatches.map((match, index) => (
         <TouchableOpacity key={match.id || `accepted-${index}`} style={styles.acceptedCard} onPress={() => openDetails(match)}>
           <View style={styles.acceptedHeader}>
-             <Ionicons name="calendar" size={20} color={designSystem.colors.primary} />
+             <Ionicons name="calendar" size={20} color={colors.primary} />
              <Text style={styles.acceptedTime}>{match.time}</Text>
           </View>
           <Text style={styles.acceptedTitle}>{role === 'coach' ? 'Booked by ' : 'vs '}{getOpponentName(match)}</Text>
@@ -1089,32 +1121,31 @@ export default function MatchmakingScreen({
   }, [role, user?.id, mySports, allPlayers, playerSearchQuery]);
 
   return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
-      <View style={styles.header}>
+    <View style={styles.container}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]}>
         <Text style={styles.title}>{role === 'coach' ? 'Coach Bookings' : (role === 'academy' ? 'Academy Matchmaking' : 'Matchmaking')}</Text>
         <View style={styles.tabs}>
-           {(role === 'coach' ? ['New Bookings', 'Accepted', 'Expired', 'History'] : ['Challenge', 'Requests', 'Accepted', 'Expired', 'History']).map((tab, index) => (
+           {(role === 'coach' ? ['Bookings', 'Accepted', 'Expired', 'History'] : ['Challenge', 'Requests', 'Accepted', 'Expired', 'History']).map((tab, index) => (
              <TouchableOpacity
+               testID={`matchmaking.tab.${tab}`}
                key={`tab-${index}`}
                style={[styles.tab, activeTab === tab && styles.activeTab]}
-               onPress={() => {
-                 setActiveTab(tab);
-               }}
+               onPress={() => handleTabChange(tab)}
              >
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</Text>
                   {tab === 'Requests' && receivedRequests.filter(r => r.isNew).length > 0 && (
-                    <View style={styles.tabBadge}>
+                    <View testID="matchmaking.tab.requests.badge" style={styles.tabBadge}>
                       <Text style={styles.tabBadgeText}>{receivedRequests.filter(r => r.isNew).length}</Text>
                     </View>
                   )}
-                  {tab === 'New Bookings' && sentRequests.filter(r => r.isNew).length > 0 && role === 'coach' && (
-                    <View style={styles.tabBadge}>
-                      <Text style={styles.tabBadgeText}>{sentRequests.filter(r => r.isNew).length}</Text>
+                  {tab === 'Bookings' && receivedRequests.filter(r => r.isNew).length > 0 && role === 'coach' && (
+                    <View testID="matchmaking.tab.bookings.badge" style={styles.tabBadge}>
+                      <Text style={styles.tabBadgeText}>{receivedRequests.filter(r => r.isNew).length}</Text>
                     </View>
                   )}
                   {tab === 'Expired' && expiredRequests.filter(r => !r.isExpiredRead).length > 0 && (
-                    <View style={styles.tabBadge}>
+                    <View testID="matchmaking.tab.expired.badge" style={styles.tabBadge}>
                       <Text style={styles.tabBadgeText}>{expiredRequests.filter(r => !r.isExpiredRead).length}</Text>
                     </View>
                   )}
@@ -1155,7 +1186,7 @@ export default function MatchmakingScreen({
           windowSize={5}
         />
       )}
-      {(activeTab === 'Requests' || (role === 'coach' && activeTab === 'New Bookings')) && renderRequested()}
+      {(activeTab === 'Requests' || (role === 'coach' && activeTab === 'Bookings')) && renderRequested()}
       {activeTab === 'Accepted' && renderAccepted()}
       {activeTab === 'Expired' && renderExpired()}
       {activeTab === 'History' && renderHistory()}
@@ -1350,7 +1381,11 @@ export default function MatchmakingScreen({
                 )}
               </View>
 
-              <TouchableOpacity style={styles.confirmBtn} onPress={confirmChallenge}>
+              <TouchableOpacity 
+                testID="matchmaking.challenge.submit"
+                style={styles.confirmBtn} 
+                onPress={confirmChallenge}
+              >
                 <Text style={styles.confirmBtnText}>Send Challenge Request</Text>
                 <Ionicons name="paper-plane" size={18} color="#fff" style={{ marginLeft: 10 }} />
               </TouchableOpacity>
@@ -1525,12 +1560,29 @@ export default function MatchmakingScreen({
                 </>
               )}
               {selectedChallenge?.status === 'Accepted' && (
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, { backgroundColor: '#22C55E' }]}
+                    onPress={() => setReportScoreMatch(selectedChallenge)}
+                  >
+                    <Text style={styles.actionBtnText}>Report Score</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.actionBtn, { backgroundColor: '#FEE2E2', borderWidth: 1, borderColor: '#EF4444' }]}
                     onPress={() => handleCancelBooking(selectedChallenge)}
                   >
-                    <Text style={[styles.actionBtnText, { color: '#B91C1C' }]}>Cancel Booking</Text>
+                    <Text style={[styles.actionBtnText, { color: '#B91C1C' }]}>Cancel</Text>
                   </TouchableOpacity>
+                </View>
+              )}
+              {selectedChallenge?.status === 'Completed' && (
+                <View style={[styles.detailItem, { width: '100%', backgroundColor: '#F0FDF4' }]}>
+                   <Ionicons name="checkmark-done-circle" size={24} color="#16A34A" />
+                   <View>
+                     <Text style={[styles.detailLabel, { color: '#16A34A' }]}>Final Result</Text>
+                     <Text style={styles.detailValue}>{selectedChallenge.resultText}</Text>
+                   </View>
+                </View>
               )}
             </View>
 
@@ -1717,19 +1769,74 @@ export default function MatchmakingScreen({
           </View>
         </View>
       </Modal>
+      {/* Report Score Modal */}
+      <Modal visible={!!reportScoreMatch} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalLabel}>REPORT MATCH SCORE</Text>
+                <Text style={styles.modalTitle}>{reportScoreMatch?.sport}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setReportScoreMatch(null)} style={styles.modalClose}>
+                <Ionicons name="close" size={28} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={{ marginTop: 20 }}>
+              <Text style={styles.sectionLabel}>Game Scores</Text>
+              {reportSets.map((set, idx) => (
+                <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15 }}>
+                  <View style={{ flex: 1, alignItems: 'center' }}>
+                    <Text style={styles.detailLabel}>You</Text>
+                    <TextInput 
+                      style={styles.scoreInput}
+                      keyboardType="number-pad"
+                      value={String(set.score1)}
+                      onChangeText={(val) => {
+                        const newSets = [...reportSets];
+                        newSets[idx].score1 = parseInt(val) || 0;
+                        setReportSets(newSets);
+                      }}
+                    />
+                  </View>
+                  <Text style={{ fontSize: 24, fontWeight: '900', color: '#CBD5E1' }}>-</Text>
+                  <View style={{ flex: 1, alignItems: 'center' }}>
+                    <Text style={styles.detailLabel}>{getOpponentName(reportScoreMatch)}</Text>
+                    <TextInput 
+                      style={styles.scoreInput}
+                      keyboardType="number-pad"
+                      value={String(set.score2)}
+                      onChangeText={(val) => {
+                        const newSets = [...reportSets];
+                        newSets[idx].score2 = parseInt(val) || 0;
+                        setReportSets(newSets);
+                      }}
+                    />
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            <TouchableOpacity style={styles.confirmBtn} onPress={submitScoreReport}>
+              <Text style={styles.confirmBtnText}>Finalize Match</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa' },
-  header: { padding: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee' },
-  title: { fontSize: 24, fontWeight: '900', color: designSystem.colors.primary, marginBottom: 15 },
+  container: { flex: 1, backgroundColor: colors.navy[50] },
+  header: { padding: 20, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: colors.navy[100] },
+  title: { fontSize: 22, fontWeight: '900', color: '#0F172A', textTransform: 'uppercase', letterSpacing: -0.5, marginBottom: 15 },
   tabs: { flexDirection: 'row', backgroundColor: '#f0f0f0', borderRadius: 10, padding: 4 },
   tab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
   activeTab: { backgroundColor: '#fff', elevation: 2 },
   tabText: { fontSize: 12, fontWeight: '600', color: '#666' },
-  activeTabText: { color: designSystem.colors.primary },
+  activeTabText: { color: colors.primary.base },
   detailsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 15, marginTop: 20 },
   detailItem: { width: '45%', flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, backgroundColor: '#F8FAFC', borderRadius: 12 },
   detailLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase' },
@@ -1751,27 +1858,45 @@ const styles = StyleSheet.create({
     marginHorizontal: 15,
     marginVertical: 10,
     paddingHorizontal: 15,
-    borderRadius: 12,
+    borderRadius: borderRadius.md,
     height: 50,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    ...shadows.sm,
   },
   searchIcon: { marginRight: 10 },
-  searchInput: { flex: 1, fontSize: 14, color: '#1E293B', fontWeight: '500' },
+  searchInput: { flex: 1, fontSize: 14, color: colors.navy[900], fontWeight: '500' },
+  scoreInput: {
+    backgroundColor: '#F1F5F9',
+    width: 60,
+    height: 50,
+    borderRadius: 12,
+    textAlign: 'center',
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 8
+  },
+  scoreInput: {
+    backgroundColor: '#F1F5F9',
+    width: 60,
+    height: 50,
+    borderRadius: 12,
+    textAlign: 'center',
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 8
+  },
   list: { padding: 15 },
   card: { 
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', 
-    padding: 15, borderRadius: 12, marginBottom: 12, elevation: 2 
+    padding: 15, borderRadius: borderRadius.lg, marginBottom: 12, ...shadows.sm 
   },
   avatar: { width: 50, height: 50, borderRadius: 25, marginRight: 15 },
   info: { flex: 1 },
   name: { fontSize: 16, fontWeight: '700', color: '#333' },
   details: { fontSize: 12, color: '#666', marginTop: 2 },
-  dist: { fontSize: 11, color: designSystem.colors.primary, marginTop: 4, fontWeight: '600' },
-  btn: { backgroundColor: designSystem.colors.primary, paddingVertical: 8, paddingHorizontal: 15, borderRadius: 8 },
+  dist: { fontSize: 11, color: colors.primary, marginTop: 4, fontWeight: '600' },
+  btn: { backgroundColor: colors.primary, paddingVertical: 8, paddingHorizontal: 15, borderRadius: 8 },
   btnSent: { backgroundColor: '#ccc' },
   btnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   tabContent: { flex: 1, padding: 15 },
@@ -1781,7 +1906,7 @@ const styles = StyleSheet.create({
   responseTag: { backgroundColor: '#F0F9FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#BAE6FD' },
   responseTagText: { fontSize: 9, fontWeight: '900', color: '#0369A1' },
   sectionTitle: { fontSize: 18, fontWeight: '800', color: '#1a1a1a' },
-  requestCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 15, borderRadius: 12, marginBottom: 10, borderLeftWidth: 4, borderLeftColor: designSystem.colors.primary },
+  requestCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 15, borderRadius: 12, marginBottom: 10, borderLeftWidth: 4, borderLeftColor: colors.primary },
   actionRow: { flexDirection: 'row', gap: 10 },
   smallBtn: { backgroundColor: '#f0f0f0', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 },
   smallBtnText: { fontSize: 12, fontWeight: '700', color: '#333' },
@@ -1789,7 +1914,7 @@ const styles = StyleSheet.create({
   subTab: { flex: 1, paddingVertical: 6, alignItems: 'center', borderRadius: 6 },
   activeSubTab: { backgroundColor: '#fff', elevation: 1 },
   subTabText: { fontSize: 11, fontWeight: '700', color: '#64748B' },
-  activeSubTabText: { color: designSystem.colors.primary },
+  activeSubTabText: { color: colors.primary },
   acceptedCard: { backgroundColor: '#fff', padding: 15, borderRadius: 12, marginBottom: 12, elevation: 3 },
   acceptedHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   acceptedTime: { fontSize: 12, color: '#666', fontWeight: '600' },
@@ -1809,10 +1934,10 @@ const styles = StyleSheet.create({
   input: { backgroundColor: '#f5f5f5', borderRadius: 10, padding: 12, fontSize: 15 },
   sportGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   sportTag: { paddingVertical: 8, paddingHorizontal: 15, borderRadius: 20, backgroundColor: '#f0f0f0' },
-  sportTagActive: { backgroundColor: designSystem.colors.primary },
+  sportTagActive: { backgroundColor: colors.primary },
   sportTagText: { fontSize: 13, fontWeight: '600', color: '#666' },
   sportTagTextActive: { color: '#fff' },
-  confirmBtn: { backgroundColor: designSystem.colors.primary, padding: 15, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', marginTop: 30 },
+  confirmBtn: { backgroundColor: colors.primary, padding: 15, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', marginTop: 30 },
   confirmBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
   modalLabel: { fontSize: 10, fontWeight: '900', color: '#6366F1', letterSpacing: 2, marginBottom: 4 },
   modalClose: { padding: 4 },
@@ -1978,7 +2103,7 @@ const styles = StyleSheet.create({
   venueDistance: {
     fontSize: 11,
     fontWeight: '700',
-    color: designSystem.colors.primary,
+    color: colors.primary,
   },
   venueContactText: {
     fontSize: 10,

@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 const OfflineScreen = ({ onRetry }) => {
   return (
-    <View style={styles.container}>
+    <View testID="app.offline.screen" style={styles.container}>
       <View style={styles.iconContainer}>
         {/* We use a combination of icons to build the visual since the custom racket asset is unavailable */}
         <Ionicons name="wifi" size={100} color="#EF4444" style={styles.mainIcon} />

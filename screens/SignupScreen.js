@@ -6,10 +6,25 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import logger from '../utils/logger';
+import { useAuth } from '../context/AuthContext';
+import { usePlayers } from '../context/PlayerContext';
+import { useSync } from '../context/SyncContext';
+import { Sport } from '../types';
 
 const { width, height } = Dimensions.get('window');
 
-const SignupScreen = ({ onSignupSuccess, onBack, players, setPlayers, Sport, isUsingCloud, onToggleCloud }) => {
+const SignupScreen = ({ navigation }) => {
+  const { onLogin: onSignupSuccess, setViewingLanding, onRegisterUser } = useAuth();
+  const { players, setPlayers } = usePlayers();
+  const { isUsingCloud, onToggleCloud } = useSync();
+
+  const onBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      setViewingLanding(true);
+    }
+  };
   
   React.useEffect(() => {
     // DIAGNOSTIC LOGGING
@@ -327,8 +342,16 @@ const SignupScreen = ({ onSignupSuccess, onBack, players, setPlayers, Sport, isU
     }
 
     setIsRegistering(true);
-    setNewlyCreatedUser(newPlayer);
-    setShowSuccessModal(true);
+    
+    // 🛡️ PERSISTENCE GUARD (v2.6.117): Ensure user is actually saved to cloud/local
+    const success = onRegisterUser(newPlayer, players);
+    
+    if (success) {
+      setNewlyCreatedUser(newPlayer);
+      setShowSuccessModal(true);
+    } else {
+      setError('Failed to record account locally. Please try again.');
+    }
     setIsRegistering(false);
   };
 

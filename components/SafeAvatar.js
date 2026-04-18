@@ -1,5 +1,6 @@
 import React, { memo, useState, useEffect } from 'react';
 import { View, Text, Image, StyleSheet } from 'react-native';
+import config from '../config';
 
 /**
  * Extracts up to 2 initials from a name string.
@@ -24,7 +25,7 @@ export const getInitials = (name) => {
  * 3. Fallback to local initials if Image fails to load
  * 4. Deterministic background colors based on name length
  */
-const SafeAvatar = memo(({ uri, name, size = 44, borderRadius = 14, style, textStyle }) => {
+const SafeAvatar = memo(({ uri, name, role, size = 44, borderRadius = 14, style, textStyle }) => {
   const [hasError, setHasError] = useState(false);
 
   // Reset error state if the URI changes
@@ -34,6 +35,9 @@ const SafeAvatar = memo(({ uri, name, size = 44, borderRadius = 14, style, textS
 
   const initials = getInitials(name);
   
+  // 🛡️ ADMIN BRANDING GUARD (v2.6.2): Use brand logo for system admin by default
+  const isAdmin = role === 'admin' || role === 'system_admin' || String(name).toLowerCase().includes('system admin');
+
   // Vibrant, accessible background colors
   const colors = [
     '#6366F1', // Indigo
@@ -48,14 +52,16 @@ const SafeAvatar = memo(({ uri, name, size = 44, borderRadius = 14, style, textS
   ];
   
   const colorIndex = (name || '').length % colors.length;
-  const backgroundColor = colors[colorIndex];
+  const backgroundColor = isAdmin ? '#0F172A' : colors[colorIndex];
 
   const isRemoteImage = uri && 
     typeof uri === 'string' && 
     uri.trim() !== '' && 
-    uri !== 'null' && 
-    uri !== 'undefined';
+    !uri.includes('null') && 
+    !uri.includes('undefined');
 
+  // 🛡️ [REPLICATION] High-precision URL preparation matching mobile-app 4
+  const stripped = config.stripBuster(uri);
   if (isRemoteImage && !hasError) {
     return (
       <Image
@@ -68,6 +74,22 @@ const SafeAvatar = memo(({ uri, name, size = 44, borderRadius = 14, style, textS
           setHasError(true);
         }}
       />
+    );
+  }
+
+  // Fallback case: Admin gets brand logo, others get initials
+  if (isAdmin && (!isRemoteImage || hasError)) {
+    return (
+      <View style={[
+        styles.placeholder,
+        { width: size, height: size, borderRadius, backgroundColor, borderWidth: 1, borderColor: '#3B82F6' },
+        style
+      ]}>
+        <Image 
+          source={require('../assets/icon.png')} 
+          style={{ width: size * 0.6, height: size * 0.6, resizeMode: 'contain' }} 
+        />
+      </View>
     );
   }
 

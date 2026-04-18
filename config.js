@@ -35,17 +35,55 @@ export default {
   ACE_API_KEY: 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=',
   IS_ANDROID: Platform.OS === 'android',
   IS_IOS: Platform.OS === 'ios',
+  stripBuster: (url) => {
+    if (!url) return url;
+    const str = String(url);
+    const idx = str.indexOf('?v=');
+    if (idx !== -1) return str.substring(0, idx);
+    const idx2 = str.indexOf('&v=');
+    return idx2 !== -1 ? str.substring(0, idx2) : str;
+  },
   sanitizeUrl: (url) => {
     if (!url) return url;
     if (typeof url !== 'string') return url;
     
+    // 🛡️ [REPLICATION] Strip existing busters before re-evaluating
     let sanitized = url;
-    // 1. Force HTTPS for AceTrack API URLs
+    const vIdx = sanitized.indexOf('v=');
+    if (vIdx !== -1) {
+       // Only strip if it's the standard buster pattern
+       const base = sanitized.substring(0, vIdx - 1);
+       if (sanitized[vIdx-1] === '?' || sanitized[vIdx-1] === '&') {
+         sanitized = base;
+       }
+    }
+    
+    // 1. Map legacy domains to current active domain
+    const legacyDomains = [
+      'acetrack-api-q39m.onrender.com',
+      'acetrack-backend-26.onrender.com'
+    ];
+    legacyDomains.forEach(domain => {
+      if (sanitized.includes(domain)) {
+        sanitized = sanitized.replace(domain, 'acetrack-suggested.onrender.com');
+      }
+    });
+
+    // 2. Force HTTPS for AceTrack API URLs
     if (sanitized.includes('acetrack-suggested.onrender.com') && sanitized.startsWith('http:')) {
       sanitized = sanitized.replace('http:', 'https:');
     }
     
-    // 2. Handle local IP addresses (emergency fallback to cloud URL if domain is missing)
+    // 3. Handle DiceBear SVG (not supported by RN Image) -> Switch to PNG
+    if (sanitized.includes('dicebear.com')) {
+      if (sanitized.includes('/svg')) {
+        sanitized = sanitized.replace('/svg', '/png');
+      } else if (sanitized.endsWith('.svg')) {
+        sanitized = sanitized.replace('.svg', '.png');
+      }
+    }
+
+    // 4. Handle local IP addresses (emergency fallback to cloud URL if domain is missing)
     const localIpRegex = /http:\/\/192\.168\.\d{1,3}\.\d{1,3}:3005/;
     if (localIpRegex.test(sanitized)) {
       sanitized = sanitized.replace(localIpRegex, 'https://acetrack-suggested.onrender.com');

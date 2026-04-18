@@ -5,9 +5,15 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getSafeAvatar } from '../utils/imageUtils';
+import SafeAvatar from '../components/SafeAvatar';
+import { useAuth } from '../context/AuthContext';
+import { usePlayers } from '../context/PlayerContext';
+import { useTournaments } from '../context/TournamentContext';
 
-const RankingScreen = ({ user, role, players, tournaments }) => {
+const RankingScreen = () => {
+  const { currentUser: user, userRole: role } = useAuth();
+  const { players } = usePlayers();
+  const { tournaments } = useTournaments();
   const insets = useSafeAreaInsets();
   const rankingPlayers = useMemo(() => {
     let list = [...(players || [])].filter(p => p && p.id !== 'admin_sys' && p.role !== 'academy' && p.role !== 'coach');
@@ -40,9 +46,12 @@ const RankingScreen = ({ user, role, players, tournaments }) => {
       >
         <Text style={styles.rankNumber}>{index + 1}</Text>
         
-        <Image 
-          source={getSafeAvatar(item.avatar, item.name)}
-          style={styles.avatar} 
+        <SafeAvatar 
+          uri={item.avatar} 
+          name={item.name} 
+          role={item.role} 
+          size={48} 
+          style={styles.avatar}
         />
         
         <View style={styles.infoCol}>

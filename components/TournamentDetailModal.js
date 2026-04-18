@@ -4,8 +4,10 @@ import {
   StyleSheet, Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppData } from '../navigation/AppNavigator';
+import { useSync } from '../context/SyncContext';
 import { formatDateIST } from '../utils/tournamentUtils';
+import TournamentService from '../services/TournamentService';
+import notify from '../utils/notify';
 
 const TournamentDetailModal = ({
   tournament,
@@ -19,7 +21,7 @@ const TournamentDetailModal = ({
   onCoachOptIn,
   onUpdateTournament,
 }) => {
-  const { serverClockOffset } = useAppData();
+  const { serverClockOffset } = useSync();
   const [showAcademyDetails, setShowAcademyDetails] = useState(false);
   const [timeLeft, setTimeLeft] = useState('');
 
@@ -72,7 +74,7 @@ const TournamentDetailModal = ({
   const isInterested = user && (tournament.interestedPlayerIds || []).includes(user.id);
   const isRejected = user && (tournament.rejectedPlayerIds || []).includes(user.id);
 
-  const handleInterestPress = () => {
+  const handleInterestPress = async () => {
     if (!user || user.role !== 'user') return;
 
     if (isInterested) {
@@ -83,26 +85,16 @@ const TournamentDetailModal = ({
           { text: "No", style: "cancel" },
           { 
             text: "Yes, Remove", 
-            onPress: () => {
-              const updated = {
-                ...tournament,
-                interestedPlayerIds: (tournament.interestedPlayerIds || []).filter(id => id !== user.id)
-              };
-              onUpdateTournament(updated);
+            onPress: async () => {
+              const res = await TournamentService.toggleInterest(tournament, user);
+              notify(res);
             }
           }
         ]
       );
     } else {
-      const updated = {
-        ...tournament,
-        interestedPlayerIds: [...(tournament.interestedPlayerIds || []), user.id]
-      };
-      onUpdateTournament(updated);
-      Alert.alert(
-        "Interest Submitted",
-        "Thank you for showing your interest, your details has been sent to the academy for confirmation."
-      );
+      const res = await TournamentService.toggleInterest(tournament, user);
+      notify(res);
     }
   };
 
@@ -149,43 +141,47 @@ const TournamentDetailModal = ({
 
   const creator = (players || []).find(p => p.id === tournament.creatorId);
 
-  const handleRegister = () => {
-    // LOCK: Prevent registration if not verified
-    if (user && (!user.isEmailVerified || !user.isPhoneVerified)) {
-      Alert.alert(
-        "Verification Required",
-        "Please complete your email and phone verification in the Profile section before registering for tournaments.",
-        [{ text: "OK" }]
-      );
-      return;
-    }
-
+  const handleRegister = async () => {
     if (isFull && !isAlreadyRegistered && !isPendingPayment) {
       if (onJoinWaitlist) {
-        onJoinWaitlist(tournament);
-        onClose();
+        const res = await onJoinWaitlist(tournament);
+        if (res && res.success) {
+          onClose();
+          Alert.alert('Success', 'You have been added to the waitlist.');
+        }
         return;
       }
-    }
-
-    if (!onRegister) {
-      Alert.alert('Register', `Register for ${tournament.title} for ₹${tournament.entryFee}?`, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Confirm', onPress: () => Alert.alert('Success', 'Registration request submitted!') },
-      ]);
+      // Fallback if prop missing
+      const res = await TournamentService.joinWaitlist(tournament.id, user.id, [tournament]);
+      if (res && res.success) {
+        onClose();
+        Alert.alert('Success', 'You have been added to the waitlist.');
+      }
       return;
     }
-    onRegister(tournament);
-    onClose();
+
+    if (onRegister) {
+      const res = await onRegister(tournament);
+      if (res && res.success) {
+        onClose();
+        Alert.alert('Success', 'You have been registered for this tournament.');
+      }
+    } else {
+      // Fallback service call - ensuring correct arguments
+      const res = await TournamentService.register(tournament.id, user.id, [tournament], players, user);
+      if (res && res.success) {
+        onClose();
+        Alert.alert('Success', 'You have been registered for this tournament.');
+      } else {
+        Alert.alert('Error', res.message || 'Registration failed');
+      }
+    }
   };
 
-  const handleOptIn = () => {
-    if (!onCoachOptIn) {
-      Alert.alert('Opt-In', 'Submitted coaching opt-in!');
-      return;
-    }
-    onCoachOptIn(tournament);
-    onClose();
+  const handleOptIn = async () => {
+    const res = await TournamentService.optInCoach(tournament, user);
+    notify(res);
+    if (res.success) onClose();
   };
 
   const getRegisterBtnLabel = () => {
@@ -305,6 +301,7 @@ const TournamentDetailModal = ({
                     ) : (
                       <View style={styles.interestActions}>
                         <TouchableOpacity 
+                           testID="tournament.detail.interestedBtn"
                            style={[styles.interestBtn, isInterested && styles.interestedBtnActive]}
                            onPress={handleInterestPress}
                         >
@@ -341,7 +338,7 @@ const TournamentDetailModal = ({
                   </View>
                 )}
                 {isFull && !isAlreadyRegistered && !isPendingPayment && !isClosed && !isWaitlisted && (
-                  <Text style={styles.alreadyRegistered}>
+                  <Text testID="tournament.detail.waitlistMsg" style={styles.alreadyRegistered}>
                     Slots Full - {(tournament.waitlistedPlayerIds || []).length} people on Waitlist
                   </Text>
                 )}
@@ -352,6 +349,7 @@ const TournamentDetailModal = ({
                   </View>
                 )}
                 <TouchableOpacity
+                  testID="tournament.detail.actionBtn"
                   onPress={handleRegister}
                   disabled={isRegisterDisabled}
                   style={[

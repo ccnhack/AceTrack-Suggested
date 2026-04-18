@@ -70,7 +70,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.101)
-const APP_VERSION = "2.6.116"; 
+const APP_VERSION = "2.6.117"; 
 
 // 🕓 Utility: Get current IST timestamp (v2.6.89)
 const getISTDate = () => {
@@ -635,9 +635,22 @@ router.get('/diagnostics', apiKeyGuard, async (req, res) => {
       }
     });
 
+    const userId = req.query.userId;
+    if (userId) console.log(`🔍 [AdminFetch] Filtering logs for: ${userId}`);
+    
     const sortedFiles = Array.from(uniqueFilesMap.entries())
       .sort((a, b) => b[1] - a[1]) // Descending
-      .map(entry => entry[0]);
+      .map(entry => entry[0])
+      .filter(f => {
+        if (!userId) return true;
+        const safeId = String(userId).toLowerCase();
+        const fName = String(f).toLowerCase();
+        console.log(`🔍 [AdminFetch] Checking file ${fName} against ID ${safeId}`);
+        // Strict match: starts with user_ OR contains admin_requested_user_ OR starts with user-
+        return fName.startsWith(safeId + '_') || 
+               fName.includes('_requested_' + safeId + '_') ||
+               fName.startsWith(safeId + '-');
+      });
 
     res.json({ success: true, files: sortedFiles });
   } catch (error) {
@@ -655,8 +668,14 @@ router.get('/diagnostics/:filename', apiKeyGuard, asyncHandler(async (req, res) 
     const fileUrl = cloudinary.url(publicId, { resource_type: 'raw', secure: true });
     const cloudRes = await fetch(fileUrl);
     if (cloudRes.ok) {
-      const data = await cloudRes.json();
-      return res.json(data);
+      const contentType = cloudRes.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await cloudRes.json();
+        return res.json(data);
+      } else {
+        const text = await cloudRes.text();
+        return res.send(text);
+      }
     }
   } catch (cloudErr) {
     console.log(`Cloudinary fetch failed for ${filename}, trying local fallback.`);

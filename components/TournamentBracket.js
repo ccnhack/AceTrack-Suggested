@@ -1,8 +1,16 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 
 const TournamentBracket = ({ tournament, players, onTeamClick }) => {
+  if (!tournament || !tournament.format) {
+    return (
+        <View style={styles.empty}>
+            <Text style={styles.emptyText}>Tournament data not available</Text>
+        </View>
+    );
+  }
+
   const isDoubles = tournament.format.includes('Doubles');
-  const activePlayerIds = tournament.registeredPlayerIds;
+  const activePlayerIds = tournament.registeredPlayerIds || [];
   
   if (activePlayerIds.length === 0) {
     return (

@@ -4,9 +4,10 @@ import {
   StyleSheet, Modal, TextInput, SafeAreaView, Dimensions 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import SafeAvatar from './SafeAvatar';
 import TournamentBracket from './TournamentBracket';
 import { formatDateIST } from '../utils/tournamentUtils';
-import { useAppData } from '../navigation/AppNavigator';
+import { useSync } from '../context/SyncContext';
 import { getReliabilityVerdict } from '../utils/verdict';
 
 const { width } = Dimensions.get('window');
@@ -14,7 +15,7 @@ const { width } = Dimensions.get('window');
 const ParticipantsModal = ({ 
   tournament, players, evaluations = [], onClose, onAddPlayer, onRemovePendingPlayer, user, onRequireVerification, onManageInterested
 }) => {
-  const { serverClockOffset } = useAppData();
+  const { serverClockOffset } = useSync();
   const [tab, setTab] = useState('roster');
   const [isAddingPlayer, setIsAddingPlayer] = useState(false);
   const [newPlayerName, setNewPlayerName] = useState('');
@@ -53,7 +54,7 @@ const ParticipantsModal = ({
     return (
       <View style={styles.rosterTimer}>
         <Ionicons name="time-outline" size={10} color="#EA580C" />
-        <Text style={styles.rosterTimerText}>{display}</Text>
+        <Text testID={`participants.player.timer.${playerId}`} style={styles.rosterTimerText}>{display}</Text>
       </View>
     );
   };
@@ -83,7 +84,11 @@ const ParticipantsModal = ({
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Participants</Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+          <TouchableOpacity 
+            testID="participants.modal.close"
+            onPress={onClose} 
+            style={styles.closeBtn}
+          >
             <Ionicons name="close" size={24} color="#0F172A" />
           </TouchableOpacity>
         </View>
@@ -139,8 +144,12 @@ const ParticipantsModal = ({
                     const c = (players || []).find(p => p.id === coachId);
                     return (
                       <>
-                        <Image 
-                          source={{ uri: (c?.avatar && c.avatar !== 'null') ? c.avatar : `https://ui-avatars.com/api/?name=${encodeURIComponent(c?.name || 'Coach')}&background=007AFF&color=fff` }} 
+                        <SafeAvatar 
+                          uri={c?.avatar} 
+                          name={c?.name || 'Coach'} 
+                          role={c?.role} 
+                          size={40} 
+                          borderRadius={20} 
                           style={styles.avatar} 
                         />
                         <View style={styles.flex}>
@@ -196,7 +205,11 @@ const ParticipantsModal = ({
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Players</Text>
                 {onAddPlayer && !isCompleted && (
-                  <TouchableOpacity onPress={() => setIsAddingPlayer(!isAddingPlayer)} style={styles.addPlayerBtn}>
+                  <TouchableOpacity 
+                    testID="participants.addPlayer.toggle"
+                    onPress={() => setIsAddingPlayer(!isAddingPlayer)} 
+                    style={styles.addPlayerBtn}
+                  >
                     <Text style={styles.addPlayerBtnText}>{isAddingPlayer ? 'Cancel' : '+ Add Player'}</Text>
                   </TouchableOpacity>
                 )}
@@ -205,6 +218,7 @@ const ParticipantsModal = ({
               {isAddingPlayer && (
                 <View style={styles.addingForm}>
                   <TextInput
+                    testID="participants.addPlayer.phoneInput"
                     placeholder="Enter Registered Phone Number"
                     value={newPlayerPhone}
                     onChangeText={text => {
@@ -217,15 +231,16 @@ const ParticipantsModal = ({
                   {newPlayerName ? (
                     <View style={styles.foundTag}>
                         <Ionicons name="checkmark-circle" size={16} color="#16A34A" />
-                        <Text style={styles.foundText}>Player Found: <Text style={styles.bold}>{newPlayerName}</Text></Text>
+                        <Text testID="participants.addPlayer.foundText" style={styles.foundText}>Player Found: <Text style={styles.bold}>{newPlayerName}</Text></Text>
                     </View>
                   ) : newPlayerPhone.length >= 10 && (
                     <View style={styles.errorTag}>
                         <Ionicons name="alert-circle" size={16} color="#DC2626" />
-                        <Text style={styles.errorText}>No registered player found</Text>
+                        <Text testID="participants.addPlayer.errorText" style={styles.errorText}>No registered user found with this number.</Text>
                     </View>
                   )}
                    <TouchableOpacity 
+                    testID="participants.addPlayer.submitBtn"
                     onPress={() => {
                       if (newPlayerName && newPlayerPhone) {
                         onAddPlayer(newPlayerName, newPlayerPhone);
@@ -287,18 +302,26 @@ const ParticipantsModal = ({
                   const verdict = getReliabilityVerdict(p);
                   return (
                     <TouchableOpacity 
+                      testID={`participants.player.card.${pid}`}
                       key={pid} 
                       onPress={() => setExpandedPlayerId(expandedPlayerId === pid ? null : pid)}
                       style={styles.playerCard}
                     >
                       <View style={styles.playerRow}>
-                          <Image 
-                            key={`${pid}-${p.avatar}`}
-                            source={{ uri: (p.avatar && p.avatar !== 'null') ? p.avatar : `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random` }} 
+                          <SafeAvatar 
+                            uri={p.avatar} 
+                            name={p.name} 
+                            role={p.role} 
+                            size={40} 
+                            borderRadius={20} 
                             style={styles.avatar} 
                           />
                           <View style={styles.flex}>
-                              <Text style={[
+                              <Text 
+                                testID={((status === 'Denied' || status === 'Opted-Out')) 
+                                  ? `participants.player.name.strike.${pid}` 
+                                  : `participants.player.name.${pid}`}
+                                style={[
                                 styles.playerName,
                                 (status === 'Denied' || status === 'Opted-Out') && styles.strikeText
                               ]}>{p.name}</Text>

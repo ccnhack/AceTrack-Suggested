@@ -6,29 +6,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { Sport, SkillLevel, TournamentStructure, TournamentFormat } from '../types';
 import logger from '../utils/logger';
 
-// Performance Optimization: Specialized Contexts
-const AuthContext = React.createContext(null);
-const DataContext = React.createContext(null);
-const ActionContext = React.createContext(null);
-const NavigationContext = React.createContext(null); // Legacy support
+import { useApp } from '../context/AppContext';
+import { useSync } from '../context/SyncContext';
+import { useAuth } from '../context/AuthContext';
+import { usePlayers } from '../context/PlayerContext';
+import { useTournaments } from '../context/TournamentContext';
+import { useVideos } from '../context/VideoContext';
+import { useSupport } from '../context/SupportContext';
 
-export const useAuth = () => React.useContext(AuthContext);
-export const useAppData = () => React.useContext(DataContext);
-export const useAppActions = () => React.useContext(ActionContext);
-
-export const useNavigationParams = () => {
-  const auth = React.useContext(AuthContext);
-  const data = React.useContext(DataContext);
-  const actions = React.useContext(ActionContext);
-  const legacy = React.useContext(NavigationContext);
-  
-  return useMemo(() => ({
-    ...auth,
-    ...data,
-    ...actions,
-    ...legacy
-  }), [auth, data, actions, legacy]);
-};
+export { useAuth };
+import { useAdmin } from '../context/AdminContext';
+import { useMatchmaking } from '../context/MatchmakingContext';
 
 // Screens
 import LandingScreen from '../screens/LandingScreen';
@@ -47,145 +35,32 @@ import CoachDirectoryScreen from '../screens/CoachDirectoryScreen';
 import SubscriptionScreen from '../screens/SubscriptionScreen';
 import LiveScoringScreen from '../screens/LiveScoringScreen';
 import TournamentCalendarScreen from '../screens/TournamentCalendarScreen';
+import OnboardingScreen from '../screens/OnboardingScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
-// Stable Screen Wrappers to prevent unmounting
-const ExploreWrapper = memo((props) => {
-  const { user, role } = useAuth();
-  const data = useAppData();
-  const actions = useAppActions();
-  return (
-    <ExploreScreen 
-      {...props} 
-      {...data}
-      {...actions} 
-      userId={user?.id}
-      userRole={role}
-      user={user}
-      userSports={user?.certifiedSports}
-      onSelect={(t) => {}} 
-      Sport={Sport} SkillLevel={SkillLevel} TournamentStructure={TournamentStructure} TournamentFormat={TournamentFormat}
-    />
-  );
-});
 
-const MatchesWrapper = memo((props) => {
-  const { user } = useAuth();
-  const data = useAppData();
-  const actions = useAppActions();
-  return <MatchesScreen {...props} {...data} {...actions} user={user} Sport={Sport} SkillLevel={SkillLevel} TournamentStructure={TournamentStructure} TournamentFormat={TournamentFormat} />;
-});
-
-const RecordingsWrapper = memo((props) => {
-  const { user, role } = useAuth();
-  const data = useAppData();
-  const actions = useAppActions();
-  return <RecordingsScreen {...props} {...data} {...actions} user={user} role={role} Sport={Sport} SkillLevel={SkillLevel} TournamentStructure={TournamentStructure} TournamentFormat={TournamentFormat} />;
-});
-
-const RankingWrapper = memo((props) => {
-  const { user, role } = useAuth();
-  const data = useAppData();
-  const actions = useAppActions();
-  return <RankingScreen {...props} {...data} {...actions} user={user} role={role} Sport={Sport} SkillLevel={SkillLevel} TournamentStructure={TournamentStructure} TournamentFormat={TournamentFormat} />;
-});
-
-const AcademyWrapper = memo((props) => {
-  const { user } = useAuth();
-  const data = useAppData();
-  const actions = useAppActions();
-  return <AcademyScreen {...props} {...data} {...actions} academyId={user?.id} Sport={Sport} SkillLevel={SkillLevel} TournamentStructure={TournamentStructure} TournamentFormat={TournamentFormat} />;
-});
-
-const AdminHubWrapper = memo((props) => {
-  const { user, onLogout } = useAuth();
-  const { isCloudOnline, ...data } = useAppData();
-  const actions = useAppActions();
-  return <AdminHubScreen {...props} {...data} tickets={data.supportTickets} user={user} onLogout={onLogout} isCloudOnline={isCloudOnline} {...actions} Sport={Sport} SkillLevel={SkillLevel} TournamentStructure={TournamentStructure} TournamentFormat={TournamentFormat} />;
-});
-
-const InsightsWrapper = memo((props) => {
-  const { user, role } = useAuth();
-  const data = useAppData();
-  return (
-    <InsightsScreen 
-      {...props} 
-      {...data}
-      role={role} 
-      user={user} 
-      academyId={user?.id}
-    />
-  );
-});
-
-const MatchmakingWrapper = memo((props) => {
-  const { user } = useAuth();
-  const data = useAppData();
-  const actions = useAppActions();
-  return <MatchmakingScreen {...props} {...data} {...actions} user={user} />;
-});
-
-const ProfileWrapper = memo((props) => {
-  const { user, onLogout } = useAuth();
-  const { 
-    isCloudOnline, isUsingCloud, lastSyncTime, appVersion, 
-    supportTickets, players, tournaments, pushStatus 
-  } = useAppData();
-  const { 
-    onManualSync, onUploadLogs, isUploadingLogs, onSaveTicket, 
-    onReplyTicket, onUpdateUser, onTopUp, setIsProfileEditActive, 
-    onToggleCloud, onVerifyAccount, onUpdateTicketStatus,
-    onRetryMessage, onMarkSeen, onToggleNotifications
-  } = useAppActions();
-
-  return (
-    <ProfileScreen 
-      {...props} 
-      user={user} 
-      onLogout={onLogout}
-      isCloudOnline={isCloudOnline}
-      isUsingCloud={isUsingCloud}
-      lastSyncTime={lastSyncTime}
-      appVersion={appVersion}
-      supportTickets={supportTickets}
-      players={players}
-      tournaments={tournaments}
-      pushStatus={pushStatus}
-      onManualSync={onManualSync}
-      onUploadLogs={onUploadLogs}
-      isUploadingLogs={isUploadingLogs}
-      onSaveTicket={onSaveTicket}
-      onReplyTicket={onReplyTicket}
-      onUpdateUser={onUpdateUser}
-      onTopUp={onTopUp}
-      setIsProfileEditActive={setIsProfileEditActive}
-      onToggleCloud={onToggleCloud}
-      onVerifyAccount={onVerifyAccount}
-      onUpdateTicketStatus={onUpdateTicketStatus}
-      onToggleNotifications={onToggleNotifications}
-      Sport={Sport} 
-      SkillLevel={SkillLevel} 
-      TournamentStructure={TournamentStructure} 
-      TournamentFormat={TournamentFormat} 
-    />
-  );
-});
+// Memoized Screen Wrappers are no longer needed for prop-passing, 
+// but we'll keep them if we want to ensure stable components for React Navigation
+// Actually, it's better to just use them directly if they are already memoized internally.
 
 const MainTabs = memo(() => {
-  const { user, role } = useAuth();
-  const { 
-    players, tournaments, matchVideos, supportTickets, seenAdminActionIds, 
-    visitedAdminSubTabs, reschedulingFrom 
-  } = useAppData();
-  const { setVisitedAdminSubTabs } = useAppActions();
+  const { currentUser: user, userRole } = useAuth();
+  const role = user?.role || userRole;
   
-  const typeProps = useMemo(() => ({ Sport, SkillLevel, TournamentStructure, TournamentFormat }), []);
-
+  if (!role) {
+    return null; // Prevent flash of wrong tabs during hydration
+  }
+  const { players } = usePlayers();
+  const { tournaments } = useTournaments();
+  const { matchVideos } = useVideos();
+  const { supportTickets } = useSupport();
+  const { matchmaking } = useMatchmaking();
+  const { seenAdminActionIds, visitedAdminSubTabs } = useAdmin();
+  
   const adminBadgeCount = useMemo(() => {
     if (role !== 'admin') return 0;
     
-    // Safety check for Set methods
     const hasVisited = (tab) => visitedAdminSubTabs?.has && typeof visitedAdminSubTabs.has === 'function' && visitedAdminSubTabs.has(tab);
     const hasSeen = (id) => seenAdminActionIds?.has && typeof seenAdminActionIds.has === 'function' && seenAdminActionIds.has(String(id));
 
@@ -194,19 +69,11 @@ const MainTabs = memo(() => {
     const pendingRecordings = hasVisited('recordings') ? [] : (matchVideos || []).filter(v => v.adminStatus === 'Deletion Requested' && !hasSeen(v.id));
     const pendingTickets = (supportTickets || []).filter(t => (t.status === 'Open' || t.status === 'Awaiting Response') && !hasSeen(t.id));
     const pendingAssignments = hasVisited('coach_assignments') ? [] : (tournaments || []).filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration' || t.coachStatus === 'Awaiting Assignment') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today) && !hasSeen(t.id));
-    
-    const total = (pendingCoaches?.length || 0) + (pendingRecordings?.length || 0) + (pendingTickets?.length || 0) + (pendingAssignments?.length || 0);
-    if (total > 0) {
-      logger.logAction('BADGE_COUNT_UPDATED', { 
-          total, 
-          coaches: pendingCoaches.length, 
-          recordings: pendingRecordings.length, 
-          tickets: pendingTickets.length, 
-          assignments: pendingAssignments.length
-      });
-    }
-    return total;
-  }, [role, visitedAdminSubTabs, players, seenAdminActionIds, matchVideos, supportTickets, tournaments]);
+    const pendingMatches = hasVisited('matches') ? [] : (matchmaking || []).filter(m => m.status === 'pending' && !hasSeen(m.id));
+    const pendingPayments = hasVisited('payments') ? [] : (tournaments || []).reduce((acc, t) => acc + (t.pendingPaymentPlayerIds || []).filter(pid => !hasSeen(`${t.id}-${pid}`)).length, 0);
+
+    return (pendingCoaches?.length || 0) + (pendingRecordings?.length || 0) + (pendingTickets?.length || 0) + (pendingAssignments?.length || 0) + (pendingMatches?.length || 0) + (typeof pendingPayments === 'number' ? pendingPayments : 0);
+  }, [role, visitedAdminSubTabs, players, seenAdminActionIds, matchVideos, supportTickets, tournaments, matchmaking]);
 
   const screenOptions = useCallback(({ route }) => ({
     tabBarBadge: route.name === 'Admin' && adminBadgeCount > 0 ? adminBadgeCount : 
@@ -229,7 +96,7 @@ const MainTabs = memo(() => {
     tabBarActiveTintColor: '#EF4444',
     tabBarInactiveTintColor: '#CBD5E1',
     headerShown: false,
-    tabBarStyle: Platform.OS === 'web' ? { display: 'none' } : {
+    tabBarStyle: {
       borderTopLeftRadius: 32,
       borderTopRightRadius: 32,
       height: 70,
@@ -239,156 +106,64 @@ const MainTabs = memo(() => {
 
   return (
     <Tab.Navigator screenOptions={screenOptions}>
-      {Platform.OS !== 'web' && (
-        <Tab.Screen name="Explore" component={ExploreWrapper} />
+      {Platform.OS !== 'web' && <Tab.Screen name="Explore" component={ExploreScreen} options={{ tabBarTestID: 'nav.tab.Explore' }} /> }
+      {Platform.OS !== 'web' && (role === 'user' || role === 'coach') && role !== 'academy' && (
+        <>
+          <Tab.Screen name="Matches" component={MatchesScreen} options={{ tabBarTestID: 'nav.tab.Matches' }} />
+          <Tab.Screen name="Recordings" component={RecordingsScreen} options={{ tabBarTestID: 'nav.tab.Recordings' }} />
+        </>
       )}
-      {Platform.OS !== 'web' && (role === 'user' || role === 'coach') && (
-        <Tab.Screen name="Matches" component={MatchesWrapper} />
-      )}
-      {Platform.OS !== 'web' && (role === 'user' || role === 'coach') && (
-        <Tab.Screen name="Recordings" component={RecordingsWrapper} />
-      )}
-      {Platform.OS !== 'web' && (
-        <Tab.Screen name="Ranking" component={RankingWrapper} />
-      )}
+      {Platform.OS !== 'web' && <Tab.Screen name="Ranking" component={RankingScreen} options={{ tabBarTestID: 'nav.tab.Ranking' }} /> }
       {Platform.OS !== 'web' && role === 'academy' && (
-        <Tab.Screen name="Academy" component={AcademyWrapper} />
+        <Tab.Screen name="Academy" component={AcademyScreen} options={{ tabBarTestID: 'nav.tab.Academy' }} />
       )}
       {role === 'admin' && (
-        <Tab.Screen name="Admin" component={AdminHubWrapper} />
+        <Tab.Screen name="Admin" component={AdminHubScreen} options={{ tabBarTestID: 'nav.tab.Admin' }} />
       )}
-      {Platform.OS !== 'web' && (role === 'user' || role === 'coach' || role === 'academy') && (
-        <Tab.Screen name="Matchmaking" component={MatchmakingWrapper} />
+      {Platform.OS !== 'web' && role !== 'admin' && (
+        <Tab.Screen name="Matchmaking" component={MatchmakingScreen} options={{ tabBarTestID: 'nav.tab.Matchmaking' }} />
       )}
       {(role === 'admin' || role === 'academy') && (
-        <Tab.Screen name="Insights" component={InsightsWrapper} />
+        <Tab.Screen name="Insights" component={InsightsScreen} options={{ tabBarTestID: 'nav.tab.Insights' }} />
       )}
-      <Tab.Screen name="Profile" component={ProfileWrapper} />
+      <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarTestID: 'nav.tab.Profile' }} />
     </Tab.Navigator>
   );
 });
 
-// Stable Stack Wrappers
-const LoginWrapper = memo((props) => {
-  const { onLogin, onResetPassword, loadData, onBack, onToggleCloud } = useAppActions();
-  const { players, isUsingCloud } = useAppData();
-  return (
-    <LoginScreen 
-      {...props} 
-      players={players} 
-      onLoginSuccess={onLogin} 
-      onSignup={() => props.navigation.navigate('Signup')}
-      onResetPassword={onResetPassword}
-      onRefreshData={async () => {
-        const cloudData = await loadData(true, true);
-        return cloudData || null;
-      }}
-      onBack={onBack} 
-      isUsingCloud={isUsingCloud}
-      onToggleCloud={onToggleCloud}
-    />
-  );
-});
-
-const SignupWrapper = memo((props) => {
-  const { onRegisterUser } = useAppActions();
-  const { players } = useAppData();
-  const { setPlayers } = useNavigationParams(); // fallback for setters if not in actions yet
-  return (
-    <SignupScreen 
-      {...props} 
-      players={players} 
-      setPlayers={setPlayers}
-      onSignupSuccess={(newUser) => {
-        onRegisterUser(newUser);
-        props.navigation.navigate('Login');
-      }}
-      onBack={() => props.navigation.goBack()}
-      Sport={Sport}
-    />
-  );
-});
-
-const CoachDirectoryWrapper = memo((props) => {
-  const auth = useAuth();
-  const data = useAppData();
-  const actions = useAppActions();
-  return <CoachDirectoryScreen {...props} user={auth.user} players={data.players} tournaments={data.tournaments} {...data} {...actions} />;
-});
-
-const SubscriptionWrapper = memo((props) => {
-  const { user } = useAuth();
-  return <SubscriptionScreen {...props} user={user} />;
-});
-
-const LiveScoringWrapper = memo((props) => {
-  const { user } = useAuth();
-  const data = useAppData();
-  const actions = useAppActions();
-  return <LiveScoringScreen {...props} user={user} players={data.players} evaluations={data.evaluations} {...data} {...actions} />;
-});
-
-export default function AppNavigator({ 
-  user, role, players, tournaments, matchVideos, matches, supportTickets, evaluations, 
-  seenAdminActionIds, setSeenAdminActionIds, visitedAdminSubTabs, setVisitedAdminSubTabs, 
-  reschedulingFrom, auditLogs, onLogout, handlers, appVersion, socketRef,
-  matchmaking, onUpdateMatchmaking, sendUserNotification, pushStatus,
-  isCloudOnline, isUsingCloud, lastSyncTime, serverClockOffset
-}) {
-  const authParams = useMemo(() => ({
-    user, role, onLogout
-  }), [user?.id, user?.avatar, user?.notifications, user?.isEmailVerified, user?.isPhoneVerified, role, onLogout]);
-
-  const dataParams = useMemo(() => ({
-    players, tournaments, matchVideos, matches, supportTickets, evaluations,
-    seenAdminActionIds, visitedAdminSubTabs, reschedulingFrom, auditLogs,
-    appVersion, matchmaking, isCloudOnline, isUsingCloud, lastSyncTime, pushStatus,
-    serverClockOffset
-  }), [
-    players, tournaments, matchVideos, matches, supportTickets, evaluations,
-    seenAdminActionIds, visitedAdminSubTabs, reschedulingFrom, auditLogs,
-    appVersion, matchmaking, isCloudOnline, isUsingCloud, lastSyncTime, pushStatus,
-    serverClockOffset
-  ]);
-
-
-  const actionParams = useMemo(() => ({
-    ...handlers, 
-    setSeenAdminActionIds,
-    setVisitedAdminSubTabs, 
-    socketRef, 
-    onUpdateMatchmaking, 
-    sendUserNotification
-  }), [handlers, setSeenAdminActionIds, setVisitedAdminSubTabs, socketRef, onUpdateMatchmaking, sendUserNotification]);
-
-  // Legacy support for any screen still using useNavigationParams
-  const legacyParams = useMemo(() => ({
-    ...authParams, ...dataParams, ...actionParams
-  }), [authParams, dataParams, actionParams]);
+export default function AppNavigator() {
+  const { currentUser, viewingLanding, setViewingLanding } = useAuth();
 
   return (
-    <AuthContext.Provider value={authParams}>
-      <DataContext.Provider value={dataParams}>
-        <ActionContext.Provider value={actionParams}>
-          <NavigationContext.Provider value={legacyParams}>
-            <Stack.Navigator screenOptions={{ headerShown: false }}>
-              {!user ? (
-                <>
-                  <Stack.Screen name="Login" component={LoginWrapper} />
-                  {Platform.OS !== 'web' && (
-                    <Stack.Screen name="Signup" component={SignupWrapper} />
-                  )}
-                </>
-              ) : (
-                <Stack.Screen name="Main" component={MainTabs} />
-              )}
-              <Stack.Screen name="CoachDirectory" component={CoachDirectoryWrapper} />
-              <Stack.Screen name="Subscriptions" component={SubscriptionWrapper} />
-              <Stack.Screen name="LiveScoring" component={LiveScoringWrapper} />
-            </Stack.Navigator>
-          </NavigationContext.Provider>
-        </ActionContext.Provider>
-      </DataContext.Provider>
-    </AuthContext.Provider>
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      {!currentUser ? (
+        viewingLanding ? (
+          <Stack.Screen name="Landing">
+            {(props) => (
+              <LandingScreen 
+                {...props} 
+                onLogin={() => setViewingLanding(false)} 
+                onJoinCircle={() => {
+                  setViewingLanding(false);
+                  props.navigation.navigate('Signup');
+                }}
+              />
+            )}
+          </Stack.Screen>
+        ) : (
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Signup" component={SignupScreen} />
+          </>
+        )
+      ) : (
+        <Stack.Screen name="Main" component={MainTabs} />
+      )}
+      <Stack.Screen name="CoachDirectory" component={CoachDirectoryScreen} />
+      <Stack.Screen name="Subscriptions" component={SubscriptionScreen} />
+      <Stack.Screen name="LiveScoring" component={LiveScoringScreen} />
+      <Stack.Screen name="TournamentCalendar" component={TournamentCalendarScreen} />
+      <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+    </Stack.Navigator>
   );
 }

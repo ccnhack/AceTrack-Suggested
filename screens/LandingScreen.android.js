@@ -27,7 +27,7 @@ const LandingScreen = ({ onLogin = () => {}, onJoinCircle = () => {} }) => {
   const isShortScreen = height < 750;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView testID="app.landing.screen" style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={styles.fullscreenContainer}>
         <Image 
@@ -61,6 +61,7 @@ const LandingScreen = ({ onLogin = () => {}, onJoinCircle = () => {} }) => {
         <View style={styles.buttonOverlay}>
           <View style={styles.buttonContainer}>
             <TouchableOpacity 
+              testID="landing.login.btn"
               style={styles.primaryButton} 
               onPress={() => {
                 console.log("🔵 LandingScreen: LOGIN pressed");
@@ -71,6 +72,7 @@ const LandingScreen = ({ onLogin = () => {}, onJoinCircle = () => {} }) => {
             </TouchableOpacity>
 
             <TouchableOpacity 
+              testID="landing.signup.btn"
               style={styles.secondaryButton} 
               onPress={() => {
                 console.log("🟢 LandingScreen: JOIN pressed");

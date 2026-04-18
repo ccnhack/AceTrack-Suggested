@@ -1,14 +1,14 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppActions } from '../navigation/AppNavigator';
+import { useSync } from '../context/SyncContext';
 
 const Layout = ({ 
   children, activeTab, setActiveTab, title, onBack, role, 
   onNotificationClick, hasUnreadNotifications, notificationCount, 
   adminActionCount, recordingsCount 
 }) => {
-  const { onToggleNotifications } = useAppActions();
+  const { onToggleNotifications } = useSync();
   const showHeader = activeTab !== 'explore';
 
   return (

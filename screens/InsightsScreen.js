@@ -1,31 +1,40 @@
 import React, { useMemo, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Animated, SafeAreaView, Modal, TextInput, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Animated, SafeAreaView, Modal, TextInput, Alert, Linking, LayoutAnimation, Platform } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import designSystem from '../theme/designSystem';
+import { colors, shadows, typography, borderRadius, spacing } from '../theme/designSystem';
 import logger from '../utils/logger';
 import { AcademyAnalytics } from '../components/AcademyAnalytics';
 
 const screenWidth = Dimensions.get('window').width;
 
-const InsightsScreen = ({ 
-  role, 
-  user, 
-  academyId, 
-  players = [], 
-  tournaments = [], 
-  matchVideos = [],
-  matches = [],
-  evaluations = [],
-  supportTickets: tickets = [], // Alias supportTickets to tickets for component-wide usage
-  navigation
-}) => {
+import { useAuth } from '../context/AuthContext';
+import { usePlayers } from '../context/PlayerContext';
+import { useTournaments } from '../context/TournamentContext';
+import { useVideos } from '../context/VideoContext';
+import { useEvaluations } from '../context/EvaluationContext';
+import { useSupport } from '../context/SupportContext';
+import { formatDateIST } from '../utils/tournamentUtils';
+
+
+const InsightsScreen = ({ navigation }) => {
+  const { currentUser: user, userRole: role } = useAuth();
+  const { players } = usePlayers();
+  const { tournaments } = useTournaments();
+  const { matchVideos, matches } = useVideos();
+  const { evaluations } = useEvaluations();
+  const { supportTickets: tickets } = useSupport();
+  
+  const academyId = user?.id; // Standard fallback
   const [selectedCity, setSelectedCity] = useState(null);
   const [selectedAcademyId, setSelectedAcademyId] = useState(null);
   const [selectedStat, setSelectedStat] = useState(null); // 'Players' | 'Tournaments' | 'Footage' | 'Coaches' | 'Devices' | 'Tickets' | null
   const [selectedArea, setSelectedArea] = useState(null);
   const [selectedCoachId, setSelectedCoachId] = useState(null);
+  const [selectedLocation, setSelectedLocation] = useState(null);
   const [deviceModalVisible, setDeviceModalVisible] = useState(false);
+
   const [selectedPlatform, setSelectedPlatform] = useState(null); // 'ios' | 'android'
   const [deviceSearchQuery, setDeviceSearchQuery] = useState('');
   const [insightModalVisible, setInsightModalVisible] = useState(false);
@@ -143,9 +152,17 @@ const InsightsScreen = ({
     }
     if (selectedStat === 'Tournaments') {
         const counts = {};
-        (tournaments || []).forEach(t => { const area = t.location || 'General Venue'; counts[area] = (counts[area] || 0) + 1; });
-        return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([name, count]) => ({ name, value: count, label: 'Hosts' }));
+        (tournaments || []).forEach(t => { 
+            const area = t.location || 'General Venue'; 
+            counts[area] = (counts[area] || 0) + 1; 
+        });
+        return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([name, count]) => ({ 
+            name, 
+            value: count, 
+            label: 'Upcoming' 
+        }));
     }
+
     if (selectedStat === 'Footage') {
         const counts = {};
         (matchVideos || []).forEach(v => {
@@ -157,20 +174,29 @@ const InsightsScreen = ({
         return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([name, count]) => ({ name, value: count, label: 'Uploads' }));
     }
     if (selectedStat === 'Coaches') {
-        const counts = {};
-        (tournaments || []).forEach(t => {
-            const coachIds = (t.assignedCoachIds || []).concat(Object.keys(t.coachOtps || {}));
-            [...new Set(coachIds)].forEach(cid => {
-                counts[cid] = (counts[cid] || 0) + 1;
-            });
+        const coachPlayers = (players || []).filter(p => p && p.role === 'coach');
+        return coachPlayers.sort((a, b) => {
+            const countA = (tournaments || []).filter(t => (t.assignedCoachIds || []).includes(a.id) || Object.keys(t.coachOtps || {}).includes(a.id)).length;
+            const countB = (tournaments || []).filter(t => (t.assignedCoachIds || []).includes(b.id) || Object.keys(t.coachOtps || {}).includes(b.id)).length;
+            return countB - countA;
+        }).slice(0, 6).map(coach => {
+            const judgedCount = (tournaments || []).filter(t => 
+                (t.assignedCoachIds || []).includes(coach.id) || 
+                (t.assignedCoachIds || []).includes(coach._id) ||
+                Object.keys(t.coachOtps || {}).includes(coach.id) ||
+                Object.keys(t.coachOtps || {}).includes(coach.phone)
+            ).length;
+            
+            return {
+                id: coach.id || coach._id,
+                name: coach.name || coach.displayName || 'Unknown Coach',
+                value: judgedCount,
+                label: 'Judged'
+            };
         });
-        return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([cid, count]) => ({
-            id: cid,
-            name: (players || []).find(p => p.id === cid)?.name || 'Unknown Coach',
-            value: count,
-            label: 'Judged'
-        }));
     }
+
+
     return null;
   }, [selectedStat, players, tournaments, matchVideos]);
 
@@ -221,8 +247,28 @@ const InsightsScreen = ({
         tournaments: judged.slice(0, 5)
     };
   }, [tournaments, selectedCoachId]);
+
+  // 8.5 Tournament Detail Stats (Location-based)
+  const tournamentDetailStats = useMemo(() => {
+    if (!selectedLocation) return null;
+    const locationTournaments = tournaments.filter(t => (t.location || 'General Venue') === selectedLocation);
+    
+    // Monthly distribution within this location
+    const monthCounts = {};
+    locationTournaments.forEach(t => {
+        const m = new Date(t.date).toLocaleString('default', { month: 'short' });
+        monthCounts[m] = (monthCounts[m] || 0) + 1;
+    });
+
+    return {
+        count: locationTournaments.length,
+        dist: Object.entries(monthCounts).map(([name, count]) => ({ name, count, percent: (count / locationTournaments.length) * 100 })),
+        tournaments: locationTournaments.slice(0, 8)
+    };
+  }, [tournaments, selectedLocation]);
   
   // 9. Device Distribution Insights
+
   const deviceStats = useMemo(() => {
     const counts = { ios: 0, android: 0, other: 0 };
     (players || []).forEach(p => {
@@ -357,13 +403,23 @@ const InsightsScreen = ({
   // Action Handlers with Logging
   const handleStatSelect = (stat) => {
     const newVal = selectedStat === stat ? null : stat;
+    if (Platform.OS !== 'web') {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
     logger.logAction('Insights_Stat_Toggle', { stat, action: newVal ? 'open' : 'close' });
     setSelectedStat(newVal);
     setSelectedArea(null);
     setSelectedCoachId(null);
+    setSelectedLocation(null);
   };
 
+
   const handleCitySelect = (city) => {
+    if (Platform.OS !== 'web') {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
     logger.logAction('Insights_City_Select', { city });
     setSelectedCity(city);
   };
@@ -382,6 +438,12 @@ const InsightsScreen = ({
     logger.logAction('Insights_Coach_DeepDive', { id, name });
     setSelectedCoachId(id);
   };
+
+  const handleTournamentSelect = (location) => {
+    logger.logAction('Insights_Tournament_DeepDive', { location });
+    setSelectedLocation(location);
+  };
+
 
   if (role === 'academy') {
     return (
@@ -437,10 +499,12 @@ const InsightsScreen = ({
                     <TouchableOpacity onPress={() => {
                         if (selectedArea) setSelectedArea(null);
                         else if (selectedCoachId) setSelectedCoachId(null);
+                        else if (selectedLocation) setSelectedLocation(null);
                         else setSelectedStat(null);
                     }}>
-                        <Ionicons name={(selectedArea || selectedCoachId) ? "arrow-back-circle" : "close-circle"} size={22} color="#6366F1" />
+                        <Ionicons name={(selectedArea || selectedCoachId || selectedLocation) ? "arrow-back-circle" : "close-circle"} size={22} color="#6366F1" />
                     </TouchableOpacity>
+
                 </View>
 
                 {selectedArea ? (
@@ -490,7 +554,39 @@ const InsightsScreen = ({
                              </View>
                         ))}
                     </View>
+                ) : selectedLocation ? (
+                    <View style={styles.areaDetail}>
+                         <View style={styles.areaHero}>
+                            <Text style={styles.areaHeroTitle}>{selectedLocation}</Text>
+                            <Text style={styles.areaHeroCount}>{tournamentDetailStats?.count} Total Events</Text>
+                         </View>
+
+                         <Text style={styles.subChartTitle}>Calendar Mix</Text>
+                         {tournamentDetailStats?.dist.map((item) => (
+                             <View key={item.name} style={styles.detailBarRow}>
+                                <View style={styles.barLabelContainer}>
+                                    <Text style={styles.barLabel}>{item.name}</Text>
+                                    <Text style={styles.barValue}>{item.count} Events</Text>
+                                </View>
+                                <View style={styles.barTrack}><View style={[styles.barFill, { width: `${item.percent}%`, backgroundColor: '#F59E0B' }]} /></View>
+                             </View>
+                         ))}
+
+                         <Text style={[styles.subChartTitle, { marginTop: 20 }]}>Participating Tournaments</Text>
+                         {tournamentDetailStats?.tournaments.map((t) => (
+                            <View key={t.id} style={styles.drillDownCardSmall}>
+                                <View style={styles.rowBetween}>
+                                    <View style={styles.flexItem}>
+                                        <Text style={styles.drillDownLabel}>{t.title}</Text>
+                                        <Text style={styles.drillDownSubText}>{t.sport} • {formatDateIST(t.date)}</Text>
+                                    </View>
+                                    <Ionicons name="trophy" size={14} color="#F59E0B" />
+                                </View>
+                            </View>
+                         ))}
+                    </View>
                 ) : (
+
                     <View>
                         <View style={styles.drillInfoBox}>
                             <Ionicons 
@@ -513,6 +609,7 @@ const InsightsScreen = ({
                                 onPress={() => {
                                     if (selectedStat === 'Players') handleAreaSelect(item.name);
                                     if (selectedStat === 'Coaches') handleCoachSelect(item.id, item.name);
+                                    if (selectedStat === 'Tournaments') handleTournamentSelect(item.name);
                                 }}
                             >
                                 <View style={styles.barLabelContainer}>
@@ -521,8 +618,9 @@ const InsightsScreen = ({
                                         {item.newPct !== undefined && <Text style={styles.newLabel}>{item.newPct}% New Joiners</Text>}
                                     </View>
                                     <Text style={styles.barValue}>{item.value} {item.label}</Text>
-                                    {(selectedStat === 'Players' || selectedStat === 'Coaches') && <Ionicons name="chevron-forward" size={14} color="#CBD5E1" />}
+                                    {(selectedStat === 'Players' || selectedStat === 'Coaches' || selectedStat === 'Tournaments') && <Ionicons name="chevron-forward" size={14} color="#CBD5E1" />}
                                 </View>
+
                                 <View style={styles.barTrack}>
                                     <View style={[styles.barFill, { width: `${(item.value / (statDrillDownData[0].value || 1)) * 100}%`, backgroundColor: index === 0 ? (selectedStat === 'Coaches' ? '#8B5CF6' : '#6366F1') : '#CBD5E1' }]} />
                                 </View>
@@ -952,9 +1050,9 @@ const styles = StyleSheet.create({
   content: { padding: 20 },
   academyHeader: { paddingHorizontal: 24, paddingTop: 40, paddingBottom: 16, backgroundColor: '#FFFFFF' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, marginTop: 40 },
-  welcomeText: { fontSize: 26, fontWeight: '800', color: '#1E293B' },
-  subText: { fontSize: 13, color: '#64748B', marginTop: 2 },
-  refreshBtn: { width: 46, height: 46, borderRadius: 14, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', ...designSystem.shadows?.sm },
+  welcomeText: { ...typography.h1, color: colors.navy[900] },
+  subText: { ...typography.caption, color: colors.navy[500], marginTop: 2 },
+  refreshBtn: { width: 46, height: 46, borderRadius: 14, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', ...shadows?.sm },
   statsGrid: { 
     flexDirection: 'row', 
     justifyContent: 'flex-start', 
@@ -965,17 +1063,17 @@ const styles = StyleSheet.create({
   },
   statBox: { 
     backgroundColor: '#fff', 
-    width: '47%', // Use safer percentage for 2-per-row layout on narrower Androids
+    width: '47%', 
     padding: 14, 
-    borderRadius: 20, 
-    ...designSystem.shadows?.sm 
+    borderRadius: borderRadius.lg, 
+    ...shadows.sm 
   },
   iconCircle: { width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
-  statValue: { fontSize: 20, fontWeight: '800', color: '#1E293B' },
-  statTitle: { fontSize: 10, color: '#94A3B8', fontWeight: '700', textTransform: 'uppercase', marginBottom: 6 },
+  statValue: { ...typography.h2, color: colors.navy[900] },
+  statTitle: { ...typography.micro, color: colors.navy[400], marginBottom: 6 },
   trendRow: { flexDirection: 'row', alignItems: 'center' },
-  trendText: { fontSize: 9, color: '#10B981', fontWeight: '700', marginLeft: 2 },
-  chartCard: { backgroundColor: '#fff', borderRadius: 24, padding: 20, marginBottom: 20, ...designSystem.shadows?.sm },
+  trendText: { fontSize: 9, color: colors.success, fontWeight: '700', marginLeft: 2 },
+  chartCard: { backgroundColor: '#fff', borderRadius: borderRadius.xl, padding: 20, marginBottom: 20, ...shadows.sm },
   chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   chartHeaderExpanded: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 },
   chartTitle: { fontSize: 17, fontWeight: '700', color: '#1E293B' },
@@ -986,7 +1084,7 @@ const styles = StyleSheet.create({
   barLabel: { fontSize: 13, fontWeight: '700', color: '#334155', flex: 1 },
   barValue: { fontSize: 12, fontWeight: '800', color: '#1E293B', marginRight: 8 },
   newLabel: { fontSize: 10, color: '#10B981', fontWeight: '700', marginTop: 1 },
-  barTrack: { height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' },
+  barTrack: { height: 8, backgroundColor: colors.navy[100], borderRadius: 4, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 4 },
   drillInfoBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF2FF', padding: 10, borderRadius: 10, marginBottom: 12, gap: 8 },
   drillInfoText: { fontSize: 11, color: '#4F46E5', fontWeight: '500', flex: 1 },
@@ -1015,7 +1113,7 @@ const styles = StyleSheet.create({
   growthBar: { width: 14, backgroundColor: '#6366F1', borderRadius: 6, opacity: 0.8 },
   growthLabel: { fontSize: 10, color: '#94A3B8', marginTop: 8, fontWeight: '700' },
   growthBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF2FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  growthBadgeText: { fontSize: 11, fontWeight: '700', color: '#6366F1', marginLeft: 4 },
+  growthBadgeText: { ...typography.caption, color: colors.primary.base, marginLeft: 4 },
   pctContainer: { height: 20, justifyContent: 'flex-end', marginBottom: 4 },
   pctText: { fontSize: 9, fontWeight: '800', color: '#10B981' },
   flexItem: { flex: 1 },

@@ -4,6 +4,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // are executed in strict order to prevent native bridge race conditions.
 let storageQueue: Promise<any> = Promise.resolve();
 
+// 🛡️ RE-ENTRANCY GUARD: Tracks if the current execution stack is already holding the storage queue.
+// This prevents deadlocks when an atomic operation (runAtomic) calls setItem/removeItem.
+let isExecutingQueue = false;
+
 const storage = {
   getItem: async (key: string) => {
     try {
@@ -12,11 +16,10 @@ const storage = {
       try {
         return JSON.parse(value);
       } catch (parseError) {
-        console.error(`Error parsing JSON for key "${key}":`, parseError);
-        return null;
+        console.warn(`[Storage] JSON parse failed for key "${key}", falling back to raw string value.`);
+        return value;
       }
     } catch (e: any) {
-      // 🛡️ CursorWindow Recovery: Auto-delete the key that's too large to read
       if (e.message && (e.message.includes('Row too big') || e.message.includes('CursorWindow'))) {
         console.warn(`[Storage] CursorWindow overflow for key "${key}" — auto-clearing to recover.`);
         try { await AsyncStorage.removeItem(key); } catch (_) {}
@@ -26,19 +29,30 @@ const storage = {
     }
   },
   
-  setItem: async (key: string, value: any) => {
-    // Append to the global queue to ensure sequential execution
-    const action = async () => {
-      try {
-        if (value === undefined) {
-          await AsyncStorage.removeItem(key);
-          return;
-        }
-        const jsonValue = JSON.stringify(value);
-        await AsyncStorage.setItem(key, jsonValue);
-      } catch (e) {
-        console.error(`Error writing value to AsyncStorage for key "${key}":`, e);
+  // Internal raw setter
+  _setItemRaw: async (key: string, value: any) => {
+    try {
+      if (value === undefined) {
+        await AsyncStorage.removeItem(key);
+        return;
       }
+      const jsonValue = JSON.stringify(value);
+      await AsyncStorage.setItem(key, jsonValue);
+    } catch (e) {
+      console.error(`Error writing raw value to AsyncStorage for key "${key}":`, e);
+    }
+  },
+
+  setItem: async (key: string, value: any) => {
+    // 🛡️ [DEADLOCK PREVENTION] 
+    // If we are already executing a task in the queue, do NOT append and await.
+    // Instead, execute immediately to satisfy the parent task's wait.
+    if (isExecutingQueue) {
+      return storage._setItemRaw(key, value);
+    }
+
+    const action = async () => {
+      return storage._setItemRaw(key, value);
     };
 
     storageQueue = storageQueue.then(action).catch(action);
@@ -46,6 +60,11 @@ const storage = {
   },
 
   removeItem: async (key: string) => {
+    if (isExecutingQueue) {
+      try { await AsyncStorage.removeItem(key); } catch (_) {}
+      return;
+    }
+
     const action = async () => {
       try {
         await AsyncStorage.removeItem(key);
@@ -58,11 +77,57 @@ const storage = {
     return storageQueue;
   },
 
-  // 🛡️ Helper for critical waits
   waitForQueue: async () => {
     return storageQueue;
+  },
+
+  runAtomic: async (action: () => Promise<any>) => {
+    const atomicTask = async () => {
+      isExecutingQueue = true;
+      try {
+        return await action();
+      } catch (e) {
+        console.error('[Storage] Atomic operation inner error:', e);
+        return null;
+      } finally {
+        isExecutingQueue = false;
+      }
+    };
+
+    storageQueue = storageQueue.then(atomicTask).catch((e) => {
+      console.error('[Storage] Atomic operation queue error:', e);
+      return null;
+    });
+    return storageQueue;
+  },
+
+  getQueueLength: () => {
+    return activeCount;
   }
 };
+
+let activeCount = 0;
+const originalSetItem = storage.setItem;
+const originalRemoveItem = storage.removeItem;
+
+storage.setItem = async (key: string, value: any) => {
+  activeCount++;
+  try {
+    return await originalSetItem(key, value);
+  } finally {
+    activeCount--;
+  }
+};
+
+storage.removeItem = async (key: string) => {
+  activeCount++;
+  try {
+    return await originalRemoveItem(key);
+  } finally {
+    activeCount--;
+  }
+};
+
 
 /**
  * 🛡️ STORAGE OPTIMIZATION (v2.6.7)
@@ -76,14 +141,14 @@ export const thinPlayer = (p: any) => {
     id, name, avatar, rating, trueSkillRating, role, 
     matchesPlayed, wins, losses, skillLevel, city, sport,
     isApprovedCoach, coachStatus, preferredFormat, mostPlayedVenue,
-    referralCode, devices
+    referralCode, devices, phone
   } = p;
   
   return { 
     id, name, avatar, rating, trueSkillRating, role, 
     matchesPlayed, wins, losses, skillLevel, city, sport,
     isApprovedCoach, coachStatus, preferredFormat, mostPlayedVenue,
-    referralCode, devices,
+    referralCode, devices, phone,
     _thinned: true // Meta-flag for diagnostics
   };
 };

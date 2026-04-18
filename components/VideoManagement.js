@@ -4,11 +4,14 @@ import {
   StyleSheet, Modal, TextInput, Alert, ActivityIndicator,
   FlatList, Dimensions, SafeAreaView
 } from 'react-native';
+import SafeAvatar from './SafeAvatar';
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import * as DocumentPicker from 'expo-document-picker';
 import { FullscreenVideoPlayer } from './FullscreenVideoPlayer';
 import config from '../config';
+import VideoService from '../services/VideoService';
+import notify from '../utils/notify';
 
 const { width } = Dimensions.get('window');
 
@@ -300,12 +303,13 @@ export const VideoManagement = ({
     setSelectedMatchId('');
   };
 
-  const handleDeletionSubmit = () => {
+  const handleDeletionSubmit = async () => {
     if (!deletionReason.trim()) {
-      Alert.alert("Error", "Please provide a reason for deletion.");
+      notify({ success: false, code: 'ERROR', type: 'error', error: "Please provide a reason for deletion." });
       return;
     }
-    onRequestDeletion(deletionVideoId, deletionReason);
+    const response = await VideoService.updateStatus(deletionVideoId, 'Deletion Requested');
+    notify(response);
     setDeletionVideoId(null);
     setDeletionReason('');
   };
@@ -512,7 +516,13 @@ export const VideoManagement = ({
                         <View style={styles.purchaserList}>
                           {purchasers.map(p => (
                             <View key={p.id} style={styles.purchaserChip}>
-                              <Image source={{ uri: p.avatar }} style={styles.chipAvatar} />
+                              <SafeAvatar 
+                                uri={p.avatar} 
+                                name={p.name} 
+                                size={24} 
+                                borderRadius={12} 
+                                style={styles.chipAvatar} 
+                              />
                               <Text style={styles.chipText}>{p.name}</Text>
                             </View>
                           ))}
@@ -747,15 +757,15 @@ export const VideoManagement = ({
 
             <View style={styles.purchaseActions}>
               <TouchableOpacity 
-                onPress={() => {
-                  if ((user?.credits || 0) >= (showPurchasePrompt?.price || 0)) {
-                    if (showPurchasePrompt?.type === 'highlights') {
-                      onPurchaseAiHighlights && onPurchaseAiHighlights(showPurchasePrompt.videoId, user.id, 'wallet');
-                    } else {
-                      onUnlockVideo && onUnlockVideo(showPurchasePrompt.videoId, showPurchasePrompt.price, 'wallet');
-                    }
-                    setShowPurchasePrompt(null);
+                onPress={async () => {
+                  let response;
+                  if (showPurchasePrompt?.type === 'highlights') {
+                    response = await VideoService.purchaseHighlights(showPurchasePrompt.videoId, 20, 'wallet', user);
                   } else {
+                    response = await VideoService.unlockVideo(showPurchasePrompt.videoId, showPurchasePrompt.price, 'wallet', user);
+                  }
+                  
+                  if (response.code === 'INSUFFICIENT_BALANCE') {
                     Alert.alert(
                       "Insufficient Balance",
                       `Your wallet balance (₹${user?.credits || 0}) is too low. Please top up or use UPI.`,
@@ -767,6 +777,9 @@ export const VideoManagement = ({
                         }}
                       ]
                     );
+                  } else {
+                    notify(response);
+                    setShowPurchasePrompt(null);
                   }
                 }}
                 style={styles.walletBtn}
@@ -778,12 +791,14 @@ export const VideoManagement = ({
               <TouchableOpacity 
                 onPress={() => {
                   Alert.alert("Redirecting to UPI...", "Connecting to payment gateway...");
-                  setTimeout(() => {
+                  setTimeout(async () => {
+                    let response;
                     if (showPurchasePrompt?.type === 'highlights') {
-                      onPurchaseAiHighlights && onPurchaseAiHighlights(showPurchasePrompt.videoId, user.id, 'upi');
+                      response = await VideoService.purchaseHighlights(showPurchasePrompt.videoId, 20, 'upi', user);
                     } else {
-                      onUnlockVideo && onUnlockVideo(showPurchasePrompt.videoId, showPurchasePrompt.price, 'upi');
+                      response = await VideoService.unlockVideo(showPurchasePrompt.videoId, showPurchasePrompt.price, 'upi', user);
                     }
+                    notify(response);
                     setShowPurchasePrompt(null);
                   }, 1500);
                 }}

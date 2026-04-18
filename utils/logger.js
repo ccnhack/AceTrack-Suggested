@@ -330,6 +330,10 @@ const logger = {
     addLog('info', 'action', `${action}${details ? ': ' + JSON.stringify(details) : ''}`);
   },
 
+  logTrace: (message, context, id, details) => {
+    addLog('info', 'trace', `[${context || 'global'}:${id || 'anon'}] ${message}${details ? ' - ' + JSON.stringify(details) : ''}`);
+  },
+
   logError: (msg, err) => {
     addLog('error', 'exception', `${msg}${err ? ': ' + err.message : ''}`);
   },

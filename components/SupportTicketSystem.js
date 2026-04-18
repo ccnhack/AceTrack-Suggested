@@ -7,6 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Swipeable } from 'react-native-gesture-handler';
 import { generateAIResponse } from '../services/aiService';
+import notify from '../utils/notify';
+import config from '../config';
 
 const TICKET_TYPES = [
   'Technical Issue', 'Bug', 'Refund', 'Enhancement Request',
@@ -143,40 +145,36 @@ export const SupportTicketSystem = ({
     }
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!formData.title.trim() || !formData.description.trim()) {
       alert('Please fill in both title and description.');
       return;
     }
-    onCreateTicket({
-      userId,
-      type: formData.type,
-      title: formData.title,
-      description: formData.description,
-      messages: [
-        {
-          senderId: userId,
-          text: formData.description,
-          timestamp: new Date().toISOString()
-        },
-        {
-          senderId: 'admin',
-          text: "Thanks for reaching out to AceTrack Support Team, Our team will look into the issue and provide an update shortly",
-          timestamp: new Date(Date.now() + 1000).toISOString(),
-          status: 'delivered'
-        }
-      ]
+    const res = await onCreateTicket({ 
+      ...formData, 
+      userId, 
+      userName,
+      messages: [{ 
+        senderId: userId, 
+        text: `ISSUE_DESCRIPTION: ${formData.description}`, 
+        timestamp: new Date().toISOString() 
+      }] 
     });
-    setFormData({ type: 'Other', title: '', description: '' });
-    setView('list');
+    if (res.success) {
+      setFormData({ type: 'Other', title: '', description: '' });
+      setView('list');
+    }
+    notify(res);
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if ((!newMessage.trim() && !selectedImage) || !selectedTicket) return;
-    onSendMessage(selectedTicket.id, newMessage, selectedImage, replyToMsg);
-    setNewMessage('');
-    setSelectedImage(null);
-    setReplyToMsg(null);
+    const res = await onReply(selectedTicket.id, newMessage, selectedImage, replyToMsg);
+    if (res.success) {
+      setNewMessage('');
+      setSelectedImage(null);
+      setReplyToMsg(null);
+    }
   };
 
   const renderMessageReply = (reply) => {
@@ -284,7 +282,7 @@ export const SupportTicketSystem = ({
             {!isMe && <Text style={styles.adminLabel}>Admin Support</Text>}
             {renderMessageReply(msg.replyTo)}
             {msg.image && (
-              <Image source={{ uri: msg.image }} style={styles.msgImage} resizeMode="contain" />
+              <Image source={{ uri: config.sanitizeUrl(msg.image) }} style={styles.msgImage} resizeMode="contain" />
             )}
             <Text style={[styles.messageText, isMe ? styles.myText : styles.otherText]}>
               {text?.startsWith('CLOSURE_REQUEST_EVENT:') 
@@ -323,12 +321,10 @@ export const SupportTicketSystem = ({
     setIsClosing(true);
     
     try {
-      // 📝 1. Post the closure message with a neutral identifier
       if (closureReason.trim()) {
-        onReply(selectedTicket.id, `CLOSURE_REQUEST_EVENT: ${closureReason.trim()}`);
+        await SupportService.replyToTicket(selectedTicket.id, userId, `CLOSURE_REQUEST_EVENT: ${closureReason.trim()}`);
       }
 
-      // 🤖 2. Generate AI Summary (same logic as admin)
       const history = (selectedTicket.messages || []).map(m => 
         `${m.senderId === 'admin' ? 'Admin' : (m.senderId === userId ? 'User' : 'Other')}: ${m.text || ''}`
       ).join('\n');
@@ -340,14 +336,15 @@ export const SupportTicketSystem = ({
 
       const aiSummary = await generateAIResponse(prompt);
       
-      // 🏁 3. Finish Closure
-      onUpdateStatus(selectedTicket.id, 'Closed', aiSummary);
-      setShowClosureModal(false);
-      setClosureReason('');
+      const res = await onUpdateStatus(selectedTicket.id, 'Closed', aiSummary);
+      if (res.success) {
+        setShowClosureModal(false);
+        setClosureReason('');
+      }
+      notify(res);
     } catch (e) {
       console.error("User-initiated closure failed:", e);
-      // Fallback: simple closure without summary if AI fails
-      onUpdateStatus(selectedTicket.id, 'Closed');
+      await onUpdateStatus(selectedTicket.id, 'Closed');
     } finally {
       setIsClosing(false);
     }

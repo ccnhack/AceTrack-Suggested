@@ -15,7 +15,7 @@ export const CURRENT_PLAYER: Player = {
   preferredFormat: 'Singles',
   mostPlayedVenue: 'Sarjapur Indoor Arena',
   city: 'Bangalore',
-  avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix',
+  avatar: 'https://api.dicebear.com/7.x/avataaars/png?seed=Felix',
   credits: 0,
   cancelledTournamentIds: [],
   trueSkillRating: 1250,

@@ -19,6 +19,7 @@ const ProfileMenuSection = memo(({
   return (
     <View style={styles.menuSection}>
       <TouchableOpacity 
+        testID="profile.edit.button"
         onPress={() => {
           logger.logAction('MODAL_OPEN', { modal: 'EditProfile' });
           onEditProfile();
@@ -150,6 +151,7 @@ const ProfileMenuSection = memo(({
       </TouchableOpacity>
 
       <TouchableOpacity 
+        testID="profile.logout.button"
         onPress={() => {
           logger.logAction('USER_LOGOUT_CLICK');
           onLogout();

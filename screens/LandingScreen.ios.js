@@ -21,7 +21,7 @@ const LandingScreen = ({ onLogin = () => {}, onJoinCircle = () => {} }) => {
   const isTallScreen = height > 800;
 
   return (
-    <View style={styles.container}>
+    <View testID="app.landing.screen" style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={styles.fullscreenContainer}>
         <Image 
@@ -56,6 +56,7 @@ const LandingScreen = ({ onLogin = () => {}, onJoinCircle = () => {} }) => {
         <View style={styles.buttonOverlay}>
           <View style={styles.buttonContainer}>
             <TouchableOpacity 
+              testID="landing.login.btn"
               style={styles.primaryButton} 
               onPress={() => {
                 console.log("🍎 iOS Landing: LOGIN pressed");
@@ -66,6 +67,7 @@ const LandingScreen = ({ onLogin = () => {}, onJoinCircle = () => {} }) => {
             </TouchableOpacity>
 
             <TouchableOpacity 
+              testID="landing.signup.btn"
               style={styles.secondaryButton} 
               onPress={() => {
                 console.log("🍎 iOS Landing: JOIN pressed");
