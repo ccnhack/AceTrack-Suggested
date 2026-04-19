@@ -59,8 +59,9 @@ const LoginScreen = ({ navigation }) => {
     setError('');
     try {
       if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      // Web Admin Only restriction
+      // Web Login: Admin fast-path + Support staff
       if (Platform.OS === 'web') {
+        // Admin hardcoded login (fast path)
         if (username === 'admin' && password === 'Password@123') {
           onLoginSuccess('admin', { 
             id: 'admin', 
@@ -69,11 +70,54 @@ const LoginScreen = ({ navigation }) => {
             avatar: 'https://ui-avatars.com/api/?name=Admin&background=random'
           });
           return;
-        } else {
-          setError('Access Denied. This portal is strictly for AceTrack Administrators.');
-          setIsLoading(false);
-          return;
         }
+        
+        // Support staff login — cloud-backed lookup
+        let supportUser = (players || []).find(p => {
+          const search = username.toLowerCase().trim();
+          return (
+            p.role === 'support' && (
+              (p.email || '').toLowerCase() === search ||
+              String(p.id || '').toLowerCase() === search ||
+              (p.name || '').toLowerCase() === search
+            )
+          );
+        });
+
+        // If not found locally, try cloud refresh
+        if (!supportUser && onRefreshData) {
+          setIsSyncing(true);
+          const cloudResult = await onRefreshData();
+          setIsSyncing(false);
+          if (cloudResult && cloudResult.players) {
+            const search = username.toLowerCase().trim();
+            supportUser = cloudResult.players.find(p => {
+              return (
+                p.role === 'support' && (
+                  (p.email || '').toLowerCase() === search ||
+                  String(p.id || '').toLowerCase() === search ||
+                  (p.name || '').toLowerCase() === search
+                )
+              );
+            });
+          }
+        }
+
+        if (supportUser) {
+          const userPassword = supportUser.password || 'password';
+          if (userPassword === password) {
+            onLoginSuccess('support', supportUser);
+            return;
+          } else {
+            setError('Invalid password for support account.');
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        setError('Access Denied. This portal is for AceTrack Administrators and Support Staff only.');
+        setIsLoading(false);
+        return;
       }
 
       // Admin Login logic
@@ -278,8 +322,8 @@ const LoginScreen = ({ navigation }) => {
           <View style={styles.webLoginBox}>
             <View style={{ alignItems: 'center', marginBottom: 32 }}>
               <Image source={require('../assets/icon.png')} style={{ width: 80, height: 80, borderRadius: 20, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' }} />
-              <Text style={styles.webTitle}>AceTrack Admin</Text>
-              <Text style={styles.webSubtitle}>Authorized Personnel Only</Text>
+              <Text style={styles.webTitle}>AceTrack Portal</Text>
+              <Text style={styles.webSubtitle}>Admin & Support Staff Access</Text>
             </View>
 
             {error ? <View style={{ backgroundColor: '#FEE2E2', padding: 12, borderRadius: 8, marginBottom: 16 }}><Text style={{ color: '#EF4444', textAlign: 'center', fontSize: 13, fontWeight: 'bold' }}>{error}</Text></View> : null}

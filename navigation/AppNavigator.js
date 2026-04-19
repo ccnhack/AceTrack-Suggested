@@ -36,6 +36,7 @@ import SubscriptionScreen from '../screens/SubscriptionScreen';
 import LiveScoringScreen from '../screens/LiveScoringScreen';
 import TournamentCalendarScreen from '../screens/TournamentCalendarScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
+import SupportDashboardScreen from '../screens/SupportDashboardScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -87,6 +88,7 @@ const MainTabs = memo(() => {
       else if (route.name === 'Ranking') iconName = focused ? 'trophy' : 'trophy-outline';
       else if (route.name === 'Recordings') iconName = focused ? 'play-circle' : 'play-circle-outline';
       else if (route.name === 'Admin') iconName = focused ? 'settings' : 'settings-outline';
+      else if (route.name === 'Support') iconName = focused ? 'headset' : 'headset-outline';
       else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
       else if (route.name === 'Matchmaking') iconName = focused ? 'people' : 'people-outline';
       else if (route.name === 'Insights') iconName = focused ? 'bar-chart' : 'bar-chart-outline';
@@ -119,6 +121,9 @@ const MainTabs = memo(() => {
       )}
       {role === 'admin' && (
         <Tab.Screen name="Admin" component={AdminHubScreen} options={{ tabBarTestID: 'nav.tab.Admin' }} />
+      )}
+      {role === 'support' && (
+        <Tab.Screen name="Support" component={SupportDashboardScreen} options={{ tabBarTestID: 'nav.tab.Support' }} />
       )}
       {Platform.OS !== 'web' && role !== 'admin' && (
         <Tab.Screen name="Matchmaking" component={MatchmakingScreen} options={{ tabBarTestID: 'nav.tab.Matchmaking' }} />
