@@ -66,11 +66,13 @@ jobs:
         run: |
           pwd
           ls -la
-          cat package.json | grep test:e2e:android:release
-
+          echo "Checking for native directories..."
+          [ -d "android" ] && echo "✅ android directory found" || echo "❌ android directory MISSING"
+          [ -d "ios" ] && echo "✅ ios directory found" || echo "❌ ios directory MISSING"
+          if [ -d "android" ]; then ls -la android; fi
 
       - name: Build Android
-        run: npm run build:e2e:android:release
+        run: cd android && ./gradlew assembleRelease assembleAndroidTest -DtestBuildType=release
 
       - name: Run Detox Tests on Emulator
         uses: reactivecircus/android-emulator-runner@v2
