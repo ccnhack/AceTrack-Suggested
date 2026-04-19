@@ -594,7 +594,7 @@ router.get('/status', apiKeyGuard, async (req, res) => {
     res.json({ 
       lastUpdated: state?.lastUpdated || 0,
       version: state?.version || 1,
-      latestAppVersion: process.env.LATEST_APP_VERSION || APP_VERSION
+      latestAppVersion: APP_VERSION
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
