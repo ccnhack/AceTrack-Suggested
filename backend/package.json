@@ -1,7 +1,7 @@
 {
   "name": "acetrack---sports-tournament-platform",
   "private": true,
-  "version": "2.6.121",
+  "version": "2.6.122",
   "engines": {
     "node": ">=18.0.0"
   },

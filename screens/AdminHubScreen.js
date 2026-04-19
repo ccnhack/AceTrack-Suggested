@@ -48,6 +48,9 @@ const AdminHubScreen = ({ navigation, route }) => {
   const [autoSelectUser, setAutoSelectUser] = useState(null);
   const [autoSelectTicketId, setAutoSelectTicketId] = useState(null);
   const { width: windowWidth } = useWindowDimensions();
+  const isWeb = Platform.OS === 'web';
+  const isMobileWeb = isWeb && windowWidth < 1024;
+  const [isWebSidebarOpen, setIsWebSidebarOpen] = useState(false);
   const today = new Date().toISOString().split('T')[0];
 
   const badges = useMemo(() => {
@@ -126,6 +129,95 @@ const AdminHubScreen = ({ navigation, route }) => {
     }
   }, [route.params]);
 
+  const renderWebSidebar = () => (
+    <>
+      {(isMobileWeb && isWebSidebarOpen) && (
+        <TouchableOpacity 
+          activeOpacity={1} 
+          onPress={() => setIsWebSidebarOpen(false)}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100 }}
+        />
+      )}
+      <View style={{ 
+        width: 280, 
+        backgroundColor: '#0F172A', 
+        height: '100vh', 
+        paddingTop: 32, 
+        paddingBottom: 24, 
+        justifyContent: 'space-between',
+        position: isMobileWeb ? 'absolute' : 'relative',
+        left: isMobileWeb ? (isWebSidebarOpen ? 0 : -280) : 0,
+        zIndex: 101,
+        // @ts-ignore
+        transition: 'left 0.3s ease-in-out'
+      }}>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, marginBottom: 40 }}>
+            {isMobileWeb ? (
+              <TouchableOpacity onPress={() => setIsWebSidebarOpen(false)}>
+                <Ionicons name="close" size={28} color="#FFF" style={{ marginRight: 16 }} />
+              </TouchableOpacity>
+            ) : (
+              <Ionicons name="menu" size={28} color="#FFF" style={{ marginRight: 16 }} />
+            )}
+            <Image source={require('../assets/icon.png')} style={{ width: 36, height: 36, borderRadius: 8, marginRight: 12 }} />
+            <Text style={{ color: '#FFF', fontSize: 20, fontWeight: '900', letterSpacing: 1 }}>ACETRACK</Text>
+          </View>
+          <ScrollView showsVerticalScrollIndicator={false} style={{ flexGrow: 1, paddingHorizontal: 16 }}>
+            <Text style={{ color: '#475569', fontSize: 11, fontWeight: '800', marginBottom: 12, paddingHorizontal: 12, letterSpacing: 1.5 }}>MAIN MENU</Text>
+            {[
+              { id: 'individuals', label: 'Individuals', icon: 'person-outline' },
+              { id: 'academies', label: 'Academies', icon: 'business-outline' },
+              { id: 'coaches', label: 'Coaches', icon: 'school-outline', count: badges.coaches },
+              { id: 'tournaments', label: 'Tournaments', icon: 'trophy-outline' },
+              { id: 'matches', label: 'Matches', icon: 'tennisball-outline', count: badges.matches },
+              { id: 'evaluations', label: 'Evaluations', icon: 'clipboard-outline' },
+              { id: 'payments', label: 'Payments', icon: 'card-outline', count: badges.payments },
+              { id: 'grievances', label: 'Grievances', icon: 'chatbubbles-outline', count: badges.grievances },
+              { id: 'recordings', label: 'Videos', icon: 'videocam-outline', count: badges.recordings },
+              { id: 'assignments', label: 'Assignments', icon: 'clipboard-outline', count: badges.assignments },
+              { id: 'staff', label: 'Staff', icon: 'people-outline' },
+              { id: 'audit', label: 'Audit Logs', icon: 'list-outline' },
+              { id: 'security', label: 'Security', icon: 'shield-half-outline' },
+              { id: 'diagnostics', label: 'Diagnostics', icon: 'pulse-outline' }
+            ].map(tab => {
+              const isActive = subTab === tab.id;
+              return (
+                 <TouchableOpacity 
+                   key={tab.id}
+                   onPress={() => { 
+                     handleTabChange(tab.id);
+                     if (isMobileWeb) setIsWebSidebarOpen(false);
+                   }}
+                   style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, backgroundColor: isActive ? '#6366F1' : 'transparent', marginBottom: 4 }}
+                 >
+                   <Ionicons name={tab.icon} size={20} color={isActive ? '#FFF' : '#94A3B8'} />
+                   <Text style={{ marginLeft: 16, fontSize: 14, fontWeight: isActive ? '700' : '500', color: isActive ? '#FFF' : '#CBD5E1', flex: 1 }}>{tab.label}</Text>
+                   {tab.count > 0 && (
+                      <View style={{ backgroundColor: '#EF4444', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2 }}>
+                        <Text style={{ color: '#FFF', fontSize: 10, fontWeight: 'bold' }}>{tab.count}</Text>
+                      </View>
+                    )}
+                 </TouchableOpacity>
+              )
+            })}
+          </ScrollView>
+        </View>
+        <View style={{ paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: '#1E293B', paddingTop: 24, marginTop: 16 }}>
+           <TouchableOpacity onPress={() => { navigation.navigate('Profile'); if (isMobileWeb) setIsWebSidebarOpen(false); }} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 }}>
+             <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#334155', justifyContent: 'center', alignItems: 'center' }}>
+               <Ionicons name="person" size={18} color="#FFF" />
+             </View>
+             <View style={{ marginLeft: 12 }}>
+               <Text style={{ color: '#F8FAFC', fontSize: 14, fontWeight: 'bold' }}>Admin Profile</Text>
+               <Text style={{ color: '#94A3B8', fontSize: 11 }}>Settings & Support</Text>
+             </View>
+           </TouchableOpacity>
+        </View>
+      </View>
+    </>
+  );
+
   const renderContent = () => {
     switch(subTab) {
       case 'individuals':
@@ -186,14 +278,23 @@ const AdminHubScreen = ({ navigation, route }) => {
     }
   };
 
-  return (
+  const content = (
     <View style={styles.container}>
       <LinearGradient colors={['#6366F1', '#4F46E5']} style={styles.premiumHeader}>
         <SafeAreaView>
           <View style={styles.headerContent}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.premiumTitle}>Admin Hub</Text>
-              <Text style={styles.premiumSubtitle}>System Overview & Management</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {isMobileWeb && (
+                  <TouchableOpacity onPress={() => setIsWebSidebarOpen(true)} style={{ marginRight: 16 }}>
+                    <Ionicons name="menu" size={28} color="#FFF" />
+                  </TouchableOpacity>
+                )}
+                <View>
+                  <Text style={styles.premiumTitle}>Admin Hub</Text>
+                  <Text style={styles.premiumSubtitle}>System Overview & Management</Text>
+                </View>
+              </View>
               
               <View style={styles.badgeRow}>
                 <TouchableOpacity 
@@ -284,6 +385,17 @@ const AdminHubScreen = ({ navigation, route }) => {
       </ScrollView>
     </View>
   );
+
+  return isWeb ? (
+    <View style={{ flex: 1, flexDirection: isMobileWeb ? 'column' : 'row', backgroundColor: '#F8FAFC', height: '100vh', width: '100vw' }}>
+      {renderWebSidebar()}
+      <View style={{ flex: 1, padding: isMobileWeb ? 16 : 32, overflow: 'hidden' }}>
+        <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: isMobileWeb ? 16 : 24, shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 30, shadowOffset: { width: 0, height: 10 }, overflow: 'hidden' }}>
+          {content}
+        </View>
+      </View>
+    </View>
+  ) : content;
 };
 
 const styles = StyleSheet.create({
