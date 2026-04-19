@@ -24,6 +24,13 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Debug Environment
+        run: |
+          pwd
+          ls -la
+          cat package.json | grep test:e2e:ios:release
+
+
       - name: Setup Apple Simulator
         run: |
           xcrun simctl list devices
@@ -54,6 +61,13 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+
+      - name: Debug Environment
+        run: |
+          pwd
+          ls -la
+          cat package.json | grep test:e2e:android:release
+
 
       - name: Build Android
         run: npm run build:e2e:android:release
