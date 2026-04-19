@@ -10,7 +10,11 @@
     "test:e2e:ios": "detox test --configuration ios.sim.debug",
     "test:e2e:android": "detox test --configuration android.emu.debug",
     "build:e2e:ios": "detox build --configuration ios.sim.debug",
-    "build:e2e:android": "detox build --configuration android.emu.debug"
+    "build:e2e:android": "detox build --configuration android.emu.debug",
+    "test:e2e:ios:release": "detox test --configuration ios.sim.release",
+    "test:e2e:android:release": "detox test --configuration android.emu.release",
+    "build:e2e:ios:release": "detox build --configuration ios.sim.release",
+    "build:e2e:android:release": "detox build --configuration android.emu.release"
   },
   "dependencies": {
     "@expo/metro-runtime": "~3.1.3",

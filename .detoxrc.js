@@ -42,7 +42,7 @@ module.exports = {
     emulator: {
       type: 'android.emulator',
       device: {
-        avdName: 'Pixel_9_Pro'
+        avdName: process.env.DETOX_AVD_NAME || 'Pixel_9_Pro'
       }
     }
   },

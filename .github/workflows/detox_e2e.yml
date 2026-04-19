@@ -71,3 +71,4 @@ jobs:
         env:
           TESTING: true
           NODE_ENV: production
+          DETOX_AVD_NAME: test
