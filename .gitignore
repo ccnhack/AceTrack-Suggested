@@ -7,7 +7,7 @@ dist/
 web-build/
 
 # Android
-android/build/
+android/app/build/
 android/.gradle/
 *.iml
 *.apk
@@ -39,7 +39,5 @@ yarn-debug.log*
 yarn-error.log*
 backend/diagnostics/
 *.zip
-/android
-/ios
 # backend/public/ — tracked for web dashboard deployment
 backend/firebase-service-account.json
