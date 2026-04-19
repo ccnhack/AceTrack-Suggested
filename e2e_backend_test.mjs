@@ -343,7 +343,7 @@ const ticketPayload = {
     title: 'E2E Automated Test Ticket',
     status: 'Open',
     type: 'Bug',
-    appVersion: "2.6.114",
+    appVersion: "2.6.116",
     platform: 'android',
     createdAt: new Date().toISOString(),
     messages: [
@@ -375,7 +375,7 @@ if (isProduction && !BYPASS_PROD_SAFETY) {
     assert('E2E-SUP-003', 'Support', 'Ticket contains automated greeting', 
       savedTicket.messages.some(m => m.senderId === 'admin' && m.text.includes('AceTrack Support Team')), 
       `Messages: ${savedTicket.messages.length}`);
-    assert('E2E-SUP-004', 'Support', 'Ticket has appVersion metadata', savedTicket.appVersion === '2.6.114', `Got: ${savedTicket.appVersion}`);
+    assert('E2E-SUP-004', 'Support', 'Ticket has appVersion metadata', savedTicket.appVersion === '2.6.116', `Got: ${savedTicket.appVersion}`);
     assert('E2E-SUP-005', 'Support', 'Ticket has platform metadata', savedTicket.platform === 'android', `Got: ${savedTicket.platform}`);
   }
 }

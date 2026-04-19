@@ -27,6 +27,7 @@ import { useTournaments } from './context/TournamentContext';
 import { useEvaluations } from './context/EvaluationContext';
 import { useSupport } from './context/SupportContext';
 
+
 function Root() {
   const { 
     isLoading, isInitialized, appVersion, latestAppVersion, 
@@ -41,7 +42,6 @@ function Root() {
   const { onSaveTicket, chatbotMessages, onSendChatMessage } = useSupport();
 
   const navigationRef = useRef();
-
   if (isLoading || !isInitialized) {
     return (
       <View testID="app.loading.container" style={styles.loadingContainer}>
@@ -50,6 +50,7 @@ function Root() {
       </View>
     );
   }
+
 
   return (
     <View style={{ flex: 1 }}>

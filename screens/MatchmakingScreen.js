@@ -160,7 +160,6 @@ export default function MatchmakingScreen({ route }) {
   );
   const role = user?.role || 'user';
   const [activeTab, setActiveTab] = useState(route?.params?.initialTab || (role === 'coach' ? 'Bookings' : 'Challenge')); // Challenge, Requests, Accepted, History
-  
   const handleTabChange = (newTab) => {
     if (newTab === activeTab) return;
     if (Platform.OS !== 'web') {
@@ -169,6 +168,7 @@ export default function MatchmakingScreen({ route }) {
     }
     setActiveTab(newTab);
   };
+
   
   // 🛡️ v2.6.87: Reactively update tab when params change (Fix for deep-linking when screen is already mounted)
   React.useEffect(() => {
@@ -901,6 +901,7 @@ export default function MatchmakingScreen({ route }) {
                     style={[styles.smallBtn, { backgroundColor: '#FFEEF2' }]} 
                     onPress={() => handleCancelChallenge(req)}
                   >
+
                     <Text style={[styles.smallBtnText, { color: '#E11D48' }]}>Cancel</Text>
                   </TouchableOpacity>
                 </View>
@@ -1141,6 +1142,7 @@ export default function MatchmakingScreen({ route }) {
                   )}
                   {tab === 'Bookings' && receivedRequests.filter(r => r.isNew).length > 0 && role === 'coach' && (
                     <View testID="matchmaking.tab.bookings.badge" style={styles.tabBadge}>
+
                       <Text style={styles.tabBadgeText}>{receivedRequests.filter(r => r.isNew).length}</Text>
                     </View>
                   )}
@@ -1834,6 +1836,7 @@ export default function MatchmakingScreen({ route }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.navy[50] },
   header: { padding: 20, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: colors.navy[100] },
+
   title: { fontSize: 22, fontWeight: '900', color: '#0F172A', textTransform: 'uppercase', letterSpacing: -0.5, marginBottom: 15 },
   tabs: { flexDirection: 'row', backgroundColor: '#f0f0f0', borderRadius: 10, padding: 4 },
   tab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
