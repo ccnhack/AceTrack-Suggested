@@ -4,7 +4,9 @@ import { syncManager } from '../services/SyncManager';
 import { eventBus } from '../services/EventBus';
 import PlayerService from '../services/PlayerService';
 import storage from '../utils/storage';
+import logger from '../utils/logger';
 import { Platform } from 'react-native';
+
 import { useSync } from './SyncContext';
 
 const AuthContext = createContext(null);
@@ -89,10 +91,12 @@ export const AuthProvider = ({ children }) => {
     const user = arg2 && typeof arg2 === 'object' ? arg2 : arg1;
     
     if (user && typeof user === 'object') {
-      console.log(`[AuthContext] Login success for user: ${user.id} (${user.role})`);
+      console.log(`[AuthContext] Login success for user: ${user.id} (${user.role}) - Verified: E:${!!user.isEmailVerified} P:${!!user.isPhoneVerified}`);
+      logger.logAction('LOGIN_SUCCESS', { userId: user.id, role: user.role, isEmailVerified: user.isEmailVerified, isPhoneVerified: user.isPhoneVerified });
       setCurrentUser(user);
       setUserRole(user.role);
       setViewingLanding(false);
+
       
       // 🛡️ INITIALIZATION GUARD: SyncManager must be aware of the user before it can persist data.
       // This prevents a race condition where syncAndSaveData would return early if this.userId was null.
@@ -210,7 +214,11 @@ export const AuthProvider = ({ children }) => {
       ...currentUserRef.current, 
       [isEmail ? 'isEmailVerified' : 'isPhoneVerified']: true 
     };
+    console.log(`[AuthContext] Verifying ${type} for ${currentUserRef.current.id}. New State: E:${!!updated.isEmailVerified} P:${!!updated.isPhoneVerified}`);
+    logger.logAction('ACCOUNT_VERIFIED', { type, userId: updated.id, isEmailVerified: updated.isEmailVerified, isPhoneVerified: updated.isPhoneVerified });
     onUpdateUser(updated);
+
+
   }, [onUpdateUser]);
 
   const onMarkNotificationsRead = useCallback(() => {

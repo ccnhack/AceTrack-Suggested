@@ -317,11 +317,20 @@ class SyncManager {
                 const idx = players.findIndex((p: any) => p && p.id === val.id);
                 if (idx !== -1) {
                   // Merge updated fields while preserving ranking-specific ones
+                  const prevVerified = !!players[idx].isEmailVerified;
                   players[idx] = { ...players[idx], ...thinPlayer(val) };
+                  const nextVerified = !!players[idx].isEmailVerified;
+                  
+                  if (prevVerified !== nextVerified) {
+                    console.log(`[SyncManager] [IDENTITY_SYNC] ${val.id} verification changed: ${prevVerified} -> ${nextVerified}`);
+                  }
+                  
                   await storage.setItem('players', players);
                   eventBus.emitEntityUpdate('players', null, 'update', 'internal');
-                  console.log(`[SyncManager] Harmonized profile for: ${val.id}`);
+                  console.log(`[SyncManager] Harmonized profile for: ${val.id} (E:${!!players[idx].isEmailVerified} P:${!!players[idx].isPhoneVerified})`);
                 }
+
+
               }
             } catch (e) {
               console.warn('[SyncManager] Profile harmonization deferred:', e);

@@ -141,7 +141,10 @@ export const thinPlayer = (p: any) => {
     id, name, avatar, rating, trueSkillRating, role, 
     matchesPlayed, wins, losses, skillLevel, city, sport,
     isApprovedCoach, coachStatus, preferredFormat, mostPlayedVenue,
-    referralCode, devices, phone
+    referralCode, devices, phone,
+    // 🛡️ [IDENTITY_GUARD] (v2.6.121) 
+    // Always preserve verification and login identifiers in the thinned list
+    email, username, isEmailVerified, isPhoneVerified
   } = p;
   
   return { 
@@ -149,9 +152,11 @@ export const thinPlayer = (p: any) => {
     matchesPlayed, wins, losses, skillLevel, city, sport,
     isApprovedCoach, coachStatus, preferredFormat, mostPlayedVenue,
     referralCode, devices, phone,
+    email, username, isEmailVerified, isPhoneVerified,
     _thinned: true // Meta-flag for diagnostics
   };
 };
+
 
 export const thinPlayers = (players: any[]) => {
   if (!Array.isArray(players)) return players;
