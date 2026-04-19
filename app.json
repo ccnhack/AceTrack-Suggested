@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "AceTrack",
-    "version": "2.6.118",
+    "version": "2.6.119",
     "sdkVersion": "50.0.0",
     "platforms": [
       "ios",

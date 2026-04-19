@@ -53,21 +53,32 @@ export default function SubscriptionScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa' },
-  header: { padding: 40, alignItems: 'center', backgroundColor: '#fff' },
-  title: { fontSize: 28, fontWeight: '900', color: colors.primary },
-  subtitle: { fontSize: 16, color: '#666', marginTop: 8 },
+  container: { flex: 1, backgroundColor: colors.navy[50] },
+  header: { padding: 40, alignItems: 'center', backgroundColor: '#fff', borderBottomLeftRadius: 32, borderBottomRightRadius: 32, ...shadows.sm },
+  title: { fontSize: 28, fontWeight: '900', color: colors.primary.base, textTransform: 'uppercase', letterSpacing: 1 },
+  subtitle: { fontSize: 16, color: colors.navy[500], marginTop: 8, fontWeight: '600' },
   list: { padding: 20 },
-  card: { backgroundColor: '#fff', borderRadius: 16, padding: 20, marginBottom: 20, borderWidth: 2, borderColor: '#eee' },
-  selectedCard: { borderColor: colors.primary, backgroundColor: '#f0f4ff' },
+  card: { backgroundColor: '#fff', borderRadius: 24, padding: 24, marginBottom: 20, borderWidth: 2, borderColor: colors.navy[100], position: 'relative' },
+  selectedCard: { borderColor: colors.primary.base, backgroundColor: '#F5F8FF', ...shadows.md },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  tierName: { fontSize: 20, fontWeight: '800', color: '#333' },
-  tierPrice: { fontSize: 18, fontWeight: '700', color: colors.primary },
-  features: { borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 15 },
-  featureLine: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  featureText: { fontSize: 14, color: '#444', marginLeft: 8 },
-  activeTag: { position: 'absolute', top: -10, right: 20, backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 },
-  activeTagText: { color: '#fff', fontSize: 10, fontWeight: '900' },
-  mainBtn: { backgroundColor: colors.primary, margin: 20, padding: 18, borderRadius: 12, alignItems: 'center' },
-  mainBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' }
+  tierName: { fontSize: 22, fontWeight: '900', color: colors.navy[900] },
+  tierPrice: { fontSize: 20, fontWeight: '800', color: colors.primary.base },
+  features: { borderTopWidth: 1, borderTopColor: colors.navy[100], paddingTop: 15 },
+  featureLine: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  featureText: { fontSize: 14, color: colors.navy[700], marginLeft: 10, fontWeight: '600' },
+  activeTag: { 
+    position: 'absolute', 
+    top: -12, 
+    right: 24, 
+    backgroundColor: colors.primary.base, 
+    paddingHorizontal: 14, 
+    paddingVertical: 6, 
+    borderRadius: 12,
+    ...shadows.sm,
+    borderWidth: 2,
+    borderColor: '#fff'
+  },
+  activeTagText: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  mainBtn: { backgroundColor: colors.primary.base, margin: 24, padding: 20, borderRadius: 20, alignItems: 'center', ...shadows.md },
+  mainBtnText: { color: '#fff', fontSize: 16, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 }
 });

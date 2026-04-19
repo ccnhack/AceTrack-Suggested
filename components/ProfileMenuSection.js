@@ -18,6 +18,19 @@ const ProfileMenuSection = memo(({
 }) => {
   return (
     <View style={styles.menuSection}>
+      {user.role === 'coach' && (
+        <TouchableOpacity 
+          onPress={onCoachOnboarding}
+          style={styles.menuItem}
+        >
+          <View style={[styles.menuIcon, { backgroundColor: '#F0FDF4' }]}>
+            <Ionicons name="ribbon" size={20} color="#16A34A" />
+          </View>
+          <Text style={styles.menuLabel}>Affiliation</Text>
+          <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+        </TouchableOpacity>
+      )}
+
       <TouchableOpacity 
         testID="profile.edit.button"
         onPress={() => {
@@ -29,7 +42,7 @@ const ProfileMenuSection = memo(({
         <View style={[styles.menuIcon, { backgroundColor: '#F8FAFC' }]}>
           <Ionicons name="person-outline" size={20} color="#334155" />
         </View>
-        <Text style={styles.menuLabel}>Edit Profile</Text>
+        <Text style={styles.menuLabel}>Profile Details</Text>
         <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
       </TouchableOpacity>
 
@@ -96,18 +109,7 @@ const ProfileMenuSection = memo(({
         <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
       </TouchableOpacity>
 
-      {user.role === 'coach' && (
-        <TouchableOpacity 
-          onPress={onCoachOnboarding}
-          style={styles.menuItem}
-        >
-          <View style={[styles.menuIcon, { backgroundColor: '#F0FDF4' }]}>
-            <Ionicons name="ribbon" size={20} color="#16A34A" />
-          </View>
-          <Text style={styles.menuLabel}>Edit Academy</Text>
-          <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
-        </TouchableOpacity>
-      )}
+
 
       <TouchableOpacity 
         onPress={async () => {

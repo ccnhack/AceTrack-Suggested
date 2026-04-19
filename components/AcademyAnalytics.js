@@ -225,21 +225,30 @@ export const AcademyAnalytics = ({
                     <ScrollView style={styles.modalScroll}>
                         {stats.tournamentRevenueDetails.map(item => (
                             <View key={item.id} style={styles.drillDownCard}>
-                                <View style={styles.drillDownCardRow}>
-                                    <View style={styles.flex}>
-                                        <View style={styles.row}>
-                                            <Text style={styles.drillDownLabel}>{item.title}</Text>
-                                            <View style={styles.miniSportBadge}>
-                                                <Text style={styles.miniSportText}>{item.sport}</Text>
-                                            </View>
+                                <View style={styles.drillDownAccent} />
+                                <View style={styles.drillDownMain}>
+                                    <View style={styles.drillDownHeaderRow}>
+                                        <View style={styles.drillDownInfo}>
+                                            <Text style={styles.drillDownSportTag}>{item.sport}</Text>
+                                            <Text style={styles.drillDownLabel} numberOfLines={2}>
+                                                {item.title}
+                                            </Text>
                                         </View>
-                                        <View style={styles.drillDownSubRow}>
+                                        <View style={styles.drillDownPriceSection}>
+                                            <Text style={styles.drillDownAmountLabel}>TOTAL REVENUE</Text>
+                                            <Text style={styles.drillDownTotal}>₹{item.total.toLocaleString()}</Text>
+                                        </View>
+                                    </View>
+                                    
+                                    <View style={styles.drillDownFooter}>
+                                        <View style={styles.drillDownFooterLeft}>
+                                            <Ionicons name="pie-chart-outline" size={14} color="#6366F1" style={{ marginRight: 6 }} />
                                             <Text style={styles.drillDownSubText}>Fees: ₹{item.regRev}</Text>
                                             <View style={styles.dotSeparator} />
                                             <Text style={styles.drillDownSubText}>Videos: ₹{item.vidRev}</Text>
                                         </View>
+                                        <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
                                     </View>
-                                    <Text style={styles.drillDownTotal}>₹{item.total.toLocaleString()}</Text>
                                 </View>
                             </View>
                         ))}
@@ -475,14 +484,74 @@ const styles = StyleSheet.create({
   modalScroll: { flex: 1 },
   flex: { flex: 1 },
   
-  // Drill-down Content Styles
-  drillDownCard: { backgroundColor: '#fff', padding: 20, borderRadius: 20, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9' },
-  drillDownCardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  drillDownLabel: { fontSize: 15, fontWeight: '800', color: '#1E293B' },
-  drillDownSubRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
-  drillDownSubText: { fontSize: 11, fontWeight: '700', color: '#64748B' },
-  dotSeparator: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#CBD5E1', mx: 8, marginHorizontal: 8 },
-  drillDownTotal: { fontSize: 16, fontWeight: '900', color: '#6366F1' },
+  // Ultra-Premium Drill-down Content Styles
+  drillDownCard: { 
+    backgroundColor: '#fff', 
+    borderRadius: 24, 
+    marginBottom: 20, 
+    flexDirection: 'row', 
+    overflow: 'hidden',
+    ...designSystem.shadows?.md,
+    borderWidth: 1,
+    borderColor: '#F1F5F9'
+  },
+  drillDownAccent: {
+    width: 6,
+    backgroundColor: '#6366F1',
+    height: '100%'
+  },
+  drillDownMain: {
+    flex: 1,
+    padding: 20,
+  },
+  drillDownHeaderRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'flex-start',
+    marginBottom: 16
+  },
+  drillDownInfo: { flex: 1, marginRight: 16 },
+  drillDownSportTag: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#6366F1',
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginBottom: 6
+  },
+  drillDownLabel: { 
+    fontSize: 18, 
+    fontWeight: '900', 
+    color: '#0F172A',
+    lineHeight: 24
+  },
+  drillDownPriceSection: { alignItems: 'flex-end' },
+  drillDownAmountLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#94A3B8',
+    marginBottom: 4,
+    letterSpacing: 0.5
+  },
+  drillDownTotal: { 
+    fontSize: 20, 
+    fontWeight: '900', 
+    color: '#0F172A' 
+  },
+  drillDownFooter: {
+    backgroundColor: '#F8FAFC',
+    padding: 12,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  drillDownFooterLeft: {
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  drillDownSubText: { fontSize: 12, fontWeight: '700', color: '#475569' },
+  dotSeparator: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#CBD5E1', marginHorizontal: 10 },
   
   tableHeader: { flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 12, marginBottom: 16 },
   tableLabel: { fontSize: 11, fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 1 },
@@ -512,8 +581,8 @@ const styles = StyleSheet.create({
   scoreSkill: { fontSize: 12, color: '#64748B', fontWeight: '600', marginBottom: 4 },
   scoreVal: { fontSize: 15, fontWeight: '800', color: '#1E293B' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  miniSportBadge: { backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  miniSportText: { fontSize: 10, fontWeight: '800', color: '#6366F1', textTransform: 'uppercase' },
+  miniSportBadge: { backgroundColor: '#EEF2FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: '#E0E7FF' },
+  miniSportText: { fontSize: 9, fontWeight: '900', color: '#6366F1', textTransform: 'uppercase', letterSpacing: 0.5 },
   drillDownSection: { marginBottom: 24 },
   drillDownHeadline: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8 },
   drillDownCardSmall: { backgroundColor: '#fff', padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: '#F1F5F9' }

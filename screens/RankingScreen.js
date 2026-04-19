@@ -9,6 +9,7 @@ import SafeAvatar from '../components/SafeAvatar';
 import { useAuth } from '../context/AuthContext';
 import { usePlayers } from '../context/PlayerContext';
 import { useTournaments } from '../context/TournamentContext';
+import TournamentService from '../services/TournamentService';
 
 const RankingScreen = () => {
   const { currentUser: user, userRole: role } = useAuth();
@@ -21,10 +22,11 @@ const RankingScreen = () => {
     if (role === 'academy' && user) {
       const myParticipantIds = new Set(
         (tournaments || [])
-          .filter(t => t.creatorId === user.id)
+          .filter(t => TournamentService.normalizeId(t.creatorId) === TournamentService.normalizeId(user.id))
           .flatMap(t => t.registeredPlayerIds || [])
+          .map(pid => TournamentService.normalizeId(pid))
       );
-      list = (players || []).filter(p => p && myParticipantIds.has(p.id) && p.role !== 'coach');
+      list = (players || []).filter(p => p && p.id && myParticipantIds.has(TournamentService.normalizeId(p.id)) && p.role !== 'coach');
     }
 
     // Sort by trueSkillRating or rating descending

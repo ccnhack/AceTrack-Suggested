@@ -190,6 +190,7 @@ const ProfileScreen = ({ navigation }) => {
 
   const [message, setMessage] = useState('');
   const [isCalendarModalVisible, setIsCalendarModalVisible] = useState(false);
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().substring(0, 7));
 
   const MOCK_EVENTS = [
@@ -211,6 +212,9 @@ const ProfileScreen = ({ navigation }) => {
 
   const today = new Date().toISOString().split('T')[0];
   const filteredEvents = allEvents.filter(event => {
+    if (selectedCalendarDate) {
+      return event.date === selectedCalendarDate;
+    }
     const eventMonth = event.date.substring(0, 7);
     const date = new Date(currentMonth + '-01');
     const nextMonthDate = new Date(date.setMonth(date.getMonth() + 1));
@@ -220,6 +224,15 @@ const ProfileScreen = ({ navigation }) => {
     return isThisOrNextMonth && event.date >= today;
   }).sort((a, b) => a.date.localeCompare(b.date));
 
+  const getCalendarTitle = () => {
+    if (!selectedCalendarDate) return 'Upcoming Events';
+    const d = new Date(selectedCalendarDate);
+    const dateLabel = d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+    return selectedCalendarDate >= today 
+      ? `Upcoming Events on ${dateLabel}`
+      : `Events on ${dateLabel}`;
+  };
+
   const markedDates = {};
   allEvents.forEach(event => {
     markedDates[event.date] = { 
@@ -227,6 +240,15 @@ const ProfileScreen = ({ navigation }) => {
         dotColor: event.type === 'booking' ? '#22C55E' : colors.primary 
     };
   });
+
+  if (selectedCalendarDate) {
+    markedDates[selectedCalendarDate] = {
+      ...markedDates[selectedCalendarDate],
+      selected: true,
+      selectedColor: colors.primary.base,
+      selectedTextColor: '#fff'
+    };
+  }
   const [editName, setEditName] = useState(user?.name || '');
   const [editEmail, setEditEmail] = useState(user?.email || '');
   const [editPhone, setEditPhone] = useState(user?.phone || '');
@@ -361,7 +383,87 @@ const ProfileScreen = ({ navigation }) => {
   };
 
 
+  const renderOTPModal = (isNested = false) => {
+    if (!showVerifyModal) return null;
+    
+    const otpContent = (
+      <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
+        <View style={styles.otpModalContent}>
+          <View style={styles.otpIconContainer}>
+            <Ionicons name={showVerifyModal === 'email' ? "mail-unread" : "chatbubble-ellipses"} size={32} color="#EF4444" />
+          </View>
+          <Text style={styles.otpTitle}>Verify {showVerifyModal === 'email' ? 'Email' : 'Phone'}</Text>
+          <Text style={styles.otpDescription}>
+            We've sent a 6-digit verification code to your {showVerifyModal === 'email' ? 'email address' : 'phone number'}.
+          </Text>
+          
+          <TextInput 
+            style={styles.otpInput}
+            placeholder="123456"
+            placeholderTextColor="#CBD5E1"
+            maxLength={6}
+            keyboardType="number-pad"
+            value={verificationCode}
+            onChangeText={setVerificationCode}
+            autoFocus={true}
+            selectionColor="#3B82F6"
+          />
+          
+          <View style={styles.otpActions}>
+            <TouchableOpacity 
+              style={[styles.otpVerifyBtn, (verificationCode.length !== 6 || isVerifying) && styles.disabledBtn]}
+              disabled={verificationCode.length !== 6 || isVerifying}
+              onPress={() => {
+                setIsVerifying(true);
+                // Simulate API call
+                setTimeout(() => {
+                  const type = showVerifyModal;
+                  if (onVerifyAccount) {
+                    onVerifyAccount(type);
+                  } else {
+                    onUpdateUser({
+                      ...user,
+                      [type === 'email' ? 'isEmailVerified' : 'isPhoneVerified']: true
+                    });
+                  }
+                  setShowVerifyModal(null);
+                  setVerificationCode('');
+                  setIsVerifying(false);
+                  Alert.alert("Success", `${type === 'email' ? 'Email' : 'Phone'} verified successfully!`);
+                }, 1500);
+              }}
+            >
+              <Text style={styles.otpVerifyText}>{isVerifying ? 'Verifying...' : 'Verify'}</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.otpCancelBtn}
+              onPress={() => {
+                setShowVerifyModal(null);
+                setVerificationCode('');
+              }}
+            >
+              <Text style={styles.otpCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
 
+    if (isNested) {
+      return (
+        <View style={[StyleSheet.absoluteFill, { zIndex: 9999 }]}>
+          {otpContent}
+        </View>
+      );
+    }
+
+    return (
+      <Modal visible={!!showVerifyModal} animationType="fade" transparent={true} onRequestClose={() => setShowVerifyModal(null)}>
+        {otpContent}
+      </Modal>
+    );
+  };
   const content = (
     <View style={[styles.container, isWeb && { maxWidth: 900, alignSelf: 'center', width: '100%', backgroundColor: '#FFFFFF', padding: 24, marginVertical: 16, borderRadius: 24, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.08, shadowRadius: 40, overflow: 'hidden', flex: 1 }, { paddingTop: Math.max(insets.top, 16) }]}>
       <ScrollView 
@@ -768,7 +870,7 @@ const ProfileScreen = ({ navigation }) => {
             >
               <View style={styles.editModalContent}>
                 <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Edit Profile</Text>
+                  <Text style={styles.modalTitle}>Profile Details</Text>
                   <TouchableOpacity onPress={() => setShowEditProfile(false)} style={styles.closeBtn}>
                     <Ionicons name="close" size={24} color="#0F172A" />
                   </TouchableOpacity>
@@ -785,6 +887,21 @@ const ProfileScreen = ({ navigation }) => {
                       value={editName}
                       onChangeText={setEditName}
                       placeholder="Enter name"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <View style={styles.labelRow}>
+                      <Text style={styles.inputLabel}>Username</Text>
+                      <View style={styles.inlineVerifiedBadge}>
+                        <Ionicons name="lock-closed" size={10} color="#94A3B8" />
+                        <Text style={[styles.verifiedText, { color: '#94A3B8' }]}>Permanent</Text>
+                      </View>
+                    </View>
+                    <TextInput 
+                      style={[styles.input, styles.disabledInput]}
+                      value={user.id}
+                      editable={false}
                     />
                   </View>
 
@@ -841,8 +958,7 @@ const ProfileScreen = ({ navigation }) => {
                           <TouchableOpacity 
                             style={styles.inlineVerifyBtn}
                             onPress={() => {
-                              setShowEditProfile(false);
-                              setTimeout(() => setShowVerifyModal('email'), 300);
+                              setShowVerifyModal('email');
                             }}
                           >
                             <Text style={styles.verifyBtnText}>Verify Now</Text>
@@ -851,12 +967,13 @@ const ProfileScreen = ({ navigation }) => {
                       )}
                     </View>
                     <TextInput 
-                      style={styles.input}
+                      style={[styles.input, user.isEmailVerified && styles.disabledInput]}
                       value={editEmail}
                       onChangeText={setEditEmail}
                       placeholder="john@example.com"
                       keyboardType="email-address"
                       autoCapitalize="none"
+                      editable={!user.isEmailVerified}
                     />
                   </View>
 
@@ -873,8 +990,7 @@ const ProfileScreen = ({ navigation }) => {
                           <TouchableOpacity 
                             style={styles.inlineVerifyBtn}
                             onPress={() => {
-                              setShowEditProfile(false);
-                              setTimeout(() => setShowVerifyModal('phone'), 300);
+                              setShowVerifyModal('phone');
                             }}
                           >
                             <Text style={styles.verifyBtnText}>Verify Now</Text>
@@ -883,11 +999,12 @@ const ProfileScreen = ({ navigation }) => {
                       )}
                     </View>
                     <TextInput 
-                      style={styles.input}
+                      style={[styles.input, user.isPhoneVerified && styles.disabledInput]}
                       value={editPhone}
                       onChangeText={setEditPhone}
                       placeholder="+91 9876543210"
                       keyboardType="phone-pad"
+                      editable={!user.isPhoneVerified}
                     />
                   </View>
 
@@ -916,6 +1033,7 @@ const ProfileScreen = ({ navigation }) => {
               </View>
             </KeyboardAvoidingView>
           </View>
+          {renderOTPModal(true)}
         </Modal>
       )}
 
@@ -1033,18 +1151,33 @@ const ProfileScreen = ({ navigation }) => {
                           
                           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
                               <Calendar 
+                                onDayPress={(day) => {
+                                  if (selectedCalendarDate === day.dateString) {
+                                    setSelectedCalendarDate(null);
+                                  } else {
+                                    setSelectedCalendarDate(day.dateString);
+                                  }
+                                }}
                                 onMonthChange={(month) => setCurrentMonth(month.dateString.substring(0, 7))}
                                 theme={{
-                                  todayTextColor: colors.primary,
-                                  arrowColor: colors.primary,
-                                  dotColor: colors.primary,
-                                  selectedDayBackgroundColor: colors.primary,
+                                  todayTextColor: colors.primary.base,
+                                  arrowColor: colors.primary.base,
+                                  dotColor: colors.primary.base,
+                                  selectedDayBackgroundColor: colors.primary.base,
+                                  selectedDayTextColor: '#fff',
                                 }}
                                 markedDates={markedDates}
                               />
                             
                             <View style={styles.eventsSection}>
-                              <Text style={styles.calendarSectionTitle}>Upcoming Events</Text>
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                <Text style={styles.calendarSectionTitle}>{getCalendarTitle()}</Text>
+                                {selectedCalendarDate && (
+                                  <TouchableOpacity onPress={() => setSelectedCalendarDate(null)}>
+                                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary, padding: 4 }}>Clear</Text>
+                                  </TouchableOpacity>
+                                )}
+                              </View>
                               {filteredEvents && filteredEvents.length > 0 ? (
                                 filteredEvents.map(item => {
                                   const eventDate = new Date(item.date);
@@ -1070,8 +1203,10 @@ const ProfileScreen = ({ navigation }) => {
                                   );
                                 })
                               ) : (
-                                <View style={{ alignItems: 'center', paddingVertical: 20 }}>
-                                  <Text style={{ color: '#94A3B8', fontSize: 13, fontWeight: '600' }}>No events for this month</Text>
+                                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                                  <Text style={{ color: '#94A3B8', fontSize: 13, fontWeight: '600', fontStyle: 'italic' }}>
+                                    {selectedCalendarDate ? 'No events found for this date' : 'No upcoming events for this month'}
+                                  </Text>
                                 </View>
                               )}
                             </View>
@@ -1084,80 +1219,21 @@ const ProfileScreen = ({ navigation }) => {
                 </View>
             </Modal>
           )}
-      {/* Verification OTP Modal */}
-      {!!showVerifyModal && (
-        <Modal visible={!!showVerifyModal} animationType="fade" transparent={true} onRequestClose={() => setShowVerifyModal(null)}>
-          <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
-            <View style={styles.otpModalContent}>
-              <View style={styles.otpIconContainer}>
-                <Ionicons name={showVerifyModal === 'email' ? "mail-unread" : "chatbubble-ellipses"} size={32} color="#EF4444" />
-              </View>
-              <Text style={styles.otpTitle}>Verify {showVerifyModal === 'email' ? 'Email' : 'Phone'}</Text>
-              <Text style={styles.otpDescription}>
-                We've sent a 6-digit verification code to your {showVerifyModal === 'email' ? 'email address' : 'phone number'}.
-              </Text>
-              
-              <TextInput 
-                style={styles.otpInput}
-                placeholder="123456"
-                placeholderTextColor="#CBD5E1"
-                maxLength={6}
-                keyboardType="number-pad"
-                value={verificationCode}
-                onChangeText={setVerificationCode}
-                autoFocus={true}
-                selectionColor="#3B82F6"
-              />
-              
-              <View style={styles.otpActions}>
-                <TouchableOpacity 
-                  style={[styles.otpVerifyBtn, (verificationCode.length !== 6 || isVerifying) && styles.disabledBtn]}
-                  disabled={verificationCode.length !== 6 || isVerifying}
-                  onPress={() => {
-                    setIsVerifying(true);
-                    // Simulate API call
-                    setTimeout(() => {
-                      const type = showVerifyModal;
-                      if (onVerifyAccount) {
-                        onVerifyAccount(type);
-                      } else {
-                        onUpdateUser({
-                          ...user,
-                          [type === 'email' ? 'isEmailVerified' : 'isPhoneVerified']: true
-                        });
-                      }
-                      setShowVerifyModal(null);
-                      setVerificationCode('');
-                      setIsVerifying(false);
-                      Alert.alert("Success", `${type === 'email' ? 'Email' : 'Phone'} verified successfully!`);
-                    }, 1500);
-                  }}
-                >
-                  <Text style={styles.otpVerifyText}>{isVerifying ? 'Verifying...' : 'Verify'}</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={styles.otpCancelBtn}
-                  onPress={() => {
-                    setShowVerifyModal(null);
-                    setVerificationCode('');
-                  }}
-                >
-                  <Text style={styles.otpCancelText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      )}
+    </View>
+  );
+
+  const fullContent = (
+    <View style={{ flex: 1 }}>
+      {content}
+      {renderOTPModal()}
     </View>
   );
 
   return isWeb ? (
     <View style={{ flex: 1, backgroundColor: '#F8FAFC', justifyContent: 'center' }}>
-      {content}
+      {fullContent}
     </View>
-  ) : content;
+  ) : fullContent;
 };
 
 const styles = StyleSheet.create({
@@ -1604,7 +1680,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#64748B',
   },
-  calendarSectionTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 16 },
+  calendarSectionTitle: { 
+    fontSize: 18, 
+    fontWeight: '800', 
+    color: '#0F172A', 
+    flex: 1, 
+    marginRight: 12 
+  },
   keyboardView: {
     width: '100%',
     alignItems: 'center',
@@ -1760,6 +1842,11 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     fontWeight: 'bold',
     marginTop: 4,
+  },
+  disabledInput: {
+    backgroundColor: '#F1F5F9',
+    color: '#94A3B8',
+    opacity: 0.8,
   },
   dropdownButton: {
     flexDirection: 'row',
