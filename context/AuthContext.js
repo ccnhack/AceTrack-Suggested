@@ -213,6 +213,15 @@ export const AuthProvider = ({ children }) => {
     onUpdateUser(updated);
   }, [onUpdateUser]);
 
+  const onMarkNotificationsRead = useCallback(() => {
+    if (!currentUserRef.current) return;
+    const updated = {
+      ...currentUserRef.current,
+      notifications: (currentUserRef.current.notifications || []).map(n => ({ ...n, read: true }))
+    };
+    onUpdateUser(updated);
+  }, [onUpdateUser]);
+
   const value = {
     currentUser,
     setCurrentUser,
@@ -231,7 +240,8 @@ export const AuthProvider = ({ children }) => {
     onVerifyAccount,
     onRegisterUser,
     onResetPassword,
-    onTopUp
+    onTopUp,
+    onMarkNotificationsRead
   };
 
   return (

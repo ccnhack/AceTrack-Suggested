@@ -21,6 +21,7 @@ import AdminAssignmentPanel from '../components/admin/AdminAssignmentPanel';
 import AdminMatchesPanel from '../components/admin/AdminMatchesPanel';
 import AdminEvaluationsPanel from '../components/admin/AdminEvaluationsPanel';
 import AdminPaymentsPanel from '../components/admin/AdminPaymentsPanel';
+import AdminStaffPanel from '../components/admin/AdminStaffPanel';
 
 // Context Hooks
 import { usePlayers } from '../context/PlayerContext';
@@ -142,6 +143,8 @@ const AdminHubScreen = ({ navigation, route }) => {
         return <AdminPaymentsPanel search={search} />;
       case 'diagnostics':
         return <AdminDiagnosticsPanel autoSelectUser={autoSelectUser} />;
+      case 'staff':
+        return <AdminStaffPanel />;
       case 'grievances':
         return (
           <AdminGrievancesPanel 
@@ -234,6 +237,7 @@ const AdminHubScreen = ({ navigation, route }) => {
             { id: 'audit', label: 'Audit', icon: 'list' },
             { id: 'security', label: 'Security', icon: 'shield-half' },
             { id: 'diagnostics', label: 'Diag', icon: 'pulse' },
+            { id: 'staff', label: 'Staff', icon: 'people-circle-outline' },
           ].map(tab => {
             const isActive = subTab === tab.id;
             const showBadge = tab.count > 0 && (tab.id === 'grievances' || !visitedAdminSubTabs.has(tab.id));
@@ -258,16 +262,18 @@ const AdminHubScreen = ({ navigation, route }) => {
         </ScrollView>
       </View>
 
-      <View style={styles.searchBar}>
-        <Ionicons name="search" size={16} color="#94A3B8" />
-        <TextInput 
-          testID="admin.search.input"
-          placeholder={subTab === 'grievances' ? "Search tickets..." : `Search ${subTab}...`}
-          value={search}
-          onChangeText={setSearch}
-          style={styles.searchInput}
-        />
-      </View>
+      {subTab !== 'diagnostics' && (
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={16} color="#94A3B8" />
+          <TextInput 
+            testID="admin.search.input"
+            placeholder={subTab === 'grievances' ? "Search tickets..." : `Search ${subTab}...`}
+            value={search}
+            onChangeText={setSearch}
+            style={styles.searchInput}
+          />
+        </View>
+      )}
 
       <ScrollView 
         style={styles.content} 

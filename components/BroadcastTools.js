@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import designSystem from '../theme/designSystem';
+import { colors } from '../theme/designSystem';
 
 export default function BroadcastTools({ tournaments = [], serverClockOffset = 0 }) {
   const [message, setMessage] = useState('');
@@ -41,10 +41,9 @@ export default function BroadcastTools({ tournaments = [], serverClockOffset = 0
 
   return (
     <View style={styles.container}>
-      <View style={styles.card}>
         <View style={styles.header}>
           <View style={styles.iconCircle}>
-            <Ionicons name="megaphone" size={20} color={designSystem.colors.primary} />
+            <Ionicons name="megaphone" size={20} color={colors.primary.base} />
           </View>
           <View>
             <Text style={styles.title}>Send Announcement</Text>
@@ -71,7 +70,12 @@ export default function BroadcastTools({ tournaments = [], serverClockOffset = 0
         </View>
 
         <Text style={styles.label}>SELECT TOURNAMENT</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow} contentContainerStyle={{ paddingBottom: 10 }}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false} 
+          style={styles.chipRow} 
+          contentContainerStyle={styles.chipRowContent}
+        >
           {categoryFilter === 'all' && (
             <TouchableOpacity 
               style={[styles.chip, selectedTournament === 'all' && styles.chipActive]}
@@ -102,7 +106,7 @@ export default function BroadcastTools({ tournaments = [], serverClockOffset = 0
             style={[styles.targetBtn, targetAudience === 'registered' && styles.targetBtnActive]}
             onPress={() => setTargetAudience('registered')}
           >
-            <Ionicons name="people" size={16} color={targetAudience === 'registered' ? designSystem.colors.primary : '#94A3B8'} />
+            <Ionicons name="people" size={16} color={targetAudience === 'registered' ? colors.primary.base : '#94A3B8'} />
             <Text style={[styles.targetText, targetAudience === 'registered' && styles.targetTextActive]}>
               Registered
             </Text>
@@ -111,7 +115,7 @@ export default function BroadcastTools({ tournaments = [], serverClockOffset = 0
             style={[styles.targetBtn, targetAudience === 'all' && styles.targetBtnActive]}
             onPress={() => setTargetAudience('all')}
           >
-            <Ionicons name="globe" size={16} color={targetAudience === 'all' ? designSystem.colors.primary : '#94A3B8'} />
+            <Ionicons name="globe" size={16} color={targetAudience === 'all' ? colors.primary.base : '#94A3B8'} />
             <Text style={[styles.targetText, targetAudience === 'all' && styles.targetTextActive]}>
               All Participants
             </Text>
@@ -140,7 +144,6 @@ export default function BroadcastTools({ tournaments = [], serverClockOffset = 0
           <Text style={styles.btnText}>BROADCAST MESSAGE</Text>
           <Ionicons name="send" size={16} color="#fff" style={{ marginLeft: 10 }} />
         </TouchableOpacity>
-      </View>
     </View>
   );
 }
@@ -158,21 +161,41 @@ const styles = StyleSheet.create({
   catBtnActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' },
   catBtnText: { fontSize: 11, fontWeight: '800', color: '#64748B' },
   catBtnTextActive: { color: '#FFFFFF' },
-  chipRow: { marginBottom: 15 },
-  chip: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 14, backgroundColor: '#F1F5F9', marginRight: 10, height: 40, justifyContent: 'center' },
+  chipRow: { 
+    marginBottom: 15,
+    width: '100%',
+  },
+  chipRowContent: { 
+    flexDirection: 'row', 
+    gap: 10,
+    paddingBottom: 10,
+    paddingHorizontal: 0,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    minWidth: '100%'
+  },
+  chip: { 
+    paddingHorizontal: 20, 
+    paddingVertical: 10, 
+    borderRadius: 14, 
+    backgroundColor: '#F1F5F9', 
+    height: 40, 
+    justifyContent: 'center',
+    alignSelf: 'flex-start'
+  },
   emptyChip: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 14, backgroundColor: '#F8FAFC', borderStyle: 'dashed', borderWidth: 1, borderColor: '#E2E8F0', height: 40, justifyContent: 'center' },
   emptyChipText: { fontSize: 12, color: '#94A3B8', fontWeight: '600' },
-  chipActive: { backgroundColor: designSystem.colors.primary },
+  chipActive: { backgroundColor: colors.primary.base },
   chipText: { fontSize: 13, color: '#64748B', fontWeight: '700' },
   chipTextActive: { color: '#fff' },
   targetRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
   targetBtn: { flex: 1, flexDirection: 'row', paddingVertical: 14, borderRadius: 16, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#F1F5F9', gap: 8 },
-  targetBtnActive: { backgroundColor: '#EEF2FF', borderColor: designSystem.colors.primary },
+  targetBtnActive: { backgroundColor: '#EEF2FF', borderColor: colors.primary.base },
   targetText: { fontSize: 13, color: '#64748B', fontWeight: '700' },
-  targetTextActive: { color: designSystem.colors.primary },
+  targetTextActive: { color: colors.primary.base },
   inputContainer: { backgroundColor: '#F8FAFC', borderRadius: 20, padding: 4, borderWidth: 1, borderColor: '#F1F5F9' },
   input: { padding: 20, height: 120, textAlignVertical: 'top', fontSize: 15, color: '#0F172A', fontWeight: '600' },
-  btn: { backgroundColor: designSystem.colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 20, borderRadius: 20, marginTop: 20, shadowColor: designSystem.colors.primary, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
+  btn: { backgroundColor: colors.primary.base, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 20, borderRadius: 20, marginTop: 20, shadowColor: colors.primary.base, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
   btnDisabled: { opacity: 0.5, backgroundColor: '#CBD5E1' },
   btnText: { color: '#fff', fontWeight: '900', fontSize: 14, letterSpacing: 1 },
   targetingBox: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 15, backgroundColor: '#F5F3FF', padding: 12, borderRadius: 12 },

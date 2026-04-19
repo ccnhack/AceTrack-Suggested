@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react';
 import { 
   View, Text, TouchableOpacity, StyleSheet, TextInput, ScrollView, 
-  ActivityIndicator, Alert, Platform, Share, Dimensions 
+  ActivityIndicator, Alert, Platform, Share, Dimensions, Modal 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
@@ -54,9 +54,11 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser }) => {
   const [cloudMatchFiles, setCloudMatchFiles] = useState([]);
   const [onlineDevices, setOnlineDevices] = useState({});
   const [pullingDeviceIds, setPullingDeviceIds] = useState({});
+  const [diagDetailType, setDiagDetailType] = useState(null); // 'health' | 'push' | 'backpressure' | 'anomalies'
+  const [isAnomaliesExpanded, setIsAnomaliesExpanded] = useState(false);
   const pongBufferRef = useRef({});
 
-  // 🛠️ Pong Handling Logic
+  // 🛡️ Pong Handling Logic
   useEffect(() => {
     const socket = socketRef?.current;
     if (!socket) return;
@@ -333,8 +335,178 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser }) => {
     return p.name?.toLowerCase().includes(s) || p.id?.toLowerCase().includes(s) || p.email?.toLowerCase().includes(s);
   });
 
+  const renderDetailModal = () => (
+    <Modal visible={!!diagDetailType} transparent animationType="fade" onRequestClose={() => setDiagDetailType(null)}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.glassModal}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              {diagDetailType === 'health' ? 'System Health Insights' : 
+               diagDetailType === 'push' ? 'Cloud Push Analysis' : 
+               diagDetailType === 'backpressure' ? 'Resource Backpressure' : 'Anomaly Trace'}
+            </Text>
+            <TouchableOpacity onPress={() => setDiagDetailType(null)} style={styles.modalCloseBtn}>
+              <Ionicons name="close-circle" size={24} color="#64748B" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.modalContent}>
+            {diagDetailType === 'health' && (
+              <View>
+                <View style={styles.scoreRow}>
+                  <Text style={styles.scoreLabel}>Current Health Score</Text>
+                  <Text style={[styles.scoreValue, { color: healthScore > 90 ? '#10B981' : (healthScore > 70 ? '#D97706' : '#EF4444') }]}>{healthScore}%</Text>
+                </View>
+                <View style={styles.detailCard}>
+                  <Text style={styles.detailCardTitle}>Calculation Breakdown</Text>
+                  <View style={styles.breakdownRow}>
+                    <Text style={styles.breakdownLabel}>Base Reliability</Text>
+                    <Text style={styles.breakdownValue}>{((metrics?.pushAttemptCount - metrics?.pushFailureCount) / (metrics?.pushAttemptCount || 1) * 100).toFixed(1)}%</Text>
+                  </View>
+                  <View style={styles.breakdownRow}>
+                    <Text style={[styles.breakdownLabel, { color: '#EF4444' }]}>Anomaly Penalties</Text>
+                    <Text style={[styles.breakdownValue, { color: '#EF4444' }]}>-{(metrics?.anomalyDetectedCount || 0) * 5}%</Text>
+                  </View>
+                  <View style={styles.breakdownRow}>
+                    <Text style={[styles.breakdownLabel, { color: '#D97706' }]}>Stale Penalties</Text>
+                    <Text style={[styles.breakdownValue, { color: '#D97706' }]}>-{(Math.floor((metrics?.staleUpdateCount || 0) / 10))}%</Text>
+                  </View>
+                </View>
+                <Text style={styles.modalHelperText}>Score reflects system stability over the current session. Higher scores indicate reliable cloud sync and zero security alarms.</Text>
+              </View>
+            )}
+
+            {diagDetailType === 'push' && (
+              <View>
+                <View style={[styles.detailCard, { borderLeftColor: '#6366F1' }]}>
+                   <Text style={styles.detailCardTitle}>Network Performance</Text>
+                   <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Success Rate</Text>
+                      <Text style={styles.breakdownValue}>{((metrics?.pushAttemptCount - metrics?.pushFailureCount) / (metrics?.pushAttemptCount || 1) * 100).toFixed(1)}%</Text>
+                   </View>
+                   <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Total Attempts</Text>
+                      <Text style={styles.breakdownValue}>{metrics?.pushAttemptCount || 0}</Text>
+                   </View>
+                   <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Last Success</Text>
+                      <Text style={[styles.breakdownValue, { fontSize: 9 }]}>{metrics?.lastSyncSuccess ? new Date(metrics.lastSyncSuccess).toLocaleTimeString() : 'Never'}</Text>
+                   </View>
+                </View>
+
+                {/* 🛡️ Actionable Incident Log */}
+                <View style={styles.detailCard}>
+                  <Text style={styles.detailCardTitle}>Recent Reliability Incidents</Text>
+                  {(metrics?.incidentHistory || []).filter(i => i.type === 'reliability').slice(0, 5).map((incident, idx) => (
+                    <View key={idx} style={styles.incidentItem}>
+                      <View style={styles.incidentDot} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.incidentTime}>{new Date(incident.timestamp).toLocaleTimeString()}</Text>
+                        <Text style={styles.incidentMsg}>{incident.message}</Text>
+                      </View>
+                    </View>
+                  ))}
+                  {!(metrics?.incidentHistory || []).some(i => i.type === 'reliability') && (
+                    <Text style={styles.emptyIncidentsText}>No reliability incidents recorded.</Text>
+                  )}
+                </View>
+
+                <View style={styles.detailCard}>
+                   <Text style={styles.detailCardTitle}>HTTP Error Breakdown</Text>
+                   <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Rate Limits (429)</Text>
+                      <Text style={styles.breakdownValue}>{metrics?.rateLimitCount || 0}</Text>
+                   </View>
+                   <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Version Conflicts (409)</Text>
+                      <Text style={styles.breakdownValue}>{metrics?.conflictCount || 0}</Text>
+                   </View>
+                   <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Other Failures</Text>
+                      <Text style={styles.breakdownValue}>{(metrics?.pushFailureCount || 0) - (metrics?.rateLimitCount || 0) - (metrics?.conflictCount || 0)}</Text>
+                   </View>
+                </View>
+              </View>
+            )}
+
+            {diagDetailType === 'backpressure' && (
+              <View>
+                <View style={styles.detailCard}>
+                   <Text style={styles.detailCardTitle}>Persistence Queue</Text>
+                   <View style={styles.backpressureVisual}>
+                      <View style={[styles.backpressureBar, { width: `${Math.min(100, (metrics?.queueLength || 0) * 5)}%` }]} />
+                   </View>
+                   <Text style={[styles.healthValue, { textAlign: 'center', marginTop: 8 }]}>{metrics?.queueLength || 0} Pending Items</Text>
+                </View>
+
+                {/* 🛡️ Actionable Incident Log */}
+                <View style={styles.detailCard}>
+                  <Text style={styles.detailCardTitle}>Throttled Entities ({metrics?.activeThrottles || 0})</Text>
+                  {(metrics?.incidentHistory || []).filter(i => i.type === 'backpressure').slice(0, 5).map((incident, idx) => (
+                    <View key={idx} style={styles.incidentItem}>
+                      <View style={[styles.incidentDot, { backgroundColor: '#F59E0B' }]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.incidentTime}>{new Date(incident.timestamp).toLocaleTimeString()}</Text>
+                        <Text style={styles.incidentMsg}>{incident.message}</Text>
+                      </View>
+                    </View>
+                  ))}
+                  {!(metrics?.incidentHistory || []).some(i => i.type === 'backpressure') && (
+                    <Text style={styles.emptyIncidentsText}>No active backpressure throttles.</Text>
+                  )}
+                </View>
+              </View>
+            )}
+
+            {diagDetailType === 'anomalies' && (
+              <View>
+                <View style={[styles.detailCard, { borderLeftColor: '#EF4444' }]}>
+                   <Text style={styles.detailCardTitle}>Security Triggers</Text>
+                   <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Identity Hijack Blocks</Text>
+                      <Text style={styles.breakdownValue}>{metrics?.anomalyDetectedCount || 0}</Text>
+                   </View>
+                   <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Data Tamper Detected</Text>
+                      <Text style={styles.breakdownValue}>{metrics?.tamperDetectedCount || 0}</Text>
+                   </View>
+                   <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Stale State Rejections</Text>
+                      <Text style={styles.breakdownValue}>{metrics?.staleUpdateCount || 0}</Text>
+                   </View>
+                </View>
+
+                {/* 🛡️ Actionable Incident Log */}
+                <View style={[styles.detailCard, { borderLeftColor: '#EF4444' }]}>
+                  <Text style={styles.detailCardTitle}>Security Incident Log</Text>
+                  {(metrics?.incidentHistory || []).filter(i => i.type === 'anomalies').slice(0, 5).map((incident, idx) => (
+                    <View key={idx} style={styles.incidentItem}>
+                      <View style={[styles.incidentDot, { backgroundColor: '#EF4444' }]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.incidentTime}>{new Date(incident.timestamp).toLocaleTimeString()}</Text>
+                        <Text style={styles.incidentMsg}>{incident.message}</Text>
+                      </View>
+                    </View>
+                  ))}
+                  {!(metrics?.incidentHistory || []).some(i => i.type === 'anomalies') && (
+                    <Text style={styles.emptyIncidentsText}>No security anomalies detected.</Text>
+                  )}
+                </View>
+              </View>
+            )}
+          </View>
+
+          <TouchableOpacity onPress={() => setDiagDetailType(null)} style={styles.modalFooterBtn}>
+             <Text style={styles.modalFooterBtnText}>DISMISS</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <View style={styles.container}>
+      {renderDetailModal()}
       <View style={styles.diagHeaderRow}>
         <Text style={styles.sectionTitle}>System Diagnostics</Text>
         <TouchableOpacity 
@@ -350,31 +522,43 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser }) => {
       {/* 🚀 System Health Overview (New Dashboard) */}
       <View style={styles.healthDashboard}>
         <View style={styles.healthRow}>
-          <View style={[styles.healthCard, { borderLeftColor: healthScore > 90 ? '#10B981' : (healthScore > 70 ? '#F59E0B' : '#EF4444') }]}>
+          <TouchableOpacity 
+            onPress={() => setDiagDetailType('health')}
+            style={[styles.healthCard, { borderLeftColor: healthScore > 90 ? '#10B981' : (healthScore > 70 ? '#F59E0B' : '#EF4444') }]}
+          >
              <Text style={styles.healthLabel}>HEALTH SCORE</Text>
              <Text style={[styles.healthValue, { color: healthScore > 90 ? '#10B981' : (healthScore > 70 ? '#D97706' : '#EF4444') }]}>{healthScore}%</Text>
              <Ionicons name="heart-half" size={24} color="#E2E8F0" style={styles.cardIcon} />
-          </View>
-          <View style={[styles.healthCard, { borderLeftColor: '#6366F1' }]}>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => setDiagDetailType('push')}
+            style={[styles.healthCard, { borderLeftColor: '#6366F1' }]}
+          >
              <Text style={styles.healthLabel}>PUSH RELIABILITY</Text>
              <Text style={styles.healthValue}>{((metrics?.pushAttemptCount - metrics?.pushFailureCount) / (metrics?.pushAttemptCount || 1) * 100).toFixed(0)}%</Text>
              <Text style={styles.healthSubValue}>{metrics?.pushAttemptCount || 0} attempts</Text>
              <Ionicons name="cloud-upload-outline" size={24} color="#E2E8F0" style={styles.cardIcon} />
-          </View>
+          </TouchableOpacity>
         </View>
         <View style={styles.healthRow}>
-          <View style={[styles.healthCard, { borderLeftColor: metrics?.queueLength > 20 ? '#EF4444' : '#10B981' }]}>
+          <TouchableOpacity 
+            onPress={() => setDiagDetailType('backpressure')}
+            style={[styles.healthCard, { borderLeftColor: metrics?.queueLength > 20 ? '#EF4444' : '#10B981' }]}
+          >
              <Text style={styles.healthLabel}>BACKPRESSURE</Text>
              <Text style={styles.healthValue}>{metrics?.queueLength || 0}</Text>
              <Text style={styles.healthSubValue}>{metrics?.activeThrottles || 0} active throttles</Text>
              <Ionicons name="git-branch-outline" size={24} color="#E2E8F0" style={styles.cardIcon} />
-          </View>
-          <View style={[styles.healthCard, { borderLeftColor: (metrics?.anomalyDetectedCount || 0) > 0 ? '#EF4444' : '#CBD5E1' }]}>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => setDiagDetailType('anomalies')}
+            style={[styles.healthCard, { borderLeftColor: (metrics?.anomalyDetectedCount || 0) > 0 ? '#EF4444' : '#CBD5E1' }]}
+          >
              <Text style={styles.healthLabel}>ANOMALIES</Text>
              <Text style={[styles.healthValue, { color: (metrics?.anomalyDetectedCount || 0) > 0 ? '#EF4444' : '#1E293B' }]}>{metrics?.anomalyDetectedCount || 0}</Text>
              <Text style={styles.healthSubValue}>{metrics?.staleUpdateCount || 0} stale blocked</Text>
              <Ionicons name="warning-outline" size={24} color="#E2E8F0" style={styles.cardIcon} />
-          </View>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -419,7 +603,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser }) => {
           ))}
           {filteredPlayers.length === 0 && (
             <TouchableOpacity onPress={handleCloudFilenameSearch} style={styles.cloudSearchHint}>
-              <Ionicons name="cloud-search-outline" size={20} color="#6366F1" />
+              <Ionicons name="search-outline" size={20} color="#6366F1" />
               <Text style={styles.cloudSearchText}>Search Cloud for "{diagUserSearch}"</Text>
             </TouchableOpacity>
           )}
@@ -658,7 +842,153 @@ const styles = StyleSheet.create({
   downloadBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   downloadBtnText: { fontSize: 12, fontWeight: 'bold', color: '#6366F1' },
   viewerContent: { maxHeight: 400, backgroundColor: '#1E293B', borderRadius: 12, padding: 12 },
-  viewerText: { color: '#ADB5BD', fontSize: 10, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }
+  viewerText: { 
+    color: '#ADB5BD', 
+    fontSize: 10, 
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' 
+  },
+  
+  // 💎 Glassmorphism Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    padding: 24
+  },
+  glassModal: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 32,
+    padding: 24,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20 },
+      android: { elevation: 10 }
+    }),
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)'
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20
+  },
+  modalTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0F172A',
+    textTransform: 'uppercase',
+    letterSpacing: 1
+  },
+  modalContent: {
+    gap: 16
+  },
+  scoreRow: {
+    alignItems: 'center',
+    marginBottom: 20
+  },
+  scoreLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase'
+  },
+  scoreValue: {
+    fontSize: 48,
+    fontWeight: '900'
+  },
+  detailCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 16,
+    borderLeftWidth: 3,
+    borderLeftColor: '#CBD5E1',
+    marginBottom: 8
+  },
+  detailCardTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#1E293B',
+    marginBottom: 12,
+    textTransform: 'uppercase'
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8
+  },
+  breakdownLabel: {
+    fontSize: 12,
+    color: '#64748B'
+  },
+  breakdownValue: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#1E293B'
+  },
+  modalHelperText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 12,
+    lineHeight: 16
+  },
+  modalFooterBtn: {
+    backgroundColor: '#1E293B',
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginTop: 24
+  },
+  modalFooterBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1
+  },
+  backpressureVisual: {
+    height: 6,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginTop: 4
+  },
+  backpressureBar: {
+    height: '100%',
+    backgroundColor: '#EF4444'
+  },
+  incidentItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+    gap: 8,
+  },
+  incidentDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#6366F1',
+    marginTop: 6,
+  },
+  incidentTime: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#94A3B8',
+    marginBottom: 2,
+  },
+  incidentMsg: {
+    fontSize: 11,
+    color: '#334155',
+    lineHeight: 14,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  emptyIncidentsText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: 10,
+  }
 });
 
 export default AdminDiagnosticsPanel;

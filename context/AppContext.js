@@ -31,6 +31,7 @@ export const AppProvider = ({ children, initialVersion }) => {
   const [appVersion, setAppVersion] = useState(initialVersion);
   const [latestAppVersion, setLatestAppVersion] = useState(initialVersion);
   const [showForceUpdate, setShowForceUpdate] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   
   const localDeviceIdRef = useRef(null);
   const isStartupCompleteRef = useRef(false);
@@ -180,7 +181,9 @@ export const AppProvider = ({ children, initialVersion }) => {
     setShowForceUpdate,
     localDeviceIdRef,
     isStartupCompleteRef,
-    navigationRef
+    navigationRef,
+    showNotifications,
+    setShowNotifications
   };
 
   return (

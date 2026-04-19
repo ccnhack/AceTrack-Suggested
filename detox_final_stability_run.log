@@ -1,0 +1,188 @@
+14:34:17.584 detox[15035] i ws-server Detox server listening on localhost:58017...
+14:34:17.588 detox[15035] B lifecycle jest --config e2e/jest.config.js
+14:34:17.589 detox[15035] i user (node:15035) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+  origin: at node:internal/process/warning:56:3
+14:34:18.116 detox[15035] B ws-server connection :58017<->:58018
+14:34:18.268 detox[15035] i device Detected emulator binary version { major: 36, minor: 4, patch: 10, toString: [Function: toString] }
+14:34:18.269 detox[15035] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb"  devices
+14:34:18.283 detox[15035] i child-process:EXEC_SUCCESS List of devices attached
+emulator-5554	device
+
+
+14:34:18.292 detox[15035] i device:DEVICE_LOOKUP Found a matching & free device emulator-5554
+14:34:18.292 detox[15035] i device settled on emulator-5554 (Pixel_9_Pro)
+  data: {
+    "id": "emulator-5554",
+    "adbName": "emulator-5554",
+    "name": "emulator-5554 (Pixel_9_Pro)"
+  }
+14:34:18.292 detox[15035] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "getprop dev.bootcomplete"
+14:34:18.320 detox[15035] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "getprop ro.build.version.sdk"
+14:34:18.341 detox[15035] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "settings put global animator_duration_scale 0"
+14:34:18.369 detox[15035] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "settings put global window_animation_scale 0"
+14:34:18.393 detox[15035] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "settings put global transition_animation_scale 0"
+14:34:18.419 detox[15035] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "dumpsys power | grep \"^[ ]*m[UW].*=\""
+14:34:18.468 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/build-tools/36.1.0/aapt" dump badging "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/debug/app-debug.apk"
+14:34:18.517 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list packages com.hacker1717.acetrackmobile.suggested"
+14:34:18.544 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 uninstall com.hacker1717.acetrackmobile.suggested
+14:34:18.611 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list packages com.hacker1717.acetrackmobile.suggested.test"
+14:34:18.703 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 uninstall com.hacker1717.acetrackmobile.suggested.test
+14:34:19.046 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "am force-stop com.hacker1717.acetrackmobile.suggested"
+14:34:19.155 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/build-tools/36.1.0/aapt" dump xmlstrings "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/debug/app-debug.apk" AndroidManifest.xml
+14:34:19.178 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/build-tools/36.1.0/aapt" dump xmlstrings "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" AndroidManifest.xml
+14:34:19.200 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "rm -fr /data/local/tmp/detox"
+14:34:19.292 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "mkdir -p /data/local/tmp/detox"
+14:34:19.340 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 push "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/debug/app-debug.apk" "/data/local/tmp/detox/Application.apk"
+14:34:20.034 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "getprop ro.build.version.sdk"
+14:34:20.062 detox[15036] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Application.apk
+14:34:20.627 detox[15036] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Application.apk exited with code #0
+14:34:20.628 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 push "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" "/data/local/tmp/detox/Test.apk"
+14:34:20.669 detox[15036] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Test.apk
+14:34:20.830 detox[15036] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Test.apk exited with code #0
+14:34:20.830 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse tcp:8081 tcp:8081
+14:34:20.849 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "am force-stop com.hacker1717.acetrackmobile.suggested"
+14:34:21.054 detox[15036] i lifecycle sync.test.js is assigned to emulator-5554 (Pixel_9_Pro)
+14:34:21.056 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "am force-stop com.hacker1717.acetrackmobile.suggested"
+14:34:21.086 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "date +\"%m-%d %T.000\""
+14:34:21.110 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse tcp:58017 tcp:58017
+14:34:21.125 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list instrumentation"
+14:34:21.155 detox[15036] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell am instrument -w -r -e detoxServer ws://localhost:58017 -e detoxSessionId d7f96590-801e-ffea-e0fb-0e12c15c46af -e debug false com.hacker1717.acetrackmobile.suggested.test/androidx.test.runner.AndroidJUnitRunner
+14:34:21.657 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "ps | grep \"com\.hacker1717\.acetrackmobile\.suggested$\""
+14:34:22.055 detox[15035] B ws-server connection :58017<->:58108
+14:34:24.337 detox[15036] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell am instrument -w -r -e detoxServer ws://localhost:58017 -e detoxSessionId d7f96590-801e-ffea-e0fb-0e12c15c46af -e debug false com.hacker1717.acetrackmobile.suggested.test/androidx.test.runner.AndroidJUnitRunner terminated with SIGINT
+14:34:24.337 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "am force-stop com.hacker1717.acetrackmobile.suggested"
+14:34:24.337 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse --remove tcp:58017
+14:34:24.405 detox[15035] E ws-server connection :58017<->:58108
+14:34:24.408 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list packages com.hacker1717.acetrackmobile.suggested"
+14:34:24.441 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 uninstall com.hacker1717.acetrackmobile.suggested
+14:34:24.505 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list packages com.hacker1717.acetrackmobile.suggested.test"
+14:34:24.550 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 uninstall com.hacker1717.acetrackmobile.suggested.test
+14:34:24.678 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/build-tools/36.1.0/aapt" dump xmlstrings "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/debug/app-debug.apk" AndroidManifest.xml
+14:34:24.690 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/build-tools/36.1.0/aapt" dump xmlstrings "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" AndroidManifest.xml
+14:34:24.704 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "rm -fr /data/local/tmp/detox"
+14:34:24.742 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "mkdir -p /data/local/tmp/detox"
+14:34:24.771 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 push "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/debug/app-debug.apk" "/data/local/tmp/detox/Application.apk"
+14:34:25.169 detox[15036] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Application.apk
+14:34:25.400 detox[15036] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Application.apk exited with code #0
+14:34:25.401 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 push "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" "/data/local/tmp/detox/Test.apk"
+14:34:25.428 detox[15036] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Test.apk
+14:34:25.583 detox[15036] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Test.apk exited with code #0
+14:34:25.584 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse tcp:8081 tcp:8081
+14:34:25.602 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "date +\"%m-%d %T.000\""
+14:34:25.635 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse tcp:58017 tcp:58017
+14:34:25.656 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list instrumentation"
+14:34:25.695 detox[15036] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell am instrument -w -r -e detoxServer ws://localhost:58017 -e detoxSessionId d7f96590-801e-ffea-e0fb-0e12c15c46af -e debug false com.hacker1717.acetrackmobile.suggested.test/androidx.test.runner.AndroidJUnitRunner
+14:34:26.195 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "ps | grep \"com\.hacker1717\.acetrackmobile\.suggested$\""
+14:34:26.542 detox[15035] B ws-server connection :58017<->:58171
+14:34:33.392 detox[15036] i lifecycle Sync & Conflict Resolution: should show Admin Hub sync badge
+14:34:33.967 detox[15036] i lifecycle Sync & Conflict Resolution: should show Admin Hub sync badge [OK]
+14:34:33.968 detox[15036] i lifecycle Sync & Conflict Resolution: should display sync status correctly
+14:34:33.978 detox[15036] i lifecycle Sync & Conflict Resolution: should display sync status correctly [OK]
+14:34:33.978 detox[15036] i lifecycle Sync & Conflict Resolution: should allow manual sync trigger via badge tap
+14:34:34.387 detox[15036] i lifecycle Sync & Conflict Resolution: should allow manual sync trigger via badge tap [OK]
+
+14:34:34.400 detox[15035] E ws-server connection :58017<->:58018
+14:34:34.403 detox[15036] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell am instrument -w -r -e detoxServer ws://localhost:58017 -e detoxSessionId d7f96590-801e-ffea-e0fb-0e12c15c46af -e debug false com.hacker1717.acetrackmobile.suggested.test/androidx.test.runner.AndroidJUnitRunner terminated with SIGINT
+14:34:34.403 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse --remove tcp:58017
+PASS e2e/sync.test.js (16.38 s)
+  Sync & Conflict Resolution
+    ✓ should show Admin Hub sync badge (576 ms)
+    ✓ should display sync status correctly (9 ms)
+    ✓ should allow manual sync trigger via badge tap (409 ms)
+
+14:34:34.422 detox[15035] B ws-server connection :58017<->:58193
+14:34:34.465 detox[15035] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb"  devices
+14:34:34.481 detox[15035] i child-process:EXEC_SUCCESS List of devices attached
+emulator-5554	device
+
+
+14:34:34.485 detox[15035] i device:DEVICE_LOOKUP Found a matching & free device emulator-5554
+14:34:34.485 detox[15035] i device settled on emulator-5554 (Pixel_9_Pro)
+  data: {
+    "id": "emulator-5554",
+    "adbName": "emulator-5554",
+    "name": "emulator-5554 (Pixel_9_Pro)"
+  }
+14:34:34.485 detox[15035] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "getprop dev.bootcomplete"
+14:34:34.515 detox[15035] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "settings put global animator_duration_scale 0"
+14:34:34.552 detox[15035] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "settings put global window_animation_scale 0"
+14:34:34.588 detox[15035] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "settings put global transition_animation_scale 0"
+14:34:34.626 detox[15035] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "dumpsys power | grep \"^[ ]*m[UW].*=\""
+14:34:34.674 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list packages com.hacker1717.acetrackmobile.suggested"
+14:34:34.711 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 uninstall com.hacker1717.acetrackmobile.suggested
+14:34:34.786 detox[15035] E ws-server connection :58017<->:58171
+14:34:34.805 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list packages com.hacker1717.acetrackmobile.suggested.test"
+14:34:34.863 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 uninstall com.hacker1717.acetrackmobile.suggested.test
+14:34:34.978 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "am force-stop com.hacker1717.acetrackmobile.suggested"
+14:34:35.041 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/build-tools/36.1.0/aapt" dump xmlstrings "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/debug/app-debug.apk" AndroidManifest.xml
+14:34:35.061 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/build-tools/36.1.0/aapt" dump xmlstrings "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" AndroidManifest.xml
+14:34:35.078 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "rm -fr /data/local/tmp/detox"
+14:34:35.200 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "mkdir -p /data/local/tmp/detox"
+14:34:35.245 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 push "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/debug/app-debug.apk" "/data/local/tmp/detox/Application.apk"
+14:34:35.682 detox[15036] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Application.apk
+14:34:35.941 detox[15036] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Application.apk exited with code #0
+14:34:35.941 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 push "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" "/data/local/tmp/detox/Test.apk"
+14:34:35.979 detox[15036] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Test.apk
+14:34:36.119 detox[15036] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Test.apk exited with code #0
+14:34:36.119 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse tcp:8081 tcp:8081
+14:34:36.138 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "am force-stop com.hacker1717.acetrackmobile.suggested"
+14:34:36.240 detox[15036] i lifecycle auth.test.js is assigned to emulator-5554 (Pixel_9_Pro)
+14:34:36.241 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "am force-stop com.hacker1717.acetrackmobile.suggested"
+14:34:36.278 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "date +\"%m-%d %T.000\""
+14:34:36.309 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse tcp:58017 tcp:58017
+14:34:36.327 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list instrumentation"
+14:34:36.364 detox[15036] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell am instrument -w -r -e detoxServer ws://localhost:58017 -e detoxSessionId d7f96590-801e-ffea-e0fb-0e12c15c46af -e debug false com.hacker1717.acetrackmobile.suggested.test/androidx.test.runner.AndroidJUnitRunner
+14:34:36.864 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "ps | grep \"com\.hacker1717\.acetrackmobile\.suggested$\""
+14:34:37.277 detox[15035] B ws-server connection :58017<->:58276
+14:34:38.804 detox[15036] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell am instrument -w -r -e detoxServer ws://localhost:58017 -e detoxSessionId d7f96590-801e-ffea-e0fb-0e12c15c46af -e debug false com.hacker1717.acetrackmobile.suggested.test/androidx.test.runner.AndroidJUnitRunner terminated with SIGINT
+14:34:38.804 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "am force-stop com.hacker1717.acetrackmobile.suggested"
+14:34:38.805 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse --remove tcp:58017
+14:34:38.860 detox[15035] E ws-server connection :58017<->:58276
+14:34:38.861 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list packages com.hacker1717.acetrackmobile.suggested"
+14:34:38.894 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 uninstall com.hacker1717.acetrackmobile.suggested
+14:34:38.957 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list packages com.hacker1717.acetrackmobile.suggested.test"
+14:34:39.013 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 uninstall com.hacker1717.acetrackmobile.suggested.test
+14:34:39.185 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/build-tools/36.1.0/aapt" dump xmlstrings "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/debug/app-debug.apk" AndroidManifest.xml
+14:34:39.201 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/build-tools/36.1.0/aapt" dump xmlstrings "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" AndroidManifest.xml
+14:34:39.214 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "rm -fr /data/local/tmp/detox"
+14:34:39.269 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "mkdir -p /data/local/tmp/detox"
+14:34:39.294 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 push "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/debug/app-debug.apk" "/data/local/tmp/detox/Application.apk"
+14:34:39.683 detox[15036] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Application.apk
+14:34:39.939 detox[15036] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Application.apk exited with code #0
+14:34:39.939 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 push "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" "/data/local/tmp/detox/Test.apk"
+14:34:39.975 detox[15036] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Test.apk
+14:34:40.125 detox[15036] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Test.apk exited with code #0
+14:34:40.126 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse tcp:8081 tcp:8081
+14:34:40.146 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "date +\"%m-%d %T.000\""
+14:34:40.176 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse tcp:58017 tcp:58017
+14:34:40.195 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list instrumentation"
+14:34:40.231 detox[15036] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell am instrument -w -r -e detoxServer ws://localhost:58017 -e detoxSessionId d7f96590-801e-ffea-e0fb-0e12c15c46af -e debug false com.hacker1717.acetrackmobile.suggested.test/androidx.test.runner.AndroidJUnitRunner
+14:34:40.733 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "ps | grep \"com\.hacker1717\.acetrackmobile\.suggested$\""
+14:34:41.100 detox[15035] B ws-server connection :58017<->:58343
+14:34:46.333 detox[15036] i lifecycle Authentication Flow: should show landing screen on first launch
+14:34:46.355 detox[15036] i lifecycle Authentication Flow: should show landing screen on first launch [OK]
+14:34:46.356 detox[15036] i lifecycle Authentication Flow: should navigate to login screen
+14:34:47.417 detox[15036] i lifecycle Authentication Flow: should navigate to login screen [OK]
+14:34:47.418 detox[15036] i lifecycle Authentication Flow: should login successfully with admin credentials
+14:34:48.623 detox[15036] i lifecycle Authentication Flow: should login successfully with admin credentials [OK]
+14:34:48.624 detox[15036] i lifecycle Authentication Flow: should logout from profile screen
+14:34:49.974 detox[15036] i lifecycle Authentication Flow: should logout from profile screen [OK]
+
+14:34:49.980 detox[15035] E ws-server connection :58017<->:58193
+14:34:49.983 detox[15036] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell am instrument -w -r -e detoxServer ws://localhost:58017 -e detoxSessionId d7f96590-801e-ffea-e0fb-0e12c15c46af -e debug false com.hacker1717.acetrackmobile.suggested.test/androidx.test.runner.AndroidJUnitRunner terminated with SIGINT
+14:34:49.983 detox[15036] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse --remove tcp:58017
+PASS e2e/auth.test.js (15.562 s)
+  Authentication Flow
+    ✓ should show landing screen on first launch (22 ms)
+    ✓ should navigate to login screen (1061 ms)
+    ✓ should login successfully with admin credentials (1205 ms)
+    ✓ should logout from profile screen (1350 ms)
+
+Test Suites: 2 passed, 2 total
+Tests:       7 passed, 7 total
+Snapshots:   0 total
+Time:        32.036 s, estimated 53 s
+Ran all test suites.
+14:34:50.100 detox[15035] i ws-server Detox server has been closed gracefully
+14:34:50.101 detox[15035] E ws-server connection :58017<->:58343

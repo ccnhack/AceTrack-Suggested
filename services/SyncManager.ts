@@ -42,7 +42,10 @@ class SyncManager {
     anomalyDetectedCount: 0,
     pushAttemptCount: 0,
     pushFailureCount: 0,
+    rateLimitCount: 0,
+    conflictCount: 0,
     lastSyncSuccess: null as string | null,
+    incidentHistory: [] as { type: string, message: string, timestamp: string }[],
   };
   private actionSequences: Map<string, any[]> = new Map();
   private throttleTimeouts: Map<string, any> = new Map();
@@ -238,6 +241,12 @@ class SyncManager {
     if (!this.userId) return;
 
     return this.trackOperation(`SYNC_${Object.keys(updates).join('_')}`, async () => {
+      // 🛡️ [BACKPRESSURE GUARD] (v2.6.121)
+      const qLen = storage.getQueueLength();
+      if (qLen > 20) {
+        this.trackIncident('backpressure', `High Backpressure: ${qLen} items in queue. System automatically throttling.`);
+      }
+
       // 1. Local Persistence (Fast Path)
       for (const key in updates) {
         let val = updates[key];
@@ -469,6 +478,42 @@ class SyncManager {
     }
   }
 
+  /**
+   * 🛡️ SELF-HEALING CONFLICT RESOLUTION (v2.6.121)
+   * Automatically pulls cloud state, merges with local changes,
+   * and increments version to resolve 409 conflicts silently.
+   */
+  private async selfHealConflict(): Promise<void> {
+    console.log('[SyncManager] [SELF_HEAL] Starting background conflict resolution...');
+    this.trackIncident('reliability', 'Self-Healing: Conflict detected. Merging cloud state...');
+    
+    try {
+      const cloudUrl = config.API_BASE_URL;
+      const res = await fetch(`${cloudUrl}/api/data`, {
+        headers: { 'x-ace-api-key': config.ACE_API_KEY }
+      });
+      if (!res.ok) throw new Error(`Pull failed: ${res.status}`);
+      
+      const serverData = await res.json();
+      const localData: Record<string, any> = {};
+      
+      // Load local state keys that exist in server response
+      for (const key in serverData) {
+        localData[key] = await storage.getItem(key);
+      }
+
+      // Merge using dataMerger
+      const { result } = dataMerger.mergeData(localData, serverData);
+
+      // Save merged result internally (isInternal=true suppresses push-back)
+      await this.syncAndSaveData(result, false, true);
+      console.log('[SyncManager] [SELF_HEAL] State merged. Ready for retry.');
+    } catch (err: any) {
+      console.error('[SyncManager] Self-healing failed:', err);
+      this.trackIncident('reliability', `Self-Healing Failed: ${err.message}`);
+    }
+  }
+
   public async performCloudPush(isInternal: boolean = false): Promise<void> {
     // 🛡️ [FIX v2.6.121] Allow nested pushes from within tracked operations.
     // Previously, atomic pushes from processActionSequence were silently skipped
@@ -487,29 +532,66 @@ class SyncManager {
       if (this.syncTimeout) clearTimeout(this.syncTimeout);
       this.syncTimeout = null;
 
-      try {
-        const success = await this.pushToApi(updates, isInternal);
-        if (success) {
-          this.pendingSync = [];
-          this.metrics.lastSyncSuccess = new Date().toISOString();
-          await storage.setItem('pendingSync', []);
-        } else {
+      let retryCount = 0;
+      const MAX_RETRIES = 2;
+
+      while (retryCount <= MAX_RETRIES) {
+        try {
+          const result = await this.pushToApi(updates, isInternal);
+          
+          if (result.success) {
+            this.pendingSync = [];
+            this.metrics.lastSyncSuccess = new Date().toISOString();
+            await storage.setItem('pendingSync', []);
+            return; // Success!
+          }
+
+          // 🛡️ [Self-Healing Branch]
+          if (result.status === 409 && retryCount < MAX_RETRIES) {
+            console.log(`[SyncManager] [RETRY] Collision detected (409). Attempting self-heal (Try ${retryCount + 1})...`);
+            await this.selfHealConflict();
+            retryCount++;
+            continue; // Retry with updated version/state
+          }
+
+          if (result.status === 429 && retryCount < MAX_RETRIES) {
+            const backoff = 2000 * (retryCount + 1);
+            console.log(`[SyncManager] [RETRY] Rate limited (429). Backing off ${backoff}ms...`);
+            await new Promise(r => setTimeout(r, backoff));
+            retryCount++;
+            continue;
+          }
+
+          // Non-retryable failure
           this.metrics.pushFailureCount++;
+          this.trackIncident('reliability', `Push failed: Server rejected with ${result.status} [isInternal: ${isInternal}]`);
+          return;
+        } catch (error: any) {
+          console.error('[SyncManager] performCloudPush error:', error);
+          this.trackIncident('reliability', `Push Exception: ${error?.message || 'Unknown network error'}`);
+          return;
         }
-      } catch (error) {
-        console.error('[SyncManager] performCloudPush error:', error);
       }
     });
   }
 
-  private async pushToApi(updates: Record<string, any>, isInternal: boolean): Promise<boolean> {
+  private trackIncident(type: string, message: string) {
+    const timestamp = new Date().toISOString();
+    this.metrics.incidentHistory.unshift({ type, message, timestamp });
+    // Keep last 10 incidents
+    if (this.metrics.incidentHistory.length > 10) {
+      this.metrics.incidentHistory.pop();
+    }
+  }
+
+  private async pushToApi(updates: Record<string, any>, isInternal: boolean): Promise<{ success: boolean, status?: number }> {
     const cloudUrl = config.API_BASE_URL;
     this.metrics.pushAttemptCount++;
     
     // 🛡️ [NETWORK GUARD] (v2.6.118)
-    // Implement 10s timeout to prevent 'Stuck Sync' status on flaky connections.
+    // Implement 30s timeout to prevent 'Stuck Sync' status on flaky connections.
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
       // 🛡️ [TICKET MESSAGE STATE: SENT] (v2.6.121)
@@ -522,7 +604,7 @@ class SyncManager {
         });
       }
 
-      console.log(`[SyncManager] Pushing to API: ${Object.keys(updates).join(', ')}`);
+      console.log(`[SyncManager] Pushing to API: ${Object.keys(updates).join(', ')} [v:${this.syncVersion}]`);
       const response = await fetch(`${cloudUrl}/api/save`, {
         method: 'POST',
         headers: {
@@ -544,28 +626,30 @@ class SyncManager {
       if (!response.ok) {
         if (response.status === 429) {
           console.warn('[SyncManager] Rate limited by server');
+          this.metrics.rateLimitCount++;
+          this.trackIncident('reliability', 'HTTP 429: Rate limited by cloud server. Automatic backoff engaged.');
         } else if (response.status === 409) {
           // 🛡️ [OCC CONFLICT HANDLING] (v2.6.121)
           // Server detected version conflict — update local version and trigger re-pull
           console.warn('[SyncManager] OCC conflict detected (409). Will re-pull.');
+          this.metrics.conflictCount++;
+          this.trackIncident('reliability', 'HTTP 409: Version conflict. Cloud has newer state.');
           try {
             const conflictData = await response.json();
             if (conflictData.serverVersion) {
               this.syncVersion = conflictData.serverVersion;
             }
           } catch (e) { /* ignore parse failure */ }
-          // Emit event so SyncContext can trigger a re-pull
-          eventBus.emit('SYNC_CONFLICT_DETECTED', {});
         }
-        return false;
+        return { success: false, status: response.status };
       }
 
       const result = await response.json();
       this.lastServerUpdate = result.lastUpdated || Date.now();
-      return true;
+      return { success: true, status: response.status };
     } catch (error) {
       console.error('[SyncManager] API Push failed:', error);
-      return false;
+      throw error; // Let performCloudPush handle the exception
     }
   }
 
@@ -593,6 +677,7 @@ class SyncManager {
       // Prevent session hijacking by verifying the ID of the incoming profile update via socket/cloud.
       if (key === 'currentUser' && next && this.userId && next.id && next.id !== this.userId) {
         console.warn(`[SyncManager] [SOCKET_IDENTITY_HIJACK_BLOCK] Rejecting remote currentUser update for mismatch: Incoming=${next.id}, Active=${this.userId}`);
+        this.trackIncident('anomalies', `Identity Hijack Block: External update for ID ${next.id} ignored.`);
         continue;
       }
 
@@ -660,6 +745,7 @@ class SyncManager {
 
           if (existing && incomingVer < existingVer) {
             this.metrics.staleUpdateCount++;
+            this.trackIncident('anomalies', `Stale Action Rejected: Incoming data for ${matchId} is older than local state.`);
             console.log(`[SyncManager] STALE_UPDATE_IGNORED: ${matchId}`);
             continue;
           }
@@ -793,6 +879,7 @@ class SyncManager {
     const currentHash = this.calculateChecksum(JSON.stringify(history.actions));
     if (currentHash !== history.checksum) {
       this.metrics.anomalyDetectedCount++;
+      this.trackIncident('anomalies', `History Corruption: match_history_${matchId} failed checksum verification.`);
       console.error(`[SyncManager] HISTORY_CORRUPTION_DETECTED: ${matchId}`);
       return null;
     }

@@ -61,15 +61,17 @@ const SafeAvatar = memo(({ uri, name, role, size = 44, borderRadius = 14, style,
     !uri.includes('undefined');
 
   // 🛡️ [REPLICATION] High-precision URL preparation matching mobile-app 4
-  const stripped = config.stripBuster(uri);
+  const sanitizedUri = config.sanitizeUrl(uri);
+  const stripped = config.stripBuster(sanitizedUri);
+  
   if (isRemoteImage && !hasError) {
     return (
       <Image
-        source={{ uri }}
+        source={{ uri: sanitizedUri }}
         style={[styles.avatar, { width: size, height: size, borderRadius }, style]}
         onError={() => {
-          if (!uri.includes('ui-avatars.com')) {
-            console.log(`[SafeAvatar] Failed to load image: ${uri}. Falling back to initials.`);
+          if (!sanitizedUri.includes('ui-avatars.com') && !sanitizedUri.includes('api.dicebear.com')) {
+            console.log(`[SafeAvatar] Failed to load image: ${sanitizedUri}. Falling back to initials.`);
           }
           setHasError(true);
         }}

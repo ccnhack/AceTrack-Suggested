@@ -11,6 +11,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { FullscreenVideoPlayer } from './FullscreenVideoPlayer';
 import config from '../config';
 import VideoService from '../services/VideoService';
+import TournamentService from '../services/TournamentService';
 import notify from '../utils/notify';
 
 const { width } = Dimensions.get('window');
@@ -145,7 +146,7 @@ const VideoStatusBadge = ({ video, isPlayerMode, user }) => {
 export const VideoManagement = ({
   academyId, tournaments = [], players = [], matchVideos = [], matches = [], onSaveVideo, onCancelVideo, onRequestDeletion, onLogTrace,
   onUnlockVideo, onPurchaseAiHighlights, onTopUp, onVideoPlay, onToggleFavourite,
-  isPlayerMode = false, user = null, hideSelector = false
+  isPlayerMode = false, user = null, hideSelector = false, serverClockOffset = 0
 }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [fullscreenVideo, setFullscreenVideo] = useState(null);
@@ -166,13 +167,18 @@ export const VideoManagement = ({
   const [uploadProgress, setUploadProgress] = useState(0);
 
 
-  const myTournaments = (academyId && academyId !== 'all') 
-    ? (tournaments || []).filter(t => (matchVideos || []).some(v => v && v.tournamentId === t.id))
-    : (tournaments || []).filter(t => t && t.creatorId === academyId);
+  const myTournaments = (academyId === 'all') 
+    ? (tournaments || [])
+    : (tournaments || []).filter(t => t && TournamentService.normalizeId(t.creatorId) === TournamentService.normalizeId(academyId));
 
   const closedTournaments = isPlayerMode 
     ? (tournaments || [])
-    : (myTournaments || []).filter(t => t && (t.status === 'completed' || t.tournamentConcluded));
+    : (myTournaments || []).filter(t => {
+        if (!t) return false;
+        const todayStr = new Date(Date.now() + (serverClockOffset || 0)).toISOString().split('T')[0];
+        const isPast = t.date < todayStr;
+        return t.status === 'completed' || t.tournamentConcluded || (isPast && !t.tournamentStarted);
+      });
   
   const myTournamentIds = new Set((myTournaments || []).map(t => t.id));
   const myVideos = isPlayerMode ? (matchVideos || []) : (matchVideos || []).filter(v => v && myTournamentIds.has(v.tournamentId));

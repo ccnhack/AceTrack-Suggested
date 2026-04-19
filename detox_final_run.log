@@ -1,0 +1,374 @@
+14:28:26.760 detox[14395] i ws-server Detox server listening on localhost:56932...
+14:28:26.764 detox[14395] B lifecycle jest --config e2e/jest.config.js
+14:28:26.765 detox[14395] i user (node:14395) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+  origin: at node:internal/process/warning:56:3
+14:28:27.277 detox[14395] B ws-server connection :56932<->:56935
+14:28:27.674 detox[14395] i device Detected emulator binary version { major: 36, minor: 4, patch: 10, toString: [Function: toString] }
+14:28:27.675 detox[14395] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb"  devices
+14:28:27.688 detox[14395] i child-process:EXEC_SUCCESS List of devices attached
+emulator-5554	device
+
+
+14:28:27.699 detox[14395] i device:DEVICE_LOOKUP Found a matching & free device emulator-5554
+14:28:27.699 detox[14395] i device settled on emulator-5554 (Pixel_9_Pro)
+  data: {
+    "id": "emulator-5554",
+    "adbName": "emulator-5554",
+    "name": "emulator-5554 (Pixel_9_Pro)"
+  }
+14:28:27.699 detox[14395] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "getprop dev.bootcomplete"
+14:28:27.739 detox[14395] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "getprop ro.build.version.sdk"
+14:28:27.770 detox[14395] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "settings put global animator_duration_scale 0"
+14:28:27.812 detox[14395] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "settings put global window_animation_scale 0"
+14:28:27.853 detox[14395] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "settings put global transition_animation_scale 0"
+14:28:27.891 detox[14395] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "dumpsys power | grep \"^[ ]*m[UW].*=\""
+14:28:27.980 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/build-tools/36.1.0/aapt" dump badging "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/debug/app-debug.apk"
+14:28:28.029 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list packages com.hacker1717.acetrackmobile.suggested"
+14:28:28.070 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 uninstall com.hacker1717.acetrackmobile.suggested
+14:28:28.208 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list packages com.hacker1717.acetrackmobile.suggested.test"
+14:28:28.287 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 uninstall com.hacker1717.acetrackmobile.suggested.test
+14:28:28.632 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "am force-stop com.hacker1717.acetrackmobile.suggested"
+14:28:28.709 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/build-tools/36.1.0/aapt" dump xmlstrings "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/debug/app-debug.apk" AndroidManifest.xml
+14:28:28.724 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/build-tools/36.1.0/aapt" dump xmlstrings "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" AndroidManifest.xml
+14:28:28.741 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "rm -fr /data/local/tmp/detox"
+14:28:28.852 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "mkdir -p /data/local/tmp/detox"
+14:28:28.919 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 push "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/debug/app-debug.apk" "/data/local/tmp/detox/Application.apk"
+14:28:30.405 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "getprop ro.build.version.sdk"
+14:28:30.464 detox[14396] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Application.apk
+14:28:31.227 detox[14396] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Application.apk exited with code #0
+14:28:31.228 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 push "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" "/data/local/tmp/detox/Test.apk"
+14:28:31.320 detox[14396] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Test.apk
+14:28:31.545 detox[14396] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Test.apk exited with code #0
+14:28:31.545 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse tcp:8081 tcp:8081
+14:28:31.571 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "am force-stop com.hacker1717.acetrackmobile.suggested"
+14:28:31.869 detox[14396] i lifecycle auth.test.js is assigned to emulator-5554 (Pixel_9_Pro)
+14:28:31.871 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "am force-stop com.hacker1717.acetrackmobile.suggested"
+14:28:31.908 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "date +\"%m-%d %T.000\""
+14:28:31.934 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse tcp:56932 tcp:56932
+14:28:31.952 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list instrumentation"
+14:28:31.983 detox[14396] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell am instrument -w -r -e detoxServer ws://localhost:56932 -e detoxSessionId e50da961-6f41-2280-0e79-30b02cc719c3 -e debug false com.hacker1717.acetrackmobile.suggested.test/androidx.test.runner.AndroidJUnitRunner
+14:28:32.484 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "ps | grep \"com\.hacker1717\.acetrackmobile\.suggested$\""
+14:28:33.091 detox[14395] B ws-server connection :56932<->:57026
+14:28:34.569 detox[14396] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell am instrument -w -r -e detoxServer ws://localhost:56932 -e detoxSessionId e50da961-6f41-2280-0e79-30b02cc719c3 -e debug false com.hacker1717.acetrackmobile.suggested.test/androidx.test.runner.AndroidJUnitRunner terminated with SIGINT
+14:28:34.569 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "am force-stop com.hacker1717.acetrackmobile.suggested"
+14:28:34.570 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse --remove tcp:56932
+14:28:34.619 detox[14395] E ws-server connection :56932<->:57026
+14:28:34.622 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list packages com.hacker1717.acetrackmobile.suggested"
+14:28:34.655 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 uninstall com.hacker1717.acetrackmobile.suggested
+14:28:34.706 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list packages com.hacker1717.acetrackmobile.suggested.test"
+14:28:34.738 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 uninstall com.hacker1717.acetrackmobile.suggested.test
+14:28:34.850 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/build-tools/36.1.0/aapt" dump xmlstrings "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/debug/app-debug.apk" AndroidManifest.xml
+14:28:34.867 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/build-tools/36.1.0/aapt" dump xmlstrings "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" AndroidManifest.xml
+14:28:34.880 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "rm -fr /data/local/tmp/detox"
+14:28:34.916 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "mkdir -p /data/local/tmp/detox"
+14:28:34.948 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 push "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/debug/app-debug.apk" "/data/local/tmp/detox/Application.apk"
+14:28:35.338 detox[14396] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Application.apk
+14:28:35.558 detox[14396] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Application.apk exited with code #0
+14:28:35.558 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 push "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" "/data/local/tmp/detox/Test.apk"
+14:28:35.599 detox[14396] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Test.apk
+14:28:35.752 detox[14396] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Test.apk exited with code #0
+14:28:35.752 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse tcp:8081 tcp:8081
+14:28:35.768 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "date +\"%m-%d %T.000\""
+14:28:35.810 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse tcp:56932 tcp:56932
+14:28:35.828 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list instrumentation"
+14:28:35.868 detox[14396] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell am instrument -w -r -e detoxServer ws://localhost:56932 -e detoxSessionId e50da961-6f41-2280-0e79-30b02cc719c3 -e debug false com.hacker1717.acetrackmobile.suggested.test/androidx.test.runner.AndroidJUnitRunner
+14:28:36.369 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "ps | grep \"com\.hacker1717\.acetrackmobile\.suggested$\""
+14:28:36.800 detox[14395] B ws-server connection :56932<->:57088
+14:28:42.083 detox[14396] i lifecycle Authentication Flow: should show landing screen on first launch
+14:28:42.118 detox[14396] i lifecycle Authentication Flow: should show landing screen on first launch [OK]
+14:28:42.118 detox[14396] i lifecycle Authentication Flow: should navigate to login screen
+14:28:43.240 detox[14396] i lifecycle Authentication Flow: should navigate to login screen [OK]
+14:28:43.241 detox[14396] i lifecycle Authentication Flow: should login successfully with admin credentials
+14:28:54.311 detox[14396] i ws-client:APP_STATUS The app seems to be idle
+14:29:04.316 detox[14396] i ws-client:APP_STATUS The app seems to be idle
+14:29:14.336 detox[14396] i lifecycle Authentication Flow: should login successfully with admin credentials [FAIL]
+14:29:14.337 detox[14396] i lifecycle Authentication Flow: should logout from profile screen
+14:29:14.340 detox[14396] i ws-client:APP_STATUS The app seems to be idle
+14:29:14.369 detox[14396] i lifecycle Authentication Flow: should logout from profile screen [FAIL]
+
+14:29:14.453 detox[14395] E ws-server connection :56932<->:56935
+14:29:14.463 detox[14396] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell am instrument -w -r -e detoxServer ws://localhost:56932 -e detoxSessionId e50da961-6f41-2280-0e79-30b02cc719c3 -e debug false com.hacker1717.acetrackmobile.suggested.test/androidx.test.runner.AndroidJUnitRunner terminated with SIGINT
+14:29:14.463 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse --remove tcp:56932
+FAIL e2e/auth.test.js (47.21 s)
+  Authentication Flow
+    ✓ should show landing screen on first launch (35 ms)
+    ✓ should navigate to login screen (1122 ms)
+    ✕ should login successfully with admin credentials (31094 ms)
+    ✕ should logout from profile screen (32 ms)
+
+  ● Authentication Flow › should login successfully with admin credentials
+
+    Test Failed: 30.0sec timeout expired without matching of given matcher: (view has effective visibility <VISIBLE> and view.getGlobalVisibleRect() covers at least <75> percent of the view's area)
+
+      28 |     await waitFor(element(by.id('nav.tab.Admin Hub')))
+      29 |       .toBeVisible()
+    > 30 |       .withTimeout(30000);
+         |        ^
+      31 |     
+      32 |     await device.enableSynchronization();
+      33 |   });
+
+      at Object.withTimeout (e2e/auth.test.js:30:8)
+
+  ● Authentication Flow › should logout from profile screen
+
+    Test Failed: No views in hierarchy found matching: (view.getTag() is "nav.tab.Profile" and view has effective visibility <VISIBLE>)
+
+
+    View Hierarchy:
+    <?xml version='1.0' encoding='UTF_8' standalone='yes' ?>
+    <ViewHierarchy density="3.0">
+      <DecorView class="com.android.internal.policy.DecorView" width="1280" height="2856" visibility="visible" alpha="1.0" focused="false" x="0" y="0">
+        <LinearLayout class="android.widget.LinearLayout" width="1280" height="2784" visibility="visible" alpha="1.0" focused="false" x="0" y="0">
+          <ViewStub class="android.view.ViewStub" width="0" height="0" visibility="gone" alpha="1.0" focused="false" x="0" y="0" />
+          <FrameLayout class="android.widget.FrameLayout" width="1280" height="2628" visibility="visible" alpha="1.0" focused="false" x="0" y="156">
+            <FitWindowsLinearLayout class="androidx.appcompat.widget.FitWindowsLinearLayout" width="1280" height="2628" visibility="visible" alpha="1.0" focused="false" x="0" y="156">
+              <ViewStubCompat class="androidx.appcompat.widget.ViewStubCompat" width="0" height="0" visibility="gone" alpha="1.0" focused="false" x="0" y="156" />
+              <ContentFrameLayout class="androidx.appcompat.widget.ContentFrameLayout" width="1280" height="2628" visibility="visible" alpha="1.0" focused="false" x="0" y="156">
+                <ReactRootView class="com.facebook.react.ReactRootView" width="1280" height="2628" visibility="visible" alpha="1.0" focused="false" label=" Welcome Back Sign in to your AceTrack account USERNAME OR EMAIL   PASSWORD   Forgot Password?  USING CLOUD API Continue Don't have an account?  Sign Up" x="0" y="156">
+                  <RNGestureHandlerRootView class="com.swmansion.gesturehandler.react.RNGestureHandlerRootView" width="1280" height="2628" visibility="visible" alpha="1.0" focused="false" x="0" y="156">
+                    <SafeAreaProvider class="com.th3rdwave.safeareacontext.SafeAreaProvider" width="1280" height="2628" visibility="visible" alpha="1.0" focused="false" x="0" y="156">
+                      <ReactViewGroup class="com.facebook.react.views.view.ReactViewGroup" width="1280" height="2628" visibility="visible" alpha="1.0" focused="false" label=" Welcome Back Sign in to your AceTrack account USERNAME OR EMAIL   PASSWORD   Forgot Password?  USING CLOUD API Continue Don't have an account?  Sign Up" x="0" y="156">
+                        <ScreenStack class="com.swmansion.rnscreens.ScreenStack" width="1280" height="2628" visibility="visible" alpha="1.0" focused="false" x="0" y="156">
+                          <ScreensCoordinatorLayout class="com.swmansion.rnscreens.ScreenStackFragment$ScreensCoordinatorLayout" width="1280" height="2628" visibility="visible" alpha="1.0" focused="false" x="0" y="156">
+                            <Screen class="com.swmansion.rnscreens.Screen" width="1280" height="2628" visibility="visible" alpha="1.0" focused="false" x="0" y="156">
+                              <ReactViewGroup class="com.facebook.react.views.view.ReactViewGroup" width="1280" height="2628" visibility="visible" alpha="1.0" focused="false" label=" Welcome Back Sign in to your AceTrack account USERNAME OR EMAIL   PASSWORD   Forgot Password?  USING CLOUD API Continue Don't have an account?  Sign Up" x="0" y="156">
+                                <ReactViewGroup class="com.facebook.react.views.view.ReactViewGroup" width="1280" height="2628" visibility="visible" alpha="1.0" focused="false" label=" Welcome Back Sign in to your AceTrack account USERNAME OR EMAIL   PASSWORD   Forgot Password?  USING CLOUD API Continue Don't have an account?  Sign Up" x="0" y="156">
+                                  <ReactScrollView class="com.facebook.react.views.scroll.ReactScrollView" width="1280" height="2628" visibility="visible" alpha="1.0" focused="false" label=" Welcome Back Sign in to your AceTrack account USERNAME OR EMAIL   PASSWORD   Forgot Password?  USING CLOUD API Continue Don't have an account?  Sign Up" x="0" y="156">
+                                    <ReactViewGroup class="com.facebook.react.views.view.ReactViewGroup" width="1280" height="2538" visibility="visible" alpha="1.0" focused="false" label=" Welcome Back Sign in to your AceTrack account USERNAME OR EMAIL   PASSWORD   Forgot Password?  USING CLOUD API Continue Don't have an account?  Sign Up" x="0" y="156">
+                                      <ReactImageView class="com.facebook.react.views.image.ReactImageView" width="1280" height="788" visibility="visible" alpha="1.0" focused="false" x="0" y="156" />
+                                      <ReactViewGroup class="com.facebook.react.views.view.ReactViewGroup" width="120" height="120" visibility="visible" alpha="1.0" focused="false" label="" x="60" y="306">
+                                        <ReactTextView class="com.facebook.react.views.text.ReactTextView" width="60" height="62" visibility="visible" alpha="1.0" focused="false" label="" x="90" y="335" text="" />
+                                      </ReactViewGroup>
+                                      <ReactViewGroup class="com.facebook.react.views.view.ReactViewGroup" width="1280" height="1840" visibility="visible" alpha="1.0" focused="false" label="Welcome Back Sign in to your AceTrack account USERNAME OR EMAIL   PASSWORD   Forgot Password?  USING CLOUD API Continue Don't have an account?  Sign Up" x="0" y="854">
+                                        <ReactTextView class="com.facebook.react.views.text.ReactTextView" width="1136" height="120" visibility="visible" alpha="1.0" focused="false" label="Welcome Back" x="72" y="926" text="Welcome Back" />
+                                        <ReactTextView class="com.facebook.react.views.text.ReactTextView" width="1136" height="60" visibility="visible" alpha="1.0" focused="false" label="Sign in to your AceTrack account" x="72" y="1058" text="Sign in to your AceTrack account" />
+                                        <ReactTextView class="com.facebook.react.views.text.ReactTextView" width="1124" height="41" visibility="visible" alpha="1.0" focused="false" label="USERNAME OR EMAIL" x="84" y="1214" text="USERNAME OR EMAIL" />
+                                        <ReactViewGroup class="com.facebook.react.views.view.ReactViewGroup" width="1136" height="174" visibility="visible" alpha="1.0" focused="false" label=" " x="72" y="1279">
+                                          <ReactTextView class="com.facebook.react.views.text.ReactTextView" width="60" height="62" visibility="visible" alpha="1.0" focused="false" label="" x="123" y="1335" text="" />
+                                          <ReactEditText class="com.facebook.react.views.textinput.ReactEditText" width="938" height="168" visibility="visible" alpha="1.0" focused="true" x="219" y="1282" id="auth.login.username.input" />
+                                        </ReactViewGroup>
+                                        <ReactTextView class="com.facebook.react.views.text.ReactTextView" width="1124" height="41" visibility="visible" alpha="1.0" focused="false" label="PASSWORD" x="84" y="1513" text="PASSWORD" />
+                                        <ReactViewGroup class="com.facebook.react.views.view.ReactViewGroup" width="1136" height="174" visibility="visible" alpha="1.0" focused="false" label=" " x="72" y="1578">
+                                          <ReactTextView class="com.facebook.react.views.text.ReactTextView" width="60" height="62" visibility="visible" alpha="1.0" focused="false" label="" x="123" y="1634" text="" />
+                                          <ReactEditText class="com.facebook.react.views.textinput.ReactEditText" width="938" height="168" visibility="visible" alpha="1.0" focused="false" x="219" y="1581" id="auth.login.password.input" />
+                                        </ReactViewGroup>
+                                        <ReactViewGroup class="com.facebook.react.views.view.ReactViewGroup" width="341" height="57" visibility="visible" alpha="1.0" focused="false" label="Forgot Password?" x="867" y="1812">
+                                          <ReactTextView class="com.facebook.react.views.text.ReactTextView" width="341" height="57" visibility="visible" alpha="1.0" focused="false" label="Forgot Password?" x="867" y="1812" text="Forgot Password?" />
+                                        </ReactViewGroup>
+                                        <ReactViewGroup class="com.facebook.react.views.view.ReactViewGroup" width="1136" height="128" visibility="visible" alpha="1.0" focused="false" label=" USING CLOUD API" x="72" y="1953">
+                                          <ReactTextView class="com.facebook.react.views.text.ReactTextView" width="48" height="50" visibility="visible" alpha="1.0" focused="false" label="" x="481" y="1992" text="" />
+                                          <ReactTextView class="com.facebook.react.views.text.ReactTextView" width="247" height="41" visibility="visible" alpha="1.0" focused="false" label="USING CLOUD API" x="553" y="1997" text="USING CLOUD API" />
+                                        </ReactViewGroup>
+                                        <ReactViewGroup class="com.facebook.react.views.view.ReactViewGroup" width="1136" height="168" visibility="visible" alpha="1.0" focused="false" label="Continue" x="72" y="2177" id="auth.login.submit.button">
+                                          <ReactTextView class="com.facebook.react.views.text.ReactTextView" width="166" height="57" visibility="visible" alpha="1.0" focused="false" label="Continue" x="557" y="2233" text="Continue" />
+                                        </ReactViewGroup>
+                                        <ReactTextView class="com.facebook.react.views.text.ReactTextView" width="474" height="61" visibility="visible" alpha="1.0" focused="false" label="Don't have an account? " x="325" y="2441" text="Don't have an account? " />
+                                        <ReactViewGroup class="com.facebook.react.views.view.ReactViewGroup" width="157" height="61" visibility="visible" alpha="1.0" focused="false" label="Sign Up" x="799" y="2441">
+                                          <ReactTextView class="com.facebook.react.views.text.ReactTextView" width="157" height="61" visibility="visible" alpha="1.0" focused="false" label="Sign Up" x="799" y="2441" text="Sign Up" />
+                                        </ReactViewGroup>
+                                      </ReactViewGroup>
+                                    </ReactViewGroup>
+                                  </ReactScrollView>
+                                </ReactViewGroup>
+                              </ReactViewGroup>
+                              <ScreenStackHeaderConfig class="com.swmansion.rnscreens.ScreenStackHeaderConfig" width="1280" height="0" visibility="gone" alpha="1.0" focused="false" x="0" y="2784" />
+                            </Screen>
+                            <AppBarLayout class="com.google.android.material.appbar.AppBarLayout" width="1280" height="0" visibility="visible" alpha="1.0" focused="false" x="0" y="156" />
+                          </ScreensCoordinatorLayout>
+                        </ScreenStack>
+                      </ReactViewGroup>
+                    </SafeAreaProvider>
+                  </RNGestureHandlerRootView>
+                </ReactRootView>
+              </ContentFrameLayout>
+            </FitWindowsLinearLayout>
+          </FrameLayout>
+        </LinearLayout>
+        <View class="android.view.View" width="1280" height="72" visibility="visible" alpha="1.0" focused="false" x="0" y="2784" />
+        <View class="android.view.View" width="1280" height="156" visibility="visible" alpha="1.0" focused="false" x="0" y="0" />
+      </DecorView>
+    </ViewHierarchy>
+
+      36 |     await device.disableSynchronization();
+      37 |     
+    > 38 |     await element(by.id('nav.tab.Profile')).tap();
+         |                                             ^
+      39 |     
+      40 |     // Scroll to logout if needed
+      41 |     await waitFor(element(by.id('profile.logout.button')))
+
+      at Object.tap (e2e/auth.test.js:38:45)
+
+14:29:14.513 detox[14395] B ws-server connection :56932<->:57142
+14:29:14.556 detox[14395] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb"  devices
+14:29:14.569 detox[14395] i child-process:EXEC_SUCCESS List of devices attached
+emulator-5554	device
+
+
+14:29:14.572 detox[14395] i device:DEVICE_LOOKUP Found a matching & free device emulator-5554
+14:29:14.572 detox[14395] i device settled on emulator-5554 (Pixel_9_Pro)
+  data: {
+    "id": "emulator-5554",
+    "adbName": "emulator-5554",
+    "name": "emulator-5554 (Pixel_9_Pro)"
+  }
+14:29:14.573 detox[14395] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "getprop dev.bootcomplete"
+14:29:14.603 detox[14395] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "settings put global animator_duration_scale 0"
+14:29:14.636 detox[14395] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "settings put global window_animation_scale 0"
+14:29:14.663 detox[14395] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "settings put global transition_animation_scale 0"
+14:29:14.687 detox[14395] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "dumpsys power | grep \"^[ ]*m[UW].*=\""
+14:29:14.761 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list packages com.hacker1717.acetrackmobile.suggested"
+14:29:14.793 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 uninstall com.hacker1717.acetrackmobile.suggested
+14:29:14.884 detox[14395] E ws-server connection :56932<->:57088
+14:29:14.908 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list packages com.hacker1717.acetrackmobile.suggested.test"
+14:29:15.011 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 uninstall com.hacker1717.acetrackmobile.suggested.test
+14:29:15.166 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "am force-stop com.hacker1717.acetrackmobile.suggested"
+14:29:15.235 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/build-tools/36.1.0/aapt" dump xmlstrings "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/debug/app-debug.apk" AndroidManifest.xml
+14:29:15.261 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/build-tools/36.1.0/aapt" dump xmlstrings "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" AndroidManifest.xml
+14:29:15.279 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "rm -fr /data/local/tmp/detox"
+14:29:15.341 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "mkdir -p /data/local/tmp/detox"
+14:29:15.377 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 push "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/debug/app-debug.apk" "/data/local/tmp/detox/Application.apk"
+14:29:15.933 detox[14396] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Application.apk
+14:29:16.216 detox[14396] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Application.apk exited with code #0
+14:29:16.216 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 push "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" "/data/local/tmp/detox/Test.apk"
+14:29:16.248 detox[14396] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Test.apk
+14:29:16.413 detox[14396] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Test.apk exited with code #0
+14:29:16.414 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse tcp:8081 tcp:8081
+14:29:16.433 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "am force-stop com.hacker1717.acetrackmobile.suggested"
+14:29:16.548 detox[14396] i lifecycle sync.test.js is assigned to emulator-5554 (Pixel_9_Pro)
+14:29:16.549 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "am force-stop com.hacker1717.acetrackmobile.suggested"
+14:29:16.581 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "date +\"%m-%d %T.000\""
+14:29:16.643 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse tcp:56932 tcp:56932
+14:29:16.673 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list instrumentation"
+14:29:16.700 detox[14396] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell am instrument -w -r -e detoxServer ws://localhost:56932 -e detoxSessionId e50da961-6f41-2280-0e79-30b02cc719c3 -e debug false com.hacker1717.acetrackmobile.suggested.test/androidx.test.runner.AndroidJUnitRunner
+14:29:17.201 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "ps | grep \"com\.hacker1717\.acetrackmobile\.suggested$\""
+14:29:17.581 detox[14395] B ws-server connection :56932<->:57221
+14:29:19.752 detox[14396] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell am instrument -w -r -e detoxServer ws://localhost:56932 -e detoxSessionId e50da961-6f41-2280-0e79-30b02cc719c3 -e debug false com.hacker1717.acetrackmobile.suggested.test/androidx.test.runner.AndroidJUnitRunner terminated with SIGINT
+14:29:19.752 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "am force-stop com.hacker1717.acetrackmobile.suggested"
+14:29:19.753 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse --remove tcp:56932
+14:29:19.814 detox[14395] E ws-server connection :56932<->:57221
+14:29:19.821 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list packages com.hacker1717.acetrackmobile.suggested"
+14:29:19.867 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 uninstall com.hacker1717.acetrackmobile.suggested
+14:29:19.918 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list packages com.hacker1717.acetrackmobile.suggested.test"
+14:29:19.961 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 uninstall com.hacker1717.acetrackmobile.suggested.test
+14:29:20.022 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/build-tools/36.1.0/aapt" dump xmlstrings "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/debug/app-debug.apk" AndroidManifest.xml
+14:29:20.037 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/build-tools/36.1.0/aapt" dump xmlstrings "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" AndroidManifest.xml
+14:29:20.052 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "rm -fr /data/local/tmp/detox"
+14:29:20.105 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "mkdir -p /data/local/tmp/detox"
+14:29:20.133 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 push "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/debug/app-debug.apk" "/data/local/tmp/detox/Application.apk"
+14:29:20.527 detox[14396] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Application.apk
+14:29:20.749 detox[14396] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Application.apk exited with code #0
+14:29:20.749 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 push "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" "/data/local/tmp/detox/Test.apk"
+14:29:20.788 detox[14396] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Test.apk
+14:29:20.902 detox[14396] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell pm install -r -g -t /data/local/tmp/detox/Test.apk exited with code #0
+14:29:20.902 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse tcp:8081 tcp:8081
+14:29:20.919 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "date +\"%m-%d %T.000\""
+14:29:20.945 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse tcp:56932 tcp:56932
+14:29:20.966 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "pm list instrumentation"
+14:29:21.013 detox[14396] i child-process:SPAWN_CMD /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell am instrument -w -r -e detoxServer ws://localhost:56932 -e detoxSessionId e50da961-6f41-2280-0e79-30b02cc719c3 -e debug false com.hacker1717.acetrackmobile.suggested.test/androidx.test.runner.AndroidJUnitRunner
+14:29:21.514 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 shell "ps | grep \"com\.hacker1717\.acetrackmobile\.suggested$\""
+14:29:22.233 detox[14395] B ws-server connection :56932<->:57289
+14:29:24.341 detox[14396] i ws-client:APP_STATUS Failed to execute the current status query. Cannot send a message over the closed web socket. See the payload below:
+
+HINT: Please report this issue on our GitHub tracker:
+https://github.com/wix/Detox/issues
+
+CurrentStatus {
+  type: 'currentStatus',
+  params: {},
+  messageId: undefined
+}
+    at listOnTimeout (node:internal/timers:605:17)
+    at processTimers (node:internal/timers:541:7) {
+  name: 'DetoxRuntimeError'
+}
+14:29:39.022 detox[14396] i ws-client:APP_STATUS The app seems to be idle
+14:29:49.030 detox[14396] i ws-client:APP_STATUS The app seems to be idle
+14:29:59.035 detox[14396] i lifecycle Sync & Conflict Resolution: should show Admin Hub sync badge
+14:29:59.036 detox[14396] i lifecycle Sync & Conflict Resolution: should show Admin Hub sync badge [FAIL]
+14:29:59.037 detox[14396] i lifecycle Sync & Conflict Resolution: should display sync status correctly
+14:29:59.037 detox[14396] i lifecycle Sync & Conflict Resolution: should display sync status correctly [FAIL]
+14:29:59.037 detox[14396] i lifecycle Sync & Conflict Resolution: should allow manual sync trigger via badge tap
+14:29:59.037 detox[14396] i lifecycle Sync & Conflict Resolution: should allow manual sync trigger via badge tap [FAIL]
+14:29:59.038 detox[14396] i ws-client:APP_STATUS The app seems to be idle
+
+14:29:59.062 detox[14395] E ws-server connection :56932<->:57142
+14:29:59.065 detox[14396] i child-process:SPAWN_END /Users/shashankshekhar/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell am instrument -w -r -e detoxServer ws://localhost:56932 -e detoxSessionId e50da961-6f41-2280-0e79-30b02cc719c3 -e debug false com.hacker1717.acetrackmobile.suggested.test/androidx.test.runner.AndroidJUnitRunner terminated with SIGINT
+14:29:59.065 detox[14396] i child-process:EXEC_CMD "/Users/shashankshekhar/Library/Android/sdk/platform-tools/adb" -s emulator-5554 reverse --remove tcp:56932
+FAIL e2e/sync.test.js (44.565 s)
+  Sync & Conflict Resolution
+    ✕ should show Admin Hub sync badge (1 ms)
+    ✕ should display sync status correctly
+    ✕ should allow manual sync trigger via badge tap
+
+  ● Sync & Conflict Resolution › should show Admin Hub sync badge
+
+    Test Failed: 30.0sec timeout expired without matching of given matcher: (view has effective visibility <VISIBLE> and view.getGlobalVisibleRect() covers at least <75> percent of the view's area)
+
+      16 |     await waitFor(element(by.id('nav.tab.Admin Hub')))
+      17 |       .toBeVisible()
+    > 18 |       .withTimeout(30000);
+         |        ^
+      19 |   });
+      20 |
+      21 |   afterAll(async () => {
+
+      at Object.withTimeout (e2e/sync.test.js:18:8)
+
+  ● Sync & Conflict Resolution › should display sync status correctly
+
+    Test Failed: 30.0sec timeout expired without matching of given matcher: (view has effective visibility <VISIBLE> and view.getGlobalVisibleRect() covers at least <75> percent of the view's area)
+
+      16 |     await waitFor(element(by.id('nav.tab.Admin Hub')))
+      17 |       .toBeVisible()
+    > 18 |       .withTimeout(30000);
+         |        ^
+      19 |   });
+      20 |
+      21 |   afterAll(async () => {
+
+      at Object.withTimeout (e2e/sync.test.js:18:8)
+
+  ● Sync & Conflict Resolution › should allow manual sync trigger via badge tap
+
+    Test Failed: 30.0sec timeout expired without matching of given matcher: (view has effective visibility <VISIBLE> and view.getGlobalVisibleRect() covers at least <75> percent of the view's area)
+
+      16 |     await waitFor(element(by.id('nav.tab.Admin Hub')))
+      17 |       .toBeVisible()
+    > 18 |       .withTimeout(30000);
+         |        ^
+      19 |   });
+      20 |
+      21 |   afterAll(async () => {
+
+      at Object.withTimeout (e2e/sync.test.js:18:8)
+
+Test Suites: 2 failed, 2 total
+Tests:       5 failed, 2 passed, 7 total
+Snapshots:   0 total
+Time:        91.96 s, estimated 97 s
+Ran all test suites.
+14:30:00.079 detox[14396] i user Jest did not exit one second after the test run has completed.
+
+'This usually means that there are asynchronous operations that weren't stopped in your tests. Consider running Jest with `--detectOpenHandles` to troubleshoot this issue.
+  origin: at node_modules/jest-cli/build/run.js:225:15
+14:30:02.070 detox[14395] E ws-server connection :56932<->:57289
+14:30:09.040 detox[14396] i ws-client:APP_STATUS Failed to execute the current status query. Cannot send a message over the closed web socket. See the payload below:
+
+HINT: Please report this issue on our GitHub tracker:
+https://github.com/wix/Detox/issues
+
+CurrentStatus {
+  type: 'currentStatus',
+  params: {},
+  messageId: undefined
+}
+    at listOnTimeout (node:internal/timers:605:17)
+    at processTimers (node:internal/timers:541:7) {
+  name: 'DetoxRuntimeError'
+}
+14:30:09.057 detox[14395] E lifecycle Command failed with exit code = 1:
+jest --config e2e/jest.config.js
+14:30:09.060 detox[14395] i ws-server Detox server has been closed gracefully

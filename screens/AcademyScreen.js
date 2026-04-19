@@ -537,48 +537,59 @@ export const AcademyScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
       {/* Premium Dashboard Header */}
-      <LinearGradient 
-        colors={[colors.primary.base, colors.primary.dark]} 
-        style={styles.premiumHeader}
-      >
+      <View style={styles.premiumHeader}>
         <View style={styles.headerTop}>
           <View>
-            <Text style={styles.welcomeLabel}>Welcome back,</Text>
+            <Text style={styles.welcomeLabel}>WELCOME BACK,</Text>
             <Text style={styles.academyNameText}>{user?.name || 'Academy'}</Text>
           </View>
-            {/* Add button remains here for now as requested */}
-            {subTab === 'tournaments' && (
-              <TouchableOpacity 
-                testID="academy.createTournament.btn"
-                onPress={() => { 
-                  if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  setEditingT(null); 
-                  setIsFormOpen(true); 
-                }}
-                style={styles.premiumAddBtn}
-              >
-                <Ionicons name="add" size={24} color="#FFFFFF" />
-              </TouchableOpacity>
-            )}
+          {subTab === 'tournaments' && (
+            <TouchableOpacity 
+              testID="academy.createTournament.btn"
+              onPress={() => { 
+                if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setEditingT(null); 
+                setIsFormOpen(true); 
+              }}
+              style={styles.premiumAddBtn}
+            >
+              <Ionicons name="add" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.statsDashboard}>
-          <View style={styles.dashStatCard}>
-            <Text style={styles.dashStatVal}>{myTournaments.filter(t => t.status !== 'completed').length}</Text>
+          <TouchableOpacity 
+            onPress={() => { handleTabChange('tournaments'); setTFilter('upcoming'); }}
+            style={styles.dashStatCard}
+          >
+            <Text style={styles.dashStatVal}>
+              {myTournaments.filter(t => {
+                const todayStr = new Date(Date.now() + (serverClockOffset || 0)).toISOString().split('T')[0];
+                const isPast = t.date < todayStr;
+                return t.status !== 'completed' && !t.tournamentConcluded && (!isPast || t.tournamentStarted);
+              }).length}
+            </Text>
             <Text style={styles.dashStatLabel}>Active Events</Text>
-          </View>
+          </TouchableOpacity>
           <View style={styles.dashStatDivider} />
-          <View style={styles.dashStatCard}>
+          <TouchableOpacity 
+            onPress={() => handleTabChange('insights')}
+            style={styles.dashStatCard}
+          >
             <Text style={styles.dashStatVal}>{myParticipants.length}</Text>
             <Text style={styles.dashStatLabel}>Total Players</Text>
-          </View>
+          </TouchableOpacity>
           <View style={styles.dashStatDivider} />
-          <View style={styles.dashStatCard}>
+          <TouchableOpacity 
+            onPress={() => handleTabChange('videos')}
+            style={styles.dashStatCard}
+          >
             <Text style={styles.dashStatVal}>{matchVideos.filter(v => v.academyId === academyId).length}</Text>
             <Text style={styles.dashStatLabel}>Video Assets</Text>
-          </View>
+          </TouchableOpacity>
         </View>
-      </LinearGradient>
+      </View>
 
       {/* Modern Segmented Tabs */}
       <View style={styles.segmentedTabContainer}>
@@ -785,7 +796,7 @@ export const AcademyScreen = () => {
                             <Ionicons name="alert-circle-outline" size={40} color="#94A3B8" />
                             <Text style={styles.emptyText}>No {tFilter} tournaments found</Text>
                             <View style={{ marginTop: 20, padding: 10, backgroundColor: '#F1F5F9', borderRadius: 8 }}>
-                                <Text testID="academy.debug.metrics" style={{ fontSize: 11, color: '#475569', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
+                                <Text testID="academy.debug.metrics" style={{ fontSize: 11, color: '#475569', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
                                     DEBUG_DUMP:
                                     Total: {tournaments.length}
                                     My: {myTournaments.length}
@@ -812,6 +823,7 @@ export const AcademyScreen = () => {
             onCancelVideo={onCancelVideo}
             onRequestDeletion={onRequestDeletion}
             onLogTrace={onLogTrace}
+            serverClockOffset={serverClockOffset}
           />
         )}
 
@@ -1226,55 +1238,56 @@ export const AcademyScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   premiumHeader: {
-    padding: 24,
-    backgroundColor: '#FFFFFF',
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    shadowColor: '#6366F1',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.05,
-    shadowRadius: 20,
-    elevation: 10,
-    zIndex: 10,
+    backgroundColor: '#0F172A',
+    paddingBottom: 24,
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 0,
+    paddingHorizontal: 24,
+    paddingTop: Platform.OS === 'ios' ? 20 : 40,
+    marginBottom: 20,
   },
   welcomeLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
+    fontSize: 10,
+    fontWeight: '900',
+    color: 'rgba(255, 255, 255, 0.6)',
     letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   academyNameText: {
     fontSize: 24,
     fontWeight: '900',
-    color: '#0F172A',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
     marginTop: 2,
   },
   premiumAddBtn: {
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: '#6366F1',
-    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     alignItems: 'center',
-    shadowColor: '#6366F1',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   statsDashboard: {
     flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 20,
-    padding: 16,
-    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 24,
+    borderRadius: 24,
+    paddingVertical: 18,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
   },
   dashStatCard: {
     flex: 1,

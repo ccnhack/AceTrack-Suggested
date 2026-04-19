@@ -1,0 +1,284 @@
+
+============================
+DIFF FOR components/Layout.js
+============================
+--- /Users/shashankshekhar/Final Working/mobile-app 4/components/Layout.js	2026-04-10 13:38:41
++++ /Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/components/Layout.js	2026-04-13 15:57:25
+@@ -3,3 +3,3 @@
+ import { Ionicons } from '@expo/vector-icons';
+-import { useAppActions } from '../navigation/AppNavigator';
++import { useSync } from '../context/SyncContext';
+ 
+@@ -10,3 +10,3 @@
+ }) => {
+-  const { onToggleNotifications } = useAppActions();
++  const { onToggleNotifications } = useSync();
+   const showHeader = activeTab !== 'explore';
+
+============================
+DIFF FOR components/TournamentCard.js
+============================
+--- /Users/shashankshekhar/Final Working/mobile-app 4/components/TournamentCard.js	2026-04-12 16:13:07
++++ /Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/components/TournamentCard.js	2026-04-13 15:56:10
+@@ -3,3 +3,3 @@
+ import { Ionicons } from '@expo/vector-icons';
+-import { useAppData } from '../navigation/AppNavigator';
++import { useSync } from '../context/SyncContext';
+ import { formatDateIST } from '../utils/tournamentUtils';
+@@ -24,3 +24,3 @@
+ }) => {
+-  const { serverClockOffset } = useAppData();
++  const { serverClockOffset } = useSync();
+   const isRegistered = userId && (t.registeredPlayerIds || []).some(id => String(id).toLowerCase() === String(userId).toLowerCase());
+
+============================
+DIFF FOR components/MatchCard.js
+============================
+--- /Users/shashankshekhar/Final Working/mobile-app 4/components/MatchCard.js	2026-04-12 16:13:07
++++ /Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/components/MatchCard.js	2026-04-13 15:56:36
+@@ -3,3 +3,3 @@
+ import { Ionicons } from '@expo/vector-icons';
+-import { useAppData } from '../navigation/AppNavigator';
++import { useSync } from '../context/SyncContext';
+ import { formatDateIST } from '../utils/tournamentUtils';
+@@ -21,3 +21,3 @@
+ }) => {
+-  const { serverClockOffset } = useAppData();
++  const { serverClockOffset } = useSync();
+   const isPendingPayment = user?.id && (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
+
+============================
+DIFF FOR screens/MatchesScreen.js
+============================
+--- /Users/shashankshekhar/Final Working/mobile-app 4/screens/MatchesScreen.js	2026-04-12 16:13:07
++++ /Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/screens/MatchesScreen.js	2026-04-14 09:38:15
+@@ -171,10 +171,21 @@
+ 
+-const MatchesScreen = ({
+-  route,
+-  navigation, tournaments, user, onReschedule, onOptOut, onLogFailedOtp,
+-  players, evaluations, matchVideos, onSaveEvaluation,
+-  onConfirmCoachRequest, onDeclineCoachRequest, onStartTournament,
+-  onEndTournament, onUpdateTournament, onSaveCoachComment, onRegister, Sport,
+-  supportTickets, onSaveTicket, onReplyTicket
+-}) => {
++import { useAuth } from '../context/AuthContext';
++import { useTournaments } from '../context/TournamentContext';
++import { usePlayers } from '../context/PlayerContext';
++import { useVideos } from '../context/VideoContext';
++import { useSupport } from '../context/SupportContext';
++import { useAdmin } from '../context/AdminContext';
++
++const MatchesScreen = ({ route, navigation }) => {
++  const { currentUser: user } = useAuth();
++  const { 
++    tournaments, onReschedule, onOptOut, onStartTournament, onEndTournament, 
++    onUpdateTournament, onRegister, onAssignCoach, onConfirmCoachRequest, onDeclineCoachRequest 
++  } = useTournaments();
++  const { players } = usePlayers();
++  const { 
++    evaluations, onSaveEvaluation, matchVideos, onSaveCoachComment 
++  } = useVideos(); // Evaluations are in VideoContext currently
++  const { supportTickets, onSaveTicket, onReplyTicket } = useSupport();
++  const { onLogFailedOtp } = useAdmin();
+   const [viewMode, setViewMode] = useState(route?.params?.viewMode || 'upcoming');
+
+============================
+DIFF FOR screens/ExploreScreen.js
+============================
+--- /Users/shashankshekhar/Final Working/mobile-app 4/screens/ExploreScreen.js	2026-04-12 16:13:07
++++ /Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/screens/ExploreScreen.js	2026-04-13 16:48:00
+@@ -3,4 +3,6 @@
+   View, Text, TouchableOpacity, ScrollView, Image, 
+-  StyleSheet, Dimensions, FlatList, Modal, Alert, ActivityIndicator, TextInput, InteractionManager 
++  StyleSheet, Dimensions, FlatList, Modal, Alert, ActivityIndicator, TextInput, InteractionManager, Platform, LayoutAnimation
+ } from 'react-native';
++import * as Haptics from 'expo-haptics';
++import { LinearGradient } from 'expo-linear-gradient';
+ import { useSafeAreaInsets } from 'react-native-safe-area-context';
+@@ -14,3 +16,3 @@
+ import { useIsFocused } from '@react-navigation/native';
+-import { useAppData } from '../navigation/AppNavigator';
++import { Sport } from '../types';
+ 
+@@ -47,9 +49,15 @@
+ 
+-const ExploreScreen = (props) => {
+-  const { serverClockOffset } = useAppData();
+-  const { 
+-    tournaments = [], onSelect, reschedulingFrom, onCancelReschedule, userId, 
+-    userRole, userSports, players = [], Sport, SkillLevel, user,
+-    onRegister, onJoinWaitlist, onAssignCoach, isSyncing, onUpdateTournament
+-  } = props;
++import { useAuth } from '../context/AuthContext';
++import { useTournaments } from '../context/TournamentContext';
++import { usePlayers } from '../context/PlayerContext';
++import { useApp } from '../context/AppContext';
++
++const ExploreScreen = ({ navigation, route }) => {
++  const { currentUser, userRole, userId } = useAuth();
++  const { tournaments, onRegister, onJoinWaitlist, onAssignCoach, onUpdateTournament, reschedulingFrom, onCancelReschedule } = useTournaments();
++  const { players } = usePlayers();
++  const { serverClockOffset } = useApp();
++  
++  const user = currentUser;
++  const userSports = user?.preferredSports || [];
+   const [sportFilter, setSportFilter] = useState('All');
+@@ -57,2 +65,21 @@
+   const [isCityDropdownVisible, setIsCityDropdownVisible] = useState(false);
++  
++  const toggleCityDropdown = () => {
++    if (Platform.OS !== 'web') {
++        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
++        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
++    }
++    setIsCityDropdownVisible(!isCityDropdownVisible);
++  };
++
++  const handleCitySelect = (item) => {
++    if (Platform.OS !== 'web') {
++        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
++        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
++    }
++    setCityFilter(item); 
++    setSelectedHub(item);
++    setIsCityDropdownVisible(false); 
++    setCitySearch(''); 
++  };
+   const [citySearch, setCitySearch] = useState('');
+@@ -69,4 +96,4 @@
+   useEffect(() => {
+-    if (props.route?.params?.selectedTournamentId) {
+-      const tid = props.route.params.selectedTournamentId;
++    if (route?.params?.selectedTournamentId) {
++      const tid = route.params.selectedTournamentId;
+       const t = tournaments.find(it => String(it.id) === String(tid));
+@@ -75,6 +102,6 @@
+         // Clear param to avoid re-opening on every render
+-        props.navigation.setParams({ selectedTournamentId: null });
++        navigation.setParams({ selectedTournamentId: null });
+       }
+     }
+-  }, [props.route?.params?.selectedTournamentId, tournaments]);
++  }, [route?.params?.selectedTournamentId, tournaments]);
+   
+@@ -95,2 +122,3 @@
+   const handleDetectLocation = async () => {
++    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+     setIsCityDropdownVisible(false);
+@@ -226,3 +254,3 @@
+   const availableSports = userRole === 'coach' && userSports ? userSports : Object.values(Sport);
+-  const currentUser = userId ? (players || []).find(p => p.id === userId) : null;
++  const currentPlayer = userId ? (players || []).find(p => p.id === userId) : null;
+ 
+@@ -286,4 +314,4 @@
+       .filter(t => {
+-          if (userRole === 'user' && currentUser?.trueSkillRating) {
+-             if (t.skillRange) return currentUser.trueSkillRating >= t.skillRange.min && currentUser.trueSkillRating <= t.skillRange.max;
++          if (userRole === 'user' && currentPlayer?.trueSkillRating) {
++             if (t.skillRange) return currentPlayer.trueSkillRating >= t.skillRange.min && currentPlayer.trueSkillRating <= t.skillRange.max;
+           }
+@@ -291,3 +319,3 @@
+       }).slice(0, 2);
+-  }, [sortedTournaments, userRole, currentUser]);
++  }, [sortedTournaments, userRole, currentPlayer]);
+ 
+@@ -385,3 +413,6 @@
+     <View style={styles.container}>
+-      <View style={[styles.hero, { paddingTop: Math.max(insets.top, 16) }]}>
+...[TRUNCATED]...
+
+============================
+DIFF FOR screens/InsightsScreen.js
+============================
+--- /Users/shashankshekhar/Final Working/mobile-app 4/screens/InsightsScreen.js	2026-04-12 16:13:07
++++ /Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/screens/InsightsScreen.js	2026-04-14 10:25:09
+@@ -1,3 +1,4 @@
+ import React, { useMemo, useEffect, useRef, useState } from 'react';
+-import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Animated, SafeAreaView, Modal, TextInput, Alert, Linking } from 'react-native';
++import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Animated, SafeAreaView, Modal, TextInput, Alert, Linking, LayoutAnimation, Platform } from 'react-native';
++import * as Haptics from 'expo-haptics';
+ import { Ionicons } from '@expo/vector-icons';
+@@ -10,14 +11,18 @@
+ 
+-const InsightsScreen = ({ 
+-  role, 
+-  user, 
+-  academyId, 
+-  players = [], 
+-  tournaments = [], 
+-  matchVideos = [],
+-  matches = [],
+-  evaluations = [],
+-  supportTickets: tickets = [], // Alias supportTickets to tickets for component-wide usage
+-  navigation
+-}) => {
++import { useAuth } from '../context/AuthContext';
++import { usePlayers } from '../context/PlayerContext';
++import { useTournaments } from '../context/TournamentContext';
++import { useVideos } from '../context/VideoContext';
++import { useEvaluations } from '../context/EvaluationContext';
++import { useSupport } from '../context/SupportContext';
++
++const InsightsScreen = ({ navigation }) => {
++  const { currentUser: user, userRole: role } = useAuth();
++  const { players } = usePlayers();
++  const { tournaments } = useTournaments();
++  const { matchVideos, matches } = useVideos();
++  const { evaluations } = useEvaluations();
++  const { supportTickets: tickets } = useSupport();
++  
++  const academyId = user?.id; // Standard fallback
+   const [selectedCity, setSelectedCity] = useState(null);
+@@ -359,2 +364,6 @@
+     const newVal = selectedStat === stat ? null : stat;
++    if (Platform.OS !== 'web') {
++        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
++        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
++    }
+     logger.logAction('Insights_Stat_Toggle', { stat, action: newVal ? 'open' : 'close' });
+@@ -366,2 +375,6 @@
+   const handleCitySelect = (city) => {
++    if (Platform.OS !== 'web') {
++        LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
++        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
++    }
+     logger.logAction('Insights_City_Select', { city });
+@@ -954,4 +967,4 @@
+   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, marginTop: 40 },
+-  welcomeText: { fontSize: 26, fontWeight: '800', color: '#1E293B' },
+-  subText: { fontSize: 13, color: '#64748B', marginTop: 2 },
++  welcomeText: { ...designSystem.typography.h1, color: designSystem.colors.navy[900] },
++  subText: { ...designSystem.typography.caption, color: designSystem.colors.navy[500], marginTop: 2 },
+   refreshBtn: { width: 46, height: 46, borderRadius: 14, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', ...designSystem.shadows?.sm },
+@@ -967,13 +980,13 @@
+     backgroundColor: '#fff', 
+-    width: '47%', // Use safer percentage for 2-per-row layout on narrower Androids
++    width: '47%', 
+     padding: 14, 
+-    borderRadius: 20, 
+-    ...designSystem.shadows?.sm 
++    borderRadius: designSystem.borderRadius.lg, 
++    ...designSystem.shadows.sm 
+   },
+   iconCircle: { width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+-  statValue: { fontSize: 20, fontWeight: '800', color: '#1E293B' },
+-  statTitle: { fontSize: 10, color: '#94A3B8', fontWeight: '700', textTransform: 'uppercase', marginBottom: 6 },
++  statValue: { ...designSystem.typography.h2, color: designSystem.colors.navy[900] },
++  statTitle: { ...designSystem.typography.micro, color: designSystem.colors.navy[400], marginBottom: 6 },
+   trendRow: { flexDirection: 'row', alignItems: 'center' },
+-  trendText: { fontSize: 9, color: '#10B981', fontWeight: '700', marginLeft: 2 },
+-  chartCard: { backgroundColor: '#fff', borderRadius: 24, padding: 20, marginBottom: 20, ...designSystem.shadows?.sm },
++  trendText: { fontSize: 9, color: designSystem.colors.success, fontWeight: '700', marginLeft: 2 },
++  chartCard: { backgroundColor: '#fff', borderRadius: designSystem.borderRadius.xl, padding: 20, marginBottom: 20, ...designSystem.shadows.sm },
+   chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+@@ -988,3 +1001,3 @@
+   newLabel: { fontSize: 10, color: '#10B981', fontWeight: '700', marginTop: 1 },
+-  barTrack: { height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' },
++  barTrack: { height: 8, backgroundColor: designSystem.colors.navy[100], borderRadius: 4, overflow: 'hidden' },
+   barFill: { height: '100%', borderRadius: 4 },
+@@ -1017,3 +1030,3 @@
+   growthBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF2FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+-  growthBadgeText: { fontSize: 11, fontWeight: '700', color: '#6366F1', marginLeft: 4 },
++  growthBadgeText: { ...designSystem.typography.caption, color: designSystem.colors.primary.base, marginLeft: 4 },
+   pctContainer: { height: 20, justifyContent: 'flex-end', marginBottom: 4 },

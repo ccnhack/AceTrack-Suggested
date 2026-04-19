@@ -61,16 +61,9 @@ export const SyncProvider = ({ children }) => {
       if (e.payload.isSyncing !== undefined) setIsSyncing(e.payload.isSyncing);
     });
 
-    // 🛡️ [OCC CONFLICT RECOVERY] (v2.6.121) — re-pull on version conflict
-    const unsubConflict = eventBus.subscribe('SYNC_CONFLICT_DETECTED', () => {
-      console.log('[SyncContext] OCC conflict detected, scheduling re-pull...');
-      setTimeout(() => loadData(true, true), 1000);
-    });
-
     return () => {
       unsubConn();
       unsubSync();
-      unsubConflict();
     };
   }, []);
 
@@ -108,7 +101,7 @@ export const SyncProvider = ({ children }) => {
   const loadData = useCallback(async (forceCloud = false, isSilent = false) => {
     const operation = async () => {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
       
       try {
         // 🛡️ [FLUSH_BEFORE_PULL] (v2.6.121)

@@ -337,6 +337,61 @@ class TournamentService {
 
     return { success: true, tournaments: updated };
   }
+
+  /**
+   * Manages manual player addition by Admin.
+   */
+  static addPlayer(tid: string, playerName: string, playerPhone: string, tournaments: any[], players: any[]) {
+    // 1. Find the player by phone
+    const player = players.find(p => p && p.phone === playerPhone);
+    if (!player) {
+      return { success: false, message: 'No registered user found with this number.' };
+    }
+
+    const userId = player.id;
+    const updated = tournaments.map(t => {
+      if (t.id !== tid) return t;
+      return {
+        ...t,
+        registeredPlayerIds: [...new Set([...(t.registeredPlayerIds || []), userId])],
+        pendingPaymentPlayerIds: (t.pendingPaymentPlayerIds || []).filter(pid => pid !== userId),
+        waitlistedPlayerIds: (t.waitlistedPlayerIds || []).filter(pid => pid !== userId),
+        playerStatuses: (() => {
+          const rest = { ...(t.playerStatuses || {}) };
+          delete rest[userId];
+          return rest;
+        })()
+      };
+    });
+
+    return { success: true, tournaments: updated };
+  }
+
+  /**
+   * Removes a player from 'Pending' or 'Registered' state.
+   */
+  static removePendingPlayer(tid: string, pid: string, tournaments: any[]) {
+    const updated = tournaments.map(t => {
+      if (t.id !== tid) return t;
+      
+      const ts = { ...(t.pendingPaymentTimestamps || {}) };
+      delete ts[pid];
+
+      return {
+        ...t,
+        registeredPlayerIds: (t.registeredPlayerIds || []).filter(id => id !== pid),
+        pendingPaymentPlayerIds: (t.pendingPaymentPlayerIds || []).filter(id => id !== pid),
+        pendingPaymentTimestamps: ts,
+        playerStatuses: (() => {
+          const rest = { ...(t.playerStatuses || {}) };
+          delete rest[pid];
+          return rest;
+        })()
+      };
+    });
+
+    return { success: true, tournaments: updated };
+  }
 }
 
 export default TournamentService;

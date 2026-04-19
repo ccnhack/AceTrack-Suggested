@@ -69,8 +69,8 @@ const initFirebase = async () => {
 };
 initFirebase();
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.101)
-const APP_VERSION = "2.6.117"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.118)
+const APP_VERSION = "2.6.118"; 
 
 // 🕓 Utility: Get current IST timestamp (v2.6.89)
 const getISTDate = () => {
@@ -348,6 +348,24 @@ const AuditLogSchema = new mongoose.Schema({
 AuditLogSchema.index({ timestamp: -1 });
 
 const AuditLog = mongoose.model('AuditLog', AuditLogSchema);
+
+// ═══════════════════════════════════════════════════════════════
+// 🎫 SUPPORT INVITE SCHEMA (v2.6.122)
+// Isolated collection to prevent invite tokens/IPs from leaking to mobile clients
+// ═══════════════════════════════════════════════════════════════
+const SupportInviteSchema = new mongoose.Schema({
+  email: { type: String, required: true },
+  token: { type: String, required: true, unique: true },
+  status: { type: String, enum: ['Pending', 'Clicked', 'Used', 'Expired'], default: 'Pending' },
+  clicks: [{
+    ip: String,
+    userAgent: String,
+    timestamp: { type: Date, default: Date.now }
+  }],
+  expiresAt: { type: Date, required: true },
+  createdAt: { type: Date, default: Date.now }
+});
+const SupportInvite = mongoose.model('SupportInvite', SupportInviteSchema);
 
 // ═══════════════════════════════════════════════════════════════
 // Security & Middleware
@@ -1358,6 +1376,102 @@ router.post('/otp/verify', apiKeyGuard, (req, res) => {
   logServerEvent('OTP_VERIFY_FAILED', { target, type, code });
   res.status(400).json({ success: false, error: 'Invalid verification code' });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// 🎫 SUPPORT HUB INVITES: Secure Onboarding Tracking
+// ═══════════════════════════════════════════════════════════════
+
+// 1. Generate Invite Link (Admin Only)
+router.post('/support/invite', apiKeyGuard, asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+  
+  // In production, enforce 'admin' role header, simulating strict RBAC
+  if (req.headers['x-user-id'] !== 'admin') {
+    return res.status(403).json({ error: 'System Administrator privileges required' });
+  }
+
+  const token = bcrypt.hashSync(Date.now().toString() + email, 10).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // strict 24 hours
+
+  await SupportInvite.create({ email, token, expiresAt });
+  await logServerEvent('SUPPORT_INVITE_GENERATED', { email });
+
+  res.json({ success: true, token, expiresAt, link: `https://support.acetrack.com/setup/${token}` });
+}));
+
+// 2. Fetch All Invites (Admin Dashboard)
+router.get('/support/invites', apiKeyGuard, asyncHandler(async (req, res) => {
+  const invites = await SupportInvite.find().sort({ createdAt: -1 });
+  
+  // Auto-mark expired links lazily for the response
+  const processed = invites.map(inv => {
+     let currentStatus = inv.status;
+     if (currentStatus === 'Pending' && inv.expiresAt < new Date()) currentStatus = 'Expired';
+     return { ...inv.toObject(), status: currentStatus };
+  });
+
+  res.json({ success: true, invites: processed });
+}));
+
+// 3. Web Hub: Click Tracking (No Auth Required)
+router.post('/support/invite/click', asyncHandler(async (req, res) => {
+  const { token } = req.body;
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const userAgent = req.headers['user-agent'];
+
+  const invite = await SupportInvite.findOne({ token });
+  if (!invite) return res.status(404).json({ error: 'Invite not found' });
+  if (invite.status === 'Used') return res.status(400).json({ error: 'Invite already claimed' });
+  if (invite.expiresAt < new Date()) return res.status(400).json({ error: 'Invite expired' });
+  
+  if (invite.status === 'Pending') invite.status = 'Clicked';
+  invite.clicks.push({ ip, userAgent, timestamp: new Date() });
+  await invite.save();
+
+  res.json({ success: true, email: invite.email });
+}));
+
+// 4. Web Hub: Final Setup & Creation
+router.post('/support/invite/setup', asyncHandler(async (req, res) => {
+  const { token, password } = req.body;
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  
+  const invite = await SupportInvite.findOne({ token });
+  if (!invite) return res.status(404).json({ error: 'Invalid token' });
+  if (invite.status === 'Used') return res.status(400).json({ error: 'Link already used' });
+  if (invite.expiresAt < new Date()) return res.status(400).json({ error: 'Link expired' });
+
+  // A. Modify Global State
+  const state = await AppState.findOne().sort({ lastUpdated: -1 });
+  if (!state || !state.data) return res.status(500).json({ error: 'System state missing' });
+
+  const players = state.data.players || [];
+  
+  const hashedPassword = bcrypt.hashSync(password, 10);
+  const newSupportAgent = {
+    id: `sup_${Date.now().toString(36)}`,
+    name: invite.email.split('@')[0], 
+    email: invite.email,
+    password: hashedPassword,
+    role: 'support',
+    createdAt: new Date().toISOString()
+  };
+
+  players.push(newSupportAgent);
+  await AppState.updateOne(
+    { _id: state._id },
+    { $set: { "data.players": players, lastUpdated: Date.now() } }
+  );
+
+  // B. Invalidate token
+  invite.status = 'Used';
+  await invite.save();
+  await logServerEvent('SUPPORT_ACCOUNT_CREATED', { email: invite.email, ip });
+
+  res.json({ success: true, message: 'Account established successfully' });
+}));
+
 
 // ═══════════════════════════════════════════════════════════════
 // 🌐 Mount API v1 + backward-compatible un-versioned routes

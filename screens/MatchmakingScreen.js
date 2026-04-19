@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  Image, Modal, TextInput, Alert, ScrollView, Platform, LayoutAnimation
+  Image, Modal, TextInput, Alert, ScrollView, Platform, LayoutAnimation, Pressable
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from '@react-navigation/native';
@@ -1206,7 +1206,8 @@ export default function MatchmakingScreen({ route }) {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.sectionLabel}>Select Sport</Text>
+              <Pressable onPress={() => { if (expandedSlot) setExpandedSlot(null); }}>
+                <Text style={styles.sectionLabel}>Select Sport</Text>
               <View style={styles.sportGrid}>
                 {selectedOpponent && getCommonSports(selectedOpponent).map((s, index) => {
                   const isPreferred = s === getUserPreferredSport();
@@ -1390,6 +1391,7 @@ export default function MatchmakingScreen({ route }) {
                 <Ionicons name="paper-plane" size={18} color="#fff" style={{ marginLeft: 10 }} />
               </TouchableOpacity>
               <View style={{ height: 40 }} />
+              </Pressable>
             </ScrollView>
           </View>
         </View>
@@ -1592,7 +1594,6 @@ export default function MatchmakingScreen({ route }) {
           </View>
         </View>
       </Modal>
-
       {/* Counter Proposal Modal */}
       <Modal visible={isCounterModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
@@ -1600,7 +1601,7 @@ export default function MatchmakingScreen({ route }) {
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalLabel}>COUNTER PROPOSAL</Text>
-                <Text style={styles.modalTitle}>{selectedChallenge?.name}</Text>
+                <Text style={styles.modalTitle}>{getOpponentName(selectedChallenge)}</Text>
               </View>
               <TouchableOpacity onPress={() => setIsCounterModalVisible(false)} style={styles.modalClose}>
                 <Ionicons name="close" size={28} color="#0F172A" />
@@ -1608,7 +1609,8 @@ export default function MatchmakingScreen({ route }) {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.sectionLabel}>Proposed Date</Text>
+              <Pressable onPress={() => { if (expandedSlot) setExpandedSlot(null); }}>
+                <Text style={styles.sectionLabel}>Proposed Date</Text>
               <View style={styles.calendarContainer}>
                  <Calendar
                    minDate={new Date().toISOString().split('T')[0]}
@@ -1765,6 +1767,7 @@ export default function MatchmakingScreen({ route }) {
                 <Text style={styles.confirmBtnText}>Submit Counter proposal</Text>
               </TouchableOpacity>
               <View style={{ height: 40 }} />
+              </Pressable>
             </ScrollView>
           </View>
         </View>
@@ -1895,8 +1898,8 @@ const styles = StyleSheet.create({
   info: { flex: 1 },
   name: { fontSize: 16, fontWeight: '700', color: '#333' },
   details: { fontSize: 12, color: '#666', marginTop: 2 },
-  dist: { fontSize: 11, color: colors.primary, marginTop: 4, fontWeight: '600' },
-  btn: { backgroundColor: colors.primary, paddingVertical: 8, paddingHorizontal: 15, borderRadius: 8 },
+  dist: { fontSize: 11, color: colors.primary.base, marginTop: 4, fontWeight: '600' },
+  btn: { backgroundColor: colors.primary.base, paddingVertical: 8, paddingHorizontal: 15, borderRadius: 8 },
   btnSent: { backgroundColor: '#ccc' },
   btnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   tabContent: { flex: 1, padding: 15 },
@@ -1906,7 +1909,7 @@ const styles = StyleSheet.create({
   responseTag: { backgroundColor: '#F0F9FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#BAE6FD' },
   responseTagText: { fontSize: 9, fontWeight: '900', color: '#0369A1' },
   sectionTitle: { fontSize: 18, fontWeight: '800', color: '#1a1a1a' },
-  requestCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 15, borderRadius: 12, marginBottom: 10, borderLeftWidth: 4, borderLeftColor: colors.primary },
+  requestCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 15, borderRadius: 12, marginBottom: 10, borderLeftWidth: 4, borderLeftColor: colors.primary.base },
   actionRow: { flexDirection: 'row', gap: 10 },
   smallBtn: { backgroundColor: '#f0f0f0', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 },
   smallBtnText: { fontSize: 12, fontWeight: '700', color: '#333' },
@@ -1914,7 +1917,7 @@ const styles = StyleSheet.create({
   subTab: { flex: 1, paddingVertical: 6, alignItems: 'center', borderRadius: 6 },
   activeSubTab: { backgroundColor: '#fff', elevation: 1 },
   subTabText: { fontSize: 11, fontWeight: '700', color: '#64748B' },
-  activeSubTabText: { color: colors.primary },
+  activeSubTabText: { color: colors.primary.base },
   acceptedCard: { backgroundColor: '#fff', padding: 15, borderRadius: 12, marginBottom: 12, elevation: 3 },
   acceptedHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   acceptedTime: { fontSize: 12, color: '#666', fontWeight: '600' },
@@ -1934,16 +1937,16 @@ const styles = StyleSheet.create({
   input: { backgroundColor: '#f5f5f5', borderRadius: 10, padding: 12, fontSize: 15 },
   sportGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   sportTag: { paddingVertical: 8, paddingHorizontal: 15, borderRadius: 20, backgroundColor: '#f0f0f0' },
-  sportTagActive: { backgroundColor: colors.primary },
+  sportTagActive: { backgroundColor: colors.primary.base },
   sportTagText: { fontSize: 13, fontWeight: '600', color: '#666' },
   sportTagTextActive: { color: '#fff' },
-  confirmBtn: { backgroundColor: colors.primary, padding: 15, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', marginTop: 30 },
+  confirmBtn: { backgroundColor: colors.primary.base, padding: 15, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', marginTop: 30 },
   confirmBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
   modalLabel: { fontSize: 10, fontWeight: '900', color: '#6366F1', letterSpacing: 2, marginBottom: 4 },
   modalClose: { padding: 4 },
   sectionLabel: { fontSize: 12, fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12, marginTop: 25 },
   calendarContainer: { borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#F1F5F9' },
-  timeSlots: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+  timeSlots: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10, zIndex: 20, overflow: 'visible' },
   slotWrapper: { width: '23%', position: 'relative' },
   slotBtn: { backgroundColor: '#F1F5F9', paddingVertical: 10, paddingHorizontal: 2, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9' },
   slotBtnActive: { backgroundColor: '#EEF2FF', borderColor: '#6366F1' },
@@ -2103,7 +2106,7 @@ const styles = StyleSheet.create({
   venueDistance: {
     fontSize: 11,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.primary.base,
   },
   venueContactText: {
     fontSize: 10,
@@ -2167,19 +2170,22 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   tabBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -14,
     backgroundColor: '#EF4444',
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 6,
-    paddingHorizontal: 4,
+    paddingHorizontal: 3,
+    zIndex: 10,
   },
   tabBadgeText: {
     color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
+    fontSize: 9,
+    fontWeight: '900',
   },
   unreadRequestCard: {
     backgroundColor: '#EFF6FF', // Very light blue background

@@ -46,7 +46,7 @@ import { useApp } from '../context/AppContext';
 
 const ProfileScreen = ({ navigation }) => {
   const { 
-    currentUser: user, onUpdateUser, onLogout, onVerifyAccount, onTopUp 
+    currentUser: user, onUpdateUser, onLogout, onVerifyAccount, onTopUp, onMarkNotificationsRead 
   } = useAuth();
   const { tournaments } = useTournaments();
   const { players } = usePlayers();
@@ -54,12 +54,12 @@ const ProfileScreen = ({ navigation }) => {
     supportTickets, onSaveTicket, onUpdateTicketStatus, onReplyTicket, onRetryMessage, onMarkSeen 
   } = useSupport();
   const { 
-    isCloudOnline, isUsingCloud, lastSyncTime, onManualSync, onToggleCloud, onToggleNotifications 
+    isCloudOnline, isUsingCloud, lastSyncTime, onManualSync, onToggleCloud 
   } = useSync();
   const { onUploadLogs, isUploadingLogs, pushStatus } = useAdmin();
-  const { appVersion } = useApp();
+  const { appVersion, setShowNotifications } = useApp();
   
-  const [isProfileEditActive, setIsProfileEditActive] = useState(false);
+
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   useEffect(() => {
@@ -209,13 +209,16 @@ const ProfileScreen = ({ navigation }) => {
   const APP_VERSION = "2.6.0";
   const allEvents = [...MOCK_EVENTS, ...MOCK_CONFIRMED_BOOKINGS];
 
+  const today = new Date().toISOString().split('T')[0];
   const filteredEvents = allEvents.filter(event => {
     const eventMonth = event.date.substring(0, 7);
     const date = new Date(currentMonth + '-01');
     const nextMonthDate = new Date(date.setMonth(date.getMonth() + 1));
     const nextMonth = nextMonthDate.toISOString().substring(0, 7);
-    return eventMonth === currentMonth || eventMonth === nextMonth;
-  });
+    
+    const isThisOrNextMonth = eventMonth === currentMonth || eventMonth === nextMonth;
+    return isThisOrNextMonth && event.date >= today;
+  }).sort((a, b) => a.date.localeCompare(b.date));
 
   const markedDates = {};
   allEvents.forEach(event => {
@@ -278,9 +281,6 @@ const ProfileScreen = ({ navigation }) => {
       console.warn("[ProfileScreen] Navigation state access failed:", e);
     }
   }, [navigation]);
-  useEffect(() => {
-    setIsProfileEditActive(showEditProfile);
-  }, [showEditProfile]);
 
   const suggestedAvatars = [
     'https://api.dicebear.com/7.x/avataaars/png?seed=Felix',
@@ -378,7 +378,7 @@ const ProfileScreen = ({ navigation }) => {
           lastSyncTime={lastSyncTime}
           onManualSync={onManualSync}
           onAvatarPress={() => setShowAvatarPicker(true)}
-          onNotificationPress={() => onToggleNotifications()}
+          onNotificationPress={() => setShowNotifications(true)}
           onWalletPress={() => setShowWalletModal(true)}
           logger={logger}
         />
@@ -529,7 +529,7 @@ const ProfileScreen = ({ navigation }) => {
 
       {/* Support System Modal */}
       {showSupport && (
-        <Modal visible={showSupport} animationType="slide">
+        <Modal visible={showSupport} animationType="slide" onRequestClose={() => setShowSupport(false)}>
           <GestureHandlerRootView style={{ flex: 1 }}>
           <SafeAreaView style={styles.supportContainer}>
               <View style={styles.supportHeader}>
@@ -557,72 +557,6 @@ const ProfileScreen = ({ navigation }) => {
         </Modal>
       )}
 
-      {/* Verification OTP Modal */}
-      {!!showVerifyModal && (
-        <Modal visible={!!showVerifyModal} animationType="fade" transparent={true}>
-          <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
-            <View style={styles.otpModalContent}>
-              <View style={styles.otpIconContainer}>
-                <Ionicons name={showVerifyModal === 'email' ? "mail-unread" : "chatbubble-ellipses"} size={32} color="#EF4444" />
-              </View>
-              <Text style={styles.otpTitle}>Verify {showVerifyModal === 'email' ? 'Email' : 'Phone'}</Text>
-              <Text style={styles.otpDescription}>
-                We've sent a 6-digit verification code to your {showVerifyModal === 'email' ? 'email address' : 'phone number'}.
-              </Text>
-              
-              <TextInput 
-                style={styles.otpInput}
-                placeholder="123456"
-                placeholderTextColor="#CBD5E1"
-                maxLength={6}
-                keyboardType="number-pad"
-                value={verificationCode}
-                onChangeText={setVerificationCode}
-                autoFocus={true}
-                selectionColor="#3B82F6"
-              />
-              
-              <View style={styles.otpActions}>
-                <TouchableOpacity 
-                  style={[styles.otpVerifyBtn, (verificationCode.length !== 6 || isVerifying) && styles.disabledBtn]}
-                  disabled={verificationCode.length !== 6 || isVerifying}
-                  onPress={() => {
-                    setIsVerifying(true);
-                    // Simulate API call
-                    setTimeout(() => {
-                      const type = showVerifyModal;
-                      if (onVerifyAccount) {
-                        onVerifyAccount(type);
-                      } else {
-                        onUpdateUser({
-                          ...user,
-                          [type === 'email' ? 'isEmailVerified' : 'isPhoneVerified']: true
-                        });
-                      }
-                      setShowVerifyModal(null);
-                      setVerificationCode('');
-                      setIsVerifying(false);
-                      Alert.alert("Success", `${type === 'email' ? 'Email' : 'Phone'} verified successfully!`);
-                    }, 1500);
-                  }}
-                >
-                  <Text style={styles.otpVerifyText}>{isVerifying ? 'Verifying...' : 'Verify'}</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={styles.otpCancelBtn}
-                  onPress={() => {
-                    setShowVerifyModal(null);
-                    setVerificationCode('');
-                  }}
-                >
-                  <Text style={styles.otpCancelText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      )}
 
       {/* Coach Onboarding (Affiliation Edit) */}
       {showCoachOnboarding && (
@@ -684,7 +618,7 @@ const ProfileScreen = ({ navigation }) => {
 
       {/* Avatar Picker Modal */}
       {showAvatarPicker && (
-        <Modal visible={showAvatarPicker} animationType="fade" transparent={true}>
+        <Modal visible={showAvatarPicker} animationType="fade" transparent={true} onRequestClose={() => setShowAvatarPicker(false)}>
           <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
             <View style={styles.editModalContent}>
               <View style={styles.modalHeader}>
@@ -826,18 +760,18 @@ const ProfileScreen = ({ navigation }) => {
 
       {/* Edit Profile Modal */}
       {showEditProfile && (
-        <Modal visible={showEditProfile} animationType="fade" transparent={true}>
+        <Modal visible={showEditProfile} animationType="fade" transparent={true} onRequestClose={() => setShowEditProfile(false)}>
           <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
             <KeyboardAvoidingView 
               behavior={Platform.OS === "ios" ? "padding" : "height"}
               style={styles.keyboardView}
             >
               <View style={styles.editModalContent}>
-                <TouchableOpacity onPress={() => setShowEditProfile(false)} style={styles.closeBtn}>
-                  <Ionicons name="close" size={24} color="#0F172A" />
-                </TouchableOpacity>
                 <View style={styles.modalHeader}>
-                  <Text style={styles.editModalTitle}>Edit Profile</Text>
+                  <Text style={styles.modalTitle}>Edit Profile</Text>
+                  <TouchableOpacity onPress={() => setShowEditProfile(false)} style={styles.closeBtn}>
+                    <Ionicons name="close" size={24} color="#0F172A" />
+                  </TouchableOpacity>
                 </View>
 
                 <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
@@ -906,7 +840,10 @@ const ProfileScreen = ({ navigation }) => {
                         ) : (
                           <TouchableOpacity 
                             style={styles.inlineVerifyBtn}
-                            onPress={() => setShowVerifyModal('email')}
+                            onPress={() => {
+                              setShowEditProfile(false);
+                              setTimeout(() => setShowVerifyModal('email'), 300);
+                            }}
                           >
                             <Text style={styles.verifyBtnText}>Verify Now</Text>
                           </TouchableOpacity>
@@ -935,7 +872,10 @@ const ProfileScreen = ({ navigation }) => {
                         ) : (
                           <TouchableOpacity 
                             style={styles.inlineVerifyBtn}
-                            onPress={() => setShowVerifyModal('phone')}
+                            onPress={() => {
+                              setShowEditProfile(false);
+                              setTimeout(() => setShowVerifyModal('phone'), 300);
+                            }}
                           >
                             <Text style={styles.verifyBtnText}>Verify Now</Text>
                           </TouchableOpacity>
@@ -981,7 +921,7 @@ const ProfileScreen = ({ navigation }) => {
 
       {/* Change Password Modal */}
       {showChangePassword && (
-        <Modal visible={showChangePassword} animationType="fade" transparent={true}>
+        <Modal visible={showChangePassword} animationType="fade" transparent={true} onRequestClose={() => setShowChangePassword(false)}>
           <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
             <KeyboardAvoidingView 
               behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -1081,7 +1021,7 @@ const ProfileScreen = ({ navigation }) => {
 
             {/* Calendar Modal */}
             {isCalendarModalVisible && (
-              <Modal visible={isCalendarModalVisible} animationType="slide" transparent>
+              <Modal visible={isCalendarModalVisible} animationType="slide" transparent onRequestClose={() => setIsCalendarModalVisible(false)}>
                   <View style={styles.modalOverlay}>
                       <View style={styles.calendarModalContent}>
                           <View style={styles.calendarModalHeader}>
@@ -1144,6 +1084,72 @@ const ProfileScreen = ({ navigation }) => {
                 </View>
             </Modal>
           )}
+      {/* Verification OTP Modal */}
+      {!!showVerifyModal && (
+        <Modal visible={!!showVerifyModal} animationType="fade" transparent={true} onRequestClose={() => setShowVerifyModal(null)}>
+          <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
+            <View style={styles.otpModalContent}>
+              <View style={styles.otpIconContainer}>
+                <Ionicons name={showVerifyModal === 'email' ? "mail-unread" : "chatbubble-ellipses"} size={32} color="#EF4444" />
+              </View>
+              <Text style={styles.otpTitle}>Verify {showVerifyModal === 'email' ? 'Email' : 'Phone'}</Text>
+              <Text style={styles.otpDescription}>
+                We've sent a 6-digit verification code to your {showVerifyModal === 'email' ? 'email address' : 'phone number'}.
+              </Text>
+              
+              <TextInput 
+                style={styles.otpInput}
+                placeholder="123456"
+                placeholderTextColor="#CBD5E1"
+                maxLength={6}
+                keyboardType="number-pad"
+                value={verificationCode}
+                onChangeText={setVerificationCode}
+                autoFocus={true}
+                selectionColor="#3B82F6"
+              />
+              
+              <View style={styles.otpActions}>
+                <TouchableOpacity 
+                  style={[styles.otpVerifyBtn, (verificationCode.length !== 6 || isVerifying) && styles.disabledBtn]}
+                  disabled={verificationCode.length !== 6 || isVerifying}
+                  onPress={() => {
+                    setIsVerifying(true);
+                    // Simulate API call
+                    setTimeout(() => {
+                      const type = showVerifyModal;
+                      if (onVerifyAccount) {
+                        onVerifyAccount(type);
+                      } else {
+                        onUpdateUser({
+                          ...user,
+                          [type === 'email' ? 'isEmailVerified' : 'isPhoneVerified']: true
+                        });
+                      }
+                      setShowVerifyModal(null);
+                      setVerificationCode('');
+                      setIsVerifying(false);
+                      Alert.alert("Success", `${type === 'email' ? 'Email' : 'Phone'} verified successfully!`);
+                    }, 1500);
+                  }}
+                >
+                  <Text style={styles.otpVerifyText}>{isVerifying ? 'Verifying...' : 'Verify'}</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.otpCancelBtn}
+                  onPress={() => {
+                    setShowVerifyModal(null);
+                    setVerificationCode('');
+                  }}
+                >
+                  <Text style={styles.otpCancelText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 
@@ -1722,8 +1728,10 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 24,
-    paddingRight: 40,
   },
   modalTitle: {
     fontSize: 24,
@@ -1948,16 +1956,12 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   closeBtn: {
-    position: 'absolute',
-    top: 32,
-    right: 32,
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F1F5F9',
     borderRadius: 20,
-    zIndex: 10,
   },
   clearBtn: {
     paddingVertical: 14,

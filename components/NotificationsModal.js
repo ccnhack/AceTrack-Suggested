@@ -12,7 +12,7 @@ const NotificationsModal = ({ visible, onClose, notifications, onClear, onNotifi
       <View style={styles.modalOverlay}>
         <View style={styles.notificationsModalContent}>
           <View style={styles.modalHeader}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.modalTitle}>Notifications</Text>
               {notifications && notifications.length > 0 && (
                 <TouchableOpacity onPress={onClear} style={styles.headerClearBtn}>
@@ -21,7 +21,9 @@ const NotificationsModal = ({ visible, onClose, notifications, onClear, onNotifi
               )}
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Ionicons name="close" size={24} color="#0F172A" />
+              <View style={styles.closeIconBg}>
+                <Ionicons name="close" size={20} color="#64748B" />
+              </View>
             </TouchableOpacity>
           </View>
           
@@ -57,7 +59,8 @@ const NotificationsModal = ({ visible, onClose, notifications, onClear, onNotifi
               </View>
             }
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={notifications?.length === 0 ? { flex: 1, justifyContent: 'center' } : { paddingBottom: 20 }}
+            contentContainerStyle={notifications?.length === 0 ? { flexGrow: 1, justifyContent: 'center' } : { paddingBottom: 20 }}
+            style={{ minHeight: notifications?.length === 0 ? 300 : undefined }}
           />
           
         </View>
@@ -93,14 +96,22 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   modalTitle: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: '900',
     color: '#0F172A',
-    textTransform: 'uppercase',
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   },
   closeBtn: {
-    padding: 4,
+    padding: 8,
+    marginLeft: 12,
+  },
+  closeIconBg: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   notificationItem: {
     flexDirection: 'row',
@@ -159,14 +170,14 @@ const styles = StyleSheet.create({
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 100,
+    paddingVertical: 60,
   },
   emptyText: {
     marginTop: 16,
-    fontSize: 14,
+    fontSize: 15,
     color: '#94A3B8',
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
   clearBtn: {
     paddingVertical: 16,

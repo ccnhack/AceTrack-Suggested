@@ -12,6 +12,7 @@ import AppNavigator from './navigation/AppNavigator';
 import ErrorBoundary from './components/ErrorBoundary';
 import OfflineScreen from './components/OfflineScreen';
 import ChatBot from './components/ChatBot';
+import NotificationsModal from './components/NotificationsModal';
 if (__DEV__) {
   require('./e2e/test_api');
 }
@@ -29,11 +30,11 @@ import { useSupport } from './context/SupportContext';
 function Root() {
   const { 
     isLoading, isInitialized, appVersion, latestAppVersion, 
-    showForceUpdate, setShowForceUpdate 
+    showForceUpdate, setShowForceUpdate, showNotifications, setShowNotifications
   } = useApp();
   
   const { isFullyConnected, isSyncing } = useSync();
-  const { currentUser, userRole, userId } = useAuth();
+  const { currentUser, userRole, userId, onMarkNotificationsRead } = useAuth();
   const { players } = usePlayers();
   const { tournaments } = useTournaments();
   const { evaluations } = useEvaluations();
@@ -86,6 +87,21 @@ function Root() {
           </View>
         )}
       </NavigationContainer>
+
+      <NotificationsModal 
+        visible={showNotifications}
+        onClose={() => setShowNotifications(false)}
+        notifications={currentUser?.notifications || []}
+        onClear={onMarkNotificationsRead}
+        onNotificationClick={(notif) => {
+          setShowNotifications(false);
+          if (navigationRef.current) {
+            if (notif.type === 'support') navigationRef.current.navigate('Profile');
+            else if (notif.type === 'video') navigationRef.current.navigate('Recordings');
+            else if (notif.type === 'challenge') navigationRef.current.navigate('Matches');
+          }
+        }}
+      />
 
       {/* Mandatory OTA Update Modal (Modal can remain outside as it doesn't use navigation) */}
       <Modal testID="app.update.modal" visible={showForceUpdate} transparent={false} animationType="fade">
