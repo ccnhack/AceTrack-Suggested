@@ -113,7 +113,7 @@ class SyncManager {
         this.syncVersion = savedVersion;
       }
 
-      // 🛡️ [SYNC RECOVERY] (v2.6.119) Reset sync count and clear hung states
+      // 🛡️ [SYNC RECOVERY] (v2.6.121) Reset sync count and clear hung states
       this.activeSyncs = 0;
       this.isSyncing = false;
       this.emitSyncStatus();
@@ -435,7 +435,7 @@ class SyncManager {
   }
 
   /**
-   * 🛡️ WATCHDOG ENGINE (v2.6.119)
+   * 🛡️ WATCHDOG ENGINE (v2.6.121)
    * Prevents 'Stuck Sync' UI by forcing a reset if no operations complete within 15s.
    */
   private syncWatchdog: any = null;

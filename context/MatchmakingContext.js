@@ -101,7 +101,7 @@ export const MatchmakingProvider = ({ children }) => {
    * but we restore this to prevent crashes in older screen logic.
    */
   const onUpdateMatchmaking = useCallback((updatedData) => {
-    // 🛡️ [SYNC AUTHORITY] (v2.6.119)
+    // 🛡️ [SYNC AUTHORITY] (v2.6.121)
     // If passed a full array (legacy bulk update like 'Remove All Expired'),
     // we must route through syncAndSaveData with the atomic flag.
     if (Array.isArray(updatedData)) {
