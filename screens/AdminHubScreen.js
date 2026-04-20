@@ -363,7 +363,7 @@ const AdminHubScreen = ({ navigation, route }) => {
         </ScrollView>
       </View>
 
-      {subTab !== 'diagnostics' && (
+      {subTab !== 'diagnostics' && subTab !== 'staff' && (
         <View style={styles.searchBar}>
           <Ionicons name="search" size={16} color="#94A3B8" />
           <TextInput 
