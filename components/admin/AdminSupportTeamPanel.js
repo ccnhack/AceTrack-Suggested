@@ -145,9 +145,10 @@ const AdminSupportTeamPanel = () => {
                 </View>
               </View>
 
-              <TouchableOpacity 
-                style={styles.settingsBtn}
-                onPress={() => {
+              <View style={styles.headerActionBox}>
+                <TouchableOpacity 
+                  style={styles.settingsBtn}
+                  onPress={() => {
                    Alert.alert(
                      "Employee Actions",
                      `Manage ${selectedAgent.name}`,
@@ -167,8 +168,9 @@ const AdminSupportTeamPanel = () => {
                 }}
               >
                 <Ionicons name="settings" size={20} color="#6366F1" />
-              </TouchableOpacity>
-            </View>
+               </TouchableOpacity>
+             </View>
+           </View>
 
             {/* Performance Insights */}
             <View style={styles.statsGrid}>
@@ -251,7 +253,8 @@ const styles = StyleSheet.create({
   levelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
   levelTag: { fontSize: 10, fontWeight: '800', color: '#6366F1', backgroundColor: '#EEF2FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, textTransform: 'uppercase' },
   statusLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'capitalize' },
-  settingsBtn: { padding: 8, backgroundColor: '#F8FAFC', borderRadius: 12 },
+  headerActionBox: { paddingTop: 4 },
+  settingsBtn: { padding: 8, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#F1F5F9' },
   statsGrid: { flexDirection: 'row', gap: 12, marginTop: 24 },
   statBox: { flex: 1, backgroundColor: '#F8FAFC', padding: 12, borderRadius: 16, alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9' },
   statLabel: { fontSize: 8, fontWeight: '900', color: '#94A3B8', marginBottom: 4 },

@@ -18,7 +18,13 @@ import admin from 'firebase-admin';
 import compression from 'compression';
 import { sendPushNotification } from './notifications.js';
 import { processTournamentWaitlist } from './promotion_logic.mjs'; 
-import { sendOnboardingEmail, buildOnboardingHtml, sendPasswordResetEmail } from './emailService.mjs';
+import { 
+  sendOnboardingEmail, 
+  buildOnboardingHtml, 
+  sendPasswordResetEmail,
+  sendOnboardingSuccessEmail,
+  sendLoginDetailsEmail 
+} from './emailService.mjs';
 import SupportMetricsService from './services/SupportMetricsService.js';
 
 dotenv.config();
@@ -72,7 +78,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.133"; 
+const APP_VERSION = "2.6.134"; 
 
 
 
@@ -1819,6 +1825,20 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
 
   const players = appState.data.players || [];
   
+  // 🆔 Username Generation Logic (Requested: First3 + Last2)
+  const generateSupportUsername = (fName, lName, existing) => {
+    const base = (fName.substring(0, 3) + lName.substring(0, 2)).toLowerCase().replace(/[^a-z0-9]/g, '');
+    let username = base;
+    let counter = 1;
+    while (existing.some(p => p.username === username || p.id === username)) {
+      username = `${base}${counter}`;
+      counter++;
+    }
+    return username;
+  };
+
+  const username = generateSupportUsername(firstName, lastName, players);
+  
   const hashedPassword = bcrypt.hashSync(password, 10);
   const newSupportAgent = {
     id: `sup_${Date.now().toString(36)}`,
@@ -1841,7 +1861,8 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
     isEmailVerified: true,
     createdAt: new Date().toISOString(),
     onboardedVia: 'invite',
-    onboardedIp: ip
+    onboardedIp: ip,
+    username: username
   };
 
   players.push(newSupportAgent);
@@ -1862,6 +1883,12 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
   });
 
   res.json({ success: true, message: 'Account established successfully' });
+
+  // 📧 DUAL-EMAIL TRIGGER (Non-blocking)
+  // 1. CEO Congratulations & Welcome
+  sendOnboardingSuccessEmail(invite.email, firstName);
+  // 2. Official Login Credentials
+  sendLoginDetailsEmail(invite.email, `${firstName} ${lastName}`, username);
 }));
 
 
