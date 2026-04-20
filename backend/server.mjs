@@ -71,7 +71,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.125)
-const APP_VERSION = "2.6.125"; 
+const APP_VERSION = "2.6.126"; 
 
 
 
@@ -2006,8 +2006,15 @@ app.get('/setup/:token', (req, res) => {
           Upload a clear scan or photo of your government-issued ID (Aadhaar, PAN, Passport, or Driving License) for employment documentation.
         </p>
 
-        <div class="file-upload" id="file-drop" onclick="document.getElementById('govIdFile').click()">
-          <input type="file" id="govIdFile" accept="image/*,application/pdf" onchange="handleFileSelect(this)">
+        <div 
+          class="file-upload" 
+          id="file-drop" 
+          onclick="if(event.target.id !== 'govIdFile') { document.getElementById('govIdFile').click(); event.stopPropagation(); }"
+          ondragover="event.preventDefault(); this.classList.add('drag-over');"
+          ondragleave="this.classList.remove('drag-over');"
+          ondrop="handleDrop(event)"
+        >
+          <input type="file" id="govIdFile" accept="image/*,application/pdf" onchange="handleFileSelect(this)" style="display:none">
           <div class="upload-icon">📄</div>
           <div class="upload-text"><strong>Click to upload</strong> or drag and drop</div>
           <div class="file-name" id="fileName" style="display:none"></div>
@@ -2130,10 +2137,33 @@ app.get('/setup/:token', (req, res) => {
     function handleFileSelect(input) {
       const file = input.files[0];
       if (!file) return;
+      processFile(file);
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      document.getElementById('file-drop').classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (!file) return;
+      processFile(file);
+    }
+
+    function processFile(file) {
+      if (file.size > 10 * 1024 * 1024) {
+        showError('error-2', 'File size must be under 10MB.');
+        return;
+      }
+      const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+      if (!allowed.includes(file.type)) {
+        showError('error-2', 'Invalid file type. Please upload JPG, PNG, or PDF.');
+        return;
+      }
+      
       selectedFile = file;
       document.getElementById('fileName').style.display = 'block';
       document.getElementById('fileName').textContent = '✓ ' + file.name;
       document.getElementById('file-drop').classList.add('has-file');
+      clearErrors();
     }
 
     async function verifyToken() {

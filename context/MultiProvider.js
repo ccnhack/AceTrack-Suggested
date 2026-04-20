@@ -7,7 +7,7 @@ import { TournamentProvider } from './TournamentContext';
 import { VideoProvider } from './VideoContext';
 import { SupportProvider } from './SupportContext';
 
-const APP_VERSION = "2.6.125";
+const APP_VERSION = "2.6.126";
 
 
 import { AdminProvider } from './AdminContext';

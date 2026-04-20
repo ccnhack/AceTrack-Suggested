@@ -22,6 +22,7 @@ const AdminStaffPanel = () => {
   const [resendingToken, setResendingToken] = useState(null);
   const [resendCooldowns, setResendCooldowns] = useState({});
   const [expandedAnalytics, setExpandedAnalytics] = useState(null); // token of expanded card
+  const [selectedEvent, setSelectedEvent] = useState(null); // specific event for modal
 
   useEffect(() => {
     fetchInvites();
@@ -250,12 +251,16 @@ const AdminStaffPanel = () => {
             {/* Expanded Analytics Detail */}
             {isExpanded && inv.clicks && (
               <View style={styles.analyticsDetail}>
-                {inv.clicks.map((click, idx) => {
+                {invites.find(i => i.token === expandedAnalytics)?.clicks?.map((click, idx) => {
                   const actionInfo = ACTION_LABELS[click.action] || { icon: '📍', label: click.action || 'Click', color: '#64748B' };
-                  const location = [click.city, click.region, click.country].filter(Boolean).join(', ');
                   
                   return (
-                    <View key={idx} style={styles.eventRow}>
+                    <TouchableOpacity 
+                      key={idx} 
+                      style={styles.eventRow}
+                      onPress={() => setSelectedEvent({ ...click, ...actionInfo })}
+                      activeOpacity={0.6}
+                    >
                       <View style={[styles.eventDot, { backgroundColor: actionInfo.color }]} />
                       <View style={styles.eventContent}>
                         <View style={styles.eventHeaderRow}>
@@ -267,55 +272,14 @@ const AdminStaffPanel = () => {
                           </Text>
                         </View>
                         
-                        {/* IP Address */}
                         <View style={styles.eventDetailRow}>
-                          <Ionicons name="globe-outline" size={11} color="#94A3B8" />
-                          <Text style={styles.eventDetailText}>IP: {click.ip || 'Unknown'}</Text>
+                          <Ionicons name="location-outline" size={11} color="#94A3B8" />
+                          <Text style={styles.eventDetailText} numberOfLines={1}>
+                            {click.ip} - {[click.city, click.region].filter(Boolean).join(', ')}
+                          </Text>
                         </View>
-
-                        {/* Location */}
-                        {location ? (
-                          <View style={styles.eventDetailRow}>
-                            <Ionicons name="location-outline" size={11} color="#94A3B8" />
-                            <Text style={styles.eventDetailText}>{location}</Text>
-                          </View>
-                        ) : null}
-
-                        {/* ISP */}
-                        {click.isp ? (
-                          <View style={styles.eventDetailRow}>
-                            <Ionicons name="wifi-outline" size={11} color="#94A3B8" />
-                            <Text style={styles.eventDetailText}>ISP: {click.isp}</Text>
-                          </View>
-                        ) : null}
-
-                        {/* Timezone */}
-                        {click.timezone ? (
-                          <View style={styles.eventDetailRow}>
-                            <Ionicons name="time-outline" size={11} color="#94A3B8" />
-                            <Text style={styles.eventDetailText}>TZ: {click.timezone}</Text>
-                          </View>
-                        ) : null}
-
-                        {/* Coordinates */}
-                        {click.lat && click.lon ? (
-                          <View style={styles.eventDetailRow}>
-                            <Ionicons name="navigate-outline" size={11} color="#94A3B8" />
-                            <Text style={styles.eventDetailText}>Coords: {click.lat.toFixed(4)}, {click.lon.toFixed(4)}</Text>
-                          </View>
-                        ) : null}
-
-                        {/* Device / User Agent (truncated) */}
-                        {click.userAgent ? (
-                          <View style={styles.eventDetailRow}>
-                            <Ionicons name="phone-portrait-outline" size={11} color="#94A3B8" />
-                            <Text style={styles.eventDetailText} numberOfLines={1}>
-                              {click.userAgent.length > 60 ? click.userAgent.substring(0, 60) + '...' : click.userAgent}
-                            </Text>
-                          </View>
-                        ) : null}
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   );
                 })}
               </View>
@@ -354,6 +318,81 @@ const AdminStaffPanel = () => {
       })}
 
       {invites.length === 0 && <Text style={styles.emptyText}>No provisioning links generated yet.</Text>}
+
+      {/* 📊 Analytics Detail Modal */}
+      <Modal
+        visible={!!selectedEvent}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setSelectedEvent(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={[styles.modalIconBox, { backgroundColor: (selectedEvent?.color || '#6366F1') + '15' }]}>
+                <Text style={{ fontSize: 24 }}>{selectedEvent?.icon || '📍'}</Text>
+              </View>
+              <View style={{ flex: 1, marginLeft: 16 }}>
+                <Text style={styles.modalTitle}>{selectedEvent?.label || 'Event Details'}</Text>
+                <Text style={styles.modalSubtitle}>
+                  {selectedEvent ? new Date(selectedEvent.timestamp).toLocaleString() : ''}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedEvent(null)}>
+                <Ionicons name="close-circle" size={28} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <View style={styles.infoSection}>
+                <Text style={styles.infoLabel}>IP - Location</Text>
+                <View style={styles.infoRow}>
+                  <Ionicons name="globe-outline" size={16} color="#6366F1" />
+                  <Text style={styles.infoValue}>
+                    {selectedEvent?.ip} - {[selectedEvent?.city, selectedEvent?.region, selectedEvent?.country].filter(Boolean).join(', ')}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.infoSection}>
+                <Text style={styles.infoLabel}>User agent :-</Text>
+                <View style={styles.infoRow}>
+                  <Ionicons name="phone-portrait-outline" size={16} color="#8B5CF6" />
+                  <Text style={[styles.infoValue, { fontSize: 11, fontStyle: 'italic' }]}>
+                    {selectedEvent?.userAgent || 'Unknown'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.infoSection}>
+                <Text style={styles.infoLabel}>Actions Performed:-</Text>
+                <View style={styles.infoRow}>
+                  <Ionicons name="flash-outline" size={16} color="#10B981" />
+                  <Text style={styles.infoValue}>
+                    {selectedEvent?.label === 'Link Clicked' ? 'Opened Setup URL' : 
+                     selectedEvent?.label?.includes('Step') ? `Completed ${selectedEvent.label.split(':')[0]}` :
+                     selectedEvent?.label || 'Performed interaction'}
+                  </Text>
+                </View>
+              </View>
+              
+              {selectedEvent?.isp && (
+                <View style={styles.infoSection}>
+                  <Text style={styles.infoLabel}>Network / ISP</Text>
+                  <View style={styles.infoRow}>
+                    <Ionicons name="wifi-outline" size={16} color="#64748B" />
+                    <Text style={styles.infoValue}>{selectedEvent.isp}</Text>
+                  </View>
+                </View>
+              )}
+            </View>
+
+            <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setSelectedEvent(null)}>
+              <Text style={styles.modalCloseBtnText}>Close Details</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -409,7 +448,21 @@ const styles = StyleSheet.create({
   cooldownRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   cooldownText: { fontSize: 11, color: '#F59E0B', fontWeight: '600' },
   resendCounter: { fontSize: 11, color: '#94A3B8' },
-  emptyText: { textAlign: 'center', color: '#94A3B8', marginTop: 40 }
+  emptyText: { textAlign: 'center', color: '#94A3B8', marginTop: 40 },
+  // Modal Styles
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContent: { backgroundColor: '#FFF', width: '100%', borderRadius: 20, padding: 24, ...shadows.lg },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  modalIconBox: { width: 50, height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A' },
+  modalSubtitle: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  modalBody: { gap: 16 },
+  infoSection: { backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#E2E8F0' },
+  infoLabel: { fontSize: 10, fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  infoValue: { fontSize: 13, fontWeight: '600', color: '#1E293B', flex: 1 },
+  modalCloseBtn: { backgroundColor: '#4F46E5', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 24 },
+  modalCloseBtnText: { color: '#FFF', fontWeight: '800', fontSize: 14 }
 });
 
 export default AdminStaffPanel;
