@@ -81,7 +81,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.144"; 
+const APP_VERSION = "2.6.145"; 
 
 
 
@@ -904,7 +904,12 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
                     else mergedDevices.push(d);
                   });
                 }
-                entityMap.set(id, { ...existing, ...p, devices: mergedDevices });
+                // 🛡️ PASSWORD GUARD (v2.6.145): Preserve server-side password for support users
+                // Prevents mobile sync from overwriting admin force-reset passwords
+                const preservedPassword = (existing.role === 'support') ? existing.password : (p.password || existing.password);
+                const preservedStatus = (existing.role === 'support' && existing.supportStatus) 
+                  ? existing.supportStatus : (p.supportStatus || existing.supportStatus);
+                entityMap.set(id, { ...existing, ...p, devices: mergedDevices, password: preservedPassword, supportStatus: preservedStatus });
               } else {
                 if (key === 'matchmaking') {
                   const statusChanged = existing && p.status && p.status !== existing.status;
@@ -952,7 +957,9 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
                   else mergedDevices.push(d);
                 });
               }
-              newMasterData.players[pIndex] = { ...existing, ...incoming, devices: mergedDevices };
+              // 🛡️ PASSWORD GUARD (v2.6.145): Same protection as players merge
+              const preservedPw = (existing.role === 'support') ? existing.password : (incoming.password || existing.password);
+              newMasterData.players[pIndex] = { ...existing, ...incoming, devices: mergedDevices, password: preservedPw };
             }
           }
         } else if (['seenAdminActionIds', 'visitedAdminSubTabs'].includes(key) && Array.isArray(incoming)) {
