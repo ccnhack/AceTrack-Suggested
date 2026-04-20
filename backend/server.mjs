@@ -81,7 +81,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.141"; 
+const APP_VERSION = "2.6.142"; 
 
 
 
@@ -2573,7 +2573,10 @@ server.on('error', (e) => {
  * GET /api/support/analytics
  * Fetches the weighted leaderboard and team workload snapshot.
  */
-app.get('/api/support/analytics', authenticateToken, async (req, res) => {
+app.get('/api/support/analytics', apiKeyGuard, async (req, res) => {
+  if (req.headers['x-user-id'] !== 'admin') {
+    return res.status(403).json({ error: 'System Administrator privileges required' });
+  }
   try {
     const state = await AppState.findOne().sort({ lastUpdated: -1 });
     if (!state || !state.data) return res.status(404).json({ error: "State not found" });
@@ -2599,9 +2602,9 @@ app.get('/api/support/analytics', authenticateToken, async (req, res) => {
  * POST /api/support/manage-user
  * Toggles status (active/overwhelmed/terminated) and promotes support agents.
  */
-app.post('/api/support/manage-user', authenticateToken, async (req, res) => {
+app.post('/api/support/manage-user', apiKeyGuard, async (req, res) => {
   const { targetUserId, status, level } = req.body;
-  if (req.user.id !== 'admin') return res.status(403).json({ error: "Unauthorized" });
+  if (req.headers['x-user-id'] !== 'admin') return res.status(403).json({ error: 'System Administrator privileges required' });
 
   try {
     const state = await AppState.findOne().sort({ lastUpdated: -1 });
@@ -2652,9 +2655,10 @@ app.post('/api/support/manage-user', authenticateToken, async (req, res) => {
  * POST /api/support/claim-ticket
  * Manual ticket picking from the pool for performance incentives.
  */
-app.post('/api/support/claim-ticket', authenticateToken, async (req, res) => {
+app.post('/api/support/claim-ticket', apiKeyGuard, async (req, res) => {
   const { ticketId } = req.body;
-  const agentId = req.user.id;
+  const agentId = req.headers['x-user-id'];
+  if (!agentId) return res.status(400).json({ error: "Agent ID required in headers" });
 
   try {
     const state = await AppState.findOne().sort({ lastUpdated: -1 });
@@ -2695,8 +2699,8 @@ app.post('/api/support/claim-ticket', authenticateToken, async (req, res) => {
  * POST /api/support/force-reset
  * Admin-only: Force-resets an employee's password and sends a secure email. (Stores plaintext to align with global sync architecture)
  */
-app.post('/api/support/force-reset', authenticateToken, async (req, res) => {
-  if (req.user.role !== 'admin' && req.headers['x-user-id'] !== 'admin') {
+app.post('/api/support/force-reset', apiKeyGuard, async (req, res) => {
+  if (req.headers['x-user-id'] !== 'admin') {
     return res.status(403).json({ error: 'System Administrator privileges required' });
   }
 
