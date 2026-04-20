@@ -28,7 +28,7 @@ import {
   sendPromotionEmail,
   sendTerminationEmail
 } from './emailService.mjs';
-import SupportMetricsService from './services/SupportMetricsService.js';
+import SupportMetricsService from './services/SupportMetricsService.mjs';
 
 dotenv.config();
 
