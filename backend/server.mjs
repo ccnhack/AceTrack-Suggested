@@ -2627,7 +2627,16 @@ router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
     if (idx === -1) return res.status(404).json({ error: "User not found" });
 
     // Apply updates
-    if (status) players[idx].supportStatus = status;
+    if (status) {
+      players[idx].supportStatus = status;
+      if (status === 'terminated') {
+        players[idx].terminatedAt = new Date().toISOString();
+      } else if (status === 'active') {
+        // Re-onboarding: clear termination metadata
+        delete players[idx].terminatedAt;
+        players[idx].reOnboardedAt = new Date().toISOString();
+      }
+    }
     if (level) {
       const oldLevel = players[idx].supportLevel;
       players[idx].supportLevel = level;
