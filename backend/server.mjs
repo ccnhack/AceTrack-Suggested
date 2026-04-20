@@ -1813,10 +1813,16 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
   let govIdUrl = null;
   if (req.file) {
     try {
+      // 📁 Naming Convention: "LastName, FirstName(email)" for easy HR lookup
+      const sanitizedLastName = (lastName || 'Unknown').replace(/[^a-zA-Z0-9]/g, '');
+      const sanitizedFirstName = (firstName || 'Unknown').replace(/[^a-zA-Z0-9]/g, '');
+      const sanitizedEmail = (invite.email || '').replace(/[^a-zA-Z0-9@._-]/g, '');
+      const publicId = `${sanitizedLastName}, ${sanitizedFirstName}(${sanitizedEmail})`;
+
       const cloudResult = await cloudinary.uploader.upload(req.file.path, {
         folder: 'acetrack/support_ids',
         resource_type: 'auto',
-        public_id: `gov_id_${Date.now()}`
+        public_id: publicId
       });
       govIdUrl = cloudResult.secure_url;
       // Clean up temp file
