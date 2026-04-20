@@ -594,11 +594,127 @@ export async function sendAdminResetPasswordEmail(toEmail, name, newPassword) {
   }
 }
 
+/**
+ * Builds the Promotion email.
+ */
+export function buildPromotionHtml(name, newRole) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Congratulations on your Promotion!</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F0FDF4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#F0FDF4;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="550" cellspacing="0" cellpadding="0" style="max-width:550px;width:100%;">
+          <tr>
+            <td style="background-color:#FFFFFF;padding:40px;border-radius:24px;border:2px solid #22C55E;">
+              <div style="background-color:#DCFCE7;width:60px;height:60px;border-radius:30px;margin:0 auto 20px;display:flex;align-items:center;justify-content:center;">
+                 <span style="font-size:30px;">🌟</span>
+              </div>
+              <h2 style="margin:0 0 16px;font-size:22px;font-weight:900;color:#166534;text-align:center;">Congratulations!</h2>
+              
+              <p style="font-size:16px;color:#475569;line-height:1.6;margin-bottom:24px;">
+                Hi <strong>${name}</strong>,<br><br>
+                We are thrilled to inform you that you have been promoted to the designation of <strong style="color:#15803D;font-size:18px;">${newRole}</strong> !
+              </p>
+
+              <blockquote style="margin:0 0 24px;padding:16px 20px;border-left:4px solid #22C55E;background-color:#F0FDF4;font-style:italic;color:#166534;line-height:1.6;">
+                "Your dedication to resolving player issues and maintaining high satisfaction ratings has not gone unnoticed. Keep up the excellent work; this is just the beginning of your journey here!"
+              </blockquote>
+
+              <p style="font-size:14px;color:#64748B;line-height:1.6;text-align:center;">
+                Your new access privileges have automatically been applied to your account.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+/**
+ * Builds the Termination email.
+ */
+export function buildTerminationHtml(name) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Important Employment Update</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F8FAFC;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#F8FAFC;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="550" cellspacing="0" cellpadding="0" style="max-width:550px;width:100%;">
+          <tr>
+            <td style="background-color:#FFFFFF;padding:40px;border-radius:24px;border:1px solid #E2E8F0;">
+              
+              <h2 style="margin:0 0 16px;font-size:20px;font-weight:900;color:#0F172A;">Employment Notice</h2>
+              
+              <p style="font-size:15px;color:#475569;line-height:1.7;margin-bottom:20px;">
+                Dear <strong>${name}</strong>,<br><br>
+                It is with a heavy heart that we are writing to you today. Due to ongoing restructuring situations within the organization, we have had to make the hard decision to reduce our current workforce.
+              </p>
+
+              <p style="font-size:15px;color:#475569;line-height:1.7;margin-bottom:24px;">
+                Unfortunately, this means we must take the tough decision to terminate your employment with AceTrack, effective immediately. 
+              </p>
+
+              <p style="font-size:14px;color:#64748B;line-height:1.6;">
+                We want to express our sincere gratitude for the time you spent with us and the effort you put into supporting our player base. It was a pleasure having you on the team, and we wish you the very best in your future endeavors.
+              </p>
+              
+              <div style="margin-top:32px;border-top:1px solid #F1F5F9;padding-top:20px;">
+                 <p style="font-size:13px;color:#94A3B8;margin:0;">Sincerely,</p>
+                 <p style="font-size:14px;color:#0F172A;font-weight:700;margin:4px 0 0;">AceTrack Management Board</p>
+              </div>
+
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+export async function sendPromotionEmail(toEmail, name, newRole) {
+  const mailOptions = {
+    from: `"AceTrack HR" <${process.env.GMAIL_USER}>`,
+    to: toEmail,
+    subject: `\u{1F31F} Congratulations on your Promotion!`,
+    html: buildPromotionHtml(name, newRole)
+  };
+  return transporter.sendMail(mailOptions).catch(e => console.error(e));
+}
+
+export async function sendTerminationEmail(toEmail, name) {
+  const mailOptions = {
+    from: `"AceTrack HR" <${process.env.GMAIL_USER}>`,
+    to: toEmail,
+    subject: `Important update regarding your employment`,
+    html: buildTerminationHtml(name)
+  };
+  return transporter.sendMail(mailOptions).catch(e => console.error(e));
+}
+
 export default { 
   sendOnboardingEmail, 
   sendPasswordResetEmail, 
   buildOnboardingHtml,
   sendOnboardingSuccessEmail,
   sendLoginDetailsEmail,
-  sendAdminResetPasswordEmail
+  sendAdminResetPasswordEmail,
+  sendPromotionEmail,
+  sendTerminationEmail
 };

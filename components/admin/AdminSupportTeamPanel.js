@@ -178,11 +178,12 @@ const AdminSupportTeamPanel = () => {
                   </View>
                 </View>
               </View>
+            </View>
 
-              <View style={styles.headerActionBox}>
-                <TouchableOpacity 
-                  style={styles.settingsBtn}
-                  onPress={() => {
+            {/* Absolute Settings Button */}
+            <TouchableOpacity 
+              style={styles.settingsBtn}
+              onPress={() => {
                    Alert.alert(
                      "Employee Actions",
                      `Manage ${selectedAgent.name}`,
@@ -203,9 +204,7 @@ const AdminSupportTeamPanel = () => {
                 }}
               >
                 <Ionicons name="settings" size={20} color="#6366F1" />
-               </TouchableOpacity>
-             </View>
-           </View>
+            </TouchableOpacity>
 
             {/* Performance Insights */}
             <View style={styles.statsGrid}>
@@ -280,16 +279,15 @@ const styles = StyleSheet.create({
   emptyAgents: { fontSize: 12, color: '#94A3B8', marginTop: 12, marginLeft: 8, fontStyle: 'italic' },
   mainContent: { flex: 1 },
   detailCard: { backgroundColor: '#FFF', borderRadius: 24, padding: 20, ...shadows.md, borderWidth: 1, borderColor: '#F1F5F9' },
-  detailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  detailAvatarBox: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  detailHeader: { flexDirection: 'row', alignItems: 'center' },
+  detailAvatarBox: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, paddingRight: 40 },
   detailNameBox: { flex: 1 },
   detailName: { fontSize: 18, fontWeight: '900', color: '#0F172A' },
   detailEmail: { fontSize: 12, color: '#64748B', marginTop: 2 },
   levelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
   levelTag: { fontSize: 10, fontWeight: '800', color: '#6366F1', backgroundColor: '#EEF2FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, textTransform: 'uppercase' },
   statusLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'capitalize' },
-  headerActionBox: { paddingTop: 4, marginRight: 6 },
-  settingsBtn: { padding: 8, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#F1F5F9' },
+  settingsBtn: { position: 'absolute', top: 20, right: 20, padding: 8, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#F1F5F9', zIndex: 10 },
   statsGrid: { flexDirection: 'row', gap: 12, marginTop: 24 },
   statBox: { flex: 1, backgroundColor: '#F8FAFC', padding: 12, borderRadius: 16, alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9' },
   statLabel: { fontSize: 8, fontWeight: '900', color: '#94A3B8', marginBottom: 4 },

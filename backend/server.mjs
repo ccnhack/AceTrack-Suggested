@@ -24,7 +24,9 @@ import {
   sendPasswordResetEmail,
   sendOnboardingSuccessEmail,
   sendLoginDetailsEmail,
-  sendAdminResetPasswordEmail 
+  sendAdminResetPasswordEmail,
+  sendPromotionEmail,
+  sendTerminationEmail
 } from './emailService.mjs';
 import SupportMetricsService from './services/SupportMetricsService.js';
 
@@ -79,7 +81,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.136"; 
+const APP_VERSION = "2.6.137"; 
 
 
 
@@ -2581,7 +2583,15 @@ app.post('/api/support/manage-user', authenticateToken, async (req, res) => {
 
     // Apply updates
     if (status) players[idx].supportStatus = status;
-    if (level) players[idx].supportLevel = level;
+    if (level) {
+      const oldLevel = players[idx].supportLevel;
+      players[idx].supportLevel = level;
+
+      // 📧 Trigger Promotion Email if leveled up
+      if (oldLevel !== level) {
+         sendPromotionEmail(players[idx].email, players[idx].name, level);
+      }
+    }
     
     // Automated Unassign Trigger: If terminated, free up their tickets
     if (status === 'terminated') {
@@ -2592,6 +2602,9 @@ app.post('/api/support/manage-user', authenticateToken, async (req, res) => {
          return t;
        });
        state.data.supportTickets = tickets;
+
+       // 📧 Trigger Termination Email
+       sendTerminationEmail(players[idx].email, players[idx].name);
     }
 
     state.data.players = players;
