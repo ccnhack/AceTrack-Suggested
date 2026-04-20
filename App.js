@@ -28,7 +28,29 @@ import { useEvaluations } from './context/EvaluationContext';
 import { useSupport } from './context/SupportContext';
 
 
+
+// 🛡️ Web Deep Linking Configuration (v2.6.124)
+const linking = {
+  prefixes: ['https://acetrack-suggested.onrender.com', 'acetrack://'],
+  config: {
+    screens: {
+      SupportSetup: 'setup/:token',
+      Login: 'login',
+      Signup: 'signup',
+      Main: {
+        screens: {
+          Explore: '',
+          Admin: 'admin',
+          Support: 'support',
+          Profile: 'profile'
+        }
+      }
+    }
+  }
+};
+
 function Root() {
+
   const { 
     isLoading, isInitialized, appVersion, latestAppVersion, 
     showForceUpdate, setShowForceUpdate, showNotifications, setShowNotifications
@@ -56,7 +78,7 @@ function Root() {
     <View style={{ flex: 1 }}>
       <StatusBar barStyle="dark-content" />
       
-      <NavigationContainer ref={navigationRef}>
+      <NavigationContainer ref={navigationRef} linking={linking}>
         <AppNavigator />
         
         {/* Global Connectivity Overlay */}

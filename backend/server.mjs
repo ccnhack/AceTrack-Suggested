@@ -18,6 +18,7 @@ import admin from 'firebase-admin';
 import compression from 'compression';
 import { sendPushNotification } from './notifications.js';
 import { processTournamentWaitlist } from './promotion_logic.mjs'; 
+import { sendOnboardingEmail, buildOnboardingHtml } from './emailService.mjs';
 
 dotenv.config();
 
@@ -70,7 +71,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.123)
-const APP_VERSION = "2.6.123"; 
+const APP_VERSION = "2.6.124"; 
 
 
 
@@ -1399,8 +1400,27 @@ router.post('/support/invite', apiKeyGuard, asyncHandler(async (req, res) => {
   await SupportInvite.create({ email, token, expiresAt });
   await logServerEvent('SUPPORT_INVITE_GENERATED', { email });
 
-  res.json({ success: true, token, expiresAt, link: `https://support.acetrack.com/setup/${token}` });
+  const setupLink = `https://acetrack-suggested.onrender.com/setup/${token}`;
+
+  // 📧 Send onboarding email (non-blocking — invite succeeds even if email fails)
+  let emailStatus = { success: false, error: 'Email service not configured' };
+  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+    emailStatus = await sendOnboardingEmail(email, setupLink, expiresAt.toISOString());
+  } else {
+    console.warn('⚠️ GMAIL_USER / GMAIL_APP_PASSWORD not set. Skipping onboarding email.');
+  }
+
+  res.json({ success: true, token, expiresAt, link: setupLink, emailSent: emailStatus.success });
 }));
+
+// 1b. Email Preview (Admin Debug — view the onboarding email in browser)
+router.get('/support/invite/preview', (req, res) => {
+  const sampleLink = 'https://acetrack-suggested.onrender.com/setup/SAMPLE_TOKEN_PREVIEW';
+  const expiryFormatted = new Date(Date.now() + 24*60*60*1000).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' });
+  const html = buildOnboardingHtml('John Doe', 'john.doe@acetrack.com', sampleLink, expiryFormatted);
+  res.setHeader('Content-Type', 'text/html');
+  res.send(html);
+});
 
 // 2. Fetch All Invites (Admin Dashboard)
 router.get('/support/invites', apiKeyGuard, asyncHandler(async (req, res) => {
@@ -1434,9 +1454,9 @@ router.post('/support/invite/click', asyncHandler(async (req, res) => {
   res.json({ success: true, email: invite.email });
 }));
 
-// 4. Web Hub: Final Setup & Creation
-router.post('/support/invite/setup', asyncHandler(async (req, res) => {
-  const { token, password } = req.body;
+// 4. Web Hub: Final Setup & Creation (v2.6.124 — Full Employee Onboarding)
+router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async (req, res) => {
+  const { token, password, firstName, lastName, phone, addressLine1, addressLine2, city, state: addrState, pinCode, country } = req.body;
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   
   const invite = await SupportInvite.findOne({ token });
@@ -1444,32 +1464,74 @@ router.post('/support/invite/setup', asyncHandler(async (req, res) => {
   if (invite.status === 'Used') return res.status(400).json({ error: 'Link already used' });
   if (invite.expiresAt < new Date()) return res.status(400).json({ error: 'Link expired' });
 
-  // A. Modify Global State
-  const state = await AppState.findOne().sort({ lastUpdated: -1 });
-  if (!state || !state.data) return res.status(500).json({ error: 'System state missing' });
+  if (!password || password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  if (!firstName || !lastName) return res.status(400).json({ error: 'First and Last Name are required' });
 
-  const players = state.data.players || [];
+  // A. Upload Govt ID to Cloudinary (if provided)
+  let govIdUrl = null;
+  if (req.file) {
+    try {
+      const cloudResult = await cloudinary.uploader.upload(req.file.path, {
+        folder: 'acetrack/support_ids',
+        resource_type: 'auto',
+        public_id: `gov_id_${Date.now()}`
+      });
+      govIdUrl = cloudResult.secure_url;
+      // Clean up temp file
+      fs.unlink(req.file.path, () => {});
+    } catch (uploadErr) {
+      console.error('❌ Govt ID upload failed:', uploadErr.message);
+      // Continue without blocking account creation
+    }
+  }
+
+  // B. Modify Global State
+  const appState = await AppState.findOne().sort({ lastUpdated: -1 });
+  if (!appState || !appState.data) return res.status(500).json({ error: 'System state missing' });
+
+  const players = appState.data.players || [];
   
   const hashedPassword = bcrypt.hashSync(password, 10);
   const newSupportAgent = {
     id: `sup_${Date.now().toString(36)}`,
-    name: invite.email.split('@')[0], 
+    name: `${firstName} ${lastName}`,
+    firstName,
+    lastName,
     email: invite.email,
+    phone: phone || '',
     password: hashedPassword,
     role: 'support',
-    createdAt: new Date().toISOString()
+    address: {
+      line1: addressLine1 || '',
+      line2: addressLine2 || '',
+      city: city || '',
+      state: addrState || '',
+      pinCode: pinCode || '',
+      country: country || 'India'
+    },
+    govIdUrl: govIdUrl || '',
+    isEmailVerified: true,
+    createdAt: new Date().toISOString(),
+    onboardedVia: 'invite',
+    onboardedIp: ip
   };
 
   players.push(newSupportAgent);
   await AppState.updateOne(
-    { _id: state._id },
+    { _id: appState._id },
     { $set: { "data.players": players, lastUpdated: Date.now() } }
   );
 
-  // B. Invalidate token
+  // C. Invalidate token
   invite.status = 'Used';
   await invite.save();
-  await logServerEvent('SUPPORT_ACCOUNT_CREATED', { email: invite.email, ip });
+  await logServerEvent('SUPPORT_ACCOUNT_CREATED', { 
+    email: invite.email, 
+    name: newSupportAgent.name, 
+    phone: newSupportAgent.phone,
+    hasGovId: !!govIdUrl,
+    ip 
+  });
 
   res.json({ success: true, message: 'Account established successfully' });
 }));
@@ -1549,13 +1611,475 @@ ${tournament.sponsorName ? `<div class="sponsor">Sponsored by ${tournament.spons
 });
 
 // ═══════════════════════════════════════════════════════════════
+// 🎫 Support Staff Onboarding Page (v2.6.124)
+// Server-rendered — works independently of the Expo web bundle
+// ═══════════════════════════════════════════════════════════════
+app.get('/setup/:token', (req, res) => {
+  const { token } = req.params;
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AceTrack Support — Employee Onboarding</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F172A 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      color: #E2E8F0;
+    }
+    .card {
+      background: #1E293B;
+      border: 1px solid #334155;
+      border-radius: 24px;
+      padding: 40px;
+      width: 100%;
+      max-width: 520px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #4F46E5, #7C3AED, #EC4899);
+    }
+    .icon-wrap {
+      width: 64px; height: 64px;
+      background: rgba(79,70,229,0.15);
+      border-radius: 16px;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 20px;
+    }
+    .icon-wrap svg { width: 32px; height: 32px; fill: #818CF8; }
+    h1 { text-align: center; font-size: 22px; font-weight: 800; color: #F8FAFC; margin-bottom: 4px; }
+    .subtitle { text-align: center; font-size: 13px; color: #94A3B8; margin-bottom: 28px; }
+    .email-badge {
+      background: #0F172A;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 24px;
+    }
+    .email-badge .label { font-size: 10px; font-weight: 700; color: #64748B; letter-spacing: 1.5px; text-transform: uppercase; }
+    .email-badge .value { font-size: 15px; font-weight: 600; color: #E2E8F0; margin-top: 4px; }
+
+    .section-title {
+      font-size: 12px; font-weight: 700; color: #818CF8; text-transform: uppercase;
+      letter-spacing: 1.5px; margin: 24px 0 14px; padding-bottom: 8px;
+      border-bottom: 1px solid #334155;
+    }
+    .section-title:first-of-type { margin-top: 0; }
+
+    .row { display: flex; gap: 12px; }
+    .row .field { flex: 1; }
+
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: 13px; font-weight: 600; color: #94A3B8; margin-bottom: 6px; }
+    .field label .req { color: #F87171; }
+    .field input, .field textarea {
+      width: 100%;
+      padding: 11px 14px;
+      background: #0F172A;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      color: #F8FAFC;
+      font-size: 14px;
+      font-family: 'Inter', sans-serif;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .field input:focus, .field textarea:focus { border-color: #6366F1; }
+    .field textarea { resize: vertical; min-height: 70px; }
+
+    .file-upload {
+      border: 2px dashed #334155;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+    .file-upload:hover { border-color: #6366F1; background: rgba(99,102,241,0.05); }
+    .file-upload.has-file { border-color: #34D399; background: rgba(16,185,129,0.05); }
+    .file-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .file-upload .upload-icon { font-size: 28px; margin-bottom: 8px; }
+    .file-upload .upload-text { font-size: 13px; color: #94A3B8; }
+    .file-upload .upload-text strong { color: #818CF8; }
+    .file-upload .file-name { font-size: 13px; color: #34D399; font-weight: 600; margin-top: 6px; }
+    .file-upload .upload-hint { font-size: 11px; color: #475569; margin-top: 6px; }
+
+    .error-msg {
+      background: rgba(239,68,68,0.12);
+      color: #F87171;
+      font-size: 13px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .error-msg.visible { display: block; }
+    .btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #4F46E5, #7C3AED);
+      color: #FFF;
+      font-size: 15px;
+      font-weight: 700;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      transition: opacity 0.2s, transform 0.1s;
+      margin-top: 8px;
+    }
+    .btn:hover { opacity: 0.92; }
+    .btn:active { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .spinner { display: inline-block; width: 18px; height: 18px; border: 2.5px solid rgba(255,255,255,0.3); border-top-color: #FFF; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .progress-bar { display: flex; gap: 6px; margin-bottom: 4px; }
+    .progress-bar .step { flex: 1; height: 4px; border-radius: 2px; background: #334155; transition: background 0.3s; }
+    .progress-bar .step.done { background: #818CF8; }
+    .progress-label { font-size: 11px; color: #64748B; text-align: right; margin-bottom: 20px; }
+
+    /* States */
+    .state { display: none; }
+    .state.active { display: block; }
+    .state-center { text-align: center; }
+    .state-icon { width: 64px; height: 64px; margin: 0 auto 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .state-icon.error { background: rgba(239,68,68,0.15); }
+    .state-icon.error svg { fill: #F87171; }
+    .state-icon.success { background: rgba(16,185,129,0.15); }
+    .state-icon.success svg { fill: #34D399; }
+    .state-center h2 { font-size: 20px; font-weight: 800; color: #F8FAFC; margin-bottom: 8px; }
+    .state-center p { font-size: 14px; color: #94A3B8; line-height: 1.6; margin-bottom: 24px; }
+    .link-btn {
+      display: inline-block; padding: 12px 28px;
+      background: rgba(99,102,241,0.15); color: #818CF8;
+      font-weight: 700; font-size: 14px; border-radius: 10px;
+      text-decoration: none; transition: background 0.2s;
+    }
+    .link-btn:hover { background: rgba(99,102,241,0.25); }
+    .loading-container { text-align: center; padding: 60px 0; }
+    .loading-container .spinner { width: 36px; height: 36px; border-width: 3px; border-color: rgba(99,102,241,0.3); border-top-color: #818CF8; }
+    .loading-text { margin-top: 16px; font-size: 14px; color: #64748B; }
+    .footer { text-align: center; margin-top: 24px; font-size: 11px; color: #475569; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <!-- Loading State -->
+    <div id="state-loading" class="state active">
+      <div class="loading-container">
+        <div class="spinner"></div>
+        <div class="loading-text">Verifying your invitation link...</div>
+      </div>
+    </div>
+
+    <!-- Invalid State -->
+    <div id="state-invalid" class="state state-center">
+      <div class="state-icon error">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+      </div>
+      <h2>Invalid Setup Link</h2>
+      <p id="invalid-msg">This setup link is invalid or has expired.</p>
+      <p style="font-size:12px;color:#64748B;">Please contact your System Administrator for a new invitation.</p>
+    </div>
+
+    <!-- Form State -->
+    <div id="state-form" class="state">
+      <div class="icon-wrap">
+        <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
+      </div>
+      <h1>AceTrack Support</h1>
+      <div class="subtitle">Secure Employee Onboarding</div>
+
+      <div class="progress-bar">
+        <div class="step done"></div>
+        <div class="step" id="prog-2"></div>
+        <div class="step" id="prog-3"></div>
+      </div>
+      <div class="progress-label" id="prog-label">Step 1 of 3 — Personal Details</div>
+
+      <div class="email-badge">
+        <div class="label">Corporate Email (Verified)</div>
+        <div class="value" id="agent-email">—</div>
+      </div>
+
+      <!-- STEP 1: Personal Details -->
+      <div id="step-1" class="state active">
+        <div class="section-title">👤 Personal Information</div>
+        <div class="row">
+          <div class="field">
+            <label>First Name <span class="req">*</span></label>
+            <input type="text" id="firstName" placeholder="e.g. Rahul" required>
+          </div>
+          <div class="field">
+            <label>Last Name <span class="req">*</span></label>
+            <input type="text" id="lastName" placeholder="e.g. Sharma" required>
+          </div>
+        </div>
+        <div class="field">
+          <label>Phone Number <span class="req">*</span></label>
+          <input type="tel" id="phone" placeholder="+91 9876543210">
+        </div>
+
+        <div class="section-title">🏠 Permanent Address</div>
+        <div class="field">
+          <label>Address Line 1 <span class="req">*</span></label>
+          <input type="text" id="addrLine1" placeholder="House/Flat No., Street">
+        </div>
+        <div class="field">
+          <label>Address Line 2</label>
+          <input type="text" id="addrLine2" placeholder="Landmark (optional)">
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>City <span class="req">*</span></label>
+            <input type="text" id="city" placeholder="e.g. Bangalore">
+          </div>
+          <div class="field">
+            <label>State <span class="req">*</span></label>
+            <input type="text" id="addrState" placeholder="e.g. Karnataka">
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>PIN Code <span class="req">*</span></label>
+            <input type="text" id="pinCode" placeholder="e.g. 560001" maxlength="6">
+          </div>
+          <div class="field">
+            <label>Country</label>
+            <input type="text" id="country" value="India" placeholder="India">
+          </div>
+        </div>
+
+        <div class="error-msg" id="error-1"></div>
+        <button class="btn" onclick="goStep2()">Continue to ID Verification →</button>
+      </div>
+
+      <!-- STEP 2: ID Upload -->
+      <div id="step-2" class="state">
+        <div class="section-title">🪪 Government ID Verification</div>
+        <p style="font-size:13px;color:#94A3B8;margin-bottom:16px;line-height:1.5;">
+          Upload a clear scan or photo of your government-issued ID (Aadhaar, PAN, Passport, or Driving License) for employment documentation.
+        </p>
+
+        <div class="file-upload" id="file-drop" onclick="document.getElementById('govIdFile').click()">
+          <input type="file" id="govIdFile" accept="image/*,application/pdf" onchange="handleFileSelect(this)">
+          <div class="upload-icon">📄</div>
+          <div class="upload-text"><strong>Click to upload</strong> or drag and drop</div>
+          <div class="file-name" id="fileName" style="display:none"></div>
+          <div class="upload-hint">PDF, JPG, PNG — Max 10MB</div>
+        </div>
+
+        <div class="error-msg" id="error-2"></div>
+        <div style="display:flex;gap:12px;margin-top:16px;">
+          <button class="btn" style="background:#334155;flex:0.4;" onclick="backStep1()">← Back</button>
+          <button class="btn" style="flex:0.6;" onclick="goStep3()">Continue to Security →</button>
+        </div>
+      </div>
+
+      <!-- STEP 3: Password -->
+      <div id="step-3" class="state">
+        <div class="section-title">🔐 Account Security</div>
+        <div class="field">
+          <label>Create Password <span class="req">*</span></label>
+          <input type="password" id="password" placeholder="At least 8 characters" autocomplete="new-password">
+        </div>
+        <div class="field">
+          <label>Confirm Password <span class="req">*</span></label>
+          <input type="password" id="confirm" placeholder="Repeat your password" autocomplete="new-password">
+        </div>
+
+        <div class="error-msg" id="error-3"></div>
+        <div style="display:flex;gap:12px;margin-top:8px;">
+          <button class="btn" style="background:#334155;flex:0.4;" onclick="backStep2()">← Back</button>
+          <button class="btn" style="flex:0.6;" id="submit-btn" onclick="handleSetup()">Finalize Account</button>
+        </div>
+        <div class="footer">🔒 Your password is encrypted end-to-end before storage.</div>
+      </div>
+    </div>
+
+    <!-- Success State -->
+    <div id="state-success" class="state state-center">
+      <div class="state-icon success">
+        <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+      </div>
+      <h2>Account Ready!</h2>
+      <p>Your support agent account has been securely established. All documentation has been recorded. You can now log in.</p>
+      <a href="/" class="link-btn">Go to Login →</a>
+    </div>
+  </div>
+
+  <script>
+    const TOKEN = '${token}';
+    const API = '';
+    let selectedFile = null;
+
+    function showState(id) {
+      document.querySelectorAll('.card > .state').forEach(s => s.classList.remove('active'));
+      document.getElementById('state-' + id).classList.add('active');
+    }
+
+    function showStep(n) {
+      [1,2,3].forEach(i => {
+        document.getElementById('step-' + i).classList.toggle('active', i === n);
+      });
+      // Update progress bar
+      document.getElementById('prog-2').classList.toggle('done', n >= 2);
+      document.getElementById('prog-3').classList.toggle('done', n >= 3);
+      const labels = { 1: 'Step 1 of 3 — Personal Details', 2: 'Step 2 of 3 — ID Verification', 3: 'Step 3 of 3 — Security' };
+      document.getElementById('prog-label').textContent = labels[n];
+    }
+
+    function showError(boxId, msg) {
+      const box = document.getElementById(boxId);
+      box.textContent = msg;
+      box.classList.add('visible');
+    }
+    function clearErrors() {
+      document.querySelectorAll('.error-msg').forEach(b => { b.classList.remove('visible'); b.textContent = ''; });
+    }
+
+    function goStep2() {
+      clearErrors();
+      const fn = document.getElementById('firstName').value.trim();
+      const ln = document.getElementById('lastName').value.trim();
+      const ph = document.getElementById('phone').value.trim();
+      const a1 = document.getElementById('addrLine1').value.trim();
+      const ct = document.getElementById('city').value.trim();
+      const st = document.getElementById('addrState').value.trim();
+      const pin = document.getElementById('pinCode').value.trim();
+
+      if (!fn || !ln) { showError('error-1', 'First and Last Name are required.'); return; }
+      if (!ph || ph.length < 10) { showError('error-1', 'Please enter a valid phone number.'); return; }
+      if (!a1) { showError('error-1', 'Address Line 1 is required.'); return; }
+      if (!ct || !st) { showError('error-1', 'City and State are required.'); return; }
+      if (!pin || pin.length < 5) { showError('error-1', 'Please enter a valid PIN/ZIP code.'); return; }
+      showStep(2);
+    }
+
+    function backStep1() { clearErrors(); showStep(1); }
+
+    function goStep3() {
+      clearErrors();
+      if (!selectedFile) { showError('error-2', 'Government ID upload is required for documentation.'); return; }
+      if (selectedFile.size > 10 * 1024 * 1024) { showError('error-2', 'File size must be under 10MB.'); return; }
+      showStep(3);
+    }
+
+    function backStep2() { clearErrors(); showStep(2); }
+
+    function handleFileSelect(input) {
+      const file = input.files[0];
+      if (!file) return;
+      selectedFile = file;
+      document.getElementById('fileName').style.display = 'block';
+      document.getElementById('fileName').textContent = '✓ ' + file.name;
+      document.getElementById('file-drop').classList.add('has-file');
+    }
+
+    async function verifyToken() {
+      try {
+        const res = await fetch(API + '/api/support/invite/click', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: TOKEN })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          document.getElementById('agent-email').textContent = data.email;
+          showState('form');
+        } else {
+          document.getElementById('invalid-msg').textContent = data.error || 'This setup link is invalid or has expired.';
+          showState('invalid');
+        }
+      } catch (err) {
+        document.getElementById('invalid-msg').textContent = 'Failed to connect to the server. Please try again later.';
+        showState('invalid');
+      }
+    }
+
+    async function handleSetup() {
+      clearErrors();
+      const pw = document.getElementById('password').value;
+      const cf = document.getElementById('confirm').value;
+      const btn = document.getElementById('submit-btn');
+
+      if (pw.length < 8) { showError('error-3', 'Password must be at least 8 characters.'); return; }
+      if (pw !== cf) { showError('error-3', 'Passwords do not match.'); return; }
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Setting up...';
+
+      try {
+        // Build FormData with all employee details
+        const fd = new FormData();
+        fd.append('token', TOKEN);
+        fd.append('password', pw);
+        fd.append('firstName', document.getElementById('firstName').value.trim());
+        fd.append('lastName', document.getElementById('lastName').value.trim());
+        fd.append('phone', document.getElementById('phone').value.trim());
+        fd.append('addressLine1', document.getElementById('addrLine1').value.trim());
+        fd.append('addressLine2', document.getElementById('addrLine2').value.trim());
+        fd.append('city', document.getElementById('city').value.trim());
+        fd.append('state', document.getElementById('addrState').value.trim());
+        fd.append('pinCode', document.getElementById('pinCode').value.trim());
+        fd.append('country', document.getElementById('country').value.trim() || 'India');
+        if (selectedFile) fd.append('govId', selectedFile);
+
+        const res = await fetch(API + '/api/support/invite/setup', {
+          method: 'POST',
+          body: fd
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showState('success');
+        } else {
+          showError('error-3', data.error || 'Failed to establish account.');
+          btn.disabled = false;
+          btn.textContent = 'Finalize Account';
+        }
+      } catch (err) {
+        showError('error-3', 'A network error occurred. Please try again.');
+        btn.disabled = false;
+        btn.textContent = 'Finalize Account';
+      }
+    }
+
+    // Auto-verify on page load
+    verifyToken();
+  </script>
+</body>
+</html>`;
+
+  res.setHeader('Content-Type', 'text/html');
+  res.send(html);
+});
+
+
+// ═══════════════════════════════════════════════════════════════
 // Serve Web Admin Dashboard
 // ═══════════════════════════════════════════════════════════════
 const publicPath = path.join(__dirname, 'public');
 if (fs.existsSync(publicPath)) {
   app.use(express.static(publicPath));
   app.use((req, res, next) => {
-    if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/socket.io') && !req.path.startsWith('/results')) {
+    if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/socket.io') && !req.path.startsWith('/results') && !req.path.startsWith('/setup')) {
       res.sendFile(path.join(publicPath, 'index.html'));
     } else {
       next();

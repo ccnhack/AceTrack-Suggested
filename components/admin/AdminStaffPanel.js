@@ -51,8 +51,11 @@ const AdminStaffPanel = () => {
       });
       const data = await res.json();
       if (res.ok) {
-        const link = `https://support.acetrack.com/setup/${data.token}`;
-        Alert.alert("Invite Generated", `The secure setup link has been created:\n\n${link}`);
+        const link = `https://acetrack-suggested.onrender.com/setup/${data.token}`;
+        const emailNote = data.emailSent 
+          ? '📧 Onboarding email sent successfully!' 
+          : '⚠️ Email not sent (configure GMAIL credentials on Render)';
+        Alert.alert("Invite Generated", `${emailNote}\n\nSetup Link:\n${link}`);
         setEmail('');
         fetchInvites();
       } else {
@@ -145,7 +148,7 @@ const AdminStaffPanel = () => {
           )}
 
           {(inv.status === 'Pending' || inv.status === 'Clicked') && (
-            <TouchableOpacity style={styles.copyBtn} onPress={() => copyToClipboard(`https://support.acetrack.com/setup/${inv.token}`)}>
+            <TouchableOpacity style={styles.copyBtn} onPress={() => copyToClipboard(`https://acetrack-suggested.onrender.com/setup/${inv.token}`)}>
               <Ionicons name="copy-outline" size={16} color="#4F46E5" />
               <Text style={styles.copyBtnText}>Copy Link</Text>
             </TouchableOpacity>
