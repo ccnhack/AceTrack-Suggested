@@ -82,7 +82,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.145"; 
+const APP_VERSION = "2.6.146"; 
 
 
 
@@ -1488,6 +1488,21 @@ router.post('/support/invite', apiKeyGuard, asyncHandler(async (req, res) => {
       error: 'Email already has an active provisioning link.',
       message: 'Kindly resend the invitation or retire the current link to provision again.'
     });
+  }
+
+  // 🛡️ Employee-Exists Guard: Check if email is already associated with an active employee
+  const appStateCheck = await AppState.findOne().sort({ lastUpdated: -1 });
+  if (appStateCheck?.data?.players) {
+    const existingEmployee = appStateCheck.data.players.find(p =>
+      p.role === 'support' && p.email?.toLowerCase() === email.toLowerCase().trim()
+    );
+    if (existingEmployee && existingEmployee.supportStatus !== 'terminated') {
+      return res.status(422).json({
+        error: 'Employee Already Exists',
+        message: `The email ${email} is already associated with an active support employee (${existingEmployee.name || existingEmployee.firstName + ' ' + existingEmployee.lastName}). Use the Support tab to manage their account.`,
+        employeeName: existingEmployee.name || `${existingEmployee.firstName} ${existingEmployee.lastName}`
+      });
+    }
   }
 
   const token = bcrypt.hashSync(Date.now().toString() + email, 10).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);

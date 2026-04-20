@@ -91,6 +91,12 @@ const AdminStaffPanel = () => {
           `The email ${email} already has an active provisioning link.\n\nKindly resend the existing link or retire it to provision a new one.`,
           [{ text: "OK" }]
         );
+      } else if (res.status === 422) {
+        Alert.alert(
+          "⚠️ Employee Already Exists",
+          `${data.message || `The email ${email} is already associated with an active support employee.`}\n\nTo manage this employee, go to the Support tab → Employees.`,
+          [{ text: "Got it" }]
+        );
       } else { Alert.alert("Error", data.error || "Failed to generate invite"); }
     } catch (e) { Alert.alert("Network Error", e.message); }
     finally { setIsGenerating(false); }
