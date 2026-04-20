@@ -91,7 +91,7 @@ class SyncManager {
     return config.API_BASE_URL;
   }
 
-  // 🛡️ [PUBLIC QUERY API] (v2.6.122)
+  // 🛡️ [PUBLIC QUERY API] (v2.6.123)
   public isSyncActive(): boolean {
     return this.activeSyncs > 0;
   }
@@ -113,7 +113,7 @@ class SyncManager {
         this.syncVersion = savedVersion;
       }
 
-      // 🛡️ [SYNC RECOVERY] (v2.6.122) Reset sync count and clear hung states
+      // 🛡️ [SYNC RECOVERY] (v2.6.123) Reset sync count and clear hung states
       this.activeSyncs = 0;
       this.isSyncing = false;
       this.emitSyncStatus();
@@ -165,7 +165,7 @@ class SyncManager {
     });
 
     this.socket.on('data_updated', async (data) => {
-      // 🛡️ [SELF-ECHO GUARD] (v2.6.122)
+      // 🛡️ [SELF-ECHO GUARD] (v2.6.123)
       // Skip updates originating from our own socket to prevent sync loops
       if (data?.lastSocketId && this.socket?.id && data.lastSocketId === this.socket.id) {
         console.log('[SyncManager] Skipping self-originated socket update.');
@@ -241,7 +241,7 @@ class SyncManager {
     if (!this.userId) return;
 
     return this.trackOperation(`SYNC_${Object.keys(updates).join('_')}`, async () => {
-      // 🛡️ [BACKPRESSURE GUARD] (v2.6.122)
+      // 🛡️ [BACKPRESSURE GUARD] (v2.6.123)
       const qLen = storage.getQueueLength();
       if (qLen > 20) {
         this.trackIncident('backpressure', `High Backpressure: ${qLen} items in queue. System automatically throttling.`);
@@ -267,7 +267,7 @@ class SyncManager {
             continue;
           }
           
-          // 🛡️ [ADMIN BADGE INJECTION] (v2.6.122)
+          // 🛡️ [ADMIN BADGE INJECTION] (v2.6.123)
           // When admin syncs, auto-inject seenAdminActionIds/visitedAdminSubTabs
           if (!isInternal && val.role === 'admin') {
             try {
@@ -282,7 +282,7 @@ class SyncManager {
 
           val = capPlayerDetail(val);
           
-          // 🛡️ [DEVICE HEARTBEAT] (v2.6.122)
+          // 🛡️ [DEVICE HEARTBEAT] (v2.6.123)
           // Stamp current device info into currentUser.devices for Admin Hub diagnostics.
           // Throttled to once per 20 minutes to avoid excessive writes.
           if (!isInternal && this.hardwareId) {
@@ -343,7 +343,7 @@ class SyncManager {
           continue; 
         }
 
-        // 🛡️ [TOURNAMENT SANITIZATION] (v2.6.122)
+        // 🛡️ [TOURNAMENT SANITIZATION] (v2.6.123)
         // Strip nil playerIds from tournament arrays on local save
         if (key === 'tournaments' && Array.isArray(val)) {
           val = val.map((t: any) => ({
@@ -353,7 +353,7 @@ class SyncManager {
           }));
         }
 
-        // 🛡️ [TICKET MESSAGE STATE: DELIVERED] (v2.6.122)
+        // 🛡️ [TICKET MESSAGE STATE: DELIVERED] (v2.6.123)
         // On pull (isInternal), mark incoming messages from others as 'delivered'
         if (key === 'supportTickets' && Array.isArray(val) && isInternal && this.userId) {
           val = val.map((ticket: any) => {
@@ -410,7 +410,7 @@ class SyncManager {
   }
 
   /**
-   * 🛡️ FLUSH BEFORE PULL (v2.6.122)
+   * 🛡️ FLUSH BEFORE PULL (v2.6.123)
    * Forces any pending/debounced local changes to be pushed to the cloud
    * immediately. Must be called BEFORE pulling fresh data to prevent
    * deleted items from reappearing via stale cloud state.
@@ -435,7 +435,7 @@ class SyncManager {
   }
 
   /**
-   * 🛡️ WATCHDOG ENGINE (v2.6.122)
+   * 🛡️ WATCHDOG ENGINE (v2.6.123)
    * Prevents 'Stuck Sync' UI by forcing a reset if no operations complete within 15s.
    */
   private syncWatchdog: any = null;
@@ -488,7 +488,7 @@ class SyncManager {
   }
 
   /**
-   * 🛡️ SELF-HEALING CONFLICT RESOLUTION (v2.6.122)
+   * 🛡️ SELF-HEALING CONFLICT RESOLUTION (v2.6.123)
    * Automatically pulls cloud state, merges with local changes,
    * and increments version to resolve 409 conflicts silently.
    */
@@ -524,7 +524,7 @@ class SyncManager {
   }
 
   public async performCloudPush(isInternal: boolean = false): Promise<void> {
-    // 🛡️ [FIX v2.6.122] Allow nested pushes from within tracked operations.
+    // 🛡️ [FIX v2.6.123] Allow nested pushes from within tracked operations.
     // Previously, atomic pushes from processActionSequence were silently skipped
     // because isSyncing was already true from the parent trackOperation wrapper.
     // We now only skip if there's a genuinely separate concurrent push, not our own.
@@ -603,7 +603,7 @@ class SyncManager {
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
-      // 🛡️ [TICKET MESSAGE STATE: SENT] (v2.6.122)
+      // 🛡️ [TICKET MESSAGE STATE: SENT] (v2.6.123)
       // On push, promote 'pending' messages to 'sent'
       if (updates.supportTickets && Array.isArray(updates.supportTickets)) {
         updates.supportTickets = updates.supportTickets.map((t: any) => {
@@ -638,7 +638,7 @@ class SyncManager {
           this.metrics.rateLimitCount++;
           this.trackIncident('reliability', 'HTTP 429: Rate limited by cloud server. Automatic backoff engaged.');
         } else if (response.status === 409) {
-          // 🛡️ [OCC CONFLICT HANDLING] (v2.6.122)
+          // 🛡️ [OCC CONFLICT HANDLING] (v2.6.123)
           // Server detected version conflict — update local version and trigger re-pull
           console.warn('[SyncManager] OCC conflict detected (409). Will re-pull.');
           this.metrics.conflictCount++;

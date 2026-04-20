@@ -51,7 +51,8 @@ const AdminStaffPanel = () => {
       });
       const data = await res.json();
       if (res.ok) {
-        Alert.alert("Invite Generated", "The secure setup link has been created.");
+        const link = `https://support.acetrack.com/setup/${data.token}`;
+        Alert.alert("Invite Generated", `The secure setup link has been created:\n\n${link}`);
         setEmail('');
         fetchInvites();
       } else {
@@ -66,7 +67,7 @@ const AdminStaffPanel = () => {
 
   const copyToClipboard = (link) => {
     Clipboard.setString(link);
-    Alert.alert("Link Copied", "Share this link securely with the employee.");
+    Alert.alert("Link Copied", `Share this link securely with the employee:\n\n${link}`);
   };
 
   const getTimeRemaining = (expiresAt) => {
