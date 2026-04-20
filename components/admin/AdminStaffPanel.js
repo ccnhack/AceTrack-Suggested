@@ -188,7 +188,19 @@ const AdminStaffPanel = () => {
     return resends.length;
   };
 
-  const getStatusColor = (s) => ({ Pending: '#F59E0B', Clicked: '#3B82F6', Used: '#10B981', Expired: '#EF4444' }[s] || '#64748B');
+  const getStatusColor = (s) => ({ 
+    Pending: '#F59E0B', 
+    Clicked: '#3B82F6', 
+    Used: '#10B981', 
+    Expired: '#EF4444',
+    Retired: '#F97316' // Distinct orange-red for manual retirement
+  }[s] || '#64748B');
+
+  const formatDateTime = (dateStr) => {
+    if (!dateStr) return 'N/A';
+    const d = new Date(dateStr);
+    return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  };
 
   const getFormProgress = (clicks) => {
     if (!clicks || clicks.length === 0) return null;
@@ -343,13 +355,28 @@ const AdminStaffPanel = () => {
               </View>
             </View>
             
-            <View style={styles.inviteMetaRow}>
-              <Ionicons name="time-outline" size={14} color="#64748B" />
-              <Text style={styles.metaText}>{inv.status === 'Expired' ? 'Expired' : getTimeRemaining(inv.expiresAt)}</Text>
-              {formProgress && (
-                <View style={[styles.progressChip, { backgroundColor: formProgress.color + '15', marginLeft: 12 }]}>
-                  <Text style={{ fontSize: 10 }}>{formProgress.icon}</Text>
-                  <Text style={[styles.progressChipText, { color: formProgress.color }]}>{formProgress.label}</Text>
+            <View style={styles.timestampContainer}>
+              <View style={styles.timestampRow}>
+                <Text style={styles.timestampLabel}>Created:-</Text>
+                <Text style={styles.timestampValue}>{formatDateTime(inv.createdAt)}</Text>
+              </View>
+              
+              <View style={styles.timestampRow}>
+                <Text style={styles.timestampLabel}>Expires:-</Text>
+                <Text style={styles.timestampValue}>{formatDateTime(inv.expiresAt)}</Text>
+              </View>
+
+              {inv.status === 'Retired' && inv.retiredAt && (
+                <View style={styles.timestampRow}>
+                  <Text style={[styles.timestampLabel, { color: '#F97316' }]}>Retired:-</Text>
+                  <Text style={[styles.timestampValue, { color: '#F97316' }]}>{formatDateTime(inv.retiredAt)}</Text>
+                </View>
+              )}
+
+              {inv.status === 'Expired' && (
+                <View style={styles.timestampRow}>
+                  <Text style={[styles.timestampLabel, { color: '#EF4444' }]}>Expired:-</Text>
+                  <Text style={[styles.timestampValue, { color: '#EF4444' }]}>{formatDateTime(inv.expiresAt)}</Text>
                 </View>
               )}
             </View>
@@ -574,6 +601,10 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   badgeText: { fontSize: 10, fontWeight: '800' },
   inviteMetaRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  timestampContainer: { gap: 4, marginBottom: 12, backgroundColor: '#F8FAFC', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' },
+  timestampRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  timestampLabel: { fontSize: 11, fontWeight: '700', color: '#64748B' },
+  timestampValue: { fontSize: 11, fontWeight: '600', color: '#1E293B', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
   metaText: { fontSize: 12, color: '#64748B', marginLeft: 4 },
   progressChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, gap: 4 },
   progressChipText: { fontSize: 10, fontWeight: '700' },

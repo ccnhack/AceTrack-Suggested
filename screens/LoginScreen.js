@@ -329,12 +329,12 @@ const LoginScreen = ({ navigation }) => {
             {error ? <View style={{ backgroundColor: '#FEE2E2', padding: 12, borderRadius: 8, marginBottom: 16 }}><Text style={{ color: '#EF4444', textAlign: 'center', fontSize: 13, fontWeight: 'bold' }}>{error}</Text></View> : null}
 
             <View style={{ marginBottom: 20 }}>
-              <Text style={styles.webInputLabel}>Admin Username</Text>
+              <Text style={styles.webInputLabel}>Email or Username</Text>
               <View style={styles.webInputWrapper}>
                 <Ionicons name="person-outline" size={20} color="#94A3B8" style={{ marginRight: 12 }} />
                 <TextInput 
                   style={styles.webInput}
-                  placeholder="Enter admin username"
+                  placeholder="Enter your email or username"
                   placeholderTextColor="#94A3B8"
                   value={username}
                   onChangeText={setUsername}
@@ -343,14 +343,14 @@ const LoginScreen = ({ navigation }) => {
                 />
               </View>
             </View>
-
+            
             <View style={{ marginBottom: 32 }}>
-              <Text style={styles.webInputLabel}>Admin Password</Text>
+              <Text style={styles.webInputLabel}>Password</Text>
               <View style={styles.webInputWrapper}>
                 <Ionicons name="lock-closed-outline" size={20} color="#94A3B8" style={{ marginRight: 12 }} />
                 <TextInput 
                   style={styles.webInput}
-                  placeholder="Enter secure password"
+                  placeholder="Enter your password"
                   placeholderTextColor="#94A3B8"
                   value={password}
                   onChangeText={setPassword}

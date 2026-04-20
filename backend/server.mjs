@@ -361,9 +361,9 @@ const SupportInviteSchema = new mongoose.Schema({
   firstName: { type: String, default: '' },
   lastName: { type: String, default: '' },
   token: { type: String, required: true, unique: true },
-  status: { type: String, enum: ['Pending', 'Clicked', 'Used', 'Expired'], default: 'Pending' },
+  status: { type: String, enum: ['Pending', 'Clicked', 'Used', 'Expired', 'Retired'], default: 'Pending' },
   clicks: [{
-    action: { type: String, default: 'link_click' }, // link_click, form_view, step_1, step_2, step_3, form_submit
+    action: { type: String, default: 'link_click' }, // link_click, form_view, step_1, step_2, step_3, form_submit, admin_retired
     ip: String,
     userAgent: String,
     city: String,
@@ -379,6 +379,7 @@ const SupportInviteSchema = new mongoose.Schema({
     timestamp: { type: Date, default: Date.now }
   }],
   expiresAt: { type: Date, required: true },
+  retiredAt: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });
 const SupportInvite = mongoose.model('SupportInvite', SupportInviteSchema);
