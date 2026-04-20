@@ -50,6 +50,11 @@ export const SupportTicketSystem = ({
   const [chatSearchText, setChatSearchText] = useState('');
   const [searchMatchIndices, setSearchMatchIndices] = useState([]);
   const [activeMatchIndex, setActiveMatchIndex] = useState(0);
+
+  // CSAT Rating State
+  const [csatRating, setCsatRating] = useState(0);
+  const [csatFeedback, setCsatFeedback] = useState('');
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const scrollViewRef = useRef(null);
   const textInputRef = useRef(null);
   const messageYOffsets = useRef({}); // 📍 Track message coordinates (v2.6.27)
@@ -148,6 +153,32 @@ export const SupportTicketSystem = ({
     if (!result.canceled) {
       setSelectedImage(`data:image/jpeg;base64,${result.assets[0].base64}`);
       setShowPlusMenu(false);
+    }
+  };
+
+  const handleRateTicket = async (rating) => {
+    if (!rating) return;
+    setIsSubmittingRating(true);
+    setCsatRating(rating);
+    try {
+      const res = await fetch(`${config.API_BASE_URL}/api/support/rate-ticket`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': userId },
+        body: JSON.stringify({ ticketId: selectedTicket.id, rating, feedback: csatFeedback })
+      });
+      if (res.ok) {
+        notify("Thank you for your feedback!");
+        setSelectedTicket(prev => ({ ...prev, rating }));
+      } else {
+        const data = await res.json();
+        notify("Error", data.error || "Failed to submit rating");
+        setCsatRating(0);
+      }
+    } catch (e) {
+      notify("Network Error", e.message);
+      setCsatRating(0);
+    } finally {
+      setIsSubmittingRating(false);
     }
   };
 
@@ -759,6 +790,53 @@ export const SupportTicketSystem = ({
                 <Text style={styles.typingText}>Admin is typing...</Text>
               </View>
             )}
+
+            {/* ⭐ CSAT Rating (Only for closed tickets & actual users) */}
+            {isClosed && userRole === 'user' && !selectedTicket.rating && (
+              <View style={styles.csatCard}>
+                <Text style={styles.csatTitle}>How was our support?</Text>
+                <View style={styles.csatStarsRow}>
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <TouchableOpacity key={star} onPress={() => setCsatRating(star)}>
+                      <Ionicons 
+                        name={star <= csatRating ? "star" : "star-outline"} 
+                        size={32} 
+                        color={star <= csatRating ? "#F59E0B" : "#D1D5DB"} 
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {csatRating > 0 && (
+                  <>
+                    <TextInput
+                      value={csatFeedback}
+                      onChangeText={setCsatFeedback}
+                      placeholder="Any additional feedback? (optional)"
+                      style={styles.csatFeedbackInput}
+                      multiline
+                      numberOfLines={2}
+                    />
+                    <TouchableOpacity 
+                      style={[styles.csatSubmitBtn, isSubmittingRating && styles.csatSubmitBtnDisabled]} 
+                      onPress={() => handleRateTicket(csatRating)}
+                      disabled={isSubmittingRating}
+                    >
+                      {isSubmittingRating ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.csatSubmitBtnText}>Submit Feedback</Text>}
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
+            )}
+
+            {/* Completed Rating Display */}
+            {(selectedTicket.rating > 0) && (
+              <View style={styles.csatRatedCard}>
+                <Text style={styles.csatRatedText}>
+                  You rated this {selectedTicket.rating} {selectedTicket.rating === 1 ? 'star' : 'stars'}
+                </Text>
+              </View>
+            )}
+
           </ScrollView>
 
           <View style={styles.inputArea}>
@@ -1795,5 +1873,68 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '900',
     textTransform: 'uppercase'
+  },
+  csatCard: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FEF3C7',
+  },
+  csatTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#D97706',
+    marginBottom: 8,
+  },
+  csatStarsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  csatFeedbackInput: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 8,
+    width: '100%',
+    padding: 10,
+    fontSize: 12,
+    minHeight: 60,
+    marginBottom: 12,
+    textAlignVertical: 'top'
+  },
+  csatSubmitBtn: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 24,
+    paddingVertical: 8,
+    borderRadius: 8,
+    width: '100%',
+    alignItems: 'center',
+  },
+  csatSubmitBtnDisabled: {
+    opacity: 0.5,
+  },
+  csatSubmitBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  csatRatedCard: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 16,
+    padding: 12,
+    marginTop: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+  },
+  csatRatedText: {
+    color: '#16A34A',
+    fontWeight: '800',
+    fontSize: 13,
   }
 });

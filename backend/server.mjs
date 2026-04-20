@@ -82,7 +82,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.148"; 
+const APP_VERSION = "2.6.149"; 
 
 
 
@@ -2693,6 +2693,24 @@ router.get('/support/analytics', apiKeyGuard, async (req, res) => {
         ? Math.round((escalatedCount / agentTickets.length) * 100)
         : 0;
 
+      // 🕒 Agent Activity Timeline (Last 15 Actions)
+      let activities = [];
+      agentTickets.forEach(t => {
+        if (t.assignedAt) activities.push({ type: 'assignment', time: t.assignedAt, ticketId: t.id, title: t.title });
+        if (t.closedAt) activities.push({ type: 'closure', time: t.closedAt, ticketId: t.id, title: t.title });
+        if (t.resolvedAt) activities.push({ type: 'resolved', time: t.resolvedAt, ticketId: t.id, title: t.title });
+        if (t.ratedAt && t.rating) activities.push({ type: 'csat_received', time: t.ratedAt, ticketId: t.id, rating: t.rating });
+        if (t.messages) {
+          t.messages.forEach(m => {
+            if (m.senderId === agentId) {
+              activities.push({ type: 'reply', time: m.timestamp, ticketId: t.id, text: m.text });
+            }
+          });
+        }
+      });
+      activities.sort((a,b) => new Date(b.time) - new Date(a.time));
+      const activityTimeline = activities.slice(0, 15);
+
       return {
         id: agentId,
         name: agent.name || `${agent.firstName} ${agent.lastName}`,
@@ -2712,7 +2730,8 @@ router.get('/support/analytics', apiKeyGuard, async (req, res) => {
           escalationRate,
           totalHandled: agentTickets.length,
           manualPicks: agent.metrics?.manualPicks || 0
-        }
+        },
+        activityTimeline
       };
     });
 
@@ -2862,6 +2881,63 @@ router.post('/support/transfer-tickets', apiKeyGuard, async (req, res) => {
 
     logServerEvent('SUPPORT_TICKETS_TRANSFERRED', { fromAgentId, toAgentId, count: transferCount });
     res.json({ success: true, transferred: transferCount, message: `${transferCount} ticket(s) transferred to ${toAgent.name}` });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ⭐ Rate Ticket (CSAT)
+router.post('/support/rate-ticket', apiKeyGuard, async (req, res) => {
+  const { ticketId, rating, feedback } = req.body;
+  const userId = req.headers['x-user-id'];
+  console.log(`[API] POST /support/rate-ticket: ticket=${ticketId}, user=${userId}, rating=${rating}`);
+  
+  if (!ticketId || !rating || rating < 1 || rating > 5) {
+    return res.status(400).json({ error: 'Valid ticketId and rating (1-5) required' });
+  }
+
+  try {
+    const state = await AppState.findOne().sort({ lastUpdated: -1 });
+    if (!state) return res.status(404).json({ error: "State not found" });
+
+    const ticketIdx = (state.data.supportTickets || []).findIndex(t => t.id === ticketId);
+    if (ticketIdx === -1) return res.status(404).json({ error: "Ticket not found" });
+
+    const ticket = state.data.supportTickets[ticketIdx];
+    if (ticket.userId !== userId) {
+      return res.status(403).json({ error: "You can only rate your own tickets" });
+    }
+    if (ticket.status !== 'Closed' && ticket.status !== 'Resolved') {
+      return res.status(400).json({ error: "Only closed or resolved tickets can be rated" });
+    }
+    if (ticket.rating) {
+      return res.status(400).json({ error: "This ticket has already been rated" });
+    }
+
+    ticket.rating = rating;
+    if (feedback) ticket.ratingFeedback = feedback;
+    ticket.ratedAt = new Date().toISOString();
+
+    // Update agent's overall metrics
+    const agentId = ticket.assignedTo;
+    if (agentId) {
+      const agentIdx = (state.data.players || []).findIndex(p => p.id === agentId);
+      if (agentIdx !== -1) {
+        const p = state.data.players[agentIdx];
+        if (!p.metrics) p.metrics = {};
+        const oldRatedCount = p.metrics.ratedTickets || 0;
+        const oldAvg = p.metrics.avgRating || 0;
+        
+        p.metrics.avgRating = ((oldAvg * oldRatedCount) + rating) / (oldRatedCount + 1);
+        p.metrics.ratedTickets = oldRatedCount + 1;
+      }
+    }
+
+    state.markModified('data');
+    await state.save();
+
+    logServerEvent('TICKET_RATED', { ticketId, rating, agentId });
+    res.json({ success: true, ticket });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

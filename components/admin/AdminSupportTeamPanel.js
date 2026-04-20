@@ -634,6 +634,36 @@ const AdminSupportTeamPanel = () => {
                  </View>
                )}
             </View>
+
+            {/* 🕰️ Activity Timeline (v2.6.148 Target) */}
+            {selectedAgentStats?.activityTimeline && selectedAgentStats.activityTimeline.length > 0 && (
+              <View style={styles.timelineSection}>
+                <Text style={styles.timelineTitle}>Recent Activity</Text>
+                {selectedAgentStats.activityTimeline.map((act, idx) => {
+                  let icon, color, text;
+                  if (act.type === 'assignment') { icon = 'person-add'; color = '#3B82F6'; text = `Assigned ticket #${act.ticketId.slice(-4)}`; }
+                  else if (act.type === 'reply') { icon = 'chatbubble-ellipses'; color = '#8B5CF6'; text = `Replied to #${act.ticketId.slice(-4)}`; }
+                  else if (act.type === 'closure') { icon = 'checkmark-circle'; color = '#10B981'; text = `Closed #${act.ticketId.slice(-4)}`; }
+                  else if (act.type === 'resolved') { icon = 'shield-checkmark'; color = '#10B981'; text = `Resolved #${act.ticketId.slice(-4)}`; }
+                  else if (act.type === 'csat_received') { icon = 'star'; color = '#F59E0B'; text = `Rated ${act.rating}★ on #${act.ticketId.slice(-4)}`; }
+                  
+                  return (
+                    <View key={idx} style={styles.timelineRow}>
+                      <View style={styles.timelineLine} />
+                      <View style={[styles.timelineIconNode, { backgroundColor: color + '1A' }]}>
+                        <Ionicons name={icon} size={12} color={color} />
+                      </View>
+                      <View style={styles.timelineContent}>
+                        <Text style={styles.timelineText}>{text}</Text>
+                        <Text style={styles.timelineTime}>
+                           {new Date(act.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
           </View>
         ) : (
           <View style={styles.selectHint}>
@@ -833,6 +863,16 @@ const styles = StyleSheet.create({
   caseloadBarBg: { flex: 1, height: 14, backgroundColor: '#F8FAFC', borderRadius: 7, marginHorizontal: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#F1F5F9' },
   caseloadBar: { height: '100%', borderRadius: 7, minWidth: 4 },
   caseloadCount: { width: 24, fontSize: 12, fontWeight: '900', textAlign: 'right' },
+
+  // Timeline
+  timelineSection: { marginTop: 20, paddingHorizontal: 4 },
+  timelineTitle: { fontSize: 12, fontWeight: '900', color: '#64748B', textTransform: 'uppercase', marginBottom: 16 },
+  timelineRow: { flexDirection: 'row', minHeight: 40 },
+  timelineLine: { position: 'absolute', left: 11, top: 24, bottom: 0, width: 2, backgroundColor: '#F1F5F9' },
+  timelineIconNode: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 12, zIndex: 1 },
+  timelineContent: { flex: 1, paddingBottom: 16 },
+  timelineText: { fontSize: 13, fontWeight: '600', color: '#1E293B', marginBottom: 2 },
+  timelineTime: { fontSize: 10, color: '#94A3B8', fontWeight: '500' }
 });
 
 export default AdminSupportTeamPanel;
