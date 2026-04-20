@@ -4,8 +4,8 @@ import Constants from 'expo-constants';
 import { eventBus } from '../services/EventBus';
 import { syncManager } from '../services/SyncManager';
 import { calculateServerOffset } from '../utils/tournamentUtils';
-import logger from '../utils/logger';
 import config from '../config';
+import logger from '../utils/logger';
 
 const SyncContext = createContext(null);
 
@@ -215,7 +215,7 @@ export const SyncProvider = ({ children }) => {
       }
 
       if (status && status.latestAppVersion) {
-        const currentVersion = Constants?.expoConfig?.version || '2.6.117';
+        const currentVersion = config.APP_VERSION;
         const obsolete = isVersionObsolete(currentVersion, status.latestAppVersion);
         console.log(`[SyncContext] Version Check: Local=${currentVersion}, Remote=${status.latestAppVersion}, Obsolete=${obsolete}`);
         if (obsolete) {
