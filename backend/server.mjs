@@ -365,6 +365,9 @@ const SupportInviteSchema = new mongoose.Schema({
     userAgent: String,
     timestamp: { type: Date, default: Date.now }
   }],
+  emailResends: [{
+    timestamp: { type: Date, default: Date.now }
+  }],
   expiresAt: { type: Date, required: true },
   createdAt: { type: Date, default: Date.now }
 });
@@ -1434,6 +1437,81 @@ router.get('/support/invites', apiKeyGuard, asyncHandler(async (req, res) => {
   });
 
   res.json({ success: true, invites: processed });
+}));
+
+// 2b. Resend Onboarding Email (Rate Limited: 3 per invite, 1min cooldown, 4hr lockout)
+router.post('/support/invite/resend', apiKeyGuard, asyncHandler(async (req, res) => {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: 'Token required' });
+
+  if (req.headers['x-user-id'] !== 'admin') {
+    return res.status(403).json({ error: 'System Administrator privileges required' });
+  }
+
+  const invite = await SupportInvite.findOne({ token });
+  if (!invite) return res.status(404).json({ error: 'Invite not found' });
+  if (invite.status === 'Used') return res.status(400).json({ error: 'Invite already claimed' });
+  if (invite.expiresAt < new Date()) return res.status(400).json({ error: 'Invite expired' });
+
+  const resends = invite.emailResends || [];
+  const now = Date.now();
+
+  // Check if 3 resends exhausted → 4-hour lockout from last resend
+  if (resends.length >= 3) {
+    const lastResend = new Date(resends[resends.length - 1].timestamp).getTime();
+    const lockoutEnd = lastResend + (4 * 60 * 60 * 1000); // 4 hours
+    if (now < lockoutEnd) {
+      const remainingMs = lockoutEnd - now;
+      const hours = Math.floor(remainingMs / (1000 * 60 * 60));
+      const mins = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+      return res.status(429).json({ 
+        error: `Rate limit reached. Email can be resent after ${hours}h ${mins}m`,
+        nextAvailableAt: new Date(lockoutEnd).toISOString(),
+        resendsUsed: resends.length,
+        resendsMax: 3
+      });
+    }
+    // Lockout expired — reset the counter
+    invite.emailResends = [];
+  }
+
+  // Check 1-minute cooldown from last resend
+  if (resends.length > 0) {
+    const lastResend = new Date(resends[resends.length - 1].timestamp).getTime();
+    const cooldownEnd = lastResend + (60 * 1000); // 1 minute
+    if (now < cooldownEnd) {
+      const remainingSec = Math.ceil((cooldownEnd - now) / 1000);
+      return res.status(429).json({ 
+        error: `Please wait ${remainingSec}s before resending`,
+        nextAvailableAt: new Date(cooldownEnd).toISOString(),
+        resendsUsed: resends.length,
+        resendsMax: 3
+      });
+    }
+  }
+
+  // Send the email
+  const setupLink = `https://acetrack-suggested.onrender.com/setup/${token}`;
+  let emailStatus = { success: false, error: 'Email service not configured' };
+  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+    emailStatus = await sendOnboardingEmail(invite.email, setupLink, invite.expiresAt.toISOString());
+  }
+
+  if (emailStatus.success) {
+    invite.emailResends.push({ timestamp: new Date() });
+    await invite.save();
+    const remaining = 3 - invite.emailResends.length;
+    await logServerEvent('SUPPORT_EMAIL_RESENT', { email: invite.email, resendsUsed: invite.emailResends.length });
+    res.json({ 
+      success: true, 
+      message: `Email resent to ${invite.email}`,
+      resendsUsed: invite.emailResends.length,
+      resendsMax: 3,
+      resendsRemaining: remaining
+    });
+  } else {
+    res.status(500).json({ error: emailStatus.error || 'Failed to send email' });
+  }
 }));
 
 // 3. Web Hub: Click Tracking (No Auth Required)
