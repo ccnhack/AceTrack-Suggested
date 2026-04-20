@@ -81,7 +81,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.143"; 
+const APP_VERSION = "2.6.144"; 
 
 
 
@@ -2644,7 +2644,7 @@ router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
     state.markModified('data');
     await state.save();
 
-    logServerEvent('SUPPORT_USER_MANAGED', { admin: req.user.id, targetUserId, status, level });
+    logServerEvent('SUPPORT_USER_MANAGED', { admin: req.headers['x-user-id'] || 'admin', targetUserId, status, level });
     res.json({ success: true, user: players[idx] });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -2701,42 +2701,51 @@ router.post('/support/force-reset', apiKeyGuard, async (req, res) => {
   const { targetUserId } = req.body;
   if (!targetUserId) return res.status(400).json({ error: 'Target user ID required' });
 
-  const appState = await AppState.findOne().sort({ lastUpdated: -1 });
-  if (!appState) return res.status(500).json({ error: 'System state unavailable' });
+  try {
+    const appState = await AppState.findOne().sort({ lastUpdated: -1 });
+    if (!appState) return res.status(500).json({ error: 'System state unavailable' });
 
-  const players = appState.data.players || [];
-  const userIndex = players.findIndex(p => p.id === targetUserId);
+    const players = appState.data.players || [];
+    const userIndex = players.findIndex(p => p.id === targetUserId);
 
-  if (userIndex === -1) return res.status(404).json({ error: 'User account not found' });
-  
-  const user = players[userIndex];
-  if (user.role !== 'support') {
-    return res.status(400).json({ error: 'Can only force-reset support accounts via this portal.' });
+    if (userIndex === -1) return res.status(404).json({ error: 'User account not found' });
+    
+    const user = players[userIndex];
+    if (user.role !== 'support') {
+      return res.status(400).json({ error: 'Can only force-reset support accounts via this portal.' });
+    }
+
+    // Generate Random Alphanumeric Password (10 chars)
+    const newPassword = Math.random().toString(36).substring(2, 7) + Math.random().toString(36).substring(2, 7);
+    console.log(`[FORCE-RESET] Generated new password for ${user.email}`);
+    
+    // Assign Plaintext to match local frontend authentication model
+    players[userIndex].password = newPassword;
+    
+    // Security Guard: Invalidate all existing sessions
+    players[userIndex].devices = [];
+
+    appState.markModified('data.players');
+    await appState.save();
+    console.log(`[FORCE-RESET] Database updated for ${user.email}`);
+
+    // Log Event
+    await logServerEvent('SUPPORT_FORCE_PASSWORD_RESET', { 
+      adminId: req.headers['x-user-id'] || 'admin', 
+      targetEmail: user.email 
+    });
+
+    // Send Notification Email
+    console.log(`[FORCE-RESET] Sending reset email to ${user.email}...`);
+    sendAdminResetPasswordEmail(user.email, user.name, newPassword);
+    console.log(`[FORCE-RESET] Email dispatch triggered for ${user.email}`);
+
+    res.json({ 
+      success: true, 
+      message: `Password reset successfully for ${user.name}. Credentials sent to ${user.email}.`
+    });
+  } catch (e) {
+    console.error(`[FORCE-RESET] CRITICAL ERROR: ${e.message}`, e.stack);
+    res.status(500).json({ error: e.message });
   }
-
-  // Generate Random Alphanumeric Password (10 chars)
-  const newPassword = Math.random().toString(36).substring(2, 7) + Math.random().toString(36).substring(2, 7);
-  
-  // Assign Plaintext to match local frontend authentication model
-  players[userIndex].password = newPassword;
-  
-  // Security Guard: Invalidate all existing sessions
-  players[userIndex].devices = [];
-
-  appState.markModified('data.players');
-  await appState.save();
-
-  // Log Event
-  await logServerEvent('SUPPORT_FORCE_PASSWORD_RESET', { 
-    adminId: req.user.id || 'admin', 
-    targetEmail: user.email 
-  });
-
-  // Send Notification Email
-  sendAdminResetPasswordEmail(user.email, user.name, newPassword);
-
-  res.json({ 
-    success: true, 
-    message: `Password reset successfully for ${user.name}. Credentials sent to ${user.email}.`
-  });
 });
