@@ -81,7 +81,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.142"; 
+const APP_VERSION = "2.6.143"; 
 
 
 
@@ -171,7 +171,7 @@ app.use(cors({
     err.status = 403; // Ensure 403 status is explicitly set to avoid 500 loop
     return callback(err);
   },
-  allowedHeaders: ['Content-Type', 'x-ace-api-key', 'x-socket-id', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'x-ace-api-key', 'x-socket-id', 'Authorization', 'x-user-id'],
   credentials: true
 }));
 
@@ -419,9 +419,14 @@ if (!ACE_API_KEY && process.env.NODE_ENV === 'production') {
 
 const apiKeyGuard = (req, res, next) => {
   const providedKey = req.headers['x-ace-api-key'];
+  const userId = req.headers['x-user-id'];
+  
+  // 🔍 LOGGED: Audit all API key requests
+  console.log(`[AUTH] Guard Check: ${req.method} ${req.path} | Key: ${providedKey ? 'PROVIDED' : 'MISSING'} | UserID: ${userId || 'NONE'}`);
+
   if (providedKey !== ACE_API_KEY) {
     logAudit(req, 'UNAUTHORIZED_ACCESS', [], { ip: req.ip });
-    console.warn(`🛑 Unauthorized access attempt from ${req.ip}`);
+    console.warn(`🛑 Unauthorized access attempt from ${req.ip} - Invalid Key`);
     return res.status(401).json({ error: 'Unauthorized: Invalid or missing API Key' });
   }
   next();
@@ -2569,11 +2574,8 @@ server.on('error', (e) => {
 // 📊 SUPPORT MANAGEMENT & ANALYTICS (v2.6.132)
 // ---------------------------------------------------------
 
-/**
- * GET /api/support/analytics
- * Fetches the weighted leaderboard and team workload snapshot.
- */
-app.get('/api/support/analytics', apiKeyGuard, async (req, res) => {
+router.get('/support/analytics', apiKeyGuard, async (req, res) => {
+  console.log(`[API] GET /support/analytics requested by ${req.headers['x-user-id']}`);
   if (req.headers['x-user-id'] !== 'admin') {
     return res.status(403).json({ error: 'System Administrator privileges required' });
   }
@@ -2582,6 +2584,7 @@ app.get('/api/support/analytics', apiKeyGuard, async (req, res) => {
     if (!state || !state.data) return res.status(404).json({ error: "State not found" });
 
     const agents = (state.data.players || []).filter(p => p.role === 'support');
+    console.log(`[API] Generating leaderboard for ${agents.length} agents...`);
     const leaderboard = SupportMetricsService.generateLeaderboard(agents);
     
     // Calculate global stats for weighting reference
@@ -2598,12 +2601,9 @@ app.get('/api/support/analytics', apiKeyGuard, async (req, res) => {
   }
 });
 
-/**
- * POST /api/support/manage-user
- * Toggles status (active/overwhelmed/terminated) and promotes support agents.
- */
-app.post('/api/support/manage-user', apiKeyGuard, async (req, res) => {
+router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
   const { targetUserId, status, level } = req.body;
+  console.log(`[API] POST /support/manage-user: target=${targetUserId}, status=${status}, level=${level}`);
   if (req.headers['x-user-id'] !== 'admin') return res.status(403).json({ error: 'System Administrator privileges required' });
 
   try {
@@ -2651,13 +2651,10 @@ app.post('/api/support/manage-user', apiKeyGuard, async (req, res) => {
   }
 });
 
-/**
- * POST /api/support/claim-ticket
- * Manual ticket picking from the pool for performance incentives.
- */
-app.post('/api/support/claim-ticket', apiKeyGuard, async (req, res) => {
+router.post('/support/claim-ticket', apiKeyGuard, async (req, res) => {
   const { ticketId } = req.body;
   const agentId = req.headers['x-user-id'];
+  console.log(`[API] POST /support/claim-ticket: ticketID=${ticketId}, agentID=${agentId}`);
   if (!agentId) return res.status(400).json({ error: "Agent ID required in headers" });
 
   try {
@@ -2695,11 +2692,8 @@ app.post('/api/support/claim-ticket', apiKeyGuard, async (req, res) => {
   }
 });
 
-/**
- * POST /api/support/force-reset
- * Admin-only: Force-resets an employee's password and sends a secure email. (Stores plaintext to align with global sync architecture)
- */
-app.post('/api/support/force-reset', apiKeyGuard, async (req, res) => {
+router.post('/support/force-reset', apiKeyGuard, async (req, res) => {
+  console.log(`[API] POST /support/force-reset requested for ${req.body.targetUserId}`);
   if (req.headers['x-user-id'] !== 'admin') {
     return res.status(403).json({ error: 'System Administrator privileges required' });
   }
