@@ -240,43 +240,44 @@ const LoginScreen = ({ navigation }) => {
 
   const handleIdentify = async () => {
     const normalize = (s) => String(s || '').trim().toLowerCase();
-    const cleanPhone = (s) => String(s || '').trim();
-
     const nUser = normalize(forgotUser);
-    const nPhone = cleanPhone(forgotPhone);
 
-    let userToReset = players.find(p => {
-      const idMatch = (normalize(p.id) === nUser || normalize(p.email) === nUser);
-      const phoneMatch = (cleanPhone(p.phone) === nPhone);
-      
-      // Standard strict match
-      return idMatch && phoneMatch;
-    });
-
-    // ROBUSTNESS Fix: If strictly not found locally (maybe due to thinned cache without phones),
-    // force a full cloud refresh to check the un-thinned master backend records.
-    if (!userToReset && onRefreshData) {
-      setIsLoading(true);
-      const cloudResult = await onRefreshData();
-      setIsLoading(false);
-      
-      if (cloudResult && cloudResult.players) {
-        userToReset = cloudResult.players.find(p => {
-          const idMatch = (normalize(p.id) === nUser || normalize(p.email) === nUser);
-          const phoneMatch = (cleanPhone(p.phone) === nPhone);
-          
-          return idMatch && phoneMatch;
-        });
-      }
+    // 🛡️ ADMIN GUARD (v2.6.131): Strictly block resets for the system administrator
+    if (nUser === 'admin') {
+      Alert.alert(
+        "Security Restriction", 
+        "Password reset is not permitted for the system administrator account via this portal. Contact technical support for master account recovery.",
+        [{ text: "OK" }]
+      );
+      return;
     }
 
-    if (userToReset) {
-      setStoredUserToReset(userToReset);
-      setForgotStep(2);
-      // MOCK OTP SEND
-      console.log(`🔑 OTP 1234 sent to ${forgotPhone}`);
-    } else {
-      Alert.alert("Not Found", "We couldn't find an account with that username and phone number.");
+    if (!nUser) {
+      Alert.alert("Error", "Please enter your username or email address.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${config.API_BASE_URL}/api/support/password-reset/request`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-ace-api-key': config.ACE_API_KEY
+        },
+        body: JSON.stringify({ identifier: nUser })
+      });
+      
+      const data = await res.json();
+      if (res.ok) {
+        setForgotStep(2); // Success step: Show check email instruction
+      } else {
+        Alert.alert("Error", data.message || data.error || "Failed to process request.");
+      }
+    } catch (e) {
+      Alert.alert("Network Error", "Please check your connection and try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -371,6 +372,12 @@ const LoginScreen = ({ navigation }) => {
               ) : (
                 <Text style={styles.webLoginButtonText}>ACCESS SECURE DASHBOARD</Text>
               )}
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={handleStartForgot} style={{ marginTop: 16 }}>
+              <Text style={{ color: '#6366F1', textAlign: 'center', fontSize: 13, fontWeight: '600' }}>
+                Forgot Password?
+              </Text>
             </TouchableOpacity>
 
             <Text style={{ textAlign: 'center', color: '#64748B', fontSize: 11, marginTop: 24, letterSpacing: 0.5 }}>
@@ -496,40 +503,33 @@ const LoginScreen = ({ navigation }) => {
 
             {forgotStep === 1 && (
               <View style={styles.stepContainer}>
-                <Text style={styles.stepDesc}>Enter your username and the mobile number linked to your account.</Text>
+                <Text style={styles.stepDesc}>Enter the username or email address registered with your account.</Text>
                 <TextInput 
                   style={styles.modalInput} 
-                  placeholder="Username" 
+                  placeholder="Username or Email" 
                   value={forgotUser} 
                   onChangeText={setForgotUser}
                   autoCapitalize="none"
                 />
-                <TextInput 
-                  style={styles.modalInput} 
-                  placeholder="Mobile Number" 
-                  value={forgotPhone} 
-                  onChangeText={setForgotPhone} 
-                  keyboardType="phone-pad"
-                />
-                <TouchableOpacity style={styles.modalBtn} onPress={handleIdentify}>
-                  <Text style={styles.modalBtnText}>Verify Account</Text>
+                <TouchableOpacity style={styles.modalBtn} onPress={handleIdentify} disabled={isLoading}>
+                  {isLoading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalBtnText}>Send Reset Link</Text>}
                 </TouchableOpacity>
               </View>
             )}
 
             {forgotStep === 2 && (
               <View style={styles.stepContainer}>
-                <Text style={styles.stepDesc}>We've sent a 4-digit code to {forgotPhone}. Enter it below.</Text>
-                <TextInput 
-                  style={styles.modalInput} 
-                  placeholder="4-digit OTP" 
-                  value={forgotOTP} 
-                  onChangeText={setForgotOTP} 
-                  keyboardType="number-pad"
-                  maxLength={4}
-                />
-                <TouchableOpacity style={styles.modalBtn} onPress={handleVerifyOTP}>
-                  <Text style={styles.modalBtnText}>Confirm OTP</Text>
+                <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                  <Ionicons name="mail-unread-outline" size={48} color="#6366F1" />
+                </View>
+                <Text style={[styles.stepDesc, { textAlign: 'center' }]}>
+                  If an account is associated with that identifier, a password recovery link has been sent to the registered email address.
+                </Text>
+                <Text style={[styles.stepDesc, { textAlign: 'center', fontSize: 13, color: '#64748B' }]}>
+                  Please check your inbox (and spam folder). The link will expire in 60 minutes.
+                </Text>
+                <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#F1F5F9' }]} onPress={() => setShowForgot(false)}>
+                  <Text style={[styles.modalBtnText, { color: '#0F172A' }]}>Finish</Text>
                 </TouchableOpacity>
               </View>
             )}

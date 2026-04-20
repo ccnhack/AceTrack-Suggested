@@ -294,4 +294,80 @@ AceTrack Systems`;
   }
 }
 
-export default { sendOnboardingEmail, buildOnboardingHtml };
+export async function sendPasswordResetEmail(toEmail, resetLink, expiresAt, firstName = '') {
+  const expiryDate = new Date(expiresAt);
+  const expiryFormatted = expiryDate.toLocaleString('en-IN', { 
+    dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' 
+  });
+
+  const displayName = firstName || toEmail.split('@')[0].replace(/\d+$/g, '').replace(/\b\w/g, c => c.toUpperCase());
+  
+  const htmlBody = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reset Your AceTrack Password</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F1F5F9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#F1F5F9;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;">
+          <tr>
+            <td style="background:#0F172A;border-radius:16px 16px 0 0;padding:32px 40px;text-align:center;">
+              <span style="color:#F8FAFC;font-size:24px;font-weight:800;letter-spacing:-0.5px;">AceTrack Security</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#FFFFFF;padding:40px;border-radius:0 0 16px 16px;">
+              <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#0F172A;">Password Reset Request</h1>
+              <p style="margin:0 0 24px;font-size:16px;color:#475569;line-height:1.6;">
+                Hi <strong>${displayName}</strong>,<br><br>
+                We received a request to reset the password for your AceTrack account. Click the button below to set a new password.
+              </p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td align="center" style="padding:10px 0 32px;">
+                    <a href="${resetLink}" target="_blank" style="display:inline-block;background:#4F46E5;color:#FFFFFF;font-size:16px;font-weight:700;text-decoration:none;padding:16px 40px;border-radius:12px;">
+                      Reset Password
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:12px;padding:16px;margin-bottom:24px;">
+                <p style="margin:0;font-size:13px;color:#9A3412;line-height:1.5;">
+                  <strong>Security Note:</strong> This link will expire in 60 minutes (at <strong>${expiryFormatted} IST</strong>). If you did not request this, please ignore this email.
+                </p>
+              </div>
+              <p style="margin:0;font-size:12px;color:#94A3B8;line-height:1.6;text-align:center;">
+                If the button doesn't work, copy this URL:<br>
+                <a href="${resetLink}" style="color:#4F46E5;">${resetLink}</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  const mailOptions = {
+    from: `"AceTrack Security" <${process.env.GMAIL_USER}>`,
+    to: toEmail,
+    subject: `\u{1F512} AceTrack Password Reset Request`,
+    html: htmlBody,
+    text: `Reset your AceTrack password: ${resetLink}\n\nThis link expires on ${expiryFormatted} IST.`
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    return { success: true, messageId: info.messageId };
+  } catch (err) {
+    console.error(`Failed to send reset email to ${toEmail}:`, err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+export default { sendOnboardingEmail, sendPasswordResetEmail, buildOnboardingHtml };

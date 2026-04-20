@@ -18,7 +18,7 @@ import admin from 'firebase-admin';
 import compression from 'compression';
 import { sendPushNotification } from './notifications.js';
 import { processTournamentWaitlist } from './promotion_logic.mjs'; 
-import { sendOnboardingEmail, buildOnboardingHtml } from './emailService.mjs';
+import { sendOnboardingEmail, buildOnboardingHtml, sendPasswordResetEmail } from './emailService.mjs';
 
 dotenv.config();
 
@@ -71,7 +71,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.129"; 
+const APP_VERSION = "2.6.131"; 
 
 
 
@@ -383,6 +383,17 @@ const SupportInviteSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 const SupportInvite = mongoose.model('SupportInvite', SupportInviteSchema);
+
+// ═══════════════════════════════════════════════════════════════
+// 🔒 PASSWORD RESET TOKEN SCHEMA (v2.6.131)
+// ═══════════════════════════════════════════════════════════════
+const SupportPasswordResetSchema = new mongoose.Schema({
+  email: { type: String, required: true, index: true },
+  token: { type: String, required: true, unique: true },
+  expiresAt: { type: Date, required: true },
+  createdAt: { type: Date, default: Date.now }
+});
+const SupportPasswordReset = mongoose.model('SupportPasswordReset', SupportPasswordResetSchema);
 
 // ═══════════════════════════════════════════════════════════════
 // Security & Middleware
@@ -1529,7 +1540,80 @@ router.post('/support/invite/resend', apiKeyGuard, asyncHandler(async (req, res)
     invite.emailResends = [];
   }
 
-  // Check 1-minute cooldown from last resend
+  // Check 1-minute cooldown from last resend// ═══════════════════════════════════════════════════════════════
+// 🔒 PASSWORD RESET FLOW
+// ═══════════════════════════════════════════════════════════════
+
+// 1. Request Password Reset (Email Link)
+router.post('/support/password-reset/request', apiKeyGuard, asyncHandler(async (req, res) => {
+  const { identifier } = req.body; // Can be email or username
+  if (!identifier) return res.status(400).json({ error: 'Email or Username required' });
+
+  const search = identifier.toLowerCase().trim();
+  
+  // 🛡️ ADMIN GUARD: Block any reset attempts for the primary admin account
+  if (search === 'admin') {
+    return res.status(403).json({ 
+      error: 'Security Violation', 
+      message: 'Password reset is not permitted for the system administrator account via this portal. Contact technical support for master account recovery.' 
+    });
+  }
+
+  // Find user in AppState
+  const appState = await AppState.findOne();
+  const user = appState?.data?.players?.find(p => 
+    p.email?.toLowerCase() === search || 
+    String(p.id).toLowerCase() === search ||
+    (p.username && String(p.username).toLowerCase() === search)
+  );
+
+  if (!user) {
+    // 🛡️ SECURITY: Use generic message to prevent account enum
+    return res.json({ success: true, message: 'If an account exists, a recovery link has been sent.' });
+  }
+
+  const token = bcrypt.hashSync(Date.now().toString() + user.email, 10).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+  await SupportPasswordReset.create({ email: user.email, token, expiresAt });
+  
+  const resetLink = `https://acetrack-suggested.onrender.com/reset-password/${token}`;
+  await sendPasswordResetEmail(user.email, resetLink, expiresAt.toISOString(), user.firstName);
+
+  res.json({ success: true, message: 'Recovery link sent to your registered email.' });
+}));
+
+// 2. Confirm Password Reset
+router.post('/support/password-reset/confirm', apiKeyGuard, asyncHandler(async (req, res) => {
+  const { token, newPassword } = req.body;
+  if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password required' });
+
+  const resetReq = await SupportPasswordReset.findOne({ token, expiresAt: { $gt: new Date() } });
+  if (!resetReq) return res.status(400).json({ error: 'Invalid or expired reset token' });
+
+  const appState = await AppState.findOne();
+  if (!appState) return res.status(500).json({ error: 'System state unavailable' });
+
+  const players = appState.data.players || [];
+  const userIndex = players.findIndex(p => p.email?.toLowerCase() === resetReq.email.toLowerCase());
+
+  if (userIndex === -1) return res.status(404).json({ error: 'User account not found' });
+
+  // Update password (using bcrypt)
+  const salt = bcrypt.genSaltSync(10);
+  players[userIndex].password = bcrypt.hashSync(newPassword, salt);
+  
+  // Clean up device sessions for security
+  players[userIndex].devices = [];
+
+  appState.markModified('data.players');
+  await appState.save();
+  await SupportPasswordReset.deleteOne({ token });
+
+  await logServerEvent('SUPPORT_PASSWORD_RESET_SUCCESS', { email: resetReq.email });
+
+  res.json({ success: true, message: 'Password updated successfully. You can now login.' });
+}));
   if (resends.length > 0) {
     const lastResend = new Date(resends[resends.length - 1].timestamp).getTime();
     const cooldownEnd = lastResend + (60 * 1000); // 1 minute
