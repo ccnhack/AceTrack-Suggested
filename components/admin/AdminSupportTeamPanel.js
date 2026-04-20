@@ -51,6 +51,8 @@ const AdminSupportTeamPanel = () => {
       });
       if (res.ok) {
         fetchTeamAnalytics();
+        fetchServerRoster();
+        setSelectedAgentId(null);
         Alert.alert("Success", "Employee profile updated successfully.");
       } else {
         const data = await res.json();
@@ -92,15 +94,40 @@ const AdminSupportTeamPanel = () => {
           } finally {
             setIsManaging(null);
           }
-        }}
+         }}
       ]
     );
   };
 
-  // Split support agents into active & terminated
+  // 🛡️ SERVER-TRUTH ROSTER (v2.6.145): Fetch support agents directly from server
+  // Local cache may have stale supportStatus values from before termination
+  const [serverAgents, setServerAgents] = useState(null);
+
+  const fetchServerRoster = useCallback(async () => {
+    try {
+      const res = await fetch(`${config.API_BASE_URL}/api/data`, {
+        headers: { 'x-ace-api-key': config.ACE_API_KEY }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const supportList = (data.players || []).filter(p => p.role === 'support');
+        setServerAgents(supportList);
+        console.log(`[SUPPORT_PANEL] Fetched ${supportList.length} support agents from server`);
+      }
+    } catch (e) {
+      console.warn('[SUPPORT_PANEL] Server roster fetch failed, using local cache');
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchServerRoster();
+  }, [fetchServerRoster]);
+
+  // Use server truth if available, otherwise fall back to local cache
   const allSupportAgents = useMemo(() => {
+    if (serverAgents) return serverAgents;
     return (players || []).filter(p => p.role === 'support');
-  }, [players]);
+  }, [serverAgents, players]);
 
   const activeAgents = useMemo(() => {
     return allSupportAgents.filter(a => a.supportStatus !== 'terminated');
@@ -212,7 +239,7 @@ const AdminSupportTeamPanel = () => {
           ))}
           {filteredAgents.length === 0 && (
             <View style={styles.emptyContainer}>
-              <Ionicons name={activeTab === 'employees' ? 'people-outline' : 'filing-outline'} size={24} color="#CBD5E1" />
+              <Ionicons name={activeTab === 'employees' ? 'people-outline' : 'folder-open-outline'} size={24} color="#CBD5E1" />
               <Text style={styles.emptyAgents}>
                 {activeTab === 'employees' ? 'No active support employees found.' : 'No ex-employees found.'}
               </Text>
