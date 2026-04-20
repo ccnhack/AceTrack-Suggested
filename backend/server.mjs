@@ -70,8 +70,8 @@ const initFirebase = async () => {
 };
 initFirebase();
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.125)
-const APP_VERSION = "2.6.126"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.127)
+const APP_VERSION = "2.6.127"; 
 
 
 
@@ -1527,20 +1527,42 @@ router.post('/support/invite/resend', apiKeyGuard, asyncHandler(async (req, res)
 }));
 
 // 🌐 IP Geolocation Helper (free ip-api.com — 45 req/min, no key needed)
+function isBotTraffic(userAgent) {
+  if (!userAgent) return false;
+  const bots = ['WhatsApp', 'TelegramBot', 'Twitterbot', 'facebookexternalhit', 'Slackbot', 'LinkedInBot', 'Discordbot', 'Crawler', 'Bot'];
+  return bots.some(bot => userAgent.toLowerCase().includes(bot.toLowerCase()));
+}
+
 async function resolveIpGeo(ipRaw) {
   try {
-    // Extract first public IP from x-forwarded-for chain
-    const ip = (ipRaw || '').split(',')[0].trim().replace('::ffff:', '');
-    if (!ip || ip === '127.0.0.1' || ip === '::1') return { ip, city: 'Localhost', region: '', country: '', isp: '' };
-    const resp = await fetch(`http://ip-api.com/json/${ip}?fields=status,city,regionName,country,isp,lat,lon,timezone`, { signal: AbortSignal.timeout(3000) });
+    // x-forwarded-for can be a comma-separated list: "client, proxy1, proxy2"
+    // The first one is typically the actual client.
+    const ipChain = (ipRaw || '').split(',').map(s => s.trim().replace('::ffff:', '')).filter(Boolean);
+    const primaryIp = ipChain[0] || '127.0.0.1';
+    
+    if (primaryIp === '127.0.0.1' || primaryIp === '::1') {
+      return { ip: primaryIp, city: 'Localhost', region: '', country: '', isp: '', lat: 0, lon: 0, timezone: '' };
+    }
+
+    const resp = await fetch(`http://ip-api.com/json/${primaryIp}?fields=status,city,regionName,country,isp,lat,lon,timezone`, { signal: AbortSignal.timeout(3000) });
     if (resp.ok) {
       const data = await resp.json();
       if (data.status === 'success') {
-        return { ip, city: data.city, region: data.regionName, country: data.country, isp: data.isp, lat: data.lat, lon: data.lon, timezone: data.timezone };
+        // We return the primary resolved geo data, but keep the ipRaw as the full chain for the logger
+        return { 
+          ip: ipRaw, // Store the full chain in the record
+          city: data.city, 
+          region: data.regionName, 
+          country: data.country, 
+          isp: data.isp, 
+          lat: data.lat, 
+          lon: data.lon, 
+          timezone: data.timezone 
+        };
       }
     }
   } catch (e) { /* silent fallback */ }
-  return { ip: (ipRaw || '').split(',')[0].trim(), city: '', region: '', country: '', isp: '' };
+  return { ip: (ipRaw || '127.0.0.1'), city: '', region: '', country: '', isp: '' };
 }
 
 // 3. Web Hub: Click Tracking (No Auth Required) — Enhanced with IP Geolocation
@@ -1564,19 +1586,34 @@ router.post('/support/invite/click', asyncHandler(async (req, res) => {
 
 // 3b. Form Step Tracking (tracks form_view, step progression, submission)
 router.post('/support/invite/track', asyncHandler(async (req, res) => {
-  const { token, action } = req.body;
-  const validActions = ['form_view', 'step_1', 'step_2', 'step_3', 'form_submit'];
-  if (!token || !action || !validActions.includes(action)) {
-    return res.status(400).json({ error: 'Invalid tracking data' });
-  }
+  const { token, action: rawAction } = req.body;
+  if (!token || !rawAction) return res.status(400).json({ error: 'Invalid tracking data' });
 
   const ipRaw = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   const userAgent = req.headers['user-agent'];
+  
   const invite = await SupportInvite.findOne({ token });
   if (!invite) return res.status(404).json({ error: 'Invite not found' });
 
+  let action = rawAction;
+  if (isBotTraffic(userAgent)) {
+    action = `BOT:${action}`;
+  }
+
   const geo = await resolveIpGeo(ipRaw);
-  invite.clicks.push({ action, ip: geo.ip, userAgent, city: geo.city, region: geo.region, country: geo.country, isp: geo.isp, lat: geo.lat, lon: geo.lon, timezone: geo.timezone, timestamp: new Date() });
+  invite.clicks.push({ 
+    action, 
+    ip: geo.ip, 
+    userAgent, 
+    city: geo.city, 
+    region: geo.region, 
+    country: geo.country, 
+    isp: geo.isp, 
+    lat: geo.lat, 
+    lon: geo.lon, 
+    timezone: geo.timezone, 
+    timestamp: new Date() 
+  });
   await invite.save();
 
   res.json({ success: true });
@@ -2082,7 +2119,7 @@ app.get('/setup/:token', (req, res) => {
     }
 
     // Track initial form view
-    trackStep('form_view');
+    trackStep('Form Opened (Step 1)');
 
     function showStep(n) {
       [1,2,3].forEach(i => {
@@ -2093,7 +2130,13 @@ app.get('/setup/:token', (req, res) => {
       document.getElementById('prog-3').classList.toggle('done', n >= 3);
       const labels = { 1: 'Step 1 of 3 — Personal Details', 2: 'Step 2 of 3 — ID Verification', 3: 'Step 3 of 3 — Security' };
       document.getElementById('prog-label').textContent = labels[n];
-      trackStep('step_' + n);
+      
+      const trackLabels = {
+        1: 'Viewing Personal Info',
+        2: 'ID Verification Reached',
+        3: 'Security Setup Reached'
+      };
+      trackStep(trackLabels[n]);
     }
 
     function showError(boxId, msg) {

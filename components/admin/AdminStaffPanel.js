@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator, Clipboard, Modal } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator, Clipboard, Modal, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, shadows } from '../../theme/designSystem';
 import config from '../../config';
@@ -344,14 +344,31 @@ const AdminStaffPanel = () => {
             </View>
 
             <View style={styles.modalBody}>
-              <View style={styles.infoSection}>
-                <Text style={styles.infoLabel}>IP - Location</Text>
-                <View style={styles.infoRow}>
-                  <Ionicons name="globe-outline" size={16} color="#6366F1" />
-                  <Text style={styles.infoValue}>
-                    {selectedEvent?.ip} - {[selectedEvent?.city, selectedEvent?.region, selectedEvent?.country].filter(Boolean).join(', ')}
-                  </Text>
+              {/* Bot / Preview Badge */}
+              {selectedEvent?.action?.startsWith('BOT:') && (
+                <View style={styles.botBadge}>
+                  <Ionicons name="robot-outline" size={16} color="#B45309" />
+                  <Text style={styles.botBadgeText}>🤖 BOT / PREVIEW DETECTED</Text>
+                  {selectedEvent.userAgent?.includes('WhatsApp') && <Text style={styles.botPlatform}>platform: WhatsApp</Text>}
+                  {selectedEvent.userAgent?.includes('Telegram') && <Text style={styles.botPlatform}>platform: Telegram</Text>}
                 </View>
+              )}
+
+              <View style={styles.infoSection}>
+                <Text style={styles.infoLabel}>IP - Location Chain</Text>
+                {selectedEvent?.ip?.split(',').map((ip, i) => {
+                  const cleanIp = ip.trim();
+                  const isPrimary = i === 0;
+                  const location = isPrimary ? [selectedEvent.city, selectedEvent.region, selectedEvent.country].filter(Boolean).join(', ') : '';
+                  return (
+                    <View key={i} style={[styles.infoRow, i > 0 && { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E2E8F0' }]}>
+                      <Ionicons name={isPrimary ? "globe-outline" : "share-social-outline"} size={16} color={isPrimary ? "#6366F1" : "#94A3B8"} />
+                      <Text style={styles.infoValue}>
+                        {cleanIp} {location ? `- ${location}` : (isPrimary ? '' : '- [Network Proxy/Gateway]')}
+                      </Text>
+                    </View>
+                  );
+                })}
               </View>
 
               <View style={styles.infoSection}>
@@ -369,9 +386,7 @@ const AdminStaffPanel = () => {
                 <View style={styles.infoRow}>
                   <Ionicons name="flash-outline" size={16} color="#10B981" />
                   <Text style={styles.infoValue}>
-                    {selectedEvent?.label === 'Link Clicked' ? 'Opened Setup URL' : 
-                     selectedEvent?.label?.includes('Step') ? `Completed ${selectedEvent.label.split(':')[0]}` :
-                     selectedEvent?.label || 'Performed interaction'}
+                    {selectedEvent?.action?.replace('BOT:', '') || 'Performed interaction'}
                   </Text>
                 </View>
               </View>
@@ -462,7 +477,11 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   infoValue: { fontSize: 13, fontWeight: '600', color: '#1E293B', flex: 1 },
   modalCloseBtn: { backgroundColor: '#4F46E5', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 24 },
-  modalCloseBtnText: { color: '#FFF', fontWeight: '800', fontSize: 14 }
+  modalCloseBtnText: { color: '#FFF', fontWeight: '800', fontSize: 14 },
+  // Bot Badge
+  botBadge: { backgroundColor: '#FFFBEB', borderColor: '#FEF3C7', borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 16, alignItems: 'center' },
+  botBadgeText: { color: '#B45309', fontWeight: '800', fontSize: 12, letterSpacing: 1 },
+  botPlatform: { color: '#D97706', fontSize: 10, fontWeight: '600', marginTop: 4, textTransform: 'uppercase' }
 });
 
 export default AdminStaffPanel;
