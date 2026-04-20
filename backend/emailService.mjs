@@ -232,12 +232,40 @@ export async function sendOnboardingEmail(toEmail, setupLink, expiresAt) {
   const employeeName = toEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
   const htmlBody = buildOnboardingHtml(employeeName, toEmail, setupLink, expiryFormatted);
+  
+  // Plain text version for better deliverability
+  const textBody = `
+Welcome to AceTrack!
+
+Hi ${employeeName},
+
+You've been invited to join AceTrack as a Support Agent. Complete your account setup to get started.
+
+Complete Your Setup: ${setupLink}
+
+Your role: Support Agent
+Department: Customer Success
+
+Security Notice:
+This invitation link expires on ${expiryFormatted} IST. Do not forward this email.
+
+Best regards,
+AceTrack Systems
+  `.trim();
 
   const mailOptions = {
     from: `"AceTrack Systems" <${process.env.GMAIL_USER}>`,
     to: toEmail,
     subject: '🛡️ AceTrack — You\'re Invited! Complete Your Support Agent Setup',
-    html: htmlBody
+    html: htmlBody,
+    text: textBody,
+    // Spam mitigation headers
+    headers: {
+      'List-Unsubscribe': `<mailto:${process.env.GMAIL_USER}>, <${setupLink}>`,
+      'Importance': 'high',
+      'X-Priority': '1 (Highest)',
+      'Precedence': 'bulk'
+    }
   };
 
   try {

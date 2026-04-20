@@ -70,8 +70,8 @@ const initFirebase = async () => {
 };
 initFirebase();
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.123)
-const APP_VERSION = "2.6.124"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.125)
+const APP_VERSION = "2.6.125"; 
 
 
 
@@ -1498,6 +1498,7 @@ router.post('/support/invite/resend', apiKeyGuard, asyncHandler(async (req, res)
   }
 
   if (emailStatus.success) {
+    if (!invite.emailResends) invite.emailResends = [];
     invite.emailResends.push({ timestamp: new Date() });
     await invite.save();
     const remaining = 3 - invite.emailResends.length;
