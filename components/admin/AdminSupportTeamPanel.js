@@ -385,6 +385,7 @@ const AdminSupportTeamPanel = () => {
           <View style={[styles.summaryCard, { borderLeftColor: '#EF4444' }]}>  
             <Text style={styles.summaryValue}>{analytics.teamSummary.overdueTickets}</Text>
             <Text style={styles.summaryLabel}>Overdue</Text>
+          </View>
         </View>
       )}
 
