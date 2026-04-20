@@ -243,7 +243,13 @@ export async function sendOnboardingEmail(toEmail, setupLink, expiresAt, firstNa
   } else if (firstName) {
     displayName = firstName;
   } else {
-    displayName = toEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    // Fallback: derive from email, strip trailing digits, split on dots/underscores/camelCase
+    displayName = toEmail.split('@')[0]
+      .replace(/\d+$/g, '')                    // strip trailing digits (e.g. "shekhar0517" → "shekhar")
+      .replace(/([a-z])([A-Z])/g, '$1 $2')     // split camelCase
+      .replace(/[._-]/g, ' ')                  // split on delimiters
+      .replace(/\b\w/g, c => c.toUpperCase())  // capitalize each word
+      .trim() || 'Team Member';
   }
 
   const htmlBody = buildOnboardingHtml(displayName, toEmail, setupLink, expiryFormatted);
