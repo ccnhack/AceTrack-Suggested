@@ -22,6 +22,7 @@ import AdminMatchesPanel from '../components/admin/AdminMatchesPanel';
 import AdminEvaluationsPanel from '../components/admin/AdminEvaluationsPanel';
 import AdminPaymentsPanel from '../components/admin/AdminPaymentsPanel';
 import AdminStaffPanel from '../components/admin/AdminStaffPanel';
+import AdminSupportTeamPanel from '../components/admin/AdminSupportTeamPanel';
 
 // Context Hooks
 import { usePlayers } from '../context/PlayerContext';
@@ -176,7 +177,8 @@ const AdminHubScreen = ({ navigation, route }) => {
               { id: 'grievances', label: 'Grievances', icon: 'chatbubbles-outline', count: badges.grievances },
               { id: 'recordings', label: 'Videos', icon: 'videocam-outline', count: badges.recordings },
               { id: 'assignments', label: 'Assignments', icon: 'clipboard-outline', count: badges.assignments },
-              { id: 'staff', label: 'Staff', icon: 'people-outline' },
+              { id: 'recruitment', label: 'Recruitment', icon: 'people-outline' },
+              { id: 'support_team', label: 'Support Team', icon: 'shield-checkmark-outline' },
               { id: 'audit', label: 'Audit Logs', icon: 'list-outline' },
               { id: 'security', label: 'Security', icon: 'shield-half-outline' },
               { id: 'diagnostics', label: 'Diagnostics', icon: 'pulse-outline' }
@@ -235,8 +237,10 @@ const AdminHubScreen = ({ navigation, route }) => {
         return <AdminPaymentsPanel search={search} />;
       case 'diagnostics':
         return <AdminDiagnosticsPanel autoSelectUser={autoSelectUser} />;
-      case 'staff':
+      case 'recruitment':
         return <AdminStaffPanel />;
+      case 'support_team':
+        return <AdminSupportTeamPanel />;
       case 'grievances':
         return (
           <AdminGrievancesPanel 
@@ -338,7 +342,8 @@ const AdminHubScreen = ({ navigation, route }) => {
             { id: 'audit', label: 'Audit', icon: 'list' },
             { id: 'security', label: 'Security', icon: 'shield-half' },
             { id: 'diagnostics', label: 'Diag', icon: 'pulse' },
-            { id: 'staff', label: 'Staff', icon: 'people-circle-outline' },
+            { id: 'recruitment', label: 'Staff', icon: 'people-circle-outline' },
+            { id: 'support_team', label: 'Support', icon: 'shield-checkmark' },
           ].map(tab => {
             const isActive = subTab === tab.id;
             const showBadge = tab.count > 0 && (tab.id === 'grievances' || !visitedAdminSubTabs.has(tab.id));
@@ -363,7 +368,7 @@ const AdminHubScreen = ({ navigation, route }) => {
         </ScrollView>
       </View>
 
-      {subTab !== 'diagnostics' && subTab !== 'staff' && (
+      {subTab !== 'diagnostics' && subTab !== 'recruitment' && subTab !== 'support_team' && (
         <View style={styles.searchBar}>
           <Ionicons name="search" size={16} color="#94A3B8" />
           <TextInput 

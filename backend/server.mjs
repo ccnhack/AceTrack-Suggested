@@ -72,7 +72,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.132"; 
+const APP_VERSION = "2.6.133"; 
 
 
 

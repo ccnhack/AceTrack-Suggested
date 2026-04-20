@@ -29,7 +29,7 @@ const ACE_API_KEY = (Constants.expoConfig && Constants.expoConfig.extra && Const
   : (process.env.EXPO_PUBLIC_ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=');
 
 export default {
-  APP_VERSION: '2.6.132',
+  APP_VERSION: '2.6.133',
   API_BASE_URL: (Constants.appConfig?.extra?.apiUrl || 
                  'https://acetrack-suggested.onrender.com').replace(/\/$/, ''),
   GROQ_API_KEY,
