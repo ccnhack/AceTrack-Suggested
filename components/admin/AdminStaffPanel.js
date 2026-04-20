@@ -1,35 +1,41 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator, Clipboard } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator, Clipboard, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, shadows } from '../../theme/designSystem';
 import config from '../../config';
+
+const ACTION_LABELS = {
+  link_click: { icon: '🔗', label: 'Link Clicked', color: '#3B82F6' },
+  form_view: { icon: '👁️', label: 'Form Viewed', color: '#8B5CF6' },
+  step_1: { icon: '1️⃣', label: 'Step 1: Personal Details', color: '#6366F1' },
+  step_2: { icon: '2️⃣', label: 'Step 2: ID Verification', color: '#A855F7' },
+  step_3: { icon: '3️⃣', label: 'Step 3: Security', color: '#EC4899' },
+  form_submit: { icon: '✅', label: 'Form Submitted', color: '#10B981' },
+};
 
 const AdminStaffPanel = () => {
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [invites, setInvites] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [resendingToken, setResendingToken] = useState(null);
   const [resendCooldowns, setResendCooldowns] = useState({});
+  const [expandedAnalytics, setExpandedAnalytics] = useState(null); // token of expanded card
 
-  // Poll for invites to show real-time click tracking
   useEffect(() => {
     fetchInvites();
     const interval = setInterval(fetchInvites, 10000);
     return () => clearInterval(interval);
   }, []);
 
-  // Countdown timer for cooldowns
   useEffect(() => {
     const timer = setInterval(() => {
       setResendCooldowns(prev => {
         const updated = { ...prev };
         let changed = false;
         for (const token in updated) {
-          const cd = updated[token];
-          if (cd.nextAt && new Date(cd.nextAt) <= new Date()) {
+          if (updated[token].nextAt && new Date(updated[token].nextAt) <= new Date()) {
             delete updated[token];
             changed = true;
           }
@@ -55,45 +61,26 @@ const AdminStaffPanel = () => {
   };
 
   const generateInvite = async () => {
-    if (!email.includes('@')) {
-      Alert.alert("Invalid Email", "Please enter a valid corporate email address.");
-      return;
-    }
-    if (!firstName.trim() || !lastName.trim()) {
-      Alert.alert("Name Required", "Please enter the employee's first and last name.");
-      return;
-    }
+    if (!email.includes('@')) { Alert.alert("Invalid Email", "Please enter a valid corporate email address."); return; }
+    if (!firstName.trim() || !lastName.trim()) { Alert.alert("Name Required", "Please enter the employee's first and last name."); return; }
     
     setIsGenerating(true);
     try {
       const res = await fetch(`${config.API_BASE_URL}/api/support/invite`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-ace-api-key': config.ACE_API_KEY,
-          'x-user-id': 'admin' 
-        },
+        headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' },
         body: JSON.stringify({ email, firstName: firstName.trim(), lastName: lastName.trim() })
       });
       const data = await res.json();
       if (res.ok) {
         const link = `https://acetrack-suggested.onrender.com/setup/${data.token}`;
-        const emailNote = data.emailSent 
-          ? '📧 Onboarding email sent successfully!' 
-          : '⚠️ Email not sent (configure GMAIL credentials on Render)';
+        const emailNote = data.emailSent ? '📧 Onboarding email sent!' : '⚠️ Email not sent (configure GMAIL on Render)';
         Alert.alert("Invite Generated", `${emailNote}\n\nSetup Link:\n${link}`);
-        setEmail('');
-        setFirstName('');
-        setLastName('');
+        setEmail(''); setFirstName(''); setLastName('');
         fetchInvites();
-      } else {
-        Alert.alert("Error", data.error || "Failed to generate invite");
-      }
-    } catch (e) {
-      Alert.alert("Network Error", e.message);
-    } finally {
-      setIsGenerating(false);
-    }
+      } else { Alert.alert("Error", data.error || "Failed to generate invite"); }
+    } catch (e) { Alert.alert("Network Error", e.message); }
+    finally { setIsGenerating(false); }
   };
 
   const resendEmail = async (token, email) => {
@@ -101,113 +88,79 @@ const AdminStaffPanel = () => {
     try {
       const res = await fetch(`${config.API_BASE_URL}/api/support/invite/resend`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-ace-api-key': config.ACE_API_KEY,
-          'x-user-id': 'admin' 
-        },
+        headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' },
         body: JSON.stringify({ token })
       });
       const data = await res.json();
-      
       if (res.ok) {
-        Alert.alert("Email Resent", `📧 Onboarding email resent to ${email}\n\n${data.resendsRemaining} resend(s) remaining`);
-        setResendCooldowns(prev => ({
-          ...prev,
-          [token]: { nextAt: new Date(Date.now() + 60000).toISOString(), message: '' }
-        }));
+        Alert.alert("Email Resent", `📧 Resent to ${email}\n\n${data.resendsRemaining} resend(s) remaining`);
+        setResendCooldowns(prev => ({ ...prev, [token]: { nextAt: new Date(Date.now() + 60000).toISOString() } }));
         fetchInvites();
       } else if (res.status === 429) {
-        setResendCooldowns(prev => ({
-          ...prev,
-          [token]: { nextAt: data.nextAvailableAt, message: data.error }
-        }));
+        setResendCooldowns(prev => ({ ...prev, [token]: { nextAt: data.nextAvailableAt, message: data.error } }));
         Alert.alert("Rate Limited", data.error);
-      } else {
-        Alert.alert("Error", data.error || "Failed to resend email");
-      }
-    } catch (e) {
-      Alert.alert("Network Error", e.message);
-    } finally {
-      setResendingToken(null);
-    }
+      } else { Alert.alert("Error", data.error || "Failed to resend email"); }
+    } catch (e) { Alert.alert("Network Error", e.message); }
+    finally { setResendingToken(null); }
   };
 
-  const copyToClipboard = (link) => {
-    Clipboard.setString(link);
-    Alert.alert("Link Copied", `Share this link securely with the employee:\n\n${link}`);
-  };
+  const copyToClipboard = (link) => { Clipboard.setString(link); Alert.alert("Link Copied", `Share securely:\n\n${link}`); };
 
   const getTimeRemaining = (expiresAt) => {
-    const total = Date.parse(expiresAt) - Date.parse(new Date());
+    const total = Date.parse(expiresAt) - Date.now();
     if (total <= 0) return "Expired";
-    const hours = Math.floor((total / (1000 * 60 * 60)) % 24);
-    const minutes = Math.floor((total / 1000 / 60) % 60);
-    return `${hours}h ${minutes}m left`;
+    const h = Math.floor((total / (1000 * 60 * 60)) % 24);
+    const m = Math.floor((total / 1000 / 60) % 60);
+    return `${h}h ${m}m left`;
   };
 
   const getResendCooldownText = (token, inv) => {
     const cd = resendCooldowns[token];
-    if (cd && cd.nextAt) {
-      const remaining = new Date(cd.nextAt) - new Date();
-      if (remaining > 0) {
-        if (remaining > 60000) {
-          const h = Math.floor(remaining / (1000 * 60 * 60));
-          const m = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
-          return `Email can be resent after ${h}h ${m}m`;
-        } else {
-          const s = Math.ceil(remaining / 1000);
-          return `Wait ${s}s to resend`;
-        }
+    if (cd?.nextAt) {
+      const rem = new Date(cd.nextAt) - new Date();
+      if (rem > 0) {
+        if (rem > 60000) { const h = Math.floor(rem / 3600000); const m = Math.floor((rem % 3600000) / 60000); return `Email can be resent after ${h}h ${m}m`; }
+        return `Wait ${Math.ceil(rem / 1000)}s to resend`;
       }
     }
     const resends = inv.emailResends || [];
     if (resends.length >= 3) {
-      const last = new Date(resends[resends.length - 1].timestamp).getTime();
-      const lockoutEnd = last + (4 * 60 * 60 * 1000);
-      const remaining = lockoutEnd - Date.now();
-      if (remaining > 0) {
-        const h = Math.floor(remaining / (1000 * 60 * 60));
-        const m = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
-        return `Email can be resent after ${h}h ${m}m`;
-      }
+      const lockoutEnd = new Date(resends[resends.length - 1].timestamp).getTime() + 14400000;
+      const rem = lockoutEnd - Date.now();
+      if (rem > 0) { const h = Math.floor(rem / 3600000); const m = Math.floor((rem % 3600000) / 60000); return `Email can be resent after ${h}h ${m}m`; }
     }
     return null;
   };
 
-  const isResendDisabled = (token, inv) => {
-    return !!getResendCooldownText(token, inv) || resendingToken === token;
-  };
+  const isResendDisabled = (token, inv) => !!getResendCooldownText(token, inv) || resendingToken === token;
 
   const getResendCount = (inv) => {
     const resends = inv.emailResends || [];
     if (resends.length >= 3) {
-      const last = new Date(resends[resends.length - 1].timestamp).getTime();
-      const lockoutEnd = last + (4 * 60 * 60 * 1000);
+      const lockoutEnd = new Date(resends[resends.length - 1].timestamp).getTime() + 14400000;
       if (Date.now() >= lockoutEnd) return 0;
     }
     return resends.length;
   };
 
-  const getStatusColor = (status) => {
-    switch(status) {
-      case 'Pending': return '#F59E0B';
-      case 'Clicked': return '#3B82F6';
-      case 'Used': return '#10B981';
-      case 'Expired': return '#EF4444';
-      default: return '#64748B';
-    }
-  };
+  const getStatusColor = (s) => ({ Pending: '#F59E0B', Clicked: '#3B82F6', Used: '#10B981', Expired: '#EF4444' }[s] || '#64748B');
 
-  const getDisplayName = (inv) => {
-    if (inv.firstName && inv.lastName) return `${inv.lastName}, ${inv.firstName}`;
-    return inv.email;
+  const getFormProgress = (clicks) => {
+    if (!clicks || clicks.length === 0) return null;
+    const actions = clicks.map(c => c.action).filter(Boolean);
+    if (actions.includes('form_submit')) return { label: 'Submitted', color: '#10B981', icon: '✅' };
+    if (actions.includes('step_3')) return { label: 'Step 3/3', color: '#EC4899', icon: '🔒' };
+    if (actions.includes('step_2')) return { label: 'Step 2/3', color: '#A855F7', icon: '📄' };
+    if (actions.includes('step_1')) return { label: 'Step 1/3', color: '#6366F1', icon: '✏️' };
+    if (actions.includes('form_view')) return { label: 'Form Opened', color: '#8B5CF6', icon: '👁️' };
+    if (actions.includes('link_click')) return { label: 'Link Clicked', color: '#3B82F6', icon: '🔗' };
+    return null;
   };
 
   const isFormValid = email.includes('@') && firstName.trim() && lastName.trim();
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 16 }}>
+    <ScrollView style={styles.container} contentContainerStyle={{ padding: 16, paddingBottom: 80 }}>
       <View style={styles.header}>
         <Ionicons name="shield-checkmark" size={24} color="#6366F1" />
         <View style={{ marginLeft: 12 }}>
@@ -217,41 +170,20 @@ const AdminStaffPanel = () => {
       </View>
 
       <View style={styles.card}>
-        {/* Name Row */}
         <View style={styles.nameRow}>
           <View style={styles.nameField}>
             <Text style={styles.label}>First Name</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="John"
-              value={firstName}
-              onChangeText={setFirstName}
-              autoCapitalize="words"
-            />
+            <TextInput style={styles.input} placeholder="John" value={firstName} onChangeText={setFirstName} autoCapitalize="words" />
           </View>
           <View style={styles.nameField}>
             <Text style={styles.label}>Last Name</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Doe"
-              value={lastName}
-              onChangeText={setLastName}
-              autoCapitalize="words"
-            />
+            <TextInput style={styles.input} placeholder="Doe" value={lastName} onChangeText={setLastName} autoCapitalize="words" />
           </View>
         </View>
 
         <Text style={[styles.label, { marginTop: 12 }]}>Employee Corporate Email</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. j.doe@acetrack.com"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
+        <TextInput style={styles.input} placeholder="e.g. j.doe@acetrack.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
 
-        {/* Preview salutation */}
         {firstName.trim() && lastName.trim() && (
           <View style={styles.preview}>
             <Text style={styles.previewLabel}>Email Salutation Preview:</Text>
@@ -259,11 +191,7 @@ const AdminStaffPanel = () => {
           </View>
         )}
 
-        <TouchableOpacity 
-          style={[styles.btn, (!isFormValid || isGenerating) && styles.btnDisabled]} 
-          onPress={generateInvite}
-          disabled={!isFormValid || isGenerating}
-        >
+        <TouchableOpacity style={[styles.btn, (!isFormValid || isGenerating) && styles.btnDisabled]} onPress={generateInvite} disabled={!isFormValid || isGenerating}>
           {isGenerating ? <ActivityIndicator color="#FFF" /> : <Text style={styles.btnText}>Generate Secure Link</Text>}
         </TouchableOpacity>
       </View>
@@ -275,13 +203,16 @@ const AdminStaffPanel = () => {
         const resendDisabled = isResendDisabled(inv.token, inv);
         const resendCount = getResendCount(inv);
         const isActive = inv.status === 'Pending' || inv.status === 'Clicked';
+        const isExpanded = expandedAnalytics === inv.token;
+        const formProgress = getFormProgress(inv.clicks);
+        const clickCount = (inv.clicks || []).length;
 
         return (
           <View key={inv._id} style={styles.inviteCard}>
             <View style={styles.inviteHeader}>
               <View style={{ flex: 1 }}>
                 {(inv.firstName || inv.lastName) && (
-                  <Text style={styles.inviteName}>{getDisplayName(inv)}</Text>
+                  <Text style={styles.inviteName}>{inv.lastName}, {inv.firstName}</Text>
                 )}
                 <Text style={styles.inviteEmail}>{inv.email}</Text>
               </View>
@@ -293,37 +224,111 @@ const AdminStaffPanel = () => {
             <View style={styles.inviteMetaRow}>
               <Ionicons name="time-outline" size={14} color="#64748B" />
               <Text style={styles.metaText}>{inv.status === 'Expired' ? 'Expired' : getTimeRemaining(inv.expiresAt)}</Text>
+              {formProgress && (
+                <View style={[styles.progressChip, { backgroundColor: formProgress.color + '15', marginLeft: 12 }]}>
+                  <Text style={{ fontSize: 10 }}>{formProgress.icon}</Text>
+                  <Text style={[styles.progressChipText, { color: formProgress.color }]}>{formProgress.label}</Text>
+                </View>
+              )}
             </View>
 
-            {inv.clicks && inv.clicks.length > 0 && (
-              <View style={styles.clickTracking}>
-                <Text style={styles.clickTitle}>Analytics (Click Tracking):</Text>
-                {inv.clicks.map((click, idx) => (
-                  <Text key={idx} style={styles.clickEntry}>
-                    • IP: <Text style={{fontWeight: 'bold'}}>{click.ip}</Text> at {new Date(click.timestamp).toLocaleTimeString()}
-                  </Text>
-                ))}
+            {/* Clickable Analytics Summary */}
+            {clickCount > 0 && (
+              <TouchableOpacity 
+                style={styles.analyticsBtn}
+                onPress={() => setExpandedAnalytics(isExpanded ? null : inv.token)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.analyticsBtnLeft}>
+                  <Ionicons name="analytics-outline" size={14} color="#6366F1" />
+                  <Text style={styles.analyticsBtnText}>Analytics ({clickCount} events)</Text>
+                </View>
+                <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={16} color="#94A3B8" />
+              </TouchableOpacity>
+            )}
+
+            {/* Expanded Analytics Detail */}
+            {isExpanded && inv.clicks && (
+              <View style={styles.analyticsDetail}>
+                {inv.clicks.map((click, idx) => {
+                  const actionInfo = ACTION_LABELS[click.action] || { icon: '📍', label: click.action || 'Click', color: '#64748B' };
+                  const location = [click.city, click.region, click.country].filter(Boolean).join(', ');
+                  
+                  return (
+                    <View key={idx} style={styles.eventRow}>
+                      <View style={[styles.eventDot, { backgroundColor: actionInfo.color }]} />
+                      <View style={styles.eventContent}>
+                        <View style={styles.eventHeaderRow}>
+                          <Text style={[styles.eventAction, { color: actionInfo.color }]}>
+                            {actionInfo.icon} {actionInfo.label}
+                          </Text>
+                          <Text style={styles.eventTime}>
+                            {new Date(click.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </Text>
+                        </View>
+                        
+                        {/* IP Address */}
+                        <View style={styles.eventDetailRow}>
+                          <Ionicons name="globe-outline" size={11} color="#94A3B8" />
+                          <Text style={styles.eventDetailText}>IP: {click.ip || 'Unknown'}</Text>
+                        </View>
+
+                        {/* Location */}
+                        {location ? (
+                          <View style={styles.eventDetailRow}>
+                            <Ionicons name="location-outline" size={11} color="#94A3B8" />
+                            <Text style={styles.eventDetailText}>{location}</Text>
+                          </View>
+                        ) : null}
+
+                        {/* ISP */}
+                        {click.isp ? (
+                          <View style={styles.eventDetailRow}>
+                            <Ionicons name="wifi-outline" size={11} color="#94A3B8" />
+                            <Text style={styles.eventDetailText}>ISP: {click.isp}</Text>
+                          </View>
+                        ) : null}
+
+                        {/* Timezone */}
+                        {click.timezone ? (
+                          <View style={styles.eventDetailRow}>
+                            <Ionicons name="time-outline" size={11} color="#94A3B8" />
+                            <Text style={styles.eventDetailText}>TZ: {click.timezone}</Text>
+                          </View>
+                        ) : null}
+
+                        {/* Coordinates */}
+                        {click.lat && click.lon ? (
+                          <View style={styles.eventDetailRow}>
+                            <Ionicons name="navigate-outline" size={11} color="#94A3B8" />
+                            <Text style={styles.eventDetailText}>Coords: {click.lat.toFixed(4)}, {click.lon.toFixed(4)}</Text>
+                          </View>
+                        ) : null}
+
+                        {/* Device / User Agent (truncated) */}
+                        {click.userAgent ? (
+                          <View style={styles.eventDetailRow}>
+                            <Ionicons name="phone-portrait-outline" size={11} color="#94A3B8" />
+                            <Text style={styles.eventDetailText} numberOfLines={1}>
+                              {click.userAgent.length > 60 ? click.userAgent.substring(0, 60) + '...' : click.userAgent}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
             )}
 
             {isActive && (
               <View style={styles.actionRow}>
-                <TouchableOpacity 
-                  style={styles.copyBtn} 
-                  onPress={() => copyToClipboard(`https://acetrack-suggested.onrender.com/setup/${inv.token}`)}
-                >
+                <TouchableOpacity style={styles.copyBtn} onPress={() => copyToClipboard(`https://acetrack-suggested.onrender.com/setup/${inv.token}`)}>
                   <Ionicons name="copy-outline" size={16} color="#4F46E5" />
                   <Text style={styles.copyBtnText}>Copy Link</Text>
                 </TouchableOpacity>
-
-                <TouchableOpacity 
-                  style={[styles.resendBtn, resendDisabled && styles.resendBtnDisabled]} 
-                  onPress={() => resendEmail(inv.token, inv.email)}
-                  disabled={resendDisabled}
-                >
-                  {resendingToken === inv.token ? (
-                    <ActivityIndicator size="small" color="#7C3AED" />
-                  ) : (
+                <TouchableOpacity style={[styles.resendBtn, resendDisabled && styles.resendBtnDisabled]} onPress={() => resendEmail(inv.token, inv.email)} disabled={resendDisabled}>
+                  {resendingToken === inv.token ? <ActivityIndicator size="small" color="#7C3AED" /> : (
                     <>
                       <Ionicons name="mail-outline" size={16} color={resendDisabled ? '#94A3B8' : '#7C3AED'} />
                       <Text style={[styles.resendBtnText, resendDisabled && { color: '#94A3B8' }]}>Resend</Text>
@@ -333,7 +338,6 @@ const AdminStaffPanel = () => {
               </View>
             )}
 
-            {/* Resend counter & cooldown message */}
             {isActive && (
               <View style={styles.resendInfo}>
                 {cooldownText ? (
@@ -342,18 +346,14 @@ const AdminStaffPanel = () => {
                     <Text style={styles.cooldownText}>{cooldownText}</Text>
                   </View>
                 ) : null}
-                <Text style={styles.resendCounter}>
-                  {resendCount}/3 resends used
-                </Text>
+                <Text style={styles.resendCounter}>{resendCount}/3 resends used</Text>
               </View>
             )}
           </View>
         );
       })}
 
-      {invites.length === 0 && (
-        <Text style={styles.emptyText}>No provisioning links generated yet.</Text>
-      )}
+      {invites.length === 0 && <Text style={styles.emptyText}>No provisioning links generated yet.</Text>}
     </ScrollView>
   );
 };
@@ -382,9 +382,23 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 10, fontWeight: '800' },
   inviteMetaRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   metaText: { fontSize: 12, color: '#64748B', marginLeft: 4 },
-  clickTracking: { backgroundColor: '#F8FAFC', padding: 10, borderRadius: 8, marginBottom: 12 },
-  clickTitle: { fontSize: 10, fontWeight: '700', color: '#475569', marginBottom: 4 },
-  clickEntry: { fontSize: 10, color: '#64748B', marginBottom: 2 },
+  progressChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, gap: 4 },
+  progressChipText: { fontSize: 10, fontWeight: '700' },
+  // Analytics button
+  analyticsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, padding: 10, marginBottom: 12 },
+  analyticsBtnLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  analyticsBtnText: { fontSize: 12, fontWeight: '700', color: '#6366F1' },
+  // Expanded analytics
+  analyticsDetail: { backgroundColor: '#FAFBFF', borderWidth: 1, borderColor: '#E0E7FF', borderRadius: 10, padding: 12, marginBottom: 12 },
+  eventRow: { flexDirection: 'row', marginBottom: 12 },
+  eventDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5, marginRight: 10 },
+  eventContent: { flex: 1 },
+  eventHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  eventAction: { fontSize: 12, fontWeight: '800' },
+  eventTime: { fontSize: 10, color: '#94A3B8', fontWeight: '600' },
+  eventDetailRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  eventDetailText: { fontSize: 10, color: '#64748B', flex: 1 },
+  // Actions
   actionRow: { flexDirection: 'row', gap: 8 },
   copyBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#EEF2FF', padding: 10, borderRadius: 8 },
   copyBtnText: { color: '#4F46E5', fontWeight: '600', fontSize: 12, marginLeft: 6 },

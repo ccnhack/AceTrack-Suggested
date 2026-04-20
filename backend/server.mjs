@@ -363,8 +363,16 @@ const SupportInviteSchema = new mongoose.Schema({
   token: { type: String, required: true, unique: true },
   status: { type: String, enum: ['Pending', 'Clicked', 'Used', 'Expired'], default: 'Pending' },
   clicks: [{
+    action: { type: String, default: 'link_click' }, // link_click, form_view, step_1, step_2, step_3, form_submit
     ip: String,
     userAgent: String,
+    city: String,
+    region: String,
+    country: String,
+    isp: String,
+    lat: Number,
+    lon: Number,
+    timezone: String,
     timestamp: { type: Date, default: Date.now }
   }],
   emailResends: [{
@@ -1518,10 +1526,27 @@ router.post('/support/invite/resend', apiKeyGuard, asyncHandler(async (req, res)
   }
 }));
 
-// 3. Web Hub: Click Tracking (No Auth Required)
+// 🌐 IP Geolocation Helper (free ip-api.com — 45 req/min, no key needed)
+async function resolveIpGeo(ipRaw) {
+  try {
+    // Extract first public IP from x-forwarded-for chain
+    const ip = (ipRaw || '').split(',')[0].trim().replace('::ffff:', '');
+    if (!ip || ip === '127.0.0.1' || ip === '::1') return { ip, city: 'Localhost', region: '', country: '', isp: '' };
+    const resp = await fetch(`http://ip-api.com/json/${ip}?fields=status,city,regionName,country,isp,lat,lon,timezone`, { signal: AbortSignal.timeout(3000) });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.status === 'success') {
+        return { ip, city: data.city, region: data.regionName, country: data.country, isp: data.isp, lat: data.lat, lon: data.lon, timezone: data.timezone };
+      }
+    }
+  } catch (e) { /* silent fallback */ }
+  return { ip: (ipRaw || '').split(',')[0].trim(), city: '', region: '', country: '', isp: '' };
+}
+
+// 3. Web Hub: Click Tracking (No Auth Required) — Enhanced with IP Geolocation
 router.post('/support/invite/click', asyncHandler(async (req, res) => {
   const { token } = req.body;
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const ipRaw = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   const userAgent = req.headers['user-agent'];
 
   const invite = await SupportInvite.findOne({ token });
@@ -1529,11 +1554,32 @@ router.post('/support/invite/click', asyncHandler(async (req, res) => {
   if (invite.status === 'Used') return res.status(400).json({ error: 'Invite already claimed' });
   if (invite.expiresAt < new Date()) return res.status(400).json({ error: 'Invite expired' });
   
+  const geo = await resolveIpGeo(ipRaw);
   if (invite.status === 'Pending') invite.status = 'Clicked';
-  invite.clicks.push({ ip, userAgent, timestamp: new Date() });
+  invite.clicks.push({ action: 'link_click', ip: geo.ip, userAgent, city: geo.city, region: geo.region, country: geo.country, isp: geo.isp, lat: geo.lat, lon: geo.lon, timezone: geo.timezone, timestamp: new Date() });
   await invite.save();
 
   res.json({ success: true, email: invite.email });
+}));
+
+// 3b. Form Step Tracking (tracks form_view, step progression, submission)
+router.post('/support/invite/track', asyncHandler(async (req, res) => {
+  const { token, action } = req.body;
+  const validActions = ['form_view', 'step_1', 'step_2', 'step_3', 'form_submit'];
+  if (!token || !action || !validActions.includes(action)) {
+    return res.status(400).json({ error: 'Invalid tracking data' });
+  }
+
+  const ipRaw = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const userAgent = req.headers['user-agent'];
+  const invite = await SupportInvite.findOne({ token });
+  if (!invite) return res.status(404).json({ error: 'Invite not found' });
+
+  const geo = await resolveIpGeo(ipRaw);
+  invite.clicks.push({ action, ip: geo.ip, userAgent, city: geo.city, region: geo.region, country: geo.country, isp: geo.isp, lat: geo.lat, lon: geo.lon, timezone: geo.timezone, timestamp: new Date() });
+  await invite.save();
+
+  res.json({ success: true });
 }));
 
 // 4. Web Hub: Final Setup & Creation (v2.6.124 — Full Employee Onboarding)
@@ -2017,6 +2063,20 @@ app.get('/setup/:token', (req, res) => {
       document.getElementById('state-' + id).classList.add('active');
     }
 
+    // 📊 Analytics: Track form step views
+    function trackStep(action) {
+      try {
+        fetch('/api/support/invite/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: '${token}', action })
+        }).catch(() => {});
+      } catch(e) {}
+    }
+
+    // Track initial form view
+    trackStep('form_view');
+
     function showStep(n) {
       [1,2,3].forEach(i => {
         document.getElementById('step-' + i).classList.toggle('active', i === n);
@@ -2026,6 +2086,7 @@ app.get('/setup/:token', (req, res) => {
       document.getElementById('prog-3').classList.toggle('done', n >= 3);
       const labels = { 1: 'Step 1 of 3 — Personal Details', 2: 'Step 2 of 3 — ID Verification', 3: 'Step 3 of 3 — Security' };
       document.getElementById('prog-label').textContent = labels[n];
+      trackStep('step_' + n);
     }
 
     function showError(boxId, msg) {
@@ -2124,6 +2185,7 @@ app.get('/setup/:token', (req, res) => {
         fd.append('country', document.getElementById('country').value.trim() || 'India');
         if (selectedFile) fd.append('govId', selectedFile);
 
+        trackStep('form_submit');
         const res = await fetch(API + '/api/support/invite/setup', {
           method: 'POST',
           body: fd

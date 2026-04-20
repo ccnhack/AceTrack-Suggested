@@ -267,10 +267,10 @@ Best regards,
 AceTrack Systems`;
 
   const mailOptions = {
-    from: `"AceTrack" <${process.env.GMAIL_USER}>`,
+    from: `"AceTrack Systems" <${process.env.GMAIL_USER}>`,
     replyTo: process.env.GMAIL_USER,
     to: toEmail,
-    subject: `AceTrack - Complete Your Support Agent Setup`,
+    subject: `\u{1F6E1}\uFE0F AceTrack \u2014 Complete Your Support Agent Setup`,
     html: htmlBody,
     text: textBody,
     headers: {
