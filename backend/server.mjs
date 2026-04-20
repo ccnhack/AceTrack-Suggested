@@ -1647,9 +1647,8 @@ router.post('/support/password-reset/confirm', apiKeyGuard, asyncHandler(async (
 
   if (userIndex === -1) return res.status(404).json({ error: 'User account not found' });
 
-  // Update password (using bcrypt)
-  const salt = bcrypt.genSaltSync(10);
-  players[userIndex].password = bcrypt.hashSync(newPassword, salt);
+  // Update password (plaintext — matches login comparison model)
+  players[userIndex].password = newPassword;
   
   // Clean up device sessions for security
   players[userIndex].devices = [];
