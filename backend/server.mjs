@@ -81,7 +81,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.137"; 
+const APP_VERSION = "2.6.138"; 
 
 
 
@@ -1842,7 +1842,6 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
 
   const username = generateSupportUsername(firstName, lastName, players);
   
-  const hashedPassword = bcrypt.hashSync(password, 10);
   const newSupportAgent = {
     id: `sup_${Date.now().toString(36)}`,
     name: `${firstName} ${lastName}`,
@@ -1850,7 +1849,7 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
     lastName,
     email: invite.email,
     phone: phone || '',
-    password: hashedPassword,
+    password: password,
     role: 'support',
     address: {
       line1: addressLine1 || '',
@@ -2659,4 +2658,56 @@ app.post('/api/support/claim-ticket', authenticateToken, async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+/**
+ * POST /api/support/force-reset
+ * Admin-only: Force-resets an employee's password and sends a secure email. (Stores plaintext to align with global sync architecture)
+ */
+app.post('/api/support/force-reset', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.headers['x-user-id'] !== 'admin') {
+    return res.status(403).json({ error: 'System Administrator privileges required' });
+  }
+
+  const { targetUserId } = req.body;
+  if (!targetUserId) return res.status(400).json({ error: 'Target user ID required' });
+
+  const appState = await AppState.findOne().sort({ lastUpdated: -1 });
+  if (!appState) return res.status(500).json({ error: 'System state unavailable' });
+
+  const players = appState.data.players || [];
+  const userIndex = players.findIndex(p => p.id === targetUserId);
+
+  if (userIndex === -1) return res.status(404).json({ error: 'User account not found' });
+  
+  const user = players[userIndex];
+  if (user.role !== 'support') {
+    return res.status(400).json({ error: 'Can only force-reset support accounts via this portal.' });
+  }
+
+  // Generate Random Alphanumeric Password (10 chars)
+  const newPassword = Math.random().toString(36).substring(2, 7) + Math.random().toString(36).substring(2, 7);
+  
+  // Assign Plaintext to match local frontend authentication model
+  players[userIndex].password = newPassword;
+  
+  // Security Guard: Invalidate all existing sessions
+  players[userIndex].devices = [];
+
+  appState.markModified('data.players');
+  await appState.save();
+
+  // Log Event
+  await logServerEvent('SUPPORT_FORCE_PASSWORD_RESET', { 
+    adminId: req.user.id || 'admin', 
+    targetEmail: user.email 
+  });
+
+  // Send Notification Email
+  sendAdminResetPasswordEmail(user.email, user.name, newPassword);
+
+  res.json({ 
+    success: true, 
+    message: `Password reset successfully for ${user.name}. Credentials sent to ${user.email}.`
+  });
 });
