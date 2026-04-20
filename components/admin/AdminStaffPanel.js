@@ -23,6 +23,7 @@ const AdminStaffPanel = () => {
   const [resendCooldowns, setResendCooldowns] = useState({});
   const [expandedAnalytics, setExpandedAnalytics] = useState(null); // token of expanded card
   const [selectedEvent, setSelectedEvent] = useState(null); // specific event for modal
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchInvites();
@@ -160,46 +161,77 @@ const AdminStaffPanel = () => {
 
   const isFormValid = email.includes('@') && firstName.trim() && lastName.trim();
 
+  const filteredInvites = invites.filter(inv => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    const fullName = `${inv.firstName || ''} ${inv.lastName || ''}`.toLowerCase();
+    return fullName.includes(query) || inv.email.toLowerCase().includes(query);
+  });
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 16, paddingBottom: 80 }}>
-      <View style={styles.header}>
-        <Ionicons name="shield-checkmark" size={24} color="#6366F1" />
-        <View style={{ marginLeft: 12 }}>
-          <Text style={styles.title}>Support Provisioning</Text>
-          <Text style={styles.subtitle}>Generate secure, time-limited onboarding links.</Text>
-        </View>
-      </View>
-
-      <View style={styles.card}>
-        <View style={styles.nameRow}>
-          <View style={styles.nameField}>
-            <Text style={styles.label}>First Name</Text>
-            <TextInput style={styles.input} placeholder="John" value={firstName} onChangeText={setFirstName} autoCapitalize="words" />
-          </View>
-          <View style={styles.nameField}>
-            <Text style={styles.label}>Last Name</Text>
-            <TextInput style={styles.input} placeholder="Doe" value={lastName} onChangeText={setLastName} autoCapitalize="words" />
-          </View>
-        </View>
-
-        <Text style={[styles.label, { marginTop: 12 }]}>Employee Corporate Email</Text>
-        <TextInput style={styles.input} placeholder="e.g. j.doe@acetrack.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-
-        {firstName.trim() && lastName.trim() && (
-          <View style={styles.preview}>
-            <Text style={styles.previewLabel}>Email Salutation Preview:</Text>
-            <Text style={styles.previewText}>Hi {lastName.trim()}, {firstName.trim()}</Text>
-          </View>
+      {/* 🔍 Staff Search Bar */}
+      <View style={styles.searchContainer}>
+        <Ionicons name="search-outline" size={20} color="#94A3B8" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search staff by name or email..."
+          placeholderTextColor="#94A3B8"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          autoCapitalize="none"
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.searchClear}>
+            <Ionicons name="close-circle" size={18} color="#94A3B8" />
+          </TouchableOpacity>
         )}
-
-        <TouchableOpacity style={[styles.btn, (!isFormValid || isGenerating) && styles.btnDisabled]} onPress={generateInvite} disabled={!isFormValid || isGenerating}>
-          {isGenerating ? <ActivityIndicator color="#FFF" /> : <Text style={styles.btnText}>Generate Secure Link</Text>}
-        </TouchableOpacity>
       </View>
 
-      <Text style={[styles.title, { marginTop: 24, marginBottom: 12 }]}>Active Provisioning Links</Text>
+      {!searchQuery && (
+        <>
+          <View style={styles.header}>
+            <Ionicons name="shield-checkmark" size={24} color="#6366F1" />
+            <View style={{ marginLeft: 12 }}>
+              <Text style={styles.title}>Support Provisioning</Text>
+              <Text style={styles.subtitle}>Generate secure, time-limited onboarding links.</Text>
+            </View>
+          </View>
 
-      {invites.map((inv) => {
+          <View style={styles.card}>
+            <View style={styles.nameRow}>
+              <View style={styles.nameField}>
+                <Text style={styles.label}>First Name</Text>
+                <TextInput style={styles.input} placeholder="John" value={firstName} onChangeText={setFirstName} autoCapitalize="words" />
+              </View>
+              <View style={styles.nameField}>
+                <Text style={styles.label}>Last Name</Text>
+                <TextInput style={styles.input} placeholder="Doe" value={lastName} onChangeText={setLastName} autoCapitalize="words" />
+              </View>
+            </View>
+
+            <Text style={[styles.label, { marginTop: 12 }]}>Employee Corporate Email</Text>
+            <TextInput style={styles.input} placeholder="e.g. j.doe@acetrack.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+
+            {firstName.trim() && lastName.trim() && (
+              <View style={styles.preview}>
+                <Text style={styles.previewLabel}>Email Salutation Preview:</Text>
+                <Text style={styles.previewText}>Hi {lastName.trim()}, {firstName.trim()}</Text>
+              </View>
+            )}
+
+            <TouchableOpacity style={[styles.btn, (!isFormValid || isGenerating) && styles.btnDisabled]} onPress={generateInvite} disabled={!isFormValid || isGenerating}>
+              {isGenerating ? <ActivityIndicator color="#FFF" /> : <Text style={styles.btnText}>Generate Secure Link</Text>}
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
+
+      <Text style={[styles.title, { marginTop: 24, marginBottom: 12 }]}>
+        {searchQuery ? `Search Results (${filteredInvites.length})` : 'Active Provisioning Links'}
+      </Text>
+
+      {filteredInvites.map((inv) => {
         const cooldownText = getResendCooldownText(inv.token, inv);
         const resendDisabled = isResendDisabled(inv.token, inv);
         const resendCount = getResendCount(inv);
@@ -317,7 +349,11 @@ const AdminStaffPanel = () => {
         );
       })}
 
-      {invites.length === 0 && <Text style={styles.emptyText}>No provisioning links generated yet.</Text>}
+      {filteredInvites.length === 0 && (
+        <Text style={styles.emptyText}>
+          {searchQuery ? `No staff found matching "${searchQuery}"` : 'No provisioning links generated yet.'}
+        </Text>
+      )}
 
       {/* 📊 Analytics Detail Modal */}
       <Modal
@@ -481,7 +517,12 @@ const styles = StyleSheet.create({
   // Bot Badge
   botBadge: { backgroundColor: '#FFFBEB', borderColor: '#FEF3C7', borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 16, alignItems: 'center' },
   botBadgeText: { color: '#B45309', fontWeight: '800', fontSize: 12, letterSpacing: 1 },
-  botPlatform: { color: '#D97706', fontSize: 10, fontWeight: '600', marginTop: 4, textTransform: 'uppercase' }
+  botPlatform: { color: '#D97706', fontSize: 10, fontWeight: '600', marginTop: 4, textTransform: 'uppercase' },
+  // Search Styles
+  searchContainer: { backgroundColor: '#FFF', flexDirection: 'row', alignItems: 'center', borderRadius: 12, paddingHorizontal: 12, marginBottom: 20, borderWidth: 1, borderColor: '#E2E8F0', height: 48, ...shadows.sm },
+  searchIcon: { marginRight: 8 },
+  searchInput: { flex: 1, fontSize: 14, color: '#0F172A', height: '100%' },
+  searchClear: { padding: 4 }
 });
 
 export default AdminStaffPanel;
