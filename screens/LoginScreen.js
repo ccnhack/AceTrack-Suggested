@@ -104,6 +104,12 @@ const LoginScreen = ({ navigation }) => {
         }
 
         if (supportUser) {
+          if (supportUser.supportStatus === 'terminated') {
+            setError('Access Suspended: Your employment profile has been deactivated.');
+            setIsLoading(false);
+            return;
+          }
+
           const userPassword = supportUser.password || 'password';
           if (userPassword === password) {
             onLoginSuccess('support', supportUser);
@@ -202,6 +208,11 @@ const LoginScreen = ({ navigation }) => {
       }
 
       if (foundUser) {
+        if (foundUser.role === 'support' && foundUser.supportStatus === 'terminated') {
+          setError('Access Suspended: Your employment profile has been deactivated.');
+          return;
+        }
+
         const userPassword = foundUser.password || 'password';
         if (userPassword === password) {
           if (foundUser.role === 'coach' && !foundUser.isApprovedCoach) {
@@ -254,6 +265,21 @@ const LoginScreen = ({ navigation }) => {
 
     if (!nUser) {
       Alert.alert("Error", "Please enter your username or email address.");
+      return;
+    }
+
+    // 🛡️ TERMINATION GUARD
+    const isTerminated = players?.find(p => 
+      (String(p.email || '').toLowerCase() === nUser || String(p.username || '').toLowerCase() === nUser) && 
+      p.supportStatus === 'terminated'
+    );
+    
+    if (isTerminated) {
+      Alert.alert(
+        "Account Suspended",
+        "Your employment profile has been deactivated. Password reset is unavailable.",
+        [{ text: "OK" }]
+      );
       return;
     }
 

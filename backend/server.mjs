@@ -81,7 +81,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.138"; 
+const APP_VERSION = "2.6.139"; 
 
 
 
@@ -1828,46 +1828,77 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
 
   const players = appState.data.players || [];
   
-  // 🆔 Username Generation Logic (Requested: First3 + Last2)
-  const generateSupportUsername = (fName, lName, existing) => {
-    const base = (fName.substring(0, 3) + lName.substring(0, 2)).toLowerCase().replace(/[^a-z0-9]/g, '');
-    let username = base;
-    let counter = 1;
-    while (existing.some(p => p.username === username || p.id === username)) {
-      username = `${base}${counter}`;
-      counter++;
-    }
-    return username;
-  };
-
-  const username = generateSupportUsername(firstName, lastName, players);
+  const existingIndex = players.findIndex(p => p.role === 'support' && p.email?.toLowerCase() === invite.email.toLowerCase());
   
-  const newSupportAgent = {
-    id: `sup_${Date.now().toString(36)}`,
-    name: `${firstName} ${lastName}`,
-    firstName,
-    lastName,
-    email: invite.email,
-    phone: phone || '',
-    password: password,
-    role: 'support',
-    address: {
-      line1: addressLine1 || '',
-      line2: addressLine2 || '',
-      city: city || '',
-      state: addrState || '',
-      pinCode: pinCode || '',
-      country: country || 'India'
-    },
-    govIdUrl: govIdUrl || '',
-    isEmailVerified: true,
-    createdAt: new Date().toISOString(),
-    onboardedVia: 'invite',
-    onboardedIp: ip,
-    username: username
-  };
+  let finalUsername = '';
 
-  players.push(newSupportAgent);
+  if (existingIndex !== -1) {
+    // ♻️ RE-ONBOARDING EXISTING (Ex-Employee)
+    const existing = players[existingIndex];
+    finalUsername = existing.username;
+
+    players[existingIndex] = {
+      ...existing,
+      name: `${firstName} ${lastName}`,
+      firstName,
+      lastName,
+      phone: phone || '',
+      password: password,
+      supportStatus: 'active', // Restores access
+      address: {
+        line1: addressLine1 || '',
+        line2: addressLine2 || '',
+        city: city || '',
+        state: addrState || '',
+        pinCode: pinCode || '',
+        country: country || 'India'
+      },
+      govIdUrl: govIdUrl || existing.govIdUrl || '',
+      reOnboardedAt: new Date().toISOString()
+    };
+  } else {
+    // ✨ NEW ONBOARDING
+    const generateSupportUsername = (fName, lName, existingPlayers) => {
+      const base = (fName.substring(0, 3) + lName.substring(0, 2)).toLowerCase().replace(/[^a-z0-9]/g, '');
+      let un = base;
+      let counter = 1;
+      while (existingPlayers.some(p => p.username === un || p.id === un)) {
+        un = `${base}${counter}`;
+        counter++;
+      }
+      return un;
+    };
+
+    finalUsername = generateSupportUsername(firstName, lastName, players);
+
+    const newSupportAgent = {
+      id: `sup_${Date.now().toString(36)}`,
+      name: `${firstName} ${lastName}`,
+      firstName,
+      lastName,
+      email: invite.email,
+      phone: phone || '',
+      password: password,
+      role: 'support',
+      supportStatus: 'active',
+      address: {
+        line1: addressLine1 || '',
+        line2: addressLine2 || '',
+        city: city || '',
+        state: addrState || '',
+        pinCode: pinCode || '',
+        country: country || 'India'
+      },
+      govIdUrl: govIdUrl || '',
+      isEmailVerified: true,
+      createdAt: new Date().toISOString(),
+      onboardedVia: 'invite',
+      onboardedIp: ip,
+      username: finalUsername
+    };
+
+    players.push(newSupportAgent);
+  }
   await AppState.updateOne(
     { _id: appState._id },
     { $set: { "data.players": players, lastUpdated: Date.now() } }
@@ -1890,7 +1921,7 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
   // 1. CEO Congratulations & Welcome
   sendOnboardingSuccessEmail(invite.email, firstName);
   // 2. Official Login Credentials
-  sendLoginDetailsEmail(invite.email, `${firstName} ${lastName}`, username);
+  sendLoginDetailsEmail(invite.email, `${firstName} ${lastName}`, finalUsername);
 }));
 
 

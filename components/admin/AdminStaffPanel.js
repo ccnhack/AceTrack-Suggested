@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert,
 import { Ionicons } from '@expo/vector-icons';
 import { colors, shadows } from '../../theme/designSystem';
 import config from '../../config';
+import { usePlayers } from '../../context/PlayerContext';
 
 const ACTION_LABELS = {
   link_click: { icon: '🔗', label: 'Link Clicked', color: '#3B82F6' },
@@ -14,6 +15,7 @@ const ACTION_LABELS = {
 };
 
 const AdminStaffPanel = () => {
+  const { players } = usePlayers();
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -297,12 +299,27 @@ const AdminStaffPanel = () => {
             <Text style={[styles.label, { marginTop: 12 }]}>Employee Corporate Email</Text>
             <TextInput style={styles.input} placeholder="e.g. j.doe@acetrack.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
 
-            {firstName.trim() && lastName.trim() && (
-              <View style={styles.preview}>
-                <Text style={styles.previewLabel}>Email Salutation Preview:</Text>
-                <Text style={styles.previewText}>Hi {lastName.trim()}, {firstName.trim()}</Text>
-              </View>
-            )}
+            {firstName.trim() && lastName.trim() && (() => {
+              const existingExEmployee = players?.find(p => 
+                p.role === 'support' && 
+                p.supportStatus === 'terminated' && 
+                email && p.email?.toLowerCase() === email.toLowerCase().trim()
+              );
+
+              return (
+                <View style={styles.preview}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <Text style={styles.previewLabel}>Email Salutation Preview:</Text>
+                    {existingExEmployee && (
+                      <View style={{ backgroundColor: '#FEF2F2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#FECACA' }}>
+                        <Text style={{ fontSize: 9, fontWeight: '800', color: '#EF4444' }}>EX-EMPLOYEE (Profile will be restored)</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.previewText}>Hi {lastName.trim()}, {firstName.trim()}</Text>
+                </View>
+              );
+            })()}
 
             <TouchableOpacity style={[styles.btn, (!isFormValid || isGenerating) && styles.btnDisabled]} onPress={generateInvite} disabled={!isFormValid || isGenerating}>
               {isGenerating ? <ActivityIndicator color="#FFF" /> : <Text style={styles.btnText}>Generate Secure Link</Text>}
