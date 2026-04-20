@@ -82,7 +82,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.146"; 
+const APP_VERSION = "2.6.147"; 
 
 
 
@@ -2612,16 +2612,140 @@ router.get('/support/analytics', apiKeyGuard, async (req, res) => {
     if (!state || !state.data) return res.status(404).json({ error: "State not found" });
 
     const agents = (state.data.players || []).filter(p => p.role === 'support');
-    console.log(`[API] Generating leaderboard for ${agents.length} agents...`);
-    const leaderboard = SupportMetricsService.generateLeaderboard(agents);
-    
-    // Calculate global stats for weighting reference
+    const allTickets = state.data.supportTickets || [];
+
+    // 🕐 TIME FILTER: Parse optional from/to query params
+    const fromDate = req.query.from ? new Date(req.query.from) : null;
+    const toDate = req.query.to ? new Date(req.query.to) : null;
+
+    // Filter tickets by time range (based on createdAt)
+    const tickets = allTickets.filter(t => {
+      if (!fromDate && !toDate) return true;
+      const created = new Date(t.createdAt);
+      if (fromDate && created < fromDate) return false;
+      if (toDate && created > toDate) return false;
+      return true;
+    });
+
+    console.log(`[API] Analytics: ${agents.length} agents, ${tickets.length}/${allTickets.length} tickets (filtered)`);
+
+    // 📊 Compute detailed per-agent metrics from actual ticket data
+    const agentMetrics = agents.map(agent => {
+      const agentId = agent.id;
+      const agentTickets = tickets.filter(t => t.assignedTo === agentId);
+
+      // Active caseload (open tickets)
+      const activeTickets = agentTickets.filter(t => 
+        ['Open', 'In Progress', 'Awaiting Response'].includes(t.status)
+      ).length;
+
+      // Closed/Resolved tickets
+      const closedResolved = agentTickets.filter(t => 
+        t.status === 'Closed' || t.status === 'Resolved'
+      );
+      const closedResolvedCount = closedResolved.length;
+
+      // Avg Resolution Time (assignedAt → closedAt/resolvedAt)
+      const resolutionTimes = closedResolved
+        .filter(t => t.assignedAt && (t.closedAt || t.resolvedAt))
+        .map(t => {
+          const end = new Date(t.closedAt || t.resolvedAt);
+          const start = new Date(t.assignedAt);
+          return end - start;
+        })
+        .filter(ms => ms > 0);
+      const avgResolutionMs = resolutionTimes.length > 0 
+        ? resolutionTimes.reduce((a, b) => a + b, 0) / resolutionTimes.length 
+        : 0;
+
+      // Avg First Response Time (assignedAt → firstResponseAt)
+      const frtTimes = agentTickets
+        .filter(t => t.assignedAt && t.firstResponseAt)
+        .map(t => new Date(t.firstResponseAt) - new Date(t.assignedAt))
+        .filter(ms => ms > 0);
+      const avgFirstResponseMs = frtTimes.length > 0 
+        ? frtTimes.reduce((a, b) => a + b, 0) / frtTimes.length 
+        : 0;
+
+      // Tickets Reopened (count tickets that have reopenCount > 0 or were moved from Closed/Resolved back to In Progress)
+      const reopenedCount = agentTickets.filter(t => (t.reopenCount || 0) > 0).length;
+
+      // CSAT / User Feedback
+      const ratedTickets = agentTickets.filter(t => t.rating && t.rating > 0);
+      const csatScore = ratedTickets.length > 0
+        ? (ratedTickets.reduce((sum, t) => sum + t.rating, 0) / ratedTickets.length).toFixed(1)
+        : null;
+
+      // SLA Compliance (resolved within 24h of creation)
+      const slaTarget = 24 * 60 * 60 * 1000; // 24 hours
+      const slaEligible = closedResolved.filter(t => t.createdAt && (t.closedAt || t.resolvedAt));
+      const slaCompliant = slaEligible.filter(t => {
+        const resTime = new Date(t.closedAt || t.resolvedAt) - new Date(t.createdAt);
+        return resTime <= slaTarget;
+      }).length;
+      const slaPercent = slaEligible.length > 0 
+        ? Math.round((slaCompliant / slaEligible.length) * 100) 
+        : null;
+
+      // Escalation Rate (tickets that were reassigned to someone else)
+      const escalatedCount = agentTickets.filter(t => t.escalated || t.reassignedFrom === agentId).length;
+      const escalationRate = agentTickets.length > 0
+        ? Math.round((escalatedCount / agentTickets.length) * 100)
+        : 0;
+
+      return {
+        id: agentId,
+        name: agent.name || `${agent.firstName} ${agent.lastName}`,
+        email: agent.email,
+        status: agent.supportStatus,
+        level: agent.supportLevel || 'Trainee',
+        score: SupportMetricsService.calculateWeightedScore(agent.metrics || {}),
+        stats: {
+          ...(agent.metrics || {}),
+          activeTickets,
+          closedResolvedCount,
+          avgResolutionMs,
+          avgFirstResponseMs,
+          reopenedCount,
+          csatScore: csatScore ? parseFloat(csatScore) : null,
+          slaPercent,
+          escalationRate,
+          totalHandled: agentTickets.length,
+          manualPicks: agent.metrics?.manualPicks || 0
+        }
+      };
+    });
+
+    // Sort leaderboard by score desc
+    agentMetrics.sort((a, b) => b.score - a.score);
+
+    // Global stats
     const allRatings = agents.map(a => a.metrics?.avgRating || 0).filter(r => r > 0);
     const globalAvgRating = allRatings.length > 0 ? (allRatings.reduce((a,b) => a+b, 0) / allRatings.length) : 4.5;
 
+    // Team-wide summary  
+    const teamSummary = {
+      totalOpenTickets: tickets.filter(t => ['Open', 'In Progress', 'Awaiting Response'].includes(t.status)).length,
+      totalClosedResolved: tickets.filter(t => t.status === 'Closed' || t.status === 'Resolved').length,
+      unassignedQueue: tickets.filter(t => !t.assignedTo && t.status === 'Open').length,
+      ticketsToday: allTickets.filter(t => {
+        const created = new Date(t.createdAt);
+        const today = new Date();
+        return created.toDateString() === today.toDateString();
+      }).length,
+      overdueTickets: tickets.filter(t => {
+        if (t.status === 'Closed' || t.status === 'Resolved') return false;
+        const created = new Date(t.createdAt);
+        return (Date.now() - created.getTime()) > (48 * 60 * 60 * 1000);
+      }).length
+    };
+
     res.json({
-      leaderboard,
+      leaderboard: agentMetrics,
       globalAvgRating,
+      teamSummary,
+      filteredTicketCount: tickets.length,
+      totalTicketCount: allTickets.length,
       timestamp: new Date().toISOString()
     });
   } catch (e) {

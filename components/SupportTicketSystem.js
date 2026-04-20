@@ -61,7 +61,13 @@ export const SupportTicketSystem = ({
     }
   }, [selectedTicket?.id]);
 
-  const myTickets = (tickets || []).filter(t => t.userId === userId);
+  // 🛡️ TICKET VISIBILITY SCOPING (v2.6.146):
+  // Regular users: see tickets they created (userId match)
+  // Support/Admin agents: see tickets assigned to them (assignedTo match)
+  const isAgent = userRole === 'support' || userRole === 'admin';
+  const myTickets = (tickets || []).filter(t => 
+    isAgent ? (t.assignedTo === userId) : (t.userId === userId)
+  );
 
   useEffect(() => {
     if (onToggleSupport) onToggleSupport(true);
@@ -371,7 +377,11 @@ export const SupportTicketSystem = ({
         <View style={styles.header}>
           <View>
             <Text style={styles.title}>Support Requests</Text>
-            <Text style={styles.subtitle}>{listTab === 'Pool' ? 'Pool' : 'Personal'}: {listTab === 'Pool' ? tickets.filter(t => !t.assignedTo).length : myTickets.length} ticket(s)</Text>
+            <Text style={styles.subtitle}>
+              {listTab === 'Pool' 
+                ? `Pool: ${tickets.filter(t => !t.assignedTo).length} ticket(s)` 
+                : `${isAgent ? 'My Caseload' : 'My Tickets'}: ${myTickets.length} ticket(s)`}
+            </Text>
           </View>
           <TouchableOpacity onPress={() => setView('create')} style={styles.newTicketBtn}>
             <Ionicons name="add" size={16} color="#FFFFFF" />
@@ -406,11 +416,13 @@ export const SupportTicketSystem = ({
         <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
           {(() => {
             const openStatuses = ['Open', 'In Progress', 'Awaiting Response'];
-            const filtered = myTickets.filter(t => {
+            // Pool tab uses ALL tickets (unassigned); Open/Closed tabs use agent's own tickets
+            const sourceTickets = listTab === 'Pool' ? (tickets || []) : myTickets;
+            const filtered = sourceTickets.filter(t => {
               const status = t.status || 'Open';
               if (listTab === 'Pool') return !t.assignedTo && status === 'Open';
               return listTab === 'Open' 
-                ? (openStatuses.includes(status) && t.assignedTo)
+                ? (openStatuses.includes(status))
                 : (status === 'Resolved' || status === 'Closed');
             });
 

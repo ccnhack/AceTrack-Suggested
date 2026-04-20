@@ -1,10 +1,46 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator, Modal, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, shadows } from '../../theme/designSystem';
 import config from '../../config';
 import { usePlayers } from '../../context/PlayerContext';
 import SafeAvatar from '../SafeAvatar';
+
+// 🕐 Time Filter Presets
+const TIME_FILTERS = [
+  { key: 'today', label: 'Today' },
+  { key: '3d', label: '3 Days' },
+  { key: '7d', label: '7 Days' },
+  { key: '30d', label: '30 Days' },
+  { key: 'all', label: 'All Time' },
+  { key: 'custom', label: 'Custom' },
+];
+
+const getFilterDates = (key) => {
+  const now = new Date();
+  switch (key) {
+    case 'today': return { from: new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString(), to: now.toISOString() };
+    case '3d': return { from: new Date(now - 3 * 24 * 60 * 60 * 1000).toISOString(), to: now.toISOString() };
+    case '7d': return { from: new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString(), to: now.toISOString() };
+    case '30d': return { from: new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString(), to: now.toISOString() };
+    case 'all': return { from: null, to: null };
+    default: return { from: null, to: null };
+  }
+};
+
+// 🕐 Format milliseconds to human-readable
+const formatDuration = (ms) => {
+  if (!ms || ms <= 0) return 'N/A';
+  const hours = Math.floor(ms / (1000 * 60 * 60));
+  const mins = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+  if (hours > 24) {
+    const days = Math.floor(hours / 24);
+    const remHours = hours % 24;
+    return `${days}d ${remHours}h`;
+  }
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+};
 
 const AdminSupportTeamPanel = () => {
   const { players } = usePlayers();
@@ -16,10 +52,26 @@ const AdminSupportTeamPanel = () => {
   const [isManaging, setIsManaging] = useState(null);
   const [activeTab, setActiveTab] = useState('employees'); // 'employees' | 'ex-employees'
 
-  const fetchTeamAnalytics = useCallback(async () => {
+  // 🕐 Time Filter State
+  const [timeFilter, setTimeFilter] = useState('all');
+  const [showCustomRange, setShowCustomRange] = useState(false);
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+
+  const fetchTeamAnalytics = useCallback(async (filterOverride) => {
     setIsRefreshing(true);
     try {
-       const res = await fetch(`${config.API_BASE_URL}/api/support/analytics`, {
+       const currentFilter = filterOverride || timeFilter;
+       let queryParams = '';
+       
+       if (currentFilter === 'custom' && customFrom && customTo) {
+         queryParams = `?from=${encodeURIComponent(customFrom)}&to=${encodeURIComponent(customTo)}`;
+       } else if (currentFilter !== 'all' && currentFilter !== 'custom') {
+         const dates = getFilterDates(currentFilter);
+         if (dates.from) queryParams = `?from=${encodeURIComponent(dates.from)}&to=${encodeURIComponent(dates.to)}`;
+       }
+
+       const res = await fetch(`${config.API_BASE_URL}/api/support/analytics${queryParams}`, {
          headers: { 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' }
        });
        if (res.ok) {
@@ -31,11 +83,40 @@ const AdminSupportTeamPanel = () => {
     } finally {
        setIsRefreshing(false);
     }
-  }, []);
+  }, [timeFilter, customFrom, customTo]);
 
   useEffect(() => {
     fetchTeamAnalytics();
   }, [fetchTeamAnalytics]);
+
+  const handleTimeFilterChange = (key) => {
+    setTimeFilter(key);
+    if (key === 'custom') {
+      setShowCustomRange(true);
+    } else {
+      setShowCustomRange(false);
+      fetchTeamAnalytics(key);
+    }
+  };
+
+  const applyCustomRange = () => {
+    if (!customFrom || !customTo) {
+      Alert.alert('Invalid Range', 'Please enter both start and end dates.\n\nFormat: YYYY-MM-DD or YYYY-MM-DD HH:MM');
+      return;
+    }
+    const from = new Date(customFrom);
+    const to = new Date(customTo);
+    if (isNaN(from.getTime()) || isNaN(to.getTime())) {
+      Alert.alert('Invalid Date', 'Please enter valid dates in format: YYYY-MM-DD or YYYY-MM-DD HH:MM');
+      return;
+    }
+    if (from > to) {
+      Alert.alert('Invalid Range', 'Start date must be before end date.');
+      return;
+    }
+    setShowCustomRange(false);
+    fetchTeamAnalytics('custom');
+  };
 
   const updateUserStatus = async (userId, status, level) => {
     setIsManaging(userId);
@@ -169,10 +250,91 @@ const AdminSupportTeamPanel = () => {
           <Text style={styles.title}>Support Team</Text>
           <Text style={styles.subTitle}>Onboarded Personnel & KPI Audit</Text>
         </View>
-        <TouchableOpacity onPress={fetchTeamAnalytics} disabled={isRefreshing}>
+        <TouchableOpacity onPress={() => fetchTeamAnalytics()} disabled={isRefreshing}>
           <Ionicons name="refresh-circle" size={28} color="#6366F1" style={isRefreshing && { opacity: 0.5 }} />
         </TouchableOpacity>
       </View>
+
+      {/* 🕐 Time Filter Bar */}
+      <View style={styles.timeFilterContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timeFilterRow}>
+          {TIME_FILTERS.map(f => (
+            <TouchableOpacity 
+              key={f.key} 
+              onPress={() => handleTimeFilterChange(f.key)}
+              style={[styles.timeChip, timeFilter === f.key && styles.timeChipActive]}
+            >
+              {f.key === 'custom' && <Ionicons name="calendar-outline" size={12} color={timeFilter === 'custom' ? '#FFF' : '#6366F1'} style={{ marginRight: 4 }} />}
+              <Text style={[styles.timeChipText, timeFilter === f.key && styles.timeChipTextActive]}>{f.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        {analytics && timeFilter !== 'all' && (
+          <Text style={styles.filterNote}>
+            Showing {analytics.filteredTicketCount}/{analytics.totalTicketCount} tickets
+          </Text>
+        )}
+      </View>
+
+      {/* 📅 Custom Range Picker */}
+      {showCustomRange && (
+        <View style={styles.customRangeCard}>
+          <Text style={styles.customRangeTitle}>Custom Date Range</Text>
+          <View style={styles.customRangeRow}>
+            <View style={styles.customRangeField}>
+              <Text style={styles.customRangeLabel}>From</Text>
+              <TextInput
+                style={styles.customRangeInput}
+                placeholder="YYYY-MM-DD HH:MM"
+                placeholderTextColor="#94A3B8"
+                value={customFrom}
+                onChangeText={setCustomFrom}
+              />
+            </View>
+            <View style={styles.customRangeField}>
+              <Text style={styles.customRangeLabel}>To</Text>
+              <TextInput
+                style={styles.customRangeInput}
+                placeholder="YYYY-MM-DD HH:MM"
+                placeholderTextColor="#94A3B8"
+                value={customTo}
+                onChangeText={setCustomTo}
+              />
+            </View>
+          </View>
+          <View style={styles.customRangeActions}>
+            <TouchableOpacity style={styles.customRangeCancelBtn} onPress={() => { setShowCustomRange(false); setTimeFilter('all'); }}>
+              <Text style={styles.customRangeCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.customRangeApplyBtn} onPress={applyCustomRange}>
+              <Ionicons name="checkmark" size={16} color="#FFF" />
+              <Text style={styles.customRangeApplyText}>Apply Filter</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* 📊 Team Summary Cards */}
+      {analytics?.teamSummary && (
+        <View style={styles.teamSummaryRow}>
+          <View style={[styles.summaryCard, { borderLeftColor: '#3B82F6' }]}>  
+            <Text style={styles.summaryValue}>{analytics.teamSummary.totalOpenTickets}</Text>
+            <Text style={styles.summaryLabel}>Open</Text>
+          </View>
+          <View style={[styles.summaryCard, { borderLeftColor: '#10B981' }]}>  
+            <Text style={styles.summaryValue}>{analytics.teamSummary.totalClosedResolved}</Text>
+            <Text style={styles.summaryLabel}>Resolved</Text>
+          </View>
+          <View style={[styles.summaryCard, { borderLeftColor: '#F59E0B' }]}>  
+            <Text style={styles.summaryValue}>{analytics.teamSummary.unassignedQueue}</Text>
+            <Text style={styles.summaryLabel}>Queue</Text>
+          </View>
+          <View style={[styles.summaryCard, { borderLeftColor: '#EF4444' }]}>  
+            <Text style={styles.summaryValue}>{analytics.teamSummary.overdueTickets}</Text>
+            <Text style={styles.summaryLabel}>Overdue</Text>
+          </View>
+        </View>
+      )}
 
       {/* Sub-Tabs: Employees / Ex-Employees */}
       <View style={styles.subTabRow}>
@@ -342,30 +504,57 @@ const AdminSupportTeamPanel = () => {
               </TouchableOpacity>
             )}
 
-            {/* Performance Insights */}
+            {/* 📊 Performance Stats Grid — Enhanced (v2.6.147) */}
             <View style={styles.statsGrid}>
                <View style={[styles.statBox, isSelectedTerminated && styles.statBoxTerminated]}>
-                 <Text style={styles.statLabel}>WEIGHTED SCORE</Text>
-                 <Text style={[styles.statValue, isSelectedTerminated && styles.textMuted]}>{selectedAgentStats?.score || '0.0'}</Text>
+                 <Text style={styles.statLabel}>ACTIVE TICKETS</Text>
+                 <Text style={[styles.statValue, { color: isSelectedTerminated ? '#94A3B8' : '#3B82F6' }]}>{selectedAgentStats?.stats?.activeTickets || 0}</Text>
                </View>
                <View style={[styles.statBox, isSelectedTerminated && styles.statBoxTerminated]}>
-                 <Text style={styles.statLabel}>TICKETS CLOSED</Text>
-                 <Text style={[styles.statValue, isSelectedTerminated && styles.textMuted]}>{selectedAgentStats?.stats?.closedTickets || 0}</Text>
+                 <Text style={styles.statLabel}>CLOSED / RESOLVED</Text>
+                 <Text style={[styles.statValue, isSelectedTerminated && styles.textMuted]}>{selectedAgentStats?.stats?.closedResolvedCount || 0}</Text>
                </View>
                <View style={[styles.statBox, isSelectedTerminated && styles.statBoxTerminated]}>
                  <Text style={styles.statLabel}>AVG RATING</Text>
-                 <Text style={[styles.statValue, { color: isSelectedTerminated ? '#94A3B8' : '#F59E0B' }]}>★ {selectedAgentStats?.stats?.avgRating || 'N/A'}</Text>
+                 <Text style={[styles.statValue, { color: isSelectedTerminated ? '#94A3B8' : '#F59E0B' }]}>★ {selectedAgentStats?.stats?.csatScore || 'N/A'}</Text>
                </View>
             </View>
 
+            {/* 📈 Detailed Metrics List — Enhanced (v2.6.147) */}
             <View style={styles.metricsList}>
                <View style={styles.metricRow}>
                  <Text style={styles.mLabel}>Total Handled</Text>
                  <Text style={[styles.mValue, isSelectedTerminated && styles.textMuted]}>{selectedAgentStats?.stats?.totalHandled || 0}</Text>
                </View>
                <View style={styles.metricRow}>
+                 <Text style={styles.mLabel}>Avg Resolution Time</Text>
+                 <Text style={[styles.mValue, { color: isSelectedTerminated ? '#94A3B8' : '#6366F1' }]}>{formatDuration(selectedAgentStats?.stats?.avgResolutionMs)}</Text>
+               </View>
+               <View style={styles.metricRow}>
+                 <Text style={styles.mLabel}>Avg First Response</Text>
+                 <Text style={[styles.mValue, { color: isSelectedTerminated ? '#94A3B8' : '#10B981' }]}>{formatDuration(selectedAgentStats?.stats?.avgFirstResponseMs)}</Text>
+               </View>
+               <View style={styles.metricRow}>
+                 <Text style={styles.mLabel}>Tickets Reopened</Text>
+                 <Text style={[styles.mValue, { color: (selectedAgentStats?.stats?.reopenedCount || 0) > 0 ? '#EF4444' : '#94A3B8' }]}>{selectedAgentStats?.stats?.reopenedCount || 0}</Text>
+               </View>
+               <View style={styles.metricRow}>
+                 <Text style={styles.mLabel}>SLA Compliance (24h)</Text>
+                 <Text style={[styles.mValue, { color: isSelectedTerminated ? '#94A3B8' : ((selectedAgentStats?.stats?.slaPercent || 0) >= 80 ? '#10B981' : '#F59E0B') }]}>
+                   {selectedAgentStats?.stats?.slaPercent != null ? `${selectedAgentStats.stats.slaPercent}%` : 'N/A'}
+                 </Text>
+               </View>
+               <View style={styles.metricRow}>
+                 <Text style={styles.mLabel}>Escalation Rate</Text>
+                 <Text style={[styles.mValue, { color: isSelectedTerminated ? '#94A3B8' : '#64748B' }]}>{selectedAgentStats?.stats?.escalationRate || 0}%</Text>
+               </View>
+               <View style={styles.metricRow}>
                  <Text style={styles.mLabel}>Manual Pool Picks</Text>
                  <Text style={[styles.mValue, { color: isSelectedTerminated ? '#94A3B8' : '#10B981' }]}>+{selectedAgentStats?.stats?.manualPicks || 0}</Text>
+               </View>
+               <View style={styles.metricRow}>
+                 <Text style={styles.mLabel}>Weighted Score</Text>
+                 <Text style={[styles.mValue, { color: isSelectedTerminated ? '#94A3B8' : '#6366F1', fontWeight: '900' }]}>{selectedAgentStats?.score || '0.0'} pts</Text>
                </View>
                <View style={styles.metricRow}>
                  <Text style={styles.mLabel}>Onboarded Via</Text>
@@ -400,6 +589,9 @@ const AdminSupportTeamPanel = () => {
               <View key={entry.id} style={[styles.leaderboardItem, selectedAgentId === entry.id && styles.leaderboardItemActive]}>
                 <Text style={styles.rankText}>#{idx + 1}</Text>
                 <Text style={styles.rankName} numberOfLines={1}>{entry.name}</Text>
+                <View style={styles.rankMeta}>
+                  <Text style={styles.rankMetaText}>{entry.stats?.activeTickets || 0} active</Text>
+                </View>
                 <View style={styles.rankScoreBox}>
                   <Text style={styles.rankScore}>{entry.score}</Text>
                   <Text style={styles.rankScoreUnits}>pts</Text>
@@ -415,12 +607,40 @@ const AdminSupportTeamPanel = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   title: { fontSize: 20, fontWeight: '900', color: '#0F172A' },
   subTitle: { fontSize: 11, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase' },
 
+  // 🕐 Time Filter
+  timeFilterContainer: { marginBottom: 12 },
+  timeFilterRow: { gap: 6, paddingVertical: 4 },
+  timeChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
+  timeChipActive: { backgroundColor: '#6366F1', borderColor: '#4F46E5' },
+  timeChipText: { fontSize: 11, fontWeight: '800', color: '#64748B' },
+  timeChipTextActive: { color: '#FFFFFF' },
+  filterNote: { fontSize: 10, color: '#94A3B8', marginTop: 6, fontStyle: 'italic' },
+
+  // 📅 Custom Range
+  customRangeCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#E0E7FF', ...shadows.sm },
+  customRangeTitle: { fontSize: 13, fontWeight: '800', color: '#4F46E5', marginBottom: 12 },
+  customRangeRow: { flexDirection: 'row', gap: 10 },
+  customRangeField: { flex: 1 },
+  customRangeLabel: { fontSize: 10, fontWeight: '700', color: '#64748B', marginBottom: 4 },
+  customRangeInput: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 12, color: '#0F172A', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  customRangeActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 12 },
+  customRangeCancelBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, backgroundColor: '#F1F5F9' },
+  customRangeCancelText: { fontSize: 12, color: '#64748B', fontWeight: '700' },
+  customRangeApplyBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, backgroundColor: '#6366F1' },
+  customRangeApplyText: { fontSize: 12, color: '#FFF', fontWeight: '700' },
+
+  // 📊 Team Summary
+  teamSummaryRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  summaryCard: { flex: 1, backgroundColor: '#FFF', padding: 10, borderRadius: 12, borderLeftWidth: 3, alignItems: 'center', ...shadows.sm },
+  summaryValue: { fontSize: 20, fontWeight: '900', color: '#0F172A' },
+  summaryLabel: { fontSize: 9, fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', marginTop: 2 },
+
   // Sub-Tabs
-  subTabRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  subTabRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   subTab: { 
     flexDirection: 'row', alignItems: 'center', gap: 6, 
     paddingHorizontal: 16, paddingVertical: 10, 
@@ -433,11 +653,11 @@ const styles = StyleSheet.create({
   subTabTextActive: { color: '#FFFFFF' },
 
   // Search
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 16 },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 12 },
   searchInput: { flex: 1, marginLeft: 8, fontSize: 14, color: '#1E293B', fontWeight: '600' },
 
   // Agent Row
-  userRowContainer: { marginBottom: 24 },
+  userRowContainer: { marginBottom: 16 },
   miniCard: { width: 70, alignItems: 'center', marginRight: 12, padding: 8, borderRadius: 16, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#F1F5F9' },
   miniCardActive: { backgroundColor: '#6366F1', borderColor: '#4F46E5' },
   miniCardTerminated: { opacity: 0.7, borderColor: '#FCA5A5' },
@@ -482,14 +702,14 @@ const styles = StyleSheet.create({
   },
   reOnboardText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
 
-  // Stats
-  statsGrid: { flexDirection: 'row', gap: 12, marginTop: 24 },
+  // Stats Grid — Top Cards
+  statsGrid: { flexDirection: 'row', gap: 10, marginTop: 24 },
   statBox: { flex: 1, backgroundColor: '#F8FAFC', padding: 12, borderRadius: 16, alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9' },
   statBoxTerminated: { backgroundColor: '#FAFAFA', borderColor: '#F1F5F9' },
-  statLabel: { fontSize: 8, fontWeight: '900', color: '#94A3B8', marginBottom: 4 },
+  statLabel: { fontSize: 7, fontWeight: '900', color: '#94A3B8', marginBottom: 4, textAlign: 'center' },
   statValue: { fontSize: 16, fontWeight: '900', color: '#0F172A' },
 
-  // Metrics
+  // Detailed Metrics List
   metricsList: { marginTop: 20, gap: 12, paddingTop: 20, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
   metricRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   mLabel: { fontSize: 13, color: '#64748B', fontWeight: '500' },
@@ -506,6 +726,8 @@ const styles = StyleSheet.create({
   leaderboardItemActive: { borderColor: '#6366F1', backgroundColor: '#F5F3FF' },
   rankText: { fontSize: 12, fontWeight: '900', color: '#94A3B8', width: 30 },
   rankName: { flex: 1, fontSize: 14, fontWeight: '700', color: '#1E293B' },
+  rankMeta: { marginRight: 12 },
+  rankMetaText: { fontSize: 10, fontWeight: '700', color: '#94A3B8' },
   rankScoreBox: { flexDirection: 'row', alignItems: 'baseline', gap: 2 },
   rankScore: { fontSize: 16, fontWeight: '900', color: '#6366F1' },
   rankScoreUnits: { fontSize: 10, fontWeight: '700', color: '#94A3B8' }
