@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// 📧 AceTrack Email Service (v2.6.128)
+// 📧 AceTrack Email Service (v2.6.129)
 // Uses Nodemailer + Gmail SMTP (free, 500 emails/day)
 // ═══════════════════════════════════════════════════════════════
 import nodemailer from 'nodemailer';

@@ -24,6 +24,8 @@ const AdminStaffPanel = () => {
   const [expandedAnalytics, setExpandedAnalytics] = useState(null); // token of expanded card
   const [selectedEvent, setSelectedEvent] = useState(null); // specific event for modal
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('active'); // 'active' or 'resolved'
+  const [isRetiring, setIsRetiring] = useState(null); // token of link being retired
 
   useEffect(() => {
     fetchInvites();
@@ -80,6 +82,12 @@ const AdminStaffPanel = () => {
         Alert.alert("Invite Generated", `${emailNote}\n\nSetup Link:\n${link}`);
         setEmail(''); setFirstName(''); setLastName('');
         fetchInvites();
+      } else if (res.status === 409) {
+        Alert.alert(
+          "Link Already Active", 
+          `The email ${email} already has an active provisioning link.\n\nKindly resend the existing link or retire it to provision a new one.`,
+          [{ text: "OK" }]
+        );
       } else { Alert.alert("Error", data.error || "Failed to generate invite"); }
     } catch (e) { Alert.alert("Network Error", e.message); }
     finally { setIsGenerating(false); }
@@ -104,6 +112,41 @@ const AdminStaffPanel = () => {
       } else { Alert.alert("Error", data.error || "Failed to resend email"); }
     } catch (e) { Alert.alert("Network Error", e.message); }
     finally { setResendingToken(null); }
+  };
+
+  const retireInvite = async (token, email) => {
+    Alert.alert(
+      "Retire Link?",
+      `Are you sure you want to retire the setup link for ${email}? This action is irreversible and the link will become instantly inaccessible.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Retire Link", 
+          style: "destructive",
+          onPress: async () => {
+            setIsRetiring(token);
+            try {
+              const res = await fetch(`${config.API_BASE_URL}/api/support/invite/expire`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' },
+                body: JSON.stringify({ token })
+              });
+              if (res.ok) {
+                Alert.alert("Link Retired", "The onboarding link has been successfully invalidated.");
+                fetchInvites();
+              } else {
+                const data = await res.json();
+                Alert.alert("Error", data.error || "Failed to retire link");
+              }
+            } catch (e) {
+              Alert.alert("Network Error", e.message);
+            } finally {
+              setIsRetiring(null);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const copyToClipboard = (link) => { Clipboard.setString(link); Alert.alert("Link Copied", `Share securely:\n\n${link}`); };
@@ -162,6 +205,33 @@ const AdminStaffPanel = () => {
   const isFormValid = email.includes('@') && firstName.trim() && lastName.trim();
 
   const filteredInvites = invites.filter(inv => {
+    // 1. Tab Filtering
+    const isInviteActive = (inv.status === 'Pending' || inv.status === 'Clicked') && new Date(inv.expiresAt) > new Date();
+    if (activeTab === 'active' && !isInviteActive) return false;
+    if (activeTab === 'resolved' && (isInviteActive || inv.status === 'Used')) return false; // Simple logic: Resolved = Expired/Retired. Used is different? User said "retired or expired tab"
+    
+    // Actually, user said Resolved tab should show retired/expired.
+    // Let's refine:
+    // Tab "Active": Pending/Clicked AND not expired.
+    // Tab "Resolved": Used.
+    // Tab "Retired/Expired": Expired or manually retired.
+    
+    // Re-reading user: "subtab inside active provision links to have the retire/expire tab to show the retired or expired links in that"
+    // So 2 tabs: 
+    // 1. "Active Links" (Pending/Clicked/Used) -- Wait, Used is not active.
+    // Let's use:
+    // Tab "Active": Pending/Clicked (not naturally expired)
+    // Tab "Resolved": Used
+    // Tab "Retired": Naturally expired or manually retired.
+    
+    // Let's stick to user phrasing: "Active" and "Retired/Expired"
+    if (activeTab === 'active') {
+       if (inv.status === 'Used' || inv.status === 'Expired' || new Date(inv.expiresAt) <= new Date()) return false;
+    } else {
+       if (inv.status !== 'Expired' && new Date(inv.expiresAt) > new Date()) return false;
+       if (inv.status === 'Used') return false; // Used links stay in their own bucket or we show them? User didn't specify Used.
+    }
+
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     const fullName = `${inv.firstName || ''} ${inv.lastName || ''}`.toLowerCase();
@@ -227,9 +297,28 @@ const AdminStaffPanel = () => {
         </>
       )}
 
-      <Text style={[styles.title, { marginTop: 24, marginBottom: 12 }]}>
-        {searchQuery ? `Search Results (${filteredInvites.length})` : 'Active Provisioning Links'}
+      <Text style={[styles.title, { marginTop: 24, marginBottom: 4 }]}>
+        {searchQuery ? `Search Results (${filteredInvites.length})` : 'Provisioning Links History'}
       </Text>
+
+      {/* 📑 Sub-Tabs */}
+      <View style={styles.tabRow}>
+        <TouchableOpacity 
+          style={[styles.smallTab, activeTab === 'active' && styles.smallTabActive]}
+          onPress={() => setActiveTab('active')}
+        >
+          <Text style={[styles.smallTabText, activeTab === 'active' && styles.smallTabTextActive]}>Active</Text>
+          {activeTab === 'active' && <View style={styles.tabIndicator} />}
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[styles.smallTab, activeTab === 'resolved' && styles.smallTabActive]}
+          onPress={() => setActiveTab('resolved')}
+        >
+          <Text style={[styles.smallTabText, activeTab === 'resolved' && styles.smallTabTextActive]}>Retired / Expired</Text>
+          {activeTab === 'resolved' && <View style={styles.tabIndicator} />}
+        </TouchableOpacity>
+      </View>
 
       {filteredInvites.map((inv) => {
         const cooldownText = getResendCooldownText(inv.token, inv);
@@ -328,6 +417,20 @@ const AdminStaffPanel = () => {
                     <>
                       <Ionicons name="mail-outline" size={16} color={resendDisabled ? '#94A3B8' : '#7C3AED'} />
                       <Text style={[styles.resendBtnText, resendDisabled && { color: '#94A3B8' }]}>Resend</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.retireBtn} 
+                  onPress={() => retireInvite(inv.token, inv.email)}
+                  disabled={isRetiring === inv.token}
+                >
+                  {isRetiring === inv.token ? (
+                    <ActivityIndicator size="small" color="#EF4444" />
+                  ) : (
+                    <>
+                      <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                      <Text style={styles.retireBtnText}>Retire</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -522,7 +625,16 @@ const styles = StyleSheet.create({
   searchContainer: { backgroundColor: '#FFF', flexDirection: 'row', alignItems: 'center', borderRadius: 12, paddingHorizontal: 12, marginBottom: 20, borderWidth: 1, borderColor: '#E2E8F0', height: 48, ...shadows.sm },
   searchIcon: { marginRight: 8 },
   searchInput: { flex: 1, fontSize: 14, color: '#0F172A', height: '100%' },
-  searchClear: { padding: 4 }
+  searchClear: { padding: 4 },
+  // 📑 Sub-Tabs UI
+  tabRow: { flexDirection: 'row', gap: 24, marginBottom: 16, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingHorizontal: 4 },
+  smallTab: { paddingVertical: 12, position: 'relative' },
+  smallTabActive: {},
+  smallTabText: { fontSize: 13, fontWeight: '700', color: '#94A3B8' },
+  smallTabTextActive: { color: '#4F46E5' },
+  tabIndicator: { position: 'absolute', bottom: -1, left: 0, right: 0, height: 2, backgroundColor: '#4F46E5', borderRadius: 2 },
+  retireBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FEF2F2', paddingHorizontal: 12, borderRadius: 8 },
+  retireBtnText: { color: '#EF4444', fontWeight: '700', fontSize: 12, marginLeft: 6 }
 });
 
 export default AdminStaffPanel;

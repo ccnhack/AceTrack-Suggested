@@ -70,8 +70,8 @@ const initFirebase = async () => {
 };
 initFirebase();
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.128)
-const APP_VERSION = "2.6.128"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
+const APP_VERSION = "2.6.129"; 
 
 
 
@@ -1408,6 +1408,20 @@ router.post('/support/invite', apiKeyGuard, asyncHandler(async (req, res) => {
     return res.status(403).json({ error: 'System Administrator privileges required' });
   }
 
+  // 🛡️ Double-Provisioning Guard: Check for any existing active links for this email
+  const activeInvite = await SupportInvite.findOne({ 
+    email, 
+    status: { $in: ['Pending', 'Clicked'] }, 
+    expiresAt: { $gt: new Date() } 
+  });
+
+  if (activeInvite) {
+    return res.status(409).json({ 
+      error: 'Email already has an active provisioning link.',
+      message: 'Kindly resend the invitation or retire the current link to provision again.'
+    });
+  }
+
   const token = bcrypt.hashSync(Date.now().toString() + email, 10).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // strict 24 hours
 
@@ -1448,6 +1462,34 @@ router.get('/support/invites', apiKeyGuard, asyncHandler(async (req, res) => {
   });
 
   res.json({ success: true, invites: processed });
+}));
+
+// 2a. Retire/Expire Invite (Manual Action)
+router.post('/support/invite/expire', apiKeyGuard, asyncHandler(async (req, res) => {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: 'Token required' });
+
+  if (req.headers['x-user-id'] !== 'admin') {
+    return res.status(403).json({ error: 'System Administrator privileges required' });
+  }
+
+  const invite = await SupportInvite.findOne({ token });
+  if (!invite) return res.status(404).json({ error: 'Invite not found' });
+  if (invite.status === 'Used') return res.status(400).json({ error: 'Invite already claimed' });
+
+  invite.status = 'Expired';
+  // Use a special action to track manual retirement
+  invite.clicks.push({ 
+    action: 'admin_retired', 
+    ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+    userAgent: 'Admin Hub',
+    timestamp: new Date()
+  });
+  
+  await invite.save();
+  await logServerEvent('SUPPORT_INVITE_RETIRED', { email: invite.email, token });
+
+  res.json({ success: true, message: 'Invite link has been retired and is no longer accessible.' });
 }));
 
 // 2b. Resend Onboarding Email (Rate Limited: 3 per invite, 1min cooldown, 4hr lockout)
@@ -1574,6 +1616,7 @@ router.post('/support/invite/click', asyncHandler(async (req, res) => {
   const invite = await SupportInvite.findOne({ token });
   if (!invite) return res.status(404).json({ error: 'Invite not found' });
   if (invite.status === 'Used') return res.status(400).json({ error: 'Invite already claimed' });
+  if (invite.status === 'Expired') return res.status(400).json({ error: 'Invite has been Expired' });
   if (invite.expiresAt < new Date()) return res.status(400).json({ error: 'Invite expired' });
   
   const geo = await resolveIpGeo(ipRaw);
@@ -1627,6 +1670,7 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
   const invite = await SupportInvite.findOne({ token });
   if (!invite) return res.status(404).json({ error: 'Invalid token' });
   if (invite.status === 'Used') return res.status(400).json({ error: 'Link already used' });
+  if (invite.status === 'Expired') return res.status(400).json({ error: 'Invite has been Expired' });
   if (invite.expiresAt < new Date()) return res.status(400).json({ error: 'Link expired' });
 
   if (!password || password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
