@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator, Modal, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator, Modal, Platform, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, shadows } from '../../theme/designSystem';
 import config from '../../config';
@@ -57,6 +57,18 @@ const AdminSupportTeamPanel = () => {
   const [showCustomRange, setShowCustomRange] = useState(false);
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
+
+  const handleExportCSV = () => {
+    const url = `${config.API_BASE_URL}/api/support/export?key=${config.ACE_API_KEY}&userId=admin`;
+    Alert.alert(
+      "Export Data",
+      "This will download a CSV containing all ticket data and metrics.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Download", onPress: () => Linking.openURL(url) }
+      ]
+    );
+  };
 
   const fetchTeamAnalytics = useCallback(async (filterOverride) => {
     setIsRefreshing(true);
@@ -285,9 +297,15 @@ const AdminSupportTeamPanel = () => {
           <Text style={styles.title}>Support Team</Text>
           <Text style={styles.subTitle}>Onboarded Personnel & KPI Audit</Text>
         </View>
-        <TouchableOpacity onPress={() => fetchTeamAnalytics()} disabled={isRefreshing}>
-          <Ionicons name="refresh-circle" size={28} color="#6366F1" style={isRefreshing && { opacity: 0.5 }} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={handleExportCSV} style={styles.exportBtn}>
+            <Ionicons name="download-outline" size={18} color="#2563EB" />
+            <Text style={styles.exportBtnText}>Export</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => fetchTeamAnalytics()} disabled={isRefreshing}>
+            <Ionicons name="refresh-circle" size={28} color="#6366F1" style={isRefreshing && { opacity: 0.5 }} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* 🕐 Time Filter Bar */}
@@ -367,7 +385,38 @@ const AdminSupportTeamPanel = () => {
           <View style={[styles.summaryCard, { borderLeftColor: '#EF4444' }]}>  
             <Text style={styles.summaryValue}>{analytics.teamSummary.overdueTickets}</Text>
             <Text style={styles.summaryLabel}>Overdue</Text>
-          </View>
+        </View>
+      )}
+
+      {/* ⚠️ Automated Admin Alerts (Phase 4) */}
+      {analytics?.teamSummary?.adminAlerts?.length > 0 && (
+        <View style={styles.alertsContainer}>
+           <Text style={styles.sectionTitle}>System Alerts</Text>
+           {analytics.teamSummary.adminAlerts.map((alert, i) => (
+             <View key={i} style={[styles.alertRow, alert.type === 'danger' ? styles.alertDanger : styles.alertWarning]}>
+                <Ionicons name={alert.type === 'danger' ? 'warning' : 'alert-circle'} size={16} color={alert.type === 'danger' ? '#DC2626' : '#D97706'} />
+                <Text style={[styles.alertText, { color: alert.type === 'danger' ? '#991B1B' : '#92400E' }]}>{alert.message}</Text>
+             </View>
+           ))}
+        </View>
+      )}
+
+      {/* 📊 Ticket Type Breakdown (Phase 4) */}
+      {analytics?.teamSummary?.ticketTypesBreakdown && Object.keys(analytics.teamSummary.ticketTypesBreakdown).length > 0 && (
+        <View style={styles.breakdownContainer}>
+           <Text style={styles.sectionTitle}>Ticket Types</Text>
+           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillsScroll}>
+             <View style={styles.pillsRow}>
+               {Object.entries(analytics.teamSummary.ticketTypesBreakdown).map(([type, count]) => (
+                  <View key={type} style={styles.typePill}>
+                    <Text style={styles.typePillLabel}>{type}</Text>
+                    <View style={styles.typePillCountBadge}>
+                      <Text style={styles.typePillCount}>{count}</Text>
+                    </View>
+                  </View>
+               ))}
+             </View>
+           </ScrollView>
         </View>
       )}
 
@@ -872,7 +921,23 @@ const styles = StyleSheet.create({
   timelineIconNode: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 12, zIndex: 1 },
   timelineContent: { flex: 1, paddingBottom: 16 },
   timelineText: { fontSize: 13, fontWeight: '600', color: '#1E293B', marginBottom: 2 },
-  timelineTime: { fontSize: 10, color: '#94A3B8', fontWeight: '500' }
+  timelineTime: { fontSize: 10, color: '#94A3B8', fontWeight: '500' },
+
+  // Phase 4 - Export, Alerts, Breakdown
+  exportBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, gap: 4, marginRight: 8, borderWidth: 1, borderColor: '#BFDBFE' },
+  exportBtnText: { fontSize: 12, fontWeight: '800', color: '#2563EB' },
+  alertsContainer: { marginBottom: 20 },
+  alertRow: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1, gap: 8 },
+  alertDanger: { backgroundColor: '#FEF2F2', borderColor: '#FECACA' },
+  alertWarning: { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' },
+  alertText: { fontSize: 12, fontWeight: '600', flex: 1, lineHeight: 18 },
+  breakdownContainer: { marginBottom: 20 },
+  pillsScroll: { marginTop: 4 },
+  pillsRow: { flexDirection: 'row', gap: 8, paddingBottom: 4 },
+  typePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', paddingLeft: 12, paddingRight: 4, paddingVertical: 4, borderRadius: 20, gap: 8 },
+  typePillLabel: { fontSize: 11, fontWeight: '700', color: '#475569' },
+  typePillCountBadge: { backgroundColor: '#3B82F6', width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  typePillCount: { fontSize: 10, fontWeight: '900', color: '#FFF' }
 });
 
 export default AdminSupportTeamPanel;

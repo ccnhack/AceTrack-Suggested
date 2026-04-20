@@ -82,7 +82,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.149"; 
+const APP_VERSION = "2.6.150"; 
 
 
 
@@ -2742,6 +2742,38 @@ router.get('/support/analytics', apiKeyGuard, async (req, res) => {
     const allRatings = agents.map(a => a.metrics?.avgRating || 0).filter(r => r > 0);
     const globalAvgRating = allRatings.length > 0 ? (allRatings.reduce((a,b) => a+b, 0) / allRatings.length) : 4.5;
 
+    // Ticket Type Breakdown
+    const ticketTypesBreakdown = {};
+    tickets.forEach(t => {
+      const type = t.type || 'Other';
+      ticketTypesBreakdown[type] = (ticketTypesBreakdown[type] || 0) + 1;
+    });
+
+    // Automated Admin Alerts
+    const adminAlerts = [];
+    agentMetrics.forEach(a => {
+      if (a.stats.activeTickets > 10) {
+        adminAlerts.push({ type: 'warning', message: `${a.name} is overwhelmed with ${a.stats.activeTickets} active tickets. Consider pausing distribution.` });
+      }
+      if (a.stats.csatScore && a.stats.csatScore <= 3.5) {
+         adminAlerts.push({ type: 'danger', message: `${a.name} has a low CSAT score (${a.stats.csatScore}★). Quality review recommended.` });
+      }
+    });
+
+    const overdueCount = tickets.filter(t => {
+      if (t.status === 'Closed' || t.status === 'Resolved') return false;
+      const created = new Date(t.createdAt);
+      return (Date.now() - created.getTime()) > (48 * 60 * 60 * 1000);
+    }).length;
+    
+    if (overdueCount > 0) {
+      adminAlerts.push({ type: 'danger', message: `${overdueCount} tickets are overdue (open for > 48h).` });
+    }
+
+    tickets.filter(t => (t.reopenCount || 0) >= 3).forEach(t => {
+      adminAlerts.push({ type: 'warning', message: `Ticket #${t.id.slice(-4)} has been reopened ${t.reopenCount} times.` });
+    });
+
     // Team-wide summary  
     const teamSummary = {
       totalOpenTickets: tickets.filter(t => ['Open', 'In Progress', 'Awaiting Response'].includes(t.status)).length,
@@ -2752,11 +2784,9 @@ router.get('/support/analytics', apiKeyGuard, async (req, res) => {
         const today = new Date();
         return created.toDateString() === today.toDateString();
       }).length,
-      overdueTickets: tickets.filter(t => {
-        if (t.status === 'Closed' || t.status === 'Resolved') return false;
-        const created = new Date(t.createdAt);
-        return (Date.now() - created.getTime()) > (48 * 60 * 60 * 1000);
-      }).length
+      overdueTickets: overdueCount,
+      ticketTypesBreakdown,
+      adminAlerts
     };
 
     res.json({
@@ -2768,6 +2798,49 @@ router.get('/support/analytics', apiKeyGuard, async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 📥 Export Support Data as CSV
+router.get('/support/export', async (req, res) => {
+  // Allow key in query param since browser direct downloads can't send custom headers easily
+  const providedKey = req.headers['x-ace-api-key'] || req.query.key;
+  const userId = req.headers['x-user-id'] || req.query.userId;
+
+  if (providedKey !== ACE_API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid API Key' });
+  }
+  if (userId !== 'admin') {
+    return res.status(403).json({ error: 'System Administrator privileges required' });
+  }
+
+  try {
+    const state = await AppState.findOne().sort({ lastUpdated: -1 });
+    if (!state) return res.status(404).json({ error: "State not found" });
+
+    const tickets = state.data.supportTickets || [];
+    const fields = ['id', 'type', 'status', 'assignedTo', 'createdAt', 'resolvedAt', 'closedAt', 'rating'];
+    let csv = fields.join(',') + '\n';
+    
+    tickets.forEach(t => {
+       const row = fields.map(f => {
+         let value = t[f] || '';
+         if (typeof value === 'string') {
+           value = value.replace(/"/g, '""');
+           if (value.includes(',') || value.includes('\n') || value.includes('"')) {
+             value = `"${value}"`;
+           }
+         }
+         return value;
+       });
+       csv += row.join(',') + '\n';
+    });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="support_tickets.csv"');
+    res.send(csv);
+  } catch(e) {
     res.status(500).json({ error: e.message });
   }
 });
