@@ -71,4 +71,4 @@ class SupportMetricsService {
   }
 }
 
-module.exports = SupportMetricsService;
+export default SupportMetricsService;
