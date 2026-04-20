@@ -26,7 +26,8 @@ import {
   sendLoginDetailsEmail,
   sendAdminResetPasswordEmail,
   sendPromotionEmail,
-  sendTerminationEmail
+  sendTerminationEmail,
+  sendReOnboardingEmail
 } from './emailService.mjs';
 import SupportMetricsService from './services/SupportMetricsService.mjs';
 
@@ -2632,9 +2633,17 @@ router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
       if (status === 'terminated') {
         players[idx].terminatedAt = new Date().toISOString();
       } else if (status === 'active') {
-        // Re-onboarding: clear termination metadata
+        // Re-onboarding: clear termination metadata, generate new credentials
         delete players[idx].terminatedAt;
         players[idx].reOnboardedAt = new Date().toISOString();
+        
+        // 🔑 Generate fresh credentials for re-onboarded employee
+        const newPassword = Math.random().toString(36).substring(2, 12);
+        players[idx].password = newPassword;
+        console.log(`[RE-ONBOARD] Generated new credentials for ${players[idx].email}`);
+        
+        // 📧 Send Welcome Back email with new access key
+        sendReOnboardingEmail(players[idx].email, players[idx].name, newPassword);
       }
     }
     if (level) {
