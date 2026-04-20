@@ -82,7 +82,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.147"; 
+const APP_VERSION = "2.6.148"; 
 
 
 
@@ -2771,9 +2771,14 @@ router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
       players[idx].supportStatus = status;
       if (status === 'terminated') {
         players[idx].terminatedAt = new Date().toISOString();
+      } else if (status === 'suspended') {
+        // 🔒 SUSPEND: Freeze account without full termination
+        players[idx].suspendedAt = new Date().toISOString();
+        console.log(`[SUSPEND] ${players[idx].email} suspended by admin`);
       } else if (status === 'active') {
-        // Re-onboarding: clear termination metadata, generate new credentials
+        // Re-onboarding or unsuspend: clear metadata
         delete players[idx].terminatedAt;
+        delete players[idx].suspendedAt;
         players[idx].reOnboardedAt = new Date().toISOString();
         
         // 🔑 Generate fresh credentials for re-onboarded employee
@@ -2789,14 +2794,14 @@ router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
       const oldLevel = players[idx].supportLevel;
       players[idx].supportLevel = level;
 
-      // 📧 Trigger Promotion Email if leveled up
+      // 📧 Trigger Promotion/Demotion Email if level changed
       if (oldLevel !== level) {
          sendPromotionEmail(players[idx].email, players[idx].name, level);
       }
     }
     
-    // Automated Unassign Trigger: If terminated, free up their tickets
-    if (status === 'terminated') {
+    // Automated Unassign Trigger: If terminated or suspended, free up their tickets
+    if (status === 'terminated' || status === 'suspended') {
        const tickets = (state.data.supportTickets || []).map(t => {
          if (t.assignedTo === targetUserId) {
            return { ...t, assignedTo: null, assignedAt: null };
@@ -2805,8 +2810,10 @@ router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
        });
        state.data.supportTickets = tickets;
 
-       // 📧 Trigger Termination Email
-       sendTerminationEmail(players[idx].email, players[idx].name);
+       if (status === 'terminated') {
+         // 📧 Trigger Termination Email
+         sendTerminationEmail(players[idx].email, players[idx].name);
+       }
     }
 
     state.data.players = players;
@@ -2815,6 +2822,46 @@ router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
 
     logServerEvent('SUPPORT_USER_MANAGED', { admin: req.headers['x-user-id'] || 'admin', targetUserId, status, level });
     res.json({ success: true, user: players[idx] });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 🔄 Transfer All Open Tickets from One Agent to Another
+router.post('/support/transfer-tickets', apiKeyGuard, async (req, res) => {
+  const { fromAgentId, toAgentId } = req.body;
+  console.log(`[API] POST /support/transfer-tickets: from=${fromAgentId}, to=${toAgentId}`);
+  if (req.headers['x-user-id'] !== 'admin') return res.status(403).json({ error: 'System Administrator privileges required' });
+  if (!fromAgentId || !toAgentId) return res.status(400).json({ error: 'Both fromAgentId and toAgentId are required' });
+  if (fromAgentId === toAgentId) return res.status(400).json({ error: 'Source and target agent cannot be the same' });
+
+  try {
+    const state = await AppState.findOne().sort({ lastUpdated: -1 });
+    if (!state) return res.status(404).json({ error: "State not found" });
+
+    const players = state.data.players || [];
+    const fromAgent = players.find(p => p.id === fromAgentId);
+    const toAgent = players.find(p => p.id === toAgentId && p.role === 'support' && p.supportStatus === 'active');
+    if (!fromAgent) return res.status(404).json({ error: "Source agent not found" });
+    if (!toAgent) return res.status(404).json({ error: "Target agent not found or not active" });
+
+    const tickets = state.data.supportTickets || [];
+    let transferCount = 0;
+
+    for (const ticket of tickets) {
+      if (ticket.assignedTo === fromAgentId && ['Open', 'In Progress', 'Awaiting Response'].includes(ticket.status)) {
+        ticket.assignedTo = toAgentId;
+        ticket.assignedAt = new Date().toISOString();
+        ticket.reassignedFrom = fromAgentId;
+        transferCount++;
+      }
+    }
+
+    state.markModified('data');
+    await state.save();
+
+    logServerEvent('SUPPORT_TICKETS_TRANSFERRED', { fromAgentId, toAgentId, count: transferCount });
+    res.json({ success: true, transferred: transferCount, message: `${transferCount} ticket(s) transferred to ${toAgent.name}` });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

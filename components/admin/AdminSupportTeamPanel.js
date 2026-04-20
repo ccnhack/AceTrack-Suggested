@@ -180,6 +180,41 @@ const AdminSupportTeamPanel = () => {
     );
   };
 
+  // 🔄 Transfer Tickets Handler
+  const handleTransferTickets = async (fromId) => {
+    const otherAgents = activeAgents.filter(a => a.id !== fromId);
+    if (otherAgents.length === 0) {
+      Alert.alert('No Agents Available', 'There are no other active agents to transfer tickets to.');
+      return;
+    }
+    const buttons = otherAgents.map(a => ({
+      text: a.name || `${a.firstName} ${a.lastName}`,
+      onPress: async () => {
+        setIsManaging(fromId);
+        try {
+          const res = await fetch(`${config.API_BASE_URL}/api/support/transfer-tickets`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' },
+            body: JSON.stringify({ fromAgentId: fromId, toAgentId: a.id })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            Alert.alert('Tickets Transferred', data.message || `${data.transferred} ticket(s) transferred.`);
+            fetchTeamAnalytics();
+          } else {
+            Alert.alert('Error', data.error || 'Failed to transfer tickets');
+          }
+        } catch (e) {
+          Alert.alert('Network Error', e.message);
+        } finally {
+          setIsManaging(null);
+        }
+      }
+    }));
+    buttons.unshift({ text: 'Cancel', style: 'cancel' });
+    Alert.alert('Transfer Tickets To', `Select the target agent to receive all open tickets from ${selectedAgent?.name}:`, buttons);
+  };
+
   // 🛡️ SERVER-TRUTH ROSTER (v2.6.145): Fetch support agents directly from server
   // Local cache may have stale supportStatus values from before termination
   const [serverAgents, setServerAgents] = useState(null);
@@ -395,7 +430,7 @@ const AdminSupportTeamPanel = () => {
               </Text>
               <View style={[
                 styles.statusDot, 
-                { backgroundColor: agent.supportStatus === 'terminated' ? '#EF4444' : (agent.supportStatus === 'overwhelmed' ? '#F59E0B' : '#10B981') }
+                { backgroundColor: agent.supportStatus === 'terminated' ? '#EF4444' : agent.supportStatus === 'suspended' ? '#F97316' : (agent.supportStatus === 'overwhelmed' ? '#F59E0B' : '#10B981') }
               ]} />
             </TouchableOpacity>
           ))}
@@ -438,15 +473,15 @@ const AdminSupportTeamPanel = () => {
                     </Text>
                     <View style={[
                       styles.statusPill,
-                      { backgroundColor: isSelectedTerminated ? '#FEE2E2' : (selectedAgent.supportStatus === 'overwhelmed' ? '#FEF3C7' : '#D1FAE5') }
+                      { backgroundColor: isSelectedTerminated ? '#FEE2E2' : (selectedAgent.supportStatus === 'suspended' ? '#FFF7ED' : (selectedAgent.supportStatus === 'overwhelmed' ? '#FEF3C7' : '#D1FAE5')) }
                     ]}>
                       <View style={[
                         styles.statusPillDot, 
-                        { backgroundColor: isSelectedTerminated ? '#EF4444' : (selectedAgent.supportStatus === 'overwhelmed' ? '#F59E0B' : '#10B981') }
+                        { backgroundColor: isSelectedTerminated ? '#EF4444' : (selectedAgent.supportStatus === 'suspended' ? '#F97316' : (selectedAgent.supportStatus === 'overwhelmed' ? '#F59E0B' : '#10B981')) }
                       ]} />
                       <Text style={[
                         styles.statusPillText,
-                        { color: isSelectedTerminated ? '#DC2626' : (selectedAgent.supportStatus === 'overwhelmed' ? '#D97706' : '#059669') }
+                        { color: isSelectedTerminated ? '#DC2626' : (selectedAgent.supportStatus === 'suspended' ? '#EA580C' : (selectedAgent.supportStatus === 'overwhelmed' ? '#D97706' : '#059669')) }
                       ]}>
                         {isSelectedTerminated ? 'Terminated' : (selectedAgent.supportStatus || 'Active')}
                       </Text>
@@ -456,28 +491,58 @@ const AdminSupportTeamPanel = () => {
               </View>
             </View>
 
-            {/* Settings Button — only for ACTIVE employees */}
+            {/* Settings Button — only for ACTIVE/SUSPENDED employees */}
             {!isSelectedTerminated && (
               <TouchableOpacity 
                 style={styles.settingsBtn}
                 onPress={() => {
-                     Alert.alert(
-                       "Employee Actions",
-                       `Manage ${selectedAgent.name}`,
-                       [
-                         { text: "Cancel", style: "cancel" },
-                         { text: "Promote (Specialist)", onPress: () => updateUserStatus(selectedAgent.id, null, 'Specialist') },
-                         { text: "Promote (Senior)", onPress: () => updateUserStatus(selectedAgent.id, null, 'Senior') },
-                         { text: selectedAgent.supportStatus === 'overwhelmed' ? "Resume Distribution" : "Pause Distribution", onPress: () => updateUserStatus(selectedAgent.id, selectedAgent.supportStatus === 'overwhelmed' ? 'active' : 'overwhelmed') },
-                         { text: "Terminate Access", style: 'destructive', onPress: () => {
-                           Alert.alert("Confirm Termination", "This will unassign all tickets instantly and revoke dashboard access. The employee will be moved to Ex-Employees. Proceed?", [
-                             { text: "Cancel" },
-                             { text: "Terminate", style: 'destructive', onPress: () => updateUserStatus(selectedAgent.id, 'terminated') }
-                           ])
-                         }},
-                         { text: "Reset Password", onPress: () => handleForceReset(selectedAgent.id) }
-                       ]
-                     )
+                     const isSuspended = selectedAgent.supportStatus === 'suspended';
+                     const currentLevel = selectedAgent.supportLevel || 'Trainee';
+                     
+                     // Build dynamic action list
+                     const actions = [{ text: "Cancel", style: "cancel" }];
+                     
+                     // Promote options (only for active)
+                     if (!isSuspended) {
+                       if (currentLevel !== 'Specialist') actions.push({ text: "Promote → Specialist", onPress: () => updateUserStatus(selectedAgent.id, null, 'Specialist') });
+                       if (currentLevel !== 'Senior') actions.push({ text: "Promote → Senior", onPress: () => updateUserStatus(selectedAgent.id, null, 'Senior') });
+                     }
+                     
+                     // Demote options
+                     if (currentLevel === 'Senior') actions.push({ text: "Demote → Specialist", onPress: () => updateUserStatus(selectedAgent.id, null, 'Specialist') });
+                     if (currentLevel !== 'Trainee') actions.push({ text: "Demote → Trainee", onPress: () => updateUserStatus(selectedAgent.id, null, 'Trainee') });
+                     
+                     // Suspend/Unsuspend
+                     if (isSuspended) {
+                       actions.push({ text: "✅ Unsuspend (Reactivate)", onPress: () => updateUserStatus(selectedAgent.id, 'active') });
+                     } else {
+                       actions.push({ 
+                         text: selectedAgent.supportStatus === 'overwhelmed' ? "Resume Distribution" : "Pause Distribution", 
+                         onPress: () => updateUserStatus(selectedAgent.id, selectedAgent.supportStatus === 'overwhelmed' ? 'active' : 'overwhelmed') 
+                       });
+                       actions.push({ text: "🔒 Suspend Account", onPress: () => {
+                         Alert.alert("Confirm Suspension", "This will temporarily freeze the account and unassign all open tickets. The employee can be unsuspended later.", [
+                           { text: "Cancel" },
+                           { text: "Suspend", style: 'destructive', onPress: () => updateUserStatus(selectedAgent.id, 'suspended') }
+                         ]);
+                       }});
+                     }
+                     
+                     // Transfer Tickets
+                     if (!isSuspended) {
+                       actions.push({ text: "🔄 Transfer All Tickets", onPress: () => handleTransferTickets(selectedAgent.id) });
+                     }
+                     
+                     // Terminate & Reset
+                     actions.push({ text: "Terminate Access", style: 'destructive', onPress: () => {
+                       Alert.alert("Confirm Termination", "This will unassign all tickets instantly and revoke dashboard access. The employee will be moved to Ex-Employees. Proceed?", [
+                         { text: "Cancel" },
+                         { text: "Terminate", style: 'destructive', onPress: () => updateUserStatus(selectedAgent.id, 'terminated') }
+                       ]);
+                     }});
+                     actions.push({ text: "Reset Password", onPress: () => handleForceReset(selectedAgent.id) });
+                     
+                     Alert.alert("Employee Actions", `Manage ${selectedAgent.name}\nLevel: ${currentLevel} | Status: ${isSuspended ? 'Suspended' : selectedAgent.supportStatus}`, actions);
                   }}
                 >
                   <Ionicons name="settings" size={20} color="#6366F1" />
@@ -578,6 +643,34 @@ const AdminSupportTeamPanel = () => {
                 ? 'Select an agent above for deep diagnostics' 
                 : 'Select an ex-employee to view their history'}
             </Text>
+          </View>
+        )}
+
+        {/* 📊 Caseload Distribution — only in Employees tab */}
+        {activeTab === 'employees' && analytics?.leaderboard && analytics.leaderboard.length > 0 && (
+          <View style={styles.caseloadSection}>
+            <Text style={styles.caseloadTitle}>Caseload Distribution</Text>
+            {(() => {
+              const maxLoad = Math.max(...analytics.leaderboard.map(e => e.stats?.activeTickets || 0), 1);
+              return analytics.leaderboard
+                .filter(e => e.status !== 'terminated')
+                .sort((a, b) => (b.stats?.activeTickets || 0) - (a.stats?.activeTickets || 0))
+                .map(entry => {
+                  const load = entry.stats?.activeTickets || 0;
+                  const pct = Math.max((load / maxLoad) * 100, 4);
+                  const barColor = load === 0 ? '#E2E8F0' : load >= 8 ? '#EF4444' : load >= 5 ? '#F59E0B' : '#10B981';
+                  const statusIcon = entry.status === 'suspended' ? '🔒' : entry.status === 'overwhelmed' ? '⚠️' : '';
+                  return (
+                    <View key={entry.id} style={styles.caseloadRow}>
+                      <Text style={styles.caseloadName} numberOfLines={1}>{statusIcon}{entry.name?.split(' ')[0]}</Text>
+                      <View style={styles.caseloadBarBg}>
+                        <View style={[styles.caseloadBar, { width: `${pct}%`, backgroundColor: barColor }]} />
+                      </View>
+                      <Text style={[styles.caseloadCount, { color: barColor === '#E2E8F0' ? '#94A3B8' : barColor }]}>{load}</Text>
+                    </View>
+                  );
+                });
+            })()}
           </View>
         )}
 
@@ -730,7 +823,16 @@ const styles = StyleSheet.create({
   rankMetaText: { fontSize: 10, fontWeight: '700', color: '#94A3B8' },
   rankScoreBox: { flexDirection: 'row', alignItems: 'baseline', gap: 2 },
   rankScore: { fontSize: 16, fontWeight: '900', color: '#6366F1' },
-  rankScoreUnits: { fontSize: 10, fontWeight: '700', color: '#94A3B8' }
+  rankScoreUnits: { fontSize: 10, fontWeight: '700', color: '#94A3B8' },
+
+  // 📊 Caseload Distribution Chart
+  caseloadSection: { marginTop: 24, marginBottom: 8, backgroundColor: '#FFF', padding: 16, borderRadius: 20, borderWidth: 1, borderColor: '#F1F5F9', ...shadows.sm },
+  caseloadTitle: { fontSize: 13, fontWeight: '900', color: '#0F172A', marginBottom: 14, textTransform: 'uppercase', letterSpacing: 0.5 },
+  caseloadRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  caseloadName: { width: 65, fontSize: 11, fontWeight: '700', color: '#64748B' },
+  caseloadBarBg: { flex: 1, height: 14, backgroundColor: '#F8FAFC', borderRadius: 7, marginHorizontal: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#F1F5F9' },
+  caseloadBar: { height: '100%', borderRadius: 7, minWidth: 4 },
+  caseloadCount: { width: 24, fontSize: 12, fontWeight: '900', textAlign: 'right' },
 });
 
 export default AdminSupportTeamPanel;
