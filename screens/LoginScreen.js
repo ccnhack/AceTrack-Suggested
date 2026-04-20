@@ -72,35 +72,40 @@ const LoginScreen = ({ navigation }) => {
           return;
         }
         
-        // Support staff login — cloud-backed lookup
-        let supportUser = (players || []).find(p => {
-          const search = username.toLowerCase().trim();
-          return (
-            p.role === 'support' && (
-              (p.email || '').toLowerCase() === search ||
-              String(p.id || '').toLowerCase() === search ||
-              (p.name || '').toLowerCase() === search
-            )
-          );
-        });
+        // Support staff login — ALWAYS fetch fresh data from server (v2.6.145)
+        // Local cache may have stale passwords from previous sessions
+        let supportUser = null;
+        const search = username.toLowerCase().trim();
 
-        // If not found locally, try cloud refresh
-        if (!supportUser && onRefreshData) {
+        if (onRefreshData) {
           setIsSyncing(true);
-          const cloudResult = await onRefreshData();
-          setIsSyncing(false);
-          if (cloudResult && cloudResult.players) {
-            const search = username.toLowerCase().trim();
-            supportUser = cloudResult.players.find(p => {
-              return (
+          try {
+            const cloudResult = await onRefreshData();
+            if (cloudResult && cloudResult.players) {
+              supportUser = cloudResult.players.find(p => (
                 p.role === 'support' && (
                   (p.email || '').toLowerCase() === search ||
                   String(p.id || '').toLowerCase() === search ||
                   (p.name || '').toLowerCase() === search
                 )
-              );
-            });
+              ));
+            }
+          } catch (refreshErr) {
+            console.warn('Cloud refresh failed, falling back to local cache:', refreshErr.message);
+          } finally {
+            setIsSyncing(false);
           }
+        }
+
+        // Fallback: If server unreachable, try local cache
+        if (!supportUser) {
+          supportUser = (players || []).find(p => (
+            p.role === 'support' && (
+              (p.email || '').toLowerCase() === search ||
+              String(p.id || '').toLowerCase() === search ||
+              (p.name || '').toLowerCase() === search
+            )
+          ));
         }
 
         if (supportUser) {
