@@ -24,8 +24,10 @@ const AdminStaffPanel = () => {
   const [expandedAnalytics, setExpandedAnalytics] = useState(null); // token of expanded card
   const [selectedEvent, setSelectedEvent] = useState(null); // specific event for modal
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('active'); // 'active' or 'resolved'
+  const [activeTab, setActiveTab] = useState('active'); // 'active', 'resolved', 'team'
   const [isRetiring, setIsRetiring] = useState(null); // token of link being retired
+  const [analytics, setAnalytics] = useState(null);
+  const [isManaging, setIsManaging] = useState(null); // userId being updated
 
   useEffect(() => {
     fetchInvites();
@@ -63,6 +65,24 @@ const AdminStaffPanel = () => {
       console.warn("Failed to fetch invites");
     }
   };
+
+  const fetchTeamAnalytics = async () => {
+    try {
+       const res = await fetch(`${config.API_BASE_URL}/api/support/analytics`, {
+         headers: { 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' }
+       });
+       if (res.ok) {
+         const data = await res.json();
+         setAnalytics(data);
+       }
+    } catch (e) {
+       console.warn("Failed to fetch analytics");
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'team') fetchTeamAnalytics();
+  }, [activeTab]);
 
   const generateInvite = async () => {
     if (!email.includes('@')) { Alert.alert("Invalid Email", "Please enter a valid corporate email address."); return; }
@@ -147,6 +167,32 @@ const AdminStaffPanel = () => {
         }
       ]
     );
+  };
+
+  const updateUserStatus = async (userId, status, level) => {
+    setIsManaging(userId);
+    try {
+      const res = await fetch(`${config.API_BASE_URL}/api/support/manage-user`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'x-ace-api-key': config.ACE_API_KEY, 
+          'x-user-id': 'admin' 
+        },
+        body: JSON.stringify({ targetUserId: userId, status, level })
+      });
+      if (res.ok) {
+        fetchTeamAnalytics();
+        Alert.alert("Success", "Employee profile updated successfully.");
+      } else {
+        const data = await res.json();
+        Alert.alert("Error", data.error || "Failed to update user");
+      }
+    } catch (e) {
+      Alert.alert("Network Error", e.message);
+    } finally {
+      setIsManaging(null);
+    }
   };
 
   const copyToClipboard = (link) => { Clipboard.setString(link); Alert.alert("Link Copied", `Share securely:\n\n${link}`); };
@@ -330,7 +376,95 @@ const AdminStaffPanel = () => {
           <Text style={[styles.smallTabText, activeTab === 'resolved' && styles.smallTabTextActive]}>Retired / Expired</Text>
           {activeTab === 'resolved' && <View style={styles.tabIndicator} />}
         </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.smallTab, activeTab === 'team' && styles.smallTabActive]}
+          onPress={() => setActiveTab('team')}
+        >
+          <Text style={[styles.smallTabText, activeTab === 'team' && styles.smallTabTextActive]}>Team & Leaderboard</Text>
+          {activeTab === 'team' && <View style={styles.tabIndicator} />}
+        </TouchableOpacity>
       </View>
+
+      {activeTab === 'team' && (
+        <View style={styles.teamContainer}>
+           <View style={styles.analyticsHeader}>
+             <Text style={styles.analyticsSubTitle}>Support Team Performance (Weighted Score)</Text>
+             <TouchableOpacity onPress={fetchTeamAnalytics}>
+               <Ionicons name="refresh-circle" size={24} color="#6366F1" />
+             </TouchableOpacity>
+           </View>
+
+           {analytics?.leaderboard?.map((agent, index) => (
+             <View key={agent.id} style={styles.leaderboardCard}>
+               <View style={styles.rankBadge}>
+                 <Text style={styles.rankText}>#{index + 1}</Text>
+               </View>
+               
+               <View style={styles.agentInfo}>
+                 <Text style={styles.agentName}>{agent.name}</Text>
+                 <Text style={styles.agentEmail}>{agent.email}</Text>
+                 <View style={styles.levelRow}>
+                    <Text style={styles.levelTag}>{agent.level}</Text>
+                    <View style={[styles.dot, { backgroundColor: agent.status === 'terminated' ? '#EF4444' : (agent.status === 'overwhelmed' ? '#F59E0B' : '#10B981') }]} />
+                    <Text style={styles.statusText}>{agent.status || 'active'}</Text>
+                 </View>
+               </View>
+
+               <View style={styles.scoreSection}>
+                 <Text style={styles.scoreValue}>{agent.score}</Text>
+                 <Text style={styles.scoreLabel}>PTS</Text>
+               </View>
+
+               <View style={styles.agentActions}>
+                 <TouchableOpacity 
+                   style={styles.manageBtn}
+                   onPress={() => {
+                     Alert.alert(
+                       "Manage Employee",
+                       `Change status/level for ${agent.name}`,
+                       [
+                         { text: "Cancel", style: "cancel" },
+                         { text: "Promote (Specialist)", onPress: () => updateUserStatus(agent.id, null, 'Specialist') },
+                         { text: "Promote (Senior)", onPress: () => updateUserStatus(agent.id, null, 'Senior') },
+                         { text: agent.status === 'overwhelmed' ? "Resume Assigns" : "Pause Assigns", onPress: () => updateUserStatus(agent.id, agent.status === 'overwhelmed' ? 'active' : 'overwhelmed') },
+                         { text: "Terminate", style: 'destructive', onPress: () => {
+                           Alert.alert("Confirm Termination", "This will block access and unassign all tickets. Proceed?", [
+                             { text: "Cancel" },
+                             { text: "Terminate", style: 'destructive', onPress: () => updateUserStatus(agent.id, 'terminated') }
+                           ])
+                         }}
+                       ]
+                     )
+                   }}
+                 >
+                   <Ionicons name="settings-outline" size={20} color="#6366F1" />
+                 </TouchableOpacity>
+               </View>
+
+               {/* Metrics Breakdown */}
+               <View style={styles.metricsGrid}>
+                 <View style={styles.metricItem}>
+                   <Text style={styles.mValue}>{agent.stats.totalHandled}</Text>
+                   <Text style={styles.mLabel}>Handled</Text>
+                 </View>
+                 <View style={styles.metricItem}>
+                   <Text style={styles.mValue}>{agent.stats.closedTickets}</Text>
+                   <Text style={styles.mLabel}>Closed</Text>
+                 </View>
+                 <View style={styles.metricItem}>
+                   <Text style={[styles.mValue, { color: '#10B981' }]}>+{agent.stats.manualPicks}</Text>
+                   <Text style={styles.mLabel}>Pool Picks</Text>
+                 </View>
+                 <View style={styles.metricItem}>
+                   <Text style={styles.mValue}>{agent.stats.avgRating || 'N/A'}</Text>
+                   <Text style={styles.mLabel}>Rating</Text>
+                 </View>
+               </View>
+             </View>
+           ))}
+        </View>
+      )}
 
       {filteredInvites.map((inv) => {
         const cooldownText = getResendCooldownText(inv.token, inv);
@@ -665,7 +799,29 @@ const styles = StyleSheet.create({
   smallTabTextActive: { color: '#4F46E5' },
   tabIndicator: { position: 'absolute', bottom: -1, left: 0, right: 0, height: 2, backgroundColor: '#4F46E5', borderRadius: 2 },
   retireBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FEF2F2', paddingHorizontal: 12, borderRadius: 8 },
-  retireBtnText: { color: '#EF4444', fontWeight: '700', fontSize: 12, marginLeft: 6 }
+  retireBtnText: { color: '#EF4444', fontWeight: '700', fontSize: 12, marginLeft: 6 },
+  // 📊 Team & Leaderboard Styles (v2.6.132)
+  teamContainer: { marginTop: 8 },
+  analyticsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, backgroundColor: '#F0F9FF', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#BAE6FD' },
+  analyticsSubTitle: { fontSize: 12, fontWeight: '800', color: '#0369A1' },
+  leaderboardCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0', ...shadows.sm, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
+  rankBadge: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  rankText: { fontSize: 12, fontWeight: '800', color: '#64748B' },
+  agentInfo: { flex: 1 },
+  agentName: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
+  agentEmail: { fontSize: 12, color: '#64748B' },
+  levelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  levelTag: { fontSize: 10, fontWeight: '800', color: '#6366F1', backgroundColor: '#EEF2FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, textTransform: 'uppercase' },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  statusText: { fontSize: 10, fontWeight: '600', color: '#94A3B8', textTransform: 'capitalize' },
+  scoreSection: { alignItems: 'flex-end', marginLeft: 12 },
+  scoreValue: { fontSize: 20, fontWeight: '900', color: '#4F46E5' },
+  scoreLabel: { fontSize: 9, fontWeight: '800', color: '#94A3B8' },
+  manageBtn: { padding: 8, backgroundColor: '#F5F3FF', borderRadius: 8, marginLeft: 12 },
+  metricsGrid: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9', gap: 8 },
+  metricItem: { flex: 1, alignItems: 'center' },
+  mValue: { fontSize: 14, fontWeight: '800', color: '#1E293B' },
+  mLabel: { fontSize: 9, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', marginTop: 2 }
 });
 
 export default AdminStaffPanel;

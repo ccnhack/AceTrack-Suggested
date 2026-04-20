@@ -26,7 +26,7 @@ const statusColors = {
 export const SupportTicketSystem = ({
   userId, userName, tickets = [], onCreateTicket, onSendMessage, 
   onTypingStart, onTypingStop, onResolvePrompt, onToggleSupport,
-  onUpdateStatus, onReply, onRetryMessage, onMarkSeen
+  onUpdateStatus, onReply, onRetryMessage, onMarkSeen, onClaimTicket, userRole
 }) => {
   const [view, setView] = useState('list');
   const [selectedTicket, setSelectedTicket] = useState(null);
@@ -174,6 +174,16 @@ export const SupportTicketSystem = ({
       setNewMessage('');
       setSelectedImage(null);
       setReplyToMsg(null);
+    }
+  };
+
+  const handleClaim = async (ticketId) => {
+    if (!onClaimTicket) return;
+    const res = await onClaimTicket(ticketId);
+    if (res.success) {
+        notify({ success: true, message: "Ticket claimed! Check your 'Open' list." });
+    } else {
+        notify({ success: false, message: res.error || "Failed to claim ticket" });
     }
   };
 
@@ -361,7 +371,7 @@ export const SupportTicketSystem = ({
         <View style={styles.header}>
           <View>
             <Text style={styles.title}>Support Requests</Text>
-            <Text style={styles.subtitle}>{myTickets.length} ticket{myTickets.length !== 1 ? 's' : ''}</Text>
+            <Text style={styles.subtitle}>{listTab === 'Pool' ? 'Pool' : 'Personal'}: {listTab === 'Pool' ? tickets.filter(t => !t.assignedTo).length : myTickets.length} ticket(s)</Text>
           </View>
           <TouchableOpacity onPress={() => setView('create')} style={styles.newTicketBtn}>
             <Ionicons name="add" size={16} color="#FFFFFF" />
@@ -382,6 +392,15 @@ export const SupportTicketSystem = ({
           >
             <Text style={[styles.tabBtnText, listTab === 'Closed' && styles.tabBtnTextActive]}>Resolved/Closed</Text>
           </TouchableOpacity>
+          
+          {(userRole === 'admin' || userRole === 'support') && (
+            <TouchableOpacity 
+              onPress={() => setListTab('Pool')}
+              style={[styles.tabBtn, listTab === 'Pool' && styles.tabBtnActive]}
+            >
+              <Text style={[styles.tabBtnText, listTab === 'Pool' && styles.tabBtnTextActive]}>Pool</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
@@ -389,8 +408,9 @@ export const SupportTicketSystem = ({
             const openStatuses = ['Open', 'In Progress', 'Awaiting Response'];
             const filtered = myTickets.filter(t => {
               const status = t.status || 'Open';
+              if (listTab === 'Pool') return !t.assignedTo && status === 'Open';
               return listTab === 'Open' 
-                ? openStatuses.includes(status)
+                ? (openStatuses.includes(status) && t.assignedTo)
                 : (status === 'Resolved' || status === 'Closed');
             });
 
@@ -472,6 +492,16 @@ export const SupportTicketSystem = ({
                         <View style={styles.unreadDot} />
                         <Text style={styles.unreadText}>New Reply</Text>
                       </View>
+                    )}
+
+                    {listTab === 'Pool' && (
+                      <TouchableOpacity 
+                        style={styles.claimBtn} 
+                        onPress={() => handleClaim(ticket.id)}
+                      >
+                        <Ionicons name="hand-right-outline" size={14} color="#FFF" />
+                        <Text style={styles.claimBtnText}>Claim Case</Text>
+                      </TouchableOpacity>
                     )}
                   </TouchableOpacity>
                 );
@@ -638,9 +668,11 @@ export const SupportTicketSystem = ({
                     ) : (
                       <>
                         <Text style={styles.ticketTitleDetail} numberOfLines={1}>{selectedTicket.title}</Text>
-                        <View style={{ marginTop: 2 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 }}>
                             <Text style={styles.typeTag}>{selectedTicket.type}</Text>
-                            <Text style={[styles.typeTag, { fontSize: 8, color: '#94A3B8', marginTop: 1 }]}>ID: {selectedTicket.id}</Text>
+                            <Text style={[styles.typeTag, { backgroundColor: '#F1F5F9', color: '#64748B' }]}>
+                                {selectedTicket.assignedTo ? `Assigned to ${selectedTicket.assignedTo === userId ? 'You' : 'Agent'}` : 'Unassigned'}
+                            </Text>
                         </View>
                       </>
                     )}
@@ -1734,4 +1766,22 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
+  claimBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3B82F6',
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginTop: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#2563EB',
+  },
+  claimBtnText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase'
+  }
 });

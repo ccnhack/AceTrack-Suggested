@@ -19,6 +19,7 @@ import compression from 'compression';
 import { sendPushNotification } from './notifications.js';
 import { processTournamentWaitlist } from './promotion_logic.mjs'; 
 import { sendOnboardingEmail, buildOnboardingHtml, sendPasswordResetEmail } from './emailService.mjs';
+import SupportMetricsService from './services/SupportMetricsService.js';
 
 dotenv.config();
 
@@ -71,7 +72,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.131"; 
+const APP_VERSION = "2.6.132"; 
 
 
 
@@ -1045,29 +1046,62 @@ router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => 
         }
       }
 
-      // 3. Support Ticket Replies
+      // 3. Support Ticket Replies & Auto-Assignment
       if (changedKeys.includes('supportTickets')) {
         const incomingTickets = req.body.supportTickets || [];
         const existingTickets = currentData.supportTickets || [];
         
-        for (const ticket of incomingTickets) {
+        for (let i = 0; i < incomingTickets.length; i++) {
+          const ticket = incomingTickets[i];
           const existing = existingTickets.find(et => et.id === ticket.id);
           const newMessages = (ticket.messages || []).slice(existing ? existing.messages.length : 0);
           
+          // 🤖 [AUTO-ASSIGN] (v2.6.132) 
+          // If ticket is Open and unassigned, try to find a best agent
+          if (ticket.status === 'Open' && !ticket.assignedTo) {
+            const bestAgent = SupportMetricsService.findBestAgent(newMasterData.players, newMasterData.supportTickets || []);
+            if (bestAgent) {
+              console.log(`🤖 [ASSIGN] Auto-assigning ticket ${ticket.id} to agent ${bestAgent.id} (${bestAgent.firstName})`);
+              ticket.assignedTo = bestAgent.id;
+              ticket.assignedAt = new Date().toISOString();
+              ticket.assignmentSource = 'auto';
+              
+              // Increment agent's lifetime handles
+              const agentIndex = newMasterData.players.findIndex(p => p.id === bestAgent.id);
+              if (agentIndex !== -1) {
+                if (!newMasterData.players[agentIndex].metrics) newMasterData.players[agentIndex].metrics = { totalHandled: 0, closedTickets: 0, manualPicks: 0, avgRating: 0 };
+                newMasterData.players[agentIndex].metrics.totalHandled += 1;
+              }
+            }
+          }
+
+          // 🛡️ [TERMINATION CLEANUP] (v2.6.132)
+          // If the assigned agent is now terminated, unassign the ticket
+          if (ticket.assignedTo) {
+            const agent = newMasterData.players.find(p => p.id === ticket.assignedTo);
+            if (agent && agent.supportStatus === 'terminated') {
+              console.log(`🛡️ [CLEANUP] Unassigning ticket ${ticket.id} due to agent termination.`);
+              ticket.assignedTo = null;
+              ticket.assignedAt = null;
+            }
+          }
+
           for (const msg of newMessages) {
-            // 🛡️ [NOTIFY_DEBUG] v2.6.96: Harden identity comparison (String coercion)
+            // Track Initial Acknowledgment (v2.6.132)
+            if (String(msg.senderId) !== String(ticket.userId) && !ticket.firstResponseAt && msg.senderId !== 'system') {
+                ticket.firstResponseAt = new Date().toISOString();
+            }
+
+            // 🛡️ [NOTIFY] v2.6.96: Harden identity comparison 
             if (String(msg.senderId) !== String(ticket.userId)) {
               const user = newMasterData.players.find(p => String(p.id) === String(ticket.userId));
               if (user && user.pushTokens?.length > 0) {
-                console.log(`📡 [NOTIFY_DEBUG] Admin reply detected for ticket ${ticket.id}. Dispatching push to user ${user.id} (${user.pushTokens.length} tokens)`);
                 sendPushNotification(
                   user.pushTokens, 
                   "Support Ticket Reply ✉️", 
                   `New reply regarding your ticket: "${ticket.title}"`,
                   { ticketId: ticket.id, type: 'SUPPORT_REPLY' }
                 );
-              } else {
-                console.log(`📡 [NOTIFY_DEBUG] Admin reply detected, but no push tokens found for user ${ticket.userId}`);
               }
               break; // Only notify once per sync batch
             }
@@ -2470,5 +2504,118 @@ server.on('error', (e) => {
     setTimeout(() => { server.close(); server.listen(PORT); }, 5000);
   } else {
     console.error('❌ Server binding error:', e);
+  }
+});// ---------------------------------------------------------
+// 📊 SUPPORT MANAGEMENT & ANALYTICS (v2.6.132)
+// ---------------------------------------------------------
+
+/**
+ * GET /api/support/analytics
+ * Fetches the weighted leaderboard and team workload snapshot.
+ */
+app.get('/api/support/analytics', authenticateToken, async (req, res) => {
+  try {
+    const state = await AppState.findOne().sort({ lastUpdated: -1 });
+    if (!state || !state.data) return res.status(404).json({ error: "State not found" });
+
+    const agents = (state.data.players || []).filter(p => p.role === 'support');
+    const leaderboard = SupportMetricsService.generateLeaderboard(agents);
+    
+    // Calculate global stats for weighting reference
+    const allRatings = agents.map(a => a.metrics?.avgRating || 0).filter(r => r > 0);
+    const globalAvgRating = allRatings.length > 0 ? (allRatings.reduce((a,b) => a+b, 0) / allRatings.length) : 4.5;
+
+    res.json({
+      leaderboard,
+      globalAvgRating,
+      timestamp: new Date().toISOString()
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * POST /api/support/manage-user
+ * Toggles status (active/overwhelmed/terminated) and promotes support agents.
+ */
+app.post('/api/support/manage-user', authenticateToken, async (req, res) => {
+  const { targetUserId, status, level } = req.body;
+  if (req.user.id !== 'admin') return res.status(403).json({ error: "Unauthorized" });
+
+  try {
+    const state = await AppState.findOne().sort({ lastUpdated: -1 });
+    if (!state) return res.status(404).json({ error: "State not found" });
+
+    const players = [...(state.data.players || [])];
+    const idx = players.findIndex(p => p.id === targetUserId);
+    if (idx === -1) return res.status(404).json({ error: "User not found" });
+
+    // Apply updates
+    if (status) players[idx].supportStatus = status;
+    if (level) players[idx].supportLevel = level;
+    
+    // Automated Unassign Trigger: If terminated, free up their tickets
+    if (status === 'terminated') {
+       const tickets = (state.data.supportTickets || []).map(t => {
+         if (t.assignedTo === targetUserId) {
+           return { ...t, assignedTo: null, assignedAt: null };
+         }
+         return t;
+       });
+       state.data.supportTickets = tickets;
+    }
+
+    state.data.players = players;
+    state.markModified('data');
+    await state.save();
+
+    logServerEvent('SUPPORT_USER_MANAGED', { admin: req.user.id, targetUserId, status, level });
+    res.json({ success: true, user: players[idx] });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * POST /api/support/claim-ticket
+ * Manual ticket picking from the pool for performance incentives.
+ */
+app.post('/api/support/claim-ticket', authenticateToken, async (req, res) => {
+  const { ticketId } = req.body;
+  const agentId = req.user.id;
+
+  try {
+    const state = await AppState.findOne().sort({ lastUpdated: -1 });
+    if (!state) return res.status(404).json({ error: "State not found" });
+
+    const tickets = [...(state.data.supportTickets || [])];
+    const ticketIdx = tickets.findIndex(t => t.id === ticketId);
+    
+    if (ticketIdx === -1) return res.status(404).json({ error: "Ticket not found" });
+    if (tickets[ticketIdx].assignedTo) return res.status(409).json({ error: "Ticket already assigned" });
+
+    // Assign to agent
+    tickets[ticketIdx].assignedTo = agentId;
+    tickets[ticketIdx].assignedAt = new Date().toISOString();
+    tickets[ticketIdx].assignmentSource = 'manual_pool';
+
+    // Increment agent's pool bonus metrics
+    const players = [...(state.data.players || [])];
+    const agentIdx = players.findIndex(p => p.id === agentId);
+    if (agentIdx !== -1) {
+      if (!players[agentIdx].metrics) players[agentIdx].metrics = { totalHandled: 0, closedTickets: 0, manualPicks: 0, avgRating: 0 };
+      players[agentIdx].metrics.manualPicks += 1;
+      players[agentIdx].metrics.totalHandled += 1;
+    }
+
+    state.data.supportTickets = tickets;
+    state.data.players = players;
+    state.markModified('data');
+    await state.save();
+
+    res.json({ success: true, ticket: tickets[ticketIdx] });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });

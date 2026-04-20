@@ -100,6 +100,28 @@ export const SupportProvider = ({ children }) => {
     syncAndSaveData({ supportTickets }, true);
   }, [supportTickets, syncAndSaveData]);
 
+  /** 🛡️ [NEW v2.6.132] Claim a ticket from the unassigned pool */
+  const onClaimTicket = useCallback(async (ticketId) => {
+    try {
+      const res = await fetch(`${config.API_BASE_URL}/api/support/claim-ticket`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${await storage.getItem('userToken')}`, // authenticateToken usage
+          'x-ace-api-key': config.ACE_API_KEY
+        },
+        body: JSON.stringify({ ticketId })
+      });
+      if (res.ok) {
+        // The server updated the master state; we rely on the next ENTITY_UPDATED to refresh.
+        return { success: true };
+      }
+      return { success: false, error: "Failed to claim ticket" };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }, []);
+
   const value = {
     supportTickets,
     setSupportTickets,
