@@ -23,7 +23,8 @@ import {
   buildOnboardingHtml, 
   sendPasswordResetEmail,
   sendOnboardingSuccessEmail,
-  sendLoginDetailsEmail 
+  sendLoginDetailsEmail,
+  sendAdminResetPasswordEmail 
 } from './emailService.mjs';
 import SupportMetricsService from './services/SupportMetricsService.js';
 
@@ -78,7 +79,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.134"; 
+const APP_VERSION = "2.6.135"; 
 
 
 

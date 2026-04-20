@@ -62,6 +62,40 @@ const AdminSupportTeamPanel = () => {
     }
   };
 
+  const handleForceReset = async (userId) => {
+    Alert.alert(
+      "Force Password Reset",
+      "This will generate a random secure password and email it to the employee. All current sessions will be terminated. Proceed?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Reset Password", style: "destructive", onPress: async () => {
+          setIsManaging(userId);
+          try {
+            const res = await fetch(`${config.API_BASE_URL}/api/support/force-reset`, {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json', 
+                'x-ace-api-key': config.ACE_API_KEY, 
+                'x-user-id': 'admin' 
+              },
+              body: JSON.stringify({ targetUserId: userId })
+            });
+            if (res.ok) {
+              Alert.alert("Success", "Password reset successfully. Credentials sent to employee.");
+            } else {
+              const data = await res.json();
+              Alert.alert("Error", data.error || "Failed to reset password");
+            }
+          } catch (e) {
+            Alert.alert("Error", e.message);
+          } finally {
+            setIsManaging(null);
+          }
+        }}
+      ]
+    );
+  };
+
   const supportAgents = useMemo(() => {
     return (players || []).filter(p => p.role === 'support');
   }, [players]);
@@ -162,7 +196,8 @@ const AdminSupportTeamPanel = () => {
                            { text: "Cancel" },
                            { text: "Terminate", style: 'destructive', onPress: () => updateUserStatus(selectedAgent.id, 'terminated') }
                          ])
-                       }}
+                       }},
+                       { text: "Reset Password", onPress: () => handleForceReset(selectedAgent.id) }
                      ]
                    )
                 }}
