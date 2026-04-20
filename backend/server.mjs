@@ -358,6 +358,8 @@ const AuditLog = mongoose.model('AuditLog', AuditLogSchema);
 // ═══════════════════════════════════════════════════════════════
 const SupportInviteSchema = new mongoose.Schema({
   email: { type: String, required: true },
+  firstName: { type: String, default: '' },
+  lastName: { type: String, default: '' },
   token: { type: String, required: true, unique: true },
   status: { type: String, enum: ['Pending', 'Clicked', 'Used', 'Expired'], default: 'Pending' },
   clicks: [{
@@ -1389,8 +1391,9 @@ router.post('/otp/verify', apiKeyGuard, (req, res) => {
 
 // 1. Generate Invite Link (Admin Only)
 router.post('/support/invite', apiKeyGuard, asyncHandler(async (req, res) => {
-  const { email } = req.body;
+  const { email, firstName, lastName } = req.body;
   if (!email) return res.status(400).json({ error: 'Email required' });
+  if (!firstName || !lastName) return res.status(400).json({ error: 'First name and last name are required' });
   
   // In production, enforce 'admin' role header, simulating strict RBAC
   if (req.headers['x-user-id'] !== 'admin') {
@@ -1400,15 +1403,15 @@ router.post('/support/invite', apiKeyGuard, asyncHandler(async (req, res) => {
   const token = bcrypt.hashSync(Date.now().toString() + email, 10).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // strict 24 hours
 
-  await SupportInvite.create({ email, token, expiresAt });
-  await logServerEvent('SUPPORT_INVITE_GENERATED', { email });
+  await SupportInvite.create({ email, firstName: firstName.trim(), lastName: lastName.trim(), token, expiresAt });
+  await logServerEvent('SUPPORT_INVITE_GENERATED', { email, firstName, lastName });
 
   const setupLink = `https://acetrack-suggested.onrender.com/setup/${token}`;
 
   // 📧 Send onboarding email (non-blocking — invite succeeds even if email fails)
   let emailStatus = { success: false, error: 'Email service not configured' };
   if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
-    emailStatus = await sendOnboardingEmail(email, setupLink, expiresAt.toISOString());
+    emailStatus = await sendOnboardingEmail(email, setupLink, expiresAt.toISOString(), firstName.trim(), lastName.trim());
   } else {
     console.warn('⚠️ GMAIL_USER / GMAIL_APP_PASSWORD not set. Skipping onboarding email.');
   }
@@ -1490,11 +1493,11 @@ router.post('/support/invite/resend', apiKeyGuard, asyncHandler(async (req, res)
     }
   }
 
-  // Send the email
+  // Send the email (use stored name from invite)
   const setupLink = `https://acetrack-suggested.onrender.com/setup/${token}`;
   let emailStatus = { success: false, error: 'Email service not configured' };
   if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
-    emailStatus = await sendOnboardingEmail(invite.email, setupLink, invite.expiresAt.toISOString());
+    emailStatus = await sendOnboardingEmail(invite.email, setupLink, invite.expiresAt.toISOString(), invite.firstName || '', invite.lastName || '');
   }
 
   if (emailStatus.success) {

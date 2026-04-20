@@ -6,16 +6,18 @@ import config from '../../config';
 
 const AdminStaffPanel = () => {
   const [email, setEmail] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [invites, setInvites] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [resendingToken, setResendingToken] = useState(null); // token currently being resent
-  const [resendCooldowns, setResendCooldowns] = useState({}); // { token: { nextAt: Date, message: '' } }
+  const [resendingToken, setResendingToken] = useState(null);
+  const [resendCooldowns, setResendCooldowns] = useState({});
 
   // Poll for invites to show real-time click tracking
   useEffect(() => {
     fetchInvites();
-    const interval = setInterval(fetchInvites, 10000); // refresh every 10s
+    const interval = setInterval(fetchInvites, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -57,6 +59,10 @@ const AdminStaffPanel = () => {
       Alert.alert("Invalid Email", "Please enter a valid corporate email address.");
       return;
     }
+    if (!firstName.trim() || !lastName.trim()) {
+      Alert.alert("Name Required", "Please enter the employee's first and last name.");
+      return;
+    }
     
     setIsGenerating(true);
     try {
@@ -67,7 +73,7 @@ const AdminStaffPanel = () => {
           'x-ace-api-key': config.ACE_API_KEY,
           'x-user-id': 'admin' 
         },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email, firstName: firstName.trim(), lastName: lastName.trim() })
       });
       const data = await res.json();
       if (res.ok) {
@@ -77,6 +83,8 @@ const AdminStaffPanel = () => {
           : '⚠️ Email not sent (configure GMAIL credentials on Render)';
         Alert.alert("Invite Generated", `${emailNote}\n\nSetup Link:\n${link}`);
         setEmail('');
+        setFirstName('');
+        setLastName('');
         fetchInvites();
       } else {
         Alert.alert("Error", data.error || "Failed to generate invite");
@@ -104,14 +112,12 @@ const AdminStaffPanel = () => {
       
       if (res.ok) {
         Alert.alert("Email Resent", `📧 Onboarding email resent to ${email}\n\n${data.resendsRemaining} resend(s) remaining`);
-        // Set 1-min cooldown locally
         setResendCooldowns(prev => ({
           ...prev,
           [token]: { nextAt: new Date(Date.now() + 60000).toISOString(), message: '' }
         }));
         fetchInvites();
       } else if (res.status === 429) {
-        // Rate limited
         setResendCooldowns(prev => ({
           ...prev,
           [token]: { nextAt: data.nextAvailableAt, message: data.error }
@@ -146,7 +152,6 @@ const AdminStaffPanel = () => {
       const remaining = new Date(cd.nextAt) - new Date();
       if (remaining > 0) {
         if (remaining > 60000) {
-          // Hours display (4hr lockout)
           const h = Math.floor(remaining / (1000 * 60 * 60));
           const m = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
           return `Email can be resent after ${h}h ${m}m`;
@@ -156,7 +161,6 @@ const AdminStaffPanel = () => {
         }
       }
     }
-    // Check from server data
     const resends = inv.emailResends || [];
     if (resends.length >= 3) {
       const last = new Date(resends[resends.length - 1].timestamp).getTime();
@@ -177,24 +181,30 @@ const AdminStaffPanel = () => {
 
   const getResendCount = (inv) => {
     const resends = inv.emailResends || [];
-    // If 3+ and lockout expired, it's reset
     if (resends.length >= 3) {
       const last = new Date(resends[resends.length - 1].timestamp).getTime();
       const lockoutEnd = last + (4 * 60 * 60 * 1000);
-      if (Date.now() >= lockoutEnd) return 0; // reset
+      if (Date.now() >= lockoutEnd) return 0;
     }
     return resends.length;
   };
 
   const getStatusColor = (status) => {
     switch(status) {
-      case 'Pending': return '#F59E0B'; // Amber
-      case 'Clicked': return '#3B82F6'; // Blue
-      case 'Used': return '#10B981'; // Green
-      case 'Expired': return '#EF4444'; // Red
+      case 'Pending': return '#F59E0B';
+      case 'Clicked': return '#3B82F6';
+      case 'Used': return '#10B981';
+      case 'Expired': return '#EF4444';
       default: return '#64748B';
     }
   };
+
+  const getDisplayName = (inv) => {
+    if (inv.firstName && inv.lastName) return `${inv.lastName}, ${inv.firstName}`;
+    return inv.email;
+  };
+
+  const isFormValid = email.includes('@') && firstName.trim() && lastName.trim();
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 16 }}>
@@ -207,7 +217,31 @@ const AdminStaffPanel = () => {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.label}>Employee Corporate Email</Text>
+        {/* Name Row */}
+        <View style={styles.nameRow}>
+          <View style={styles.nameField}>
+            <Text style={styles.label}>First Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="John"
+              value={firstName}
+              onChangeText={setFirstName}
+              autoCapitalize="words"
+            />
+          </View>
+          <View style={styles.nameField}>
+            <Text style={styles.label}>Last Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Doe"
+              value={lastName}
+              onChangeText={setLastName}
+              autoCapitalize="words"
+            />
+          </View>
+        </View>
+
+        <Text style={[styles.label, { marginTop: 12 }]}>Employee Corporate Email</Text>
         <TextInput
           style={styles.input}
           placeholder="e.g. j.doe@acetrack.com"
@@ -216,10 +250,19 @@ const AdminStaffPanel = () => {
           keyboardType="email-address"
           autoCapitalize="none"
         />
+
+        {/* Preview salutation */}
+        {firstName.trim() && lastName.trim() && (
+          <View style={styles.preview}>
+            <Text style={styles.previewLabel}>Email Salutation Preview:</Text>
+            <Text style={styles.previewText}>Hi {lastName.trim()}, {firstName.trim()}</Text>
+          </View>
+        )}
+
         <TouchableOpacity 
-          style={[styles.btn, (!email || isGenerating) && styles.btnDisabled]} 
+          style={[styles.btn, (!isFormValid || isGenerating) && styles.btnDisabled]} 
           onPress={generateInvite}
-          disabled={!email || isGenerating}
+          disabled={!isFormValid || isGenerating}
         >
           {isGenerating ? <ActivityIndicator color="#FFF" /> : <Text style={styles.btnText}>Generate Secure Link</Text>}
         </TouchableOpacity>
@@ -236,7 +279,12 @@ const AdminStaffPanel = () => {
         return (
           <View key={inv._id} style={styles.inviteCard}>
             <View style={styles.inviteHeader}>
-              <Text style={styles.inviteEmail}>{inv.email}</Text>
+              <View style={{ flex: 1 }}>
+                {(inv.firstName || inv.lastName) && (
+                  <Text style={styles.inviteName}>{getDisplayName(inv)}</Text>
+                )}
+                <Text style={styles.inviteEmail}>{inv.email}</Text>
+              </View>
               <View style={[styles.badge, { backgroundColor: getStatusColor(inv.status) + '20' }]}>
                 <Text style={[styles.badgeText, { color: getStatusColor(inv.status) }]}>{inv.status}</Text>
               </View>
@@ -316,14 +364,20 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: '700', color: colors.navy[900] },
   subtitle: { fontSize: 12, color: colors.navy[500] },
   card: { backgroundColor: '#FFF', padding: 16, borderRadius: 16, ...shadows.sm, borderWidth: 1, borderColor: '#F1F5F9' },
-  label: { fontSize: 12, fontWeight: '600', color: colors.navy[600], marginBottom: 8 },
+  label: { fontSize: 12, fontWeight: '600', color: colors.navy[600], marginBottom: 6 },
+  nameRow: { flexDirection: 'row', gap: 10 },
+  nameField: { flex: 1 },
   input: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, padding: 12, fontSize: 14 },
+  preview: { backgroundColor: '#F0F9FF', borderRadius: 8, padding: 10, marginTop: 12, borderWidth: 1, borderColor: '#BAE6FD' },
+  previewLabel: { fontSize: 10, fontWeight: '600', color: '#0369A1', marginBottom: 4 },
+  previewText: { fontSize: 14, fontWeight: '700', color: '#0C4A6E' },
   btn: { backgroundColor: '#4F46E5', borderRadius: 8, padding: 14, alignItems: 'center', marginTop: 16 },
   btnDisabled: { backgroundColor: '#94A3B8' },
   btnText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
   inviteCard: { backgroundColor: '#FFF', padding: 16, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' },
   inviteHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  inviteEmail: { fontSize: 14, fontWeight: '700', color: '#1E293B', flex: 1 },
+  inviteName: { fontSize: 15, fontWeight: '800', color: '#0F172A', marginBottom: 2 },
+  inviteEmail: { fontSize: 13, fontWeight: '500', color: '#64748B' },
   badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   badgeText: { fontSize: 10, fontWeight: '800' },
   inviteMetaRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
