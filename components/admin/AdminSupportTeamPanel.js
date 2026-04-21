@@ -791,7 +791,20 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
               </View>
               <ScrollView style={styles.modalBody}>
                 {(() => {
-                  if (!analytics?.tickets) return <ActivityIndicator style={{ marginTop: 20 }} />;
+                  if (!analytics?.tickets) {
+                    return (
+                      <View style={{ alignItems: 'center', padding: 40 }}>
+                        <ActivityIndicator size="large" color="#6366F1" style={{ marginBottom: 16 }} />
+                        <Text style={{ color: '#64748B', fontWeight: '600', marginBottom: 20 }}>Synchronizing drill-down data...</Text>
+                        <TouchableOpacity 
+                          style={{ paddingHorizontal: 20, paddingVertical: 10, backgroundColor: '#EFF6FF', borderRadius: 8 }}
+                          onPress={() => fetchTeamAnalytics()}
+                        >
+                          <Text style={{ color: '#3B82F6', fontWeight: 'bold' }}>Force Resync</Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  }
                   let list = analytics.tickets;
                   if (drillDownConfig.category === 'open') list = list.filter(t => ['Open', 'In Progress', 'Awaiting Response'].includes(t.status));
                   else if (drillDownConfig.category === 'resolved') list = list.filter(t => t.status === 'Closed' || t.status === 'Resolved');
