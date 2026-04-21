@@ -65,6 +65,28 @@ const getSessionKey = async () => {
   return sessionKeyPromise;
 };
 
+/**
+ * 🚀 HIGH-PERFORMANCE BINARY UTILITIES (v2.6.157)
+ * Replaces slow spread-operator and .split().map() patterns which caused 30s main-thread hangs.
+ */
+const binaryToBase64 = (uint8: Uint8Array): string => {
+  const CHUNK_SIZE = 8192; // 8KB chunks to prevent "Maximum call stack size"
+  let binary = '';
+  for (let i = 0; i < uint8.length; i += CHUNK_SIZE) {
+    binary += String.fromCharCode(...uint8.subarray(i, i + CHUNK_SIZE));
+  }
+  return window.btoa(binary);
+};
+
+const base64ToUint8Array = (base64: string): Uint8Array => {
+  const binary = window.atob(base64);
+  const uint8 = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    uint8[i] = binary.charCodeAt(i);
+  }
+  return uint8;
+};
+
 const encrypt = async (str: string) => {
   if (!isWeb || typeof window === 'undefined') return str;
   try {
@@ -84,8 +106,8 @@ const encrypt = async (str: string) => {
     combined.set(iv);
     combined.set(new Uint8Array(ciphertext), iv.length);
     
-    // Return Base64 of the binary blob with 'AES:' prefix
-    return 'AES:' + window.btoa(String.fromCharCode(...combined));
+    // 🚀 STACK-SAFE BASE64 (v2.6.157)
+    return 'AES:' + binaryToBase64(combined);
   } catch(e) { 
     console.error('[WebCrypto] Encrypt failed:', e);
     return str; 
@@ -112,7 +134,8 @@ const decrypt = async (str: string, policy?: string) => {
     const key = await getSessionKey();
     if (!key) return str;
     
-    const binary = new Uint8Array(atob(str.substring(4)).split('').map(c => c.charCodeAt(0)));
+    // 🚀 HIGH-EFFICIENCY DECODING (v2.6.157)
+    const binary = base64ToUint8Array(str.substring(4));
     const iv = binary.slice(0, 12);
     const ciphertext = binary.slice(12);
     

@@ -439,11 +439,11 @@ class SyncManager {
    * Prevents 'Stuck Sync' UI by forcing a reset if no operations complete within 15s.
    */
   private syncWatchdog: any = null;
-  private startWatchdog() {
+  private startWatchdog(label: string) {
     if (this.syncWatchdog) clearTimeout(this.syncWatchdog);
     this.syncWatchdog = setTimeout(() => {
       if (this.activeSyncs > 0) {
-        console.warn(`[SyncManager] 🛡️ WATCHDOG TRIGGERED: Forcing sync reset after 30s hang.`);
+        console.warn(`[SyncManager] 🛡️ WATCHDOG TRIGGERED: Forcing sync reset after 30s hang [STUCK_OP: ${label}]`);
         this.activeSyncs = 0;
         this.emitSyncStatus();
       }
@@ -456,7 +456,7 @@ class SyncManager {
    */
   public async trackOperation<T>(label: string, operation: () => Promise<T>): Promise<T> {
     await this.updateSyncStatus(true);
-    this.startWatchdog();
+    this.startWatchdog(label);
     try {
       console.log(`[SyncManager] [TRACK] Starting: ${label}`);
       return await operation();
