@@ -84,7 +84,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.162"; 
+const APP_VERSION = "2.6.163"; 
 
 
 
@@ -1892,6 +1892,8 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
       phone: phone || '',
       password: password,
       supportStatus: 'active', // Restores access
+      supportLevel: 'Trainee',  // Default to Trainee on re-onboard
+      designation: 'Trainee',   // 🔄 Initialization sync
       address: {
         line1: addressLine1 || '',
         line2: addressLine2 || '',
@@ -1928,6 +1930,8 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
       password: password,
       role: 'support',
       supportStatus: 'active',
+      supportLevel: 'Trainee',  // ✨ Explicit Rank Initialization
+      designation: 'Trainee',   // 🔄 Explicit Designation Sync
       address: {
         line1: addressLine1 || '',
         line2: addressLine2 || '',
@@ -2914,6 +2918,7 @@ router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
     if (level) {
       const oldLevel = players[idx].supportLevel || 'Trainee';
       players[idx].supportLevel = level;
+      players[idx].designation = level; // 🔄 Sync designation with support level
 
       // 📧 Trigger Promotion/Demotion Email if level changed (v2.6.148)
       if (oldLevel !== level) {
