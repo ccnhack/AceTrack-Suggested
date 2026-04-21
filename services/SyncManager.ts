@@ -112,32 +112,39 @@ class SyncManager {
     this.userId = userId;
     
     this.initPromise = (async () => {
-      const savedVersion = await storage.getItem('version');
-      if (typeof savedVersion === 'number') {
-        this.syncVersion = savedVersion;
+      try {
+        const savedVersion = await storage.getItem('version');
+        if (typeof savedVersion === 'number') {
+          this.syncVersion = savedVersion;
+        }
+
+        // 🛡️ [SYNC RECOVERY] (v2.6.125) Reset sync count and clear hung states
+        this.activeSyncs = 0;
+        this.isSyncing = false;
+        this.emitSyncStatus();
+
+        console.log(`[SyncManager] Initializing for user: ${userId} (Cloud v${this.syncVersion})`);
+        
+        // 🛡️ [DIAGNOSTICS] Stabilize hardware ID for Admin Hub correlation
+        this.hardwareId = await storage.getItem('acetrack_device_id');
+
+        // 1. Hydrate pending sync state
+        const savedPending = await storage.getItem('pendingSync');
+        if (Array.isArray(savedPending)) {
+          this.pendingSync = savedPending;
+        }
+
+        // 2. Setup Socket.io
+        this.setupSocket(userId);
+
+        // 3. Inform system that initialization is complete
+        eventBus.emit('INITIALIZATION_COMPLETE', { userId });
+      } catch (e: any) {
+        console.error('[SyncManager] FATAL_INIT_CRASH:', e);
+        logger.logAction('SYNC_MANAGER_INIT_FATAL', { error: e.message, stack: e.stack });
+        // Attempt emergency status update via REST
+        this.reportEmergencyStatus(userId, e.message);
       }
-
-      // 🛡️ [SYNC RECOVERY] (v2.6.125) Reset sync count and clear hung states
-      this.activeSyncs = 0;
-      this.isSyncing = false;
-      this.emitSyncStatus();
-
-      console.log(`[SyncManager] Initializing for user: ${userId} (Cloud v${this.syncVersion})`);
-      
-      // 🛡️ [DIAGNOSTICS] Stabilize hardware ID for Admin Hub correlation
-      this.hardwareId = await storage.getItem('acetrack_device_id');
-
-      // 1. Hydrate pending sync state
-      const savedPending = await storage.getItem('pendingSync');
-      if (Array.isArray(savedPending)) {
-        this.pendingSync = savedPending;
-      }
-
-      // 2. Setup Socket.io
-      this.setupSocket(userId);
-
-      // 3. Inform system that initialization is complete
-      eventBus.emit('INITIALIZATION_COMPLETE', { userId });
     })();
 
     return this.initPromise;
@@ -158,83 +165,115 @@ class SyncManager {
       extraHeaders: { 'x-ace-api-key': config.ACE_API_KEY }
     });
 
-    this.socket.on('connect', () => {
-      console.log('[SyncManager] Socket connected');
-      eventBus.emit('SYNC_STATUS_CHANGED', { isOnline: true, source: 'socket' });
-    });
+    try {
+      this.socket.on('connect', () => {
+        console.log('[SyncManager] Socket connected');
+        eventBus.emit('SYNC_STATUS_CHANGED', { isOnline: true, source: 'socket' });
+      });
 
-    this.socket.on('disconnect', () => {
-      console.log('[SyncManager] Socket disconnected');
-      eventBus.emit('SYNC_STATUS_CHANGED', { isOnline: false, source: 'socket' });
-    });
+      this.socket.on('disconnect', () => {
+        console.log('[SyncManager] Socket disconnected');
+        eventBus.emit('SYNC_STATUS_CHANGED', { isOnline: false, source: 'socket' });
+      });
 
-    this.socket.on('data_updated', async (data) => {
-      // 🛡️ [SELF-ECHO GUARD] (v2.6.125)
-      // Skip updates originating from our own socket to prevent sync loops
-      if (data?.lastSocketId && this.socket?.id && data.lastSocketId === this.socket.id) {
-        console.log('[SyncManager] Skipping self-originated socket update.');
-        return;
-      }
-      console.log('[SyncManager] Received data_updated via socket');
-      await this.handleRemoteUpdate(data.updates);
-    });
+      this.socket.on('data_updated', async (data) => {
+        try {
+          if (data?.lastSocketId && this.socket?.id && data.lastSocketId === this.socket.id) {
+            console.log('[SyncManager] Skipping self-originated socket update.');
+            return;
+          }
+          console.log('[SyncManager] Received data_updated via socket');
+          await this.handleRemoteUpdate(data.updates);
+        } catch (e: any) {
+          console.error('[SyncManager] socket:data_updated error:', e);
+        }
+      });
 
-    // 🛡️ [DIAGNOSTICS] ADMIN PING RESPONDER (v2.6.118)
-    // Allows the Admin Hub to verify real-time device connectivity.
-    this.socket.on('admin_ping_device_relay', async (data: any) => {
-      if (data.targetUserId === this.userId && this.socket) {
-        // Ensure hardwareId is loaded before ponging
-        if (this.initPromise) await this.initPromise;
-        
-        console.log('[SyncManager] Received Admin Ping — Replying with Pong');
-        this.socket.emit('device_pong', {
-          targetUserId: this.userId,
-          deviceId: this.hardwareId || Constants.sessionId || 'mobile_client',
-          deviceName: Constants.deviceName || Platform.OS, // Fallback to OS if name is null
-          appVersion: Constants.expoConfig?.version || '2.6.117',
-          timestamp: Date.now() // Numerical timestamp for better Admin Hub compatibility
-        });
-      }
-    });
+      // 🛡️ [DIAGNOSTICS] ADMIN PING RESPONDER (v2.6.167)
+      this.socket.on('admin_ping_device_relay', async (data: any) => {
+        try {
+          if (data.targetUserId === this.userId && this.socket) {
+            if (this.initPromise) await this.initPromise;
+            
+            console.log('[SyncManager] Received Admin Ping — Replying with Pong');
+            this.socket.emit('device_pong', {
+              targetUserId: this.userId,
+              deviceId: this.hardwareId || Constants.sessionId || 'mobile_client',
+              deviceName: Constants.deviceName || Platform.OS,
+              appVersion: Constants.expoConfig?.version || config.APP_VERSION || '2.6.167',
+              timestamp: Date.now()
+            });
+          }
+        } catch (e: any) {
+          console.error('[SyncManager] socket:admin_ping error:', e);
+        }
+      });
 
-    // 🛡️ [DIAGNOSTICS] FORCE UPLOAD RESPONDER
-    // Allows the Admin Hub to pull logs remotely from the device.
-    // Matches monolith App.js format: prefix='admin_requested' so Admin Hub shows [ADMIN PULL]
-    this.socket.on('force_upload_diagnostics', async (data: any) => {
-      if (data.targetUserId === this.userId) {
-         console.log('[SyncManager] Received Force Upload Request');
-         logger.logAction('ADMIN_DIAGNOSTICS_PULL_RECEIVED', {
-           adminId: data.adminId,
-           targetUserId: data.targetUserId,
-           myId: this.userId,
-           targetDeviceId: data.targetDeviceId,
-           myDeviceId: this.hardwareId
-         });
-         try {
-           const user = await storage.getItem('currentUser');
-           const label = user?.name || 'Guest';
-           const deviceId = this.hardwareId || await storage.getItem('acetrack_device_id') || 'unknown';
-           const allLogs = logger.getLogs();
-           await fetch(`${config.API_BASE_URL}/api/diagnostics`, {
-             method: 'POST',
-             headers: {
-               'Content-Type': 'application/json',
-               'x-ace-api-key': config.ACE_API_KEY
-             },
-             body: JSON.stringify({
-               username: label,
-               logs: allLogs,
-               prefix: 'admin_requested',
-               deviceId
-             })
-           });
-           logger.logAction('ADMIN_DIAGNOSTICS_PULL_SUCCESS', { count: allLogs.length });
-         } catch (e: any) {
-           console.error('[SyncManager] Remote diagnostic upload failed:', e);
-           logger.logAction('ADMIN_DIAGNOSTICS_PULL_FAILED', { error: e.message });
-         }
-      }
-    }, threshold);
+      // 🛡️ [DIAGNOSTICS] FORCE UPLOAD RESPONDER
+      this.socket.on('force_upload_diagnostics', async (data: any) => {
+        try {
+          if (data.targetUserId === this.userId) {
+             console.log('[SyncManager] Received Force Upload Request');
+             logger.logAction('ADMIN_DIAGNOSTICS_PULL_RECEIVED', {
+               adminId: data.adminId,
+               targetUserId: data.targetUserId,
+               myId: this.userId,
+               targetDeviceId: data.targetDeviceId,
+               myDeviceId: this.hardwareId
+             });
+             
+             const user = await storage.getItem('currentUser');
+             const label = user?.name || 'Guest';
+             const deviceId = this.hardwareId || await storage.getItem('acetrack_device_id') || 'unknown';
+             const allLogs = logger.getLogs();
+             await fetch(`${config.API_BASE_URL}/api/diagnostics`, {
+               method: 'POST',
+               headers: {
+                 'Content-Type': 'application/json',
+                 'x-ace-api-key': config.ACE_API_KEY
+               },
+               body: JSON.stringify({
+                 username: label,
+                 logs: allLogs,
+                 prefix: 'admin_requested',
+                 deviceId
+               })
+             });
+             logger.logAction('ADMIN_DIAGNOSTICS_PULL_SUCCESS', { count: allLogs.length });
+          }
+        } catch (e: any) {
+          console.error('[SyncManager] Remote diagnostic upload failed:', e);
+          logger.logAction('ADMIN_DIAGNOSTICS_PULL_FAILED', { error: e.message });
+        }
+      });
+    } catch (e: any) {
+      console.error('[SyncManager] setupSocket listeners failed:', e);
+    }
+  }
+
+  private async reportEmergencyStatus(userId: string, error: string) {
+    try {
+      await fetch(`${config.API_BASE_URL}/api/diagnostics`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-ace-api-key': config.ACE_API_KEY
+        },
+        body: JSON.stringify({
+          username: userId,
+          logs: [{ 
+            timestamp: new Date().toISOString(), 
+            level: 'ERROR', 
+            type: 'SYNC_FATAL', 
+            message: `SYNC_INIT_CRASH: ${error}`
+          }],
+          prefix: 'crash_report',
+          deviceId: this.hardwareId || 'unknown'
+        })
+      });
+    } catch (e) {
+      // Last resort failed, nothing we can do
+    }
   }
 
   /**
@@ -262,6 +301,7 @@ class SyncManager {
       let count = 0;
       for (const key in updates) {
         count++;
+        console.log(`[SyncManager] [LOCAL_SAVE] Processing key ${count}/${keys.length}: ${key}`);
         // 🚀 [CONCURRENCY YIELD] (v2.6.160)
         // Every 3 keys, yield to the browser's event loop for 1ms.
         // This lets the UI update and the Watchdog setTimeout fire between heavy writes.
@@ -429,7 +469,7 @@ class SyncManager {
         }
       }
 
-    });
+    }, threshold);
   }
 
   /**
