@@ -5,6 +5,24 @@
     <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
     <title>AceTrack</title>
+    <script>
+      // 🛡️ SECURITY: Self-Healing & Session Guard (v2.6.162)
+      (function() {
+        const VERSION = '2.6.162';
+        const saved = localStorage.getItem('app_version');
+        if (saved && saved !== VERSION) {
+          console.warn('[AceTrack] Version mismatch detected. Purging stale sessions...');
+          localStorage.clear();
+          sessionStorage.clear();
+          localStorage.setItem('app_version', VERSION);
+          // Force a clean reload to ensure all service workers/bundles are fresh
+          window.location.reload(true);
+        } else if (!saved) {
+          localStorage.setItem('app_version', VERSION);
+        }
+      })();
+    </script>
+
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
       /* These styles make the body full-height */

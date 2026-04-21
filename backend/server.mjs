@@ -2565,11 +2565,16 @@ if (fs.existsSync(publicPath)) {
   app.use(express.static(publicPath));
   app.use((req, res, next) => {
     if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/socket.io') && !req.path.startsWith('/results') && !req.path.startsWith('/setup')) {
+      // 🛡️ SECURITY: Force browser to check for new versions on every reload
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       res.sendFile(path.join(publicPath, 'index.html'));
     } else {
       next();
     }
   });
+
 }
 
 // ═══════════════════════════════════════════════════════════════
