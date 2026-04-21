@@ -730,7 +730,8 @@ router.get('/diagnostics', apiKeyGuard, sensitiveCacheGuard, asyncHandler(async 
     console.error('Diagnostics Fetch Error:', error);
     res.status(500).json({ error: error.message });
   }
-});
+}));
+
 
 // GET /api/v1/diagnostics/:filename
 router.get('/diagnostics/:filename', apiKeyGuard, asyncHandler(async (req, res) => {
