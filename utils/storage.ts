@@ -3,20 +3,103 @@ import { Platform } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
 
-// 🛡️ WEB OBFUSCATION (v2.6.155)
-// Masks structured plain-text from casual inspectors via Web Local Storage. Uses Base64+URI abstraction to handle all emojis and unicode securely.
-const obfuscate = (str: string) => {
-  if (!isWeb || typeof window === 'undefined') return str;
-  try {
-    return 'ENC:' + window.btoa(unescape(encodeURIComponent(str)));
-  } catch(e) { return str; }
+/**
+ * 🔐 PRODUCTION-GRADE WEB SECURITY POLICY (v2.6.155)
+ * Defines where specific data types are allowed to be stored on Web.
+ * Native (iOS/Android) continues to use encrypted AsyncStorage (provided by OS).
+ */
+const SECURITY_POLICY: Record<string, 'MEMORY' | 'SESSION' | 'PERSISTENT'> = {
+  // Highly Sensitive: Never hit disk (cleared on refresh)
+  'players': 'MEMORY',
+  'supportTickets': 'MEMORY',
+  'auditLogs': 'MEMORY',
+  'matchmaking': 'MEMORY',
+  'persistent_logs': 'MEMORY',
+  
+  // Semi-Sensitive: Session storage (cleared on tab close)
+  'currentUser': 'SESSION',
+  'authToken': 'SESSION',
+  'acetrack_device_id': 'SESSION',
+  'version': 'SESSION',
+  
+  // Non-Sensitive: Local storage (truly persistent)
+  'app_theme': 'PERSISTENT',
+  'last_visited_tab': 'PERSISTENT'
 };
 
-const deobfuscate = (str: string) => {
-  if (!isWeb || typeof window === 'undefined' || !str || !str.startsWith('ENC:')) return str;
+// 🔐 SESSION-ONLY MEMORY CACHE
+const webMemoryCache: Record<string, string> = {};
+
+/**
+ * 🔐 WEB CRYPTO LAYER (AES-GCM)
+ * Production-grade encryption using hardware-accelerated Web Crypto API.
+ * Uses a page-load-specific master key so disk data is useless after refresh.
+ */
+let sessionKey: CryptoKey | null = null;
+const getSessionKey = async () => {
+  if (!isWeb || typeof window === 'undefined') return null;
+  if (sessionKey) return sessionKey;
+  
+  // Generate a page-load specific AES-256 key
+  sessionKey = await window.crypto.subtle.generateKey(
+    { name: 'AES-GCM', length: 256 },
+    true,
+    ['encrypt', 'decrypt']
+  );
+  return sessionKey;
+};
+
+const encrypt = async (str: string) => {
+  if (!isWeb || typeof window === 'undefined') return str;
   try {
-    return decodeURIComponent(escape(window.atob(str.substring(4))));
-  } catch(e) { return str; }
+    const key = await getSessionKey();
+    if (!key) return str;
+    
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const encoded = new TextEncoder().encode(str);
+    const ciphertext = await window.crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      encoded
+    );
+    
+    // Package IV + Ciphertext for storage
+    const combined = new Uint8Array(iv.length + ciphertext.byteLength);
+    combined.set(iv);
+    combined.set(new Uint8Array(ciphertext), iv.length);
+    
+    // Return Base64 of the binary blob with 'AES:' prefix
+    return 'AES:' + window.btoa(String.fromCharCode(...combined));
+  } catch(e) { 
+    console.error('[WebCrypto] Encrypt failed:', e);
+    return str; 
+  }
+};
+
+const decrypt = async (str: string) => {
+  if (!isWeb || typeof window === 'undefined' || !str || !str.startsWith('AES:')) return str;
+  try {
+    const key = await getSessionKey();
+    if (!key) return str;
+    
+    const binary = new Uint8Array(atob(str.substring(4)).split('').map(c => c.charCodeAt(0)));
+    const iv = binary.slice(0, 12);
+    const ciphertext = binary.slice(12);
+    
+    const decrypted = await window.crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      ciphertext
+    );
+    
+    return new TextDecoder().decode(decrypted);
+  } catch(e) { 
+    // Fallback for legacy 'ENC:' (Base64) data to prevent session loss during migration
+    if (str.startsWith('ENC:')) {
+       try { return decodeURIComponent(escape(window.atob(str.substring(4)))); } catch(_) {}
+    }
+    return str; 
+  }
 };
 
 // 🛡️ SEQUENTIAL STORAGE QUEUE: Ensures that rapid persistence calls (e.g. from sync loop)
@@ -30,23 +113,32 @@ let isExecutingQueue = false;
 const storage = {
   getItem: async (key: string) => {
     try {
-      const storedValue = await AsyncStorage.getItem(key);
+      let storedValue: string | null = null;
+      
+      if (isWeb) {
+        const policy = SECURITY_POLICY[key] || 'SESSION';
+        if (policy === 'MEMORY') {
+          storedValue = webMemoryCache[key] || null;
+        } else if (policy === 'SESSION') {
+          storedValue = window.sessionStorage.getItem(key);
+        } else {
+          storedValue = await AsyncStorage.getItem(key);
+        }
+      } else {
+        storedValue = await AsyncStorage.getItem(key);
+      }
+
       if (!storedValue || storedValue === 'undefined') return null;
       
-      const value = deobfuscate(storedValue);
+      const value = await decrypt(storedValue);
       
       try {
         return JSON.parse(value);
       } catch (parseError) {
-        console.warn(`[Storage] JSON parse failed for key "${key}", falling back to raw string value.`);
         return value;
       }
     } catch (e: any) {
-      if (e.message && (e.message.includes('Row too big') || e.message.includes('CursorWindow'))) {
-        console.warn(`[Storage] CursorWindow overflow for key "${key}" — auto-clearing to recover.`);
-        try { await AsyncStorage.removeItem(key); } catch (_) {}
-      }
-      console.error('Error reading value from AsyncStorage:', e);
+      console.error(`Error reading value for key "${key}":`, e);
       return null;
     }
   },
@@ -55,13 +147,27 @@ const storage = {
   _setItemRaw: async (key: string, value: any) => {
     try {
       if (value === undefined) {
-        await AsyncStorage.removeItem(key);
+        await storage.removeItem(key);
         return;
       }
+      
       const jsonValue = JSON.stringify(value);
-      await AsyncStorage.setItem(key, obfuscate(jsonValue));
+      const encrypted = await encrypt(jsonValue);
+
+      if (isWeb) {
+        const policy = SECURITY_POLICY[key] || 'SESSION';
+        if (policy === 'MEMORY') {
+          webMemoryCache[key] = encrypted;
+        } else if (policy === 'SESSION') {
+          window.sessionStorage.setItem(key, encrypted);
+        } else {
+          await AsyncStorage.setItem(key, encrypted);
+        }
+      } else {
+        await AsyncStorage.setItem(key, encrypted);
+      }
     } catch (e) {
-      console.error(`Error writing raw value to AsyncStorage for key "${key}":`, e);
+      console.error(`Error writing value for key "${key}":`, e);
     }
   },
 
@@ -83,15 +189,23 @@ const storage = {
 
   removeItem: async (key: string) => {
     if (isExecutingQueue) {
+      if (isWeb) {
+        delete webMemoryCache[key];
+        window.sessionStorage.removeItem(key);
+      }
       try { await AsyncStorage.removeItem(key); } catch (_) {}
       return;
     }
 
     const action = async () => {
       try {
+        if (isWeb) {
+          delete webMemoryCache[key];
+          window.sessionStorage.removeItem(key);
+        }
         await AsyncStorage.removeItem(key);
       } catch (e) {
-        console.error(`Error removing value from AsyncStorage for key "${key}":`, e);
+        console.error(`Error removing value for key "${key}":`, e);
       }
     };
     

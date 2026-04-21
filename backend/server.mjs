@@ -82,7 +82,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.151"; 
+const APP_VERSION = "2.6.155"; 
 
 
 
@@ -598,13 +598,24 @@ const syncMutex = new AsyncMutex();
 // ═══════════════════════════════════════════════════════════════
 const router = express.Router();
 
+// 🛡️ SECURITY: BROWSER CACHE HARDENING (v2.6.155)
+// Forces browsers to never store sensitive API responses on disk.
+// Prevents exposing raw JSON state to casual inspectors or via disk forensics.
+const sensitiveCacheGuard = (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
+  next();
+};
+
 // Public Health Check (No Key Required)
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime(), version: APP_VERSION });
 });
 
 // GET /api/v1/data
-router.get('/data', apiKeyGuard, async (req, res) => {
+router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
   try {
     const state = await AppState.findOne().sort({ lastUpdated: -1 }).lean();
     if (!state || !state.data) return res.json({});
@@ -630,7 +641,7 @@ router.get('/data', apiKeyGuard, async (req, res) => {
 });
 
 // GET /api/v1/status
-router.get('/status', apiKeyGuard, async (req, res) => {
+router.get('/status', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
   try {
     const state = await AppState.findOne().sort({ lastUpdated: -1 }).select('lastUpdated version');
     res.json({ 
@@ -644,7 +655,7 @@ router.get('/status', apiKeyGuard, async (req, res) => {
 });
 
 // GET /api/v1/diagnostics
-router.get('/diagnostics', apiKeyGuard, async (req, res) => {
+router.get('/diagnostics', apiKeyGuard, sensitiveCacheGuard, asyncHandler(async (req, res) => {
   try {
     let allFilesWithMeta = [];
 
@@ -792,7 +803,7 @@ router.post('/register-push-token', apiKeyGuard, async (req, res) => {
 });
 
 // POST /api/v1/save
-router.post('/save', apiKeyGuard, validate(SaveDataSchema), async (req, res) => {
+router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema), async (req, res) => {
   const waitStart = Date.now();
   const release = await syncMutex.acquire();
   const waitTime = Date.now() - waitStart;
@@ -1434,7 +1445,7 @@ router.post('/diagnostics/auto-flush', apiKeyGuard, validate(AutoFlushSchema), a
 }));
 
 // GET /api/v1/audit-logs (Admin only)
-router.get('/audit-logs', apiKeyGuard, asyncHandler(async (req, res) => {
+router.get('/audit-logs', apiKeyGuard, sensitiveCacheGuard, asyncHandler(async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 100, 500);
   const logs = await AuditLog.find().sort({ timestamp: -1 }).limit(limit);
   res.json({ success: true, logs });
