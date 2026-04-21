@@ -443,11 +443,11 @@ class SyncManager {
     if (this.syncWatchdog) clearTimeout(this.syncWatchdog);
     this.syncWatchdog = setTimeout(() => {
       if (this.activeSyncs > 0) {
-        console.warn(`[SyncManager] 🛡️ WATCHDOG TRIGGERED: Forcing sync reset after 30s hang [STUCK_OP: ${label}]`);
+        console.warn(`[SyncManager] 🛡️ WATCHDOG TRIGGERED: Forcing sync reset after 35s hang [STUCK_OP: ${label}]`);
         this.activeSyncs = 0;
         this.emitSyncStatus();
       }
-    }, 30000);
+    }, 35000);
   }
 
   /**
@@ -545,6 +545,15 @@ class SyncManager {
     if (this.syncTimeout) clearTimeout(this.syncTimeout);
     this.syncTimeout = null;
 
+    // 🛡️ [GHOST PUSH PROTECTION] (v2.6.159)
+    // Prevent initiating cloud push if there is actually nothing to sync.
+    if (Object.keys(updates).length === 0) {
+      console.log('[SyncManager] performCloudPush: No updates found, skipping network sequence.');
+      return;
+    }
+
+    console.log(`[SyncManager] [${new Date().toISOString()}] Starting Cloud Push sequence...`);
+
     let retryCount = 0;
     const MAX_RETRIES = 2;
 
@@ -613,10 +622,11 @@ class SyncManager {
     const cloudUrl = config.API_BASE_URL;
     this.metrics.pushAttemptCount++;
     
-    // 🛡️ [NETWORK GUARD] (v2.6.118)
-    // Implement 30s timeout to prevent 'Stuck Sync' status on flaky connections.
+    // 🛡️ [NETWORK GUARD] (v2.6.159) Hardened
+    // Implement 20s timeout (decreased from 30s) to ensure network failure 
+    // happens BEFORE the watchdog triggers (35s).
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
     try {
       // 🛡️ [TICKET MESSAGE STATE: SENT] (v2.6.125)
@@ -629,7 +639,7 @@ class SyncManager {
         });
       }
 
-      console.log(`[SyncManager] Pushing to API: ${Object.keys(updates).join(', ')} [v:${this.syncVersion}]`);
+      console.log(`[SyncManager] [${new Date().toISOString()}] Pushing to API: ${Object.keys(updates).join(', ')} [v:${this.syncVersion}]`);
       const response = await fetch(`${cloudUrl}/api/save`, {
         method: 'POST',
         headers: {
