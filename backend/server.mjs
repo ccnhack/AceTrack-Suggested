@@ -2642,24 +2642,32 @@ app.get('/setup/:token', (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 const publicPath = path.join(__dirname, 'public');
 if (fs.existsSync(publicPath)) {
-  // 🛡️ SECURITY: Handle index.html BEFORE express.static to ensure no-cache headers take precedence for the entry point.
+  // 🛡️ [ENTRY-POINT GUARD]: Handle the root explicitly with no-cache headers.
+  app.get('/', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
+    res.sendFile(path.join(publicPath, 'index.html'));
+  });
+
+  // 🛡️ [STATIC ASSETS]: Serve physical files (JS, CSS, Images, etc.)
+  app.use(express.static(publicPath));
+
+  // 🛡️ [SPA FALLBACK]: Handle deep-links for the Single Page Application.
+  // We exclude paths with extensions (containing a dot) to ensure missing assets return 404, not HTML.
   app.use((req, res, next) => {
     const isApi = req.path.startsWith('/api') || req.path.startsWith('/socket.io') || req.path.startsWith('/results') || req.path.startsWith('/setup');
     const hasExtension = req.path.includes('.');
     
     if (req.method === 'GET' && !isApi && !hasExtension) {
-      // 🛡️ SECURITY: Force browser to check for new versions on every reload
+      // Still apply no-cache for SPA routes to be safe
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      res.setHeader('Surrogate-Control', 'no-store');
       res.sendFile(path.join(publicPath, 'index.html'));
     } else {
       next();
     }
   });
-
-  app.use(express.static(publicPath));
 }
 
 // ═══════════════════════════════════════════════════════════════

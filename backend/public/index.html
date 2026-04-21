@@ -6,21 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
     <title>AceTrack</title>
     <script>
-      // 🛡️ SECURITY: Self-Healing & Session Guard (v2.6.162)
-      (function() {
-        const VERSION = '2.6.166';
-        const saved = localStorage.getItem('app_version');
-        if (saved && saved !== VERSION) {
-          console.warn('[AceTrack] Version mismatch detected. Purging stale sessions...');
-          localStorage.clear();
-          sessionStorage.clear();
-          localStorage.setItem('app_version', VERSION);
-          // Force a clean reload to ensure all service workers/bundles are fresh
-          window.location.reload(true);
-        } else if (!saved) {
-          localStorage.setItem('app_version', VERSION);
-        }
-      })();
+      // 🛡️ SELF-HEALING BOOTLOADER (v2.6.166)
+      // If the main JS bundle fails to load (MIME error or 404), trigger a repair
+      function triggerAppRepair() {
+        console.error('[AceTrack] CRITICAL: Main bundle failed to load. Initiating self-healing repair...');
+        // Clear metadata to force a fresh pull on next load
+        localStorage.removeItem('app_version');
+        sessionStorage.clear();
+        // Force a hard bypass of the browser cache
+        window.location.reload(true);
+      }
     </script>
 
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
@@ -50,6 +45,6 @@
     </noscript>
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
-  <script src="/_expo/static/js/web/AppEntry-917f41ac502f714401de8591c4ce113b.js" defer></script>
+  <script src="/_expo/static/js/web/AppEntry-917f41ac502f714401de8591c4ce113b.js" defer onerror="triggerAppRepair()"></script>
 </body>
 </html>
