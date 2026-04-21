@@ -393,6 +393,8 @@ export const AdminGrievancesPanel = ({
       );
     }
 
+    const isClosed = selectedTicket?.status === 'Closed' || selectedTicket?.status === 'Resolved';
+
     const renderRightActions = () => (
       <View style={styles.swipeToReplyAction}>
         <Ionicons name="arrow-undo" size={20} color="#64748B" />
@@ -406,9 +408,11 @@ export const AdminGrievancesPanel = ({
       >
         <Swipeable
           ref={ref => { swipeableRefs.current[msg.id || msg.timestamp] = ref; }}
-          renderRightActions={isMe ? renderRightActions : undefined}
-          renderLeftActions={!isMe ? renderRightActions : undefined}
+          enabled={!isClosed}
+          renderRightActions={!isClosed && isMe ? renderRightActions : undefined}
+          renderLeftActions={!isClosed && !isMe ? renderRightActions : undefined}
           onSwipeableOpen={() => {
+            if (isClosed) return;
             setReplyToMsg(msg);
             // 🛡️ Snap-back: Close swipeable once action is registered (v2.6.35)
             swipeableRefs.current[msg.id || msg.timestamp]?.close();
