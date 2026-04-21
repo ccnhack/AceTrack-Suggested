@@ -716,10 +716,21 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
 router.get('/status', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
   try {
     const state = await AppState.findOne().sort({ lastUpdated: -1 }).select('lastUpdated version');
+    // 🛡️ GHOST VERSION SHIM (v2.6.166)
+    // Legacy web bundles are hardcoded with v2.6.151.
+    // If we report v2.6.166, they trigger the "obsolete" lockout modal.
+    // We temporarily lie to these specific clients to allow them into the app.
+    let reportedVersion = APP_VERSION;
+    const ua = req.headers['user-agent'] || '';
+    const isLegacyWeb = ua.includes('Mozilla') && !ua.includes('Expo');
+    if (isLegacyWeb) {
+      reportedVersion = '2.6.151'; // Allow v2.6.151 to pass checks
+    }
+
     res.json({ 
       lastUpdated: state?.lastUpdated || 0,
       version: state?.version || 1,
-      latestAppVersion: APP_VERSION
+      latestAppVersion: reportedVersion
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
