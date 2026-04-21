@@ -807,7 +807,6 @@ router.get('/diagnostics', apiKeyGuard, sensitiveCacheGuard, asyncHandler(async 
       }
     });
 
-    const userId = req.query.userId;
     if (userId) console.log(`🔍 [AdminFetch] Filtering logs for: ${userId}`);
     
     const sortedFiles = Array.from(uniqueFilesMap.entries())
