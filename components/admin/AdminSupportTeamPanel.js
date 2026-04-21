@@ -764,19 +764,21 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
         {activeTab === 'employees' && (
           <View style={styles.leaderboardSection}>
             <Text style={styles.leaderboardTitle}>Team Performance Leaderboard</Text>
-            {analytics?.leaderboard?.map((entry, idx) => (
-              <View key={entry.id} style={[styles.leaderboardItem, selectedAgentId === entry.id && styles.leaderboardItemActive]}>
-                <Text style={styles.rankText}>#{idx + 1}</Text>
-                <Text style={styles.rankName} numberOfLines={1}>{entry.name}</Text>
-                <View style={styles.rankMeta}>
-                  <Text style={styles.rankMetaText}>{entry.stats?.activeTickets || 0} active</Text>
+            {analytics?.leaderboard
+              ?.filter(entry => entry.status !== 'terminated')
+              ?.map((entry, idx) => (
+                <View key={entry.id} style={[styles.leaderboardItem, selectedAgentId === entry.id && styles.leaderboardItemActive]}>
+                  <Text style={styles.rankText}>#{idx + 1}</Text>
+                  <Text style={styles.rankName} numberOfLines={1}>{entry.name}</Text>
+                  <View style={styles.rankMeta}>
+                    <Text style={styles.rankMetaText}>{entry.stats?.activeTickets || 0} active</Text>
+                  </View>
+                  <View style={styles.rankScoreBox}>
+                    <Text style={styles.rankScore}>{entry.score}</Text>
+                    <Text style={styles.rankScoreUnits}>pts</Text>
+                  </View>
                 </View>
-                <View style={styles.rankScoreBox}>
-                  <Text style={styles.rankScore}>{entry.score}</Text>
-                  <Text style={styles.rankScoreUnits}>pts</Text>
-                </View>
-              </View>
-            ))}
+              ))}
           </View>
         )}
       </ScrollView>
