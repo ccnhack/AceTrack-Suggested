@@ -82,7 +82,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.160"; 
+const APP_VERSION = "2.6.162"; 
 
 
 
@@ -2904,14 +2904,27 @@ router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
       }
     }
     if (level) {
-      const oldLevel = players[idx].supportLevel;
+      const oldLevel = players[idx].supportLevel || 'Trainee';
       players[idx].supportLevel = level;
 
-      // 📧 Trigger Promotion/Demotion Email if level changed
+      // 📧 Trigger Promotion/Demotion Email if level changed (v2.6.148)
       if (oldLevel !== level) {
-         sendPromotionEmail(players[idx].email, players[idx].name, level);
+         const LEVEL_RANKS = { 'Trainee': 1, 'Specialist': 2, 'Senior': 3 };
+         const oldRank = LEVEL_RANKS[oldLevel] || 0;
+         const newRank = LEVEL_RANKS[level] || 0;
+
+         if (newRank < oldRank) {
+            // Demotion: Use the supportive, growth-focused template
+            console.log(`[LEVEL] Demoting ${players[idx].email} from ${oldLevel} to ${level}`);
+            sendDemotionEmail(players[idx].email, players[idx].name, level);
+         } else {
+            // Promotion: Use the celebratory template
+            console.log(`[LEVEL] Promoting ${players[idx].email} from ${oldLevel} to ${level}`);
+            sendPromotionEmail(players[idx].email, players[idx].name, level);
+         }
       }
     }
+
     
     // Automated Unassign Trigger: If terminated or suspended, free up their tickets
     if (status === 'terminated' || status === 'suspended') {
@@ -2979,6 +2992,46 @@ router.post('/support/transfer-tickets', apiKeyGuard, async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+/** 🔄 [NEW v2.6.162] Reassign a Specific Ticket to Another Agent */
+router.post('/support/reassign-ticket', apiKeyGuard, async (req, res) => {
+  const { ticketId, targetAgentId } = req.body;
+  console.log(`[API] POST /support/reassign-ticket: ticket=${ticketId}, to=${targetAgentId}`);
+  if (req.headers['x-user-id'] !== 'admin') return res.status(403).json({ error: 'System Administrator privileges required' });
+  if (!ticketId || !targetAgentId) return res.status(400).json({ error: 'Both ticketId and targetAgentId are required' });
+
+  try {
+    const state = await AppState.findOne().sort({ lastUpdated: -1 });
+    if (!state || !state.data) return res.status(404).json({ error: "State not found" });
+
+    const players = state.data.players || [];
+    const targetAgent = players.find(p => p.id === targetAgentId && p.role === 'support' && p.supportStatus !== 'terminated');
+    if (!targetAgent) return res.status(404).json({ error: "Target agent not found or inactive" });
+
+    const tickets = state.data.supportTickets || [];
+    const ticketIdx = tickets.findIndex(t => t.id === ticketId);
+    if (ticketIdx === -1) return res.status(404).json({ error: "Ticket not found" });
+
+    const oldAgentId = tickets[ticketIdx].assignedTo;
+    
+    // Perform reassignment
+    tickets[ticketIdx].assignedTo = targetAgentId;
+    tickets[ticketIdx].assignedAt = new Date().toISOString();
+    tickets[ticketIdx].reassignedFrom = oldAgentId;
+
+    state.markModified('data');
+    await state.save();
+
+    logServerEvent('SUPPORT_TICKET_REASSIGNED', { ticketId, fromAgentId: oldAgentId, toAgentId: targetAgentId });
+    res.json({ 
+      success: true, 
+      message: `Ticket #${ticketId.slice(-4)} reassigned to ${targetAgent.name}` 
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 
 // ⭐ Rate Ticket (CSAT)
 router.post('/support/rate-ticket', apiKeyGuard, async (req, res) => {

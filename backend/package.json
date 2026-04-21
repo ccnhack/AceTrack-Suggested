@@ -13,7 +13,9 @@
     "dev:all": "concurrently \"npm run server\" \"npm run dev\"",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "heal:assets": "node scripts/heal-orphaned-assets.mjs"
+
   },
   "dependencies": {
     "@google/genai": "^1.38.0",

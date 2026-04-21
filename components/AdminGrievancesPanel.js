@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, TextInput, 
-  StyleSheet, Modal, SafeAreaView, KeyboardAvoidingView, Platform, Image, ActivityIndicator 
+  StyleSheet, Modal, SafeAreaView, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Alert
 } from 'react-native';
+
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -43,8 +44,9 @@ const formatTicketDateFull = (dateStr) => {
 };
 
 export const AdminGrievancesPanel = ({
-  tickets, players, onReply, onUpdateStatus, onTypingStart, onTypingStop, search, onRetryMessage, onMarkSeen, onDetailToggle, autoSelectUser, autoSelectTicketId, ...restProps
+  tickets, players, onReply, onUpdateStatus, onReassignTicket, onTypingStart, onTypingStop, search, onRetryMessage, onMarkSeen, onDetailToggle, autoSelectUser, autoSelectTicketId, ...restProps
 }) => {
+
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [replyText, setReplyText] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
@@ -253,6 +255,41 @@ export const AdminGrievancesPanel = ({
       setPendingStatus(null);
     }
   };
+
+  const handleReassign = () => {
+    const supportAgents = (players || []).filter(p => p.role === 'support' && p.supportStatus !== 'terminated');
+    if (supportAgents.length === 0) {
+      Alert.alert("No Agents", "No other active support agents available for reassignment.");
+      return;
+    }
+
+    const currentAgentId = selectedTicket.assignedTo;
+    const options = supportAgents
+      .filter(p => p.id !== currentAgentId)
+      .map(p => ({
+        text: p.name,
+        onPress: async () => {
+          if (!onReassignTicket) {
+             Alert.alert("Error", "Reassignment handler not available.");
+             return;
+          }
+          const res = await onReassignTicket(selectedTicket.id, p.id);
+          if (res.success) {
+            Alert.alert("Success", res.message);
+          } else {
+            Alert.alert("Error", res.error);
+          }
+        }
+      }));
+    
+    options.unshift({ text: 'Cancel', style: 'cancel' });
+    Alert.alert(
+      "Reassign Ticket",
+      `Select an agent to take over this ticket from ${currentAgentId ? getUserName(currentAgentId) : 'unassigned pool'}:`,
+      options
+    );
+  };
+
 
   const getUserName = (userId) => {
     const p = (players || []).find(pl => pl.id === userId);
@@ -576,7 +613,25 @@ export const AdminGrievancesPanel = ({
                           ))}
                         </View>
                       </View>
+
+                      {/* 🔄 Reassign Control (v2.6.162) */}
+                      <View style={[styles.statusControl, { marginTop: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 16 }]}>
+                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                           <View>
+                             <Text style={styles.infoLabel}>Assigned Agent</Text>
+                             <Text style={styles.infoValue}>{selectedTicket.assignedTo ? getUserName(selectedTicket.assignedTo) : 'Unassigned Pool'}</Text>
+                           </View>
+                           <TouchableOpacity 
+                             onPress={handleReassign}
+                             style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#6366F1', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 }}
+                           >
+                             <Ionicons name="swap-horizontal" size={14} color="#FFF" />
+                             <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '700', marginLeft: 6 }}>Reassign</Text>
+                           </TouchableOpacity>
+                         </View>
+                      </View>
                     </View>
+
 
                     {selectedTicket.closureSummary && (
                       <View style={styles.resolutionCard}>

@@ -640,6 +640,56 @@ export function buildPromotionHtml(name, newRole) {
 }
 
 /**
+ * Builds the supportive Demotion email (v2.6.148).
+ */
+export function buildDemotionHtml(name, newRole) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Let's Grow Together!</title>
+</head>
+<body style="margin:0;padding:0;background-color:#EEF2FF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#EEF2FF;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="550" cellspacing="0" cellpadding="0" style="max-width:550px;width:100%;">
+          <tr>
+            <td style="background-color:#FFFFFF;padding:40px;border-radius:24px;border:2px solid #6366F1;">
+              <div style="background-color:#E0E7FF;width:60px;height:60px;border-radius:30px;margin:0 auto 20px;display:flex;align-items:center;justify-content:center;">
+                 <span style="font-size:30px;">💙</span>
+              </div>
+              <h2 style="margin:0 0 16px;font-size:22px;font-weight:900;color:#3730A3;text-align:center;">Let's Grow Together!</h2>
+              
+              <p style="font-size:16px;color:#475569;line-height:1.6;margin-bottom:24px;">
+                Hi <strong>${name}</strong>,<br><br>
+                We have updated your designation within the team to <strong style="color:#4338CA;font-size:18px;">${newRole}</strong>.
+              </p>
+
+              <p style="font-size:15px;color:#475569;line-height:1.7;margin-bottom:24px;">
+                We want you to know that this change is about providing you with the right environment to refine your skills and master the foundations of our support operations. At AceTrack, we value sustainable growth and excellence, and we are fully committed to supporting you as you navigate this learning phase.
+              </p>
+
+              <blockquote style="margin:0 0 24px;padding:16px 20px;border-left:4px solid #6366F1;background-color:#F5F7FF;font-style:italic;color:#3730A3;line-height:1.6;">
+                "Every great journey involve moments of recalibration. We believe in your potential and are here to help you reach the next level at a pace that ensures your long-term success."
+              </blockquote>
+
+              <p style="font-size:14px;color:#64748B;line-height:1.6;text-align:center;">
+                Your new access privileges have been updated automatically. Your <strong>manager</strong> will be in touch shortly to discuss a supportive development plan tailored to you.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+
+/**
  * Builds the Termination email.
  */
 export function buildTerminationHtml(name) {
@@ -692,11 +742,22 @@ export async function sendPromotionEmail(toEmail, name, newRole) {
   const mailOptions = {
     from: `"AceTrack HR" <${process.env.GMAIL_USER}>`,
     to: toEmail,
-    subject: `\u{1F31F} Congratulations on your Promotion!`,
+    subject: `🌟 Congratulations on your Promotion!`,
     html: buildPromotionHtml(name, newRole)
   };
   return transporter.sendMail(mailOptions).catch(e => console.error(e));
 }
+
+export async function sendDemotionEmail(toEmail, name, newRole) {
+  const mailOptions = {
+    from: `"AceTrack HR" <${process.env.GMAIL_USER}>`,
+    to: toEmail,
+    subject: `💙 A supportive update regarding your AceTrack role`,
+    html: buildDemotionHtml(name, newRole)
+  };
+  return transporter.sendMail(mailOptions).catch(e => console.error(e));
+}
+
 
 export async function sendTerminationEmail(toEmail, name) {
   const mailOptions = {
@@ -789,6 +850,8 @@ export default {
   sendLoginDetailsEmail,
   sendAdminResetPasswordEmail,
   sendPromotionEmail,
+  sendDemotionEmail,
   sendTerminationEmail,
   sendReOnboardingEmail
 };
+

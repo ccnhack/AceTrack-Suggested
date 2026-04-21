@@ -122,6 +122,30 @@ export const SupportProvider = ({ children }) => {
     }
   }, []);
 
+  /** 🛡️ [NEW v2.6.162] Reassign a specific ticket to another agent */
+  const onReassignTicket = useCallback(async (ticketId, targetAgentId) => {
+    try {
+      const res = await fetch(`${config.API_BASE_URL}/api/support/reassign-ticket`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${await storage.getItem('userToken')}`, 
+          'x-ace-api-key': config.ACE_API_KEY,
+          'x-user-id': 'admin'
+        },
+        body: JSON.stringify({ ticketId, targetAgentId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        return { success: true, message: data.message };
+      }
+      return { success: false, error: data.error || "Failed to reassign ticket" };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }, []);
+
+
   const value = {
     supportTickets,
     setSupportTickets,
@@ -132,9 +156,12 @@ export const SupportProvider = ({ children }) => {
     onMarkSeen,
     onUpdateTicketStatus,
     onSaveTicket,
+    onClaimTicket,
+    onReassignTicket,
     // 🛡️ [MIGRATION FIX] (v2.6.121) Missing handler
     onRetryMessage
   };
+
 
   return (
     <SupportContext.Provider value={value}>

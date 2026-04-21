@@ -38,7 +38,8 @@ const AdminHubScreen = ({ navigation, route }) => {
   const { players } = usePlayers();
   const { tournaments, onUpdateTournament, onRemovePendingPlayer } = useTournaments();
   const { matchVideos, onUpdateVideoStatus, onBulkUpdateVideoStatus, onForceRefundVideo, onApproveDeleteVideo, onRejectDeleteVideo, onPermanentDeleteVideo, onBulkPermanentDeleteVideos } = useVideos();
-  const { supportTickets, onReplyTicket, onUpdateTicketStatus } = useSupport();
+  const { supportTickets, onReplyTicket, onUpdateTicketStatus, onReassignTicket } = useSupport();
+
   const { matchmaking } = useMatchmaking();
   const { evaluations } = useEvaluations();
   const { seenAdminActionIds = new Set(), setSeenAdminActionIds, auditLogs, hasSeen, hasVisited, setVisitedAdminSubTabs, visitedAdminSubTabs = new Set() } = useAdmin();
@@ -256,9 +257,11 @@ const AdminHubScreen = ({ navigation, route }) => {
             players={players || []}
             onReply={onReplyTicket}
             onUpdateStatus={onUpdateTicketStatus}
+            onReassignTicket={onReassignTicket}
             seenAdminActionIds={seenAdminActionIds}
             autoSelectTicketId={autoSelectTicketId}
           />
+
         );
       case 'audit':
         return <AdminAuditLogsPanel logs={auditLogs} search={search} />;

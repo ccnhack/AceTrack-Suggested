@@ -17,7 +17,7 @@ const RankingScreen = () => {
   const { tournaments } = useTournaments();
   const insets = useSafeAreaInsets();
   const rankingPlayers = useMemo(() => {
-    let list = [...(players || [])].filter(p => p && p.id !== 'admin_sys' && p.role !== 'academy' && p.role !== 'coach');
+    let list = [...(players || [])].filter(p => p && p.id !== 'admin_sys' && p.id !== 'admin' && p.role !== 'admin' && p.role !== 'academy' && p.role !== 'coach');
     
     if (role === 'academy' && user) {
       const myParticipantIds = new Set(

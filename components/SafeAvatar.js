@@ -26,17 +26,20 @@ export const getInitials = (name) => {
  * 4. Deterministic background colors based on name length
  */
 const SafeAvatar = memo(({ uri, name, role, size = 44, borderRadius = 14, style, textStyle }) => {
+  const [retryCount, setRetryCount] = useState(0);
   const [hasError, setHasError] = useState(false);
+
 
   // Reset error state if the URI changes
   useEffect(() => {
     setHasError(false);
+    setRetryCount(0);
   }, [uri]);
 
   const initials = getInitials(name);
   
   // 🛡️ ADMIN BRANDING GUARD (v2.6.2): Use brand logo for system admin by default
-  const isAdmin = role === 'admin' || role === 'system_admin' || String(name).toLowerCase().includes('system admin');
+  const isAdmin = role === 'admin' || role === 'system_admin' || String(name).toLowerCase().includes('system admin') || String(name).toLowerCase().includes('acetrack admin');
 
   // Vibrant, accessible background colors
   const colors = [
@@ -62,18 +65,23 @@ const SafeAvatar = memo(({ uri, name, role, size = 44, borderRadius = 14, style,
 
   // 🛡️ [REPLICATION] High-precision URL preparation matching mobile-app 4
   const sanitizedUri = config.sanitizeUrl(uri);
-  const stripped = config.stripBuster(sanitizedUri);
+  const finalUri = retryCount > 0 ? `${sanitizedUri}${sanitizedUri.includes('?') ? '&' : '?'}retry=${retryCount}` : sanitizedUri;
   
   if (isRemoteImage && !hasError) {
     return (
       <Image
-        source={{ uri: sanitizedUri }}
+        source={{ uri: finalUri }}
         style={[styles.avatar, { width: size, height: size, borderRadius }, style]}
         onError={() => {
-          if (!sanitizedUri.includes('ui-avatars.com') && !sanitizedUri.includes('api.dicebear.com')) {
-            console.log(`[SafeAvatar] Failed to load image: ${sanitizedUri}. Falling back to initials.`);
+          if (retryCount < 2) {
+            console.log(`[SafeAvatar] Load failed for ${sanitizedUri}. Retrying (${retryCount + 1}/2)...`);
+            setTimeout(() => setRetryCount(prev => prev + 1), 1000);
+          } else {
+            if (!sanitizedUri.includes('ui-avatars.com') && !sanitizedUri.includes('api.dicebear.com')) {
+              console.log(`[SafeAvatar] Permanent load failure: ${sanitizedUri}. Falling back.`);
+            }
+            setHasError(true);
           }
-          setHasError(true);
         }}
       />
     );

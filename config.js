@@ -29,7 +29,7 @@ const ACE_API_KEY = (Constants.expoConfig && Constants.expoConfig.extra && Const
   : (process.env.EXPO_PUBLIC_ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=');
 
 export default {
-  APP_VERSION: '2.6.151',
+  APP_VERSION: '2.6.162',
   API_BASE_URL: (Constants.appConfig?.extra?.apiUrl || 
                  'https://acetrack-suggested.onrender.com').replace(/\/$/, ''),
   GROQ_API_KEY,
@@ -52,7 +52,6 @@ export default {
     let sanitized = url;
     const vIdx = sanitized.indexOf('v=');
     if (vIdx !== -1) {
-       // Only strip if it's the standard buster pattern
        const base = sanitized.substring(0, vIdx - 1);
        if (sanitized[vIdx-1] === '?' || sanitized[vIdx-1] === '&') {
          sanitized = base;
@@ -62,7 +61,8 @@ export default {
     // 1. Map legacy domains to current active domain
     const legacyDomains = [
       'acetrack-api-q39m.onrender.com',
-      'acetrack-backend-26.onrender.com'
+      'acetrack-backend-26.onrender.com',
+      'acetrack-api.onrender.com'
     ];
     legacyDomains.forEach(domain => {
       if (sanitized.includes(domain)) {

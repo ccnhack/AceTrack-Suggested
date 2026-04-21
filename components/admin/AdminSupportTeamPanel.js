@@ -595,7 +595,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                      }});
                      actions.push({ text: "Reset Password", onPress: () => handleForceReset(selectedAgent.id) });
                      
-                     Alert.alert("Employee Actions", `Manage ${selectedAgent.name}\nLevel: ${currentLevel} | Status: ${isSuspended ? 'Suspended' : selectedAgent.supportStatus}`, actions);
+                     Alert.alert("Employee Actions", `Manage ${selectedAgent.name}\nLevel: ${currentLevel} | Status: ${isSuspended ? 'Suspended' : (selectedAgent.supportStatus || 'Active')}`, actions);
                   }}
                 >
                   <Ionicons name="settings" size={20} color="#6366F1" />
