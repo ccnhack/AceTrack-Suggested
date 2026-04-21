@@ -2642,9 +2642,12 @@ app.get('/setup/:token', (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 const publicPath = path.join(__dirname, 'public');
 if (fs.existsSync(publicPath)) {
-  // 🛡️ SECURITY: Handle index.html BEFORE express.static to ensure no-cache headers take precedence.
+  // 🛡️ SECURITY: Handle index.html BEFORE express.static to ensure no-cache headers take precedence for the entry point.
   app.use((req, res, next) => {
-    if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/socket.io') && !req.path.startsWith('/results') && !req.path.startsWith('/setup')) {
+    const isApi = req.path.startsWith('/api') || req.path.startsWith('/socket.io') || req.path.startsWith('/results') || req.path.startsWith('/setup');
+    const hasExtension = req.path.includes('.');
+    
+    if (req.method === 'GET' && !isApi && !hasExtension) {
       // 🛡️ SECURITY: Force browser to check for new versions on every reload
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       res.setHeader('Pragma', 'no-cache');
