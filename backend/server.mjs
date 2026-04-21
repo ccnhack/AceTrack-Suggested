@@ -957,16 +957,17 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
         let incoming = req.body[key];
         const atomicKeys = req.body.atomicKeys || [];
 
+        if (key === 'tournaments' && Array.isArray(incoming)) {
           // 🛡️ TOURNAMENT OTP REPAIR (v2.6.165): 
           // Do NOT hash Start/End OTPs inside the shared tournaments collection.
           // Hashing them here breaks client-side verification as the client receives a bcrypt hash instead of the 6-digit code.
-          // Identity-based verification is already handled by the server for sensitive actions.
           console.log(`[SYNC_DEBUG] Processing ${incoming.length} incoming tournaments (OTP Hashing Skipped for Stability)`);
           incoming = incoming.map(t => {
              const updatedT = { ...t };
              // Preserve raw OTPs if present, or rely on them being set by Admin only.
              return updatedT;
           });
+        }
 
         if (['players', 'matchmaking', 'tournaments', 'matches', 'auditLogs', 'matchVideos', 'supportTickets', 'evaluations'].includes(key) && Array.isArray(incoming)) {
           const atomicKeys = req.body.atomicKeys || [];
