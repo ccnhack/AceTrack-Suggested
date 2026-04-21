@@ -1942,8 +1942,8 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
   await invite.save();
   await logServerEvent('SUPPORT_ACCOUNT_CREATED', { 
     email: invite.email, 
-    name: newSupportAgent.name, 
-    phone: newSupportAgent.phone,
+    name: `${firstName} ${lastName}`, 
+    phone: phone || '',
     hasGovId: !!govIdUrl,
     ip 
   });
