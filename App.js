@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { 
-  View, Text, StyleSheet, StatusBar, ActivityIndicator, Modal, TouchableOpacity 
+  View, Text, StyleSheet, StatusBar, ActivityIndicator, Modal, TouchableOpacity, Platform
 } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -126,29 +126,33 @@ function Root() {
         }}
       />
 
-      {/* Mandatory OTA Update Modal (Modal can remain outside as it doesn't use navigation) */}
+      {/* Mandatory OTA Update & Web Refresh Modal */}
       <Modal testID="app.update.modal" visible={showForceUpdate} transparent={false} animationType="fade">
         <View style={styles.updateModalContainer}>
           <Ionicons name="cloud-download" size={80} color="#38BDF8" style={{ marginBottom: 24 }} />
           <Text style={styles.updateTitle}>Update Required</Text>
           <Text style={styles.updateDescription}>
-            Version {appVersion} is obsolete. Please update to {latestAppVersion} to restore network access.
+            Version {appVersion} is obsolete. {Platform.OS === 'web' ? 'Please refresh this page to load the latest release.' : `Please update to ${latestAppVersion} to restore network access.`}
           </Text>
           <TouchableOpacity 
             style={styles.updateButton}
             onPress={async () => {
-              try {
-                const update = await Updates.checkForUpdateAsync();
-                if (update.isAvailable) {
-                  await Updates.fetchUpdateAsync();
-                  await Updates.reloadAsync();
+              if (Platform.OS === 'web') {
+                if (typeof window !== 'undefined') window.location.reload();
+              } else {
+                try {
+                  const update = await Updates.checkForUpdateAsync();
+                  if (update.isAvailable) {
+                    await Updates.fetchUpdateAsync();
+                    await Updates.reloadAsync();
+                  }
+                } catch (e) {
+                  console.error("Update error:", e);
                 }
-              } catch (e) {
-                console.error("Update error:", e);
               }
             }}
           >
-            <Text style={styles.updateButtonText}>Download OTA Update</Text>
+            <Text style={styles.updateButtonText}>{Platform.OS === 'web' ? 'Refresh Browser' : 'Download OTA Update'}</Text>
           </TouchableOpacity>
         </View>
       </Modal>
