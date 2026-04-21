@@ -243,8 +243,9 @@ const AdminHubScreen = ({ navigation, route }) => {
         return (
           <AdminSupportTeamPanel 
             onOpenTicket={(ticketId) => {
+              setAutoSelectTicketId(null); // Clear first to guarantee re-trigger
               handleTabChange('grievances');
-              setAutoSelectTicketId(ticketId);
+              setTimeout(() => setAutoSelectTicketId(ticketId), 100);
             }} 
           />
         );

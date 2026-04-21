@@ -78,16 +78,28 @@ export const AdminGrievancesPanel = ({
     }
   }, [selectedTicket?.id]);
 
-  // Handle deep-linking auto-selection
+  // Handle deep-linking auto-selection (v2.6.151 hardened)
   useEffect(() => {
-    if (autoSelectTicketId && tickets) {
-        const ticket = (tickets || []).find(t => t.id === autoSelectTicketId);
-        if (ticket) setSelectedTicket(ticket);
-    } else if (autoSelectUser && tickets) {
+    if (!autoSelectTicketId && !autoSelectUser) return;
+    
+    const trySelect = () => {
+      if (autoSelectTicketId && tickets) {
+        const ticket = (tickets || []).find(t => t.id === autoSelectTicketId || t._id === autoSelectTicketId);
+        if (ticket) { setSelectedTicket(ticket); return true; }
+      } else if (autoSelectUser && tickets) {
         const userTicket = (tickets || []).find(t => t.userId === autoSelectUser);
-        if (userTicket) setSelectedTicket(userTicket);
+        if (userTicket) { setSelectedTicket(userTicket); return true; }
+      }
+      return false;
+    };
+    
+    // Immediate attempt
+    if (!trySelect()) {
+      // Retry after a short delay in case tickets are still loading
+      const timer = setTimeout(() => trySelect(), 500);
+      return () => clearTimeout(timer);
     }
-  }, [autoSelectUser, autoSelectTicketId, tickets?.length]);
+  }, [autoSelectUser, autoSelectTicketId, tickets]);
 
   // 📜 Auto-scroll on Open/Update (v2.6.26)
   useEffect(() => {
