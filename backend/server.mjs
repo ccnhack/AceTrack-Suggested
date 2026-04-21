@@ -747,6 +747,15 @@ router.get('/status', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
 // GET /api/v1/diagnostics
 router.get('/diagnostics', apiKeyGuard, sensitiveCacheGuard, asyncHandler(async (req, res) => {
   try {
+    const { userId } = req.query;
+
+    // 🛡️ FRONTEND SHIM: The legacy Web Admin Hub might have a stale frontend socket.
+    // Hijack this REST query to emit the ping device relay directly from the server.
+    if (userId) {
+      logServerEvent('ADMIN_PING_DEVICE_SHIM', { targetUserId: userId });
+      io.emit('admin_ping_device_relay', { targetUserId: userId });
+    }
+
     let allFilesWithMeta = [];
 
     // 1. Fetch Cloud Files with metadata
