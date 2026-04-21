@@ -230,17 +230,24 @@ class SyncManager {
            logger.logAction('ADMIN_DIAGNOSTICS_PULL_FAILED', { error: e.message });
          }
       }
-    });
-
+    }, threshold);
   }
 
   /**
    * The primary entry point for all data changes.
    */
   public async syncAndSaveData(updates: Record<string, any>, isAtomic: boolean = false, isInternal: boolean = false) {
-    if (!this.userId) return;
+    // 🛡️ [BULK LABEL TRUNCATION] (v2.6.160)
+    // Avoid massive string joining for audit logs and bulk hydrates
+    const keys = Object.keys(updates);
+    const labelBase = keys.length > 3 ? `BULK_SYNC_${keys.length}_KEYS` : `SYNC_${keys.join('_')}`;
+    
+    // 🛡️ [DYNAMIC THRESHOLD] (v2.6.160)
+    // Bulk syncs and Cloud Init naturally take longer on mobile hardware.
+    // We increase headroom to 60s for these specific labels.
+    const threshold = (labelBase.includes('BULK') || labelBase.includes('CLOUD_INIT')) ? 60000 : 35000;
 
-    return this.trackOperation(`SYNC_${Object.keys(updates).join('_')}`, async () => {
+    return this.trackOperation(labelBase, async () => {
       // 🛡️ [BACKPRESSURE GUARD] (v2.6.125)
       const qLen = storage.getQueueLength();
       if (qLen > 20) {
@@ -248,7 +255,16 @@ class SyncManager {
       }
 
       // 1. Local Persistence (Fast Path)
+      let count = 0;
       for (const key in updates) {
+        count++;
+        // 🚀 [CONCURRENCY YIELD] (v2.6.160)
+        // Every 3 keys, yield to the browser's event loop for 1ms.
+        // This lets the UI update and the Watchdog setTimeout fire between heavy writes.
+        if (count % 3 === 0) {
+          await new Promise(r => setTimeout(r, 0));
+        }
+
         let val = updates[key];
         
         // Capture Cloud Version
@@ -439,24 +455,25 @@ class SyncManager {
    * Prevents 'Stuck Sync' UI by forcing a reset if no operations complete within 15s.
    */
   private syncWatchdog: any = null;
-  private startWatchdog(label: string) {
+  private startWatchdog(label: string, customThreshold?: number) {
     if (this.syncWatchdog) clearTimeout(this.syncWatchdog);
+    const timeout = customThreshold || 35000;
     this.syncWatchdog = setTimeout(() => {
       if (this.activeSyncs > 0) {
-        console.warn(`[SyncManager] 🛡️ WATCHDOG TRIGGERED: Forcing sync reset after 35s hang [STUCK_OP: ${label}]`);
+        console.warn(`[SyncManager] 🛡️ WATCHDOG TRIGGERED: Forcing sync reset after ${timeout/1000}s hang [STUCK_OP: ${label}]`);
         this.activeSyncs = 0;
         this.emitSyncStatus();
       }
-    }, 35000);
+    }, timeout);
   }
 
   /**
    * Centralized sync tracking wrapper.
    * Ensures activeSyncs is always decremented and UI is updated.
    */
-  public async trackOperation<T>(label: string, operation: () => Promise<T>): Promise<T> {
+  public async trackOperation<T>(label: string, operation: () => Promise<T>, customThreshold?: number): Promise<T> {
     await this.updateSyncStatus(true);
-    this.startWatchdog(label);
+    this.startWatchdog(label, customThreshold);
     try {
       console.log(`[SyncManager] [TRACK] Starting: ${label}`);
       return await operation();

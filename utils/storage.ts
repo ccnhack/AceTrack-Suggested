@@ -28,7 +28,8 @@ const SECURITY_POLICY: Record<string, 'MEMORY' | 'SESSION' | 'PERSISTENT'> = {
 };
 
 // 🔐 SESSION-ONLY MEMORY CACHE
-const webMemoryCache: Record<string, string> = {};
+// On Web, this stores RAW objects to avoid redundant JSON.stringify overhead.
+const webMemoryCache: Record<string, any> = {};
 
 /**
  * 🔐 WEB CRYPTO LAYER (AES-GCM)
@@ -168,6 +169,8 @@ const storage = {
         const policy = SECURITY_POLICY[key] || 'SESSION';
         if (policy === 'MEMORY') {
           storedValue = webMemoryCache[key] || null;
+          // 🚀 PERFORMANCE: If it's already an object (from our new memory tier), return immediately.
+          if (storedValue && typeof storedValue !== 'string') return storedValue;
         } else if (policy === 'SESSION') {
           storedValue = window.sessionStorage.getItem(key);
         } else {
@@ -179,6 +182,7 @@ const storage = {
 
       if (!storedValue || storedValue === 'undefined') return null;
       
+      // If we got a string but it's not encrypted, try to parse it (handled by decrypt)
       const value = await decrypt(storedValue);
       
       try {
@@ -200,14 +204,17 @@ const storage = {
         return;
       }
       
-      const jsonValue = JSON.stringify(value);
-      const policy = isWeb ? (SECURITY_POLICY[key] || 'SESSION') : 'NATIVE';
-
       if (isWeb) {
+        const policy = SECURITY_POLICY[key] || 'SESSION';
         if (policy === 'MEMORY') {
-          // 🛡️ PERFORMANCE: Bypass encryption for memory-tier (no disk footprint anyway)
-          webMemoryCache[key] = 'MEM:' + jsonValue;
-        } else if (policy === 'SESSION') {
+          // 🚀 ZERO-STRINGIFY: Do NOT stringify memory-only data.
+          // This saves massive CPU time for large lists (Players/Tickets).
+          webMemoryCache[key] = value;
+          return;
+        } 
+        
+        const jsonValue = JSON.stringify(value);
+        if (policy === 'SESSION') {
           const encrypted = await encrypt(jsonValue);
           window.sessionStorage.setItem(key, encrypted);
         } else {
@@ -215,6 +222,7 @@ const storage = {
           await AsyncStorage.setItem(key, encrypted);
         }
       } else {
+        const jsonValue = JSON.stringify(value);
         await AsyncStorage.setItem(key, jsonValue); // Native uses OS-level encryption for AsyncStorage
       }
     } catch (e) {
