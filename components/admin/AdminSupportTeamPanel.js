@@ -42,7 +42,7 @@ const formatDuration = (ms) => {
   return `${mins}m`;
 };
 
-const AdminSupportTeamPanel = () => {
+const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const { players } = usePlayers();
   
   const [search, setSearch] = useState('');
@@ -51,6 +51,9 @@ const AdminSupportTeamPanel = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isManaging, setIsManaging] = useState(null);
   const [activeTab, setActiveTab] = useState('employees'); // 'employees' | 'ex-employees'
+
+  // Phase 5: Drill-Down Modal Config
+  const [drillDownConfig, setDrillDownConfig] = useState(null);
 
   // 🕐 Time Filter State
   const [timeFilter, setTimeFilter] = useState('all');
@@ -370,22 +373,22 @@ const AdminSupportTeamPanel = () => {
       {/* 📊 Team Summary Cards */}
       {analytics?.teamSummary && (
         <View style={styles.teamSummaryRow}>
-          <View style={[styles.summaryCard, { borderLeftColor: '#3B82F6' }]}>  
+          <TouchableOpacity onPress={() => setDrillDownConfig({ title: 'Open Tickets', category: 'open' })} style={[styles.summaryCard, { borderLeftColor: '#3B82F6' }]}>  
             <Text style={styles.summaryValue}>{analytics.teamSummary.totalOpenTickets}</Text>
             <Text style={styles.summaryLabel}>Open</Text>
-          </View>
-          <View style={[styles.summaryCard, { borderLeftColor: '#10B981' }]}>  
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setDrillDownConfig({ title: 'Resolved Tickets', category: 'resolved' })} style={[styles.summaryCard, { borderLeftColor: '#10B981' }]}>  
             <Text style={styles.summaryValue}>{analytics.teamSummary.totalClosedResolved}</Text>
             <Text style={styles.summaryLabel}>Resolved</Text>
-          </View>
-          <View style={[styles.summaryCard, { borderLeftColor: '#F59E0B' }]}>  
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setDrillDownConfig({ title: 'Unassigned Queue', category: 'queue' })} style={[styles.summaryCard, { borderLeftColor: '#F59E0B' }]}>  
             <Text style={styles.summaryValue}>{analytics.teamSummary.unassignedQueue}</Text>
             <Text style={styles.summaryLabel}>Queue</Text>
-          </View>
-          <View style={[styles.summaryCard, { borderLeftColor: '#EF4444' }]}>  
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setDrillDownConfig({ title: 'Overdue Tickets', category: 'overdue' })} style={[styles.summaryCard, { borderLeftColor: '#EF4444' }]}>  
             <Text style={styles.summaryValue}>{analytics.teamSummary.overdueTickets}</Text>
             <Text style={styles.summaryLabel}>Overdue</Text>
-          </View>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -409,12 +412,12 @@ const AdminSupportTeamPanel = () => {
            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillsScroll}>
              <View style={styles.pillsRow}>
                {Object.entries(analytics.teamSummary.ticketTypesBreakdown).map(([type, count]) => (
-                  <View key={type} style={styles.typePill}>
+                  <TouchableOpacity key={type} onPress={() => setDrillDownConfig({ title: `${type} Tickets`, category: 'type', typeStr: type })} style={styles.typePill}>
                     <Text style={styles.typePillLabel}>{type}</Text>
                     <View style={styles.typePillCountBadge}>
                       <Text style={styles.typePillCount}>{count}</Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                ))}
              </View>
            </ScrollView>
@@ -774,6 +777,61 @@ const AdminSupportTeamPanel = () => {
           </View>
         )}
       </ScrollView>
+
+      {/* Drill-Down Modal Configuration (Phase 5) */}
+      {drillDownConfig && (
+        <Modal visible transparent animationType="slide" onRequestClose={() => setDrillDownConfig(null)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{drillDownConfig.title}</Text>
+                <TouchableOpacity onPress={() => setDrillDownConfig(null)}>
+                  <Ionicons name="close-circle" size={28} color="#94A3B8" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={styles.modalBody}>
+                {(() => {
+                  if (!analytics?.tickets) return <ActivityIndicator style={{ marginTop: 20 }} />;
+                  let list = analytics.tickets;
+                  if (drillDownConfig.category === 'open') list = list.filter(t => ['Open', 'In Progress', 'Awaiting Response'].includes(t.status));
+                  else if (drillDownConfig.category === 'resolved') list = list.filter(t => t.status === 'Closed' || t.status === 'Resolved');
+                  else if (drillDownConfig.category === 'queue') list = list.filter(t => !t.assignedTo && t.status === 'Open');
+                  else if (drillDownConfig.category === 'overdue') {
+                    list = list.filter(t => {
+                      if (t.status === 'Closed' || t.status === 'Resolved') return false;
+                      const created = new Date(t.createdAt);
+                      return (Date.now() - created.getTime()) > (48 * 60 * 60 * 1000);
+                    });
+                  } else if (drillDownConfig.category === 'type') list = list.filter(t => (t.type || 'Other') === drillDownConfig.typeStr);
+                  
+                  if (list.length === 0) return <Text style={styles.emptyAgents}>No tickets match this filter.</Text>;
+
+                  return list.map(t => (
+                    <TouchableOpacity 
+                      key={t.id} 
+                      style={styles.drillTicketCard}
+                      onPress={() => {
+                        setDrillDownConfig(null);
+                        onOpenTicket && onOpenTicket(t.id);
+                      }}
+                    >
+                       <View style={styles.drillTicketHeader}>
+                         <Text style={styles.drillTicketId}>#{t.id.slice(-5)}</Text>
+                         <Text style={[styles.drillTicketStatus, t.status === 'Open' ? { color: '#3B82F6'} : t.status === 'Closed' || t.status === 'Resolved' ? { color: '#10B981' } : { color: '#F59E0B' }]}>{t.status}</Text>
+                       </View>
+                       <Text style={styles.drillTicketTitle} numberOfLines={1}>{t.title || 'Untitled Ticket'}</Text>
+                       <View style={styles.drillTicketMeta}>
+                          <Text style={styles.drillTicketAgent}>Agent: {t.assignedTo ? (players?.find(p => p.id === t.assignedTo)?.name || 'Unknown') : 'Unassigned'}</Text>
+                          {t.rating && <Text style={styles.drillTicketRating}>★ {t.rating}/5</Text>}
+                       </View>
+                    </TouchableOpacity>
+                  ));
+                })()}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 };
@@ -781,6 +839,7 @@ const AdminSupportTeamPanel = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { fontSize: 20, fontWeight: '900', color: '#0F172A' },
   subTitle: { fontSize: 11, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase' },
 
@@ -938,7 +997,22 @@ const styles = StyleSheet.create({
   typePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', paddingLeft: 12, paddingRight: 4, paddingVertical: 4, borderRadius: 20, gap: 8 },
   typePillLabel: { fontSize: 11, fontWeight: '700', color: '#475569' },
   typePillCountBadge: { backgroundColor: '#3B82F6', width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  typePillCount: { fontSize: 10, fontWeight: '900', color: '#FFF' }
+  typePillCount: { fontSize: 10, fontWeight: '900', color: '#FFF' },
+
+  // Phase 5 - Drill Down Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#FFF', paddingHorizontal: 20, paddingTop: 24, paddingBottom: 40, borderTopLeftRadius: 32, borderTopRightRadius: 32, maxHeight: '85%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 20, fontWeight: '900', color: '#0F172A' },
+  modalBody: { flexGrow: 1, paddingBottom: 20 },
+  drillTicketCard: { backgroundColor: '#F8FAFC', padding: 16, borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9', ...shadows.sm },
+  drillTicketHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  drillTicketId: { fontSize: 11, fontWeight: '800', color: '#94A3B8' },
+  drillTicketStatus: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
+  drillTicketTitle: { fontSize: 15, fontWeight: '700', color: '#1E293B', marginBottom: 10 },
+  drillTicketMeta: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 10 },
+  drillTicketAgent: { fontSize: 12, color: '#64748B', fontWeight: '600' },
+  drillTicketRating: { fontSize: 12, color: '#F59E0B', fontWeight: '800' }
 });
 
 export default AdminSupportTeamPanel;

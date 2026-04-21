@@ -240,7 +240,14 @@ const AdminHubScreen = ({ navigation, route }) => {
       case 'recruitment':
         return <AdminStaffPanel />;
       case 'support_team':
-        return <AdminSupportTeamPanel />;
+        return (
+          <AdminSupportTeamPanel 
+            onOpenTicket={(ticketId) => {
+              handleTabChange('grievances');
+              setAutoSelectTicketId(ticketId);
+            }} 
+          />
+        );
       case 'grievances':
         return (
           <AdminGrievancesPanel 

@@ -82,7 +82,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.150"; 
+const APP_VERSION = "2.6.151"; 
 
 
 
@@ -2795,6 +2795,16 @@ router.get('/support/analytics', apiKeyGuard, async (req, res) => {
       teamSummary,
       filteredTicketCount: tickets.length,
       totalTicketCount: allTickets.length,
+      tickets: tickets.map(t => ({
+        id: t.id,
+        type: t.type || 'Other',
+        status: t.status,
+        title: t.title,
+        assignedTo: t.assignedTo,
+        rating: t.rating,
+        createdAt: t.createdAt,
+        closedAt: t.closedAt
+      })),
       timestamp: new Date().toISOString()
     });
   } catch (e) {
