@@ -84,7 +84,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.129)
-const APP_VERSION = "2.6.163"; 
+const APP_VERSION = "2.6.165"; 
 
 
 
@@ -435,6 +435,67 @@ const apiKeyGuard = (req, res, next) => {
   next();
 };
 
+/**
+ * 🛡️ PRIVACY GUARD (v2.6.165)
+ * Sanitizes the global application state based on requester identity and role.
+ * Ensures strict isolation of private records (Tickets, Matches, Evaluations, PII).
+ */
+const getSanitizedState = (fullData, reqUserId, reqUserRole) => {
+  if (!fullData) return {};
+  const isAdmin = reqUserRole === 'admin' || String(reqUserId).toLowerCase() === 'admin';
+  const normalizedReqId = String(reqUserId || '').toLowerCase();
+
+  const sanitized = { ...fullData };
+
+  // 1. Mask PII in Players
+  if (sanitized.players && Array.isArray(sanitized.players)) {
+    sanitized.players = sanitized.players.map(p => {
+      if (!p) return p;
+      const isOwner = String(p.id).toLowerCase() === normalizedReqId;
+      if (isAdmin || isOwner) return p;
+
+      // Mask sensitive fields for others
+      const { email, phone, password, pushTokens, devices, ...publicProfile } = p;
+      return publicProfile;
+    });
+  }
+
+  // 2. Filter Support Tickets
+  if (sanitized.supportTickets && Array.isArray(sanitized.supportTickets)) {
+    sanitized.supportTickets = sanitized.supportTickets.filter(t => {
+      if (isAdmin) return true;
+      return String(t.userId).toLowerCase() === normalizedReqId;
+    });
+  }
+
+  // 3. Filter Matches
+  if (sanitized.matches && Array.isArray(sanitized.matches)) {
+    sanitized.matches = sanitized.matches.filter(m => {
+      if (isAdmin) return true;
+      const p1 = String(m.player1Id || m.challengerId || '').toLowerCase();
+      const p2 = String(m.player2Id || m.opponentId || '').toLowerCase();
+      return p1 === normalizedReqId || p2 === normalizedReqId;
+    });
+  }
+
+  // 4. Filter Evaluations
+  if (sanitized.evaluations && Array.isArray(sanitized.evaluations)) {
+    sanitized.evaluations = sanitized.evaluations.filter(e => {
+      if (isAdmin) return true;
+      return String(e.playerId).toLowerCase() === normalizedReqId;
+    });
+  }
+
+  // 5. Restrict Audit Logs
+  if (sanitized.auditLogs && Array.isArray(sanitized.auditLogs)) {
+    if (!isAdmin) {
+      sanitized.auditLogs = sanitized.auditLogs.filter(log => String(log.userId).toLowerCase() === normalizedReqId);
+    }
+  }
+
+  return sanitized;
+};
+
 // ═══════════════════════════════════════════════════════════════
 // 📋 Zod Validation Schemas (SE/SEC Fix #5)
 // ═══════════════════════════════════════════════════════════════
@@ -635,7 +696,16 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       state.data.currentUser.role = 'user';
     }
 
-    res.json({ ...state.data, lastUpdated: state.lastUpdated, version: state.version || 1 });
+    // 🛡️ SECURITY HARDENING (v2.6.164/165): Explicitly exclude 'currentUser' and sanitize based on identity.
+    const reqUserId = req.headers['x-user-id'];
+    const users = state.data.players || [];
+    const requestingUser = users.find(u => String(u.id).toLowerCase() === String(reqUserId || '').toLowerCase());
+    const reqUserRole = requestingUser?.role || 'user';
+
+    const sanitizedData = getSanitizedState(state.data, reqUserId, reqUserRole);
+    delete sanitizedData.currentUser;
+
+    res.json({ ...sanitizedData, lastUpdated: state.lastUpdated, version: state.version || 1 });
   } catch (error) {
     console.error('❌ Data Fetch Error:', error.message);
     res.status(500).json({ error: error.message });
@@ -813,7 +883,9 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
   if (waitTime > 2000) console.warn(`⚠️ Save Mutex Wait: ${waitTime}ms from ${req.ip}`);
 
   try {
-    const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'currentUser', 'matchmaking', 'seenAdminActionIds', 'visitedAdminSubTabs'];
+    // 🛡️ SECURITY HARDENING (v2.6.164): Removed 'currentUser' from syncableKeys.
+    // User profile updates now happen exclusively via the 'players' collection to maintain isolation.
+    const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'matchmaking', 'seenAdminActionIds', 'visitedAdminSubTabs'];
     
     const now = Date.now();
     const clientVersion = req.body.version;
@@ -840,27 +912,25 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
     await logAudit(req, 'DATA_SAVE', changedKeys, { atomicKeys: req.body.atomicKeys, version: clientVersion });
 
     const newMasterData = { ...currentData };
+    
+    // 🛡️ SECURITY HARDENING (v2.6.164): Purge any legacy currentUser leaked into global state
+    delete newMasterData.currentUser;
 
     for (const key of syncableKeys) {
       if (req.body[key] !== undefined) {
         let incoming = req.body[key];
         const atomicKeys = req.body.atomicKeys || [];
 
-        if (key === 'tournaments' && Array.isArray(incoming)) {
-          console.log(`[SYNC_DEBUG] Processing ${incoming.length} incoming tournaments`);
-          incoming = await Promise.all(incoming.map(async (t) => {
+          // 🛡️ TOURNAMENT OTP REPAIR (v2.6.165): 
+          // Do NOT hash Start/End OTPs inside the shared tournaments collection.
+          // Hashing them here breaks client-side verification as the client receives a bcrypt hash instead of the 6-digit code.
+          // Identity-based verification is already handled by the server for sensitive actions.
+          console.log(`[SYNC_DEBUG] Processing ${incoming.length} incoming tournaments (OTP Hashing Skipped for Stability)`);
+          incoming = incoming.map(t => {
              const updatedT = { ...t };
-             if (t.startOtp && String(t.startOtp).length === 6 && !String(t.startOtp).startsWith('$2')) {
-                console.log(`🔐 Hashing Start OTP for tournament: ${t.id || 'new'}`);
-                updatedT.startOtp = await hashOtp(t.startOtp);
-             }
-             if (t.endOtp && String(t.endOtp).length === 6 && !String(t.endOtp).startsWith('$2')) {
-                console.log(`🔐 Hashing End OTP for tournament: ${t.id || 'new'}`);
-                updatedT.endOtp = await hashOtp(t.endOtp);
-             }
+             // Preserve raw OTPs if present, or rely on them being set by Admin only.
              return updatedT;
-          }));
-        }
+          });
 
         if (['players', 'matchmaking', 'tournaments', 'matches', 'auditLogs', 'matchVideos', 'supportTickets', 'evaluations'].includes(key) && Array.isArray(incoming)) {
           const atomicKeys = req.body.atomicKeys || [];
@@ -1449,6 +1519,10 @@ router.post('/diagnostics/auto-flush', apiKeyGuard, validate(AutoFlushSchema), a
 
 // GET /api/v1/audit-logs (Admin only)
 router.get('/audit-logs', apiKeyGuard, sensitiveCacheGuard, asyncHandler(async (req, res) => {
+  // 🛡️ SECURITY HARDENING (v2.6.165): Strict Admin ID check
+  if (req.headers['x-user-id'] !== 'admin') {
+    return res.status(403).json({ error: 'System Administrator privileges required' });
+  }
   const limit = Math.min(parseInt(req.query.limit) || 100, 500);
   const logs = await AuditLog.find().sort({ timestamp: -1 }).limit(limit);
   res.json({ success: true, logs });

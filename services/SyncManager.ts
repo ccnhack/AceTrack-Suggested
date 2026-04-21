@@ -389,7 +389,10 @@ class SyncManager {
       }
 
       // 2. Enqueue for Cloud Sync
-      const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'currentUser', 'chatbotMessages', 'matchmaking', 'seenAdminActionIds', 'visitedAdminSubTabs'];
+      // 🛡️ SECURITY HARDENING (v2.6.164): Removed 'currentUser' from syncableKeys.
+      // Profile changes are now synchronized through the 'players' collection via harmonization logic, 
+      // preventing sensitive session objects from leaking into the global shared state.
+      const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'matchmaking', 'seenAdminActionIds', 'visitedAdminSubTabs'];
       const syncUpdates: Record<string, any> = {};
       let hasSyncable = false;
 

@@ -183,6 +183,18 @@ const ParticipantsModal = ({
                 {expandedPlayerId === (tournament.assignedCoachId || tournament.confirmedCoachId) && (() => {
                     const coachId = tournament.assignedCoachId || tournament.confirmedCoachId;
                     const c = (players || []).find(p => p.id === coachId);
+                    
+                    // 🛡️ UI PRIVACY GUARD (v2.6.165): Mask sensitive info for regular users
+                    const isAuthorized = user?.role === 'admin' || user?.role === 'coach' || String(user?.id).toLowerCase() === String(coachId).toLowerCase();
+                    
+                    if (!isAuthorized) {
+                      return (
+                        <View style={styles.expandedInfo}>
+                          <Text style={styles.privacyNote}>Identity verified. Contact info restricted to Admins/Coaches.</Text>
+                        </View>
+                      );
+                    }
+
                     return (
                         <View style={styles.expandedInfo}>
                             <View style={styles.contactRow}>
@@ -364,41 +376,54 @@ const ParticipantsModal = ({
                           <Ionicons name={expandedPlayerId === pid ? "chevron-up" : "chevron-down"} size={16} color="#94A3B8" />
                       </View>
                       
-                      {expandedPlayerId === pid && (
-                          <View style={styles.expandedInfo}>
-                              <View style={styles.contactRow}>
-                                  <Ionicons name="at-outline" size={14} color="#64748B" />
-                                  <Text style={styles.contactText}>{p.id}</Text>
-                              </View>
-                              <View style={styles.contactRow}>
-                                  <Ionicons name="call" size={14} color="#64748B" />
-                                  <Text style={styles.contactText}>{p.phone}</Text>
-                              </View>
-                              <View style={styles.contactRow}>
-                                  <Ionicons name="mail" size={14} color="#64748B" />
-                                  <Text style={styles.contactText}>{p.email}</Text>
-                              </View>
+                      {expandedPlayerId === pid && (() => {
+                          // 🛡️ UI PRIVACY GUARD (v2.6.165): Mask sensitive info for regular users
+                          const isAuthorized = user?.role === 'admin' || user?.role === 'coach' || String(user?.id).toLowerCase() === String(pid).toLowerCase();
 
-                              {isInterested && onManageInterested && (
-                                  <View style={styles.actionRow}>
-                                      <TouchableOpacity 
-                                          style={[styles.actionBtn, styles.confirmBtn]}
-                                          onPress={() => onManageInterested(pid, 'confirm')}
-                                      >
-                                          <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
-                                          <Text style={styles.actionBtnText}>Confirm</Text>
-                                      </TouchableOpacity>
-                                      <TouchableOpacity 
-                                          style={[styles.actionBtn, styles.rejectBtn]}
-                                          onPress={() => onManageInterested(pid, 'reject')}
-                                      >
-                                          <Ionicons name="close-circle" size={16} color="#FFFFFF" />
-                                          <Text style={styles.actionBtnText}>Reject</Text>
-                                      </TouchableOpacity>
-                                  </View>
-                              )}
-                          </View>
-                      )}
+                          if (!isAuthorized) {
+                            return (
+                              <View style={styles.expandedInfo}>
+                                <Text style={styles.privacyNote}>Identity verified. Contact info restricted to Admins/Coaches.</Text>
+                              </View>
+                            );
+                          }
+
+                          return (
+                            <View style={styles.expandedInfo}>
+                                <View style={styles.contactRow}>
+                                    <Ionicons name="at-outline" size={14} color="#64748B" />
+                                    <Text style={styles.contactText}>{p.id}</Text>
+                                </View>
+                                <View style={styles.contactRow}>
+                                    <Ionicons name="call" size={14} color="#64748B" />
+                                    <Text style={styles.contactText}>{p.phone}</Text>
+                                </View>
+                                <View style={styles.contactRow}>
+                                    <Ionicons name="mail" size={14} color="#64748B" />
+                                    <Text style={styles.contactText}>{p.email}</Text>
+                                </View>
+
+                                {isInterested && onManageInterested && (
+                                    <View style={styles.actionRow}>
+                                        <TouchableOpacity 
+                                            style={[styles.actionBtn, styles.confirmBtn]}
+                                            onPress={() => onManageInterested(pid, 'confirm')}
+                                        >
+                                            <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
+                                            <Text style={styles.actionBtnText}>Confirm</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity 
+                                            style={[styles.actionBtn, styles.rejectBtn]}
+                                            onPress={() => onManageInterested(pid, 'reject')}
+                                        >
+                                            <Ionicons name="close-circle" size={16} color="#FFFFFF" />
+                                            <Text style={styles.actionBtnText}>Reject</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+                            </View>
+                          );
+                      })()}
                     </TouchableOpacity>
                   );
                 });
@@ -595,6 +620,11 @@ const styles = StyleSheet.create({
   contactText: {
     fontSize: 12,
     color: '#475569',
+  },
+  privacyNote: {
+    fontSize: 10,
+    color: '#94A3B8',
+    fontStyle: 'italic',
   },
   addPlayerBtn: {
     backgroundColor: '#EFF6FF',

@@ -30,7 +30,7 @@ import { useSupport } from './context/SupportContext';
 
 
 // 🛡️ Web Deep Linking Configuration (v2.6.160)
-const APP_VERSION = "2.6.163";
+const APP_VERSION = "2.6.165";
 const linking = {
   prefixes: ['https://acetrack-suggested.onrender.com', 'acetrack://'],
   config: {
@@ -139,7 +139,33 @@ function Root() {
             style={styles.updateButton}
             onPress={async () => {
               if (Platform.OS === 'web') {
-                if (typeof window !== 'undefined') window.location.reload();
+                if (typeof window !== 'undefined') {
+                  // 🚀 HARD REFRESH ENGINE (v2.6.164)
+                  // Aggressive cache bypass to ensure obsolete sessions get the new bundle.
+                  try {
+                    // 1. Unregister all service workers
+                    if ('serviceWorker' in navigator) {
+                      const registrations = await navigator.serviceWorker.getRegistrations();
+                      for (let registration of registrations) {
+                        await registration.unregister();
+                      }
+                    }
+                    // 2. Clear cache storage if supported
+                    if (window.caches) {
+                      const cacheNames = await window.caches.keys();
+                      for (let name of cacheNames) {
+                        await window.caches.delete(name);
+                      }
+                    }
+                  } catch (e) {
+                    console.warn("Silent cache clear failed:", e);
+                  }
+                  
+                  // 3. Force reload with cache-busting query param
+                  const currentUrl = new URL(window.location.href);
+                  currentUrl.searchParams.set('v', Date.now().toString());
+                  window.location.href = currentUrl.toString();
+                }
               } else {
                 try {
                   const update = await Updates.checkForUpdateAsync();
