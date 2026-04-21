@@ -36,17 +36,33 @@ const webMemoryCache: Record<string, string> = {};
  * Uses a page-load-specific master key so disk data is useless after refresh.
  */
 let sessionKey: CryptoKey | null = null;
+let sessionKeyPromise: Promise<CryptoKey | null> | null = null;
+
 const getSessionKey = async () => {
   if (!isWeb || typeof window === 'undefined') return null;
   if (sessionKey) return sessionKey;
   
-  // Generate a page-load specific AES-256 key
-  sessionKey = await window.crypto.subtle.generateKey(
-    { name: 'AES-GCM', length: 256 },
-    true,
-    ['encrypt', 'decrypt']
-  );
-  return sessionKey;
+  // 🛡️ CONCURRENCY GUARD: If a key is already being generated, wait for that promise
+  if (sessionKeyPromise) return sessionKeyPromise;
+  
+  sessionKeyPromise = (async () => {
+    try {
+      // Generate a page-load specific AES-256 key
+      sessionKey = await window.crypto.subtle.generateKey(
+        { name: 'AES-GCM', length: 256 },
+        true,
+        ['encrypt', 'decrypt']
+      );
+      return sessionKey;
+    } catch (e) {
+      console.error('[WebCrypto] Key generation failed:', e);
+      return null;
+    } finally {
+      sessionKeyPromise = null;
+    }
+  })();
+  
+  return sessionKeyPromise;
 };
 
 const encrypt = async (str: string) => {
@@ -76,8 +92,22 @@ const encrypt = async (str: string) => {
   }
 };
 
-const decrypt = async (str: string) => {
-  if (!isWeb || typeof window === 'undefined' || !str || !str.startsWith('AES:')) return str;
+const decrypt = async (str: string, policy?: string) => {
+  if (!isWeb || typeof window === 'undefined' || !str) return str;
+  
+  // 🛡️ PERFORMANCE BYPASS: Memory-tier data is stored as raw JSON strings (prefixed with MEM:)
+  if (str.startsWith('MEM:')) {
+    return str.substring(4);
+  }
+
+  if (!str.startsWith('AES:')) {
+    // Fallback for legacy 'ENC:' (Base64) data to prevent session loss during migration
+    if (str.startsWith('ENC:')) {
+       try { return decodeURIComponent(escape(window.atob(str.substring(4)))); } catch(_) {}
+    }
+    return str;
+  }
+
   try {
     const key = await getSessionKey();
     if (!key) return str;
@@ -94,10 +124,6 @@ const decrypt = async (str: string) => {
     
     return new TextDecoder().decode(decrypted);
   } catch(e) { 
-    // Fallback for legacy 'ENC:' (Base64) data to prevent session loss during migration
-    if (str.startsWith('ENC:')) {
-       try { return decodeURIComponent(escape(window.atob(str.substring(4)))); } catch(_) {}
-    }
     return str; 
   }
 };
@@ -152,19 +178,21 @@ const storage = {
       }
       
       const jsonValue = JSON.stringify(value);
-      const encrypted = await encrypt(jsonValue);
+      const policy = isWeb ? (SECURITY_POLICY[key] || 'SESSION') : 'NATIVE';
 
       if (isWeb) {
-        const policy = SECURITY_POLICY[key] || 'SESSION';
         if (policy === 'MEMORY') {
-          webMemoryCache[key] = encrypted;
+          // 🛡️ PERFORMANCE: Bypass encryption for memory-tier (no disk footprint anyway)
+          webMemoryCache[key] = 'MEM:' + jsonValue;
         } else if (policy === 'SESSION') {
+          const encrypted = await encrypt(jsonValue);
           window.sessionStorage.setItem(key, encrypted);
         } else {
+          const encrypted = await encrypt(jsonValue);
           await AsyncStorage.setItem(key, encrypted);
         }
       } else {
-        await AsyncStorage.setItem(key, encrypted);
+        await AsyncStorage.setItem(key, jsonValue); // Native uses OS-level encryption for AsyncStorage
       }
     } catch (e) {
       console.error(`Error writing value for key "${key}":`, e);

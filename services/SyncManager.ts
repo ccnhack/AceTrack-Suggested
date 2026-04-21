@@ -443,11 +443,11 @@ class SyncManager {
     if (this.syncWatchdog) clearTimeout(this.syncWatchdog);
     this.syncWatchdog = setTimeout(() => {
       if (this.activeSyncs > 0) {
-        console.warn(`[SyncManager] 🛡️ WATCHDOG TRIGGERED: Forcing sync reset after 15s hang.`);
+        console.warn(`[SyncManager] 🛡️ WATCHDOG TRIGGERED: Forcing sync reset after 30s hang.`);
         this.activeSyncs = 0;
         this.emitSyncStatus();
       }
-    }, 15000);
+    }, 30000);
   }
 
   /**
