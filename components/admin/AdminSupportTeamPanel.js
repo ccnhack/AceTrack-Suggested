@@ -237,7 +237,10 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const fetchServerRoster = useCallback(async () => {
     try {
       const res = await fetch(`${config.API_BASE_URL}/api/data`, {
-        headers: { 'x-ace-api-key': config.ACE_API_KEY }
+        headers: { 
+          'x-ace-api-key': config.ACE_API_KEY,
+          'x-user-id': 'admin'
+        }
       });
       if (res.ok) {
         const data = await res.json();

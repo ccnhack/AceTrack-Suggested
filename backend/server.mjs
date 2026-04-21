@@ -442,8 +442,8 @@ const apiKeyGuard = (req, res, next) => {
  */
 const getSanitizedState = (fullData, reqUserId, reqUserRole) => {
   if (!fullData) return {};
-  const isAdmin = reqUserRole === 'admin' || String(reqUserId).toLowerCase() === 'admin';
   const normalizedReqId = String(reqUserId || '').toLowerCase();
+  const isAdmin = reqUserRole === 'admin' || normalizedReqId === 'admin';
 
   const sanitized = { ...fullData };
 

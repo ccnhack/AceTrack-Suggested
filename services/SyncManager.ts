@@ -87,6 +87,10 @@ class SyncManager {
     return this.socket;
   }
 
+  public getUserId(): string | null {
+    return this.userId;
+  }
+
   public getActiveApiUrl(): string {
     return config.API_BASE_URL;
   }
@@ -523,7 +527,10 @@ class SyncManager {
       try {
         const cloudUrl = config.API_BASE_URL;
         const res = await fetch(`${cloudUrl}/api/data`, {
-          headers: { 'x-ace-api-key': config.ACE_API_KEY },
+          headers: { 
+            'x-ace-api-key': config.ACE_API_KEY,
+            'x-user-id': this.userId || 'guest'
+          },
           signal: controller.signal
         });
         clearTimeout(timeoutId);

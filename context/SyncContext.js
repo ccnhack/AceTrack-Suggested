@@ -114,7 +114,10 @@ export const SyncProvider = ({ children }) => {
         
         const cloudUrl = config.API_BASE_URL;
         const response = await fetch(`${cloudUrl}/api/data`, {
-          headers: { 'x-ace-api-key': config.ACE_API_KEY },
+          headers: { 
+            'x-ace-api-key': config.ACE_API_KEY,
+            'x-user-id': syncManager.getUserId() || 'guest'
+          },
           signal: controller.signal
         });
 
@@ -181,7 +184,10 @@ export const SyncProvider = ({ children }) => {
       lastUpdateCheckRef.current = now;
 
       const response = await fetch(`${config.API_BASE_URL}/api/status`, {
-        headers: { 'x-ace-api-key': config.ACE_API_KEY }
+        headers: { 
+          'x-ace-api-key': config.ACE_API_KEY,
+          'x-user-id': syncManager.getUserId() || 'guest'
+        }
       });
 
       if (response.status === 429) {
