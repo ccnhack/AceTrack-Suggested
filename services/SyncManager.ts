@@ -493,58 +493,68 @@ class SyncManager {
    * and increments version to resolve 409 conflicts silently.
    */
   private async selfHealConflict(): Promise<void> {
-    console.log('[SyncManager] [SELF_HEAL] Starting background conflict resolution...');
-    this.trackIncident('reliability', 'Self-Healing: Conflict detected. Merging cloud state...');
-    
-    try {
-      const cloudUrl = config.API_BASE_URL;
-      const res = await fetch(`${cloudUrl}/api/data`, {
-        headers: { 'x-ace-api-key': config.ACE_API_KEY }
-      });
-      if (!res.ok) throw new Error(`Pull failed: ${res.status}`);
+    return this.trackOperation('CLOUD_SELF_HEAL', async () => {
+      console.log('[SyncManager] [SELF_HEAL] Starting background conflict resolution...');
+      this.trackIncident('reliability', 'Self-Healing: Conflict detected. Merging cloud state...');
       
-      const serverData = await res.json();
-      const localData: Record<string, any> = {};
-      
-      // Load local state keys that exist in server response
-      for (const key in serverData) {
-        localData[key] = await storage.getItem(key);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000); // Strict 20s for heal pull
+
+      try {
+        const cloudUrl = config.API_BASE_URL;
+        const res = await fetch(`${cloudUrl}/api/data`, {
+          headers: { 'x-ace-api-key': config.ACE_API_KEY },
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) throw new Error(`Pull failed: ${res.status}`);
+        
+        const serverData = await res.json();
+        const localData: Record<string, any> = {};
+        
+        // Load local state keys that exist in server response
+        for (const key in serverData) {
+          localData[key] = await storage.getItem(key);
+        }
+
+        // Merge using dataMerger
+        const { result } = dataMerger.mergeData(localData, serverData);
+
+        // Save merged result internally (isInternal=true suppresses push-back)
+        await this.syncAndSaveData(result, false, true);
+        console.log('[SyncManager] [SELF_HEAL] State merged. Ready for retry.');
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        console.error('[SyncManager] Self-healing failed:', err);
+        this.trackIncident('reliability', `Self-Healing Failed: ${err.message}`);
       }
-
-      // Merge using dataMerger
-      const { result } = dataMerger.mergeData(localData, serverData);
-
-      // Save merged result internally (isInternal=true suppresses push-back)
-      await this.syncAndSaveData(result, false, true);
-      console.log('[SyncManager] [SELF_HEAL] State merged. Ready for retry.');
-    } catch (err: any) {
-      console.error('[SyncManager] Self-healing failed:', err);
-      this.trackIncident('reliability', `Self-Healing Failed: ${err.message}`);
-    }
+    });
   }
 
   public async performCloudPush(isInternal: boolean = false): Promise<void> {
-    // 🛡️ [FIX v2.6.125] Allow nested pushes from within tracked operations.
-    // Previously, atomic pushes from processActionSequence were silently skipped
-    // because isSyncing was already true from the parent trackOperation wrapper.
-    // We now only skip if there's a genuinely separate concurrent push, not our own.
     if (this.activeSyncs > 1 && !isInternal) {
       console.log('[SyncManager] performCloudPush: Skip (Concurrent sync active)');
       return;
     }
     
-    return this.trackOperation('CLOUD_PUSH', async () => {
-      console.log('[SyncManager] Starting Cloud Push...');
+    console.log('[SyncManager] Starting Cloud Push sequence...');
 
-      const updates = { ...this.pendingSyncUpdates };
-      this.pendingSyncUpdates = {};
-      if (this.syncTimeout) clearTimeout(this.syncTimeout);
-      this.syncTimeout = null;
+    const updates = { ...this.pendingSyncUpdates };
+    this.pendingSyncUpdates = {};
+    if (this.syncTimeout) clearTimeout(this.syncTimeout);
+    this.syncTimeout = null;
 
-      let retryCount = 0;
-      const MAX_RETRIES = 2;
+    let retryCount = 0;
+    const MAX_RETRIES = 2;
 
-      while (retryCount <= MAX_RETRIES) {
+    while (retryCount <= MAX_RETRIES) {
+      // 🛡️ [GRANULAR TRACKING] (v2.6.158)
+      // Wrap each discrete attempt in a separate trackOperation so the watchdog
+      // resets its 30s timer for every network roundtrip.
+      const label = `CLOUD_PUSH_ATTEMPT_${retryCount + 1}${isInternal ? '_INTERNAL' : ''}`;
+      
+      const success = await this.trackOperation(label, async () => {
         try {
           const result = await this.pushToApi(updates, isInternal);
           
@@ -552,36 +562,42 @@ class SyncManager {
             this.pendingSync = [];
             this.metrics.lastSyncSuccess = new Date().toISOString();
             await storage.setItem('pendingSync', []);
-            return; // Success!
+            return true; 
           }
 
-          // 🛡️ [Self-Healing Branch]
           if (result.status === 409 && retryCount < MAX_RETRIES) {
-            console.log(`[SyncManager] [RETRY] Collision detected (409). Attempting self-heal (Try ${retryCount + 1})...`);
+            console.log(`[SyncManager] [CONFLICT] Attempt ${retryCount + 1} failed. Self-healing...`);
             await this.selfHealConflict();
-            retryCount++;
-            continue; // Retry with updated version/state
+            return 'RETRY_CONFLICT';
           }
 
           if (result.status === 429 && retryCount < MAX_RETRIES) {
-            const backoff = 2000 * (retryCount + 1);
-            console.log(`[SyncManager] [RETRY] Rate limited (429). Backing off ${backoff}ms...`);
-            await new Promise(r => setTimeout(r, backoff));
-            retryCount++;
-            continue;
+            return 'RETRY_RATE_LIMIT';
           }
 
-          // Non-retryable failure
           this.metrics.pushFailureCount++;
-          this.trackIncident('reliability', `Push failed: Server rejected with ${result.status} [isInternal: ${isInternal}]`);
-          return;
+          this.trackIncident('reliability', `Push failed: Server rejected with ${result.status}`);
+          return false;
         } catch (error: any) {
           console.error('[SyncManager] performCloudPush error:', error);
-          this.trackIncident('reliability', `Push Exception: ${error?.message || 'Unknown network error'}`);
-          return;
+          this.trackIncident('reliability', `Push Exception: ${error?.message}`);
+          return false;
         }
+      });
+
+      if (success === true) return;
+      if (success === false) return; // Terminal failure
+
+      // Handle Retries
+      retryCount++;
+      if (success === 'RETRY_RATE_LIMIT') {
+        const backoff = 2000 * retryCount;
+        console.log(`[SyncManager] [RETRY] Backing off ${backoff}ms...`);
+        // 🛡️ [IDLE EXCLUSION] Sleep happens OUTSIDE trackOperation to avoid watchdog triggers
+        await new Promise(r => setTimeout(r, backoff));
       }
-    });
+      // For RETRY_CONFLICT, we continue immediately after self-healing
+    }
   }
 
   private trackIncident(type: string, message: string) {
