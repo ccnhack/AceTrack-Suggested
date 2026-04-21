@@ -1,4 +1,23 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+
+const isWeb = Platform.OS === 'web';
+
+// 🛡️ WEB OBFUSCATION (v2.6.155)
+// Masks structured plain-text from casual inspectors via Web Local Storage. Uses Base64+URI abstraction to handle all emojis and unicode securely.
+const obfuscate = (str: string) => {
+  if (!isWeb || typeof window === 'undefined') return str;
+  try {
+    return 'ENC:' + window.btoa(unescape(encodeURIComponent(str)));
+  } catch(e) { return str; }
+};
+
+const deobfuscate = (str: string) => {
+  if (!isWeb || typeof window === 'undefined' || !str || !str.startsWith('ENC:')) return str;
+  try {
+    return decodeURIComponent(escape(window.atob(str.substring(4))));
+  } catch(e) { return str; }
+};
 
 // 🛡️ SEQUENTIAL STORAGE QUEUE: Ensures that rapid persistence calls (e.g. from sync loop)
 // are executed in strict order to prevent native bridge race conditions.
@@ -11,8 +30,11 @@ let isExecutingQueue = false;
 const storage = {
   getItem: async (key: string) => {
     try {
-      const value = await AsyncStorage.getItem(key);
-      if (!value || value === 'undefined') return null;
+      const storedValue = await AsyncStorage.getItem(key);
+      if (!storedValue || storedValue === 'undefined') return null;
+      
+      const value = deobfuscate(storedValue);
+      
       try {
         return JSON.parse(value);
       } catch (parseError) {
@@ -37,7 +59,7 @@ const storage = {
         return;
       }
       const jsonValue = JSON.stringify(value);
-      await AsyncStorage.setItem(key, jsonValue);
+      await AsyncStorage.setItem(key, obfuscate(jsonValue));
     } catch (e) {
       console.error(`Error writing raw value to AsyncStorage for key "${key}":`, e);
     }
