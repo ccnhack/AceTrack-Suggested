@@ -416,6 +416,76 @@ const LoginScreen = ({ navigation }) => {
             </Text>
           </View>
         </View>
+
+        {/* Forgot Password Modal (Web-Only Instance for Isolation) */}
+        <Modal visible={showForgot} animationType="fade" transparent={true}>
+          <View style={styles.webModalOverlay}>
+            <View style={styles.webModalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Reset Password</Text>
+                <TouchableOpacity onPress={() => setShowForgot(false)} style={styles.closeBtn}>
+                  <Ionicons name="close" size={24} color="#0F172A" />
+                </TouchableOpacity>
+              </View>
+
+              {forgotStep === 1 && (
+                <View style={styles.stepContainer}>
+                  <Text style={styles.stepDesc}>Enter the username or email address registered with your account.</Text>
+                  <TextInput 
+                    style={styles.modalInput} 
+                    placeholder="Username or Email" 
+                    value={forgotUser} 
+                    onChangeText={setForgotUser}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity style={styles.modalBtn} onPress={handleIdentify} disabled={isLoading}>
+                    {isLoading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalBtnText}>Send Reset Link</Text>}
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {forgotStep === 2 && (
+                <View style={styles.stepContainer}>
+                  <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                    <Ionicons name="mail-unread-outline" size={48} color="#6366F1" />
+                  </View>
+                  <Text style={[styles.stepDesc, { textAlign: 'center' }]}>
+                    If an account is associated with that identifier, a password recovery link has been sent to the registered email address.
+                  </Text>
+                  <Text style={[styles.stepDesc, { textAlign: 'center', fontSize: 13, color: '#64748B' }]}>
+                    Please check your inbox (and spam folder). The link will expire in 60 minutes.
+                  </Text>
+                  <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#F1F5F9' }]} onPress={() => setShowForgot(false)}>
+                    <Text style={[styles.modalBtnText, { color: '#0F172A' }]}>Finish</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {forgotStep === 3 && (
+                <View style={styles.stepContainer}>
+                  <Text style={styles.stepDesc}>Set your new password below.</Text>
+                  <TextInput 
+                    style={styles.modalInput} 
+                    placeholder="New Password" 
+                    value={newPass} 
+                    onChangeText={setNewPass} 
+                    secureTextEntry
+                  />
+                  <TextInput 
+                    style={styles.modalInput} 
+                    placeholder="Confirm New Password" 
+                    value={confirmPass} 
+                    onChangeText={setConfirmPass} 
+                    secureTextEntry
+                  />
+                  <TouchableOpacity style={styles.modalBtn} onPress={handleResetPassword} disabled={isResetting}>
+                    {isResetting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalBtnText}>Update Password</Text>}
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </View>
+        </Modal>
       </ImageBackground>
     );
   }
@@ -724,6 +794,25 @@ const styles = StyleSheet.create({
   modalInput: { backgroundColor: '#F8FAFC', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 16, height: 56, fontSize: 16, color: '#0F172A' },
   modalBtn: { backgroundColor: '#3B82F6', borderRadius: 16, height: 56, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
   modalBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
+  webModalOverlay: { 
+    flex: 1, 
+    backgroundColor: 'rgba(15, 23, 42, 0.7)', 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    // @ts-ignore
+    cursor: 'default'
+  },
+  webModalContent: { 
+    backgroundColor: '#FFFFFF', 
+    borderRadius: 24, 
+    padding: 32, 
+    width: 440, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 10 }, 
+    shadowOpacity: 0.25, 
+    shadowRadius: 20,
+    elevation: 10
+  }
 });
 
 export default LoginScreen;
