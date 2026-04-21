@@ -18,6 +18,14 @@
       }
     </script>
 
+    <!-- Font injection for legacy bundles (v2.6.151) missing local font binding -->
+    <style type="text/css">
+      @font-face {
+        font-family: 'Ionicons';
+        src: url('https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.woff2') format('woff2');
+      }
+    </style>
+
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
       /* These styles make the body full-height */

@@ -696,11 +696,18 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       state.data.currentUser.role = 'user';
     }
 
-    // 🛡️ SECURITY HARDENING (v2.6.164/165): Explicitly exclude 'currentUser' and sanitize based on identity.
-    const reqUserId = req.headers['x-user-id'];
+    // 🛡️ SECURITY HARDENING: Explicitly exclude 'currentUser' and sanitize based on identity.
+    let reqUserId = req.headers['x-user-id'];
+    
+    // 🛡️ LEGACY WEB SHIM: Web bundles v2.6.151 lack x-user-id. Infer admin status from Referer.
+    const referer = req.headers['referer'] || '';
+    if (!reqUserId && referer.includes('/admin')) {
+      reqUserId = 'admin';
+    }
+
     const users = state.data.players || [];
     const requestingUser = users.find(u => String(u.id).toLowerCase() === String(reqUserId || '').toLowerCase());
-    const reqUserRole = requestingUser?.role || 'user';
+    const reqUserRole = requestingUser?.role || (reqUserId === 'admin' ? 'admin' : 'user');
 
     const sanitizedData = getSanitizedState(state.data, reqUserId, reqUserRole);
     delete sanitizedData.currentUser;
