@@ -832,6 +832,16 @@ router.get('/diagnostics', apiKeyGuard, sensitiveCacheGuard, asyncHandler(async 
 
 
 // GET /api/v1/diagnostics/:filename
+router.get('/diagnostics/raw_events', apiKeyGuard, asyncHandler(async (req, res) => {
+  const filepath = path.join(DIAGNOSTICS_DIR, 'server_events.jsonl');
+  if (fs.existsSync(filepath)) {
+    const data = await fs.promises.readFile(filepath, 'utf8');
+    res.setHeader('Content-Type', 'text/plain');
+    return res.send(data);
+  }
+  res.status(404).send('Not found');
+}));
+
 router.get('/diagnostics/:filename', apiKeyGuard, asyncHandler(async (req, res) => {
   const filename = path.basename(req.params.filename);
   

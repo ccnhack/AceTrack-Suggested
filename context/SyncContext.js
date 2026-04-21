@@ -40,11 +40,6 @@ export const SyncProvider = ({ children }) => {
   const lastUpdateCheckRef = useRef(0);
   const isStartupCompleteRef = useRef(false);
 
-  // Sync socketRef with Manager instance
-  useEffect(() => {
-    socketRef.current = syncManager.getSocket();
-  }, [isCloudOnline]); // Refresh when connection status changes
-
   // Function to refresh metrics
   const refreshMetrics = useCallback(() => {
     setMetrics(syncManager.getMetrics());
@@ -59,7 +54,12 @@ export const SyncProvider = ({ children }) => {
     const unsubSync = eventBus.subscribe('SYNC_STATUS_CHANGED', (e) => {
       if (e.payload.isOnline !== undefined) setIsCloudOnline(e.payload.isOnline);
       if (e.payload.isSyncing !== undefined) setIsSyncing(e.payload.isSyncing);
+      // 🛡️ Ensure socketRef stays fresh regardless of state bailout (fixes Admin Diag Pings)
+      socketRef.current = syncManager.getSocket();
     });
+
+    // 🛡️ Set initial reference if already available
+    socketRef.current = syncManager.getSocket();
 
     return () => {
       unsubConn();
