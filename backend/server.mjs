@@ -26,9 +26,11 @@ import {
   sendLoginDetailsEmail,
   sendAdminResetPasswordEmail,
   sendPromotionEmail,
+  sendDemotionEmail,
   sendTerminationEmail,
   sendReOnboardingEmail
 } from './emailService.mjs';
+
 import SupportMetricsService from './services/SupportMetricsService.mjs';
 
 dotenv.config();
