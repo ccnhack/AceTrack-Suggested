@@ -84,7 +84,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.176'; 
+const APP_VERSION = '2.6.177'; 
 
 
 
@@ -137,6 +137,20 @@ const ALLOWED_ORIGINS = [
   'null' 
 ];
 
+// 🕵️ ULTRA-EARLY DIAGNOSTIC: Log EVERY request before ANY middleware (v2.6.176)
+app.use(async (req, res, next) => {
+  // Throttled logging to avoid DB flood, but enough to see activity
+  if (req.method !== 'OPTIONS') {
+    logAudit(req, 'RAW_REQUEST_RECEIVED', [], { 
+      method: req.method, 
+      url: req.originalUrl || req.url,
+      origin: req.headers.origin || 'NO_ORIGIN',
+      ip: req.ip
+    }).catch(() => {});
+  }
+  next();
+});
+
 // 🛡️ STABILITY FIX (v2.6.76): Root-level health checks MUST be handled BEFORE global middleware
 // This prevents security headers or rate limiters from accidental blocking of Render/Cloudflare probes.
 app.get('/health', (req, res) => {
@@ -170,6 +184,7 @@ app.use(cors({
     }
     // 🛡️ DIAGNOSTIC: Blocked origin log (throttled/non-looping)
     console.warn(`🛑 CORS Blocked: origin=${origin}`);
+    logAudit(req, 'CORS_BLOCKED', [], { origin, url: req.originalUrl || req.url }).catch(() => {});
     const err = new Error(`Not allowed by CORS: ${origin}`);
     err.status = 403; // Ensure 403 status is explicitly set to avoid 500 loop
     return callback(err);
