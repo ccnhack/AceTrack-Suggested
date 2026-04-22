@@ -116,7 +116,8 @@ export const SyncProvider = ({ children }) => {
         const response = await fetch(`${cloudUrl}/api/data`, {
           headers: { 
             'x-ace-api-key': config.PUBLIC_APP_ID,
-            'x-user-id': syncManager.getUserId() || 'guest'
+            'x-user-id': syncManager.getUserId() || 'guest',
+            'Authorization': (await syncManager.getSystemFlag('userToken')) ? `Bearer ${await syncManager.getSystemFlag('userToken')}` : ''
           },
           signal: controller.signal
         });
@@ -186,7 +187,8 @@ export const SyncProvider = ({ children }) => {
       const response = await fetch(`${config.API_BASE_URL}/api/status`, {
         headers: { 
           'x-ace-api-key': config.PUBLIC_APP_ID,
-          'x-user-id': syncManager.getUserId() || 'guest'
+          'x-user-id': syncManager.getUserId() || 'guest',
+          'Authorization': (await syncManager.getSystemFlag('userToken')) ? `Bearer ${await syncManager.getSystemFlag('userToken')}` : ''
         }
       });
 

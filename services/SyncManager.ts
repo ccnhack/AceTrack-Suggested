@@ -22,6 +22,7 @@ import logger from '../utils/logger';
 class SyncManager {
   private static instance: SyncManager;
   private userId: string | null = null;
+  private userToken: string | null = null;
   private hardwareId: string | null = null;
   private initPromise: Promise<void> | null = null;
   private socket: Socket | null = null;
@@ -95,6 +96,14 @@ class SyncManager {
     return config.API_BASE_URL;
   }
 
+  public setUserToken(token: string | null) {
+    this.userToken = token;
+    // Re-setup socket if token changed to ensure high-security connection
+    if (this.userId && this.socket) {
+      this.setupSocket(this.userId);
+    }
+  }
+
   // 🛡️ [PUBLIC QUERY API] (v2.6.125)
   public isSyncActive(): boolean {
     return this.activeSyncs > 0;
@@ -161,8 +170,11 @@ class SyncManager {
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
       query: { userId },
-      auth: { token: config.PUBLIC_APP_ID },
-      extraHeaders: { 'x-ace-api-key': config.PUBLIC_APP_ID }
+      auth: { token: this.userToken || config.PUBLIC_APP_ID },
+      extraHeaders: { 
+        'x-ace-api-key': config.PUBLIC_APP_ID,
+        'Authorization': this.userToken ? `Bearer ${this.userToken}` : ''
+      }
     });
 
     try {
@@ -712,7 +724,8 @@ class SyncManager {
         headers: {
           'Content-Type': 'application/json',
           'x-ace-api-key': config.PUBLIC_APP_ID,
-          'x-user-id': this.userId || 'guest'
+          'x-user-id': this.userId || 'guest',
+          'Authorization': this.userToken ? `Bearer ${this.userToken}` : ''
         },
         body: JSON.stringify({
           ...updates,

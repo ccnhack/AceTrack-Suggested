@@ -107,7 +107,7 @@ const LoginScreen = ({ navigation }) => {
         const supportData = await supportRes.json();
 
         if (supportRes.ok && supportData.success && supportData.user) {
-          onLoginSuccess('support', supportData.user);
+          onLoginSuccess('support', { ...supportData.user, token: supportData.token });
           return;
         }
       } catch (serverErr) {
@@ -386,7 +386,7 @@ const LoginScreen = ({ navigation }) => {
                       const result = await resp.json();
                       if (resp.ok && result.success && result.user) {
                         setShowMFA(false); setMfaPin('');
-                        onLoginSuccess('admin', result.user);
+                        onLoginSuccess('admin', { ...result.user, token: result.token });
                       } else {
                         setMfaError(result.error || 'Verification failed.');
                         setMfaPin('');
@@ -411,7 +411,7 @@ const LoginScreen = ({ navigation }) => {
                       const result = await resp.json();
                       if (resp.ok && result.success && result.user) {
                         setShowMFA(false); setMfaPin('');
-                        onLoginSuccess('admin', result.user);
+                        onLoginSuccess('admin', { ...result.user, token: result.token });
                       } else {
                         setMfaError(result.error || 'Verification failed.');
                         setMfaPin('');

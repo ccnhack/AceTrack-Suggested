@@ -32,16 +32,18 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const hydrateSession = async () => {
       try {
-        const rawUser = await storage.getItem('currentUser');
-        if (rawUser) {
-          console.log(`[AuthContext] Hydrating session for: ${rawUser.id}`);
-          setCurrentUser(rawUser);
-          setUserRole(rawUser.role);
-          setViewingLanding(false);
-          
-          // Re-initialize SyncManager immediately for background processes
-          syncManager.init(rawUser.id);
-        }
+          const rawUser = await storage.getItem('currentUser');
+          const token = await storage.getItem('userToken');
+          if (rawUser) {
+            console.log(`[AuthContext] Hydrating session for: ${rawUser.id}`);
+            setCurrentUser(rawUser);
+            setUserRole(rawUser.role);
+            setViewingLanding(false);
+            
+            // Re-initialize SyncManager immediately for background processes
+            syncManager.init(rawUser.id);
+            if (token) syncManager.setUserToken(token);
+          }
       } catch (e) {
         console.error("[AuthContext] Hydration failed:", e);
       }
@@ -88,24 +90,29 @@ export const AuthProvider = ({ children }) => {
 
   const onLogin = useCallback((arg1, arg2) => {
     // Handle polymorphic arguments: onLogin(user) OR onLogin(role, user)
+    // 🛡️ [JWT UPDATED] (v2.6.190): Extract token from login result
     const user = arg2 && typeof arg2 === 'object' ? arg2 : arg1;
+    const token = (arg2 && typeof arg2 === 'object') ? null : (arg1 && arg1.token ? arg1.token : null);
+    // Actually, LoginScreen calls onLoginSuccess(role, user) but we updated routes to return { success, token, user }
+    // Let's refine the LoginScreen call to pass the token.
     
     if (user && typeof user === 'object') {
-      console.log(`[AuthContext] Login success for user: ${user.id} (${user.role}) - Verified: E:${!!user.isEmailVerified} P:${!!user.isPhoneVerified}`);
-      logger.logAction('LOGIN_SUCCESS', { userId: user.id, role: user.role, isEmailVerified: user.isEmailVerified, isPhoneVerified: user.isPhoneVerified });
+      console.log(`[AuthContext] Login success for user: ${user.id} (${user.role})`);
+      logger.logAction('LOGIN_SUCCESS', { userId: user.id, role: user.role });
       setCurrentUser(user);
       setUserRole(user.role);
       setViewingLanding(false);
 
-      
-      // 🛡️ INITIALIZATION GUARD: SyncManager must be aware of the user before it can persist data.
-      // This prevents a race condition where syncAndSaveData would return early if this.userId was null.
       syncManager.init(user.id);
       
-      // Use redundant persistence for high-reliability session hydration
-      syncManager.setSystemFlag('currentUser', user);
+      // If we received a token, persist it (v2.6.190)
+      if (user.token || token) {
+        const activeToken = user.token || token;
+        syncManager.setUserToken(activeToken);
+        syncManager.setSystemFlag('userToken', activeToken);
+      }
       
-      // Now this call will succeed in persisting the session to device storage.
+      syncManager.setSystemFlag('currentUser', user);
       syncAndSaveData({ currentUser: user });
       
       // 🛡️ [PUSH TOKEN SYNC ON LOGIN] (v2.6.121)
@@ -135,7 +142,7 @@ export const AuthProvider = ({ children }) => {
     
     // 🔒 PRIVACY GUARD: Clear all user-specific data from local storage
     const syncableKeys = [
-      'currentUser', 'players', 'tournaments', 'matchVideos', 'matches', 
+      'currentUser', 'userToken', 'players', 'tournaments', 'matchVideos', 'matches', 
       'matchmaking', 'evaluations', 'supportTickets', 'auditLogs', 
       'chatbotMessages', 'isUsingCloud', 'seenAdminActionIds', 
       'visitedAdminSubTabs', 'sessionCustomAvatar'
@@ -152,7 +159,8 @@ export const AuthProvider = ({ children }) => {
       }
       syncManager.removeSystemFlag(key);
     });
-    
+
+    syncManager.setUserToken(null);
     console.log('[AuthContext] Privacy Guard: All session data cleared.');
   }, []);
 

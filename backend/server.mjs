@@ -84,10 +84,48 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.189'; 
+const APP_VERSION = '2.6.190'; 
 
-// 🛡️ SECURITY: API Key (v2.6.178)
+// 🛡️ SECURITY: JWT & Secrets (v2.6.190)
+import jwt from 'jsonwebtoken';
 const ACE_API_KEY = process.env.ACE_API_KEY;
+const JWT_SECRET = process.env.JWT_SECRET || 'acetrack_zero_trust_fallback_secret_1717';
+const SECURITY_WEBHOOK_URL = process.env.SECURITY_WEBHOOK_URL; // For Discord/Slack alerts
+
+const signToken = (user) => {
+  return jwt.sign(
+    { 
+      id: user.id, 
+      role: user.role || 'user',
+      scopes: user.scopes || (user.role === 'admin' ? ['*'] : ['read:own'])
+    }, 
+    JWT_SECRET, 
+    { expiresIn: '1h' }
+  );
+};
+
+// 🛡️ SECURITY: Real-time Alerting (v2.6.190)
+const sendSecurityAlert = async (event, data) => {
+  if (!SECURITY_WEBHOOK_URL) return;
+  try {
+    const payload = {
+      content: `🚨 **SECURITY ALERT: ${event}**`,
+      embeds: [{
+        title: event,
+        color: 15158332, // Red
+        fields: Object.entries(data).map(([k, v]) => ({ name: k, value: String(v), inline: true })),
+        timestamp: new Date().toISOString()
+      }]
+    };
+    await fetch(SECURITY_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  } catch (err) {
+    console.error('❌ Failed to send security alert:', err.message);
+  }
+};
 
 // 📊 Schemas (SE Fix: Database indexing)
 const AppStateSchema = new mongoose.Schema({
@@ -122,6 +160,16 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
       userAgent: (req && req.headers && req.headers['user-agent']) || 'unknown',
       details
     });
+
+    // 🚨 Real-time Alert for Critical Events (v2.6.190)
+    const criticalEvents = ['UNAUTHORIZED_ACCESS_BLOCKED', 'HARD_ROUTE_BLOCK', 'OTP_BRUTE_FORCE_DETECTED', 'ADMIN_PRIVILEGE_ESCALATION'];
+    if (criticalEvents.includes(action)) {
+      await sendSecurityAlert(action, { 
+        IP: (req && req.ip) || '0.0.0.0', 
+        URL: (req && (req.originalUrl || req.url)) || 'Unknown', 
+        Actor: (req && req.headers && req.headers['x-user-id']) || 'Unknown' 
+      });
+    }
   } catch (e) {
     console.error("❌ Audit log error:", e.message);
   }
@@ -484,26 +532,36 @@ const PUBLIC_APP_ID = "AceTrack_Client_v2_Production";
 const apiKeyGuard = async (req, res, next) => {
   const providedKey = req.headers['x-ace-api-key'];
   const userId = req.headers['x-user-id'];
+  const authHeader = req.headers['authorization'];
+  const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
   const path = req.path;
   
   // 🔍 LOGGED: Audit all API key requests
-  console.log(`[AUTH] Guard Check: ${req.method} ${path} | Key: ${providedKey ? 'PROVIDED' : 'MISSING'} | UserID: ${userId || 'NONE'}`);
+  console.log(`[AUTH] Guard Check: ${req.method} ${path} | Key: ${providedKey ? 'PROVIDED' : 'MISSING'} | JWT: ${bearerToken ? 'PROVIDED' : 'MISSING'}`);
 
-  // 1. MASTER KEY: Full access for administrative/emergency use (from ENV)
+  // 1. JWT TOKEN (v2.6.190): High-security authenticated session
+  if (bearerToken) {
+    try {
+      const decoded = jwt.verify(bearerToken, JWT_SECRET);
+      req.user = decoded;
+      req.userId = decoded.id;
+      req.userRole = decoded.role;
+      return next();
+    } catch (err) {
+      console.warn(`🛑 Invalid JWT from ${req.ip}: ${err.message}`);
+      return res.status(401).json({ error: 'Session expired or invalid. Please login again.' });
+    }
+  }
+
+  // 2. MASTER KEY: Full access for administrative/emergency use (from ENV)
   if (providedKey && providedKey === ACE_API_KEY) {
+    req.user = { id: 'admin', role: 'admin', scopes: ['*'] };
     return next();
   }
 
-  // 2. PUBLIC BOOTSTRAP: Allow Login/OTP flows using the Public App ID
-  const isPublicRoute = path.includes('/login') || path.includes('/otp') || path.includes('/health');
+  // 3. PUBLIC BOOTSTRAP: Allow Login/OTP flows using the Public App ID
+  const isPublicRoute = path.includes('/login') || path.includes('/otp') || path.includes('/health') || path.includes('/status');
   if (isPublicRoute && providedKey === PUBLIC_APP_ID) {
-    return next();
-  }
-
-  // 3. AUTHENTICATED SESSION: Allow data sync if the user is identified
-  // In a future update, we will replace this with a JWT token check.
-  if (userId && userId !== 'guest' && !path.includes('/export') && !path.includes('/force-reset')) {
-    // 🛡️ SECURITY: Prevent keyless access to high-privilege support routes
     return next();
   }
 
@@ -562,30 +620,36 @@ const passwordResetLimiter = rateLimit({
  * Sanitizes the global application state based on requester identity and role.
  * Ensures strict isolation of private records (Tickets, Matches, Evaluations, PII).
  */
-const getSanitizedState = (fullData, reqUserId, reqUserRole) => {
+const getSanitizedState = (fullData, req) => {
   if (!fullData) return {};
+  const reqUserId = req.userId;
+  const reqUserRole = req.userRole;
+  const scopes = req.user?.scopes || [];
+
   const normalizedReqId = String(reqUserId || '').toLowerCase();
-  const isAdmin = reqUserRole === 'admin' || normalizedReqId === 'admin';
+  const isAdmin = reqUserRole === 'admin' || normalizedReqId === 'admin' || scopes.includes('*');
+  const canReadPII = isAdmin || scopes.includes('read:pii');
+  const canReadSupport = isAdmin || scopes.includes('read:support') || scopes.includes('read:basic');
 
   const sanitized = { ...fullData };
 
-  // 1. Mask PII in Players
+  // 1. Mask PII in Players (BOLA Protection)
   if (sanitized.players && Array.isArray(sanitized.players)) {
     sanitized.players = sanitized.players.map(p => {
       if (!p) return p;
       const isOwner = String(p.id).toLowerCase() === normalizedReqId;
-      if (isAdmin || isOwner) return p;
+      if (canReadPII || isOwner) return p;
 
-      // Mask sensitive fields for others
+      // Mask sensitive fields for others (and support without PII scope)
       const { email, phone, password, pushTokens, devices, ...publicProfile } = p;
       return publicProfile;
     });
   }
 
-  // 2. Filter Support Tickets
+  // 2. Filter Support Tickets (Principle of Least Privilege)
   if (sanitized.supportTickets && Array.isArray(sanitized.supportTickets)) {
     sanitized.supportTickets = sanitized.supportTickets.filter(t => {
-      if (isAdmin) return true;
+      if (canReadSupport) return true;
       return String(t.userId).toLowerCase() === normalizedReqId;
     });
   }
@@ -818,7 +882,7 @@ router.get('/data', sensitiveCacheGuard, async (req, res) => {
     const requestingUser = users.find(u => String(u.id).toLowerCase() === String(reqUserId || '').toLowerCase());
     const reqUserRole = requestingUser?.role || (reqUserId === 'admin' ? 'admin' : 'user');
 
-    const sanitizedData = getSanitizedState(state.data, reqUserId, reqUserRole);
+    const sanitizedData = getSanitizedState(state.data, req);
     delete sanitizedData.currentUser;
 
     res.json({ ...sanitizedData, lastUpdated: state.lastUpdated, version: state.version || 1 });
@@ -1997,8 +2061,13 @@ router.post('/admin/verify-pin', asyncHandler(async (req, res) => {
   pendingAdminMFA.delete(mfaToken);
 
   logServerEvent('ADMIN_LOGIN_SUCCESS', { ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
+
+  // 🛡️ Success! Issue JWT with Admin scope (v2.6.190)
+  const token = signToken({ id: 'admin', role: 'admin', scopes: ['*'] });
+
   res.json({
     success: true,
+    token,
     user: {
       id: 'admin',
       name: 'System Admin',
@@ -2090,7 +2159,15 @@ router.post('/support/login', loginLimiter, asyncHandler(async (req, res) => {
   const { password: _pw, pushTokens, devices, ...safeUser } = supportUser;
 
   await logAudit(req, 'SUPPORT_LOGIN_SUCCESS', [], { userId: supportUser.id, email: supportUser.email });
-  res.json({ success: true, user: safeUser });
+  
+  // 🛡️ Success! Issue JWT with Support scope (v2.6.190)
+  const token = signToken({ 
+    id: supportUser.id, 
+    role: 'support', 
+    scopes: ['read:basic', 'write:tickets'] 
+  });
+
+  res.json({ success: true, token, user: safeUser });
 
 }));
 
