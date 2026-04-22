@@ -84,7 +84,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.180'; 
+const APP_VERSION = '2.6.181'; 
 
 // 🛡️ SECURITY: API Key (v2.6.178)
 const ACE_API_KEY = process.env.ACE_API_KEY;
@@ -208,9 +208,22 @@ app.get('/', (req, res, next) => {
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: Helmet for HTTP headers (SEC)
 // ═══════════════════════════════════════════════════════════════
+// 🛡️ SECURITY: Hardened Headers (v2.6.181)
 app.use(helmet({
-  contentSecurityPolicy: false, 
-  crossOriginEmbedderPolicy: false
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://acetrack-suggested.onrender.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "https://fonts.googleapis.com", "data:"],
+      imgSrc: ["'self'", "data:", "https://res.cloudinary.com", "https://api.dicebear.com", "https://*.fbcdn.net"],
+      connectSrc: ["'self'", "https://acetrack-suggested.onrender.com", "wss://acetrack-suggested.onrender.com"],
+      frameSrc: ["'self'"],
+      upgradeInsecureRequests: [],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
 // ═══════════════════════════════════════════════════════════════
@@ -3125,6 +3138,19 @@ if (fs.existsSync(publicPath)) {
       // Still apply no-cache for SPA routes to be safe
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       res.sendFile(path.join(publicPath, 'index.html'));
+    } else {
+      next();
+    }
+  });
+
+  // 🛡️ [JSON 404 HANDLER]: Prevent Express.js Fingerprinting (v2.6.181)
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api')) {
+      res.status(404).json({
+        success: false,
+        error: `Resource not found: ${req.method} ${req.originalUrl}`,
+        version: APP_VERSION
+      });
     } else {
       next();
     }
