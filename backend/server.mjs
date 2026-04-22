@@ -1946,8 +1946,17 @@ router.post('/support/login', loginLimiter, asyncHandler(async (req, res) => {
   });
 
   if (!supportUser) {
+    // 🕵️ DEEP DIAGNOSTIC: Find if the user exists AT ALL but has the wrong role
+    const anyUser = players.find(p => 
+      String(p.email || '').toLowerCase().trim() === search || 
+      String(p.username || '').toLowerCase().trim() === search
+    );
+    if (anyUser) {
+      await logAudit(req, 'SUPPORT_LOGIN_DENIED_ROLE', [], { identifier: search, foundRole: anyUser.role, status: anyUser.supportStatus });
+    }
     return res.status(401).json({ error: 'Access Denied. This portal is for AceTrack Administrators and Support Staff only.' });
   }
+
 
   if (supportUser.supportStatus === 'terminated' || supportUser.supportStatus === 'inactive') {
     return res.status(403).json({ error: 'Access Suspended: Your employment profile has been deactivated.' });
