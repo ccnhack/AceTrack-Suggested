@@ -1819,7 +1819,7 @@ router.post('/support/invite/resend', apiKeyGuard, asyncHandler(async (req, res)
 const ADMIN_MFA_PIN = process.env.ADMIN_MFA_PIN || '120522';
 const pendingAdminMFA = new Map(); // token → { expires }
 
-router.post('/admin/login', apiKeyGuard, asyncHandler(async (req, res) => {
+router.post('/admin/login', loginLimiter, asyncHandler(async (req, res) => {
   const { identifier, password } = req.body;
   if (!identifier || !password) {
     return res.status(400).json({ error: 'Username and Password are required.' });
@@ -1864,7 +1864,7 @@ router.post('/admin/login', apiKeyGuard, asyncHandler(async (req, res) => {
   res.json({ success: true, requiresMFA: true, mfaToken });
 }));
 
-router.post('/admin/verify-pin', apiKeyGuard, asyncHandler(async (req, res) => {
+router.post('/admin/verify-pin', asyncHandler(async (req, res) => {
   const { mfaToken, pin } = req.body;
   if (!mfaToken || !pin) {
     return res.status(400).json({ error: 'MFA token and PIN are required.' });
