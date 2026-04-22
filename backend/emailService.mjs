@@ -864,7 +864,8 @@ export default {
   sendPromotionEmail,
   sendDemotionEmail,
   sendTerminationEmail,
-  sendReOnboardingEmail
+  sendReOnboardingEmail,
+  sendSecurityAlertEmail
 };
 
 
