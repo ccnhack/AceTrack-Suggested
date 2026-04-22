@@ -49,6 +49,8 @@ const LoginScreen = ({ navigation }) => {
   const [forgotStep, setForgotStep] = useState(1); // 1: ID, 2: Done
   const [forgotUser, setForgotUser] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isForgotLoading, setIsForgotLoading] = useState(false);
+
 
   // 🔐 MFA States (v2.6.170)
   const [showMFA, setShowMFA] = useState(false);
@@ -60,6 +62,7 @@ const LoginScreen = ({ navigation }) => {
   const handleLogin = async () => {
     logger.logAction('LOGIN_CLICK', { username });
     setError('');
+    setIsLoading(true);
     try {
       if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       // Web Login: Server-side authentication (v2.6.170)
@@ -256,7 +259,7 @@ const LoginScreen = ({ navigation }) => {
       return;
     }
 
-    setIsLoading(true);
+    setIsForgotLoading(true);
     try {
       const res = await fetch(`${config.API_BASE_URL}/api/support/password-reset/request`, {
         method: 'POST',
@@ -281,7 +284,7 @@ const LoginScreen = ({ navigation }) => {
     } catch (e) {
       Alert.alert("Network Error", "Please check your connection and try again.");
     } finally {
-      setIsLoading(false);
+      setIsForgotLoading(false);
     }
   };
 
@@ -509,8 +512,8 @@ const LoginScreen = ({ navigation }) => {
                     onChangeText={setForgotUser}
                     autoCapitalize="none"
                   />
-                  <TouchableOpacity style={styles.modalBtn} onPress={handleIdentify} disabled={isLoading}>
-                    {isLoading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalBtnText}>INITIATE RECOVERY</Text>}
+                  <TouchableOpacity style={styles.modalBtn} onPress={handleIdentify} disabled={isForgotLoading}>
+                    {isForgotLoading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalBtnText}>INITIATE RECOVERY</Text>}
                   </TouchableOpacity>
                 </View>
               )}
@@ -667,8 +670,8 @@ const LoginScreen = ({ navigation }) => {
                   onChangeText={setForgotUser}
                   autoCapitalize="none"
                 />
-                <TouchableOpacity style={styles.modalBtn} onPress={handleIdentify} disabled={isLoading}>
-                  {isLoading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalBtnText}>Send Reset Link</Text>}
+                <TouchableOpacity style={styles.modalBtn} onPress={handleIdentify} disabled={isForgotLoading}>
+                  {isForgotLoading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalBtnText}>Send Reset Link</Text>}
                 </TouchableOpacity>
               </View>
             )}
