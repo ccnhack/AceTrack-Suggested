@@ -1904,7 +1904,16 @@ router.post('/admin/verify-pin', apiKeyGuard, asyncHandler(async (req, res) => {
 // 🔐 SUPPORT STAFF LOGIN (v2.6.170)
 // Server-side authentication — credentials never leave the server
 // ═══════════════════════════════════════════════════════════════
-router.post('/support/login', apiKeyGuard, asyncHandler(async (req, res) => {
+// 🛡️ SECURITY: Rate limit login attempts to prevent brute-force (Finding 8)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 login attempts per window
+  message: { error: 'Too many login attempts. Please try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+router.post('/support/login', loginLimiter, asyncHandler(async (req, res) => {
   const { identifier, password } = req.body;
   if (!identifier || !password) {
     return res.status(400).json({ error: 'Username/Email and Password are required.' });
