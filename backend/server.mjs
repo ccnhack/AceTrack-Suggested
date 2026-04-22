@@ -84,7 +84,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.186'; 
+const APP_VERSION = '2.6.187'; 
 
 // 🛡️ SECURITY: API Key (v2.6.178)
 const ACE_API_KEY = process.env.ACE_API_KEY;
@@ -218,15 +218,7 @@ app.get('/', (req, res, next) => {
   next();
 });
 
-// ═══════════════════════════════════════════════════════════════
-      upgradeInsecureRequests: [],
-    },
-  },
-  crossOriginEmbedderPolicy: false,
-  crossOriginResourcePolicy: { policy: "cross-origin" }
-}));
 
-// ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: CORS with whitelist (SEC Fix #3)
 // ═══════════════════════════════════════════════════════════════
 app.use(cors({
