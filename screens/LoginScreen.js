@@ -225,7 +225,9 @@ const LoginScreen = ({ navigation }) => {
     setShowForgot(true);
   };
 
-  const handleIdentify = async () => {
+  const handleIdentify = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (e && e.stopPropagation) e.stopPropagation();
     const normalize = (s) => String(s || '').trim().toLowerCase();
     const nUser = normalize(forgotUser);
 

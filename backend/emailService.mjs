@@ -3,16 +3,28 @@
 // Uses Nodemailer + Gmail SMTP (free, 500 emails/day)
 // ═══════════════════════════════════════════════════════════════
 import nodemailer from 'nodemailer';
+import dotenv from 'dotenv';
+dotenv.config();
 
 // Gmail SMTP Transporter
 // Requires: GMAIL_USER and GMAIL_APP_PASSWORD env vars on Render
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD
+let transporter;
+function getTransporter() {
+  if (!transporter) {
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+      console.warn("⚠️ GMAIL_USER or GMAIL_APP_PASSWORD is not set. Emails will fail.");
+    }
+    transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_APP_PASSWORD
+      }
+    });
   }
-});
+  return transporter;
+}
+
 
 /**
  * Builds the premium HTML email body for onboarding.
@@ -285,7 +297,7 @@ AceTrack Systems`;
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
+    const info = await getTransporter().sendMail(mailOptions);
     console.log(`Email sent to ${toEmail}: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
   } catch (err) {
@@ -362,7 +374,7 @@ export async function sendPasswordResetEmail(toEmail, resetLink, expiresAt, firs
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
+    const info = await getTransporter().sendMail(mailOptions);
     return { success: true, messageId: info.messageId };
   } catch (err) {
     console.error(`Failed to send reset email to ${toEmail}:`, err.message);
@@ -497,7 +509,7 @@ export async function sendOnboardingSuccessEmail(toEmail, firstName) {
     text: `Welcome to the family, ${firstName}! Congratulations on becoming an AceTrackian. Message from CEO Shashank Shekhar: Welcome to the organization!`
   };
   try {
-    await transporter.sendMail(mailOptions);
+    await getTransporter().sendMail(mailOptions);
     return { success: true };
   } catch (err) {
     console.error("Success email failed:", err.message);
@@ -514,7 +526,7 @@ export async function sendLoginDetailsEmail(toEmail, name, username) {
     text: `Login Details:\nName: ${name}\nEmail: ${toEmail}\nUsername: ${username}`
   };
   try {
-    await transporter.sendMail(mailOptions);
+    await getTransporter().sendMail(mailOptions);
     return { success: true };
   } catch (err) {
     console.error("Credentials email failed:", err.message);
@@ -586,7 +598,7 @@ export async function sendAdminResetPasswordEmail(toEmail, name, newPassword) {
     text: `Your AceTrack password has been reset due to organizational policy.\nNew Password: ${newPassword}\nLogin: https://acetrack-suggested.onrender.com/admin`
   };
   try {
-    await transporter.sendMail(mailOptions);
+    await getTransporter().sendMail(mailOptions);
     return { success: true };
   } catch (err) {
     console.error("Force reset email failed:", err.message);
@@ -745,7 +757,7 @@ export async function sendPromotionEmail(toEmail, name, newRole) {
     subject: `🌟 Congratulations on your Promotion!`,
     html: buildPromotionHtml(name, newRole)
   };
-  return transporter.sendMail(mailOptions).catch(e => console.error(e));
+  return getTransporter().sendMail(mailOptions).catch(e => console.error(e));
 }
 
 export async function sendDemotionEmail(toEmail, name, newRole) {
@@ -755,7 +767,7 @@ export async function sendDemotionEmail(toEmail, name, newRole) {
     subject: `💙 A supportive update regarding your AceTrack role`,
     html: buildDemotionHtml(name, newRole)
   };
-  return transporter.sendMail(mailOptions).catch(e => console.error(e));
+  return getTransporter().sendMail(mailOptions).catch(e => console.error(e));
 }
 
 
@@ -766,7 +778,7 @@ export async function sendTerminationEmail(toEmail, name) {
     subject: `Important update regarding your employment`,
     html: buildTerminationHtml(name)
   };
-  return transporter.sendMail(mailOptions).catch(e => console.error(e));
+  return getTransporter().sendMail(mailOptions).catch(e => console.error(e));
 }
 
 /**
@@ -834,7 +846,7 @@ export async function sendReOnboardingEmail(toEmail, name, newPassword) {
     text: `Welcome back to AceTrack, ${name}! Your account has been reinstated.\nNew Access Key: ${newPassword}\nLogin: https://acetrack-suggested.onrender.com/login`
   };
   try {
-    await transporter.sendMail(mailOptions);
+    await getTransporter().sendMail(mailOptions);
     return { success: true };
   } catch (err) {
     console.error("Re-onboarding email failed:", err.message);
