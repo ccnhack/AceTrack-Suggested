@@ -84,7 +84,48 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.177'; 
+const APP_VERSION = '2.6.178'; 
+
+// 🛡️ SECURITY: API Key (v2.6.178)
+const ACE_API_KEY = process.env.ACE_API_KEY;
+
+// 📊 Schemas (SE Fix: Database indexing)
+const AppStateSchema = new mongoose.Schema({
+  data: mongoose.Schema.Types.Mixed,
+  version: { type: Number, default: 1 },
+  lastUpdated: { type: Date, default: Date.now, index: true }
+}, { minimize: false });
+
+const AppState = mongoose.model('AppState', AppStateSchema);
+
+const AuditLogSchema = new mongoose.Schema({
+  userId: { type: String, index: true },
+  action: { type: String, index: true },
+  changedCollections: [String],
+  ipAddress: String,
+  userAgent: String,
+  details: mongoose.Schema.Types.Mixed,
+  timestamp: { type: Date, default: Date.now, index: true },
+  createdAt: { type: Date, default: Date.now, index: { expires: '30d' } }
+});
+AuditLogSchema.index({ timestamp: -1 });
+
+const AuditLog = mongoose.model('AuditLog', AuditLogSchema);
+
+const logAudit = async (req, action, changedCollections = [], details = {}) => {
+  try {
+    await AuditLog.create({
+      userId: (req && req.headers && req.headers['x-user-id']) || (req && req.ip) || 'system',
+      action,
+      changedCollections,
+      ipAddress: (req && req.ip) || '0.0.0.0',
+      userAgent: (req && req.headers && req.headers['user-agent']) || 'unknown',
+      details
+    });
+  } catch (e) {
+    console.error("❌ Audit log error:", e.message);
+  }
+};
 
 
 
@@ -364,29 +405,7 @@ startServices();
 // ═══════════════════════════════════════════════════════════════
 // 📊 Schemas (SE Fix: Database indexing)
 // ═══════════════════════════════════════════════════════════════
-const AppStateSchema = new mongoose.Schema({
-  data: mongoose.Schema.Types.Mixed,
-  version: { type: Number, default: 1 },
-  lastUpdated: { type: Date, default: Date.now, index: true }
-}, { minimize: false });
-
-const AppState = mongoose.model('AppState', AppStateSchema);
-// ═══════════════════════════════════════════════════════════════
-// 📋 AUDIT LOG (SEC Fix #7 — Immutable audit trail)
-// ═══════════════════════════════════════════════════════════════
-const AuditLogSchema = new mongoose.Schema({
-  userId: { type: String, index: true },
-  action: { type: String, index: true },
-  changedCollections: [String],
-  ipAddress: String,
-  userAgent: String,
-  details: mongoose.Schema.Types.Mixed,
-  timestamp: { type: Date, default: Date.now, index: true },
-  createdAt: { type: Date, default: Date.now, index: { expires: '30d' } }
-});
-AuditLogSchema.index({ timestamp: -1 });
-
-const AuditLog = mongoose.model('AuditLog', AuditLogSchema);
+// Schemas moved to top
 
 // ═══════════════════════════════════════════════════════════════
 // 🎫 SUPPORT INVITE SCHEMA (v2.6.122)
@@ -437,7 +456,7 @@ const SupportPasswordReset = mongoose.model('SupportPasswordReset', SupportPassw
 // 🔐 SECURITY: API KEY Configuration (SEC Fix)
 // In production, failure is mandatory if key is missing.
 // 🔐 SECURITY (v2.6.175): Strict API key enforcement. No hardcoded fallbacks permitted in production or dev.
-const ACE_API_KEY = process.env.ACE_API_KEY; 
+// ACE_API_KEY moved to top
 if (!ACE_API_KEY && process.env.NODE_ENV === 'production') {
   console.error("❌ CRITICAL: ACE_API_KEY is missing in production environment!");
   // 🛡️ STABILITY FIX (v2.6.112): Don't exit process, just log error. 
@@ -618,20 +637,7 @@ const asyncHandler = (fn) => (req, res, next) => {
   Promise.resolve(fn(req, res, next)).catch(next);
 };
 
-const logAudit = async (req, action, changedCollections = [], details = {}) => {
-  try {
-    await AuditLog.create({
-      userId: req.headers['x-user-id'] || req.ip,
-      action,
-      changedCollections,
-      ipAddress: req.ip,
-      userAgent: req.headers['user-agent'],
-      details
-    });
-  } catch (e) {
-    console.error("❌ Audit log error:", e.message);
-  }
-};
+// logAudit moved to top
 
 // Static file serving
 app.use((req, res, next) => {
