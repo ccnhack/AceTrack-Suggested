@@ -68,63 +68,66 @@ const LoginScreen = ({ navigation }) => {
           return;
         }
         
-        // Support staff login — ALWAYS fetch fresh data from server (v2.6.145)
-        // Local cache may have stale passwords from previous sessions
-        let supportUser = null;
-        const search = username.toLowerCase().trim();
-
-        if (onRefreshData) {
-          setIsSyncing(true);
-          try {
-            const cloudResult = await onRefreshData();
-            if (cloudResult && cloudResult.players) {
-              supportUser = cloudResult.players.find(p => (
-                p.role === 'support' && (
-                  (p.email || '').toLowerCase() === search ||
-                  String(p.id || '').toLowerCase() === search ||
-                  (p.name || '').toLowerCase() === search
-                )
-              ));
-            }
-          } catch (refreshErr) {
-            console.warn('Cloud refresh failed, falling back to local cache:', refreshErr.message);
-          } finally {
-            setIsSyncing(false);
+        // Support staff login — Server-side authentication (v2.6.170)
+        // Uses dedicated /support/login endpoint to avoid data sanitization issues
+        setIsSyncing(true);
+        try {
+          const loginResponse = await fetch(`${config.API_BASE_URL}/api/v1/support/login`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': config.API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=',
+            },
+            body: JSON.stringify({ identifier: username, password }),
+          });
+          
+          const result = await loginResponse.json();
+          
+          if (loginResponse.ok && result.success && result.user) {
+            onLoginSuccess('support', result.user);
+            return;
+          } else {
+            setError(result.error || 'Login failed. Please try again.');
+            setIsLoading(false);
+            return;
           }
-        }
-
-        // Fallback: If server unreachable, try local cache
-        if (!supportUser) {
-          supportUser = (players || []).find(p => (
+        } catch (networkErr) {
+          console.warn('Server login failed, attempting local fallback:', networkErr.message);
+          // Fallback: Try local cache if server is unreachable
+          const search = username.toLowerCase().trim();
+          const supportUser = (players || []).find(p => (
             p.role === 'support' && (
               (p.email || '').toLowerCase() === search ||
               String(p.id || '').toLowerCase() === search ||
+              (p.username || '').toLowerCase() === search ||
               (p.name || '').toLowerCase() === search
             )
           ));
-        }
-
-        if (supportUser) {
-          if (supportUser.supportStatus === 'terminated') {
-            setError('Access Suspended: Your employment profile has been deactivated.');
-            setIsLoading(false);
-            return;
+          
+          if (supportUser) {
+            if (supportUser.supportStatus === 'terminated' || supportUser.supportStatus === 'inactive') {
+              setError('Access Suspended: Your employment profile has been deactivated.');
+              setIsLoading(false);
+              return;
+            }
+            const userPassword = supportUser.password || 'password';
+            if (userPassword === password) {
+              onLoginSuccess('support', supportUser);
+              return;
+            } else {
+              setError('Invalid password for support account.');
+              setIsLoading(false);
+              return;
+            }
           }
-
-          const userPassword = supportUser.password || 'password';
-          if (userPassword === password) {
-            onLoginSuccess('support', supportUser);
-            return;
-          } else {
-            setError('Invalid password for support account.');
-            setIsLoading(false);
-            return;
-          }
+        } finally {
+          setIsSyncing(false);
         }
 
         setError('Access Denied. This portal is for AceTrack Administrators and Support Staff only.');
         setIsLoading(false);
         return;
+
       }
 
       // Admin Login logic

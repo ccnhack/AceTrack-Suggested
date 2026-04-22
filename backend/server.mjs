@@ -1791,6 +1791,59 @@ router.post('/support/invite/resend', apiKeyGuard, asyncHandler(async (req, res)
 }));
 
 // ═══════════════════════════════════════════════════════════════
+// 🔐 SUPPORT STAFF LOGIN (v2.6.170)
+// Server-side authentication — credentials never leave the server
+// ═══════════════════════════════════════════════════════════════
+router.post('/support/login', apiKeyGuard, asyncHandler(async (req, res) => {
+  const { identifier, password } = req.body;
+  if (!identifier || !password) {
+    return res.status(400).json({ error: 'Username/Email and Password are required.' });
+  }
+
+  const search = String(identifier).toLowerCase().trim();
+
+  // 🛡️ ADMIN GUARD: Block support login attempts using the admin account
+  if (search === 'admin') {
+    return res.status(403).json({ error: 'Access Denied. Use the administrator login.' });
+  }
+
+  const appState = await AppState.findOne().sort({ lastUpdated: -1 });
+  if (!appState || !appState.data) {
+    return res.status(500).json({ error: 'System state unavailable.' });
+  }
+
+  const players = appState.data.players || [];
+  const supportUser = players.find(p =>
+    p.role === 'support' && (
+      (p.email || '').toLowerCase() === search ||
+      String(p.id || '').toLowerCase() === search ||
+      (p.username || '').toLowerCase() === search ||
+      (p.name || '').toLowerCase() === search
+    )
+  );
+
+  if (!supportUser) {
+    return res.status(401).json({ error: 'Access Denied. This portal is for AceTrack Administrators and Support Staff only.' });
+  }
+
+  if (supportUser.supportStatus === 'terminated' || supportUser.supportStatus === 'inactive') {
+    return res.status(403).json({ error: 'Access Suspended: Your employment profile has been deactivated.' });
+  }
+
+  const userPassword = supportUser.password || 'password';
+  if (userPassword !== password) {
+    logServerEvent('SUPPORT_LOGIN_FAILED', { identifier: search, reason: 'wrong_password' });
+    return res.status(401).json({ error: 'Invalid password for support account.' });
+  }
+
+  // Strip sensitive fields before sending the user object back
+  const { password: _pw, pushTokens, devices, ...safeUser } = supportUser;
+
+  logServerEvent('SUPPORT_LOGIN_SUCCESS', { userId: supportUser.id, email: supportUser.email });
+  res.json({ success: true, user: safeUser });
+}));
+
+// ═══════════════════════════════════════════════════════════════
 // 🔒 PASSWORD RESET FLOW
 // ═══════════════════════════════════════════════════════════════
 
