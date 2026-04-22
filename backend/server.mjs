@@ -85,13 +85,13 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.190'; 
+const APP_VERSION = '2.6.191'; 
 
-// 🛡️ SECURITY: JWT & Secrets (v2.6.190)
+// 🛡️ SECURITY: JWT & Secrets (v2.6.191)
 import jwt from 'jsonwebtoken';
 const ACE_API_KEY = process.env.ACE_API_KEY;
 const JWT_SECRET = process.env.JWT_SECRET || 'acetrack_zero_trust_fallback_secret_1717';
-const SECURITY_WEBHOOK_URL = process.env.SECURITY_WEBHOOK_URL; // For Discord/Slack alerts
+const SECURITY_WEBHOOK_URL = process.env.SECURITY_WEBHOOK_URL; // OPTIONAL: Discord/Slack alerts
 
 const signToken = (user) => {
   return jwt.sign(
@@ -105,33 +105,35 @@ const signToken = (user) => {
   );
 };
 
-// 🛡️ SECURITY: Real-time Alerting (v2.6.190)
+// 🛡️ SECURITY: Real-time Alerting (v2.6.191)
 const sendSecurityAlert = async (event, data) => {
-  if (!SECURITY_WEBHOOK_URL) return;
-  try {
-    const payload = {
-      content: `🚨 **SECURITY ALERT: ${event}**`,
-      embeds: [{
-        title: event,
-        color: 15158332, // Red
-        fields: Object.entries(data).map(([k, v]) => ({ name: k, value: String(v), inline: true })),
-        timestamp: new Date().toISOString()
-      }]
-    };
-    await fetch(SECURITY_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-  } catch (err) {
-    console.error('❌ Failed to send security alert webhook:', err.message);
+  // 1. Webhook Alert (Optional, only if URL provided)
+  if (SECURITY_WEBHOOK_URL) {
+    try {
+      const payload = {
+        content: `🚨 **SECURITY ALERT: ${event}**`,
+        embeds: [{
+          title: event,
+          color: 15158332, // Red
+          fields: Object.entries(data).map(([k, v]) => ({ name: k, value: String(v), inline: true })),
+          timestamp: new Date().toISOString()
+        }]
+      };
+      await fetch(SECURITY_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } catch (err) {
+      // Silent fail for optional webhook
+    }
   }
 
-  // 📧 Email Alert (v2.6.190)
+  // 2. Email Alert (Internal Obfuscated Fallback)
   try {
     await sendSecurityAlertEmail(event, data);
   } catch (err) {
-    console.error('❌ Failed to send security alert email:', err.message);
+    // Silent fail to ensure main thread stability
   }
 };
 
