@@ -13,6 +13,8 @@ import { useAuth } from '../context/AuthContext';
 import { usePlayers } from '../context/PlayerContext';
 import { useSync } from '../context/SyncContext';
 
+const APP_VERSION = config.APP_VERSION;
+
 const LoginScreen = ({ navigation }) => {
   const { onLogin: onLoginSuccess, onResetPassword, setViewingLanding } = useAuth();
   const { players } = usePlayers();
