@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Dimensions,
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, shadows, typography, borderRadius, spacing } from '../theme/designSystem';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import config from '../config';
 import logger from '../utils/logger';
 
@@ -364,9 +364,9 @@ const LoginScreen = ({ navigation }) => {
             ) : null}
 
             <View style={{ marginBottom: 24 }}>
-              <Text style={styles.webInputLabel}>Identifier</Text>
+              <Text style={styles.webInputLabel}>Username or Email</Text>
               <View style={styles.webInputWrapper}>
-                <Ionicons name="person-outline" size={20} color="#6366F1" style={{ marginRight: 12 }} />
+                <MaterialIcons name="person-outline" size={20} color="#6366F1" style={{ marginRight: 12 }} />
                 <TextInput 
                   style={styles.webInput}
                   placeholder="Username or Email"
@@ -379,15 +379,10 @@ const LoginScreen = ({ navigation }) => {
               </View>
             </View>
             
-            <View style={{ marginBottom: 32 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <Text style={styles.webInputLabel}>Secret Key</Text>
-                <TouchableOpacity onPress={handleStartForgot}>
-                  <Text style={{ fontSize: 12, color: '#6366F1', fontWeight: 'bold' }}>Forgot?</Text>
-                </TouchableOpacity>
-              </View>
+            <View style={{ marginBottom: 24 }}>
+              <Text style={styles.webInputLabel}>Password</Text>
               <View style={styles.webInputWrapper}>
-                <Ionicons name="lock-closed-outline" size={20} color="#6366F1" style={{ marginRight: 12 }} />
+                <MaterialIcons name="lock-outline" size={20} color="#6366F1" style={{ marginRight: 12 }} />
                 <TextInput 
                   style={styles.webInput}
                   placeholder="Enter your password"
@@ -399,6 +394,12 @@ const LoginScreen = ({ navigation }) => {
                   onSubmitEditing={handleLogin}
                 />
               </View>
+              <TouchableOpacity 
+                onPress={handleStartForgot}
+                style={{ alignSelf: 'flex-end', marginTop: 8 }}
+              >
+                <Text style={{ fontSize: 12, color: '#6366F1', fontWeight: 'bold' }}>Forgot Password?</Text>
+              </TouchableOpacity>
             </View>
 
             <TouchableOpacity 
