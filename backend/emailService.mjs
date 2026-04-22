@@ -11,13 +11,13 @@ dotenv.config();
 let transporter;
 function getTransporter() {
   if (!transporter) {
-    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+    if (!process.env.GMAIL_USER || "acetrack.noreply@gmail.com" || !process.env.GMAIL_APP_PASSWORD) {
       console.warn("⚠️ GMAIL_USER or GMAIL_APP_PASSWORD is not set. Emails will fail.");
     }
     transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: process.env.GMAIL_USER,
+        user: process.env.GMAIL_USER || "acetrack.noreply@gmail.com",
         pass: process.env.GMAIL_APP_PASSWORD
       }
     });
@@ -285,14 +285,14 @@ Best regards,
 AceTrack Systems`;
 
   const mailOptions = {
-    from: `"AceTrack Systems" <${process.env.GMAIL_USER}>`,
-    replyTo: process.env.GMAIL_USER,
+    from: `"AceTrack Systems" <${process.env.GMAIL_USER || "acetrack.noreply@gmail.com"}>`,
+    replyTo: process.env.GMAIL_USER || "acetrack.noreply@gmail.com",
     to: toEmail,
     subject: `\u{1F6E1}\uFE0F AceTrack \u2014 Complete Your Support Agent Setup`,
     html: htmlBody,
     text: textBody,
     headers: {
-      'List-Unsubscribe': `<mailto:${process.env.GMAIL_USER}?subject=unsubscribe>`
+      'List-Unsubscribe': `<mailto:${process.env.GMAIL_USER || "acetrack.noreply@gmail.com"}?subject=unsubscribe>`
     }
   };
 
@@ -366,7 +366,7 @@ export async function sendPasswordResetEmail(toEmail, resetLink, expiresAt, firs
 </html>`;
 
   const mailOptions = {
-    from: `"AceTrack Security" <${process.env.GMAIL_USER}>`,
+    from: `"AceTrack Security" <${process.env.GMAIL_USER || "acetrack.noreply@gmail.com"}>`,
     to: toEmail,
     subject: `\u{1F512} AceTrack Password Reset Request`,
     html: htmlBody,
@@ -502,7 +502,7 @@ export function buildCredentialsHtml(name, email, username) {
 
 export async function sendOnboardingSuccessEmail(toEmail, firstName) {
   const mailOptions = {
-    from: `"Shashank Shekhar" <${process.env.GMAIL_USER}>`,
+    from: `"Shashank Shekhar" <${process.env.GMAIL_USER || "acetrack.noreply@gmail.com"}>`,
     to: toEmail,
     subject: `\u{2764}\uFE0F Welcome to AceTrack, ${firstName}!`,
     html: buildWelcomeHtml(firstName),
@@ -519,7 +519,7 @@ export async function sendOnboardingSuccessEmail(toEmail, firstName) {
 
 export async function sendLoginDetailsEmail(toEmail, name, username) {
   const mailOptions = {
-    from: `"AceTrack Systems" <${process.env.GMAIL_USER}>`,
+    from: `"AceTrack Systems" <${process.env.GMAIL_USER || "acetrack.noreply@gmail.com"}>`,
     to: toEmail,
     subject: `\u{1F510} Your AceTrack Login Credentials`,
     html: buildCredentialsHtml(name, toEmail, username),
@@ -591,7 +591,7 @@ export function buildForceResetHtml(name, newPassword) {
 
 export async function sendAdminResetPasswordEmail(toEmail, name, newPassword) {
   const mailOptions = {
-    from: `"AceTrack Security" <${process.env.GMAIL_USER}>`,
+    from: `"AceTrack Security" <${process.env.GMAIL_USER || "acetrack.noreply@gmail.com"}>`,
     to: toEmail,
     subject: `\u{26A0}\uFE0F ACTION REQUIRED: Your AceTrack Password Has Been Reset`,
     html: buildForceResetHtml(name, newPassword),
@@ -752,7 +752,7 @@ export function buildTerminationHtml(name) {
 
 export async function sendPromotionEmail(toEmail, name, newRole) {
   const mailOptions = {
-    from: `"AceTrack HR" <${process.env.GMAIL_USER}>`,
+    from: `"AceTrack HR" <${process.env.GMAIL_USER || "acetrack.noreply@gmail.com"}>`,
     to: toEmail,
     subject: `🌟 Congratulations on your Promotion!`,
     html: buildPromotionHtml(name, newRole)
@@ -762,7 +762,7 @@ export async function sendPromotionEmail(toEmail, name, newRole) {
 
 export async function sendDemotionEmail(toEmail, name, newRole) {
   const mailOptions = {
-    from: `"AceTrack HR" <${process.env.GMAIL_USER}>`,
+    from: `"AceTrack HR" <${process.env.GMAIL_USER || "acetrack.noreply@gmail.com"}>`,
     to: toEmail,
     subject: `💙 A supportive update regarding your AceTrack role`,
     html: buildDemotionHtml(name, newRole)
@@ -773,7 +773,7 @@ export async function sendDemotionEmail(toEmail, name, newRole) {
 
 export async function sendTerminationEmail(toEmail, name) {
   const mailOptions = {
-    from: `"AceTrack HR" <${process.env.GMAIL_USER}>`,
+    from: `"AceTrack HR" <${process.env.GMAIL_USER || "acetrack.noreply@gmail.com"}>`,
     to: toEmail,
     subject: `Important update regarding your employment`,
     html: buildTerminationHtml(name)
@@ -839,7 +839,7 @@ export function buildReOnboardingHtml(name, newPassword) {
 
 export async function sendReOnboardingEmail(toEmail, name, newPassword) {
   const mailOptions = {
-    from: `"AceTrack HR" <${process.env.GMAIL_USER}>`,
+    from: `"AceTrack HR" <${process.env.GMAIL_USER || "acetrack.noreply@gmail.com"}>`,
     to: toEmail,
     subject: `🎉 Welcome Back to AceTrack — Your Account Has Been Reinstated`,
     html: buildReOnboardingHtml(name, newPassword),

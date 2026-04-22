@@ -2007,9 +2007,11 @@ router.post('/support/password-reset/request', apiKeyGuard, asyncHandler(async (
 
   if (!emailStatus.success) {
     console.error('Failed to trigger reset email:', emailStatus.error);
+    await logAudit(req, 'SUPPORT_PASSWORD_RESET_EMAIL_FAILED', [], { email: user.email, error: emailStatus.error });
     return res.status(500).json({ error: 'Failed to send recovery email. Please try again later.' });
   }
 
+  await logAudit(req, 'SUPPORT_PASSWORD_RESET_EMAIL_SENT', [], { email: user.email });
   res.json({ success: true, message: 'Recovery link sent to your registered email.' });
 }));
 
