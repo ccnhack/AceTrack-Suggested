@@ -704,7 +704,7 @@ router.get('/health', (req, res) => {
 });
 
 // GET /api/v1/data
-router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
+router.get('/data', sensitiveCacheGuard, async (req, res) => {
   try {
     const state = await AppState.findOne().sort({ lastUpdated: -1 }).lean();
     if (!state || !state.data) return res.json({});
