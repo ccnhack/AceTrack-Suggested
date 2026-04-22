@@ -900,7 +900,7 @@ const ProfileScreen = ({ navigation }) => {
                     </View>
                     <TextInput 
                       style={[styles.input, styles.disabledInput]}
-                      value={user.id}
+                      value={user.username || user.id}
                       editable={false}
                     />
                   </View>
