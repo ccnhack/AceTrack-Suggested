@@ -83,8 +83,8 @@ const initFirebase = async () => {
 };
 initFirebase();
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.169)
-const APP_VERSION = "2.6.169"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.170)
+const APP_VERSION = '2.6.170'; 
 
 
 
@@ -723,7 +723,7 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
 router.get('/status', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
   try {
     const state = await AppState.findOne().sort({ lastUpdated: -1 }).select('lastUpdated version');
-    // 🛡️ GHOST VERSION SHIM (v2.6.169)
+    // 🛡️ AceTrack Backend Engine (v2.6.170)
     // Legacy web bundles are hardcoded with v2.6.151.
     // If we report v2.6.169, they trigger the "obsolete" lockout modal.
     // We temporarily lie to these specific clients to allow them into the app.
@@ -1010,6 +1010,14 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
                 }
               }
 
+              // 🛡️ ULTIMATE ADMIN GUARD (v2.6.170): Block ANY modification to the master 'admin' account
+              if (id === 'admin' && key === 'players' && existing) {
+                console.warn(`🛑 Blocked unauthorized attempt to modify System Admin profile: userId=${req.headers['x-user-id']}`);
+                // Restore entire existing admin profile, ignore all incoming changes
+                entityMap.set(id, existing);
+                return;
+              }
+
               // 🛡️ ADMIN GUARD: Only allow the 'admin' account to have the 'admin' role (v2.6.51)
               if (p.role === 'admin' && id !== 'admin') {
                 console.warn(`🛑 Unauthorized Admin Escalation Attempt: userId=${id}`);
@@ -1058,6 +1066,12 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
         } else if (key === 'currentUser' && incoming && incoming.id) {
           const id = String(incoming.id).toLowerCase();
           
+          // 🛡️ ULTIMATE ADMIN GUARD: Protect the current user object if it targets the 'admin' ID
+          if (id === 'admin') {
+            console.warn(`🛑 Blocked unauthorized attempt to modify System Admin (Current User)`);
+            return; // Ignore any incoming 'currentUser' update for the 'admin' ID
+          }
+
           // 🛡️ ADMIN GUARD: Secure the current user object as well
           if (incoming.role === 'admin' && id !== 'admin') {
             console.warn(`🛑 Unauthorized Admin Escalation Attempt (Current User): userId=${id}`);
@@ -1795,8 +1809,8 @@ router.post('/support/password-reset/request', apiKeyGuard, asyncHandler(async (
     });
   }
 
-  // Find user in AppState
-  const appState = await AppState.findOne();
+  // Find user in AppState (Sort by lastUpdated to ensure we use the master record)
+  const appState = await AppState.findOne().sort({ lastUpdated: -1 });
   const user = appState?.data?.players?.find(p => 
     p.email?.toLowerCase() === search || 
     String(p.id).toLowerCase() === search ||
@@ -1836,11 +1850,14 @@ router.post('/support/password-reset/confirm', asyncHandler(async (req, res) => 
   const resetReq = await SupportPasswordReset.findOne({ token, expiresAt: { $gt: new Date() } });
   if (!resetReq) return res.status(400).json({ error: 'Invalid or expired reset token' });
 
-  const appState = await AppState.findOne();
+  const appState = await AppState.findOne().sort({ lastUpdated: -1 });
   if (!appState) return res.status(500).json({ error: 'System state unavailable' });
 
   const players = appState.data.players || [];
-  const userIndex = players.findIndex(p => p.email?.toLowerCase() === resetReq.email.toLowerCase());
+  const userIndex = players.findIndex(p => 
+    p.email?.toLowerCase() === resetReq.email.toLowerCase() && 
+    p.id !== 'admin' // 🛡️ ADMIN GUARD (v2.6.170): Never reset admin password via support portal
+  );
 
   if (userIndex === -1) return res.status(404).json({ error: 'User account not found' });
 
@@ -1997,7 +2014,11 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
 
   const players = appState.data.players || [];
   
-  const existingIndex = players.findIndex(p => p.role === 'support' && p.email?.toLowerCase() === invite.email.toLowerCase());
+  const existingIndex = players.findIndex(p => 
+    p.role === 'support' && 
+    p.email?.toLowerCase() === invite.email.toLowerCase() && 
+    p.id !== 'admin' // 🛡️ ADMIN GUARD: Protect admin from setup takeover
+  );
   
   let finalUsername = '';
 
@@ -2125,7 +2146,7 @@ app.get('/reset-password/:token', asyncHandler(async (req, res) => {
     `);
   }
 
-  const appState = await AppState.findOne();
+  const appState = await AppState.findOne().sort({ lastUpdated: -1 });
   const players = appState?.data?.players || [];
   const user = players.find(p => p.email?.toLowerCase() === resetReq.email.toLowerCase());
   

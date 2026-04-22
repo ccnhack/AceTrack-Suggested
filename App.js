@@ -29,8 +29,8 @@ import { useSupport } from './context/SupportContext';
 
 
 
-// 🛡️ Web Deep Linking Configuration (v2.6.169)
-const APP_VERSION = "2.6.169";
+// 🛡️ Web Deep Linking Configuration (v2.6.170)
+const APP_VERSION = "2.6.170";
 const linking = {
   prefixes: ['https://acetrack-suggested.onrender.com', 'acetrack://'],
   config: {
@@ -140,7 +140,7 @@ function Root() {
             onPress={async () => {
               if (Platform.OS === 'web') {
                 if (typeof window !== 'undefined') {
-                  // 🚀 HARD REFRESH ENGINE (v2.6.164)
+                  // 🚀 HARD REFRESH ENGINE (v2.6.170)
                   // Aggressive cache bypass to ensure obsolete sessions get the new bundle.
                   try {
                     // 1. Unregister all service workers
