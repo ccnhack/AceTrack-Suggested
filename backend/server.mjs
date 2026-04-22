@@ -84,7 +84,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.175'; 
+const APP_VERSION = '2.6.176'; 
 
 
 
@@ -1972,6 +1972,14 @@ router.post('/support/login', loginLimiter, asyncHandler(async (req, res) => {
       String(p.email || '').toLowerCase().trim() === search || 
       String(p.username || '').toLowerCase().trim() === search
     );
+    
+    await logAudit(req, 'DEBUG_SUPPORT_LOGIN_FAILED_SEARCH', [], { 
+      search, 
+      foundAnyUser: !!anyUser, 
+      foundRole: anyUser ? anyUser.role : null,
+      totalPlayersInState: players.length
+    });
+
     if (anyUser) {
       await logAudit(req, 'SUPPORT_LOGIN_DENIED_ROLE', [], { identifier: search, foundRole: anyUser.role, status: anyUser.supportStatus });
     }
@@ -1980,11 +1988,17 @@ router.post('/support/login', loginLimiter, asyncHandler(async (req, res) => {
 
 
   if (supportUser.supportStatus === 'terminated' || supportUser.supportStatus === 'inactive') {
+    await logAudit(req, 'DEBUG_SUPPORT_LOGIN_DEACTIVATED', [], { identifier: search, status: supportUser.supportStatus });
     return res.status(403).json({ error: 'Access Suspended: Your employment profile has been deactivated.' });
   }
 
   const userPassword = supportUser.password || 'password';
   if (userPassword !== password) {
+    await logAudit(req, 'DEBUG_SUPPORT_LOGIN_WRONG_PASSWORD', [], { 
+      identifier: search, 
+      expectedPwLength: userPassword.length, 
+      receivedPwLength: password.length 
+    });
     await logAudit(req, 'SUPPORT_LOGIN_FAILED', [], { identifier: search, reason: 'wrong_password' });
     return res.status(401).json({ error: 'Invalid password for support account.' });
   }

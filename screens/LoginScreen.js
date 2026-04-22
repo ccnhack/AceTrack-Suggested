@@ -114,6 +114,11 @@ const LoginScreen = ({ navigation }) => {
             body: JSON.stringify({ identifier: username, password }),
           });
           const supportResult = await supportResponse.json();
+          
+          if (Platform.OS === 'web') {
+            console.log(`📡 [DEBUG] Support Login Status: ${supportResponse.status}`);
+            console.log(`📦 [DEBUG] Support Login Result:`, supportResult);
+          }
 
           if (supportResponse.ok && supportResult.success && supportResult.user) {
             onLoginSuccess('support', supportResult.user);
