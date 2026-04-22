@@ -429,7 +429,7 @@ const apiKeyGuard = (req, res, next) => {
   console.log(`[AUTH] Guard Check: ${req.method} ${req.path} | Key: ${providedKey ? 'PROVIDED' : 'MISSING'} | UserID: ${userId || 'NONE'}`);
 
   if (providedKey !== ACE_API_KEY) {
-    logAudit(req, 'UNAUTHORIZED_ACCESS', [], { ip: req.ip });
+    await logAudit(req, 'UNAUTHORIZED_ACCESS', [], { ip: req.ip, url: req.originalUrl || req.url, method: req.method });
     console.warn(`🛑 Unauthorized access attempt from ${req.ip} - Invalid Key`);
     return res.status(401).json({ error: 'Unauthorized: Invalid or missing API Key' });
   }
