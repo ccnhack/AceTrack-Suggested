@@ -421,7 +421,7 @@ if (!ACE_API_KEY && process.env.NODE_ENV === 'production') {
   // Exiting causes Render crash loops which are harder to diagnose than 500 errors.
 }
 
-const apiKeyGuard = (req, res, next) => {
+const apiKeyGuard = async (req, res, next) => {
   const providedKey = req.headers['x-ace-api-key'];
   const userId = req.headers['x-user-id'];
   
