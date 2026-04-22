@@ -84,7 +84,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.182'; 
+const APP_VERSION = '2.6.183'; 
 
 // 🛡️ SECURITY: API Key (v2.6.178)
 const ACE_API_KEY = process.env.ACE_API_KEY;
@@ -479,6 +479,8 @@ if (!ACE_API_KEY && process.env.NODE_ENV === 'production') {
   // Exiting causes Render crash loops which are harder to diagnose than 500 errors.
 }
 
+const LEGACY_API_KEY = "AceTrack_Shield_v2_9982_BETA_SECURE_7712";
+
 const apiKeyGuard = async (req, res, next) => {
   const providedKey = req.headers['x-ace-api-key'];
   const userId = req.headers['x-user-id'];
@@ -486,12 +488,22 @@ const apiKeyGuard = async (req, res, next) => {
   // 🔍 LOGGED: Audit all API key requests
   console.log(`[AUTH] Guard Check: ${req.method} ${req.path} | Key: ${providedKey ? 'PROVIDED' : 'MISSING'} | UserID: ${userId || 'NONE'}`);
 
-  if (providedKey !== ACE_API_KEY) {
-    await logAudit(req, 'UNAUTHORIZED_ACCESS', [], { ip: req.ip, url: req.originalUrl || req.url, method: req.method });
-    console.warn(`🛑 Unauthorized access attempt from ${req.ip} - Invalid Key`);
-    return res.status(401).json({ error: 'Unauthorized: Invalid or missing API Key' });
+  // 🛡️ SECURITY: DUAL-KEY ROTATION (v2.6.183)
+  // 1. Check Primary Secure Key (from ENV)
+  if (providedKey === ACE_API_KEY) {
+    return next();
   }
-  next();
+
+  // 2. Fallback to Legacy Key (Grace Period)
+  if (providedKey === LEGACY_API_KEY) {
+    console.warn(`⚠️ [LEGACY_AUTH] Client using deprecated API key: IP=${req.ip}`);
+    return next();
+  }
+
+  // 3. Reject everything else
+  await logAudit(req, 'UNAUTHORIZED_ACCESS', [], { ip: req.ip, url: req.originalUrl || req.url, method: req.method });
+  console.warn(`🛑 Unauthorized access attempt from ${req.ip} - Invalid Key`);
+  return res.status(401).json({ error: 'Unauthorized: Invalid or missing API Key' });
 };
 
 // 🛡️ SECURITY: Global Rate Limiters (Finding 8)
