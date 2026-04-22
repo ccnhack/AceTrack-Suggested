@@ -59,10 +59,17 @@ const LoginScreen = ({ navigation }) => {
   const [mfaError, setMfaError] = useState('');
   const [mfaLoading, setMfaLoading] = useState(false);
 
-  const handleLogin = async () => {
+  const handleLogin = async (e) => {
+    // 🛡️ UI GUARD: Block login if recovery modal is open or already loading
+    if (showForgot || isLoading || isForgotLoading) return;
+    
+    if (e && e.preventDefault) e.preventDefault();
+    if (e && e.stopPropagation) e.stopPropagation();
+
     logger.logAction('LOGIN_CLICK', { username });
     setError('');
     setIsLoading(true);
+
     try {
       if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       // Web Login: Server-side authentication (v2.6.170)

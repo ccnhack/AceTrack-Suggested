@@ -2043,14 +2043,17 @@ router.post('/support/password-reset/confirm', asyncHandler(async (req, res) => 
 
   if (userIndex === -1) return res.status(404).json({ error: 'User account not found' });
 
-  // Update password (plaintext — matches login comparison model)
+  // Update password
   players[userIndex].password = newPassword;
   
   // Clean up device sessions for security
   players[userIndex].devices = [];
 
+  // 🛡️ SYNC PROTECTION: Explicitly update timestamp to prevent overwrite by stale devices
+  appState.lastUpdated = new Date();
   appState.markModified('data.players');
   await appState.save();
+
   await SupportPasswordReset.deleteOne({ token });
 
   await logServerEvent('SUPPORT_PASSWORD_RESET_SUCCESS', { email: resetReq.email });
