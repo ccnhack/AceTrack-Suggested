@@ -1208,11 +1208,26 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
         const incomingTickets = req.body.supportTickets || [];
         const existingTickets = currentData.supportTickets || [];
         
+        // 🛡️ [DATA VALIDATION] (v2.6.171)
+        // Guard against "Ghost Tickets" by rejecting malformed payloads
+        const invalidTickets = incomingTickets.filter(t => !t.title || t.title === 'undefined' || !t.description || t.description === 'undefined');
+        if (invalidTickets.length > 0) {
+          console.warn(`🛡️ [GUARD] Rejecting sync due to ${invalidTickets.length} malformed tickets.`);
+          return res.status(400).json({ 
+            error: "MALFORMED_TICKET_DATA", 
+            details: "Subject and Description are required for all tickets." 
+          });
+        }
+
         for (let i = 0; i < incomingTickets.length; i++) {
           const ticket = incomingTickets[i];
           const existing = existingTickets.find(et => et.id === ticket.id);
+          const isNew = !existing;
           const newMessages = (ticket.messages || []).slice(existing ? existing.messages.length : 0);
           
+          if (isNew) {
+             logAudit(req, 'TICKET_CREATED', ['supportTickets'], { ticketId: ticket.id, type: ticket.type, title: ticket.title });
+          }
           // 🤖 [AUTO-ASSIGN] (v2.6.132) 
           // If ticket is Open and unassigned, try to find a best agent
           if (ticket.status === 'Open' && !ticket.assignedTo) {
@@ -1223,6 +1238,12 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
               ticket.assignedAt = new Date().toISOString();
               ticket.assignmentSource = 'auto';
               
+              logAudit(req, 'TICKET_AUTO_ASSIGNED', ['supportTickets', 'players'], { 
+                ticketId: ticket.id, 
+                agentId: bestAgent.id,
+                agentName: `${bestAgent.firstName} ${bestAgent.lastName}`
+              });
+
               // Increment agent's lifetime handles
               const agentIndex = newMasterData.players.findIndex(p => p.id === bestAgent.id);
               if (agentIndex !== -1) {
@@ -3570,6 +3591,8 @@ router.post('/support/claim-ticket', apiKeyGuard, async (req, res) => {
     state.data.players = players;
     state.markModified('data');
     await state.save();
+
+    logAudit(req, 'TICKET_CLAIMED', ['supportTickets'], { ticketId, agentId });
 
     res.json({ success: true, ticket: tickets[ticketIdx] });
   } catch (e) {

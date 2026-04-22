@@ -122,20 +122,8 @@ const LoginScreen = ({ navigation }) => {
       // Mobile Admin Login — server-side (v2.6.170)
       // No hardcoded credentials in client code
 
-      // Demo Academy Login
-      if (username === 'academy' && password === 'password') {
-        const demoUser = players.find(p => p.id === 'academy');
-        if (demoUser) {
-          onLoginSuccess('academy', demoUser);
-        } else {
-          onLoginSuccess('academy', {
-            id: 'academy', name: 'Ace Academy', email: 'academy@acetrack.com',
-            phone: '+91 9999999999', username: 'academy', password: 'password',
-            role: 'academy', isEmailVerified: true, isPhoneVerified: true
-          });
-        }
-        return;
-      }
+      // Demo Academy Login - Removed for security (v2.6.171)
+
       
       let foundUser = players.find(p => {
         const pEmail = (p.email || '').toLowerCase();

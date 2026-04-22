@@ -16,9 +16,11 @@ describe('Authentication Flow', () => {
   });
 
   it('should login successfully with admin credentials', async () => {
-    // Admin login is hardcoded in LoginScreen.js (admin / Password@123)
-    await element(by.id('auth.login.username.input')).replaceText('admin');
-    await element(by.id('auth.login.password.input')).replaceText('Password@123');
+    // Admin login (v2.6.171: Use environment variables for CI/CD)
+    const ADMIN_ID = process.env.ADMIN_ID || 'admin';
+    const ADMIN_PW = process.env.ADMIN_PASSWORD || 'Password@123';
+    await element(by.id('auth.login.username.input')).replaceText(ADMIN_ID);
+    await element(by.id('auth.login.password.input')).replaceText(ADMIN_PW);
     await element(by.id('auth.login.password.input')).tapReturnKey();
     
     // Fallback: tap the button if return key didn't work/dismiss keyboard

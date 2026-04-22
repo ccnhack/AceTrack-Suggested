@@ -7,7 +7,7 @@ describe('Sync & Conflict Resolution', () => {
     // Login as admin (hardcoded in LoginScreen.js)
     await element(by.id('landing.login.button')).tap();
     await element(by.id('auth.login.username.input')).replaceText('admin');
-    await element(by.id('auth.login.password.input')).replaceText('Password@123');
+    await element(by.id('auth.login.password.input')).replaceText(process.env.ADMIN_PASSWORD || 'Password@123');
     await element(by.id('auth.login.password.input')).tapReturnKey();
     
     // Fallback: tap the button if return key didn't work/dismiss keyboard

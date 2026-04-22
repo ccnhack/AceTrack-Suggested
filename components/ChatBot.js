@@ -103,6 +103,24 @@ const TournamentCard = ({ tournament, onNavigate, userRole, userId }) => {
   );
 };
 
+const TicketPromptCard = ({ type, description, onConfirm, onCancel }) => {
+  return (
+    <View style={styles.promptCard}>
+      <Text style={styles.promptText}>
+        Would you like me to raise a {type} ticket for you?
+      </Text>
+      <View style={styles.promptActions}>
+        <TouchableOpacity style={styles.promptBtnYes} onPress={onConfirm}>
+          <Text style={styles.promptBtnText}>YES, RAISE IT</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.promptBtnNo} onPress={onCancel}>
+          <Text style={styles.promptBtnText}>NO, THANKS</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
 const ChatBot = ({ 
   user, userRole, userId, userSports, evaluations, 
   chatbotMessages, onSendChatMessage, tournaments, 
@@ -114,6 +132,7 @@ const ChatBot = ({
   const messages = (chatbotMessages && user && chatbotMessages[user.id]) || [initialMessage];
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [handledActions, setHandledActions] = useState(new Set()); // Track message timestamps that were acted upon
   const scrollViewRef = useRef(null);
   const prevMessagesCountRef = useRef(messages.length);
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
@@ -168,30 +187,35 @@ const ChatBot = ({
 
   const handleActionTriggers = (text) => {
     // 1. Navigation Action: ACTION:NAV_TO_TOURNAMENT (REMOVED: Automatic navigation is disabled for a smoother UX)
-    // We now only render interactive cards via getTournamentsFromAction() and wait for user click.
-
     // 2. Ticket Action: ACTION:RAISE_TICKET TYPE:DESCRIPTION
-    const ticketMatch = text.match(/ACTION:RAISE_TICKET\s+([^:]+):(.+)/);
-    if (ticketMatch && ticketMatch[1] && ticketMatch[2] && onSaveTicket) {
-      const type = ticketMatch[1].trim();
-      const description = ticketMatch[2].trim();
+    // Logic moved to render layer for user confirmation
+    console.log("🤖 [ChatBot] Detected AI Action Trigger:", text.match(/ACTION:[A-Z_]+/)?.[0]);
+  };
 
-      onSaveTicket({
-        id: `ticket_${Date.now()}`, // Generate a unique ID for the ticket
-        userId: user.id,
-        userName: user.name, // Assuming user.name is available
-        type: type,
-        description: description,
-        status: 'Open', // Default status
-        date: new Date().toISOString(),
-        messages: [{ // Include the initial message that triggered the ticket
-          senderId: user.id,
-          text: description,
-          timestamp: new Date().toISOString()
-        }]
-      });
-      console.log("AI automatically raised support ticket:", type);
-    }
+  const handleConfirmTicket = (type, description, msgTimestamp) => {
+    if (!onSaveTicket) return;
+    
+    onSaveTicket({
+      id: `ticket_${Date.now()}`,
+      userId: user.id,
+      userName: user.name,
+      type: type,
+      title: description.length > 50 ? description.substring(0, 47) + '...' : description,
+      description: description,
+      status: 'Open',
+      date: new Date().toISOString(),
+      messages: [{
+        senderId: user.id,
+        text: `(Raised via AI Chat) ${description}`,
+        timestamp: new Date().toISOString()
+      }]
+    });
+    
+    setHandledActions(prev => new Set(prev).add(msgTimestamp));
+    // Provide immediate feedback in chat
+    const feedbackMsg = `I've raised a ${type} ticket for you. Our team will look into it shortly.`;
+    const newMessages = [...messages, { role: 'model', text: feedbackMsg }];
+    onSendChatMessage(newMessages);
   };
 
   const cleanMessage = (text) => {
@@ -349,15 +373,19 @@ Keep answers concise, premium, and friendly. Use ### for headers and **bold** fo
             >
               {messages.map((m, i) => {
                 const recommendedTournaments = m.role === 'model' ? getTournamentsFromAction(m.text) : [];
+                const ticketMatch = m.role === 'model' ? m.text.match(/ACTION:RAISE_TICKET\s+([^:]+):(.+)/) : null;
                 const cleanedText = cleanMessage(m.text);
+                const msgKey = m.timestamp || `msg-${i}`;
 
                 return (
-                  <View key={i} style={[styles.messageRow, m.role === 'user' ? styles.userRow : styles.modelRow]}>
+                  <View key={msgKey} style={[styles.messageRow, m.role === 'user' ? styles.userRow : styles.modelRow]}>
                     <View style={[styles.bubble, m.role === 'user' ? styles.userBubble : styles.modelBubble]}>
                       <MarkdownText
                         text={cleanedText}
                         isUser={m.role === 'user'}
                       />
+                      
+                      {/* Interactive Tournament Recommendations */}
                       {recommendedTournaments.length > 0 && (
                         <ScrollView
                           horizontal
@@ -375,6 +403,16 @@ Keep answers concise, premium, and friendly. Use ### for headers and **bold** fo
                             />
                           ))}
                         </ScrollView>
+                      )}
+
+                      {/* Interactive Ticket Confirmation Prompt */}
+                      {ticketMatch && !handledActions.has(msgKey) && (
+                        <TicketPromptCard 
+                          type={ticketMatch[1].trim()}
+                          description={ticketMatch[2].trim()}
+                          onConfirm={() => handleConfirmTicket(ticketMatch[1].trim(), ticketMatch[2].trim(), msgKey)}
+                          onCancel={() => setHandledActions(prev => new Set(prev).add(msgKey))}
+                        />
                       )}
                     </View>
                   </View>
@@ -596,6 +634,47 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     backgroundColor: '#CBD5E1',
+  },
+  // Ticket Prompt Styles
+  promptCard: {
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  promptText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#9A3412',
+    textAlign: 'center',
+    marginBottom: 12,
+    lineHeight: 18,
+  },
+  promptActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  promptBtnYes: {
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    elevation: 2,
+  },
+  promptBtnNo: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    elevation: 2,
+  },
+  promptBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 11,
   },
   // Action Card Styles
   carouselContainer: {

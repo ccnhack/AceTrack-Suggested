@@ -13,7 +13,7 @@ import { eventBus } from '../services/EventBus';
  * ╠══════════════════════════════════════════════════════════╣
  * ║  Role        │ Username         │ Password              ║
  * ║──────────────┼──────────────────┼───────────────────────║
- * ║  Admin       │ admin            │ Password@123          ║
+ * ║  Admin       │ admin            │ [SECRET_CONFIGURED]  ║
  * ║  Individual  │ testindividual   │ password              ║
  * ║  Academy     │ testingacademy   │ password              ║
  * ║  Coach       │ testingcoach     │ password              ║
