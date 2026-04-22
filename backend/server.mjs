@@ -1946,15 +1946,16 @@ router.post('/support/login', apiKeyGuard, asyncHandler(async (req, res) => {
 
   const userPassword = supportUser.password || 'password';
   if (userPassword !== password) {
-    logServerEvent('SUPPORT_LOGIN_FAILED', { identifier: search, reason: 'wrong_password' });
+    await logAudit(req, 'SUPPORT_LOGIN_FAILED', [], { identifier: search, reason: 'wrong_password' });
     return res.status(401).json({ error: 'Invalid password for support account.' });
   }
 
   // Strip sensitive fields before sending the user object back
   const { password: _pw, pushTokens, devices, ...safeUser } = supportUser;
 
-  logServerEvent('SUPPORT_LOGIN_SUCCESS', { userId: supportUser.id, email: supportUser.email });
+  await logAudit(req, 'SUPPORT_LOGIN_SUCCESS', [], { userId: supportUser.id, email: supportUser.email });
   res.json({ success: true, user: safeUser });
+
 }));
 
 // ═══════════════════════════════════════════════════════════════
@@ -2051,14 +2052,14 @@ router.post('/support/password-reset/confirm', asyncHandler(async (req, res) => 
 
   // 🛡️ SYNC PROTECTION: Explicitly update timestamp to prevent overwrite by stale devices
   appState.lastUpdated = new Date();
-  appState.markModified('data.players');
   await appState.save();
 
   await SupportPasswordReset.deleteOne({ token });
 
-  await logServerEvent('SUPPORT_PASSWORD_RESET_SUCCESS', { email: resetReq.email });
+  await logAudit(req, 'SUPPORT_PASSWORD_RESET_SUCCESS', [], { email: resetReq.email });
 
   res.json({ success: true, message: 'Password updated successfully. You can now login.' });
+
 }));
 
 // 🌐 IP Geolocation Helper (free ip-api.com — 45 req/min, no key needed)
