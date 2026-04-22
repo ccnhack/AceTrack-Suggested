@@ -28,7 +28,7 @@ const newForceSync = `               <TouchableOpacity
                       setUserDiagFiles([]);
                       try {
                         const url = \`\${activeApiUrl}/api/diagnostics\`;
-                        const res = await fetch(url, { headers: { 'x-ace-api-key': config.ACE_API_KEY } });
+                        const res = await fetch(url, { headers: { 'x-ace-api-key': config.PUBLIC_APP_ID } });
                         if (res.ok) {
                             const data = await res.json();
                             const pName = (selectedDiagUser.name || '').toLowerCase();

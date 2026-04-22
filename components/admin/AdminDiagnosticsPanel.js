@@ -135,7 +135,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
     
     try {
       const res = await fetch(`${activeApiUrl}/api/diagnostics`, { 
-        headers: { 'x-ace-api-key': config.ACE_API_KEY } 
+        headers: { 'x-ace-api-key': config.PUBLIC_APP_ID } 
       });
       if (res.ok) {
         const data = await res.json();
@@ -181,7 +181,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
     try {
       // Add cache-buster and ensure strict User ID passing
       const res = await fetch(`${activeApiUrl}/api/diagnostics?userId=${p.id}&_t=${Date.now()}`, { 
-        headers: { 'x-ace-api-key': config.ACE_API_KEY }
+        headers: { 'x-ace-api-key': config.PUBLIC_APP_ID }
       });
       if (res.ok) {
         const data = await res.json();
@@ -249,7 +249,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
       try {
         const safeId = selectedDiagUser.id.toLowerCase();
         const res = await fetch(`${activeApiUrl}/api/diagnostics?userId=${selectedDiagUser.id}&_t=${Date.now()}`, { 
-          headers: { 'x-ace-api-key': config.ACE_API_KEY } 
+          headers: { 'x-ace-api-key': config.PUBLIC_APP_ID } 
         });
         
         if (res.ok) {
@@ -285,7 +285,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
     setIsDownloading(true);
     try {
       const res = await fetch(`${activeApiUrl}/api/diagnostics/${file}`, { 
-        headers: { 'x-ace-api-key': config.ACE_API_KEY } 
+        headers: { 'x-ace-api-key': config.PUBLIC_APP_ID } 
       });
       if (res.ok) {
         const text = await res.text();

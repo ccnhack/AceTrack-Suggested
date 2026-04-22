@@ -115,7 +115,7 @@ export const SyncProvider = ({ children }) => {
         const cloudUrl = config.API_BASE_URL;
         const response = await fetch(`${cloudUrl}/api/data`, {
           headers: { 
-            'x-ace-api-key': config.ACE_API_KEY,
+            'x-ace-api-key': config.PUBLIC_APP_ID,
             'x-user-id': syncManager.getUserId() || 'guest'
           },
           signal: controller.signal
@@ -185,7 +185,7 @@ export const SyncProvider = ({ children }) => {
 
       const response = await fetch(`${config.API_BASE_URL}/api/status`, {
         headers: { 
-          'x-ace-api-key': config.ACE_API_KEY,
+          'x-ace-api-key': config.PUBLIC_APP_ID,
           'x-user-id': syncManager.getUserId() || 'guest'
         }
       });

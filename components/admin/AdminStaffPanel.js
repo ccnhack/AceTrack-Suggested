@@ -55,7 +55,7 @@ const AdminStaffPanel = () => {
   const fetchInvites = async () => {
     try {
       const res = await fetch(`${config.API_BASE_URL}/api/support/invites`, {
-        headers: { 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' }
+        headers: { 'x-ace-api-key': config.PUBLIC_APP_ID, 'x-user-id': 'admin' }
       });
       if (res.ok) {
         const data = await res.json();
@@ -75,7 +75,7 @@ const AdminStaffPanel = () => {
     try {
       const res = await fetch(`${config.API_BASE_URL}/api/support/invite`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' },
+        headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID, 'x-user-id': 'admin' },
         body: JSON.stringify({ email, firstName: firstName.trim(), lastName: lastName.trim() })
       });
       const data = await res.json();
@@ -107,7 +107,7 @@ const AdminStaffPanel = () => {
     try {
       const res = await fetch(`${config.API_BASE_URL}/api/support/invite/resend`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' },
+        headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID, 'x-user-id': 'admin' },
         body: JSON.stringify({ token })
       });
       const data = await res.json();
@@ -137,7 +137,7 @@ const AdminStaffPanel = () => {
             try {
               const res = await fetch(`${config.API_BASE_URL}/api/support/invite/expire`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' },
+                headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID, 'x-user-id': 'admin' },
                 body: JSON.stringify({ token })
               });
               if (res.ok) {

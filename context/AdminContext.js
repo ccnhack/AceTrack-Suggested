@@ -75,7 +75,7 @@ export const AdminProvider = ({ children }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-ace-api-key': config.ACE_API_KEY,
+          'x-ace-api-key': config.PUBLIC_APP_ID,
         },
         body: JSON.stringify({
           username: currentUser?.name || 'unknown',

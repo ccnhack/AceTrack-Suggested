@@ -256,7 +256,7 @@ export const VideoManagement = ({
           body: formData,
           headers: {
             'Content-Type': 'multipart/form-data',
-            'x-ace-api-key': config.ACE_API_KEY
+            'x-ace-api-key': config.PUBLIC_APP_ID
           },
         });
 

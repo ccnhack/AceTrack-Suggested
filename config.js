@@ -25,16 +25,16 @@ const GROQ_API_KEY = (Constants.expoConfig && Constants.expoConfig.extra && Cons
   ? Constants.expoConfig.extra.groqApiKey
   : process.env.EXPO_PUBLIC_GROQ_API_KEY;
 
-const ACE_API_KEY = (Constants.expoConfig && Constants.expoConfig.extra && Constants.expoConfig.extra.aceApiKey)
+const PUBLIC_APP_ID = (Constants.expoConfig && Constants.expoConfig.extra && Constants.expoConfig.extra.aceApiKey)
   ? Constants.expoConfig.extra.aceApiKey
   : process.env.EXPO_PUBLIC_ACE_API_KEY;
 
 export default {
-  APP_VERSION: '2.6.188',
+  APP_VERSION: '2.6.189',
   API_BASE_URL: (Constants.appConfig?.extra?.apiUrl || 
                  'https://acetrack-suggested.onrender.com').replace(/\/$/, ''),
   GROQ_API_KEY,
-  ACE_API_KEY: 'AceTrack_Client_v2_Production',
+  PUBLIC_APP_ID: 'AceTrack_Client_v2_Production',
   IS_ANDROID: Platform.OS === 'android',
   IS_IOS: Platform.OS === 'ios',
   stripBuster: (url) => {

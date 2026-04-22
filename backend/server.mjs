@@ -84,7 +84,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.188'; 
+const APP_VERSION = '2.6.189'; 
 
 // 🛡️ SECURITY: API Key (v2.6.178)
 const ACE_API_KEY = process.env.ACE_API_KEY;
@@ -194,7 +194,32 @@ app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
 
-// 🛡️ SECURITY: Hardened CSP (v2.6.186) - Removing 'unsafe-eval'
+// 🛡️ SECURITY: Global Hardening (v2.6.189)
+app.disable('x-powered-by'); // Stop framework fingerprinting
+
+// 1. HARDENED ROUTE GUARD: Explicitly block sensitive enumeration at top level
+app.use((req, res, next) => {
+  const path = req.path.toLowerCase();
+  const sensitivePaths = ['/admin', '/debug', '/config', '/metrics', '/swagger', '/env', '/graphql', '/.env', '/config.php'];
+  
+  if (sensitivePaths.some(p => path.startsWith(p))) {
+    const providedKey = req.headers['x-ace-api-key'] || req.query.key;
+    if (providedKey !== ACE_API_KEY) {
+      console.warn(`🛑 Hard Block: Unauthorized access to ${req.path} from ${req.ip}`);
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Forbidden: Direct access to administrative routes is prohibited.',
+        code: 'HARD_ROUTE_BLOCK'
+      });
+    }
+  }
+  next();
+});
+
+// 2. FULL SECURITY HEADERS (v2.6.189)
+app.use(helmet()); // Restore HSTS, X-Frame-Options, X-Content-Type-Options, etc.
+
+// 3. CUSTOM CSP (v2.6.189)
 app.use(helmet.contentSecurityPolicy({
   directives: {
     defaultSrc: ["'self'"],
@@ -207,9 +232,6 @@ app.use(helmet.contentSecurityPolicy({
     upgradeInsecureRequests: [],
   },
 }));
-
-// 🛡️ SECURITY: Restore Strict CORP (v2.6.186)
-app.use(helmet.crossOriginResourcePolicy({ policy: "same-origin" }));
 
 app.get('/', (req, res, next) => {
   if (req.headers.accept?.includes('application/json')) {
@@ -485,18 +507,7 @@ const apiKeyGuard = async (req, res, next) => {
     return next();
   }
 
-  // 4. HARDENED ROUTE GUARD: Explicitly block sensitive enumeration (v2.6.186)
-  const isSensitivePath = ['/admin', '/debug', '/config', '/metrics', '/swagger', '/env', '/graphql'].some(p => path.startsWith(p));
-  if (isSensitivePath && providedKey !== ACE_API_KEY) {
-    console.warn(`🛑 Sensitive route access blocked: ${path} from ${req.ip}`);
-    return res.status(403).json({ 
-      success: false, 
-      error: 'Access Denied: High-privilege route restricted to master key holders only.',
-      code: 'FORBIDDEN_ROUTE'
-    });
-  }
-
-  // 5. REJECT: All other unauthorized attempts
+  // 4. REJECT: All other unauthorized attempts
   await logAudit(req, 'UNAUTHORIZED_ACCESS_BLOCKED', [], { ip: req.ip, url: req.originalUrl || req.url, method: req.method });
   console.warn(`🛑 Unauthorized access attempt from ${req.ip} - Rejected by Zero-Exposure Guard`);
   return res.status(401).json({ 

@@ -96,7 +96,7 @@ const ProfileScreen = ({ navigation }) => {
     const checkUpdates = async () => {
       try {
         const response = await fetch(`${activeApiUrl}/api/status`, {
-          headers: { 'x-ace-api-key': config.ACE_API_KEY || 'ace-secret-key-1717' }
+          headers: { 'x-ace-api-key': config.PUBLIC_APP_ID || 'ace-secret-key-1717' }
         });
         const data = await response.json();
         if (data && data.latestAppVersion) {
@@ -799,7 +799,7 @@ const ProfileScreen = ({ navigation }) => {
                           body: formData,
                           headers: { 
                             'Content-Type': 'multipart/form-data',
-                            'x-ace-api-key': config.ACE_API_KEY
+                            'x-ace-api-key': config.PUBLIC_APP_ID
                           },
                         });
                         

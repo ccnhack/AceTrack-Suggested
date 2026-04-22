@@ -108,7 +108,7 @@ export const SupportProvider = ({ children }) => {
         headers: { 
           'Content-Type': 'application/json', 
           'Authorization': `Bearer ${await storage.getItem('userToken')}`, // authenticateToken usage
-          'x-ace-api-key': config.ACE_API_KEY
+          'x-ace-api-key': config.PUBLIC_APP_ID
         },
         body: JSON.stringify({ ticketId })
       });
@@ -130,7 +130,7 @@ export const SupportProvider = ({ children }) => {
         headers: { 
           'Content-Type': 'application/json', 
           'Authorization': `Bearer ${await storage.getItem('userToken')}`, 
-          'x-ace-api-key': config.ACE_API_KEY,
+          'x-ace-api-key': config.PUBLIC_APP_ID,
           'x-user-id': 'admin'
         },
         body: JSON.stringify({ ticketId, targetAgentId })

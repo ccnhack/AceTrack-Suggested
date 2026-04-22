@@ -945,7 +945,7 @@ assert('TC-WS-001', 'WebSocket', 'App.js: io() initialization includes auth.toke
   const mockIo = (url, opts) => ({ url, opts });
   const socket = mockIo(activeApiUrl, {
     reconnection: true,
-    auth: { token: config.ACE_API_KEY }
+    auth: { token: config.PUBLIC_APP_ID }
   });
   
   return socket.opts.auth.token === 'test_key_123';

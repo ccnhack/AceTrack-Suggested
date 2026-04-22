@@ -163,7 +163,7 @@ export const SupportTicketSystem = ({
     try {
       const res = await fetch(`${config.API_BASE_URL}/api/support/rate-ticket`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': userId },
+        headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID, 'x-user-id': userId },
         body: JSON.stringify({ ticketId: selectedTicket.id, rating, feedback: csatFeedback })
       });
       if (res.ok) {

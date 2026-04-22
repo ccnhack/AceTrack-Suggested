@@ -80,7 +80,7 @@ const LoginScreen = ({ navigation }) => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-ace-api-key': config.ACE_API_KEY,
+            'x-ace-api-key': config.PUBLIC_APP_ID,
           },
           body: JSON.stringify({ identifier: username, password }),
         });
@@ -100,7 +100,7 @@ const LoginScreen = ({ navigation }) => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-ace-api-key': config.ACE_API_KEY,
+            'x-ace-api-key': config.PUBLIC_APP_ID,
           },
           body: JSON.stringify({ identifier: username, password }),
         });
@@ -205,7 +205,7 @@ const LoginScreen = ({ navigation }) => {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'x-ace-api-key': config.ACE_API_KEY
+          'x-ace-api-key': config.PUBLIC_APP_ID
         },
         body: JSON.stringify({ identifier: nUser })
       });
@@ -380,7 +380,7 @@ const LoginScreen = ({ navigation }) => {
                     try {
                       const resp = await fetch(`${config.API_BASE_URL}/api/v1/admin/verify-pin`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.ACE_API_KEY },
+                        headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID },
                         body: JSON.stringify({ mfaToken, pin: mfaPin }),
                       });
                       const result = await resp.json();
@@ -405,7 +405,7 @@ const LoginScreen = ({ navigation }) => {
                     try {
                       const resp = await fetch(`${config.API_BASE_URL}/api/v1/admin/verify-pin`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.ACE_API_KEY },
+                        headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID },
                         body: JSON.stringify({ mfaToken, pin: mfaPin }),
                       });
                       const result = await resp.json();

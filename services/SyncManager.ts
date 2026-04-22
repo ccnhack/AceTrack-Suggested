@@ -161,8 +161,8 @@ class SyncManager {
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
       query: { userId },
-      auth: { token: config.ACE_API_KEY },
-      extraHeaders: { 'x-ace-api-key': config.ACE_API_KEY }
+      auth: { token: config.PUBLIC_APP_ID },
+      extraHeaders: { 'x-ace-api-key': config.PUBLIC_APP_ID }
     });
 
     try {
@@ -230,7 +230,7 @@ class SyncManager {
                method: 'POST',
                headers: {
                  'Content-Type': 'application/json',
-                 'x-ace-api-key': config.ACE_API_KEY
+                 'x-ace-api-key': config.PUBLIC_APP_ID
                },
                body: JSON.stringify({
                  username: label,
@@ -257,7 +257,7 @@ class SyncManager {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-ace-api-key': config.ACE_API_KEY
+          'x-ace-api-key': config.PUBLIC_APP_ID
         },
         body: JSON.stringify({
           username: userId,
@@ -568,7 +568,7 @@ class SyncManager {
         const cloudUrl = config.API_BASE_URL;
         const res = await fetch(`${cloudUrl}/api/data`, {
           headers: { 
-            'x-ace-api-key': config.ACE_API_KEY,
+            'x-ace-api-key': config.PUBLIC_APP_ID,
             'x-user-id': this.userId || 'guest'
           },
           signal: controller.signal
@@ -711,7 +711,7 @@ class SyncManager {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-ace-api-key': config.ACE_API_KEY,
+          'x-ace-api-key': config.PUBLIC_APP_ID,
           'x-user-id': this.userId || 'guest'
         },
         body: JSON.stringify({

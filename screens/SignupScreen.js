@@ -141,7 +141,7 @@ const SignupScreen = ({ navigation }) => {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'x-ace-api-key': config.ACE_API_KEY
+          'x-ace-api-key': config.PUBLIC_APP_ID
         },
         body: JSON.stringify({ target, type })
       });
@@ -175,7 +175,7 @@ const SignupScreen = ({ navigation }) => {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'x-ace-api-key': config.ACE_API_KEY
+          'x-ace-api-key': config.PUBLIC_APP_ID
         },
         body: JSON.stringify({ 
           target: verificationModal.target, 
