@@ -84,7 +84,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.181'; 
+const APP_VERSION = '2.6.182'; 
 
 // 🛡️ SECURITY: API Key (v2.6.178)
 const ACE_API_KEY = process.env.ACE_API_KEY;
@@ -164,9 +164,6 @@ let dbStatus = 'connecting';
 const app = express();
 app.set('trust proxy', true);
 
-// ═══════════════════════════════════════════════════════════════
-// 🔐 SECURITY: CORS Whitelist (SEC Fix #3)
-// ═══════════════════════════════════════════════════════════════
 const ALLOWED_ORIGINS = [
   'https://acetrack-suggested.onrender.com',
   'https://acetrack-web.onrender.com',
@@ -174,8 +171,7 @@ const ALLOWED_ORIGINS = [
   'http://localhost:8081',
   'http://localhost:19006',
   'http://localhost:3005',
-  'http://localhost:8082',
-  'null' 
+  'http://localhost:8082'
 ];
 
 // 🕵️ ULTRA-EARLY DIAGNOSTIC: Log EVERY request before ANY middleware (v2.6.176)
@@ -231,17 +227,24 @@ app.use(helmet({
 // ═══════════════════════════════════════════════════════════════
 app.use(cors({
   origin: (origin, callback) => {
-    // 🛡️ SYNC HARDENING (v2.6.175): Allow mobile apps (no origin). 'null' origin is REJECTED for security (SEC Fix #1.0).
+    // 🛡️ SECURITY HARDENING (v2.6.182): 
+    // 1. Allow mobile apps (no origin header).
+    // 2. Explicitly REJECT 'null' origin to prevent Sandboxed Iframe attacks (Finding 2).
+    // 3. Match against the strictly defined whitelist.
+    
     if (!origin) return callback(null, true);
+    
+    if (origin === 'null') {
+      console.warn(`🛑 CORS REJECTED: Malicious 'null' origin detected.`);
+      return callback(new Error('CORS: null origin is not permitted for security reasons.'));
+    }
+
     if (ALLOWED_ORIGINS.includes(origin)) {
       return callback(null, true);
     }
-    // 🛡️ DIAGNOSTIC: Blocked origin log (throttled/non-looping)
+
     console.warn(`🛑 CORS Blocked: origin=${origin}`);
-    logAudit(req, 'CORS_BLOCKED', [], { origin, url: req.originalUrl || req.url }).catch(() => {});
-    const err = new Error(`Not allowed by CORS: ${origin}`);
-    err.status = 403; // Ensure 403 status is explicitly set to avoid 500 loop
-    return callback(err);
+    return callback(new Error(`Not allowed by CORS: ${origin}`));
   },
   allowedHeaders: ['Content-Type', 'x-ace-api-key', 'x-socket-id', 'Authorization', 'x-user-id'],
   credentials: true
