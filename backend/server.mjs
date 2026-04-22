@@ -2285,6 +2285,8 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
 // 🌐 Mount API v1 + backward-compatible un-versioned routes
 // ═══════════════════════════════════════════════════════════════
 app.use('/api', router);
+app.use('/api/v1', router); // 🛡️ COMPATIBILITY FIX (v2.6.174): Support versioned API calls from web/mobile clients
+
 
 // 🛡️ STABILITY FIX (v2.6.75): Dedicated Root Health Check for Render Load Balancer
 // This bypasses complex middleware to ensure the service stays "Up" during heavy load.
