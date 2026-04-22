@@ -1791,6 +1791,94 @@ router.post('/support/invite/resend', apiKeyGuard, asyncHandler(async (req, res)
 }));
 
 // ═══════════════════════════════════════════════════════════════
+// 🔐 ADMIN LOGIN WITH MFA (v2.6.170)
+// Server-side authentication — credentials & PIN never leave the server
+// ═══════════════════════════════════════════════════════════════
+const ADMIN_MFA_PIN = process.env.ADMIN_MFA_PIN || '120522';
+const pendingAdminMFA = new Map(); // token → { expires }
+
+router.post('/admin/login', apiKeyGuard, asyncHandler(async (req, res) => {
+  const { identifier, password } = req.body;
+  if (!identifier || !password) {
+    return res.status(400).json({ error: 'Username and Password are required.' });
+  }
+
+  const search = String(identifier).toLowerCase().trim();
+
+  // Only allow the 'admin' username/ID
+  if (search !== 'admin') {
+    return res.status(401).json({ error: 'Invalid administrator credentials.' });
+  }
+
+  // Validate password against the database record
+  const appState = await AppState.findOne().sort({ lastUpdated: -1 });
+  if (!appState || !appState.data) {
+    return res.status(500).json({ error: 'System state unavailable.' });
+  }
+
+  const players = appState.data.players || [];
+  const adminUser = players.find(p => p.id === 'admin' && p.role === 'admin');
+
+  if (!adminUser) {
+    return res.status(500).json({ error: 'Administrator account not found in system.' });
+  }
+
+  const adminPassword = adminUser.password || '';
+  if (adminPassword !== password) {
+    logServerEvent('ADMIN_LOGIN_FAILED', { reason: 'wrong_password', ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
+    return res.status(401).json({ error: 'Invalid administrator credentials.' });
+  }
+
+  // Step 1 passed — generate MFA session token
+  const mfaToken = bcrypt.hashSync(Date.now().toString() + 'admin_mfa', 10).replace(/[^a-zA-Z0-9]/g, '').substring(0, 40);
+  pendingAdminMFA.set(mfaToken, { expires: Date.now() + 5 * 60 * 1000 }); // 5 min expiry
+
+  // Cleanup expired tokens
+  for (const [tk, val] of pendingAdminMFA.entries()) {
+    if (val.expires < Date.now()) pendingAdminMFA.delete(tk);
+  }
+
+  logServerEvent('ADMIN_MFA_INITIATED', { ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
+  res.json({ success: true, requiresMFA: true, mfaToken });
+}));
+
+router.post('/admin/verify-pin', apiKeyGuard, asyncHandler(async (req, res) => {
+  const { mfaToken, pin } = req.body;
+  if (!mfaToken || !pin) {
+    return res.status(400).json({ error: 'MFA token and PIN are required.' });
+  }
+
+  const session = pendingAdminMFA.get(mfaToken);
+  if (!session) {
+    return res.status(401).json({ error: 'Invalid or expired MFA session. Please login again.' });
+  }
+
+  if (session.expires < Date.now()) {
+    pendingAdminMFA.delete(mfaToken);
+    return res.status(401).json({ error: 'MFA session expired. Please login again.' });
+  }
+
+  if (pin !== ADMIN_MFA_PIN) {
+    logServerEvent('ADMIN_MFA_FAILED', { reason: 'wrong_pin', ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
+    return res.status(401).json({ error: 'Invalid PIN. Access denied.' });
+  }
+
+  // MFA passed — consume token
+  pendingAdminMFA.delete(mfaToken);
+
+  logServerEvent('ADMIN_LOGIN_SUCCESS', { ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
+  res.json({
+    success: true,
+    user: {
+      id: 'admin',
+      name: 'System Admin',
+      role: 'admin',
+      avatar: 'https://ui-avatars.com/api/?name=Admin&background=random'
+    }
+  });
+}));
+
+// ═══════════════════════════════════════════════════════════════
 // 🔐 SUPPORT STAFF LOGIN (v2.6.170)
 // Server-side authentication — credentials never leave the server
 // ═══════════════════════════════════════════════════════════════

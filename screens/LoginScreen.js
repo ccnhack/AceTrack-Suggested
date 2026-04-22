@@ -50,29 +50,25 @@ const LoginScreen = ({ navigation }) => {
   const [forgotUser, setForgotUser] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // 🔐 MFA States (v2.6.170)
+  const [showMFA, setShowMFA] = useState(false);
+  const [mfaToken, setMfaToken] = useState('');
+  const [mfaPin, setMfaPin] = useState('');
+  const [mfaError, setMfaError] = useState('');
+  const [mfaLoading, setMfaLoading] = useState(false);
+
   const handleLogin = async () => {
     logger.logAction('LOGIN_CLICK', { username });
     setError('');
     try {
       if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      // Web Login: Admin fast-path + Support staff
+      // Web Login: Server-side authentication (v2.6.170)
+      // NO credentials are stored in client code — all validation happens on the server
       if (Platform.OS === 'web') {
-        // Admin hardcoded login (fast path)
-        if (username === 'admin' && password === 'Password@123') {
-          onLoginSuccess('admin', { 
-            id: 'admin', 
-            name: 'System Admin', 
-            role: 'admin',
-            avatar: 'https://ui-avatars.com/api/?name=Admin&background=random'
-          });
-          return;
-        }
-        
-        // Support staff login — Server-side authentication (v2.6.170)
-        // Uses dedicated /support/login endpoint to avoid data sanitization issues
         setIsSyncing(true);
         try {
-          const loginResponse = await fetch(`${config.API_BASE_URL}/api/v1/support/login`, {
+          // Step 1: Try admin login first
+          const adminResponse = await fetch(`${config.API_BASE_URL}/api/v1/admin/login`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -80,66 +76,51 @@ const LoginScreen = ({ navigation }) => {
             },
             body: JSON.stringify({ identifier: username, password }),
           });
-          
-          const result = await loginResponse.json();
-          
-          if (loginResponse.ok && result.success && result.user) {
-            onLoginSuccess('support', result.user);
-            return;
-          } else {
-            setError(result.error || 'Login failed. Please try again.');
+          const adminResult = await adminResponse.json();
+
+          if (adminResponse.ok && adminResult.success && adminResult.requiresMFA) {
+            // Admin credentials valid — show MFA PIN modal
+            setMfaToken(adminResult.mfaToken);
+            setMfaPin('');
+            setMfaError('');
+            setShowMFA(true);
             setIsLoading(false);
+            setIsSyncing(false);
             return;
           }
-        } catch (networkErr) {
-          console.warn('Server login failed, attempting local fallback:', networkErr.message);
-          // Fallback: Try local cache if server is unreachable
-          const search = username.toLowerCase().trim();
-          const supportUser = (players || []).find(p => (
-            p.role === 'support' && (
-              (p.email || '').toLowerCase() === search ||
-              String(p.id || '').toLowerCase() === search ||
-              (p.username || '').toLowerCase() === search ||
-              (p.name || '').toLowerCase() === search
-            )
-          ));
-          
-          if (supportUser) {
-            if (supportUser.supportStatus === 'terminated' || supportUser.supportStatus === 'inactive') {
-              setError('Access Suspended: Your employment profile has been deactivated.');
-              setIsLoading(false);
-              return;
-            }
-            const userPassword = supportUser.password || 'password';
-            if (userPassword === password) {
-              onLoginSuccess('support', supportUser);
-              return;
-            } else {
-              setError('Invalid password for support account.');
-              setIsLoading(false);
-              return;
-            }
+
+          // Step 2: Try support login
+          const supportResponse = await fetch(`${config.API_BASE_URL}/api/v1/support/login`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': config.API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=',
+            },
+            body: JSON.stringify({ identifier: username, password }),
+          });
+          const supportResult = await supportResponse.json();
+
+          if (supportResponse.ok && supportResult.success && supportResult.user) {
+            onLoginSuccess('support', supportResult.user);
+            return;
           }
+
+          // Both failed — show the most relevant error
+          setError(supportResult.error || adminResult.error || 'Access Denied. This portal is for AceTrack Administrators and Support Staff only.');
+          setIsLoading(false);
+          return;
+        } catch (networkErr) {
+          console.warn('Server login failed:', networkErr.message);
+          setError('Unable to reach the server. Please check your connection and try again.');
+          setIsLoading(false);
+          return;
         } finally {
           setIsSyncing(false);
         }
-
-        setError('Access Denied. This portal is for AceTrack Administrators and Support Staff only.');
-        setIsLoading(false);
-        return;
-
       }
 
-      // Admin Login logic
-      if (username === 'admin' && password === 'Password@123') {
-        onLoginSuccess('admin', { 
-          id: 'admin', 
-          name: 'System Admin', 
-          role: 'admin',
-          avatar: 'https://ui-avatars.com/api/?name=Admin&background=000000&color=ffffff'
-        });
-        return;
-      }
+      // Mobile Admin Login — server-side (v2.6.170)
+      // No hardcoded credentials in client code
 
       // Demo Academy Login
       if (username === 'academy' && password === 'password') {
@@ -422,6 +403,102 @@ const LoginScreen = ({ navigation }) => {
             </Text>
           </View>
         </View>
+
+        {/* Forgot Password Modal */}
+        {/* 🔐 MFA PIN VERIFICATION MODAL (v2.6.170) */}
+        <Modal visible={showMFA} animationType="fade" transparent={true}>
+          <View style={styles.webModalOverlay}>
+            <View style={[styles.webModalContent, { maxWidth: 400 }]}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Identity Verification</Text>
+                <TouchableOpacity onPress={() => { setShowMFA(false); setMfaPin(''); setMfaError(''); }} style={styles.closeBtn}>
+                  <Ionicons name="close" size={24} color="#0F172A" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.stepContainer}>
+                <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                  <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#EEF2FF', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
+                    <MaterialIcons name="verified-user" size={36} color="#6366F1" />
+                  </View>
+                  <Text style={{ fontSize: 14, color: '#64748B', textAlign: 'center', lineHeight: 20 }}>
+                    Multi-Factor Authentication required.{'\n'}Enter your 6-digit security PIN.
+                  </Text>
+                </View>
+
+                {mfaError ? (
+                  <View style={{ backgroundColor: '#FEE2E2', padding: 12, borderRadius: 10, marginBottom: 16, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 3, borderLeftColor: '#EF4444' }}>
+                    <Ionicons name="alert-circle" size={16} color="#EF4444" style={{ marginRight: 8 }} />
+                    <Text style={{ color: '#991B1B', fontSize: 13, fontWeight: '600', flex: 1 }}>{mfaError}</Text>
+                  </View>
+                ) : null}
+
+                <TextInput
+                  style={[styles.modalInput, { textAlign: 'center', fontSize: 28, fontWeight: '900', letterSpacing: 12 }]}
+                  placeholder="• • • • • •"
+                  placeholderTextColor="#CBD5E1"
+                  value={mfaPin}
+                  onChangeText={(t) => setMfaPin(t.replace(/[^0-9]/g, '').substring(0, 6))}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  secureTextEntry
+                  autoFocus
+                  onSubmitEditing={async () => {
+                    if (mfaPin.length < 6) { setMfaError('PIN must be 6 digits.'); return; }
+                    setMfaLoading(true); setMfaError('');
+                    try {
+                      const resp = await fetch(`${config.API_BASE_URL}/api/v1/admin/verify-pin`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'x-api-key': config.API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=' },
+                        body: JSON.stringify({ mfaToken, pin: mfaPin }),
+                      });
+                      const result = await resp.json();
+                      if (resp.ok && result.success && result.user) {
+                        setShowMFA(false); setMfaPin('');
+                        onLoginSuccess('admin', result.user);
+                      } else {
+                        setMfaError(result.error || 'Verification failed.');
+                        setMfaPin('');
+                      }
+                    } catch (e) { setMfaError('Network error. Please try again.'); }
+                    finally { setMfaLoading(false); }
+                  }}
+                />
+
+                <TouchableOpacity
+                  style={[styles.modalBtn, { marginTop: 16, opacity: mfaPin.length < 6 ? 0.5 : 1 }]}
+                  disabled={mfaLoading || mfaPin.length < 6}
+                  onPress={async () => {
+                    if (mfaPin.length < 6) { setMfaError('PIN must be 6 digits.'); return; }
+                    setMfaLoading(true); setMfaError('');
+                    try {
+                      const resp = await fetch(`${config.API_BASE_URL}/api/v1/admin/verify-pin`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'x-api-key': config.API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=' },
+                        body: JSON.stringify({ mfaToken, pin: mfaPin }),
+                      });
+                      const result = await resp.json();
+                      if (resp.ok && result.success && result.user) {
+                        setShowMFA(false); setMfaPin('');
+                        onLoginSuccess('admin', result.user);
+                      } else {
+                        setMfaError(result.error || 'Verification failed.');
+                        setMfaPin('');
+                      }
+                    } catch (e) { setMfaError('Network error. Please try again.'); }
+                    finally { setMfaLoading(false); }
+                  }}
+                >
+                  {mfaLoading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalBtnText}>VERIFY PIN</Text>}
+                </TouchableOpacity>
+
+                <Text style={{ textAlign: 'center', color: '#94A3B8', fontSize: 11, marginTop: 16 }}>
+                  Session expires in 5 minutes. Contact technical support if you have lost your PIN.
+                </Text>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* Forgot Password Modal */}
         <Modal visible={showForgot} animationType="fade" transparent={true}>
