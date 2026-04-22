@@ -74,17 +74,22 @@ const LoginScreen = ({ navigation }) => {
       if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       // Web Login: Server-side authentication (v2.6.170)
       // NO credentials are stored in client code — all validation happens on the server
-      if (Platform.OS === 'web') {
-        setIsSyncing(true);
         try {
+          const loginUrl = `${config.API_BASE_URL}/api/v1/admin/login`;
+          // 🛡️ DIAGNOSTIC ALERT
+          if (Platform.OS === 'web') console.log(`🚀 [DEBUG] Calling Admin Login: ${loginUrl}`);
+
           // Step 1: Try admin login first
-          const adminResponse = await fetch(`${config.API_BASE_URL}/api/v1/admin/login`, {
+          const adminResponse = await fetch(loginUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'x-ace-api-key': config.ACE_API_KEY,
             },
             body: JSON.stringify({ identifier: username, password }),
+          }).catch(err => {
+             if (Platform.OS === 'web') alert(`❌ Browser Blocked Request: ${err.message}\nURL: ${loginUrl}`);
+             throw err;
           });
           const adminResult = await adminResponse.json();
 
