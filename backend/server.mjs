@@ -1923,14 +1923,18 @@ router.post('/support/login', apiKeyGuard, asyncHandler(async (req, res) => {
   }
 
   const players = appState.data.players || [];
-  const supportUser = players.find(p =>
-    p.role === 'support' && (
-      (p.email || '').toLowerCase() === search ||
-      String(p.id || '').toLowerCase() === search ||
-      (p.username || '').toLowerCase() === search ||
-      (p.name || '').toLowerCase() === search
-    )
-  );
+  console.log(`[DIAG] Support Login Attempt: ${search} | Total Players: ${players.length}`);
+  const supportUser = players.find(p => {
+    const role = String(p.role || '').toLowerCase().trim();
+    if (role !== 'support') return false;
+    
+    const pEmail = String(p.email || '').toLowerCase().trim();
+    const pId = String(p.id || '').toLowerCase().trim();
+    const pUsername = String(p.username || '').toLowerCase().trim();
+    const pName = String(p.name || '').toLowerCase().trim();
+    
+    return pEmail === search || pId === search || pUsername === search || pName === search;
+  });
 
   if (!supportUser) {
     return res.status(401).json({ error: 'Access Denied. This portal is for AceTrack Administrators and Support Staff only.' });
@@ -1974,11 +1978,15 @@ router.post('/support/password-reset/request', apiKeyGuard, asyncHandler(async (
 
   // Find user in AppState (Sort by lastUpdated to ensure we use the master record)
   const appState = await AppState.findOne().sort({ lastUpdated: -1 });
-  const user = appState?.data?.players?.find(p => 
-    p.email?.toLowerCase() === search || 
-    String(p.id).toLowerCase() === search ||
-    (p.username && String(p.username).toLowerCase() === search)
-  );
+  const players = appState?.data?.players || [];
+  console.log(`[DIAG] Recovery Attempt: ${search} | Total Players: ${players.length}`);
+  const user = players.find(p => {
+    const pEmail = String(p.email || '').toLowerCase().trim();
+    const pId = String(p.id || '').toLowerCase().trim();
+    const pUsername = String(p.username || '').toLowerCase().trim();
+    const pName = String(p.name || '').toLowerCase().trim();
+    return pEmail === search || pId === search || pUsername === search || pName === search;
+  });
 
   if (!user) {
     // 🛡️ SECURITY: Use generic message to prevent account enum

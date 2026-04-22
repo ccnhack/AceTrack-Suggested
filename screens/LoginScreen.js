@@ -261,7 +261,7 @@ const LoginScreen = ({ navigation }) => {
 
     setIsForgotLoading(true);
     try {
-      const res = await fetch(`${config.API_BASE_URL}/api/support/password-reset/request`, {
+      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/password-reset/request`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
