@@ -436,6 +436,23 @@ const apiKeyGuard = (req, res, next) => {
   next();
 };
 
+// 🛡️ SECURITY: Global Rate Limiters (Finding 8)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 login attempts per window
+  message: { error: 'Too many login attempts. Please try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const passwordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 reset requests per window
+  message: { error: 'Too many recovery attempts. Please try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 /**
  * 🛡️ PRIVACY GUARD (v2.6.165)
  * Sanitizes the global application state based on requester identity and role.
@@ -1904,14 +1921,6 @@ router.post('/admin/verify-pin', asyncHandler(async (req, res) => {
 // 🔐 SUPPORT STAFF LOGIN (v2.6.170)
 // Server-side authentication — credentials never leave the server
 // ═══════════════════════════════════════════════════════════════
-// 🛡️ SECURITY: Rate limit login attempts to prevent brute-force (Finding 8)
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // Limit each IP to 10 login attempts per window
-  message: { error: 'Too many login attempts. Please try again in 15 minutes.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
 
 router.post('/support/login', loginLimiter, asyncHandler(async (req, res) => {
   const { identifier, password } = req.body;
@@ -1980,14 +1989,6 @@ router.post('/support/login', loginLimiter, asyncHandler(async (req, res) => {
 // 🔒 PASSWORD RESET FLOW
 // ═══════════════════════════════════════════════════════════════
 
-// 🛡️ SECURITY: Rate limit password reset requests (Finding 8)
-const passwordResetLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 reset requests per window
-  message: { error: 'Too many recovery attempts. Please try again in 15 minutes.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
 
 // 1. Request Password Reset (Email Link)
 router.post('/support/password-reset/request', passwordResetLimiter, asyncHandler(async (req, res) => {
