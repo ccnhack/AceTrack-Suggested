@@ -84,7 +84,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.184'; 
+const APP_VERSION = '2.6.185'; 
 
 // 🛡️ SECURITY: API Key (v2.6.178)
 const ACE_API_KEY = process.env.ACE_API_KEY;
@@ -519,7 +519,19 @@ const apiKeyGuard = async (req, res, next) => {
   });
 };
 
-// 🛡️ SECURITY: Global Rate Limiters (Finding 8)
+// 🛡️ SECURITY: Global Rate Limiters (v2.6.185)
+const globalApiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 200, // 200 requests per minute per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { 
+    success: false, 
+    error: 'Too many requests. Your IP has been temporarily throttled for security.',
+    version: APP_VERSION 
+  }
+});
+
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10, // Limit each IP to 10 login attempts per window
@@ -527,6 +539,17 @@ const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+const otpLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 5, // 5 requests per window
+  message: { error: 'Security Alert: Too many OTP attempts. Please wait 10 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply Global Limiter to all API routes
+app.use('/api/', globalApiLimiter);
 
 const passwordResetLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -1689,7 +1712,7 @@ router.get('/audit-logs', apiKeyGuard, sensitiveCacheGuard, asyncHandler(async (
 }));
 
 // 🔐 OTP: Send verification code (Simulated/Hardcoded for Testing)
-router.post('/otp/send', apiKeyGuard, (req, res) => {
+router.post('/otp/send', otpLimiter, apiKeyGuard, (req, res) => {
   const { target, type } = req.body; // target is email/phone, type is 'email' or 'phone'
   console.log(`🔑 [OTP_SIMULATION] Code "123456" requested for ${type}: ${target}`);
   logServerEvent('OTP_SEND_REQUESTED', { target, type });
@@ -1697,7 +1720,7 @@ router.post('/otp/send', apiKeyGuard, (req, res) => {
 });
 
 // 🔐 OTP: Verify code (Hardcoded to 123456)
-router.post('/otp/verify', apiKeyGuard, (req, res) => {
+router.post('/otp/verify', otpLimiter, apiKeyGuard, (req, res) => {
   const { code, target, type } = req.body;
   
   if (code === '123456') {
