@@ -1943,7 +1943,11 @@ router.post('/support/login', loginLimiter, asyncHandler(async (req, res) => {
     return res.status(403).json({ error: 'Access Denied. Use the administrator login.' });
   }
 
+  // 🕵️ SUPER DIAGNOSTIC: Log EXACTLY what the browser sent
+  await logAudit(req, 'DEBUG_SUPPORT_LOGIN_PAYLOAD', [], { receivedIdentifier: identifier, processedSearch: search });
+
   const appState = await AppState.findOne().sort({ lastUpdated: -1 });
+
   if (!appState || !appState.data) {
     return res.status(500).json({ error: 'System state unavailable.' });
   }
