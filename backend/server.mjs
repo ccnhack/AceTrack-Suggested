@@ -84,7 +84,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.187'; 
+const APP_VERSION = '2.6.188'; 
 
 // 🛡️ SECURITY: API Key (v2.6.178)
 const ACE_API_KEY = process.env.ACE_API_KEY;
@@ -300,29 +300,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// ═══════════════════════════════════════════════════════════════
-// 🔐 SECURITY: Rate Limiting (SEC Fix #4)
-// ═══════════════════════════════════════════════════════════════
-
-const globalLimiter = rateLimit({
-  windowMs: 60 * 1000, 
-  max: 200, 
-  message: { error: 'Too many requests. Please try again after a minute.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-  validate: { trustProxy: false },
-});
-
-const otpLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 5,
-  message: { error: 'Too many OTP attempts. Account temporarily locked.' },
-  validate: { trustProxy: false },
-});
-
-app.use('/api', globalLimiter);
 
 // ═══════════════════════════════════════════════════════════════
+// WebSocket Setup
 // WebSocket Setup
 // ═══════════════════════════════════════════════════════════════
 const httpServer = createServer(app);
