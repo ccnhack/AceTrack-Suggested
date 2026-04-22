@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 const API_URL = 'http://localhost:3005/api';
-const VALID_KEY = 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=';
+const VALID_KEY = process.env.ACE_API_KEY;
 
 describe('AceTrack Audit Logging Integrity', () => {
 

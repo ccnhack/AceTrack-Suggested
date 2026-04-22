@@ -9,6 +9,7 @@ import logger from '../utils/logger';
 import { useAuth } from '../context/AuthContext';
 import { usePlayers } from '../context/PlayerContext';
 import { useSync } from '../context/SyncContext';
+import config from '../config';
 import { Sport } from '../types';
 
 const { width, height } = Dimensions.get('window');
@@ -140,7 +141,7 @@ const SignupScreen = ({ navigation }) => {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'x-ace-api-key': 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=' // Hardcoded for simulation
+          'x-ace-api-key': config.ACE_API_KEY
         },
         body: JSON.stringify({ target, type })
       });
@@ -174,7 +175,7 @@ const SignupScreen = ({ navigation }) => {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'x-ace-api-key': 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=' 
+          'x-ace-api-key': config.ACE_API_KEY
         },
         body: JSON.stringify({ 
           target: verificationModal.target, 

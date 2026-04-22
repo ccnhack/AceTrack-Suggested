@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 const API_BASE = 'http://localhost:3005/api';
-const API_KEY = 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=';
+const API_KEY = process.env.ACE_API_KEY;
 
 async function clientCall(url, method = 'GET', body = null) {
   const options = {

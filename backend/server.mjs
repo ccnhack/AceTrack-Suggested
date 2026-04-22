@@ -83,8 +83,8 @@ const initFirebase = async () => {
 };
 initFirebase();
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.170)
-const APP_VERSION = '2.6.170'; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
+const APP_VERSION = '2.6.175'; 
 
 
 
@@ -163,8 +163,8 @@ app.use(helmet({
 // ═══════════════════════════════════════════════════════════════
 app.use(cors({
   origin: (origin, callback) => {
-    // 🛡️ SYNC HARDENING (v2.6.20/74): Allow mobile apps (no origin) or null string
-    if (!origin || origin === 'null') return callback(null, true);
+    // 🛡️ SYNC HARDENING (v2.6.175): Allow mobile apps (no origin). 'null' origin is REJECTED for security (SEC Fix #1.0).
+    if (!origin) return callback(null, true);
     if (ALLOWED_ORIGINS.includes(origin)) {
       return callback(null, true);
     }
@@ -413,7 +413,8 @@ const SupportPasswordReset = mongoose.model('SupportPasswordReset', SupportPassw
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: API KEY Configuration (SEC Fix)
 // In production, failure is mandatory if key is missing.
-const ACE_API_KEY = process.env.ACE_API_KEY || (process.env.NODE_ENV === 'production' ? null : 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=');
+// 🔐 SECURITY (v2.6.175): Strict API key enforcement. No hardcoded fallbacks permitted in production or dev.
+const ACE_API_KEY = process.env.ACE_API_KEY; 
 if (!ACE_API_KEY && process.env.NODE_ENV === 'production') {
   console.error("❌ CRITICAL: ACE_API_KEY is missing in production environment!");
   // 🛡️ STABILITY FIX (v2.6.112): Don't exit process, just log error. 

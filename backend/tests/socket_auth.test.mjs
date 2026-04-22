@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { io } from 'socket.io-client';
 
 const SOCKET_URL = 'http://localhost:3005';
-const VALID_KEY = 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=';
+const VALID_KEY = process.env.ACE_API_KEY;
 
 describe('AceTrack Socket.io Auth Hardening', () => {
 

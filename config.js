@@ -23,17 +23,18 @@ const CLOUD_API_URL = 'https://acetrack-suggested.onrender.com';
 const API_BASE_URL = __DEV__ ? LOCAL_API_URL : CLOUD_API_URL;
 const GROQ_API_KEY = (Constants.expoConfig && Constants.expoConfig.extra && Constants.expoConfig.extra.groqApiKey)
   ? Constants.expoConfig.extra.groqApiKey
-  : (process.env.EXPO_PUBLIC_GROQ_API_KEY || ['gsk_K7PS6xX6c', '0u1Hl4A5t3tWGdyb3FYnnYM', 'HeT4tzc1hWoTftABTcCT'].join(''));
+  : process.env.EXPO_PUBLIC_GROQ_API_KEY;
+
 const ACE_API_KEY = (Constants.expoConfig && Constants.expoConfig.extra && Constants.expoConfig.extra.aceApiKey)
   ? Constants.expoConfig.extra.aceApiKey
-  : (process.env.EXPO_PUBLIC_ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=');
+  : process.env.EXPO_PUBLIC_ACE_API_KEY;
 
 export default {
-  APP_VERSION: '2.6.170',
+  APP_VERSION: '2.6.175',
   API_BASE_URL: (Constants.appConfig?.extra?.apiUrl || 
                  'https://acetrack-suggested.onrender.com').replace(/\/$/, ''),
   GROQ_API_KEY,
-  ACE_API_KEY: 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=',
+  ACE_API_KEY,
   IS_ANDROID: Platform.OS === 'android',
   IS_IOS: Platform.OS === 'ios',
   stripBuster: (url) => {

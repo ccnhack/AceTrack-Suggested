@@ -1,7 +1,7 @@
 import fetch from 'node-fetch';
 
 const BASE_URL = 'https://acetrack-suggested.onrender.com';
-const API_KEY = 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=';
+const API_KEY = process.env.ACE_API_KEY;
 
 async function cleanup() {
   console.log('🧹 Starting E2E Ticket Cleanup...');

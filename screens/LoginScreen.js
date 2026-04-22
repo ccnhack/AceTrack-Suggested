@@ -75,7 +75,7 @@ const LoginScreen = ({ navigation }) => {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'x-api-key': config.API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=',
+              'x-ace-api-key': config.ACE_API_KEY,
             },
             body: JSON.stringify({ identifier: username, password }),
           });
@@ -97,7 +97,7 @@ const LoginScreen = ({ navigation }) => {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'x-api-key': config.API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=',
+              'x-ace-api-key': config.ACE_API_KEY,
             },
             body: JSON.stringify({ identifier: username, password }),
           });
@@ -440,7 +440,7 @@ const LoginScreen = ({ navigation }) => {
                     try {
                       const resp = await fetch(`${config.API_BASE_URL}/api/v1/admin/verify-pin`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'x-api-key': config.API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=' },
+                        headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.ACE_API_KEY },
                         body: JSON.stringify({ mfaToken, pin: mfaPin }),
                       });
                       const result = await resp.json();
@@ -465,7 +465,7 @@ const LoginScreen = ({ navigation }) => {
                     try {
                       const resp = await fetch(`${config.API_BASE_URL}/api/v1/admin/verify-pin`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'x-api-key': config.API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=' },
+                        headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.ACE_API_KEY },
                         body: JSON.stringify({ mfaToken, pin: mfaPin }),
                       });
                       const result = await resp.json();
