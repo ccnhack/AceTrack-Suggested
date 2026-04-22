@@ -28,7 +28,8 @@ import {
   sendPromotionEmail,
   sendDemotionEmail,
   sendTerminationEmail,
-  sendReOnboardingEmail
+  sendReOnboardingEmail,
+  sendSecurityAlertEmail
 } from './emailService.mjs';
 
 import SupportMetricsService from './services/SupportMetricsService.mjs';
@@ -123,7 +124,14 @@ const sendSecurityAlert = async (event, data) => {
       body: JSON.stringify(payload)
     });
   } catch (err) {
-    console.error('❌ Failed to send security alert:', err.message);
+    console.error('❌ Failed to send security alert webhook:', err.message);
+  }
+
+  // 📧 Email Alert (v2.6.190)
+  try {
+    await sendSecurityAlertEmail(event, data);
+  } catch (err) {
+    console.error('❌ Failed to send security alert email:', err.message);
   }
 };
 

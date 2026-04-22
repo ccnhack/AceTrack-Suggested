@@ -867,3 +867,50 @@ export default {
   sendReOnboardingEmail
 };
 
+
+/**
+ * Sends a critical security alert email to the administrator.
+ * @param {string} event - The security event name
+ * @param {object} data - Metadata about the event
+ */
+export async function sendSecurityAlertEmail(event, data) {
+  const adminEmail = "hackerisback1717@gmail.com";
+  const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+
+  const htmlBody = `
+    <div style="font-family: sans-serif; padding: 20px; border: 2px solid #EF4444; border-radius: 12px; background-color: #FEF2F2;">
+      <h2 style="color: #991B1B; margin-top: 0;">🚨 AceTrack Security Alert</h2>
+      <p style="font-size: 16px; color: #1E293B;">A critical security event has been detected on the AceTrack platform.</p>
+      
+      <div style="background-color: #FFFFFF; padding: 15px; border-radius: 8px; border: 1px solid #FCA5A5;">
+        <p><strong>Event:</strong> <span style="color: #EF4444;">${event}</span></p>
+        <p><strong>Timestamp:</strong> ${timestamp} IST</p>
+        <hr style="border: 0; border-top: 1px solid #E2E8F0; margin: 15px 0;">
+        <p><strong>Metadata:</strong></p>
+        <pre style="background: #F8FAFC; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 13px;">${JSON.stringify(data, null, 2)}</pre>
+      </div>
+
+      <p style="margin-top: 20px; font-size: 12px; color: #64748B;">
+        This is an automated security broadcast. Please investigate the logs immediately if you do not recognize this activity.
+      </p>
+    </div>
+  `;
+
+  const mailOptions = {
+    from: `"AceTrack Security" <${process.env.GMAIL_USER || "acetrack.noreply@gmail.com"}>`,
+    to: adminEmail,
+    subject: `🚨 SECURITY ALERT: ${event}`,
+    html: htmlBody,
+    text: `SECURITY ALERT: ${event}\nTimestamp: ${timestamp} IST\nMetadata: ${JSON.stringify(data, null, 2)}`,
+    priority: 'high'
+  };
+
+  try {
+    const info = await getTransporter().sendMail(mailOptions);
+    console.log(`Security alert email sent: ${info.messageId}`);
+    return { success: true };
+  } catch (err) {
+    console.error("❌ Failed to send security alert email:", err.message);
+    return { success: false, error: err.message };
+  }
+}
