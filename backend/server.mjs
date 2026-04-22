@@ -84,7 +84,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.185'; 
+const APP_VERSION = '2.6.186'; 
 
 // 🛡️ SECURITY: API Key (v2.6.178)
 const ACE_API_KEY = process.env.ACE_API_KEY;
@@ -194,6 +194,23 @@ app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
 
+// 🛡️ SECURITY: Hardened CSP (v2.6.186) - Removing 'unsafe-eval'
+app.use(helmet.contentSecurityPolicy({
+  directives: {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'", "'unsafe-inline'", "https://acetrack-suggested.onrender.com", "https://fonts.googleapis.com"],
+    styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+    fontSrc: ["'self'", "https://fonts.gstatic.com"],
+    connectSrc: ["'self'", "https://acetrack-suggested.onrender.com", "https://*.cloudinary.com", "https://*.firebaseio.com", "https://*.googleapis.com"],
+    imgSrc: ["'self'", "data:", "https://*.cloudinary.com", "https://*.dicebear.com", "https://*.googleusercontent.com"],
+    frameAncestors: ["'none'"],
+    upgradeInsecureRequests: [],
+  },
+}));
+
+// 🛡️ SECURITY: Restore Strict CORP (v2.6.186)
+app.use(helmet.crossOriginResourcePolicy({ policy: "same-origin" }));
+
 app.get('/', (req, res, next) => {
   if (req.headers.accept?.includes('application/json')) {
     return res.json({ status: 'ok', version: APP_VERSION });
@@ -202,19 +219,6 @@ app.get('/', (req, res, next) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// 🔐 SECURITY: Helmet for HTTP headers (SEC)
-// ═══════════════════════════════════════════════════════════════
-// 🛡️ SECURITY: Hardened Headers (v2.6.181)
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://acetrack-suggested.onrender.com"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com", "https://fonts.googleapis.com", "data:"],
-      imgSrc: ["'self'", "data:", "https://res.cloudinary.com", "https://api.dicebear.com", "https://*.fbcdn.net"],
-      connectSrc: ["'self'", "https://acetrack-suggested.onrender.com", "wss://acetrack-suggested.onrender.com"],
-      frameSrc: ["'self'"],
       upgradeInsecureRequests: [],
     },
   },
@@ -509,7 +513,18 @@ const apiKeyGuard = async (req, res, next) => {
     return next();
   }
 
-  // 4. REJECT: All other unauthorized attempts
+  // 4. HARDENED ROUTE GUARD: Explicitly block sensitive enumeration (v2.6.186)
+  const isSensitivePath = ['/admin', '/debug', '/config', '/metrics', '/swagger', '/env', '/graphql'].some(p => path.startsWith(p));
+  if (isSensitivePath && providedKey !== ACE_API_KEY) {
+    console.warn(`🛑 Sensitive route access blocked: ${path} from ${req.ip}`);
+    return res.status(403).json({ 
+      success: false, 
+      error: 'Access Denied: High-privilege route restricted to master key holders only.',
+      code: 'FORBIDDEN_ROUTE'
+    });
+  }
+
+  // 5. REJECT: All other unauthorized attempts
   await logAudit(req, 'UNAUTHORIZED_ACCESS_BLOCKED', [], { ip: req.ip, url: req.originalUrl || req.url, method: req.method });
   console.warn(`🛑 Unauthorized access attempt from ${req.ip} - Rejected by Zero-Exposure Guard`);
   return res.status(401).json({ 

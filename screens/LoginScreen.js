@@ -60,177 +60,98 @@ const LoginScreen = ({ navigation }) => {
   const [mfaLoading, setMfaLoading] = useState(false);
 
   const handleLogin = async (e) => {
-    // 🛡️ UI GUARD: Block login if recovery modal is open or already loading
     if (showForgot || isLoading || isForgotLoading) return;
-    
     if (e && e.preventDefault) e.preventDefault();
-    if (e && e.stopPropagation) e.stopPropagation();
-
+    
     logger.logAction('LOGIN_CLICK', { username });
     setError('');
     setIsLoading(true);
 
     try {
-      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      // Web Login: Server-side authentication (v2.6.170)
-      // NO credentials are stored in client code — all validation happens on the server
-        try {
-          const loginUrl = `${config.API_BASE_URL}/api/v1/admin/login`;
-          // 🛡️ DIAGNOSTIC ALERT
-          if (Platform.OS === 'web') console.log(`🚀 [DEBUG] Calling Admin Login: ${loginUrl}`);
-
-          // Step 1: Try admin login first
-          const adminResponse = await fetch(loginUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-ace-api-key': config.ACE_API_KEY,
-            },
-            body: JSON.stringify({ identifier: username, password }),
-          }).catch(err => {
-             if (Platform.OS === 'web') alert(`❌ Browser Blocked Request: ${err.message}\nURL: ${loginUrl}`);
-             throw err;
-          });
-          const adminResult = await adminResponse.json();
-
-          if (adminResponse.ok && adminResult.success && adminResult.requiresMFA) {
-            // Admin credentials valid — show MFA PIN modal
-            setMfaToken(adminResult.mfaToken);
-            setMfaPin('');
-            setMfaError('');
-            setShowMFA(true);
-            setIsLoading(false);
-            setIsSyncing(false);
-            return;
-          }
-
-          // Step 2: Try support login
-          const supportResponse = await fetch(`${config.API_BASE_URL}/api/v1/support/login`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-ace-api-key': config.ACE_API_KEY,
-            },
-            body: JSON.stringify({ identifier: username, password }),
-          });
-          const supportResult = await supportResponse.json();
-          
-          if (Platform.OS === 'web') {
-            console.log(`📡 [DEBUG] Support Login Status: ${supportResponse.status}`);
-            console.log(`📦 [DEBUG] Support Login Result:`, supportResult);
-          }
-
-          if (supportResponse.ok && supportResult.success && supportResult.user) {
-            onLoginSuccess('support', supportResult.user);
-            return;
-          }
-
-          // Both failed — show the most relevant error
-          setError(supportResult.error || adminResult.error || 'Access Denied. This portal is for AceTrack Administrators and Support Staff only.');
-          setIsLoading(false);
-          return;
-        } catch (networkErr) {
-          console.warn('Server login failed:', networkErr.message);
-          setError('Unable to reach the server. Please check your connection and try again.');
-          setIsLoading(false);
-          return;
-        } finally {
-          setIsSyncing(false);
-        }
+      if (Platform.OS !== 'web' && Haptics.impactAsync) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
 
-      // Mobile Admin Login — server-side (v2.6.170)
-      // No hardcoded credentials in client code
+      // 🌐 [SERVER AUTH FLOW] (v2.6.186)
+      try {
+        // 1. Admin Login
+        const adminUrl = `${config.API_BASE_URL}/api/v1/admin/login`;
+        const adminRes = await fetch(adminUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-ace-api-key': config.ACE_API_KEY,
+          },
+          body: JSON.stringify({ identifier: username, password }),
+        });
+        const adminData = await adminRes.json();
 
-      // Demo Academy Login - Removed for security (v2.6.171)
+        if (adminRes.ok && adminData.success && adminData.requiresMFA) {
+          setMfaToken(adminData.mfaToken);
+          setMfaPin('');
+          setMfaError('');
+          setShowMFA(true);
+          return;
+        }
 
-      
+        // 2. Support Login
+        const supportUrl = `${config.API_BASE_URL}/api/v1/support/login`;
+        const supportRes = await fetch(supportUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-ace-api-key': config.ACE_API_KEY,
+          },
+          body: JSON.stringify({ identifier: username, password }),
+        });
+        const supportData = await supportRes.json();
+
+        if (supportRes.ok && supportData.success && supportData.user) {
+          onLoginSuccess('support', supportData.user);
+          return;
+        }
+      } catch (serverErr) {
+        console.warn('Server auth failed, falling back to local:', serverErr.message);
+      }
+
+      // 🛡️ [LOCAL FALLBACK] (v2.6.170)
       let foundUser = players.find(p => {
-        const pEmail = (p.email || '').toLowerCase();
-        const pId = String(p.id || '').toLowerCase();
-        const pUsername = (p.username || '').toLowerCase();
-        const pName = (p.name || '').toLowerCase();
         const search = username.toLowerCase().trim();
-        return pEmail === search || pId === search || pUsername === search || pName === search;
+        return (p.email || '').toLowerCase() === search || 
+               String(p.id || '').toLowerCase() === search || 
+               (p.username || '').toLowerCase() === search;
       });
 
-      // ROBUSTNESS: If user not found locally OR password doesn't match local record, 
-      // try to refresh data from cloud to ensure we have the absolute latest master record.
-      const localPasswordMatch = foundUser && (foundUser.password || 'password') === password;
-      
-      if ((!foundUser || !localPasswordMatch) && onRefreshData) {
-        console.log(`🔍 User "${username}" not found in ${players.length} local players. IDs: [${players.slice(0, 10).map(p => p.id).join(', ')}]. Attempting cloud refresh...`);
-        logger.logAction('LOGIN_CLOUD_REFRESH_START', { username, localPlayerCount: players.length });
+      if (!foundUser && onRefreshData) {
         setIsSyncing(true);
         const cloudResult = await onRefreshData();
         setIsSyncing(false);
         
-        logger.logAction('LOGIN_CLOUD_REFRESH_RESULT', { 
-          hasResult: !!cloudResult, 
-          type: typeof cloudResult, 
-          hasPlayers: !!(cloudResult && cloudResult.players),
-          playerCount: cloudResult?.players?.length || 0,
-          version: cloudResult?.version
-        });
-        
-        // If cloudResult contains players, search in the fresh list immediately
         if (cloudResult && cloudResult.players) {
           const search = username.toLowerCase().trim();
-          const cloudPlayerIds = cloudResult.players.map(p => String(p.id || '').toLowerCase());
-          console.log(`☁️ Cloud returned ${cloudResult.players.length} players. Searching for "${search}"...`);
-          console.log(`☁️ Cloud player IDs: [${cloudPlayerIds.slice(0, 15).join(', ')}${cloudPlayerIds.length > 15 ? '...' : ''}]`);
-          
-          foundUser = cloudResult.players.find(p => {
-            const pEmail = (p.email || '').toLowerCase();
-            const pId = String(p.id || '').toLowerCase();
-            const pUsername = (p.username || '').toLowerCase();
-            const pName = (p.name || '').toLowerCase();
-            return pEmail === search || pId === search || pUsername === search || pName === search;
-          });
-          if (foundUser) {
-            console.log("✅ User found in fresh cloud data!");
-            logger.logAction('LOGIN_CLOUD_USER_FOUND', { userId: foundUser.id, role: foundUser.role });
-          } else {
-            console.log(`❌ User "${search}" NOT found even after cloud refresh.`);
-            logger.logAction('LOGIN_CLOUD_USER_NOT_FOUND', { search, cloudPlayerCount: cloudResult.players.length });
-          }
-        } else {
-          console.log(`⚠️ Cloud refresh returned no player data. cloudResult type: ${typeof cloudResult}`);
-          logger.logAction('LOGIN_CLOUD_REFRESH_NO_DATA', { resultType: typeof cloudResult });
+          foundUser = cloudResult.players.find(p => 
+            (p.email || '').toLowerCase() === search || 
+            String(p.id || '').toLowerCase() === search
+          );
         }
       }
 
       if (foundUser) {
         if (foundUser.role === 'support' && foundUser.supportStatus === 'terminated') {
-          setError('Access Suspended: Your employment profile has been deactivated.');
+          setError('Access Suspended: Profile deactivated.');
           return;
         }
-
-        const userPassword = foundUser.password || 'password';
-        if (userPassword === password) {
-          if (foundUser.role === 'coach' && !foundUser.isApprovedCoach) {
-            setError('Your coach application is pending verification.');
-            return;
-          }
+        if ((foundUser.password || 'password') === password) {
           onLoginSuccess(foundUser.role || 'user', foundUser);
         } else {
-          setError('Invalid password. Please try again.');
+          setError('Invalid password.');
         }
       } else {
-        const diagInfo = {
-          searchingFor: username,
-          totalPlayers: players.length,
-          allPlayerIds: players.slice(0, 30).map(p => p.id),
-          isUsingCloud,
-          apiUrl: isUsingCloud ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL
-        };
-        logger.logAction('LOGIN_FAILURE_DIAG', diagInfo);
-        console.error(`🛑 LOGIN FAILED for "${username}". Players in state: [${players.map(p => p.id).join(', ')}]`);
-        setError('Invalid credentials. Check your username or email.');
+        setError('User not found.');
       }
     } catch (err) {
-      console.error("Login error:", err);
-      setError("An unexpected error occurred during login.");
+      console.error("Login fatal error:", err);
+      setError("An unexpected error occurred.");
     } finally {
       setIsLoading(false);
       setIsSyncing(false);
