@@ -241,7 +241,12 @@ const AdminHubScreen = ({ navigation, route }) => {
       case 'payments':
         return <AdminPaymentsPanel search={search} />;
       case 'diagnostics':
-        return <AdminDiagnosticsPanel autoSelectUser={autoSelectUser} />;
+        return (
+          <AdminDiagnosticsPanel 
+            autoSelectUser={autoSelectUser} 
+            onConsumeAutoSelect={() => setAutoSelectUser(null)}
+          />
+        );
       case 'recruitment':
         return <AdminStaffPanel />;
       case 'support_team':
@@ -270,6 +275,8 @@ const AdminHubScreen = ({ navigation, route }) => {
             }}
             seenAdminActionIds={seenAdminActionIds}
             autoSelectTicketId={autoSelectTicketId}
+            onConsumeTicketId={() => setAutoSelectTicketId(null)}
+            onConsumeAutoSelect={() => setAutoSelectUser(null)}
           />
 
         );

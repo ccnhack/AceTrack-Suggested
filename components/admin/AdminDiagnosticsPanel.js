@@ -13,7 +13,7 @@ import SafeAvatar from '../SafeAvatar';
 import config from '../../config';
 import logger from '../../utils/logger';
 
-const AdminDiagnosticsPanel = memo(({ autoSelectUser }) => {
+const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => {
   const { players } = usePlayers();
   const { socketRef, isUsingCloud, isCloudOnline, activeApiUrl, metrics, refreshMetrics } = useSync();
   const { currentUser } = useAuth();
@@ -102,9 +102,10 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser }) => {
       if (player) {
          setDiagUserSearch(autoSelectUser);
          handleSelectDiagPlayer(player);
+         onConsumeAutoSelect?.(); // 🛡️ Consume immediately to prevent sticky refresh
       }
     }
-  }, [autoSelectUser, players]);
+  }, [autoSelectUser, players, onConsumeAutoSelect]);
 
   // 🛡️ Proactive Ping when subtab is ready
   useEffect(() => {

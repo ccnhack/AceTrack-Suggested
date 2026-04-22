@@ -83,8 +83,8 @@ const initFirebase = async () => {
 };
 initFirebase();
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.168)
-const APP_VERSION = "2.6.168"; 
+// 🚀 ACE TRACK STABILITY VERSION (v2.6.169)
+const APP_VERSION = "2.6.169"; 
 
 
 
@@ -723,9 +723,9 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
 router.get('/status', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
   try {
     const state = await AppState.findOne().sort({ lastUpdated: -1 }).select('lastUpdated version');
-    // 🛡️ GHOST VERSION SHIM (v2.6.168)
+    // 🛡️ GHOST VERSION SHIM (v2.6.169)
     // Legacy web bundles are hardcoded with v2.6.151.
-    // If we report v2.6.168, they trigger the "obsolete" lockout modal.
+    // If we report v2.6.169, they trigger the "obsolete" lockout modal.
     // We temporarily lie to these specific clients to allow them into the app.
     let reportedVersion = APP_VERSION;
     const ua = req.headers['user-agent'] || '';

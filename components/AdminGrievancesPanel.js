@@ -44,7 +44,7 @@ const formatTicketDateFull = (dateStr) => {
 };
 
 export const AdminGrievancesPanel = ({
-  tickets, players, onReply, onUpdateStatus, onReassignTicket, onTypingStart, onTypingStop, search, onRetryMessage, onMarkSeen, onDetailToggle, autoSelectUser, autoSelectTicketId, ...restProps
+  tickets, players, onReply, onUpdateStatus, onReassignTicket, onTypingStart, onTypingStop, search, onRetryMessage, onMarkSeen, onDetailToggle, autoSelectUser, autoSelectTicketId, onConsumeTicketId, onConsumeAutoSelect, ...restProps
 }) => {
 
   const [selectedTicket, setSelectedTicket] = useState(null);
@@ -87,10 +87,18 @@ export const AdminGrievancesPanel = ({
     const trySelect = () => {
       if (autoSelectTicketId && tickets) {
         const ticket = (tickets || []).find(t => t.id === autoSelectTicketId || t._id === autoSelectTicketId);
-        if (ticket) { setSelectedTicket(ticket); return true; }
+        if (ticket) { 
+          setSelectedTicket(ticket); 
+          onConsumeTicketId?.(); 
+          return true; 
+        }
       } else if (autoSelectUser && tickets) {
         const userTicket = (tickets || []).find(t => t.userId === autoSelectUser);
-        if (userTicket) { setSelectedTicket(userTicket); return true; }
+        if (userTicket) { 
+          setSelectedTicket(userTicket); 
+          onConsumeAutoSelect?.();
+          return true; 
+        }
       }
       return false;
     };
