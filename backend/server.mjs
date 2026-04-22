@@ -185,6 +185,14 @@ app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// 🛡️ DIAGNOSTICS: Global Request Logger (v2.6.175)
+app.use(async (req, res, next) => {
+  if (req.path.includes('login') || req.path.includes('recovery')) {
+    await logAudit(req, 'DEBUG_INCOMING_AUTH_REQ', [], { url: req.originalUrl || req.path, method: req.method });
+  }
+  next();
+});
+
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SECURITY: MongoDB injection prevention (SEC Fix #5)
 // Express 5 Compatibility: Redefine req.query as writable
