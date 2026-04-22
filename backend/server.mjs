@@ -307,7 +307,7 @@ io.on('connection', (socket) => {
 // Directories & DB
 // ═══════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3005;
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const DIAGNOSTICS_DIR = path.join(__dirname, 'diagnostics');
 
@@ -1736,79 +1736,7 @@ router.post('/support/invite/resend', apiKeyGuard, asyncHandler(async (req, res)
     invite.emailResends = [];
   }
 
-  // Check 1-minute cooldown from last resend// ═══════════════════════════════════════════════════════════════
-// 🔒 PASSWORD RESET FLOW
-// ═══════════════════════════════════════════════════════════════
-
-// 1. Request Password Reset (Email Link)
-router.post('/support/password-reset/request', apiKeyGuard, asyncHandler(async (req, res) => {
-  const { identifier } = req.body; // Can be email or username
-  if (!identifier) return res.status(400).json({ error: 'Email or Username required' });
-
-  const search = identifier.toLowerCase().trim();
-  
-  // 🛡️ ADMIN GUARD: Block any reset attempts for the primary admin account
-  if (search === 'admin') {
-    return res.status(403).json({ 
-      error: 'Security Violation', 
-      message: 'Password reset is not permitted for the system administrator account via this portal. Contact technical support for master account recovery.' 
-    });
-  }
-
-  // Find user in AppState
-  const appState = await AppState.findOne();
-  const user = appState?.data?.players?.find(p => 
-    p.email?.toLowerCase() === search || 
-    String(p.id).toLowerCase() === search ||
-    (p.username && String(p.username).toLowerCase() === search)
-  );
-
-  if (!user) {
-    // 🛡️ SECURITY: Use generic message to prevent account enum
-    return res.json({ success: true, message: 'If an account exists, a recovery link has been sent.' });
-  }
-
-  const token = bcrypt.hashSync(Date.now().toString() + user.email, 10).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
-  const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-  await SupportPasswordReset.create({ email: user.email, token, expiresAt });
-  
-  const resetLink = `https://acetrack-suggested.onrender.com/reset-password/${token}`;
-  await sendPasswordResetEmail(user.email, resetLink, expiresAt.toISOString(), user.firstName);
-
-  res.json({ success: true, message: 'Recovery link sent to your registered email.' });
-}));
-
-// 2. Confirm Password Reset
-router.post('/support/password-reset/confirm', apiKeyGuard, asyncHandler(async (req, res) => {
-  const { token, newPassword } = req.body;
-  if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password required' });
-
-  const resetReq = await SupportPasswordReset.findOne({ token, expiresAt: { $gt: new Date() } });
-  if (!resetReq) return res.status(400).json({ error: 'Invalid or expired reset token' });
-
-  const appState = await AppState.findOne();
-  if (!appState) return res.status(500).json({ error: 'System state unavailable' });
-
-  const players = appState.data.players || [];
-  const userIndex = players.findIndex(p => p.email?.toLowerCase() === resetReq.email.toLowerCase());
-
-  if (userIndex === -1) return res.status(404).json({ error: 'User account not found' });
-
-  // Update password (plaintext — matches login comparison model)
-  players[userIndex].password = newPassword;
-  
-  // Clean up device sessions for security
-  players[userIndex].devices = [];
-
-  appState.markModified('data.players');
-  await appState.save();
-  await SupportPasswordReset.deleteOne({ token });
-
-  await logServerEvent('SUPPORT_PASSWORD_RESET_SUCCESS', { email: resetReq.email });
-
-  res.json({ success: true, message: 'Password updated successfully. You can now login.' });
-}));
+  // Check 1-minute cooldown from last resend
   if (resends.length > 0) {
     const lastResend = new Date(resends[resends.length - 1].timestamp).getTime();
     const cooldownEnd = lastResend + (60 * 1000); // 1 minute
@@ -1846,6 +1774,89 @@ router.post('/support/password-reset/confirm', apiKeyGuard, asyncHandler(async (
   } else {
     res.status(500).json({ error: emailStatus.error || 'Failed to send email' });
   }
+}));
+
+// ═══════════════════════════════════════════════════════════════
+// 🔒 PASSWORD RESET FLOW
+// ═══════════════════════════════════════════════════════════════
+
+// 1. Request Password Reset (Email Link)
+router.post('/support/password-reset/request', apiKeyGuard, asyncHandler(async (req, res) => {
+  const { identifier } = req.body; // Can be email or username
+  if (!identifier) return res.status(400).json({ error: 'Email or Username required' });
+
+  const search = identifier.toLowerCase().trim();
+  
+  // 🛡️ ADMIN GUARD: Block any reset attempts for the primary admin account
+  if (search === 'admin') {
+    return res.status(403).json({ 
+      error: 'Security Violation', 
+      message: 'Password reset is not permitted for the system administrator account via this portal. Contact technical support for master account recovery.' 
+    });
+  }
+
+  // Find user in AppState
+  const appState = await AppState.findOne();
+  const user = appState?.data?.players?.find(p => 
+    p.email?.toLowerCase() === search || 
+    String(p.id).toLowerCase() === search ||
+    (p.username && String(p.username).toLowerCase() === search)
+  );
+
+  if (!user) {
+    // 🛡️ SECURITY: Use generic message to prevent account enum
+    return res.json({ success: true, message: 'If an account exists, a recovery link has been sent.' });
+  }
+  
+  if (!user.email) {
+    return res.status(400).json({ error: 'This account does not have a registered email address. Contact support.' });
+  }
+
+  const token = bcrypt.hashSync(Date.now().toString() + user.email, 10).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+  await SupportPasswordReset.create({ email: user.email, token, expiresAt });
+  
+  const resetLink = `https://acetrack-suggested.onrender.com/reset-password/${token}`;
+  const emailStatus = await sendPasswordResetEmail(user.email, resetLink, expiresAt.toISOString(), user.firstName || user.name || '');
+
+  if (!emailStatus.success) {
+    console.error('Failed to trigger reset email:', emailStatus.error);
+    return res.status(500).json({ error: 'Failed to send recovery email. Please try again later.' });
+  }
+
+  res.json({ success: true, message: 'Recovery link sent to your registered email.' });
+}));
+
+// 2. Confirm Password Reset (No API Key guard as the token is the secret)
+router.post('/support/password-reset/confirm', asyncHandler(async (req, res) => {
+  const { token, newPassword } = req.body;
+  if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password required' });
+
+  const resetReq = await SupportPasswordReset.findOne({ token, expiresAt: { $gt: new Date() } });
+  if (!resetReq) return res.status(400).json({ error: 'Invalid or expired reset token' });
+
+  const appState = await AppState.findOne();
+  if (!appState) return res.status(500).json({ error: 'System state unavailable' });
+
+  const players = appState.data.players || [];
+  const userIndex = players.findIndex(p => p.email?.toLowerCase() === resetReq.email.toLowerCase());
+
+  if (userIndex === -1) return res.status(404).json({ error: 'User account not found' });
+
+  // Update password (plaintext — matches login comparison model)
+  players[userIndex].password = newPassword;
+  
+  // Clean up device sessions for security
+  players[userIndex].devices = [];
+
+  appState.markModified('data.players');
+  await appState.save();
+  await SupportPasswordReset.deleteOne({ token });
+
+  await logServerEvent('SUPPORT_PASSWORD_RESET_SUCCESS', { email: resetReq.email });
+
+  res.json({ success: true, message: 'Password updated successfully. You can now login.' });
 }));
 
 // 🌐 IP Geolocation Helper (free ip-api.com — 45 req/min, no key needed)
@@ -2097,6 +2108,142 @@ app.use('/api', router);
 app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
+
+// 🌐 Password Reset Web Page
+app.get('/reset-password/:token', asyncHandler(async (req, res) => {
+  const { token } = req.params;
+  const resetReq = await SupportPasswordReset.findOne({ token, expiresAt: { $gt: new Date() } });
+  
+  if (!resetReq) {
+    return res.status(400).send(`
+      <html>
+        <body style="background:#0F172A;color:#FFF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-align:center;padding:50px;">
+          <h2>Link Expired or Invalid</h2>
+          <p style="color:#94A3B8;">Please request a new password reset link from the AceTrack Portal.</p>
+        </body>
+      </html>
+    `);
+  }
+
+  const appState = await AppState.findOne();
+  const players = appState?.data?.players || [];
+  const user = players.find(p => p.email?.toLowerCase() === resetReq.email.toLowerCase());
+  
+  if (!user) {
+    return res.status(404).send('User not found');
+  }
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reset AceTrack Password</title>
+  <style>
+    body { background-color: #0F172A; color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+    .container { background-color: #1E293B; padding: 40px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); width: 100%; max-width: 400px; box-sizing: border-box; }
+    h2 { margin-top: 0; margin-bottom: 24px; color: #FFFFFF; font-weight: 800; text-align: center; }
+    .form-group { margin-bottom: 20px; text-align: left; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .read-only { background-color: #0F172A; padding: 12px 16px; border-radius: 8px; font-size: 15px; color: #CBD5E1; border: 1px solid #334155; }
+    input[type="password"] { width: 100%; box-sizing: border-box; background-color: #0F172A; color: #FFFFFF; border: 1px solid #334155; padding: 12px 16px; border-radius: 8px; font-size: 15px; outline: none; transition: border-color 0.2s; }
+    input[type="password"]:focus { border-color: #6366F1; }
+    .btn { width: 100%; background-color: #4F46E5; color: #FFF; border: none; padding: 14px; border-radius: 8px; font-size: 16px; font-weight: 700; cursor: pointer; transition: background-color 0.2s; margin-top: 10px; }
+    .btn:hover { background-color: #4338CA; }
+    .btn:disabled { background-color: #334155; cursor: not-allowed; color: #94A3B8; }
+    .error { color: #EF4444; font-size: 13px; margin-top: 8px; text-align: center; display: none; }
+    .success { display: none; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container" id="form-container">
+    <h2>Set New Password</h2>
+    <div class="form-group">
+      <label>Email</label>
+      <div class="read-only">${user.email}</div>
+    </div>
+    <div class="form-group">
+      <label>Username</label>
+      <div class="read-only">${user.username || 'N/A'}</div>
+    </div>
+    <div class="form-group">
+      <label>New Password</label>
+      <input type="password" id="newPassword" placeholder="Enter new password">
+    </div>
+    <div class="form-group">
+      <label>Confirm Password</label>
+      <input type="password" id="confirmPassword" placeholder="Confirm new password">
+    </div>
+    <div class="error" id="error-msg"></div>
+    <button class="btn" id="submit-btn" onclick="submitPassword()">Save Password</button>
+  </div>
+  
+  <div class="container success" id="success-container">
+    <div style="font-size:48px;margin-bottom:16px;">✅</div>
+    <h2>Password Updated</h2>
+    <p style="color:#94A3B8;margin-bottom:24px;line-height:1.6;">Your AceTrack password has been successfully reset. You can now securely log in to the portal.</p>
+    <button class="btn" onclick="window.location.href='/'">Go to Login</button>
+  </div>
+
+  <script>
+    async function submitPassword() {
+      const p1 = document.getElementById('newPassword').value;
+      const p2 = document.getElementById('confirmPassword').value;
+      const errorMsg = document.getElementById('error-msg');
+      const btn = document.getElementById('submit-btn');
+      
+      errorMsg.style.display = 'none';
+      
+      if (!p1 || !p2) {
+        errorMsg.textContent = 'Both fields are required.';
+        errorMsg.style.display = 'block';
+        return;
+      }
+      if (p1 !== p2) {
+        errorMsg.textContent = 'Passwords do not match.';
+        errorMsg.style.display = 'block';
+        return;
+      }
+      if (p1.length < 8) {
+        errorMsg.textContent = 'Password must be at least 8 characters long.';
+        errorMsg.style.display = 'block';
+        return;
+      }
+      
+      btn.disabled = true;
+      btn.textContent = 'Updating...';
+      
+      try {
+        const res = await fetch('/api/support/password-reset/confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: '${token}', newPassword: p1 })
+        });
+        
+        const data = await res.json();
+        if (res.ok) {
+          document.getElementById('form-container').style.display = 'none';
+          document.getElementById('success-container').style.display = 'block';
+        } else {
+          errorMsg.textContent = data.error || 'Failed to update password.';
+          errorMsg.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = 'Save Password';
+        }
+      } catch (e) {
+        errorMsg.textContent = 'Network error. Please try again.';
+        errorMsg.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Save Password';
+      }
+    }
+  </script>
+</body>
+</html>
+  `;
+  res.send(html);
+}));
 
 // Root catch-all for legacy health monitors
 app.get('/', (req, res, next) => {

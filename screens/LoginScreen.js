@@ -44,15 +44,9 @@ const LoginScreen = ({ navigation }) => {
 
   // Forgot Password States
   const [showForgot, setShowForgot] = useState(false);
-  const [forgotStep, setForgotStep] = useState(1); // 1: ID, 2: OTP, 3: Reset
+  const [forgotStep, setForgotStep] = useState(1); // 1: ID, 2: Done
   const [forgotUser, setForgotUser] = useState('');
-  const [forgotPhone, setForgotPhone] = useState('');
-  const [forgotOTP, setForgotOTP] = useState('');
-  const [newPass, setNewPass] = useState('');
-  const [confirmPass, setConfirmPass] = useState('');
-  const [isResetting, setIsResetting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [storedUserToReset, setStoredUserToReset] = useState(null);
 
   const handleLogin = async () => {
     logger.logAction('LOGIN_CLICK', { username });
@@ -302,6 +296,11 @@ const LoginScreen = ({ navigation }) => {
       const data = await res.json();
       if (res.ok) {
         setForgotStep(2); // Success step: Show check email instruction
+        if (Platform.OS === 'web') {
+          window.alert("Success: Password recovery link has been sent to your registered email.");
+        } else {
+          Alert.alert("Success", "Mail Sent! Check your registered email inbox.");
+        }
       } else {
         Alert.alert("Error", data.message || data.error || "Failed to process request.");
       }
@@ -312,61 +311,63 @@ const LoginScreen = ({ navigation }) => {
     }
   };
 
-  const handleVerifyOTP = () => {
-    if (forgotOTP === '1234') {
-      setForgotStep(3);
-    } else {
-      Alert.alert("Invalid OTP", "Please enter the correct 4-digit code.");
-    }
-  };
-
-  const handleResetPassword = async () => {
-    if (!newPass || newPass !== confirmPass) {
-      Alert.alert("Error", "Passwords do not match.");
-      return;
-    }
-
-    setIsResetting(true);
-    const targetId = storedUserToReset ? storedUserToReset.id : forgotUser;
-    const success = await onResetPassword(targetId, newPass, players);
-    setIsResetting(false);
-
-    if (success) {
-      Alert.alert("Success", "Password Reset Successful!", [
-        { text: "OK", onPress: () => {
-          setShowForgot(false);
-          setForgotStep(1);
-        }}
-      ]);
-    } else {
-      Alert.alert("Error", "Failed to update password. Please check your connection.");
-    }
-  };
-
   if (Platform.OS === 'web') {
     return (
-      <ImageBackground 
-        source={{ uri: "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?q=80&w=2000&auto=format&fit=crop" }} 
-        style={styles.webBg}
-        resizeMode="cover"
-      >
-        <View style={styles.webOverlay}>
-          <View style={styles.webLoginBox}>
-            <View style={{ alignItems: 'center', marginBottom: 32 }}>
-              <Image source={require('../assets/icon.png')} style={{ width: 80, height: 80, borderRadius: 20, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' }} />
-              <Text style={styles.webTitle}>AceTrack Portal</Text>
-              <Text style={styles.webSubtitle}>Admin & Support Staff Access</Text>
+      <View style={{ flex: 1, flexDirection: 'row', height: '100vh', backgroundColor: '#F8FAFC' }}>
+        {/* Left Side: Illustration & Branding */}
+        <View style={{ flex: 1.2, backgroundColor: '#0F172A', position: 'relative', overflow: 'hidden' }}>
+          <ImageBackground 
+            source={{ uri: "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?q=80&w=2000&auto=format&fit=crop" }} 
+            style={{ ...StyleSheet.absoluteFillObject, opacity: 0.4 }}
+            resizeMode="cover"
+          />
+          <LinearGradient colors={['transparent', 'rgba(15, 23, 42, 0.9)']} style={StyleSheet.absoluteFillObject} />
+          
+          <View style={{ flex: 1, justifyContent: 'center', padding: 80, zIndex: 10 }}>
+            <Image source={require('../assets/icon.png')} style={{ width: 80, height: 80, borderRadius: 20, marginBottom: 32, shadowColor: '#6366F1', shadowRadius: 20, shadowOpacity: 0.5 }} />
+            <Text style={{ fontSize: 48, fontWeight: '900', color: '#FFFFFF', letterSpacing: -1, lineHeight: 56 }}>
+              The Ultimate Platform for <Text style={{ color: '#6366F1' }}>Sports Excellence.</Text>
+            </Text>
+            <Text style={{ fontSize: 18, color: '#94A3B8', marginTop: 24, lineHeight: 28, maxWidth: 500 }}>
+              Manage tournaments, track player performance, and handle support requests with our state-of-the-art administrative ecosystem.
+            </Text>
+            
+            <View style={{ flexDirection: 'row', marginTop: 48, gap: 24 }}>
+              <View>
+                <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFF' }}>v{APP_VERSION}</Text>
+                <Text style={{ fontSize: 12, color: '#64748B', textTransform: 'uppercase', letterSpacing: 1 }}>Stability Build</Text>
+              </View>
+              <View style={{ width: 1, backgroundColor: '#334155' }} />
+              <View>
+                <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFF' }}>100%</Text>
+                <Text style={{ fontSize: 12, color: '#64748B', textTransform: 'uppercase', letterSpacing: 1 }}>Cloud Uptime</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Right Side: Login Form */}
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+          <View style={{ width: '100%', maxWidth: 440 }}>
+            <View style={{ marginBottom: 40 }}>
+              <Text style={{ fontSize: 32, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 }}>Welcome Back</Text>
+              <Text style={{ fontSize: 16, color: '#64748B', marginTop: 8 }}>Sign in to the administrative portal</Text>
             </View>
 
-            {error ? <View style={{ backgroundColor: '#FEE2E2', padding: 12, borderRadius: 8, marginBottom: 16 }}><Text style={{ color: '#EF4444', textAlign: 'center', fontSize: 13, fontWeight: 'bold' }}>{error}</Text></View> : null}
+            {error ? (
+              <View style={{ backgroundColor: '#FEE2E2', padding: 16, borderRadius: 12, marginBottom: 24, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 4, borderLeftColor: '#EF4444' }}>
+                <Ionicons name="alert-circle" size={20} color="#EF4444" style={{ marginRight: 12 }} />
+                <Text style={{ color: '#991B1B', fontSize: 14, fontWeight: '600' }}>{error}</Text>
+              </View>
+            ) : null}
 
-            <View style={{ marginBottom: 20 }}>
-              <Text style={styles.webInputLabel}>Email or Username</Text>
+            <View style={{ marginBottom: 24 }}>
+              <Text style={styles.webInputLabel}>Identifier</Text>
               <View style={styles.webInputWrapper}>
-                <Ionicons name="person-outline" size={20} color="#94A3B8" style={{ marginRight: 12 }} />
+                <Ionicons name="person-outline" size={20} color="#6366F1" style={{ marginRight: 12 }} />
                 <TextInput 
                   style={styles.webInput}
-                  placeholder="Enter your email or username"
+                  placeholder="Username or Email"
                   placeholderTextColor="#94A3B8"
                   value={username}
                   onChangeText={setUsername}
@@ -377,9 +378,14 @@ const LoginScreen = ({ navigation }) => {
             </View>
             
             <View style={{ marginBottom: 32 }}>
-              <Text style={styles.webInputLabel}>Password</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={styles.webInputLabel}>Secret Key</Text>
+                <TouchableOpacity onPress={handleStartForgot}>
+                  <Text style={{ fontSize: 12, color: '#6366F1', fontWeight: 'bold' }}>Forgot?</Text>
+                </TouchableOpacity>
+              </View>
               <View style={styles.webInputWrapper}>
-                <Ionicons name="lock-closed-outline" size={20} color="#94A3B8" style={{ marginRight: 12 }} />
+                <Ionicons name="lock-closed-outline" size={20} color="#6366F1" style={{ marginRight: 12 }} />
                 <TextInput 
                   style={styles.webInput}
                   placeholder="Enter your password"
@@ -401,28 +407,22 @@ const LoginScreen = ({ navigation }) => {
               {isLoading ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.webLoginButtonText}>ACCESS SECURE DASHBOARD</Text>
+                <Text style={styles.webLoginButtonText}>SECURE LOGIN</Text>
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={handleStartForgot} style={{ marginTop: 16 }}>
-              <Text style={{ color: '#6366F1', textAlign: 'center', fontSize: 13, fontWeight: '600' }}>
-                Forgot Password?
-              </Text>
-            </TouchableOpacity>
-
-            <Text style={{ textAlign: 'center', color: '#64748B', fontSize: 11, marginTop: 24, letterSpacing: 0.5 }}>
-              Platform actions are monitored and audited.
+            <Text style={{ textAlign: 'center', color: '#94A3B8', fontSize: 12, marginTop: 40, lineHeight: 18 }}>
+              This portal is restricted to authorized personnel. All activity is logged and subject to audit under policy SEC-402.
             </Text>
           </View>
         </View>
 
-        {/* Forgot Password Modal (Web-Only Instance for Isolation) */}
+        {/* Forgot Password Modal */}
         <Modal visible={showForgot} animationType="fade" transparent={true}>
           <View style={styles.webModalOverlay}>
             <View style={styles.webModalContent}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Reset Password</Text>
+                <Text style={styles.modalTitle}>Security Recovery</Text>
                 <TouchableOpacity onPress={() => setShowForgot(false)} style={styles.closeBtn}>
                   <Ionicons name="close" size={24} color="#0F172A" />
                 </TouchableOpacity>
@@ -430,7 +430,7 @@ const LoginScreen = ({ navigation }) => {
 
               {forgotStep === 1 && (
                 <View style={styles.stepContainer}>
-                  <Text style={styles.stepDesc}>Enter the username or email address registered with your account.</Text>
+                  <Text style={styles.stepDesc}>Verify your identity to receive a secure recovery link. This must be your registered professional email.</Text>
                   <TextInput 
                     style={styles.modalInput} 
                     placeholder="Username or Email" 
@@ -439,7 +439,7 @@ const LoginScreen = ({ navigation }) => {
                     autoCapitalize="none"
                   />
                   <TouchableOpacity style={styles.modalBtn} onPress={handleIdentify} disabled={isLoading}>
-                    {isLoading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalBtnText}>Send Reset Link</Text>}
+                    {isLoading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalBtnText}>INITIATE RECOVERY</Text>}
                   </TouchableOpacity>
                 </View>
               )}
@@ -447,46 +447,30 @@ const LoginScreen = ({ navigation }) => {
               {forgotStep === 2 && (
                 <View style={styles.stepContainer}>
                   <View style={{ alignItems: 'center', marginBottom: 16 }}>
-                    <Ionicons name="mail-unread-outline" size={48} color="#6366F1" />
+                    <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#EEF2FF', justifyContent: 'center', alignItems: 'center' }}>
+                      <Ionicons name="mail-unread-outline" size={40} color="#6366F1" />
+                    </View>
                   </View>
+                  <Text style={[styles.stepDesc, { textAlign: 'center', fontWeight: 'bold', color: '#0F172A', fontSize: 18 }]}>
+                    Transmission Sent
+                  </Text>
                   <Text style={[styles.stepDesc, { textAlign: 'center' }]}>
-                    If an account is associated with that identifier, a password recovery link has been sent to the registered email address.
+                    A secure recovery link has been dispatched to your verified email. Please check your inbox and follow the instructions.
                   </Text>
-                  <Text style={[styles.stepDesc, { textAlign: 'center', fontSize: 13, color: '#64748B' }]}>
-                    Please check your inbox (and spam folder). The link will expire in 60 minutes.
-                  </Text>
-                  <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#F1F5F9' }]} onPress={() => setShowForgot(false)}>
-                    <Text style={[styles.modalBtnText, { color: '#0F172A' }]}>Finish</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {forgotStep === 3 && (
-                <View style={styles.stepContainer}>
-                  <Text style={styles.stepDesc}>Set your new password below.</Text>
-                  <TextInput 
-                    style={styles.modalInput} 
-                    placeholder="New Password" 
-                    value={newPass} 
-                    onChangeText={setNewPass} 
-                    secureTextEntry
-                  />
-                  <TextInput 
-                    style={styles.modalInput} 
-                    placeholder="Confirm New Password" 
-                    value={confirmPass} 
-                    onChangeText={setConfirmPass} 
-                    secureTextEntry
-                  />
-                  <TouchableOpacity style={styles.modalBtn} onPress={handleResetPassword} disabled={isResetting}>
-                    {isResetting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalBtnText}>Update Password</Text>}
+                  <View style={{ backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12, marginTop: 8 }}>
+                    <Text style={[styles.stepDesc, { textAlign: 'center', fontSize: 12, color: '#64748B', fontStyle: 'italic', marginBottom: 0 }]}>
+                      Link Validity: 60 Minutes
+                    </Text>
+                  </View>
+                  <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#0F172A' }]} onPress={() => { setShowForgot(false); setForgotStep(1); }}>
+                    <Text style={styles.modalBtnText}>BACK TO LOGIN</Text>
                   </TouchableOpacity>
                 </View>
               )}
             </View>
           </View>
         </Modal>
-      </ImageBackground>
+      </View>
     );
   }
 
@@ -623,37 +607,17 @@ const LoginScreen = ({ navigation }) => {
                 <View style={{ alignItems: 'center', marginBottom: 16 }}>
                   <Ionicons name="mail-unread-outline" size={48} color="#6366F1" />
                 </View>
+                <Text style={[styles.stepDesc, { textAlign: 'center', fontWeight: 'bold', color: '#0F172A' }]}>
+                  Check Your Email
+                </Text>
                 <Text style={[styles.stepDesc, { textAlign: 'center' }]}>
-                  If an account is associated with that identifier, a password recovery link has been sent to the registered email address.
+                  A password recovery link has been sent to your registered email address.
                 </Text>
-                <Text style={[styles.stepDesc, { textAlign: 'center', fontSize: 13, color: '#64748B' }]}>
-                  Please check your inbox (and spam folder). The link will expire in 60 minutes.
+                <Text style={[styles.stepDesc, { textAlign: 'center', fontSize: 12, color: '#64748B', fontStyle: 'italic' }]}>
+                  Please click the link in the email to set your new password. It will expire in 60 minutes.
                 </Text>
-                <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#F1F5F9' }]} onPress={() => setShowForgot(false)}>
-                  <Text style={[styles.modalBtnText, { color: '#0F172A' }]}>Finish</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {forgotStep === 3 && (
-              <View style={styles.stepContainer}>
-                <Text style={styles.stepDesc}>Set your new password below.</Text>
-                <TextInput 
-                  style={styles.modalInput} 
-                  placeholder="New Password" 
-                  value={newPass} 
-                  onChangeText={setNewPass} 
-                  secureTextEntry
-                />
-                <TextInput 
-                  style={styles.modalInput} 
-                  placeholder="Confirm New Password" 
-                  value={confirmPass} 
-                  onChangeText={setConfirmPass} 
-                  secureTextEntry
-                />
-                <TouchableOpacity style={styles.modalBtn} onPress={handleResetPassword} disabled={isResetting}>
-                  {isResetting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalBtnText}>Update Password</Text>}
+                <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#EF4444' }]} onPress={() => { setShowForgot(false); setForgotStep(1); }}>
+                  <Text style={styles.modalBtnText}>Finish</Text>
                 </TouchableOpacity>
               </View>
             )}

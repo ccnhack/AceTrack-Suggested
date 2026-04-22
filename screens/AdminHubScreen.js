@@ -74,6 +74,10 @@ const AdminHubScreen = ({ navigation, route }) => {
     }
     setSubTab(newTab);
     setSearch('');
+    
+    // 🛡️ STABILITY: Clear auto-selection state on manual tab change (v2.6.85)
+    setAutoSelectTicketId(null);
+    setAutoSelectUser(null);
 
     // Mark as visited logic
     if (setVisitedAdminSubTabs) {
@@ -258,6 +262,12 @@ const AdminHubScreen = ({ navigation, route }) => {
             onReply={onReplyTicket}
             onUpdateStatus={onUpdateTicketStatus}
             onReassignTicket={onReassignTicket}
+            onDetailToggle={(isOpen) => {
+              if (!isOpen) {
+                setAutoSelectTicketId(null);
+                setAutoSelectUser(null);
+              }
+            }}
             seenAdminActionIds={seenAdminActionIds}
             autoSelectTicketId={autoSelectTicketId}
           />

@@ -140,17 +140,19 @@ const styles = StyleSheet.create({
   },
   buttonOverlay: {
     position: 'absolute',
-    bottom: height > 800 ? 35 : 20, // Lowered buttons for better balance (v2.6.51)
-    left: 0,
-    right: 0,
-    paddingHorizontal: 24,
+    bottom: Platform.OS === 'web' ? '15%' : (height > 800 ? 35 : 20), // Lowered buttons for better balance (v2.6.51)
+    left: Platform.OS === 'web' ? '10%' : 0,
+    right: Platform.OS === 'web' ? '10%' : 0,
+    paddingHorizontal: Platform.OS === 'web' ? 0 : 24,
   },
   buttonContainer: {
     gap: 12,
+    flexDirection: Platform.OS === 'web' && width > 768 ? 'row' : 'column',
   },
   primaryButton: {
     backgroundColor: '#D12621',
     height: 54,
+    width: Platform.OS === 'web' && width > 768 ? 200 : 'auto',
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
@@ -168,6 +170,7 @@ const styles = StyleSheet.create({
   secondaryButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     height: 54,
+    width: Platform.OS === 'web' && width > 768 ? 250 : 'auto',
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
@@ -187,18 +190,19 @@ const styles = StyleSheet.create({
   },
   textOverlay: {
     position: 'absolute',
-    left: 24,
-    right: 24,
+    left: Platform.OS === 'web' ? '10%' : 24,
+    right: Platform.OS === 'web' ? '10%' : 24,
     // Fix: Moved UP to clear the emoji clutter seen in the dashboard screenshot
-    top: height > 800 ? (height * 0.38) : (height * 0.35), 
+    top: Platform.OS === 'web' ? '35%' : (height > 800 ? (height * 0.38) : (height * 0.35)), 
     zIndex: 10,
+    maxWidth: Platform.OS === 'web' ? 800 : '100%',
   },
   headingText: {
     color: '#FFFFFF',
-    fontSize: 28,
+    fontSize: Platform.OS === 'web' && width > 768 ? 48 : 28,
     fontWeight: '900',
-    lineHeight: 34,
-    marginBottom: 8,
+    lineHeight: Platform.OS === 'web' && width > 768 ? 54 : 34,
+    marginBottom: Platform.OS === 'web' ? 16 : 8,
     textTransform: 'uppercase',
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 0, height: 2 },
@@ -206,9 +210,9 @@ const styles = StyleSheet.create({
   },
   subHeadingText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: Platform.OS === 'web' && width > 768 ? 18 : 14,
     fontWeight: '500',
-    lineHeight: 20,
+    lineHeight: Platform.OS === 'web' && width > 768 ? 28 : 20,
     opacity: 0.95,
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 0, height: 1 },

@@ -17,6 +17,14 @@ if (Platform.OS !== 'web') {
   const notifService = require('../services/notificationService');
   registerForPushNotificationsAsync = notifService.registerForPushNotificationsAsync;
   sendTokenToBackend = notifService.sendTokenToBackend;
+} else {
+  // Web specific imports for fixing icon fonts
+  const Ionicons = require('@expo/vector-icons/Ionicons').default;
+  const Font = require('expo-font');
+  
+  // Expose to global scope so it can be loaded
+  globalThis.IoniconsFont = Ionicons.font;
+  globalThis.ExpoFont = Font;
 }
 
 const AppContext = createContext(null);
@@ -56,6 +64,16 @@ export const AppProvider = ({ children, initialVersion }) => {
           await syncManager.setSystemFlag('acetrack_device_id', hardwareId);
         }
         localDeviceIdRef.current = hardwareId;
+
+        // 🌐 Load web fonts to fix icon rendering (rectangular block issue)
+        if (Platform.OS === 'web' && globalThis.ExpoFont && globalThis.IoniconsFont) {
+          try {
+            await globalThis.ExpoFont.loadAsync(globalThis.IoniconsFont);
+            console.log('🌐 Web fonts loaded successfully');
+          } catch (fontErr) {
+            console.error('❌ Failed to load web fonts:', fontErr);
+          }
+        }
         
         // 🛡️ [NOTIFICATION LISTENERS] (v2.6.121) — deep-link on tap, foreground refresh
         if (Platform.OS !== 'web' && Notifications) {
