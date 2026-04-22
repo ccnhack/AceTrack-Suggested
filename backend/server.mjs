@@ -1961,8 +1961,17 @@ router.post('/support/login', apiKeyGuard, asyncHandler(async (req, res) => {
 // 🔒 PASSWORD RESET FLOW
 // ═══════════════════════════════════════════════════════════════
 
+// 🛡️ SECURITY: Rate limit password reset requests (Finding 8)
+const passwordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 reset requests per window
+  message: { error: 'Too many recovery attempts. Please try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // 1. Request Password Reset (Email Link)
-router.post('/support/password-reset/request', apiKeyGuard, asyncHandler(async (req, res) => {
+router.post('/support/password-reset/request', passwordResetLimiter, asyncHandler(async (req, res) => {
   const { identifier } = req.body; // Can be email or username
   if (!identifier) return res.status(400).json({ error: 'Email or Username required' });
 
