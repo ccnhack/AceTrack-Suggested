@@ -2070,7 +2070,9 @@ router.post('/support/password-reset/confirm', asyncHandler(async (req, res) => 
 
   // 🛡️ SYNC PROTECTION: Explicitly update timestamp to prevent overwrite by stale devices
   appState.lastUpdated = new Date();
+  appState.markModified('data.players'); 
   await appState.save();
+
 
   await SupportPasswordReset.deleteOne({ token });
 
