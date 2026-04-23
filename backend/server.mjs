@@ -86,7 +86,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.200'; 
+const APP_VERSION = '2.6.201'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -289,7 +289,27 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
 
     if (aggregationEvents.includes(action)) {
       const ip = (req && req.ip) || '0.0.0.0';
-      const actor = (req && req.headers && req.headers['x-user-id']) || (req && req.user && req.user.id) || 'guest';
+      let actor = (req && req.headers && req.headers['x-user-id']) || (req && req.user && req.user.id);
+      
+      // 🛡️ [ACTOR INFERENCE] (v2.6.201)
+      // If actor is missing (e.g. hard browser navigation), look for recent session from this IP
+      if (!actor && ip !== '0.0.0.0') {
+        try {
+          const lastSession = await AuditLog.findOne({
+            ipAddress: ip,
+            action: { $in: ['LOGIN_SUCCESS', 'SUPPORT_LOGIN_SUCCESS'] },
+            timestamp: { $gt: new Date(Date.now() - 2 * 60 * 60 * 1000) }
+          }).sort({ timestamp: -1 }).lean();
+          
+          if (lastSession) {
+            actor = `${lastSession.userId} (Inferred)`;
+          }
+        } catch (e) {
+          console.error("Actor inference failed:", e.message);
+        }
+      }
+      
+      actor = actor || 'guest';
       const url = (req && (req.originalUrl || req.url)) || 'Unknown';
       const method = (req && req.method) || 'Unknown';
 
@@ -308,7 +328,7 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
       } else {
         await SecuritySummary.create({
           ipAddress: ip,
-          userId: (req && req.headers && req.headers['x-user-id']) || (req && req.user && req.user.id) || 'guest',
+          userId: (req && req.headers && req.headers['x-user-id']) || (req && req.user && req.user.id) || actor,
           actor: actor,
           events: [{ action, url, method, details }]
         });
@@ -434,6 +454,35 @@ app.use((req, res, next) => {
       // 🛡️ [SECURITY AUDIT] (v2.6.194)
       logAudit(req, 'HARD_ROUTE_BLOCK', [], { path: req.path, ip: req.ip });
       console.warn(`🛑 Hard Block: Unauthorized access to ${req.path} from ${req.ip}`);
+
+      // 🛡️ [UX GUARD] (v2.6.201): Pretty error for browsers, JSON for machines
+      const acceptHeader = req.headers['accept'] || '';
+      if (acceptHeader.includes('text/html')) {
+        return res.status(403).send(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Access Denied | AceTrack</title>
+              <style>
+                body { background: #0F172A; color: #94A3B8; font-family: -apple-system, system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+                .card { background: #1E293B; padding: 40px; borderRadius: 24px; text-align: center; max-width: 400px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); border: 1px solid #334155; }
+                h1 { color: #F8FAFC; margin: 0 0 12px 0; font-size: 24px; }
+                p { line-height: 1.6; margin-bottom: 24px; }
+                .btn { background: #6366F1; color: white; padding: 12px 24px; borderRadius: 12px; text-decoration: none; font-weight: bold; display: inline-block; transition: background 0.2s; }
+                .btn:hover { background: #4F46E5; }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <h1>🛑 Access Denied</h1>
+                <p>Direct access to administrative routes is prohibited by the AceTrack security engine.</p>
+                <a href="/" class="btn">Return to Dashboard</a>
+              </div>
+            </body>
+          </html>
+        `);
+      }
+
       return res.status(403).json({ 
         success: false, 
         error: 'Forbidden: Direct access to administrative routes is prohibited.',
