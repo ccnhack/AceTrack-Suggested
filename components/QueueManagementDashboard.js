@@ -121,18 +121,22 @@ const QueueManagementDashboard = ({
 
           <Text style={styles.filterLabel}>Filter by Agent</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
-            <TouchableOpacity 
-              onPress={() => setSelectedAgentId('All')}
-              style={[styles.filterBtn, selectedAgentId === 'All' && styles.filterBtnActive]}
-            >
-              <Text style={[styles.filterBtnText, selectedAgentId === 'All' && styles.filterBtnTextActive]}>All Agents</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              onPress={() => setSelectedAgentId('Unassigned')}
-              style={[styles.filterBtn, selectedAgentId === 'Unassigned' && styles.filterBtnActive]}
-            >
-              <Text style={[styles.filterBtnText, selectedAgentId === 'Unassigned' && styles.filterBtnTextActive]}>Unassigned</Text>
-            </TouchableOpacity>
+            {!agentSearchQuery && (
+              <TouchableOpacity 
+                onPress={() => setSelectedAgentId('All')}
+                style={[styles.filterBtn, selectedAgentId === 'All' && styles.filterBtnActive]}
+              >
+                <Text style={[styles.filterBtnText, selectedAgentId === 'All' && styles.filterBtnTextActive]}>All Agents</Text>
+              </TouchableOpacity>
+            )}
+            {!agentSearchQuery && (
+              <TouchableOpacity 
+                onPress={() => setSelectedAgentId('Unassigned')}
+                style={[styles.filterBtn, selectedAgentId === 'Unassigned' && styles.filterBtnActive]}
+              >
+                <Text style={[styles.filterBtnText, selectedAgentId === 'Unassigned' && styles.filterBtnTextActive]}>Unassigned</Text>
+              </TouchableOpacity>
+            )}
             {supportAgents.map(agent => (
               <TouchableOpacity 
                 key={agent.id}
