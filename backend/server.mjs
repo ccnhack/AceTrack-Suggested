@@ -86,7 +86,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.212'; 
+const APP_VERSION = '2.6.213'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -437,8 +437,21 @@ const trackLoginAttempt = async (req, identifier, password, success) => {
   
   // 🛡️ [ADVANCED BRUTE-FORCE MONITOR] (v2.6.208)
   
+  // 🛡️ [ROLE-BASED THRESHOLD] (v2.6.213)
+  // Admin: 5 attempts | Support: 10 attempts | Others: 10 attempts
+  const appState = await AppState.findOne().sort({ lastUpdated: -1 }).lean();
+  const players = appState?.data?.players || [];
+  const search = String(identifier).toLowerCase().trim();
+  const targetUser = players.find(p => 
+    String(p.id).toLowerCase() === search || 
+    String(p.email).toLowerCase() === search || 
+    String(p.username).toLowerCase() === search
+  );
+  const role = targetUser?.role || (identifier === 'admin_mfa' ? 'admin' : 'user');
+  const threshold = role === 'admin' ? 5 : 10;
+
   // 1. IMMEDIATE ALERT: Success after significant failure (Critical Breach Potential)
-  if (success && recentFailures.length >= 5) {
+  if (success && recentFailures.length >= threshold) {
     const history = recentAttempts.map(a => `${a.password} (${a.success ? '✅' : '❌'})`).join(', ');
     await logAudit(req, 'BRUTE_FORCE_DETECTED', [], { 
       TargetUser: identifier, 
@@ -925,13 +938,13 @@ const apiKeyGuard = async (req, res, next) => {
     try {
       const decoded = jwt.verify(bearerToken, JWT_SECRET);
       
-      // 🛡️ [ADMIN LOCKDOWN CHECK] (v2.6.212)
-      // Force logout validation for administrative sessions
-      if (decoded.id === 'admin') {
-         const state = await AppState.findOne().sort({ lastUpdated: -1 });
-         const admin = state?.data?.players?.find(p => p.id === 'admin');
-         if (admin && admin.lastForceLogoutAt && (decoded.iat * 1000) < admin.lastForceLogoutAt) {
-            console.warn(`🛑 Session Blocked: Admin JWT issued before force-logout timestamp.`);
+      // 🛡️ [ROLE-BASED LOCKDOWN CHECK] (v2.6.213)
+      // Force logout validation for administrative and support sessions
+      if (decoded.role === 'admin' || decoded.role === 'support') {
+         const state = await AppState.findOne().sort({ lastUpdated: -1 }).lean();
+         const targetUser = state?.data?.players?.find(p => p.id === decoded.id);
+         if (targetUser && targetUser.lastForceLogoutAt && (decoded.iat * 1000) < targetUser.lastForceLogoutAt) {
+            console.warn(`🛑 Session Blocked: JWT for ${decoded.role} issued before force-logout timestamp.`);
             return res.status(401).json({ error: 'Session invalidated by security action. Please login again.' });
          }
       }
@@ -998,22 +1011,28 @@ router.post('/api/v1/slack/interact', async (req, res) => {
         const appState = await AppState.findOne().sort({ lastUpdated: -1 });
         if (appState?.data?.players) {
           const players = [...appState.data.players];
-          const adminIdx = players.findIndex(p => p.id === 'admin');
-          if (adminIdx !== -1) {
+          const userIdx = players.findIndex(p => 
+            String(p.id).toLowerCase() === String(target).toLowerCase() || 
+            String(p.email).toLowerCase() === String(target).toLowerCase() ||
+            String(p.username).toLowerCase() === String(target).toLowerCase()
+          );
+
+          if (userIdx !== -1) {
             const now = Date.now();
-            players[adminIdx].loginBlockedUntil = now + (5 * 60 * 1000); // 5 min cooldown
-            players[adminIdx].lastForceLogoutAt = now; // Invalidate current JWTs
+            const lockedUser = players[userIdx];
+            players[userIdx].loginBlockedUntil = now + (5 * 60 * 1000); // 5 min cooldown
+            players[userIdx].lastForceLogoutAt = now; // Invalidate current JWTs
             
             await AppState.findOneAndUpdate(
               {},
               { $set: { 'data.players': players, version: appState.version + 1, lastUpdated: now } }
             );
             
-            console.warn(`🛡️ [LOCKDOWN] Admin account LOCKED for 5 mins via Slack Action [Triggered by ${payload.user.name}]`);
+            console.warn(`🛡️ [LOCKDOWN] Account ${lockedUser.id} (${lockedUser.role}) LOCKED for 5 mins via Slack Action [Triggered by ${payload.user.name}]`);
             
             return res.json({
               replace_original: false,
-              text: `🛑 *LOCKDOWN SUCCESSFUL*: Admin account blocked for 5 minutes. All active sessions invalidated. (Action by: ${payload.user.name})`
+              text: `🛑 *LOCKDOWN SUCCESSFUL*: Account *${lockedUser.id}* blocked for 5 minutes. All active sessions invalidated. (Action by: ${payload.user.name})`
             });
           }
         }
@@ -2676,6 +2695,12 @@ router.post('/support/login', loginLimiter, asyncHandler(async (req, res) => {
     return res.status(401).json({ error: 'Access Denied. This portal is for AceTrack Administrators and Support Staff only.' });
   }
 
+
+  // 🛡️ [SECURITY LOCKDOWN CHECK] (v2.6.213)
+  if (supportUser.loginBlockedUntil && supportUser.loginBlockedUntil > Date.now()) {
+    const remaining = Math.ceil((supportUser.loginBlockedUntil - Date.now()) / 60000);
+    return res.status(403).json({ error: `Security Lockdown: Your account is temporarily blocked. Try again in ${remaining} minutes.` });
+  }
 
   if (supportUser.supportStatus === 'terminated' || supportUser.supportStatus === 'inactive') {
     await logAudit(req, 'DEBUG_SUPPORT_LOGIN_DEACTIVATED', [], { identifier: search, status: supportUser.supportStatus });
