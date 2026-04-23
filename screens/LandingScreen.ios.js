@@ -66,19 +66,21 @@ const LandingScreen = ({ onLogin = () => {}, onJoinCircle = () => {} }) => {
               <Text style={styles.primaryButtonText}>LOGIN</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              testID="landing.signup.btn"
-              style={styles.secondaryButton} 
-              onPress={() => {
-                console.log("🍎 iOS Landing: JOIN pressed");
-                onJoinCircle();
-              }}
-            >
-              <View style={styles.secondaryContent}>
-                <Ionicons name="business" size={18} color="#FFFFFF" />
-                <Text style={styles.secondaryButtonText}>JOIN AN ELITE CIRCLE</Text>
-              </View>
-            </TouchableOpacity>
+            {Platform.OS !== 'web' && (
+              <TouchableOpacity 
+                testID="landing.signup.btn"
+                style={styles.secondaryButton} 
+                onPress={() => {
+                  console.log("🍎 iOS Landing: JOIN pressed");
+                  onJoinCircle();
+                }}
+              >
+                <View style={styles.secondaryContent}>
+                  <Ionicons name="business" size={18} color="#FFFFFF" />
+                  <Text style={styles.secondaryButtonText}>JOIN AN ELITE CIRCLE</Text>
+                </View>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </View>
