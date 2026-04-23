@@ -931,17 +931,19 @@ export const AdminGrievancesPanel = ({
                             <Text style={styles.agentInitials}>{agent.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}</Text>
                           </View>
                           <View style={styles.agentInfo}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 35 }}>
                               <Text style={styles.agentName} numberOfLines={1}>{agent.name}</Text>
                               <View style={[styles.loadBadge, { backgroundColor: agent.activeTickets > 5 ? '#FEF2F2' : '#F0FDF4' }]}>
                                 <Text style={[styles.loadText, { color: agent.activeTickets > 5 ? '#EF4444' : '#22C55E' }]}>
-                                  {agent.activeTickets} {agent.activeTickets === 1 ? 'ticket' : 'tickets'}
+                                  {agent.activeTickets}
                                 </Text>
                               </View>
                             </View>
                             <Text style={styles.agentUser}>@{agent.username || agent.id}</Text>
                           </View>
-                          <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+                          <View style={{ position: 'absolute', right: 0 }}>
+                             <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+                          </View>
                         </TouchableOpacity>
                       ))}
                     
