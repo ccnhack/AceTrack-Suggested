@@ -30,7 +30,7 @@ const PUBLIC_APP_ID = (Constants.expoConfig && Constants.expoConfig.extra && Con
   : process.env.EXPO_PUBLIC_ACE_API_KEY;
 
 export default {
-  APP_VERSION: '2.6.195',
+  APP_VERSION: '2.6.196',
   API_BASE_URL: (Constants.appConfig?.extra?.apiUrl || 
                  'https://acetrack-suggested.onrender.com').replace(/\/$/, ''),
   GROQ_API_KEY,
@@ -42,6 +42,20 @@ export default {
   // 🛡️ SECURITY: Stealth Endpoint Registry (v2.6.193)
   // Prevents plaintext enumeration of backend attack surface in the JS bundle.
   getEndpoint: (key) => {
+    // 🔧 [HOTFIX v2.6.196]: Polyfill atob for React Native stability
+    const _atob = (input) => {
+      if (typeof atob !== 'undefined') return atob(input);
+      try {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+        let str = String(input).replace(/[=]+$/, '');
+        let output = '';
+        for (let bc = 0, bs, buffer, idx = 0; buffer = str.charAt(idx++); ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer, bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0) {
+          buffer = chars.indexOf(buffer);
+        }
+        return output;
+      } catch (e) { return ''; }
+    };
+
     const _m = {
       'ADMIN_LOGIN': 'L2FwaS92MS9hZG1pbi9sb2dpbg==',           // /api/v1/admin/login
       'ADMIN_VERIFY': 'L2FwaS92MS9hZG1pbi92ZXJpZnktcGlu',       // /api/v1/admin/verify-pin
@@ -57,9 +71,7 @@ export default {
     try {
       const encoded = _m[key];
       if (!encoded) return '';
-      // Cross-platform Base64 decoding (v2.6.193)
-      if (typeof atob !== 'undefined') return atob(encoded);
-      return Buffer.from(encoded, 'base64').toString();
+      return _atob(encoded);
     } catch (e) {
       return '';
     }
