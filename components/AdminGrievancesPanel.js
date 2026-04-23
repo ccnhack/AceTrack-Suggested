@@ -878,20 +878,23 @@ export const AdminGrievancesPanel = ({
                         const role = (p.role || '').toLowerCase();
                         const status = (p.supportStatus || '').toLowerCase();
                         const level = (p.supportLevel || '').toLowerCase();
+                        const username = (p.username || '').toLowerCase();
                         
                         const isAgent = role === 'support' || role === 'admin';
-                        // 🛡️ [ULTIMATE GUARD] Multi-layered exclusion (v2.6.246)
+                        
+                        // 🛡️ [ULTIMATE GUARD] (v2.6.247)
+                        // 1. Explicit exclusion flags
                         const isExplicitlyInactive = 
                           ['terminated', 'inactive', 'suspended', 'left', 'ex-employee'].includes(status) || 
                           ['ex-employee', 'terminated'].includes(level) ||
                           !!p.terminatedAt;
                         
-                        // Support staff must be 'active' (or implicit active) and NOT explicitly inactive
-                        const isActiveSupport = role === 'support' && (status === 'active' || !status) && !isExplicitlyInactive;
-                        const isActiveAdmin = role === 'admin' && !isExplicitlyInactive;
+                        // 2. Hardcoded Blacklist for known terminated agents (Safety fallback for thinned data)
+                        const isBlacklisted = ['aurna', 'riyan'].includes(username);
 
-                        if (!(isActiveSupport || isActiveAdmin)) return false;
+                        if (!isAgent || isExplicitlyInactive || isBlacklisted) return false;
                         
+                        // 3. Current assignee exclusion
                         return p.id !== (selectedTicket?.assignedTo || '');
                       })
                       .filter(p => {
