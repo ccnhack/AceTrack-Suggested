@@ -28,13 +28,19 @@ export const dataMerger = {
     const mergedResult: any = { ...cloudData }; // Start with cloud as priority
 
     // 1. Merge Collections (ID-based, Cloud priority)
-    const collections = ['tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'matchmaking'];
+    const collections = ['tournaments', 'matchVideos', 'matches', 'evaluations', 'auditLogs', 'matchmaking'];
     collections.forEach(key => {
       if (localData[key] || cloudData[key]) {
         mergedResult[key] = this.mergeCollection(localData[key] || [], cloudData[key] || []);
         fieldsChanged.push(key);
       }
     });
+
+    // 1.5 Support Ticket Specialized Merge (v2.6.221)
+    if (localData.supportTickets || cloudData.supportTickets) {
+      mergedResult.supportTickets = this.mergeSupportTickets(localData.supportTickets || [], cloudData.supportTickets || []);
+      fieldsChanged.push('supportTickets');
+    }
 
     // 2. Specialized Player Merge (Thinning required)
     if (localData.players || cloudData.players) {
@@ -128,5 +134,69 @@ export const dataMerger = {
     
     const combined = new Set([...localArr, ...cloudArr].map(String).filter(id => !!id && id !== 'undefined' && id !== 'null'));
     return Array.from(combined);
+  },
+
+  /**
+   * Specialized Support Ticket Merge (v2.6.221)
+   * Prevents "Seen" status from being lost during cloud sync and 
+   * implements updatedAt-based metadata reconciliation.
+   */
+  mergeSupportTickets(local: any[], cloud: any[]): any[] {
+    const cloudMap = new Map(cloud.map(item => [item.id, item]));
+    const localMap = new Map(local.map(item => [item.id, item]));
+    
+    const allIds = new Set([...cloudMap.keys(), ...localMap.keys()]);
+    const merged: any[] = [];
+
+    allIds.forEach(id => {
+      const localTicket = localMap.get(id);
+      const cloudTicket = cloudMap.get(id);
+
+      if (localTicket && cloudTicket) {
+        // Start with cloud as baseline
+        const mergedTicket = { ...cloudTicket };
+        
+        // 1. Message Status Synchronization (Seen > Delivered > Sent)
+        const localMsgs = localTicket.messages || [];
+        const cloudMsgs = cloudTicket.messages || [];
+        const msgMap = new Map(cloudMsgs.map((m: any) => [m.id, m]));
+        
+        localMsgs.forEach((lm: any) => {
+          if (msgMap.has(lm.id)) {
+            const cm = msgMap.get(lm.id);
+            // 🛡️ [SEEN PERSISTENCE] If local knows it's seen, cloud shouldn't downgrade it
+            if (lm.status === 'seen' && cm.status !== 'seen') {
+              msgMap.set(lm.id, { ...cm, status: 'seen' });
+            }
+          } else {
+            // New local message (not yet in cloud) - preserve it
+            cloudMsgs.push(lm);
+          }
+        });
+        
+        // Re-assemble and sort messages
+        mergedTicket.messages = Array.from(msgMap.values()).sort((a: any, b: any) => 
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        );
+        
+        // 2. Metadata Reconciliation (Newest wins for Status/Assignee)
+        const localUpdate = new Date(localTicket.updatedAt || 0).getTime();
+        const cloudUpdate = new Date(cloudTicket.updatedAt || 0).getTime();
+        
+        if (localUpdate > cloudUpdate) {
+          mergedTicket.status = localTicket.status;
+          mergedTicket.assignedTo = localTicket.assignedTo;
+          mergedTicket.updatedAt = localTicket.updatedAt;
+          mergedTicket.lastMessageAt = localTicket.lastMessageAt;
+        }
+
+        merged.push(mergedTicket);
+      } else {
+        // Only exists in one source
+        merged.push(cloudTicket || localTicket);
+      }
+    });
+
+    return merged.filter(t => !!t);
   }
 };
