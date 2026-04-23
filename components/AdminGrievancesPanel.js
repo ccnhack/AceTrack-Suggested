@@ -1914,9 +1914,10 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
     marginLeft: 10,
+    marginRight: 12, // 🛡️ [SPACING FIX] (v2.6.250)
   },
   loadText: {
-    fontSize: 10,
+    fontSize: 9, // Slightly smaller for better fit
     fontWeight: '800',
     textTransform: 'uppercase',
   },
