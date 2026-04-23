@@ -283,16 +283,17 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
       details
     });
 
-    // 🚨 Real-time Alert for Critical Events (v2.6.194)
+    // 🚨 Real-time Alert for Critical Events (v2.6.195)
     const criticalEvents = ['UNAUTHORIZED_ACCESS_BLOCKED', 'HARD_ROUTE_BLOCK', 'OTP_BRUTE_FORCE_DETECTED', 'ADMIN_PRIVILEGE_ESCALATION', 'SENSITIVE_ACCESS_ATTEMPT'];
-    if (criticalEvents.includes(action)) {
+    const aggregationEvents = [...criticalEvents, 'LOGIN_SUCCESS', 'SUPPORT_LOGIN_SUCCESS'];
+
+    if (aggregationEvents.includes(action)) {
       const ip = (req && req.ip) || '0.0.0.0';
       const actor = (req && req.headers && req.headers['x-user-id']) || (req && req.user && req.user.id) || 'guest';
       const url = (req && (req.originalUrl || req.url)) || 'Unknown';
       const method = (req && req.method) || 'Unknown';
 
-      // 🛡️ [AI AGGREGATION] (v2.6.194)
-      // Check for active alert window (30 minutes)
+      // 🛡️ [AI AGGREGATION] (v2.6.195)
       let summary = await SecuritySummary.findOne({
         ipAddress: ip,
         actor: actor,
@@ -301,14 +302,10 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
       });
 
       if (summary) {
-        // Append to existing storm window
         summary.events.push({ action, url, method, details });
         summary.lastEventAt = new Date();
         await summary.save();
-        console.log(`🌩️ [STORM] Batched ${action} from ${ip} into 30m window.`);
-        // REMOVED: return; (We now send all individual alerts as requested)
       } else {
-        // Start new storm window
         await SecuritySummary.create({
           ipAddress: ip,
           userId: (req && req.headers && req.headers['x-user-id']) || (req && req.user && req.user.id) || 'guest',
@@ -316,6 +313,10 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
           events: [{ action, url, method, details }]
         });
       }
+
+      // Only send individual Slack alerts for CRITICAL events
+      if (criticalEvents.includes(action)) {
+        // ... existing OSINT and alert dispatch ...
 
       // 🛡️ [SMART FILTERING] (v2.6.192)
       // Only dispatch email alerts for UNAUTHORIZED_ACCESS_BLOCKED if the IP is unknown.
@@ -4083,14 +4084,16 @@ router.post('/support/force-reset', apiKeyGuard, async (req, res) => {
     console.log(`[FORCE-RESET] Sending reset email to ${user.email}...`);
     sendAdminResetPasswordEmail(user.email, user.name, newPassword);
     console.log(`[FORCE-RESET] Email dispatch triggered for ${user.email}`);
-// 🛡️ SECURITY: AI Aggregator Background Task (v2.6.194)
-// Periodically checks for completed security event windows and summarizes them via Groq AI.
+// 🛡️ SECURITY: AI Aggregator Background Task (v2.6.195)
 setInterval(async () => {
   try {
     const pendingSummaries = await SecuritySummary.find({
       isSummarized: false,
       firstEventAt: { $lt: new Date(Date.now() - 30 * 60 * 1000) }
     });
+
+    const formatIST = (date) => new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: 'numeric', hour12: true }).format(date);
+    const formatDateIST = (date) => new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'long', year: 'numeric' }).format(date);
 
     for (const summary of pendingSummaries) {
       if (summary.events.length <= 1) {
@@ -4099,23 +4102,28 @@ setInterval(async () => {
         continue;
       }
 
-      console.log(`🤖 [AI] Generating security summary for ${summary.ipAddress} (${summary.events.length} events)`);
+      const successCount = summary.events.filter(e => e.action.includes('SUCCESS')).length;
+      const failCount = summary.events.length - successCount;
+      const timeRange = `${formatIST(summary.firstEventAt)} - ${formatIST(summary.lastEventAt)} IST`;
+      const dateStr = formatDateIST(summary.firstEventAt);
+
+      console.log(`🤖 [AI] Summarizing storm: ${summary.ipAddress} (${successCount}S, ${failCount}F)`);
       const aiSummary = await generateSecuritySummary(summary.events);
       
       if (SECURITY_WEBHOOK_URL) {
         const payload = {
           text: `🌩️ *Security Storm AI Summary: ${summary.ipAddress}*`,
           attachments: [{
-            color: "#6366F1", // Indigo
+            color: "#6366F1", 
             title: "🌩️ Security Storm Analysis",
-            text: aiSummary,
+            text: `*Date:* ${dateStr}\n*Time Window:* ${timeRange}\n\n${aiSummary}`,
             fields: [
               { title: "Source IP", value: summary.ipAddress, short: true },
               { title: "Actor", value: summary.actor, short: true },
-              { title: "Total Events", value: String(summary.events.length), short: true },
-              { title: "Window", value: "30 Minutes", short: true }
+              { title: "Successful Attempts", value: String(successCount), short: true },
+              { title: "Blocked/Failed", value: String(failCount), short: true }
             ],
-            footer: "AceTrack AI Guard (v2.6.194) | Groq Llama 3",
+            footer: "AceTrack AI Guard (v2.6.195) | Groq Llama 3",
             ts: Math.floor(Date.now() / 1000)
           }]
         };
