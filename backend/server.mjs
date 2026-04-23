@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.234'; 
+const APP_VERSION = '2.6.235'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -3200,17 +3200,17 @@ app.get('/reset-password/:token', asyncHandler(async (req, res) => {
       <input type="password" id="confirmPassword" placeholder="Confirm new password">
     </div>
     <div class="error" id="error-msg"></div>
-    <button class="btn" id="submit-btn" onclick="submitPassword()">Save Password</button>
+    <button class="btn" id="submit-btn">Save Password</button>
   </div>
   
   <div class="container success" id="success-container">
     <div style="font-size:48px;margin-bottom:16px;">✅</div>
     <h2>Password Updated</h2>
     <p style="color:#94A3B8;margin-bottom:24px;line-height:1.6;">Your AceTrack password has been successfully reset. You can now securely log in to the portal.</p>
-    <button class="btn" onclick="window.location.href='/'">Go to Login</button>
+    <button class="btn" id="btn-go-login">Go to Login</button>
   </div>
 
-  <script>
+  <script nonce="${res.locals.nonce}">
     async function submitPassword() {
       const p1 = document.getElementById('newPassword').value;
       const p2 = document.getElementById('confirmPassword').value;
@@ -3262,6 +3262,14 @@ app.get('/reset-password/:token', asyncHandler(async (req, res) => {
         btn.textContent = 'Save Password';
       }
     }
+
+    // 🛡️ [CSP HARMONY] Attach listeners
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('submit-btn')?.addEventListener('click', submitPassword);
+      document.getElementById('btn-go-login')?.addEventListener('click', () => {
+        window.location.href = '/';
+      });
+    });
   </script>
 </body>
 </html>
