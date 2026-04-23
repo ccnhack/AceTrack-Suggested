@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { 
-  View, Text, TouchableOpacity, ScrollView, StyleSheet, 
+  View, Text, TouchableOpacity, ScrollView, StyleSheet, TextInput,
   Modal, SafeAreaView, Dimensions, ActivityIndicator 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,10 +17,20 @@ const QueueManagementDashboard = ({
 }) => {
   const [selectedAgentId, setSelectedAgentId] = useState('All');
   const [selectedStatus, setSelectedStatus] = useState('All');
+  const [agentSearchQuery, setAgentSearchQuery] = useState('');
 
   const supportAgents = useMemo(() => {
-    return (players || []).filter(p => p.role === 'support' && p.supportStatus !== 'terminated');
-  }, [players]);
+    let list = (players || []).filter(p => p.role === 'support' && p.supportStatus !== 'terminated');
+    if (agentSearchQuery) {
+      const q = agentSearchQuery.toLowerCase();
+      list = list.filter(p => 
+        (p.name || '').toLowerCase().includes(q) || 
+        (p.email || '').toLowerCase().includes(q) || 
+        (p.username || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [players, agentSearchQuery]);
 
   const statusOptions = ['Open', 'In Progress', 'Awaiting Response', 'Resolved', 'Closed'];
 
@@ -78,6 +88,22 @@ const QueueManagementDashboard = ({
         </View>
 
         <View style={styles.filterSection}>
+          <View style={styles.agentSearchContainer}>
+            <Ionicons name="search" size={16} color="#94A3B8" />
+            <TextInput 
+              style={styles.agentSearchInput}
+              placeholder="Search agents by name, email or username..."
+              value={agentSearchQuery}
+              onChangeText={setAgentSearchQuery}
+              placeholderTextColor="#94A3B8"
+            />
+            {agentSearchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setAgentSearchQuery('')}>
+                <Ionicons name="close-circle" size={16} color="#94A3B8" />
+              </TouchableOpacity>
+            )}
+          </View>
+
           <Text style={styles.filterLabel}>Filter by Agent</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
             <TouchableOpacity 
@@ -200,8 +226,25 @@ const styles = StyleSheet.create({
   headerSubtitle: { fontSize: 12, color: '#64748B', marginTop: 2 },
   totalBadge: { backgroundColor: '#F1F5F9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
   totalText: { fontSize: 14, fontWeight: 'bold', color: '#2563EB' },
-  filterSection: { padding: 20, backgroundColor: '#FFF' },
-  filterLabel: { fontSize: 12, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 },
+  filterSection: { padding: 20, backgroundColor: '#FFF', gap: 12 },
+  agentSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    marginBottom: 8,
+  },
+  agentSearchInput: {
+    flex: 1,
+    height: 40,
+    fontSize: 13,
+    color: '#0F172A',
+    marginLeft: 8,
+  },
+  filterLabel: { fontSize: 12, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
   filterRow: { flexDirection: 'row' },
   filterBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F1F5F9', marginRight: 8, borderWidth: 1, borderColor: 'transparent' },
   filterBtnActive: { backgroundColor: '#EEF2FF', borderColor: '#6366F1' },

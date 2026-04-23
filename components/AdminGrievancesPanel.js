@@ -851,8 +851,15 @@ export const AdminGrievancesPanel = ({
                   <Text style={styles.ticketTitle} numberOfLines={1}>{ticket.title || 'Untitled Ticket'}</Text>
                   <Text style={styles.ticketMeta}>{getUserName(ticket.userId)} • ID: {ticket.id || 'NO-ID'}</Text>
                 </View>
-                <View style={[styles.statusBadge, { backgroundColor: st.bg, borderColor: st.border }]}>
-                  <Text style={[styles.statusBadgeText, { color: st.text }]}>{status}</Text>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <View style={[styles.statusBadge, { backgroundColor: st.bg, borderColor: st.border }]}>
+                    <Text style={[styles.statusBadgeText, { color: st.text }]}>{status}</Text>
+                  </View>
+                  {ticket.assignedTo && (
+                    <Text style={{ fontSize: 8, color: '#64748B', fontWeight: 'bold', marginTop: 4 }}>
+                      {getUserName(ticket.assignedTo)}
+                    </Text>
+                  )}
                 </View>
               </View>
               <View style={styles.ticketBottom}>
