@@ -721,6 +721,14 @@ class SyncManager {
   private async pushToApi(updates: Record<string, any>, isInternal: boolean): Promise<{ success: boolean, status?: number }> {
     const cloudUrl = config.API_BASE_URL;
     this.metrics.pushAttemptCount++;
+
+    // 🛡️ [GUEST PUSH GUARD] (v2.6.206)
+    // Prevent unauthenticated or guest sessions from attempting to persist local cache to cloud.
+    // This suppresses noisy "UNAUTHORIZED_ACCESS_BLOCKED" alerts on the landing page.
+    if (!this.userId || this.userId === 'guest' || this.userId.startsWith('device_')) {
+       console.log(`[SyncManager] 🛡️ Push Suppressed: Identity is ${this.userId || 'missing'}. Skipping Cloud Sync.`);
+       return { success: false, status: 403 };
+    }
     
     // 🛡️ [NETWORK GUARD] (v2.6.159) Hardened
     // Implement 20s timeout (decreased from 30s) to ensure network failure 
