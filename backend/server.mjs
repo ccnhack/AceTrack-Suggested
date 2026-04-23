@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.231'; 
+const APP_VERSION = '2.6.232'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -3337,6 +3337,7 @@ ${tournament.sponsorName ? `<div class="sponsor">Sponsored by ${tournament.spons
 // ═══════════════════════════════════════════════════════════════
 app.get('/setup/:token', (req, res) => {
   const { token } = req.params;
+  const nonce = res.locals.nonce;
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -3653,7 +3654,7 @@ app.get('/setup/:token', (req, res) => {
     </div>
   </div>
 
-  <script>
+  <script nonce="${nonce}">
     const TOKEN = '${token}';
     const API = '';
     let selectedFile = null;
