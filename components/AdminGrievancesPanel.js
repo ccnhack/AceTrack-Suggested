@@ -206,9 +206,17 @@ export const AdminGrievancesPanel = ({
   };
 
   useEffect(() => {
-    if (selectedTicket) {
-      const updated = (tickets || []).find(t => t.id === selectedTicket.id);
-      if (updated) setSelectedTicket(updated);
+    if (selectedTicket && tickets) {
+      const updated = (tickets || []).find(t => t.id === selectedTicket.id || t._id === selectedTicket.id);
+      if (updated) {
+        // 🛡️ [SYNC PROTECTION] (v2.6.253)
+        // If the local state has a different assignee (reassigned), keep it until the server catches up
+        const mergedTicket = {
+          ...updated,
+          assignedTo: selectedTicket.assignedTo // Prioritize local state for the current session
+        };
+        setSelectedTicket(mergedTicket);
+      }
     }
   }, [tickets]);
 
