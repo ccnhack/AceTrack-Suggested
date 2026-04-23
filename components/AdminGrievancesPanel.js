@@ -625,12 +625,6 @@ export const AdminGrievancesPanel = ({
                           <Text style={styles.infoLabel}>Created</Text>
                           <Text style={styles.infoValue}>{formatTicketDateFull(selectedTicket.createdAt)}</Text>
                         </View>
-                        <View style={styles.infoItem}>
-                          <Text style={styles.infoLabel}>Assigned Agent</Text>
-                          <Text style={[styles.infoValue, { color: selectedTicket.assignedTo ? '#4F46E5' : '#94A3B8' }]}>
-                            {selectedTicket.assignedTo ? getUserName(selectedTicket.assignedTo) : 'Unassigned Pool'}
-                          </Text>
-                        </View>
                       </View>
 
                       <View style={styles.statusControl}>
@@ -796,6 +790,80 @@ export const AdminGrievancesPanel = ({
               </>
             )}
           </SafeAreaView>
+
+          {/* 🛡️ [SYNC v2.6.229] Nested Modals moved inside primary detail scope to prevent z-index occlusion on iOS */}
+          {showStatusConfirm && (
+            <Modal transparent animationType="fade" visible={showStatusConfirm}>
+              <View style={styles.modalOverlay}>
+                <View style={styles.confirmBox}>
+                  <View style={styles.confirmIcon}>
+                    <Ionicons name="help-circle" size={32} color="#2563EB" />
+                  </View>
+                  <Text style={styles.confirmTitle}>Issue Resolved?</Text>
+                  <Text style={styles.confirmSub}>ACE AI will automatically generate a closure summary from the conversation history.</Text>
+                  <View style={styles.confirmActions}>
+                    <TouchableOpacity onPress={() => processStatusConfirmation(false)} style={styles.confirmNo}>
+                      <Text style={styles.confirmNoText}>No</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => processStatusConfirmation(true)} style={styles.confirmYes}>
+                      <Text style={styles.confirmYesText}>Yes</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </Modal>
+          )}
+
+          {showReopenModal && (
+            <Modal transparent animationType="fade" visible={showReopenModal}>
+              <View style={styles.modalOverlay}>
+                <View style={styles.confirmBox}>
+                  <View style={styles.confirmIcon}>
+                    <Ionicons name="refresh-circle" size={32} color="#EF4444" />
+                  </View>
+                  <Text style={styles.confirmTitle}>Reopen Ticket?</Text>
+                  <Text style={styles.confirmSub}>Please provide a justification for moving this ticket back to {pendingReopenStatus?.toLowerCase()}.</Text>
+                  
+                  <TextInput
+                    value={reopenJustification}
+                    onChangeText={setReopenJustification}
+                    placeholder="Reason for reopening..."
+                    style={styles.reopenInput}
+                    multiline
+                    numberOfLines={3}
+                  />
+
+                  <View style={styles.confirmActions}>
+                    <TouchableOpacity 
+                      onPress={() => {
+                        setShowReopenModal(false);
+                        setReopenJustification('');
+                        setPendingReopenStatus(null);
+                      }} 
+                      style={styles.confirmNo}
+                    >
+                      <Text style={styles.confirmNoText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={handleReopenSubmit} style={styles.confirmYes}>
+                      <Text style={styles.confirmYesText}>Reopen</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </Modal>
+          )}
+
+          {isGeneratingSummary && (
+            <Modal transparent visible={isGeneratingSummary}>
+              <View style={styles.modalOverlay}>
+                <View style={styles.loadingBox}>
+                  <ActivityIndicator color="#2563EB" size="large" />
+                  <Text style={styles.loadingText}>ACE AI Analyzing Conversation...</Text>
+                </View>
+              </View>
+            </Modal>
+          )}
+
         </GestureHandlerRootView>
       </Modal>
 
@@ -890,77 +958,6 @@ export const AdminGrievancesPanel = ({
 
       {/* Resolution Confirmation Prompt */}
       {showStatusConfirm && (
-        <Modal transparent animationType="fade" visible={showStatusConfirm}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.confirmBox}>
-              <View style={styles.confirmIcon}>
-                <Ionicons name="help-circle" size={32} color="#2563EB" />
-              </View>
-              <Text style={styles.confirmTitle}>Issue Resolved?</Text>
-              <Text style={styles.confirmSub}>ACE AI will automatically generate a closure summary from the conversation history.</Text>
-              <View style={styles.confirmActions}>
-                <TouchableOpacity onPress={() => processStatusConfirmation(false)} style={styles.confirmNo}>
-                  <Text style={styles.confirmNoText}>No</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => processStatusConfirmation(true)} style={styles.confirmYes}>
-                  <Text style={styles.confirmYesText}>Yes</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      )}
-
-      {/* Reopen Justification Modal */}
-      {showReopenModal && (
-        <Modal transparent animationType="fade" visible={showReopenModal}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.confirmBox}>
-              <View style={styles.confirmIcon}>
-                <Ionicons name="refresh-circle" size={32} color="#EF4444" />
-              </View>
-              <Text style={styles.confirmTitle}>Reopen Ticket?</Text>
-              <Text style={styles.confirmSub}>Please provide a justification for moving this ticket back to {pendingReopenStatus?.toLowerCase()}.</Text>
-              
-              <TextInput
-                value={reopenJustification}
-                onChangeText={setReopenJustification}
-                placeholder="Reason for reopening..."
-                style={styles.reopenInput}
-                multiline
-                numberOfLines={3}
-              />
-
-              <View style={styles.confirmActions}>
-                <TouchableOpacity 
-                   onPress={() => {
-                     setShowReopenModal(false);
-                     setReopenJustification('');
-                     setPendingReopenStatus(null);
-                   }} 
-                   style={styles.confirmNo}
-                >
-                  <Text style={styles.confirmNoText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={handleReopenSubmit} style={styles.confirmYes}>
-                  <Text style={styles.confirmYesText}>Reopen</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      )}
-
-      {/* AI Processing Overlay */}
-      {isGeneratingSummary && (
-        <Modal transparent visible={isGeneratingSummary}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.loadingBox}>
-              <ActivityIndicator color="#2563EB" size="large" />
-              <Text style={styles.loadingText}>ACE AI Analyzing Conversation...</Text>
-            </View>
-          </View>
-        </Modal>
       )}
       <QueueManagementDashboard 
         visible={showQueueDashboard}
