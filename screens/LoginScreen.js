@@ -336,10 +336,63 @@ const LoginScreen = ({ navigation }) => {
         </View>
 
         {/* Forgot Password Modal */}
+        <Modal visible={showForgot} animationType="fade" transparent={true}>
+          <View style={styles.webModalOverlay}>
+            <View style={styles.webModalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Security Recovery</Text>
+                <TouchableOpacity onPress={() => setShowForgot(false)} style={styles.closeBtn}>
+                  <Ionicons name="close" size={24} color="#0F172A" />
+                </TouchableOpacity>
+              </View>
+
+              {forgotStep === 1 && (
+                <View style={styles.stepContainer}>
+                  <Text style={styles.stepDesc}>Verify your identity to receive a secure recovery link. This must be your registered professional email.</Text>
+                  <TextInput 
+                    style={styles.modalInput} 
+                    placeholder="Username or Email" 
+                    value={forgotUser} 
+                    onChangeText={setForgotUser}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity style={styles.modalBtn} onPress={handleIdentify} disabled={isForgotLoading}>
+                    {isForgotLoading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalBtnText}>INITIATE RECOVERY</Text>}
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {forgotStep === 2 && (
+                <View style={styles.stepContainer}>
+                  <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                    <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#EEF2FF', justifyContent: 'center', alignItems: 'center' }}>
+                      <Ionicons name="mail-unread-outline" size={40} color="#6366F1" />
+                    </View>
+                  </View>
+                  <Text style={[styles.stepDesc, { textAlign: 'center', fontWeight: 'bold', color: '#0F172A', fontSize: 18 }]}>
+                    Transmission Sent
+                  </Text>
+                  <Text style={[styles.stepDesc, { textAlign: 'center' }]}>
+                    A secure recovery link has been dispatched to your verified email. Please check your inbox and follow the instructions.
+                  </Text>
+                  <View style={{ backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12, marginTop: 8 }}>
+                    <Text style={[styles.stepDesc, { textAlign: 'center', fontSize: 12, color: '#64748B', fontStyle: 'italic', marginBottom: 0 }]}>
+                      Link Validity: 60 Minutes
+                    </Text>
+                  </View>
+                  <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#0F172A' }]} onPress={() => { setShowForgot(false); setForgotStep(1); }}>
+                    <Text style={styles.modalBtnText}>BACK TO LOGIN</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </View>
+        </Modal>
+
         {/* 🔐 MFA PIN VERIFICATION MODAL (v2.6.170) */}
         <Modal visible={showMFA} animationType="fade" transparent={true}>
           <View style={styles.webModalOverlay}>
-            <View style={[styles.webModalContent, { maxWidth: 400 }]}>
+            <View style={styles.webModalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Identity Verification</Text>
                 <TouchableOpacity onPress={() => { setShowMFA(false); setMfaPin(''); setMfaError(''); }} style={styles.closeBtn}>
@@ -427,60 +480,6 @@ const LoginScreen = ({ navigation }) => {
                   Session expires in 5 minutes. Contact technical support if you have lost your PIN.
                 </Text>
               </View>
-            </View>
-          </View>
-        </Modal>
-
-        {/* Forgot Password Modal */}
-        <Modal visible={showForgot} animationType="fade" transparent={true}>
-          <View style={styles.webModalOverlay}>
-            <View style={styles.webModalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Security Recovery</Text>
-                <TouchableOpacity onPress={() => setShowForgot(false)} style={styles.closeBtn}>
-                  <Ionicons name="close" size={24} color="#0F172A" />
-                </TouchableOpacity>
-              </View>
-
-              {forgotStep === 1 && (
-                <View style={styles.stepContainer}>
-                  <Text style={styles.stepDesc}>Verify your identity to receive a secure recovery link. This must be your registered professional email.</Text>
-                  <TextInput 
-                    style={styles.modalInput} 
-                    placeholder="Username or Email" 
-                    value={forgotUser} 
-                    onChangeText={setForgotUser}
-                    autoCapitalize="none"
-                  />
-                  <TouchableOpacity style={styles.modalBtn} onPress={handleIdentify} disabled={isForgotLoading}>
-                    {isForgotLoading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalBtnText}>INITIATE RECOVERY</Text>}
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {forgotStep === 2 && (
-                <View style={styles.stepContainer}>
-                  <View style={{ alignItems: 'center', marginBottom: 16 }}>
-                    <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#EEF2FF', justifyContent: 'center', alignItems: 'center' }}>
-                      <Ionicons name="mail-unread-outline" size={40} color="#6366F1" />
-                    </View>
-                  </View>
-                  <Text style={[styles.stepDesc, { textAlign: 'center', fontWeight: 'bold', color: '#0F172A', fontSize: 18 }]}>
-                    Transmission Sent
-                  </Text>
-                  <Text style={[styles.stepDesc, { textAlign: 'center' }]}>
-                    A secure recovery link has been dispatched to your verified email. Please check your inbox and follow the instructions.
-                  </Text>
-                  <View style={{ backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12, marginTop: 8 }}>
-                    <Text style={[styles.stepDesc, { textAlign: 'center', fontSize: 12, color: '#64748B', fontStyle: 'italic', marginBottom: 0 }]}>
-                      Link Validity: 60 Minutes
-                    </Text>
-                  </View>
-                  <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#0F172A' }]} onPress={() => { setShowForgot(false); setForgotStep(1); }}>
-                    <Text style={styles.modalBtnText}>BACK TO LOGIN</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
             </View>
           </View>
         </Modal>
@@ -638,6 +637,101 @@ const LoginScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+
+      {/* 🔐 MFA PIN VERIFICATION MODAL (v2.6.170) */}
+      <Modal visible={showMFA} animationType="fade" transparent={true}>
+        <View style={styles.webModalOverlay}>
+          <View style={styles.webModalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Identity Verification</Text>
+              <TouchableOpacity onPress={() => { setShowMFA(false); setMfaPin(''); setMfaError(''); }} style={styles.closeBtn}>
+                <Ionicons name="close" size={24} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.stepContainer}>
+              <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#EEF2FF', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
+                  <MaterialIcons name="verified-user" size={36} color="#6366F1" />
+                </View>
+                <Text style={{ fontSize: 14, color: '#64748B', textAlign: 'center', lineHeight: 20 }}>
+                  Multi-Factor Authentication required.{'\n'}Enter your 6-digit security PIN.
+                </Text>
+              </View>
+
+              {mfaError ? (
+                <View style={{ backgroundColor: '#FEE2E2', padding: 12, borderRadius: 10, marginBottom: 16, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 3, borderLeftColor: '#EF4444' }}>
+                  <Ionicons name="alert-circle" size={16} color="#EF4444" style={{ marginRight: 8 }} />
+                  <Text style={{ color: '#991B1B', fontSize: 13, fontWeight: '600', flex: 1 }}>{mfaError}</Text>
+                </View>
+              ) : null}
+
+              <TextInput
+                style={[styles.modalInput, { textAlign: 'center', fontSize: 28, fontWeight: '900', letterSpacing: 12 }]}
+                placeholder="• • • • • •"
+                placeholderTextColor="#CBD5E1"
+                value={mfaPin}
+                onChangeText={(t) => setMfaPin(t.replace(/[^0-9]/g, '').substring(0, 6))}
+                keyboardType="number-pad"
+                maxLength={6}
+                secureTextEntry
+                autoFocus
+                onSubmitEditing={async () => {
+                  if (mfaPin.length < 6) { setMfaError('PIN must be 6 digits.'); return; }
+                  setMfaLoading(true); setMfaError('');
+                  try {
+                    const resp = await fetch(`${config.API_BASE_URL}${config.getEndpoint('ADMIN_VERIFY')}`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID },
+                      body: JSON.stringify({ mfaToken, pin: mfaPin }),
+                    });
+                    const result = await resp.json();
+                    if (resp.ok && result.success && result.user) {
+                      setShowMFA(false); setMfaPin('');
+                      onLoginSuccess('admin', { ...result.user, token: result.token });
+                    } else {
+                      setMfaError(result.error || 'Verification failed.');
+                      setMfaPin('');
+                    }
+                  } catch (e) { setMfaError('Network error. Please try again.'); }
+                  finally { setMfaLoading(false); }
+                }}
+              />
+
+              <TouchableOpacity
+                style={[styles.modalBtn, { marginTop: 16, opacity: mfaPin.length < 6 ? 0.5 : 1 }]}
+                disabled={mfaLoading || mfaPin.length < 6}
+                onPress={async () => {
+                  if (mfaPin.length < 6) { setMfaError('PIN must be 6 digits.'); return; }
+                  setMfaLoading(true); setMfaError('');
+                  try {
+                    const resp = await fetch(`${config.API_BASE_URL}${config.getEndpoint('ADMIN_VERIFY')}`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID },
+                      body: JSON.stringify({ mfaToken, pin: mfaPin }),
+                    });
+                    const result = await resp.json();
+                    if (resp.ok && result.success && result.user) {
+                      setShowMFA(false); setMfaPin('');
+                      onLoginSuccess('admin', { ...result.user, token: result.token });
+                    } else {
+                      setMfaError(result.error || 'Verification failed.');
+                      setMfaPin('');
+                    }
+                  } catch (e) { setMfaError('Network error. Please try again.'); }
+                  finally { setMfaLoading(false); }
+                }}
+              >
+                {mfaLoading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalBtnText}>VERIFY PIN</Text>}
+              </TouchableOpacity>
+
+              <Text style={{ textAlign: 'center', color: '#94A3B8', fontSize: 11, marginTop: 16 }}>
+                Session expires in 5 minutes. Contact technical support if you have lost your PIN.
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -784,7 +878,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF', 
     borderRadius: 24, 
     padding: 32, 
-    width: 440, 
+    width: '90%',
+    maxWidth: 440,
     shadowColor: '#000', 
     shadowOffset: { width: 0, height: 10 }, 
     shadowOpacity: 0.25, 
