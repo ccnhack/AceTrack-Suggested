@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.243'; 
+const APP_VERSION = '2.6.244'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -4425,8 +4425,20 @@ router.post('/support/reassign-ticket', apiKeyGuard, async (req, res) => {
     if (!state || !state.data) return res.status(404).json({ error: "State not found" });
 
     const players = state.data.players || [];
-    const targetAgent = players.find(p => p.id === targetAgentId && (p.role === 'support' || p.role === 'admin') && p.supportStatus !== 'terminated' && p.supportStatus !== 'inactive');
-    if (!targetAgent) return res.status(404).json({ error: "Target agent not found, inactive, or terminated" });
+    const targetAgent = players.find(p => {
+      if (p.id !== targetAgentId) return false;
+      const role = (p.role || '').toLowerCase();
+      const status = (p.supportStatus || '').toLowerCase();
+      const level = (p.supportLevel || '').toLowerCase();
+      
+      const isAgent = role === 'support' || role === 'admin';
+      const isExcluded = status === 'terminated' || status === 'inactive' || status === 'suspended' || level === 'ex-employee';
+      
+      if (!isAgent || isExcluded) return false;
+      if (role === 'support' && status !== 'active') return false;
+      return true;
+    });
+    if (!targetAgent) return res.status(404).json({ error: "Target agent not found, inactive, or unauthorized" });
 
     const tickets = state.data.supportTickets || [];
     const ticketIdx = tickets.findIndex(t => t.id === ticketId);

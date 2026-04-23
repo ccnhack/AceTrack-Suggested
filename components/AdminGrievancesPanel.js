@@ -875,9 +875,19 @@ export const AdminGrievancesPanel = ({
                   <ScrollView style={styles.agentList} showsVerticalScrollIndicator={false}>
                     {(players || [])
                       .filter(p => {
-                        const isAgent = (p.role === 'support' || p.role === 'admin');
-                        const isTerminated = p.supportStatus === 'terminated' || p.supportStatus === 'inactive' || p.supportLevel === 'EX-EMPLOYEE' || p.supportStatus === 'suspended';
-                        return isAgent && !isTerminated && p.id !== (selectedTicket?.assignedTo || '');
+                        const role = (p.role || '').toLowerCase();
+                        const status = (p.supportStatus || '').toLowerCase();
+                        const level = (p.supportLevel || '').toLowerCase();
+                        
+                        const isAgent = role === 'support' || role === 'admin';
+                        const isExcluded = status === 'terminated' || status === 'inactive' || status === 'suspended' || level === 'ex-employee';
+                        
+                        if (!isAgent || isExcluded) return false;
+                        
+                        // 🛡️ Strict: Support staff must be explicitly 'active'
+                        if (role === 'support' && status !== 'active') return false;
+                        
+                        return p.id !== (selectedTicket?.assignedTo || '');
                       })
                       .filter(p => {
                         if (!reassignSearch) return true;
@@ -910,9 +920,14 @@ export const AdminGrievancesPanel = ({
                       ))}
                     
                     {(players || []).filter(p => {
-                      const isAgent = (p.role === 'support' || p.role === 'admin');
-                      const isTerminated = p.supportStatus === 'terminated' || p.supportStatus === 'inactive' || p.supportLevel === 'EX-EMPLOYEE' || p.supportStatus === 'suspended';
-                      return isAgent && !isTerminated && p.id !== (selectedTicket?.assignedTo || '');
+                      const role = (p.role || '').toLowerCase();
+                      const status = (p.supportStatus || '').toLowerCase();
+                      const level = (p.supportLevel || '').toLowerCase();
+                      const isAgent = role === 'support' || role === 'admin';
+                      const isExcluded = status === 'terminated' || status === 'inactive' || status === 'suspended' || level === 'ex-employee';
+                      if (!isAgent || isExcluded) return false;
+                      if (role === 'support' && status !== 'active') return false;
+                      return p.id !== (selectedTicket?.assignedTo || '');
                     }).length === 0 && (
                       <Text style={styles.noAgentsText}>No other active agents available.</Text>
                     )}

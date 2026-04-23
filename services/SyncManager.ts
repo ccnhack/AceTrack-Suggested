@@ -222,7 +222,7 @@ class SyncManager {
               targetUserId: this.userId,
               deviceId: this.hardwareId || Constants.sessionId || 'mobile_client',
               deviceName: Constants.deviceName || Platform.OS,
-              appVersion: Constants.expoConfig?.version || config.APP_VERSION || '2.6.243',
+              appVersion: Constants.expoConfig?.version || config.APP_VERSION || '2.6.244',
               timestamp: Date.now()
             });
           }
@@ -364,7 +364,7 @@ class SyncManager {
               const deviceTracker = {
                 id: this.hardwareId,
                 name: Constants.deviceName || Platform.OS,
-                appVersion: Constants.expoConfig?.version || config.APP_VERSION || '2.6.243',
+                appVersion: Constants.expoConfig?.version || config.APP_VERSION || '2.6.244',
                 platformVersion: `${Platform.OS} (API ${Platform.Version})`,
                 lastActive: now
               };
