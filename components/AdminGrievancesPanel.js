@@ -10,6 +10,7 @@ import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { generateAIResponse } from '../services/aiService';
 import notify from '../utils/notify';
 import logger from '../utils/logger';
+import { colors, shadows } from '../theme/designSystem';
 import config from '../config';
 import QueueManagementDashboard from './QueueManagementDashboard';
 
