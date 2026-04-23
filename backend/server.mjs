@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.233'; 
+const APP_VERSION = '2.6.234'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -3590,7 +3590,7 @@ app.get('/setup/:token', (req, res) => {
         </div>
 
         <div class="error-msg" id="error-1"></div>
-        <button class="btn" onclick="goStep2()">Continue to ID Verification →</button>
+        <button class="btn" id="btn-go-step-2">Continue to ID Verification →</button>
       </div>
 
       <!-- STEP 2: ID Upload -->
@@ -3600,15 +3600,8 @@ app.get('/setup/:token', (req, res) => {
           Upload a clear scan or photo of your government-issued ID (Aadhaar, PAN, Passport, or Driving License) for employment documentation.
         </p>
 
-        <div 
-          class="file-upload" 
-          id="file-drop" 
-          onclick="if(event.target.id !== 'govIdFile') { document.getElementById('govIdFile').click(); event.stopPropagation(); }"
-          ondragover="event.preventDefault(); this.classList.add('drag-over');"
-          ondragleave="this.classList.remove('drag-over');"
-          ondrop="handleDrop(event)"
-        >
-          <input type="file" id="govIdFile" accept="image/*,application/pdf" onchange="handleFileSelect(this)" style="display:none">
+        <div class="file-upload" id="file-drop">
+          <input type="file" id="govIdFile" accept="image/*,application/pdf" style="display:none">
           <div class="upload-icon">📄</div>
           <div class="upload-text"><strong>Click to upload</strong> or drag and drop</div>
           <div class="file-name" id="fileName" style="display:none"></div>
@@ -3617,8 +3610,8 @@ app.get('/setup/:token', (req, res) => {
 
         <div class="error-msg" id="error-2"></div>
         <div style="display:flex;gap:12px;margin-top:16px;">
-          <button class="btn" style="background:#334155;flex:0.4;" onclick="backStep1()">← Back</button>
-          <button class="btn" style="flex:0.6;" onclick="goStep3()">Continue to Security →</button>
+          <button class="btn" id="btn-back-step-1" style="background:#334155;flex:0.4;">← Back</button>
+          <button class="btn" id="btn-go-step-3" style="flex:0.6;">Continue to Security →</button>
         </div>
       </div>
 
@@ -3636,8 +3629,8 @@ app.get('/setup/:token', (req, res) => {
 
         <div class="error-msg" id="error-3"></div>
         <div style="display:flex;gap:12px;margin-top:8px;">
-          <button class="btn" style="background:#334155;flex:0.4;" onclick="backStep2()">← Back</button>
-          <button class="btn" style="flex:0.6;" id="submit-btn" onclick="handleSetup()">Finalize Account</button>
+          <button class="btn" id="btn-back-step-2" style="background:#334155;flex:0.4;">← Back</button>
+          <button class="btn" style="flex:0.6;" id="submit-btn">Finalize Account</button>
         </div>
         <div class="footer">🔒 Your password is encrypted end-to-end before storage.</div>
       </div>
@@ -3834,6 +3827,42 @@ app.get('/setup/:token', (req, res) => {
         btn.textContent = 'Finalize Account';
       }
     }
+
+    // 🛡️ [CSP HARMONY] Attach listeners after DOM load (v2.6.234)
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('btn-go-step-2')?.addEventListener('click', goStep2);
+      document.getElementById('btn-go-step-3')?.addEventListener('click', goStep3);
+      document.getElementById('btn-back-step-1')?.addEventListener('click', backStep1);
+      document.getElementById('btn-back-step-2')?.addEventListener('click', backStep2);
+      document.getElementById('submit-btn')?.addEventListener('click', handleSetup);
+      
+      const fileDrop = document.getElementById('file-drop');
+      const fileInput = document.getElementById('govIdFile');
+      
+      fileDrop?.addEventListener('click', (e) => {
+        if (e.target.id !== 'govIdFile') {
+          fileInput?.click();
+          e.stopPropagation();
+        }
+      });
+      
+      fileDrop?.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        fileDrop.classList.add('drag-over');
+      });
+      
+      fileDrop?.addEventListener('dragleave', () => {
+        fileDrop.classList.remove('drag-over');
+      });
+      
+      fileDrop?.addEventListener('drop', (e) => {
+        handleDrop(e);
+      });
+      
+      fileInput?.addEventListener('change', () => {
+        handleFileSelect(fileInput);
+      });
+    });
 
     // Auto-verify on page load
     verifyToken();
