@@ -908,10 +908,12 @@ export const AdminGrievancesPanel = ({
                           style={styles.agentItem}
                           onPress={async () => {
                             const res = await onReassignTicket(selectedTicket.id, agent.id);
-                            if (res.success) {
-                              setShowReassignModal(false);
-                              Alert.alert("Success", `Ticket reassigned to ${agent.name}`);
-                            } else {
+                             if (res.success) {
+                               // 🛡️ [OPTIMISTIC UPDATE] (v2.6.248)
+                               setSelectedTicket(prev => ({ ...prev, assignedTo: agent.id }));
+                               setShowReassignModal(false);
+                               Alert.alert("Success", `Ticket reassigned to ${agent.name}`);
+                             } else {
                               Alert.alert("Error", res.error);
                             }
                           }}
