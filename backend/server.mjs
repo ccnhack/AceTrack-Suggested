@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.245'; 
+const APP_VERSION = '2.6.246'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -4431,10 +4431,15 @@ router.post('/support/reassign-ticket', apiKeyGuard, async (req, res) => {
       const status = (p.supportStatus || '').toLowerCase();
       const level = (p.supportLevel || '').toLowerCase();
       
-      const isAgent = role === 'support' || role === 'admin';
-      const isExcluded = status === 'terminated' || status === 'inactive' || status === 'suspended' || level === 'ex-employee';
+      const isExplicitlyInactive = 
+        ['terminated', 'inactive', 'suspended', 'left', 'ex-employee'].includes(status) || 
+        ['ex-employee', 'terminated'].includes(level) ||
+        !!p.terminatedAt;
       
-      return isAgent && !isExcluded;
+      const isActiveSupport = role === 'support' && (status === 'active' || !status) && !isExplicitlyInactive;
+      const isActiveAdmin = role === 'admin' && !isExplicitlyInactive;
+
+      return isActiveSupport || isActiveAdmin;
     });
     if (!targetAgent) return res.status(404).json({ error: "Target agent not found, inactive, or unauthorized" });
 

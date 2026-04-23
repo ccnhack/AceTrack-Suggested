@@ -878,9 +878,21 @@ export const AdminGrievancesPanel = ({
                         const role = (p.role || '').toLowerCase();
                         const status = (p.supportStatus || '').toLowerCase();
                         const level = (p.supportLevel || '').toLowerCase();
+                        
                         const isAgent = role === 'support' || role === 'admin';
-                        const isExcluded = status === 'terminated' || status === 'inactive' || status === 'suspended' || level === 'ex-employee';
-                        return isAgent && !isExcluded && p.id !== (selectedTicket?.assignedTo || '');
+                        // 🛡️ [ULTIMATE GUARD] Multi-layered exclusion (v2.6.246)
+                        const isExplicitlyInactive = 
+                          ['terminated', 'inactive', 'suspended', 'left', 'ex-employee'].includes(status) || 
+                          ['ex-employee', 'terminated'].includes(level) ||
+                          !!p.terminatedAt;
+                        
+                        // Support staff must be 'active' (or implicit active) and NOT explicitly inactive
+                        const isActiveSupport = role === 'support' && (status === 'active' || !status) && !isExplicitlyInactive;
+                        const isActiveAdmin = role === 'admin' && !isExplicitlyInactive;
+
+                        if (!(isActiveSupport || isActiveAdmin)) return false;
+                        
+                        return p.id !== (selectedTicket?.assignedTo || '');
                       })
                       .filter(p => {
                         if (!reassignSearch) return true;
@@ -916,9 +928,10 @@ export const AdminGrievancesPanel = ({
                       const role = (p.role || '').toLowerCase();
                       const status = (p.supportStatus || '').toLowerCase();
                       const level = (p.supportLevel || '').toLowerCase();
-                      const isAgent = role === 'support' || role === 'admin';
-                      const isExcluded = status === 'terminated' || status === 'inactive' || status === 'suspended' || level === 'ex-employee';
-                      return isAgent && !isExcluded && p.id !== (selectedTicket?.assignedTo || '');
+                      const isExplicitlyInactive = ['terminated', 'inactive', 'suspended', 'left', 'ex-employee'].includes(status) || ['ex-employee', 'terminated'].includes(level) || !!p.terminatedAt;
+                      const isActiveSupport = role === 'support' && (status === 'active' || !status) && !isExplicitlyInactive;
+                      const isActiveAdmin = role === 'admin' && !isExplicitlyInactive;
+                      return (isActiveSupport || isActiveAdmin) && p.id !== (selectedTicket?.assignedTo || '');
                     }).length === 0 && (
                       <Text style={styles.noAgentsText}>No other active agents available.</Text>
                     )}
