@@ -86,7 +86,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.207'; 
+const APP_VERSION = '2.6.208'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -132,7 +132,7 @@ const sendSecurityAlert = async (event, data) => {
             { title: "User-Agent", value: data['User-Agent'], short: false },
             { title: "Payload Snippet", value: `\`\`\`${String(data.Payload).substring(0, 500)}\`\`\``, short: false }
           ],
-          footer: "Zero-Trust Guard v2.6.202",
+          footer: "Zero-Trust Guard v2.6.208",
           ts: Math.floor(Date.now() / 1000)
         }]
       };
@@ -146,6 +146,20 @@ const sendSecurityAlert = async (event, data) => {
       }
       if (data.FinalOutcome) {
         payload.attachments[0].fields.push({ title: "Final Outcome", value: `*${data.FinalOutcome}*`, short: true });
+      }
+
+      // 🌩️ [CUMULATIVE SUMMARY ENRICHMENT] (v2.6.208)
+      if (event === 'BRUTE_FORCE_CUMULATIVE_SUMMARY') {
+        payload.text = `🌩️ *SECURITY SUMMARY: SUSTAINED ATTACK DETECTED*`;
+        payload.attachments[0].color = "#FF9800"; // Orange for summary
+        payload.attachments[0].fields = [
+          { title: "Target Account", value: data.TargetUser, short: true },
+          { title: "Source IP", value: `\`${data.IP}\``, short: true },
+          { title: "Total Attempts", value: String(data.TotalAttempts), short: true },
+          { title: "Failures (5m)", value: String(data.FailureCount), short: true },
+          { title: "Passwords Sample", value: `\`${data.SamplePasswords}\``, short: false },
+          { title: "Status", value: "⚠️ Throttling Active", short: true }
+        ];
       }
 
       const res = await fetch(SECURITY_WEBHOOK_URL, {
@@ -368,7 +382,7 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
     console.error("❌ Audit log error:", e.message);
   }
 };
-const loginAttempts = new Map(); // identifier_IP -> { attempts: [] }
+const loginAttempts = new Map(); // identifier_IP -> { attempts: [], lastAlertedAt: 0, lastSummaryAt: 0 }
 
 const trackLoginAttempt = async (req, identifier, password, success) => {
   const ip = (req && req.ip) || '0.0.0.0';
@@ -376,43 +390,82 @@ const trackLoginAttempt = async (req, identifier, password, success) => {
   const now = Date.now();
   
   if (!loginAttempts.has(key)) {
-    loginAttempts.set(key, { attempts: [] });
+    loginAttempts.set(key, { attempts: [], lastSummaryAt: now });
   }
   
   const state = loginAttempts.get(key);
   state.attempts.push({ timestamp: now, password, success });
   
-  // Cleanup old attempts (> 1 minute)
-  state.attempts = state.attempts.filter(a => now - a.timestamp < 60000);
+  // Cleanup old attempts (> 5 minutes for summary context, but logic uses 1m windows)
+  state.attempts = state.attempts.filter(a => now - a.timestamp < 300000); 
   
-  const failures = state.attempts.filter(a => !a.success);
+  const oneMinuteAgo = now - 60000;
+  const recentAttempts = state.attempts.filter(a => a.timestamp > oneMinuteAgo);
+  const recentFailures = recentAttempts.filter(a => !a.success);
   
-  // 🛡️ [SMART BRUTE-FORCE DETECTION] (v2.6.204)
-  // Alert if:
-  // 1. Total failures hit 5
-  // 2. A success happens after 3 failures (Credential Stuffing / Brute-Force Success)
-  const isHighRisk = (failures.length >= 5) || (success && failures.length >= 3);
+  // 🛡️ [ADVANCED BRUTE-FORCE MONITOR] (v2.6.208)
   
-  if (isHighRisk) {
-    const history = state.attempts.map(a => `${a.password} (${a.success ? '✅' : '❌'})`).join(', ');
-    const outcome = success ? "SUCCESS (Access Granted / MFA Triggered)" : "FAILED (Access Blocked)";
-    
+  // 1. IMMEDIATE ALERT: Success after significant failure (Critical Breach Potential)
+  if (success && recentFailures.length >= 5) {
+    const history = recentAttempts.map(a => `${a.password} (${a.success ? '✅' : '❌'})`).join(', ');
     await logAudit(req, 'BRUTE_FORCE_DETECTED', [], { 
       TargetUser: identifier, 
       Passwords: history, 
-      AttemptCount: state.attempts.length,
-      FailureCount: failures.length,
-      FinalOutcome: outcome,
+      AttemptCount: recentAttempts.length,
+      FailureCount: recentFailures.length,
+      FinalOutcome: "SUCCESS (ALERT: Potential Unauthorized Access)",
       Timeframe: '1 minute'
     });
-    
-    // Cooldown
+    // Reset to prevent double alerts
     loginAttempts.delete(key);
-  } else if (success) {
-    // Regular success, reset counters
-    loginAttempts.delete(key);
+    return;
+  }
+  
+  // 2. BURST ALERT: Notify every 5 failures within 1 minute
+  if (!success && recentFailures.length >= 5 && (recentFailures.length % 5 === 0)) {
+    const history = recentAttempts.map(a => `${a.password} (${a.success ? '✅' : '❌'})`).join(', ');
+    await logAudit(req, 'BRUTE_FORCE_DETECTED', [], { 
+      TargetUser: identifier, 
+      Passwords: history, 
+      AttemptCount: recentAttempts.length,
+      FailureCount: recentFailures.length,
+      FinalOutcome: "FAILED (Persistent Attack in Progress)",
+      Timeframe: '1 minute'
+    });
   }
 };
+
+// 🛡️ [CUMULATIVE SECURITY SUMMARY] (v2.6.208)
+// Runs every 5 minutes to report ongoing high-volume attacks
+setInterval(async () => {
+  const now = Date.now();
+  for (const [key, state] of loginAttempts.entries()) {
+    const failures = state.attempts.filter(a => !a.success);
+    if (failures.length >= 10 && (now - state.lastSummaryAt >= 300000)) {
+      const [identifier, ip] = key.split('_');
+      const uniquePasswords = [...new Set(failures.map(f => f.password))].slice(0, 10).join(', ');
+      
+      console.log(`🛡️ [SUMMARY] Reporting sustained attack for ${identifier} from ${ip}`);
+      await sendSecurityAlert({
+          action: 'BRUTE_FORCE_CUMULATIVE_SUMMARY',
+          ipAddress: ip,
+          actor: identifier,
+          details: {
+            TargetUser: identifier,
+            TotalAttempts: state.attempts.length,
+            FailureCount: failures.length,
+            SamplePasswords: uniquePasswords,
+            Timeframe: 'Last 5 minutes'
+          }
+      });
+      state.lastSummaryAt = now;
+      // If no activity for 5 minutes, we'll eventually cleanup
+      if (state.attempts.length === 0) loginAttempts.delete(key);
+    } else if (state.attempts.length === 0 || (now - state.attempts[state.attempts.length-1].timestamp > 600000)) {
+       loginAttempts.delete(key);
+    }
+  }
+}, 60000); // Check every minute
 
 
 // 🕓 Utility: Get current IST timestamp (v2.6.89)
@@ -895,7 +948,7 @@ const globalApiLimiter = rateLimit({
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 20, // 🛡️ [RELAXED v2.6.207] Increased from 10 to 20 to allow for testing
-  message: { error: 'Too many login attempts. Please try again in 15 minutes.' },
+  message: { error: 'Password Attempt limit reached. Please try after sometime for security.' },
   standardHeaders: true,
   legacyHeaders: false,
 });
