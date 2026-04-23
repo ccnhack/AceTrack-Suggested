@@ -86,7 +86,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.211'; 
+const APP_VERSION = '2.6.212'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -145,7 +145,38 @@ const sendSecurityAlert = async (event, data) => {
         payload.attachments[0].fields.push({ title: "History", value: `\`${data.Passwords}\``, short: false });
       }
       if (data.FinalOutcome) {
-        payload.attachments[0].fields.push({ title: "Final Outcome", value: `*${data.FinalOutcome}*`, short: true });
+        let outcomeValue = `*${data.FinalOutcome}*`;
+        // 🛡️ [VISUAL HARDENING] (v2.6.212)
+        if (data.FinalOutcome.includes('SUCCESS') && data.FinalOutcome.includes('ALERT')) {
+          outcomeValue = `🟢 *SUCCESS* 🔴 *(ALERT: Potential Unauthorized Access)*`;
+          payload.attachments[0].color = "#EF4444"; // Force high-contrast red for breach
+          
+          // 🛡️ [INTERACTIVE LOCKDOWN] (v2.6.212)
+          // Add Slack Buttons for immediate Admin response
+          payload.attachments[0].actions = [
+            {
+              name: "security_action",
+              text: "Approve Login",
+              type: "button",
+              style: "primary",
+              value: JSON.stringify({ action: "approve", target: data.TargetUser, ip: data.IP })
+            },
+            {
+              name: "security_action",
+              text: "BLOCK ACCOUNT",
+              type: "button",
+              style: "danger",
+              confirm: {
+                title: "Confirm Admin Lockdown?",
+                text: "This will force-logout all sessions and block Admin login for 5 minutes.",
+                ok_text: "Yes, Block Account",
+                dismiss_text: "Cancel"
+              },
+              value: JSON.stringify({ action: "block", target: data.TargetUser, ip: data.IP })
+            }
+          ];
+        }
+        payload.attachments[0].fields.push({ title: "Final Outcome", value: outcomeValue, short: true });
       }
 
       // 🌩️ [CUMULATIVE SUMMARY ENRICHMENT] (v2.6.208)
@@ -893,6 +924,18 @@ const apiKeyGuard = async (req, res, next) => {
   if (bearerToken) {
     try {
       const decoded = jwt.verify(bearerToken, JWT_SECRET);
+      
+      // 🛡️ [ADMIN LOCKDOWN CHECK] (v2.6.212)
+      // Force logout validation for administrative sessions
+      if (decoded.id === 'admin') {
+         const state = await AppState.findOne().sort({ lastUpdated: -1 });
+         const admin = state?.data?.players?.find(p => p.id === 'admin');
+         if (admin && admin.lastForceLogoutAt && (decoded.iat * 1000) < admin.lastForceLogoutAt) {
+            console.warn(`🛑 Session Blocked: Admin JWT issued before force-logout timestamp.`);
+            return res.status(401).json({ error: 'Session invalidated by security action. Please login again.' });
+         }
+      }
+
       req.user = decoded;
       req.userId = decoded.id;
       req.userRole = decoded.role;
@@ -918,7 +961,7 @@ const apiKeyGuard = async (req, res, next) => {
   }
 
   // 3. PUBLIC BOOTSTRAP: Allow Handshake flows using the Public App ID (v2.6.210)
-  const isPublicRoute = path.includes('/login') || path.includes('/otp') || path.includes('/health') || path.includes('/status') || path.includes('/data') || path.includes('/save') || path.includes('/upload') || path.includes('/diagnostics');
+  const isPublicRoute = path.includes('/login') || path.includes('/otp') || path.includes('/health') || path.includes('/status') || path.includes('/data') || path.includes('/save') || path.includes('/upload') || path.includes('/diagnostics') || path.includes('/slack/interact');
   if (isPublicRoute && providedKey === PUBLIC_APP_ID) {
     return next();
   }
@@ -933,7 +976,67 @@ const apiKeyGuard = async (req, res, next) => {
   });
 };
 
+
+// 🛡️ [SLACK INTERACTION ENDPOINT] (v2.6.212)
+// Handles "Approve" and "Block" buttons from Slack security alerts
+router.post('/api/v1/slack/interact', async (req, res) => {
+  try {
+    // Slack sends payload as a string-encoded JSON in 'payload' field
+    if (!req.body.payload) {
+      return res.status(400).send("Missing payload");
+    }
+
+    const payload = JSON.parse(req.body.payload);
+    const actionData = JSON.parse(payload.actions[0].value);
+    const { action, target, ip } = actionData;
+
+    console.log(`📡 [SLACK_ACTION] Received ${action} for ${target} from IP ${ip}`);
+
+    if (action === 'block') {
+      const release = await syncMutex.acquire();
+      try {
+        const appState = await AppState.findOne().sort({ lastUpdated: -1 });
+        if (appState?.data?.players) {
+          const players = [...appState.data.players];
+          const adminIdx = players.findIndex(p => p.id === 'admin');
+          if (adminIdx !== -1) {
+            const now = Date.now();
+            players[adminIdx].loginBlockedUntil = now + (5 * 60 * 1000); // 5 min cooldown
+            players[adminIdx].lastForceLogoutAt = now; // Invalidate current JWTs
+            
+            await AppState.findOneAndUpdate(
+              {},
+              { $set: { 'data.players': players, version: appState.version + 1, lastUpdated: now } }
+            );
+            
+            console.warn(`🛡️ [LOCKDOWN] Admin account LOCKED for 5 mins via Slack Action [Triggered by ${payload.user.name}]`);
+            
+            return res.json({
+              replace_original: false,
+              text: `🛑 *LOCKDOWN SUCCESSFUL*: Admin account blocked for 5 minutes. All active sessions invalidated. (Action by: ${payload.user.name})`
+            });
+          }
+        }
+      } finally {
+        release();
+      }
+    } else if (action === 'approve') {
+       console.log(`✅ [SLACK_ACTION] Admin login approved by ${payload.user.name}`);
+       return res.json({
+          replace_original: false,
+          text: `✅ *APPROVED*: Login session authorized by ${payload.user.name}.`
+       });
+    }
+
+    res.status(200).send();
+  } catch (err) {
+    console.error("❌ Slack interaction failed:", err.message);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 // 🛡️ SECURITY: Global Rate Limiters (v2.6.185)
+
 const globalApiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
   max: 200, // 200 requests per minute per IP
@@ -2380,7 +2483,7 @@ router.post('/support/invite/resend', apiKeyGuard, asyncHandler(async (req, res)
 // Server-side authentication — credentials & PIN never leave the server
 // ═══════════════════════════════════════════════════════════════
 const ADMIN_MFA_PIN = process.env.ADMIN_MFA_PIN || '120522';
-const pendingAdminMFA = new Map(); // token → { expires }
+const pendingAdminMFA = new Map(); // token → { expires, attempts }
 
 router.post('/admin/login', loginLimiter, asyncHandler(async (req, res) => {
   const { identifier, password } = req.body;
@@ -2410,6 +2513,12 @@ router.post('/admin/login', loginLimiter, asyncHandler(async (req, res) => {
 
   const adminPassword = adminUser.password || '';
   
+  // 🛡️ [SECURITY LOCKDOWN CHECK] (v2.6.212)
+  if (adminUser.loginBlockedUntil && adminUser.loginBlockedUntil > Date.now()) {
+    const remaining = Math.ceil((adminUser.loginBlockedUntil - Date.now()) / 60000);
+    return res.status(403).json({ error: `Security Lockdown: Account is temporarily blocked. Try again in ${remaining} minutes.` });
+  }
+
   // 🛡️ EMERGENCY BYPASS (v2.6.197): Allow ACE_API_KEY or default Password@123 if DB is corrupted
   const isMasterKey = password === ACE_API_KEY;
   const isDefaultKey = (adminPassword === '' || !adminPassword) && password === 'Password@123';
@@ -2424,7 +2533,7 @@ router.post('/admin/login', loginLimiter, asyncHandler(async (req, res) => {
 
   // Step 1 passed — generate MFA session token
   const mfaToken = bcrypt.hashSync(Date.now().toString() + 'admin_mfa', 10).replace(/[^a-zA-Z0-9]/g, '').substring(0, 40);
-  pendingAdminMFA.set(mfaToken, { expires: Date.now() + 5 * 60 * 1000 }); // 5 min expiry
+  pendingAdminMFA.set(mfaToken, { expires: Date.now() + 5 * 60 * 1000, attempts: 0 }); // 5 min expiry
 
   // Cleanup expired tokens
   for (const [tk, val] of pendingAdminMFA.entries()) {
@@ -2451,6 +2560,8 @@ router.post('/admin/verify-pin', asyncHandler(async (req, res) => {
     return res.status(401).json({ error: 'MFA session expired. Please login again.' });
   }
 
+  session.attempts = (session.attempts || 0) + 1;
+
   if (pin !== ADMIN_MFA_PIN) {
     await trackLoginAttempt(req, 'admin_mfa', pin, false);
   
@@ -2467,10 +2578,21 @@ router.post('/admin/verify-pin', asyncHandler(async (req, res) => {
 
 await trackLoginAttempt(req, 'admin_mfa', pin, true);
 
-// 🛡️ MFA MONITOR (v2.6.209): Immediate high-frequency monitoring for success
+// 🛡️ MFA MONITOR (v2.6.212): Interactive alert if user succeeds after brute-force
+if (session.attempts > 5) {
+  await logAudit(req, 'BRUTE_FORCE_DETECTED', [], { 
+    TargetUser: 'admin_mfa', 
+    Passwords: `[HIDDEN_MFA_HISTORY]`, 
+    AttemptCount: session.attempts,
+    FailureCount: session.attempts - 1,
+    FinalOutcome: "SUCCESS (ALERT: Potential Unauthorized Access)",
+    Timeframe: 'MFA_SESSION'
+  });
+}
+
 await logAudit(req, 'MFA_MONITOR', [], { 
   outcome: 'SUCCESS', 
-  message: 'Successful MFA PIN verification'
+  message: `Successful MFA PIN verification (Attempts: ${session.attempts})`
 });
 
   // MFA passed — consume token
