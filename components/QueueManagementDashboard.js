@@ -34,6 +34,12 @@ const QueueManagementDashboard = ({
 
   const statusOptions = ['Open', 'In Progress', 'Awaiting Response', 'Resolved', 'Closed'];
 
+  const getAgentName = (id) => {
+    if (!id) return 'Unassigned';
+    const agent = (players || []).find(a => a.id === id);
+    return agent ? agent.name : id;
+  };
+
   const filteredTickets = useMemo(() => {
     const q = agentSearchQuery.toLowerCase().trim();
 
@@ -57,7 +63,7 @@ const QueueManagementDashboard = ({
 
       return matchAgent && matchStatus && matchSearch;
     }).sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
-  }, [tickets, selectedAgentId, selectedStatus, agentSearchQuery, supportAgents]);
+  }, [tickets, selectedAgentId, selectedStatus, agentSearchQuery, players]);
 
   const stats = useMemo(() => {
     const data = filteredTickets;
@@ -68,12 +74,6 @@ const QueueManagementDashboard = ({
       awaiting: data.filter(t => t.status === 'Awaiting Response').length
     };
   }, [filteredTickets]);
-
-  const getAgentName = (id) => {
-    if (!id) return 'Unassigned';
-    const agent = supportAgents.find(a => a.id === id);
-    return agent ? agent.name : id;
-  };
 
   const getStatusColor = (status) => {
     switch (status) {
