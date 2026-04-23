@@ -143,12 +143,15 @@ export default function AppNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!currentUser ? (
-        viewingLanding ? (
+        <>
           <Stack.Screen name="Landing">
             {(props) => (
               <LandingScreen 
                 {...props} 
-                onLogin={() => setViewingLanding(false)} 
+                onLogin={() => {
+                  setViewingLanding(false);
+                  props.navigation.navigate('Login');
+                }} 
                 onJoinCircle={() => {
                   setViewingLanding(false);
                   props.navigation.navigate('Signup');
@@ -156,12 +159,9 @@ export default function AppNavigator() {
               />
             )}
           </Stack.Screen>
-        ) : (
-          <>
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Signup" component={SignupScreen} />
-          </>
-        )
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="Signup" component={SignupScreen} />
+        </>
       ) : (
         <Stack.Screen name="Main" component={MainTabs} />
       )}
