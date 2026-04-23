@@ -855,11 +855,9 @@ export const AdminGrievancesPanel = ({
                   <View style={[styles.statusBadge, { backgroundColor: st.bg, borderColor: st.border }]}>
                     <Text style={[styles.statusBadgeText, { color: st.text }]}>{status}</Text>
                   </View>
-                  {ticket.assignedTo && (
-                    <Text style={{ fontSize: 8, color: '#64748B', fontWeight: 'bold', marginTop: 4 }}>
-                      {getUserName(ticket.assignedTo)}
-                    </Text>
-                  )}
+                  <Text style={{ fontSize: 8, color: ticket.assignedTo ? '#64748B' : '#EF4444', fontWeight: 'bold', marginTop: 4 }}>
+                    {ticket.assignedTo ? getUserName(ticket.assignedTo) : 'Unassigned'}
+                  </Text>
                 </View>
               </View>
               <View style={styles.ticketBottom}>
