@@ -109,9 +109,17 @@ const LoginScreen = ({ navigation }) => {
         if (supportRes.ok && supportData.success && supportData.user) {
           onLoginSuccess('support', { ...supportData.user, token: supportData.token });
           return;
+        } else if (!supportRes.ok) {
+          // 🛡️ [SECURITY HARDENING] (v2.6.238)
+          // If the server reached and explicitly denied access (e.g. 403 Forbidden), 
+          // DO NOT fall back to local auth. This prevents terminated users from 
+          // logging in via stale local cache.
+          setError(supportData.error || supportData.message || 'Login denied by server.');
+          setIsLoading(false);
+          return;
         }
       } catch (serverErr) {
-        console.warn('Server auth failed, falling back to local:', serverErr.message);
+        console.warn('Network issue, falling back to local auth if available:', serverErr.message);
       }
 
       // 🛡️ [LOCAL FALLBACK] (v2.6.170)
@@ -137,7 +145,7 @@ const LoginScreen = ({ navigation }) => {
       }
 
       if (foundUser) {
-        if (foundUser.role === 'support' && foundUser.supportStatus === 'terminated') {
+        if (foundUser.role === 'support' && (foundUser.supportStatus === 'terminated' || foundUser.supportStatus === 'inactive' || foundUser.supportStatus === 'suspended')) {
           setError('Access Suspended: Profile deactivated.');
           return;
         }

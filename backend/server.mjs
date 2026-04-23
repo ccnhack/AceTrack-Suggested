@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.237'; 
+const APP_VERSION = '2.6.238'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -2728,7 +2728,7 @@ router.post('/support/login', loginLimiter, asyncHandler(async (req, res) => {
     return res.status(403).json({ error: `Security Lockdown: Your account is temporarily blocked. Try again in ${remaining} minutes.` });
   }
 
-  if (supportUser.supportStatus === 'terminated' || supportUser.supportStatus === 'inactive') {
+  if (supportUser.supportStatus === 'terminated' || supportUser.supportStatus === 'inactive' || supportUser.supportStatus === 'suspended') {
     await logAudit(req, 'DEBUG_SUPPORT_LOGIN_DEACTIVATED', [], { identifier: search, status: supportUser.supportStatus });
     return res.status(403).json({ error: 'Access Suspended: Your employment profile has been deactivated.' });
   }
