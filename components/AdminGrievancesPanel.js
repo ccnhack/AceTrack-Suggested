@@ -11,6 +11,7 @@ import { generateAIResponse } from '../services/aiService';
 import notify from '../utils/notify';
 import logger from '../utils/logger';
 import config from '../config';
+import QueueManagementDashboard from './QueueManagementDashboard';
 
 const statusColors = {
   'Open': { bg: '#EFF6FF', text: '#2563EB', border: '#DBEAFE' },
@@ -64,6 +65,7 @@ export const AdminGrievancesPanel = ({
   const [chatSearchText, setChatSearchText] = useState('');
   const [searchMatchIndices, setSearchMatchIndices] = useState([]);
   const [activeMatchIndex, setActiveMatchIndex] = useState(0); // 0-indexed internal, 1-indexed UI
+  const [showQueueDashboard, setShowQueueDashboard] = useState(false);
   const scrollViewRef = useRef(null);
   const textInputRef = useRef(null);
   const messageYOffsets = useRef({}); // 📍 Track message coordinates (v2.6.27)
@@ -323,6 +325,7 @@ export const AdminGrievancesPanel = ({
   const filteredTickets = (tickets || [])
     .filter(t => {
       const status = t?.status || 'Open';
+      if (filterStatus === 'Unassigned') return !t.assignedTo;
       return filterStatus === 'All' || status === filterStatus;
     })
     .filter(t => {
@@ -602,6 +605,12 @@ export const AdminGrievancesPanel = ({
                           <Text style={styles.infoLabel}>Created</Text>
                           <Text style={styles.infoValue}>{formatTicketDateFull(selectedTicket.createdAt)}</Text>
                         </View>
+                        <View style={styles.infoItem}>
+                          <Text style={styles.infoLabel}>Assigned Agent</Text>
+                          <Text style={[styles.infoValue, { color: selectedTicket.assignedTo ? '#4F46E5' : '#94A3B8' }]}>
+                            {selectedTicket.assignedTo ? getUserName(selectedTicket.assignedTo) : 'Unassigned Pool'}
+                          </Text>
+                        </View>
                       </View>
 
                       <View style={styles.statusControl}>
@@ -789,10 +798,24 @@ export const AdminGrievancesPanel = ({
         </View>
       </View>
 
+      <View style={styles.managementBar}>
+        <TouchableOpacity 
+          onPress={() => setShowQueueDashboard(true)}
+          style={styles.queueBtn}
+        >
+          <Ionicons name="apps-outline" size={16} color="#FFF" />
+          <Text style={styles.queueBtnText}>Queue Management</Text>
+        </TouchableOpacity>
+      </View>
+
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterTabs}>
-        {['All', ...statusOptions].map(s => {
-          const count = (tickets || []).filter(t => s === 'All' ? true : (t.status || 'Open') === s).length;
+        {['All', 'Unassigned', ...statusOptions].map(s => {
+          const count = (tickets || []).filter(t => {
+            if (s === 'All') return true;
+            if (s === 'Unassigned') return !t.assignedTo;
+            return (t.status || 'Open') === s;
+          }).length;
           const isActive = filterStatus === s;
           return (
             <TouchableOpacity 
@@ -914,6 +937,13 @@ export const AdminGrievancesPanel = ({
           </View>
         </Modal>
       )}
+      <QueueManagementDashboard 
+        visible={showQueueDashboard}
+        onClose={() => setShowQueueDashboard(false)}
+        tickets={tickets}
+        players={players}
+        onSelectTicket={(ticket) => setSelectedTicket(ticket)}
+      />
     </View>
   );
 };
@@ -1667,5 +1697,26 @@ const styles = StyleSheet.create({
     color: '#064E3B',
     lineHeight: 20,
     fontWeight: '500',
+  },
+  managementBar: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    alignItems: 'flex-end',
+  },
+  queueBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    gap: 8,
+    ...shadows.sm,
+  },
+  queueBtnText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
 });

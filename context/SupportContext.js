@@ -89,7 +89,7 @@ export const SupportProvider = ({ children }) => {
     const result = TicketService.markSeen(ticketId, currentUserRef.current.id, supportTickets);
     if (result.success) {
       setSupportTickets(result.tickets);
-      syncAndSaveData({ supportTickets: result.tickets });
+      syncAndSaveData({ supportTickets: result.tickets }, true);
     }
     return result;
   }, [supportTickets, syncAndSaveData]);
