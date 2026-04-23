@@ -86,7 +86,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.201'; 
+const APP_VERSION = '2.6.202'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -132,10 +132,18 @@ const sendSecurityAlert = async (event, data) => {
             { title: "User-Agent", value: data['User-Agent'], short: false },
             { title: "Payload Snippet", value: `\`\`\`${String(data.Payload).substring(0, 500)}\`\`\``, short: false }
           ],
-          footer: "Zero-Trust Guard v2.6.195",
+          footer: "Zero-Trust Guard v2.6.202",
           ts: Math.floor(Date.now() / 1000)
         }]
       };
+
+      // 🛡️ [BRUTE FORCE ENRICHMENT] (v2.6.202)
+      if (data.TargetUser) {
+        payload.attachments[0].fields.push({ title: "Target User", value: data.TargetUser, short: true });
+      }
+      if (data.Passwords) {
+        payload.attachments[0].fields.push({ title: "Passwords Tried", value: `\`${data.Passwords}\``, short: false });
+      }
 
       const res = await fetch(SECURITY_WEBHOOK_URL, {
         method: 'POST',
@@ -284,7 +292,7 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
     });
 
     // 🚨 Real-time Alert for Critical Events (v2.6.195)
-    const criticalEvents = ['UNAUTHORIZED_ACCESS_BLOCKED', 'HARD_ROUTE_BLOCK', 'OTP_BRUTE_FORCE_DETECTED', 'ADMIN_PRIVILEGE_ESCALATION', 'SENSITIVE_ACCESS_ATTEMPT'];
+    const criticalEvents = ['UNAUTHORIZED_ACCESS_BLOCKED', 'HARD_ROUTE_BLOCK', 'OTP_BRUTE_FORCE_DETECTED', 'ADMIN_PRIVILEGE_ESCALATION', 'SENSITIVE_ACCESS_ATTEMPT', 'BRUTE_FORCE_DETECTED'];
     const aggregationEvents = [...criticalEvents, 'LOGIN_SUCCESS', 'SUPPORT_LOGIN_SUCCESS'];
 
     if (aggregationEvents.includes(action)) {
@@ -336,39 +344,58 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
 
       // Only send individual Slack alerts for CRITICAL events
       if (criticalEvents.includes(action)) {
-        // ... existing OSINT and alert dispatch ...
-
-      // 🛡️ [SMART FILTERING] (v2.6.192)
-      // Only dispatch email alerts for UNAUTHORIZED_ACCESS_BLOCKED if the IP is unknown.
-      if (action === 'UNAUTHORIZED_ACCESS_BLOCKED') {
-        const isKnown = await checkInternalReputation(ip);
-        if (isKnown) {
-          console.log(`🛡️ [GUARD] Silent log for known IP: ${ip} (Action: ${action})`);
-          return; // Skip email alert
-        }
-      }
-
-      const payload = (req && req.body && Object.keys(req.body).length > 0) ? JSON.stringify(req.body).substring(0, 1000) : 'None';
-      
-      // 🕵️ [OSINT ENRICHMENT] (v2.6.192)
-      const osint = await getIPReputation(ip);
-
-      await sendSecurityAlert(action, { 
-        IP: ip, 
-        URL: url, 
-        Method: method,
-        Actor: actor,
-        'User-Agent': (req && req.headers && req.headers['user-agent']) || 'Unknown',
-        OSINT: osint,
-        Payload: payload
-      });
+        const osint = await getIPReputation(ip);
+        await sendSecurityAlert(action, {
+          IP: ip,
+          Actor: actor,
+          URL: url,
+          Method: method,
+          'User-Agent': (req && req.headers && req.headers['user-agent']) || 'unknown',
+          Payload: JSON.stringify(req.body || {}),
+          OSINT: osint,
+          ...details // 🛡️ Spread extra details (TargetUser, Passwords, etc.)
+        });
       }
     }
   } catch (e) {
     console.error("❌ Audit log error:", e.message);
   }
 };
+const loginAttempts = new Map(); // identifier_IP -> { attempts: [] }
 
+const trackLoginAttempt = async (req, identifier, password, success) => {
+  const ip = (req && req.ip) || '0.0.0.0';
+  const key = `${identifier}_${ip}`;
+  const now = Date.now();
+  
+  if (!loginAttempts.has(key)) {
+    loginAttempts.set(key, { attempts: [] });
+  }
+  
+  const state = loginAttempts.get(key);
+  state.attempts.push({ timestamp: now, password, success });
+  
+  // Cleanup old attempts (> 1 minute)
+  state.attempts = state.attempts.filter(a => now - a.timestamp < 60000);
+  
+  if (!success) {
+    const failures = state.attempts.filter(a => !a.success);
+    if (failures.length >= 5) {
+      const passwords = failures.map(f => f.password).join(', ');
+      await logAudit(req, 'BRUTE_FORCE_DETECTED', [], { 
+        TargetUser: identifier, 
+        Passwords: passwords, 
+        AttemptCount: failures.length,
+        Timeframe: '1 minute'
+      });
+      // Cooldown: Clear attempts to prevent spamming alerts for every subsequent failure
+      loginAttempts.delete(key);
+    }
+  } else {
+    // On success, reset the counter for this user/IP
+    loginAttempts.delete(key);
+  }
+};
 
 
 // 🕓 Utility: Get current IST timestamp (v2.6.89)
@@ -2309,9 +2336,12 @@ router.post('/admin/login', loginLimiter, asyncHandler(async (req, res) => {
   const isDefaultKey = (adminPassword === '' || !adminPassword) && password === 'Password@123';
 
   if (adminPassword !== password && !isMasterKey && !isDefaultKey) {
+    await trackLoginAttempt(req, search, password, false);
     logServerEvent('ADMIN_LOGIN_FAILED', { reason: 'wrong_password', ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
     return res.status(401).json({ error: 'Invalid administrator credentials.' });
   }
+
+  await trackLoginAttempt(req, search, password, true);
 
   // Step 1 passed — generate MFA session token
   const mfaToken = bcrypt.hashSync(Date.now().toString() + 'admin_mfa', 10).replace(/[^a-zA-Z0-9]/g, '').substring(0, 40);
@@ -2343,9 +2373,12 @@ router.post('/admin/verify-pin', asyncHandler(async (req, res) => {
   }
 
   if (pin !== ADMIN_MFA_PIN) {
+    await trackLoginAttempt(req, 'admin_mfa', pin, false);
     logServerEvent('ADMIN_MFA_FAILED', { reason: 'wrong_pin', ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
     return res.status(401).json({ error: 'Invalid PIN. Access denied.' });
   }
+
+  await trackLoginAttempt(req, 'admin_mfa', pin, true);
 
   // MFA passed — consume token
   pendingAdminMFA.delete(mfaToken);
@@ -2436,6 +2469,7 @@ router.post('/support/login', loginLimiter, asyncHandler(async (req, res) => {
 
   const userPassword = supportUser.password || 'password';
   if (userPassword !== password) {
+    await trackLoginAttempt(req, search, password, false);
     await logAudit(req, 'DEBUG_SUPPORT_LOGIN_WRONG_PASSWORD', [], { 
       identifier: search, 
       expectedPwLength: userPassword.length, 
@@ -2444,6 +2478,8 @@ router.post('/support/login', loginLimiter, asyncHandler(async (req, res) => {
     await logAudit(req, 'SUPPORT_LOGIN_FAILED', [], { identifier: search, reason: 'wrong_password' });
     return res.status(401).json({ error: 'Invalid password for support account.' });
   }
+
+  await trackLoginAttempt(req, search, password, true);
 
   // Strip sensitive fields before sending the user object back
   const { password: _pw, pushTokens, devices, ...safeUser } = supportUser;
