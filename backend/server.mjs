@@ -18,6 +18,7 @@ import admin from 'firebase-admin';
 import compression from 'compression';
 import { sendPushNotification } from './notifications.js';
 import { processTournamentWaitlist } from './promotion_logic.mjs'; 
+import crypto from 'crypto';
 import { 
   sendOnboardingEmail, 
   buildOnboardingHtml, 
@@ -85,9 +86,9 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.191'; 
+const APP_VERSION = '2.6.192'; 
 
-// 🛡️ SECURITY: JWT & Secrets (v2.6.191)
+// 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
 const ACE_API_KEY = process.env.ACE_API_KEY;
 const JWT_SECRET = process.env.JWT_SECRET || 'acetrack_zero_trust_fallback_secret_1717';
@@ -246,14 +247,22 @@ app.use(async (req, res, next) => {
   next();
 });
 
-// 🛡️ STABILITY FIX (v2.6.76): Root-level health checks MUST be handled BEFORE global middleware
-// This prevents security headers or rate limiters from accidental blocking of Render/Cloudflare probes.
+// 🛡️ STABILITY FIX (v2.6.76): Root-level health checks (Hardened v2.6.192)
 app.get('/health', (req, res) => {
+  const providedKey = req.headers['x-ace-api-key'] || req.query.key;
+  if (providedKey !== ACE_API_KEY) {
+    // 🛡️ Fail silently to prevent metadata leakage
+    return res.status(404).send('Not Found');
+  }
   res.status(200).send('OK');
 });
 
-// 🛡️ SECURITY: Global Hardening (v2.6.189)
-app.disable('x-powered-by'); // Stop framework fingerprinting
+// 🛡️ SECURITY: Global Hardening (v2.6.192)
+app.disable('x-powered-by'); 
+app.use((req, res, next) => {
+  res.locals.nonce = crypto.randomBytes(16).toString('base64');
+  next();
+});
 
 // 1. HARDENED ROUTE GUARD: Explicitly block sensitive enumeration at top level
 app.use((req, res, next) => {
@@ -274,20 +283,20 @@ app.use((req, res, next) => {
   next();
 });
 
-// 2. FULL SECURITY HEADERS (v2.6.189)
-app.use(helmet()); // Restore HSTS, X-Frame-Options, X-Content-Type-Options, etc.
-
-// 3. CUSTOM CSP (v2.6.189)
-app.use(helmet.contentSecurityPolicy({
-  directives: {
-    defaultSrc: ["'self'"],
-    scriptSrc: ["'self'", "'unsafe-inline'", "https://acetrack-suggested.onrender.com", "https://fonts.googleapis.com"],
-    styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-    fontSrc: ["'self'", "https://fonts.gstatic.com"],
-    connectSrc: ["'self'", "https://acetrack-suggested.onrender.com", "https://*.cloudinary.com", "https://*.firebaseio.com", "https://*.googleapis.com"],
-    imgSrc: ["'self'", "data:", "https://*.cloudinary.com", "https://*.dicebear.com", "https://*.googleusercontent.com"],
-    frameAncestors: ["'none'"],
-    upgradeInsecureRequests: [],
+// 2. FULL SECURITY HEADERS (v2.6.192)
+app.use(helmet({
+  frameguard: { action: 'sameorigin' },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", (req, res) => `'nonce-${res.locals.nonce}'`, "https://acetrack-suggested.onrender.com", "https://fonts.googleapis.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      connectSrc: ["'self'", "https://acetrack-suggested.onrender.com", "https://*.cloudinary.com", "https://*.firebaseio.com", "https://*.googleapis.com"],
+      imgSrc: ["'self'", "data:", "https://*.cloudinary.com", "https://*.dicebear.com", "https://*.googleusercontent.com"],
+      frameAncestors: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
   },
 }));
 
