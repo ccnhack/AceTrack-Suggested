@@ -40,6 +40,10 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const app = express();
+const router = express.Router();
+app.set('trust proxy', true);
+
 // 🕓 Utility: Get current IST timestamp for filenames (v2.6.84)
 const getISTTimestamp = () => {
   const now = new Date();
@@ -543,9 +547,6 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 let dbStatus = 'connecting';
-
-const app = express();
-app.set('trust proxy', true);
 
 const ALLOWED_ORIGINS = [
   'https://acetrack-suggested.onrender.com',
@@ -1328,7 +1329,6 @@ const syncMutex = new AsyncMutex();
 // ═══════════════════════════════════════════════════════════════
 // 🌐 API v1 Routes (SE Fix: API versioning)
 // ═══════════════════════════════════════════════════════════════
-const router = express.Router();
 
 // 🛡️ SECURITY: BROWSER CACHE HARDENING (v2.6.155)
 // Forces browsers to never store sensitive API responses on disk.
