@@ -86,7 +86,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.204'; 
+const APP_VERSION = '2.6.205'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -313,7 +313,11 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
           }).sort({ timestamp: -1 }).lean();
           
           if (lastSession) {
-            actor = `${lastSession.userId} (Inferred)`;
+            const inferredId = lastSession.details?.userId || lastSession.userId;
+            // 🛡️ Ensure we don't just "infer" the IP address back as the ID
+            if (inferredId && inferredId !== ip && inferredId !== 'guest') {
+              actor = `${inferredId} (Inferred)`;
+            }
           }
         } catch (e) {
           console.error("Actor inference failed:", e.message);

@@ -107,8 +107,14 @@ const MainTabs = memo(() => {
     }
   }), [adminBadgeCount, user?.notifications, role]);
 
+  const initialRouteName = useMemo(() => {
+    if (role === 'admin') return 'Admin';
+    if (role === 'support') return 'Support';
+    return 'Profile'; // Default for web/unmatched roles
+  }, [role]);
+
   return (
-    <Tab.Navigator screenOptions={screenOptions}>
+    <Tab.Navigator screenOptions={screenOptions} initialRouteName={initialRouteName}>
       {Platform.OS !== 'web' && <Tab.Screen name="Explore" component={ExploreScreen} options={{ tabBarTestID: 'nav.tab.Explore' }} /> }
       {Platform.OS !== 'web' && (role === 'user' || role === 'coach') && role !== 'academy' && (
         <>
