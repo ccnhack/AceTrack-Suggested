@@ -278,6 +278,7 @@ const AdminHubScreen = ({ navigation, route }) => {
               }
             }}
             seenAdminActionIds={seenAdminActionIds}
+            setSeenAdminActionIds={setSeenAdminActionIds}
             autoSelectTicketId={autoSelectTicketId}
             onConsumeTicketId={() => setAutoSelectTicketId(null)}
             onConsumeAutoSelect={() => setAutoSelectUser(null)}

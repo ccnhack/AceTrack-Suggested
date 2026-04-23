@@ -30,7 +30,7 @@ import { useSupport } from './context/SupportContext';
 
 
 // 🛡️ Web Deep Linking Configuration (v2.6.170)
-const APP_VERSION = "2.6.229";
+const APP_VERSION = "2.6.231";
 const linking = {
   prefixes: ['https://acetrack-suggested.onrender.com', 'acetrack://'],
   config: {

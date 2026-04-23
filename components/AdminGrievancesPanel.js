@@ -46,7 +46,7 @@ const formatTicketDateFull = (dateStr) => {
 };
 
 export const AdminGrievancesPanel = ({
-  tickets, players, onReply, onUpdateStatus, onReassignTicket, onTypingStart, onTypingStop, search, onRetryMessage, onMarkSeen, onDetailToggle, autoSelectUser, autoSelectTicketId, onConsumeTicketId, onConsumeAutoSelect, currentUser, ...restProps
+  tickets, players, onReply, onUpdateStatus, onReassignTicket, onTypingStart, onTypingStop, search, onRetryMessage, onMarkSeen, onDetailToggle, autoSelectUser, autoSelectTicketId, onConsumeTicketId, onConsumeAutoSelect, currentUser, setSeenAdminActionIds, ...restProps
 }) => {
 
   const [selectedTicket, setSelectedTicket] = useState(null);
@@ -91,15 +91,25 @@ export const AdminGrievancesPanel = ({
     }
   }, [tickets]);
 
-  // 🛡️ [Tick System] Mark as 'Seen' when ticket is opened (v2.6.28)
+  // 🛡️ [Tick System] Mark as 'Seen' when ticket is opened (v2.6.28 hardened)
   useEffect(() => {
     if (selectedTicket && selectedTicket.id) {
       onMarkSeen?.(selectedTicket.id);
       onDetailToggle?.(true); // Lock parent scroll
+
+      // 🛡️ [SYNC v2.6.230]: Persistently clear from AdminContext seen IDs
+      if (setSeenAdminActionIds && restProps.seenAdminActionIds) {
+        const tid = String(selectedTicket.id);
+        if (!restProps.seenAdminActionIds.has(tid)) {
+          const next = new Set(restProps.seenAdminActionIds);
+          next.add(tid);
+          setSeenAdminActionIds(next);
+        }
+      }
     } else {
       onDetailToggle?.(false); // Unlock parent scroll
     }
-  }, [selectedTicket?.id]);
+  }, [selectedTicket?.id, selectedTicket?.messages?.length]);
 
   // Handle deep-linking auto-selection (v2.6.151 hardened)
   useEffect(() => {
@@ -645,19 +655,29 @@ export const AdminGrievancesPanel = ({
                         </View>
                       </View>
 
-                      {/* 🔄 Reassign Control (v2.6.162) */}
                       <View style={[styles.statusControl, { marginTop: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 16 }]}>
-                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                           <View>
-                             <Text style={styles.infoLabel}>Assigned Agent</Text>
-                             <Text style={styles.infoValue}>{selectedTicket.assignedTo ? getUserName(selectedTicket.assignedTo) : 'Unassigned Pool'}</Text>
-                           </View>
+                         <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}>
                            <TouchableOpacity 
                              onPress={handleReassign}
-                             style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#6366F1', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 }}
+                             style={{ 
+                               flexDirection: 'row', 
+                               alignItems: 'center', 
+                               backgroundColor: '#6366F1', 
+                               paddingHorizontal: 16, 
+                               paddingVertical: 10, 
+                               borderRadius: 12,
+                               shadowColor: '#6366F1',
+                               shadowOffset: { width: 0, height: 4 },
+                               shadowOpacity: 0.2,
+                               shadowRadius: 8,
+                               elevation: 4
+                             }}
                            >
-                             <Ionicons name="swap-horizontal" size={14} color="#FFF" />
-                             <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '700', marginLeft: 6 }}>Reassign</Text>
+                             <Ionicons name="person-outline" size={16} color="#FFF" />
+                             <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '700', marginLeft: 8 }}>
+                               {selectedTicket.assignedTo ? `Assigned: ${getUserName(selectedTicket.assignedTo)}` : 'Assign Agent'}
+                             </Text>
+                             <Ionicons name="chevron-down" size={14} color="#FFF" style={{ marginLeft: 8, opacity: 0.8 }} />
                            </TouchableOpacity>
                          </View>
                       </View>
@@ -791,77 +811,71 @@ export const AdminGrievancesPanel = ({
             )}
           </SafeAreaView>
 
-          {/* 🛡️ [SYNC v2.6.229] Nested Modals moved inside primary detail scope to prevent z-index occlusion on iOS */}
+          {/* 🛡️ [SYNC v2.6.230] Replaced nested Modals with absolute Views to prevent iOS occlusion delay */}
           {showStatusConfirm && (
-            <Modal transparent animationType="fade" visible={showStatusConfirm}>
-              <View style={styles.modalOverlay}>
-                <View style={styles.confirmBox}>
-                  <View style={styles.confirmIcon}>
-                    <Ionicons name="help-circle" size={32} color="#2563EB" />
-                  </View>
-                  <Text style={styles.confirmTitle}>Issue Resolved?</Text>
-                  <Text style={styles.confirmSub}>ACE AI will automatically generate a closure summary from the conversation history.</Text>
-                  <View style={styles.confirmActions}>
-                    <TouchableOpacity onPress={() => processStatusConfirmation(false)} style={styles.confirmNo}>
-                      <Text style={styles.confirmNoText}>No</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => processStatusConfirmation(true)} style={styles.confirmYes}>
-                      <Text style={styles.confirmYesText}>Yes</Text>
-                    </TouchableOpacity>
-                  </View>
+            <View style={[styles.modalOverlay, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }]}>
+              <View style={styles.confirmBox}>
+                <View style={styles.confirmIcon}>
+                  <Ionicons name="help-circle" size={32} color="#2563EB" />
+                </View>
+                <Text style={styles.confirmTitle}>Issue Resolved?</Text>
+                <Text style={styles.confirmSub}>ACE AI will automatically generate a closure summary from the conversation history.</Text>
+                <View style={styles.confirmActions}>
+                  <TouchableOpacity onPress={() => processStatusConfirmation(false)} style={styles.confirmNo}>
+                    <Text style={styles.confirmNoText}>No</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => processStatusConfirmation(true)} style={styles.confirmYes}>
+                    <Text style={styles.confirmYesText}>Yes</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
-            </Modal>
+            </View>
           )}
 
           {showReopenModal && (
-            <Modal transparent animationType="fade" visible={showReopenModal}>
-              <View style={styles.modalOverlay}>
-                <View style={styles.confirmBox}>
-                  <View style={styles.confirmIcon}>
-                    <Ionicons name="refresh-circle" size={32} color="#EF4444" />
-                  </View>
-                  <Text style={styles.confirmTitle}>Reopen Ticket?</Text>
-                  <Text style={styles.confirmSub}>Please provide a justification for moving this ticket back to {pendingReopenStatus?.toLowerCase()}.</Text>
-                  
-                  <TextInput
-                    value={reopenJustification}
-                    onChangeText={setReopenJustification}
-                    placeholder="Reason for reopening..."
-                    style={styles.reopenInput}
-                    multiline
-                    numberOfLines={3}
-                  />
+            <View style={[styles.modalOverlay, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }]}>
+              <View style={styles.confirmBox}>
+                <View style={styles.confirmIcon}>
+                  <Ionicons name="refresh-circle" size={32} color="#EF4444" />
+                </View>
+                <Text style={styles.confirmTitle}>Reopen Ticket?</Text>
+                <Text style={styles.confirmSub}>Please provide a justification for moving this ticket back to {pendingReopenStatus?.toLowerCase()}.</Text>
+                
+                <TextInput
+                  value={reopenJustification}
+                  onChangeText={setReopenJustification}
+                  placeholder="Reason for reopening..."
+                  style={styles.reopenInput}
+                  multiline
+                  numberOfLines={3}
+                />
 
-                  <View style={styles.confirmActions}>
-                    <TouchableOpacity 
-                      onPress={() => {
-                        setShowReopenModal(false);
-                        setReopenJustification('');
-                        setPendingReopenStatus(null);
-                      }} 
-                      style={styles.confirmNo}
-                    >
-                      <Text style={styles.confirmNoText}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={handleReopenSubmit} style={styles.confirmYes}>
-                      <Text style={styles.confirmYesText}>Reopen</Text>
-                    </TouchableOpacity>
-                  </View>
+                <View style={styles.confirmActions}>
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setShowReopenModal(false);
+                      setReopenJustification('');
+                      setPendingReopenStatus(null);
+                    }} 
+                    style={styles.confirmNo}
+                  >
+                    <Text style={styles.confirmNoText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleReopenSubmit} style={styles.confirmYes}>
+                    <Text style={styles.confirmYesText}>Reopen</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
-            </Modal>
+            </View>
           )}
 
           {isGeneratingSummary && (
-            <Modal transparent visible={isGeneratingSummary}>
-              <View style={styles.modalOverlay}>
-                <View style={styles.loadingBox}>
-                  <ActivityIndicator color="#2563EB" size="large" />
-                  <Text style={styles.loadingText}>ACE AI Analyzing Conversation...</Text>
-                </View>
+            <View style={[styles.modalOverlay, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1001 }]}>
+              <View style={styles.loadingBox}>
+                <ActivityIndicator color="#2563EB" size="large" />
+                <Text style={styles.loadingText}>ACE AI Analyzing Conversation...</Text>
               </View>
-            </Modal>
+            </View>
           )}
 
         </GestureHandlerRootView>

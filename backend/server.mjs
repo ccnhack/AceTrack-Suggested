@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.229'; 
+const APP_VERSION = '2.6.231'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -106,7 +106,7 @@ const signToken = (user, jti = null) => {
   };
   if (jti) payload.jti = jti;
   
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
 };
 
 // 🛡️ SECURITY: Real-time Alerting (v2.6.191)
