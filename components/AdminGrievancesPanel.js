@@ -956,9 +956,6 @@ export const AdminGrievancesPanel = ({
         })}
       </ScrollView>
 
-      {/* Resolution Confirmation Prompt */}
-      {showStatusConfirm && (
-      )}
       <QueueManagementDashboard 
         visible={showQueueDashboard}
         onClose={() => setShowQueueDashboard(false)}
