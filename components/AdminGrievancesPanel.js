@@ -72,6 +72,8 @@ export const AdminGrievancesPanel = ({
   const messageYOffsets = useRef({}); // 📍 Track message coordinates (v2.6.27)
   const swipeableRefs = useRef({}); // 🛡️ Track swipeable instances for snap-back (v2.6.35)
   const [tempHighlightedId, setTempHighlightedId] = useState(null); // 🔦 Temporary highlight on jump
+  const [showReassignModal, setShowReassignModal] = useState(false); // 🛡️ Searchable Reassign (v2.6.242)
+  const [reassignSearch, setReassignSearch] = useState('');
 
   // 🛡️ [STABILITY] Sync local selectedTicket with updated props (v2.6.228)
   useEffect(() => {
@@ -296,37 +298,8 @@ export const AdminGrievancesPanel = ({
   };
 
   const handleReassign = () => {
-    const supportAgents = (players || []).filter(p => p.role === 'support' && p.supportStatus !== 'terminated');
-    if (supportAgents.length === 0) {
-      Alert.alert("No Agents", "No other active support agents available for reassignment.");
-      return;
-    }
-
-    const currentAgentId = selectedTicket.assignedTo;
-    const options = supportAgents
-      .filter(p => p.id !== currentAgentId)
-      .map(p => ({
-        text: p.name,
-        onPress: async () => {
-          if (!onReassignTicket) {
-             Alert.alert("Error", "Reassignment handler not available.");
-             return;
-          }
-          const res = await onReassignTicket(selectedTicket.id, p.id);
-          if (res.success) {
-            Alert.alert("Success", res.message);
-          } else {
-            Alert.alert("Error", res.error);
-          }
-        }
-      }));
-    
-    options.unshift({ text: 'Cancel', style: 'cancel' });
-    Alert.alert(
-      "Reassign Ticket",
-      `Select an agent to take over this ticket from ${currentAgentId ? getUserName(currentAgentId) : 'unassigned pool'}:`,
-      options
-    );
+    setReassignSearch('');
+    setShowReassignModal(true);
   };
 
 
@@ -875,6 +848,68 @@ export const AdminGrievancesPanel = ({
                 <ActivityIndicator color="#2563EB" size="large" />
                 <Text style={styles.loadingText}>ACE AI Analyzing Conversation...</Text>
               </View>
+            </View>
+          )}
+
+          {showReassignModal && (
+            <View style={[styles.modalOverlay, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1002 }]}>
+               <View style={styles.reassignModalContainer}>
+                  <View style={styles.reassignHeader}>
+                    <Text style={styles.reassignTitle}>Reassign Ticket</Text>
+                    <TouchableOpacity onPress={() => setShowReassignModal(false)}>
+                      <Ionicons name="close" size={24} color="#64748B" />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <View style={styles.reassignSearchBox}>
+                    <Ionicons name="search" size={16} color="#94A3B8" />
+                    <TextInput
+                      style={styles.reassignSearchInput}
+                      placeholder="Search active agents..."
+                      value={reassignSearch}
+                      onChangeText={setReassignSearch}
+                      autoFocus={Platform.OS !== 'web'}
+                    />
+                  </View>
+
+                  <ScrollView style={styles.agentList} showsVerticalScrollIndicator={false}>
+                    {(players || [])
+                      .filter(p => p.role === 'support' && p.supportStatus === 'active' && p.id !== (selectedTicket?.assignedTo || ''))
+                      .filter(p => {
+                        if (!reassignSearch) return true;
+                        const q = reassignSearch.toLowerCase();
+                        return p.name.toLowerCase().includes(q) || (p.username || '').toLowerCase().includes(q);
+                      })
+                      .map(agent => (
+                        <TouchableOpacity 
+                          key={agent.id}
+                          style={styles.agentItem}
+                          onPress={async () => {
+                            const res = await onReassignTicket(selectedTicket.id, agent.id);
+                            if (res.success) {
+                              setShowReassignModal(false);
+                              Alert.alert("Success", `Ticket reassigned to ${agent.name}`);
+                            } else {
+                              Alert.alert("Error", res.error);
+                            }
+                          }}
+                        >
+                          <View style={styles.agentAvatar}>
+                            <Text style={styles.agentInitials}>{agent.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}</Text>
+                          </View>
+                          <View style={styles.agentInfo}>
+                            <Text style={styles.agentName}>{agent.name}</Text>
+                            <Text style={styles.agentUser}>@{agent.username || agent.id}</Text>
+                          </View>
+                          <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+                        </TouchableOpacity>
+                      ))}
+                    
+                    {(players || []).filter(p => p.role === 'support' && p.supportStatus === 'active' && p.id !== (selectedTicket?.assignedTo || '')).length === 0 && (
+                      <Text style={styles.noAgentsText}>No other active agents available.</Text>
+                    )}
+                  </ScrollView>
+               </View>
             </View>
           )}
 
@@ -1751,5 +1786,86 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     textTransform: 'uppercase',
+  },
+  reassignModalContainer: {
+    backgroundColor: '#FFFFFF',
+    width: '90%',
+    maxHeight: '80%',
+    borderRadius: 24,
+    padding: 24,
+    ...shadows.lg,
+  },
+  reassignHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  reassignTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  reassignSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  reassignSearchInput: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 14,
+    color: '#0F172A',
+    fontWeight: '600',
+  },
+  agentList: {
+    flexGrow: 0,
+  },
+  agentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  agentAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#6366F1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  agentInitials: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  agentInfo: {
+    flex: 1,
+  },
+  agentName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  agentUser: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  noAgentsText: {
+    textAlign: 'center',
+    color: '#94A3B8',
+    fontSize: 13,
+    marginVertical: 20,
+    fontWeight: '600',
   },
 });
