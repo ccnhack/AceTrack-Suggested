@@ -6,17 +6,16 @@ node_modules/
 dist/
 web-build/
 
-# Android
-android/app/build/
-android/.gradle/
-*.iml
-*.apk
-*.aar
-
 # iOS
+ios/
 ios/build/
 ios/Pods/
 ios/.xcode.env.local
+
+# Android
+android/
+android/app/build/
+android/.gradle/
 
 # Environment variables
 .env
