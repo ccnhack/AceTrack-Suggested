@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.235'; 
+const APP_VERSION = '2.6.237'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -429,7 +429,8 @@ const trackLoginAttempt = async (req, identifier, password, success) => {
   }
   
   const state = loginAttempts.get(key);
-  state.attempts.push({ timestamp: now, password, success });
+  const maskedPassword = (password || '').length > 2 ? (password.substring(0, 2) + '****') : '****';
+  state.attempts.push({ timestamp: now, password: maskedPassword, success });
   
   // Cleanup old attempts (> 5 minutes for summary context, but logic uses 1m windows)
   state.attempts = state.attempts.filter(a => now - a.timestamp < 300000); 
@@ -2555,7 +2556,19 @@ router.post('/admin/login', loginLimiter, asyncHandler(async (req, res) => {
   const isMasterKey = password === ACE_API_KEY;
   const isDefaultKey = (adminPassword === '' || !adminPassword) && password === 'Password@123';
 
-  if (adminPassword !== password && !isMasterKey && !isDefaultKey) {
+  // 🛡️ [HYBRID AUTH ENGINE] (v2.6.237)
+  let isMatch = false;
+  try {
+    if (adminPassword.startsWith('$2a$') || adminPassword.startsWith('$2b$')) {
+      isMatch = bcrypt.compareSync(password, adminPassword);
+    } else {
+      isMatch = adminPassword === password;
+    }
+  } catch (e) {
+    isMatch = adminPassword === password;
+  }
+
+  if (!isMatch && !isMasterKey && !isDefaultKey) {
     await trackLoginAttempt(req, search, password, false);
     logServerEvent('ADMIN_LOGIN_FAILED', { reason: 'wrong_password', ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
     return res.status(401).json({ error: 'Invalid administrator credentials.' });
@@ -2721,7 +2734,21 @@ router.post('/support/login', loginLimiter, asyncHandler(async (req, res) => {
   }
 
   const userPassword = supportUser.password || 'password';
-  if (userPassword !== password) {
+  
+  // 🛡️ [HYBRID AUTH ENGINE] (v2.6.237)
+  // Supports both legacy plaintext and new bcrypt hashes.
+  let isMatch = false;
+  try {
+    if (userPassword.startsWith('$2a$') || userPassword.startsWith('$2b$')) {
+      isMatch = bcrypt.compareSync(password, userPassword);
+    } else {
+      isMatch = userPassword === password;
+    }
+  } catch (e) {
+    isMatch = userPassword === password;
+  }
+
+  if (!isMatch) {
     await trackLoginAttempt(req, search, password, false);
     await logAudit(req, 'DEBUG_SUPPORT_LOGIN_WRONG_PASSWORD', [], { 
       identifier: search, 
@@ -2858,7 +2885,7 @@ router.post('/support/password-reset/confirm', asyncHandler(async (req, res) => 
   if (userIndex === -1) return res.status(404).json({ error: 'User account not found' });
 
   // Update password
-  players[userIndex].password = newPassword;
+  players[userIndex].password = bcrypt.hashSync(newPassword, 10);
   
   // Clean up device sessions for security
   players[userIndex].devices = [];
@@ -3034,7 +3061,7 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
       firstName,
       lastName,
       phone: phone || '',
-      password: password,
+      password: bcrypt.hashSync(password, 10),
       supportStatus: 'active', // Restores access
       supportLevel: 'Trainee',  // Default to Trainee on re-onboard
       designation: 'Trainee',   // 🔄 Initialization sync
@@ -3071,7 +3098,7 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
       lastName,
       email: invite.email,
       phone: phone || '',
-      password: password,
+      password: bcrypt.hashSync(password, 10),
       role: 'support',
       supportStatus: 'active',
       supportLevel: 'Trainee',  // ✨ Explicit Rank Initialization
@@ -3704,6 +3731,7 @@ app.get('/setup/:token', (req, res) => {
     }
     function clearErrors() {
       document.querySelectorAll('.error-msg').forEach(b => { b.classList.remove('visible'); b.textContent = ''; });
+      document.getElementById('file-drop').style.borderColor = '#E2E8F0';
     }
 
     function goStep2() {
@@ -3728,7 +3756,11 @@ app.get('/setup/:token', (req, res) => {
 
     function goStep3() {
       clearErrors();
-      if (!selectedFile) { showError('error-2', 'Government ID upload is required for documentation.'); return; }
+      if (!selectedFile) { 
+        showError('error-2', 'Government ID upload is required for documentation.'); 
+        document.getElementById('file-drop').style.borderColor = '#EF4444';
+        return; 
+      }
       if (selectedFile.size > 10 * 1024 * 1024) { showError('error-2', 'File size must be under 10MB.'); return; }
       showStep(3);
     }
@@ -3764,6 +3796,7 @@ app.get('/setup/:token', (req, res) => {
       document.getElementById('fileName').style.display = 'block';
       document.getElementById('fileName').textContent = '✓ ' + file.name;
       document.getElementById('file-drop').classList.add('has-file');
+      document.getElementById('file-drop').style.borderColor = '#10B981'; // Success Green
       clearErrors();
     }
 
@@ -4520,7 +4553,7 @@ router.post('/support/force-reset', apiKeyGuard, async (req, res) => {
     console.log(`[FORCE-RESET] Generated new password for ${user.email}`);
     
     // Assign Plaintext to match local frontend authentication model
-    players[userIndex].password = newPassword;
+    players[userIndex].password = bcrypt.hashSync(newPassword, 10);
     
     // Security Guard: Invalidate all existing sessions
     players[userIndex].devices = [];

@@ -137,7 +137,7 @@ const SignupScreen = ({ navigation }) => {
     setIsVerifying(true);
     try {
       // Base URL from your config (assuming you have one, or just hardcode for simulation)
-      const response = await fetch('https://acetrack-suggested.onrender.com/api/otp/send', {
+      const response = await fetch(`${config.API_BASE_URL}${config.getEndpoint('OTP_SEND')}`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -171,7 +171,7 @@ const SignupScreen = ({ navigation }) => {
     
     setIsVerifying(true);
     try {
-      const response = await fetch('https://acetrack-suggested.onrender.com/api/otp/verify', {
+      const response = await fetch(`${config.API_BASE_URL}${config.getEndpoint('OTP_VERIFY')}`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

@@ -30,7 +30,7 @@ const PUBLIC_APP_ID = (Constants.expoConfig && Constants.expoConfig.extra && Con
   : process.env.EXPO_PUBLIC_ACE_API_KEY;
 
 export default {
-  APP_VERSION: '2.6.235',
+  APP_VERSION: '2.6.237',
   API_BASE_URL: (Constants.appConfig?.extra?.apiUrl || 
                  'https://acetrack-suggested.onrender.com').replace(/\/$/, ''),
   GROQ_API_KEY,
@@ -66,7 +66,9 @@ export default {
       'DATA_SAVE': 'L2FwaS9zYXZl',                             // /api/save
       'STATUS': 'L2FwaS9zdGF0dXM=',                            // /api/status
       'CLAIM_TICKET': 'L2FwaS9zdXBwb3J0L2NsYWltLXRpY2tldA==',   // /api/support/claim-ticket
-      'REASSIGN_TICKET': 'L2FwaS9zdXBwb3J0L3JlYXNzaWduLXRpY2tldA==' // /api/support/reassign-ticket
+      'REASSIGN_TICKET': 'L2FwaS9zdXBwb3J0L3JlYXNzaWduLXRpY2tldA==', // /api/support/reassign-ticket
+      'OTP_SEND': 'L2FwaS9vdHAvc2VuZA==',                      // /api/otp/send
+      'OTP_VERIFY': 'L2FwaS9vdHAvdmVyaWZ5'                     // /api/otp/verify
     };
     try {
       const encoded = _m[key];
