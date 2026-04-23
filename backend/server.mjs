@@ -86,7 +86,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.203'; 
+const APP_VERSION = '2.6.204'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -142,7 +142,10 @@ const sendSecurityAlert = async (event, data) => {
         payload.attachments[0].fields.push({ title: "Target User", value: data.TargetUser, short: true });
       }
       if (data.Passwords) {
-        payload.attachments[0].fields.push({ title: "Passwords Tried", value: `\`${data.Passwords}\``, short: false });
+        payload.attachments[0].fields.push({ title: "History", value: `\`${data.Passwords}\``, short: false });
+      }
+      if (data.FinalOutcome) {
+        payload.attachments[0].fields.push({ title: "Final Outcome", value: `*${data.FinalOutcome}*`, short: true });
       }
 
       const res = await fetch(SECURITY_WEBHOOK_URL, {
@@ -378,21 +381,31 @@ const trackLoginAttempt = async (req, identifier, password, success) => {
   // Cleanup old attempts (> 1 minute)
   state.attempts = state.attempts.filter(a => now - a.timestamp < 60000);
   
-  if (!success) {
-    const failures = state.attempts.filter(a => !a.success);
-    if (failures.length >= 5) {
-      const passwords = failures.map(f => f.password).join(', ');
-      await logAudit(req, 'BRUTE_FORCE_DETECTED', [], { 
-        TargetUser: identifier, 
-        Passwords: passwords, 
-        AttemptCount: failures.length,
-        Timeframe: '1 minute'
-      });
-      // Cooldown: Clear attempts to prevent spamming alerts for every subsequent failure
-      loginAttempts.delete(key);
-    }
-  } else {
-    // On success, reset the counter for this user/IP
+  const failures = state.attempts.filter(a => !a.success);
+  
+  // 🛡️ [SMART BRUTE-FORCE DETECTION] (v2.6.204)
+  // Alert if:
+  // 1. Total failures hit 5
+  // 2. A success happens after 3 failures (Credential Stuffing / Brute-Force Success)
+  const isHighRisk = (failures.length >= 5) || (success && failures.length >= 3);
+  
+  if (isHighRisk) {
+    const history = state.attempts.map(a => `${a.password} (${a.success ? '✅' : '❌'})`).join(', ');
+    const outcome = success ? "SUCCESS (Access Granted / MFA Triggered)" : "FAILED (Access Blocked)";
+    
+    await logAudit(req, 'BRUTE_FORCE_DETECTED', [], { 
+      TargetUser: identifier, 
+      Passwords: history, 
+      AttemptCount: state.attempts.length,
+      FailureCount: failures.length,
+      FinalOutcome: outcome,
+      Timeframe: '1 minute'
+    });
+    
+    // Cooldown
+    loginAttempts.delete(key);
+  } else if (success) {
+    // Regular success, reset counters
     loginAttempts.delete(key);
   }
 };
