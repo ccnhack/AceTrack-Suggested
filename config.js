@@ -35,6 +35,7 @@ export default {
                  'https://acetrack-suggested.onrender.com').replace(/\/$/, ''),
   GROQ_API_KEY,
   PUBLIC_APP_ID: 'AceTrack_Client_v2_Production',
+  ACE_API_KEY: '8f73b6e1a9c4d2e5b0a7f8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9',
   IS_ANDROID: Platform.OS === 'android',
   IS_IOS: Platform.OS === 'ios',
   
