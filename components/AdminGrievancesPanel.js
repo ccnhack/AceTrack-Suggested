@@ -46,7 +46,7 @@ const formatTicketDateFull = (dateStr) => {
 };
 
 export const AdminGrievancesPanel = ({
-  tickets, players, onReply, onUpdateStatus, onReassignTicket, onTypingStart, onTypingStop, search, onRetryMessage, onMarkSeen, onDetailToggle, autoSelectUser, autoSelectTicketId, onConsumeTicketId, onConsumeAutoSelect, ...restProps
+  tickets, players, onReply, onUpdateStatus, onReassignTicket, onTypingStart, onTypingStop, search, onRetryMessage, onMarkSeen, onDetailToggle, autoSelectUser, autoSelectTicketId, onConsumeTicketId, onConsumeAutoSelect, currentUser, ...restProps
 }) => {
 
   const [selectedTicket, setSelectedTicket] = useState(null);
@@ -312,13 +312,14 @@ export const AdminGrievancesPanel = ({
   const isTicketUnread = (ticket) => {
     if (!ticket) return false;
     
-    // 🛡️ SYNC (v2.6.49): Alignment with AdminHub badge logic
+    // 🛡️ SYNC (v2.6.227): Dynamically detect admin identity
+    const myId = currentUser?.id || 'admin';
     const status = ticket.status || 'Open';
     const isUnseenStatus = (status === 'Open' || status === 'Awaiting Response');
     const wasOpenedByAdmin = restProps.seenAdminActionIds?.has ? restProps.seenAdminActionIds.has(String(ticket.id)) : false;
     
     // Unread if: contains unread user messages OR is an unseen 'Open'/'Awaiting' status
-    const hasUnreadMessages = (ticket.messages || []).some(m => m && m.senderId !== 'admin' && m.status !== 'seen');
+    const hasUnreadMessages = (ticket.messages || []).some(m => m && m.senderId !== myId && m.status !== 'seen');
     
     return hasUnreadMessages || (isUnseenStatus && !wasOpenedByAdmin);
   };

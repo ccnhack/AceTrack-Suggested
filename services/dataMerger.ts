@@ -169,8 +169,8 @@ export const dataMerger = {
               msgMap.set(lm.id, { ...cm, status: 'seen' });
             }
           } else {
-            // New local message (not yet in cloud) - preserve it
-            cloudMsgs.push(lm);
+            // 🛡️ [LOCAL PRESERVATION] New local message (not yet in cloud) - add to the map
+            msgMap.set(lm.id, lm);
           }
         });
         

@@ -33,8 +33,10 @@ import { useAdmin } from '../context/AdminContext';
 import { useSync } from '../context/SyncContext';
 import { useMatchmaking } from '../context/MatchmakingContext';
 import { useEvaluations } from '../context/EvaluationContext';
+import { useAuth } from '../context/AuthContext';
 
 const AdminHubScreen = ({ navigation, route }) => {
+  const { currentUser } = useAuth();
   const { players } = usePlayers();
   const { tournaments, onUpdateTournament, onRemovePendingPlayer } = useTournaments();
   const { matchVideos, onUpdateVideoStatus, onBulkUpdateVideoStatus, onForceRefundVideo, onApproveDeleteVideo, onRejectDeleteVideo, onPermanentDeleteVideo, onBulkPermanentDeleteVideos } = useVideos();
@@ -268,6 +270,7 @@ const AdminHubScreen = ({ navigation, route }) => {
             onUpdateStatus={onUpdateTicketStatus}
             onMarkSeen={onMarkSeen}
             onReassignTicket={onReassignTicket}
+            currentUser={currentUser}
             onDetailToggle={(isOpen) => {
               if (!isOpen) {
                 setAutoSelectTicketId(null);
