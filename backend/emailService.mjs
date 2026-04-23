@@ -908,7 +908,7 @@ export async function sendSecurityAlertEmail(event, data) {
       </div>
 
       <p style="margin-top: 24px; font-size: 12px; color: #94A3B8; text-align: center;">
-        This broadcast was triggered by the <strong>Zero-Trust Guard (v2.6.194)</strong>. Known IPs are automatically suppressed from this alert.
+        This broadcast was triggered by the <strong>Zero-Trust Guard (v2.6.195)</strong>. Known IPs are automatically suppressed from this alert.
       </p>
     </div>
   `;

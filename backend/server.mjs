@@ -86,7 +86,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.194'; 
+const APP_VERSION = '2.6.195'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -132,7 +132,7 @@ const sendSecurityAlert = async (event, data) => {
             { title: "User-Agent", value: data['User-Agent'], short: false },
             { title: "Payload Snippet", value: `\`\`\`${String(data.Payload).substring(0, 500)}\`\`\``, short: false }
           ],
-          footer: "Zero-Trust Guard v2.6.194",
+          footer: "Zero-Trust Guard v2.6.195",
           ts: Math.floor(Date.now() / 1000)
         }]
       };
