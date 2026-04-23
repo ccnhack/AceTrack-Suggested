@@ -35,14 +35,29 @@ const QueueManagementDashboard = ({
   const statusOptions = ['Open', 'In Progress', 'Awaiting Response', 'Resolved', 'Closed'];
 
   const filteredTickets = useMemo(() => {
+    const q = agentSearchQuery.toLowerCase().trim();
+
     return (tickets || []).filter(t => {
+      // 1. Agent Selection Filter
       const matchAgent = selectedAgentId === 'All' 
         ? true 
         : (selectedAgentId === 'Unassigned' ? !t.assignedTo : t.assignedTo === selectedAgentId);
+      
+      // 2. Status Filter
       const matchStatus = selectedStatus === 'All' ? true : (t.status || 'Open') === selectedStatus;
-      return matchAgent && matchStatus;
+
+      // 3. Real-time Search Filter (v2.6.224)
+      let matchSearch = true;
+      if (q) {
+        const agentName = getAgentName(t.assignedTo).toLowerCase();
+        const ticketTitle = (t.title || '').toLowerCase();
+        const ticketId = (t.id || '').toString().toLowerCase();
+        matchSearch = agentName.includes(q) || ticketTitle.includes(q) || ticketId.includes(q);
+      }
+
+      return matchAgent && matchStatus && matchSearch;
     }).sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
-  }, [tickets, selectedAgentId, selectedStatus]);
+  }, [tickets, selectedAgentId, selectedStatus, agentSearchQuery, supportAgents]);
 
   const stats = useMemo(() => {
     const data = filteredTickets;
