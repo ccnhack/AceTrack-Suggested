@@ -246,6 +246,50 @@ const storage = {
     return storageQueue;
   },
 
+  /**
+   * 🚀 MULTI-SET OPTIMIZATION (v2.6.240)
+   * Efficiently persists multiple keys in a single queue block.
+   * On Native, this uses AsyncStorage.multiSet for a single bridge trip.
+   */
+  multiSet: async (updates: Record<string, any>) => {
+    if (isExecutingQueue) {
+       for (const key in updates) {
+         await storage._setItemRaw(key, updates[key]);
+       }
+       return;
+    }
+
+    const action = async () => {
+      isExecutingQueue = true;
+      try {
+        if (isWeb) {
+          for (const key in updates) {
+            await storage._setItemRaw(key, updates[key]);
+          }
+        } else {
+          const pairs: [string, string][] = [];
+          for (const key in updates) {
+            if (updates[key] === undefined) {
+               await AsyncStorage.removeItem(key);
+            } else {
+               pairs.push([key, JSON.stringify(updates[key])]);
+            }
+          }
+          if (pairs.length > 0) {
+            await AsyncStorage.multiSet(pairs);
+          }
+        }
+      } catch (e) {
+        console.error('[Storage] multiSet failed:', e);
+      } finally {
+        isExecutingQueue = false;
+      }
+    };
+
+    storageQueue = storageQueue.then(action).catch(action);
+    return storageQueue;
+  },
+
   removeItem: async (key: string) => {
     if (isExecutingQueue) {
       if (isWeb) {

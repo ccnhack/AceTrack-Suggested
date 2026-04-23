@@ -222,7 +222,7 @@ class SyncManager {
               targetUserId: this.userId,
               deviceId: this.hardwareId || Constants.sessionId || 'mobile_client',
               deviceName: Constants.deviceName || Platform.OS,
-              appVersion: Constants.expoConfig?.version || config.APP_VERSION || '2.6.239',
+              appVersion: Constants.expoConfig?.version || config.APP_VERSION || '2.6.240',
               timestamp: Date.now()
             });
           }
@@ -307,10 +307,10 @@ class SyncManager {
     const keys = Object.keys(updates);
     const labelBase = keys.length > 3 ? `BULK_SYNC_${keys.length}_KEYS` : `SYNC_${keys.join('_')}`;
     
-    // 🛡️ [DYNAMIC THRESHOLD] (v2.6.160)
+    // 🛡️ [DYNAMIC THRESHOLD] (v2.6.240)
     // Bulk syncs and Cloud Init naturally take longer on mobile hardware.
-    // We increase headroom to 60s for these specific labels.
-    const threshold = (labelBase.includes('BULK') || labelBase.includes('CLOUD_INIT')) ? 60000 : 35000;
+    // We increase headroom to 90s for these specific labels to prevent false positives.
+    const threshold = (labelBase.includes('BULK') || labelBase.includes('CLOUD_INIT')) ? 90000 : 35000;
 
     return this.trackOperation(labelBase, async () => {
       // 🛡️ [BACKPRESSURE GUARD] (v2.6.125)
@@ -319,126 +319,90 @@ class SyncManager {
         this.trackIncident('backpressure', `High Backpressure: ${qLen} items in queue. System automatically throttling.`);
       }
 
-      // 1. Local Persistence (Fast Path)
-      let count = 0;
-      for (const key in updates) {
-        count++;
-        console.log(`[SyncManager] [LOCAL_SAVE] Processing key ${count}/${keys.length}: ${key}`);
-        // 🚀 [CONCURRENCY YIELD] (v2.6.160)
-        // Every 3 keys, yield to the browser's event loop for 1ms.
-        // This lets the UI update and the Watchdog setTimeout fire between heavy writes.
-        if (count % 3 === 0) {
-          await new Promise(r => setTimeout(r, 0));
-        }
-
-        let val = updates[key];
+      // 1. Prepare working set for atomic write (v2.6.240)
+      const workingUpdates: Record<string, any> = { ...updates };
+      
+      // 2. Pre-Processing & Sanitization
+      for (const key in workingUpdates) {
+        let val = workingUpdates[key];
         
         // Capture Cloud Version
         if (key === 'version' && typeof val === 'number') {
           this.syncVersion = val;
         }
 
-        // Apply thinning/capping as needed
+        // Apply thinning
         if (key === 'players' && Array.isArray(val)) {
-          val = thinPlayers(val.filter(p => !!(p && p.id)));
-        } else if (key === 'currentUser' && val) {
-          // 🛡️ [IDENTITY GUARD] (v2.6.118)
-          // Prevent session hijacking by verifying the ID of the incoming profile update.
+          workingUpdates[key] = thinPlayers(val.filter(p => !!(p && p.id)));
+        } 
+        
+        // Identity & Profile Guard
+        else if (key === 'currentUser' && val) {
           if (this.userId && val.id && val.id !== this.userId) {
-            console.warn(`[SyncManager] [IDENTITY_HIJACK_BLOCK] Rejecting currentUser update for mismatch: Incoming=${val.id}, Active=${this.userId}`);
+            console.warn(`[SyncManager] [IDENTITY_HIJACK_BLOCK] Rejecting currentUser update: mismatch.`);
+            delete workingUpdates[key];
             continue;
           }
           
-          // 🛡️ [ADMIN BADGE INJECTION] (v2.6.125)
-          // When admin syncs, auto-inject seenAdminActionIds/visitedAdminSubTabs
+          // Badge Injection
           if (!isInternal && val.role === 'admin') {
             try {
               const seenIds = await storage.getItem('seenAdminActionIds');
               const visitedTabs = await storage.getItem('visitedAdminSubTabs');
               if (Array.isArray(seenIds)) val.seenAdminActionIds = seenIds;
               if (Array.isArray(visitedTabs)) val.visitedAdminSubTabs = visitedTabs;
-            } catch (e) {
-              console.warn('[SyncManager] Badge injection deferred:', e);
-            }
+            } catch (e) { /* ignore */ }
           }
 
           val = capPlayerDetail(val);
           
-          // 🛡️ [DEVICE HEARTBEAT] (v2.6.125)
-          // Stamp current device info into currentUser.devices for Admin Hub diagnostics.
-          // Throttled to once per 20 minutes to avoid excessive writes.
+          // Heartbeat
           if (!isInternal && this.hardwareId) {
             const now = Date.now();
-            const shouldStamp = (now - this.lastDeviceStamp) > 1200000; // 20 min
-            if (shouldStamp) {
+            if ((now - this.lastDeviceStamp) > 1200000) {
               this.lastDeviceStamp = now;
               const deviceTracker = {
                 id: this.hardwareId,
                 name: Constants.deviceName || Platform.OS,
-                appVersion: Constants.expoConfig?.version || '2.6.239',
+                appVersion: Constants.expoConfig?.version || config.APP_VERSION || '2.6.240',
                 platformVersion: `${Platform.OS} (API ${Platform.Version})`,
                 lastActive: now
               };
               val.devices = val.devices || [];
-              const existingIdx = val.devices.findIndex((d: any) => d && d.id === this.hardwareId);
-              if (existingIdx >= 0) {
-                val.devices[existingIdx] = deviceTracker;
-              } else {
-                val.devices.push(deviceTracker);
-              }
-              console.log(`[SyncManager] [DEVICE_HEARTBEAT] Stamped device: ${this.hardwareId}`);
+              const idx = val.devices.findIndex((d: any) => d && d.id === this.hardwareId);
+              if (idx >= 0) val.devices[idx] = deviceTracker;
+              else val.devices.push(deviceTracker);
             }
           }
-          
-          // 🛡️ [SYNC HARMONIZATION] (v2.6.118)
-          // Ensure profile changes (avatar, name) reflect in the Rankings/Matchmaking lists immediately.
-          (async () => {
-            try {
-              const players = await storage.getItem('players');
-              if (Array.isArray(players) && val && val.id) {
-                const idx = players.findIndex((p: any) => p && p.id === val.id);
-                if (idx !== -1) {
-                  // Merge updated fields while preserving ranking-specific ones
-                  const prevVerified = !!players[idx].isEmailVerified;
-                  players[idx] = { ...players[idx], ...thinPlayer(val) };
-                  const nextVerified = !!players[idx].isEmailVerified;
-                  
-                  if (prevVerified !== nextVerified) {
-                    console.log(`[SyncManager] [IDENTITY_SYNC] ${val.id} verification changed: ${prevVerified} -> ${nextVerified}`);
-                  }
-                  
-                  await storage.setItem('players', players);
-                  eventBus.emitEntityUpdate('players', null, 'update', 'internal');
-                  console.log(`[SyncManager] Harmonized profile for: ${val.id} (E:${!!players[idx].isEmailVerified} P:${!!players[idx].isPhoneVerified})`);
-                }
 
+          // 🛡️ [IDENTITY_SYNC] (v2.6.240)
+          // Synchronously harmonize players list if it's already in the working set
+          if (workingUpdates.players && Array.isArray(workingUpdates.players)) {
+             const pIdx = workingUpdates.players.findIndex((p: any) => p && p.id === val.id);
+             if (pIdx !== -1) {
+                workingUpdates.players[pIdx] = { ...workingUpdates.players[pIdx], ...thinPlayer(val) };
+             }
+          }
 
-              }
-            } catch (e) {
-              console.warn('[SyncManager] Profile harmonization deferred:', e);
-            }
-          })();
-        } else if (key === 'currentUser' && !val && !isInternal) {
-          // 🛡️ RECOVERY GUARD: Prevent overwriting currentUser with null during sync
-          // unless it's an internal reset or logout (which should use removeSystemFlag).
+          workingUpdates[key] = val;
+        } 
+        
+        else if (key === 'currentUser' && !val && !isInternal) {
           console.warn('[SyncManager] Blocking attempt to overwrite currentUser with null.');
-          continue; 
+          delete workingUpdates[key];
         }
 
-        // 🛡️ [TOURNAMENT SANITIZATION] (v2.6.125)
-        // Strip nil playerIds from tournament arrays on local save
+        // Tournament Sanitization
         if (key === 'tournaments' && Array.isArray(val)) {
-          val = val.map((t: any) => ({
+          workingUpdates[key] = val.map(t => ({
             ...t,
-            registeredPlayerIds: (t.registeredPlayerIds || []).filter((pid: any) => !!pid),
-            pendingPaymentPlayerIds: (t.pendingPaymentPlayerIds || []).filter((pid: any) => !!pid)
+            registeredPlayerIds: Array.isArray(t.registeredPlayerIds) ? t.registeredPlayerIds.filter((id: any) => id !== null) : []
           }));
         }
 
-        // 🛡️ [TICKET MESSAGE STATE: DELIVERED] (v2.6.125)
-        // On pull (isInternal), mark incoming messages from others as 'delivered'
+        // Support Ticket Delivery Stamping
         if (key === 'supportTickets' && Array.isArray(val) && isInternal && this.userId) {
-          val = val.map((ticket: any) => {
+          workingUpdates[key] = val.map((ticket: any) => {
             if (!ticket?.messages) return ticket;
             const updatedMsgs = ticket.messages.map((m: any) => {
               if (m.senderId !== this.userId && m.status === 'sent') {
@@ -449,22 +413,46 @@ class SyncManager {
             return { ...ticket, messages: updatedMsgs };
           });
         }
+      }
 
-        await storage.setItem(key, val);
+      // 3. Atomic Multi-Set (v2.6.240)
+      console.log(`[SyncManager] [LOCAL_SAVE] Executing Multi-Set for ${Object.keys(workingUpdates).length} keys...`);
+      await storage.multiSet(workingUpdates);
+
+      // 🛡️ Emit updates for each key
+      for (const key in workingUpdates) {
         eventBus.emitEntityUpdate(key, null, 'update', isInternal ? 'api' : 'local');
       }
 
-      // 2. Enqueue for Cloud Sync
-      // 🛡️ SECURITY HARDENING (v2.6.164): Removed 'currentUser' from syncableKeys.
-      // Profile changes are now synchronized through the 'players' collection via harmonization logic, 
-      // preventing sensitive session objects from leaking into the global shared state.
-      const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'matchmaking', 'seenAdminActionIds', 'visitedAdminSubTabs'];
-      const syncUpdates: Record<string, any> = {};
-      let hasSyncable = false;
+      // 🛡️ [POST-SYNC HARMONIZATION] (v2.6.240)
+      // If players wasn't in the update set, but currentUser was, update it in background without blocking watchdog
+      if (workingUpdates.currentUser && !workingUpdates.players) {
+         (async () => {
+            try {
+               const players = await storage.getItem('players');
+               if (Array.isArray(players)) {
+                  const idx = players.findIndex((p: any) => p && p.id === workingUpdates.currentUser.id);
+                  if (idx !== -1) {
+                     players[idx] = { ...players[idx], ...thinPlayer(workingUpdates.currentUser) };
+                     await storage.setItem('players', players);
+                     eventBus.emitEntityUpdate('players', null, 'update', 'internal');
+                  }
+               }
+            } catch(e) {}
+         })();
+      }
 
-      for (const key in updates) {
-        if (syncableKeys.includes(key)) {
-          let val = updates[key];
+      // 4. Cloud Synchronization (Background Path)
+      if (!isInternal) {
+        // Enqueue for Cloud Sync
+        // 🛡️ SECURITY HARDENING (v2.6.164): Removed 'currentUser' from syncableKeys.
+        const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'matchmaking', 'seenAdminActionIds', 'visitedAdminSubTabs'];
+        const syncUpdates: Record<string, any> = {};
+        let hasSyncable = false;
+
+        for (const key in workingUpdates) {
+          if (syncableKeys.includes(key)) {
+            let val = workingUpdates[key];
           
           // 🛡️ [SYNC REPLICATION] Removed LOCAL_PATH_GUARD to allow immediate local avatar previews
           syncUpdates[key] = val;
