@@ -21,6 +21,7 @@ import logger from '../utils/logger';
 
 class SyncManager {
   private static instance: SyncManager;
+  private isAuthMuted: boolean = false;
   private userId: string | null = null;
   private userToken: string | null = null;
   private hardwareId: string | null = null;
@@ -98,6 +99,7 @@ class SyncManager {
 
   public setUserToken(token: string | null) {
     this.userToken = token;
+    if (token) this.isAuthMuted = false; // Reset mute on new token
     // Re-setup socket if token changed to ensure high-security connection
     if (this.userId && this.socket) {
       this.setupSocket(this.userId);
@@ -147,6 +149,14 @@ class SyncManager {
         this.setupSocket(userId);
 
         // 3. Inform system that initialization is complete
+        // 🛡️ [JWT HYDRATION] (v2.6.192) Ensure token is available for immediate polling
+        const savedToken = await storage.getItem('userToken');
+        if (savedToken) {
+          console.log(`[SyncManager] Proactively hydrated token for ${userId}`);
+          this.userToken = savedToken;
+          this.isAuthMuted = false;
+        }
+
         eventBus.emit('INITIALIZATION_COMPLETE', { userId });
       } catch (e: any) {
         console.error('[SyncManager] FATAL_INIT_CRASH:', e);
@@ -518,6 +528,11 @@ class SyncManager {
     if (this.syncWatchdog) clearTimeout(this.syncWatchdog);
     const timeout = customThreshold || 35000;
     this.syncWatchdog = setTimeout(() => {
+      // 🛡️ [GUEST GUARD] (v2.6.192)
+      if (!this.userId || this.userId === 'guest' || this.isAuthMuted) {
+        if (this.isAuthMuted) console.log('[SyncManager] performCloudPush: Auth muted due to previous 401.');
+        return false;
+      }
       if (this.activeSyncs > 0) {
         console.warn(`[SyncManager] 🛡️ WATCHDOG TRIGGERED: Forcing sync reset after ${timeout/1000}s hang [STUCK_OP: ${label}]`);
         this.activeSyncs = 0;
@@ -612,6 +627,12 @@ class SyncManager {
   }
 
   public async performCloudPush(isInternal: boolean = false): Promise<void> {
+    // 🛡️ [GUEST GUARD] (v2.6.192)
+    if (!this.userId || this.userId === 'guest' || this.isAuthMuted) {
+      if (this.isAuthMuted) console.log('[SyncManager] performCloudPush: Auth muted due to previous 401.');
+      return;
+    }
+    
     if (this.activeSyncs > 1 && !isInternal) {
       console.log('[SyncManager] performCloudPush: Skip (Concurrent sync active)');
       return;
@@ -739,6 +760,11 @@ class SyncManager {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
+        if (response.status === 401) {
+          console.warn('[SyncManager] 🛑 Terminal Auth Failure (401). Muting sync.');
+          this.isAuthMuted = true;
+          eventBus.emit('AUTH_FAILURE', { status: 401, endpoint: `${cloudUrl}${config.getEndpoint('DATA_SAVE')}` });
+        }
         if (response.status === 429) {
           console.warn('[SyncManager] Rate limited by server');
           this.metrics.rateLimitCount++;

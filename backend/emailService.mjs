@@ -881,21 +881,34 @@ export async function sendSecurityAlertEmail(event, data) {
   
   const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
+  const osint = data.OSINT || {};
+  const score = typeof osint.score === 'number' ? osint.score : null;
+  const scoreLabel = score !== null ? `${score}%` : 'UNKNOWN';
+  const scoreColor = score !== null ? (score > 75 ? '#EF4444' : (score > 25 ? '#F59E0B' : '#10B981')) : '#64748B';
+
   const htmlBody = `
-    <div style="font-family: sans-serif; padding: 20px; border: 2px solid #EF4444; border-radius: 12px; background-color: #FEF2F2;">
-      <h2 style="color: #991B1B; margin-top: 0;">🚨 AceTrack Security Alert</h2>
-      <p style="font-size: 16px; color: #1E293B;">A critical security event has been detected on the AceTrack platform.</p>
-      
-      <div style="background-color: #FFFFFF; padding: 15px; border-radius: 8px; border: 1px solid #FCA5A5;">
-        <p><strong>Event:</strong> <span style="color: #EF4444;">${event}</span></p>
-        <p><strong>Timestamp:</strong> ${timestamp} IST</p>
-        <hr style="border: 0; border-top: 1px solid #E2E8F0; margin: 15px 0;">
-        <p><strong>Metadata:</strong></p>
-        <pre style="background: #F8FAFC; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 13px;">${JSON.stringify(data, null, 2)}</pre>
+    <div style="font-family: sans-serif; padding: 24px; border: 1px solid #E2E8F0; border-radius: 16px; background-color: #FFFFFF; max-width: 600px; margin: 0 auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px;">
+        <h2 style="color: #0F172A; margin: 0; font-size: 20px; font-weight: 800;">🚨 Security Broadcast</h2>
+        <span style="background-color: ${scoreColor}; color: #FFFFFF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 800; letter-spacing: 0.5px;">ABUSE CONFIDENCE: ${scoreLabel}</span>
       </div>
 
-      <p style="margin-top: 20px; font-size: 12px; color: #64748B;">
-        This is an automated security broadcast. Please investigate the logs immediately if you do not recognize this activity.
+      <p style="font-size: 15px; color: #475569; line-height: 1.6; margin-bottom: 20px;">A critical security event has been detected from an <strong>Unknown IP</strong>. This request was automatically blocked by the AceTrack Guard.</p>
+      
+      <div style="background-color: #F8FAFC; padding: 20px; border-radius: 12px; border: 1px solid #E2E8F0;">
+        <p style="margin: 0 0 12px; font-size: 14px;"><strong>Event:</strong> <span style="color: #EF4444; font-family: monospace; font-weight: bold;">${event}</span></p>
+        <p style="margin: 0 0 12px; font-size: 14px;"><strong>Source IP:</strong> <span style="font-family: monospace;">${data.IP}</span> (${osint.country || '??'})</p>
+        <p style="margin: 0 0 12px; font-size: 14px;"><strong>Reputation:</strong> <span style="color: ${scoreColor}; font-weight: bold;">${osint.provider || 'N/A'}</span></p>
+        <p style="margin: 0 0 12px; font-size: 14px;"><strong>Timestamp:</strong> ${timestamp} IST</p>
+        
+        <hr style="border: 0; border-top: 1px solid #E2E8F0; margin: 16px 0;">
+        
+        <p style="margin: 0 0 8px; font-size: 12px; color: #64748B; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Request Intelligence</p>
+        <pre style="background: #0F172A; color: #38BDF8; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 12px; line-height: 1.5;">${JSON.stringify(data, null, 2)}</pre>
+      </div>
+
+      <p style="margin-top: 24px; font-size: 12px; color: #94A3B8; text-align: center;">
+        This broadcast was triggered by the <strong>Zero-Trust Guard (v2.6.193)</strong>. Known IPs are automatically suppressed from this alert.
       </p>
     </div>
   `;

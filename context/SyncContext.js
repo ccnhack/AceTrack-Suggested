@@ -124,7 +124,14 @@ export const SyncProvider = ({ children }) => {
 
         clearTimeout(timeoutId);
 
-        if (!response.ok) throw new Error(`Network response was not ok (${response.status})`);
+        if (response.status === 401) {
+          console.warn('[SyncContext] 🛑 Unauthorized (401) on /api/data. Dispatching AUTH_FAILURE.');
+          eventBus.emit('AUTH_FAILURE', { status: 401, endpoint: '/api/data' });
+        }
+
+        if (!response.ok) {
+          throw new Error(`Cloud fetch failed: ${response.status}`);
+        }
         
         // 🛡️ [SERVER CLOCK OFFSET] (v2.6.121)
         // Calculate and persist drift between device and server clock
@@ -243,7 +250,16 @@ export const SyncProvider = ({ children }) => {
       if (status.lastUpdated && status.lastUpdated !== syncManager.getLastServerUpdate()) {
         console.log('[SyncContext] New cloud data detected via status poll. Auto-refreshing...');
         logger.logAction('CLOUD_UPDATE_DETECTED', { lastUpdated: status.lastUpdated });
-        await loadData(isForce, isForce);
+        
+        const isStale = status.lastUpdated !== syncManager.getLastServerUpdate();
+        if (isStale || isForce) {
+          // 🛡️ [GUEST GUARD] (v2.6.192)
+          if (!syncManager.getUserId() || syncManager.getUserId() === 'guest') {
+            console.log('[SyncContext] checkForUpdates: No active user, skipping data load.');
+            return;
+          }
+          await loadData(isForce, isForce);
+        }
       }
     } catch (error) {
       console.log('[SyncContext] Status check failed (silent):', error.message);

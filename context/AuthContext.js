@@ -88,6 +88,26 @@ export const AuthProvider = ({ children }) => {
     return unsub;
   }, [currentUser]);
 
+  // 🛡️ [AUTH FAILURE GUARD] (v2.6.192)
+  // Listen for terminal 401 failures from SyncManager to trigger graceful logout
+  useEffect(() => {
+    const unsub = eventBus.subscribe('AUTH_FAILURE', (e) => {
+      console.warn(`[AuthContext] 🛑 Terminal Auth Failure detected on ${e.payload.endpoint}.`);
+      if (currentUserRef.current) {
+        Alert.alert(
+          "Session Expired",
+          "Your security session has expired or is no longer valid. Please login again to continue syncing.",
+          [{ text: "OK", onPress: () => onLogout() }]
+        );
+        // Fallback for web where Alert.alert might be subtle or blocked
+        if (Platform.OS === 'web') {
+          onLogout();
+        }
+      }
+    });
+    return unsub;
+  }, [onLogout]);
+
   const onLogin = useCallback((arg1, arg2) => {
     // Handle polymorphic arguments: onLogin(user) OR onLogin(role, user)
     // 🛡️ [JWT UPDATED] (v2.6.190): Extract token from login result

@@ -86,7 +86,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.192'; 
+const APP_VERSION = '2.6.193'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -108,33 +108,58 @@ const signToken = (user) => {
 
 // 🛡️ SECURITY: Real-time Alerting (v2.6.191)
 const sendSecurityAlert = async (event, data) => {
-  // 1. Webhook Alert (Optional, only if URL provided)
+  let webhookSuccess = false;
+
+  // 1. Slack Webhook Alert (Primary Channel)
   if (SECURITY_WEBHOOK_URL) {
     try {
+      const osint = data.OSINT || {};
+      const score = typeof osint.score === 'number' ? osint.score : 0;
+      const color = score > 75 ? "#EF4444" : (score > 25 ? "#F59E0B" : "#10B981");
+
       const payload = {
-        content: `🚨 **SECURITY ALERT: ${event}**`,
-        embeds: [{
-          title: event,
-          color: 15158332, // Red
-          fields: Object.entries(data).map(([k, v]) => ({ name: k, value: String(v), inline: true })),
-          timestamp: new Date().toISOString()
+        text: `🚨 *SECURITY ALERT: ${event}*`,
+        attachments: [{
+          color: color,
+          fallback: `Security Alert: ${event} from ${data.IP}`,
+          fields: [
+            { title: "Event", value: event, short: false },
+            { title: "Source IP", value: `\`${data.IP}\` (${osint.country || '??'})`, short: false },
+            { title: "Actor", value: data.Actor, short: false },
+            { title: "Abuse Confidence", value: `${score}%`, short: false },
+            { title: "Method", value: data.Method, short: false },
+            { title: "URL", value: `\`${data.URL}\``, short: false },
+            { title: "User-Agent", value: data['User-Agent'], short: false },
+            { title: "Payload Snippet", value: `\`\`\`${String(data.Payload).substring(0, 500)}\`\`\``, short: false }
+          ],
+          footer: "Zero-Trust Guard v2.6.193",
+          ts: Math.floor(Date.now() / 1000)
         }]
       };
-      await fetch(SECURITY_WEBHOOK_URL, {
+
+      const res = await fetch(SECURITY_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
+      
+      if (res.ok) {
+        webhookSuccess = true;
+        console.log(`📡 [ALERT] Security event broadcast to Slack: ${event}`);
+      }
     } catch (err) {
-      // Silent fail for optional webhook
+      console.error("❌ Slack Alert Failed:", err.message);
     }
   }
 
-  // 2. Email Alert (Internal Obfuscated Fallback)
-  try {
-    await sendSecurityAlertEmail(event, data);
-  } catch (err) {
-    // Silent fail to ensure main thread stability
+  // 2. Email Alert (Fallback Channel)
+  // Only send email if Slack is not configured or failed, to reduce noise.
+  if (!webhookSuccess) {
+    try {
+      await sendSecurityAlertEmail(event, data);
+    } catch (err) {
+      // Silent fail to ensure main thread stability
+    }
   }
 };
 
@@ -161,6 +186,42 @@ AuditLogSchema.index({ timestamp: -1 });
 
 const AuditLog = mongoose.model('AuditLog', AuditLogSchema);
 
+// 🛡️ SECURITY: Reputation & OSINT Helpers (v2.6.192)
+// Checks if an IP has a record of successful authentication in the last 24 hours.
+const checkInternalReputation = async (ip) => {
+  try {
+    const recentSuccess = await AuditLog.findOne({
+      ipAddress: ip,
+      action: { $in: ['SUPPORT_LOGIN_SUCCESS', 'ADMIN_LOGIN_SUCCESS', 'LOGIN_SUCCESS'] },
+      timestamp: { $gt: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+    }).lean();
+    return !!recentSuccess;
+  } catch (e) {
+    return false;
+  }
+};
+
+// Queries AbuseIPDB for real-time reputation scoring.
+const getIPReputation = async (ip) => {
+  const apiKey = process.env.ABUSEIPDB_API_KEY;
+  if (!apiKey) return { score: 'N/A', provider: 'AbuseIPDB (Missing Key)' };
+  
+  try {
+    const response = await fetch(`https://api.abuseipdb.com/api/v2/check?ipAddress=${ip}&maxAgeInDays=90`, {
+      headers: { 'Key': apiKey, 'Accept': 'application/json' }
+    });
+    const result = await response.json();
+    return {
+      score: result?.data?.abuseConfidenceScore ?? 0,
+      country: result?.data?.countryCode || '??',
+      usage: result?.data?.usageType || 'unknown',
+      provider: 'AbuseIPDB'
+    };
+  } catch (e) {
+    return { score: 'ERR', provider: 'AbuseIPDB' };
+  }
+};
+
 const logAudit = async (req, action, changedCollections = [], details = {}) => {
   try {
     await AuditLog.create({
@@ -172,13 +233,35 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
       details
     });
 
-    // 🚨 Real-time Alert for Critical Events (v2.6.190)
+    // 🚨 Real-time Alert for Critical Events (v2.6.192)
     const criticalEvents = ['UNAUTHORIZED_ACCESS_BLOCKED', 'HARD_ROUTE_BLOCK', 'OTP_BRUTE_FORCE_DETECTED', 'ADMIN_PRIVILEGE_ESCALATION'];
     if (criticalEvents.includes(action)) {
+      const ip = (req && req.ip) || '0.0.0.0';
+      
+      // 🛡️ [SMART FILTERING] (v2.6.192)
+      // Only dispatch email alerts for UNAUTHORIZED_ACCESS_BLOCKED if the IP is unknown.
+      if (action === 'UNAUTHORIZED_ACCESS_BLOCKED') {
+        const isKnown = await checkInternalReputation(ip);
+        if (isKnown) {
+          console.log(`🛡️ [GUARD] Silent log for known IP: ${ip} (Action: ${action})`);
+          return; // Skip email alert
+        }
+      }
+
+      const actor = (req && req.headers && req.headers['x-user-id']) || (req && req.user && req.user.id) || 'guest';
+      const payload = (req && req.body && Object.keys(req.body).length > 0) ? JSON.stringify(req.body).substring(0, 1000) : 'None';
+      
+      // 🕵️ [OSINT ENRICHMENT] (v2.6.192)
+      const osint = await getIPReputation(ip);
+
       await sendSecurityAlert(action, { 
-        IP: (req && req.ip) || '0.0.0.0', 
+        IP: ip, 
         URL: (req && (req.originalUrl || req.url)) || 'Unknown', 
-        Actor: (req && req.headers && req.headers['x-user-id']) || 'Unknown' 
+        Method: (req && req.method) || 'Unknown',
+        Actor: actor,
+        'User-Agent': (req && req.headers && req.headers['user-agent']) || 'Unknown',
+        OSINT: osint,
+        Payload: payload
       });
     }
   } catch (e) {
