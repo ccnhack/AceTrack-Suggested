@@ -264,11 +264,19 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   }, [serverAgents, players]);
 
   const activeAgents = useMemo(() => {
-    return allSupportAgents.filter(a => a.supportStatus !== 'terminated');
+    return allSupportAgents.filter(a => 
+      a.supportStatus !== 'terminated' && 
+      a.supportStatus !== 'inactive' && 
+      a.supportLevel !== 'EX-EMPLOYEE'
+    );
   }, [allSupportAgents]);
 
   const exEmployees = useMemo(() => {
-    return allSupportAgents.filter(a => a.supportStatus === 'terminated');
+    return allSupportAgents.filter(a => 
+      a.supportStatus === 'terminated' || 
+      a.supportStatus === 'inactive' || 
+      a.supportLevel === 'EX-EMPLOYEE'
+    );
   }, [allSupportAgents]);
 
   const displayedAgents = activeTab === 'employees' ? activeAgents : exEmployees;
@@ -293,7 +301,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
     return analytics.leaderboard.find(a => a.id === selectedAgentId);
   }, [selectedAgentId, analytics]);
 
-  const isSelectedTerminated = selectedAgent?.supportStatus === 'terminated';
+  const isSelectedTerminated = selectedAgent?.supportStatus === 'terminated' || selectedAgent?.supportStatus === 'inactive' || selectedAgent?.supportLevel === 'EX-EMPLOYEE';
 
   return (
     <View style={styles.container}>
@@ -471,22 +479,22 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
               style={[
                 styles.miniCard, 
                 selectedAgentId === agent.id && styles.miniCardActive,
-                agent.supportStatus === 'terminated' && styles.miniCardTerminated
+                (agent.supportStatus === 'terminated' || agent.supportStatus === 'inactive' || agent.supportLevel === 'EX-EMPLOYEE') && styles.miniCardTerminated
               ]}
             >
-              <View style={agent.supportStatus === 'terminated' ? styles.avatarTerminated : null}>
+              <View style={(agent.supportStatus === 'terminated' || agent.supportStatus === 'inactive' || agent.supportLevel === 'EX-EMPLOYEE') ? styles.avatarTerminated : null}>
                 <SafeAvatar uri={agent.avatar} name={agent.name} role={agent.role} size={40} borderRadius={12} />
               </View>
               <Text style={[
                 styles.miniName, 
                 selectedAgentId === agent.id && styles.miniNameActive,
-                agent.supportStatus === 'terminated' && styles.miniNameTerminated
+                (agent.supportStatus === 'terminated' || agent.supportStatus === 'inactive' || agent.supportLevel === 'EX-EMPLOYEE') && styles.miniNameTerminated
               ]} numberOfLines={1}>
                 {agent.firstName || agent.name?.split(' ')[0]}
               </Text>
               <View style={[
                 styles.statusDot, 
-                { backgroundColor: agent.supportStatus === 'terminated' ? '#EF4444' : agent.supportStatus === 'suspended' ? '#F97316' : (agent.supportStatus === 'overwhelmed' ? '#F59E0B' : '#10B981') }
+                { backgroundColor: (agent.supportStatus === 'terminated' || agent.supportStatus === 'inactive' || agent.supportLevel === 'EX-EMPLOYEE') ? '#EF4444' : agent.supportStatus === 'suspended' ? '#F97316' : (agent.supportStatus === 'overwhelmed' ? '#F59E0B' : '#10B981') }
               ]} />
             </TouchableOpacity>
           ))}
@@ -519,7 +527,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                 </View>
                 <View style={styles.detailNameBox}>
                   <Text style={[styles.detailName, isSelectedTerminated && styles.textTerminated]}>{selectedAgent.name}</Text>
-                  <Text style={styles.detailEmail}>{selectedAgent.email}</Text>
+                  <Text style={styles.detailEmail}>{selectedAgent.email || selectedAgent.identifier || selectedAgent.id}</Text>
                   <View style={styles.levelRow}>
                     <Text style={[
                       styles.levelTag, 
