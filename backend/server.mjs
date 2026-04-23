@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.238'; 
+const APP_VERSION = '2.6.239'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -952,7 +952,13 @@ const apiKeyGuard = async (req, res, next) => {
                return res.status(401).json({ error: 'Session invalidated by security action. Please login again.' });
             }
 
-            // 2. Concurrent Session Verification (Support Only - v2.6.214)
+             // 2. Status Guard: Block terminated/suspended accounts (v2.6.238)
+             if (targetUser.role === 'support' && (targetUser.supportStatus === 'terminated' || targetUser.supportStatus === 'suspended')) {
+                console.warn(`🛑 Access Denied: Authenticated request from ${targetUser.supportStatus} account ${targetUser.id}`);
+                return res.status(403).json({ error: 'Access Denied: Your account has been deactivated.' });
+             }
+
+             // 3. Concurrent Session Verification (Support Only - v2.6.214)
             if (decoded.role === 'support' && decoded.jti) {
                const activeSessions = targetUser.activeSessions || [];
                const isSessionActive = activeSessions.some(s => s.jti === decoded.jti);
@@ -4320,6 +4326,11 @@ router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
     
     // Automated Unassign Trigger: If terminated or suspended, free up their tickets
     if (status === 'terminated' || status === 'suspended') {
+       // 🛡️ SECURITY LOCKDOWN (v2.6.238): Immediately invalidate all active JWTs
+       players[idx].lastForceLogoutAt = Date.now();
+       players[idx].activeSessions = [];
+       console.log(`[AUTH_LOCK] Invalidated all sessions for ${players[idx].email} due to ${status}`);
+
        const tickets = (state.data.supportTickets || []).map(t => {
          if (t.assignedTo === targetUserId) {
            return { ...t, assignedTo: null, assignedAt: null };
