@@ -3143,7 +3143,7 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
   // 1. CEO Congratulations & Welcome
   sendOnboardingSuccessEmail(invite.email, firstName);
   // 2. Official Login Credentials
-  sendLoginDetailsEmail(invite.email, `${firstName} ${lastName}`, finalUsername);
+  sendLoginDetailsEmail(invite.email, `${firstName} ${lastName}`, finalUsername, phone);
 }));
 
 

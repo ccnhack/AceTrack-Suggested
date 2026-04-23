@@ -442,7 +442,7 @@ export function buildWelcomeHtml(firstName) {
 /**
  * Builds the login credentials email.
  */
-export function buildCredentialsHtml(name, email, username) {
+export function buildCredentialsHtml(name, email, username, phone) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -483,6 +483,12 @@ export function buildCredentialsHtml(name, email, username) {
                   <tr>
                     <td style="font-size:18px;font-weight:900;color:#0F172A;letter-spacing:0.5px;">${username}</td>
                   </tr>
+                  <tr>
+                    <td style="padding-top:20px;padding-bottom:12px;font-size:11px;font-weight:800;color:#94A3B8;text-transform:uppercase;letter-spacing:1px;">Registered Contact</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:15px;font-weight:700;color:#0F172A;">${phone || 'Not Provided'}</td>
+                  </tr>
                 </table>
               </div>
 
@@ -517,13 +523,13 @@ export async function sendOnboardingSuccessEmail(toEmail, firstName) {
   }
 }
 
-export async function sendLoginDetailsEmail(toEmail, name, username) {
+export async function sendLoginDetailsEmail(toEmail, name, username, phone) {
   const mailOptions = {
     from: `"AceTrack Systems" <${process.env.GMAIL_USER || "acetrack.noreply@gmail.com"}>`,
     to: toEmail,
     subject: `\u{1F510} Your AceTrack Login Credentials`,
-    html: buildCredentialsHtml(name, toEmail, username),
-    text: `Login Details:\nName: ${name}\nEmail: ${toEmail}\nUsername: ${username}`
+    html: buildCredentialsHtml(name, toEmail, username, phone),
+    text: `Login Details:\nName: ${name}\nEmail: ${toEmail}\nUsername: ${username}\nContact: ${phone || 'N/A'}`
   };
   try {
     await getTransporter().sendMail(mailOptions);
