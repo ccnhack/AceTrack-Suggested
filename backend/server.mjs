@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.242'; 
+const APP_VERSION = '2.6.243'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -4425,8 +4425,8 @@ router.post('/support/reassign-ticket', apiKeyGuard, async (req, res) => {
     if (!state || !state.data) return res.status(404).json({ error: "State not found" });
 
     const players = state.data.players || [];
-    const targetAgent = players.find(p => p.id === targetAgentId && p.role === 'support' && p.supportStatus !== 'terminated');
-    if (!targetAgent) return res.status(404).json({ error: "Target agent not found or inactive" });
+    const targetAgent = players.find(p => p.id === targetAgentId && (p.role === 'support' || p.role === 'admin') && p.supportStatus !== 'terminated' && p.supportStatus !== 'inactive');
+    if (!targetAgent) return res.status(404).json({ error: "Target agent not found, inactive, or terminated" });
 
     const tickets = state.data.supportTickets || [];
     const ticketIdx = tickets.findIndex(t => t.id === ticketId);

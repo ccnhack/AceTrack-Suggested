@@ -30,7 +30,7 @@ const PUBLIC_APP_ID = (Constants.expoConfig && Constants.expoConfig.extra && Con
   : process.env.EXPO_PUBLIC_ACE_API_KEY;
 
 export default {
-  APP_VERSION: '2.6.242',
+  APP_VERSION: '2.6.243',
   API_BASE_URL: (Constants.appConfig?.extra?.apiUrl || 
                  'https://acetrack-suggested.onrender.com').replace(/\/$/, ''),
   GROQ_API_KEY,

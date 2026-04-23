@@ -874,7 +874,11 @@ export const AdminGrievancesPanel = ({
 
                   <ScrollView style={styles.agentList} showsVerticalScrollIndicator={false}>
                     {(players || [])
-                      .filter(p => p.role === 'support' && p.supportStatus === 'active' && p.id !== (selectedTicket?.assignedTo || ''))
+                      .filter(p => {
+                        const isAgent = (p.role === 'support' || p.role === 'admin');
+                        const isTerminated = p.supportStatus === 'terminated' || p.supportStatus === 'inactive' || p.supportLevel === 'EX-EMPLOYEE' || p.supportStatus === 'suspended';
+                        return isAgent && !isTerminated && p.id !== (selectedTicket?.assignedTo || '');
+                      })
                       .filter(p => {
                         if (!reassignSearch) return true;
                         const q = reassignSearch.toLowerCase();
@@ -905,7 +909,11 @@ export const AdminGrievancesPanel = ({
                         </TouchableOpacity>
                       ))}
                     
-                    {(players || []).filter(p => p.role === 'support' && p.supportStatus === 'active' && p.id !== (selectedTicket?.assignedTo || '')).length === 0 && (
+                    {(players || []).filter(p => {
+                      const isAgent = (p.role === 'support' || p.role === 'admin');
+                      const isTerminated = p.supportStatus === 'terminated' || p.supportStatus === 'inactive' || p.supportLevel === 'EX-EMPLOYEE' || p.supportStatus === 'suspended';
+                      return isAgent && !isTerminated && p.id !== (selectedTicket?.assignedTo || '');
+                    }).length === 0 && (
                       <Text style={styles.noAgentsText}>No other active agents available.</Text>
                     )}
                   </ScrollView>
