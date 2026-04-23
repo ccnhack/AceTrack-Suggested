@@ -306,7 +306,7 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
         summary.lastEventAt = new Date();
         await summary.save();
         console.log(`🌩️ [STORM] Batched ${action} from ${ip} into 30m window.`);
-        return; // Skip individual alert dispatch for storms
+        // REMOVED: return; (We now send all individual alerts as requested)
       } else {
         // Start new storm window
         await SecuritySummary.create({
