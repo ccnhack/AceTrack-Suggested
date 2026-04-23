@@ -86,7 +86,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.193'; 
+const APP_VERSION = '2.6.194'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -132,7 +132,7 @@ const sendSecurityAlert = async (event, data) => {
             { title: "User-Agent", value: data['User-Agent'], short: false },
             { title: "Payload Snippet", value: `\`\`\`${String(data.Payload).substring(0, 500)}\`\`\``, short: false }
           ],
-          footer: "Zero-Trust Guard v2.6.193",
+          footer: "Zero-Trust Guard v2.6.194",
           ts: Math.floor(Date.now() / 1000)
         }]
       };
@@ -222,6 +222,56 @@ const getIPReputation = async (ip) => {
   }
 };
 
+const SecuritySummarySchema = new mongoose.Schema({
+  ipAddress: String,
+  userId: String,
+  actor: String,
+  events: [{
+    timestamp: { type: Date, default: Date.now },
+    action: String,
+    url: String,
+    method: String,
+    details: mongoose.Schema.Types.Mixed
+  }],
+  isSummarized: { type: Boolean, default: false },
+  firstEventAt: { type: Date, default: Date.now },
+  lastEventAt: { type: Date, default: Date.now }
+});
+const SecuritySummary = mongoose.model('SecuritySummary', SecuritySummarySchema);
+
+// 🛡️ SECURITY: AI Summary Helper (v2.6.194)
+const generateSecuritySummary = async (events) => {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return "AI Summary unavailable: GROQ_API_KEY is not set.";
+
+  try {
+    const eventSummary = events.map(e => `${e.timestamp.toISOString()}: ${e.action} on ${e.url} (${e.method})`).join('\n');
+    const prompt = `You are a cybersecurity expert. Summarize the following security events detected on the AceTrack platform in the last 30 minutes. 
+Identify patterns (brute force, enumeration, lateral movement), assess risk level, and suggest 2 technical actions.
+Keep it professional and concise.
+Events:\n${eventSummary.substring(0, 3000)}`;
+
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.5,
+        max_tokens: 800
+      })
+    });
+    
+    const result = await response.json();
+    return result?.choices?.[0]?.message?.content || "AI failed to generate a summary.";
+  } catch (err) {
+    return `AI Summary Error: ${err.message}`;
+  }
+};
+
 const logAudit = async (req, action, changedCollections = [], details = {}) => {
   try {
     await AuditLog.create({
@@ -233,11 +283,40 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
       details
     });
 
-    // 🚨 Real-time Alert for Critical Events (v2.6.192)
-    const criticalEvents = ['UNAUTHORIZED_ACCESS_BLOCKED', 'HARD_ROUTE_BLOCK', 'OTP_BRUTE_FORCE_DETECTED', 'ADMIN_PRIVILEGE_ESCALATION'];
+    // 🚨 Real-time Alert for Critical Events (v2.6.194)
+    const criticalEvents = ['UNAUTHORIZED_ACCESS_BLOCKED', 'HARD_ROUTE_BLOCK', 'OTP_BRUTE_FORCE_DETECTED', 'ADMIN_PRIVILEGE_ESCALATION', 'SENSITIVE_ACCESS_ATTEMPT'];
     if (criticalEvents.includes(action)) {
       const ip = (req && req.ip) || '0.0.0.0';
-      
+      const actor = (req && req.headers && req.headers['x-user-id']) || (req && req.user && req.user.id) || 'guest';
+      const url = (req && (req.originalUrl || req.url)) || 'Unknown';
+      const method = (req && req.method) || 'Unknown';
+
+      // 🛡️ [AI AGGREGATION] (v2.6.194)
+      // Check for active alert window (30 minutes)
+      let summary = await SecuritySummary.findOne({
+        ipAddress: ip,
+        actor: actor,
+        isSummarized: false,
+        firstEventAt: { $gt: new Date(Date.now() - 30 * 60 * 1000) }
+      });
+
+      if (summary) {
+        // Append to existing storm window
+        summary.events.push({ action, url, method, details });
+        summary.lastEventAt = new Date();
+        await summary.save();
+        console.log(`🌩️ [STORM] Batched ${action} from ${ip} into 30m window.`);
+        return; // Skip individual alert dispatch for storms
+      } else {
+        // Start new storm window
+        await SecuritySummary.create({
+          ipAddress: ip,
+          userId: (req && req.headers && req.headers['x-user-id']) || (req && req.user && req.user.id) || 'guest',
+          actor: actor,
+          events: [{ action, url, method, details }]
+        });
+      }
+
       // 🛡️ [SMART FILTERING] (v2.6.192)
       // Only dispatch email alerts for UNAUTHORIZED_ACCESS_BLOCKED if the IP is unknown.
       if (action === 'UNAUTHORIZED_ACCESS_BLOCKED') {
@@ -248,7 +327,6 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
         }
       }
 
-      const actor = (req && req.headers && req.headers['x-user-id']) || (req && req.user && req.user.id) || 'guest';
       const payload = (req && req.body && Object.keys(req.body).length > 0) ? JSON.stringify(req.body).substring(0, 1000) : 'None';
       
       // 🕵️ [OSINT ENRICHMENT] (v2.6.192)
@@ -256,8 +334,8 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
 
       await sendSecurityAlert(action, { 
         IP: ip, 
-        URL: (req && (req.originalUrl || req.url)) || 'Unknown', 
-        Method: (req && req.method) || 'Unknown',
+        URL: url, 
+        Method: method,
         Actor: actor,
         'User-Agent': (req && req.headers && req.headers['user-agent']) || 'Unknown',
         OSINT: osint,
@@ -355,6 +433,8 @@ app.use((req, res, next) => {
   if (sensitivePaths.some(p => path.startsWith(p))) {
     const providedKey = req.headers['x-ace-api-key'] || req.query.key;
     if (providedKey !== ACE_API_KEY) {
+      // 🛡️ [SECURITY AUDIT] (v2.6.194)
+      logAudit(req, 'HARD_ROUTE_BLOCK', [], { path: req.path, ip: req.ip });
       console.warn(`🛑 Hard Block: Unauthorized access to ${req.path} from ${req.ip}`);
       return res.status(403).json({ 
         success: false, 
@@ -648,6 +728,14 @@ const apiKeyGuard = async (req, res, next) => {
       req.user = decoded;
       req.userId = decoded.id;
       req.userRole = decoded.role;
+
+      // 🛡️ [SUPPORT ACCESS GUARD] (v2.6.194)
+      const sensitivePaths = ['/api/diagnostics', '/api/logs', '/api/backup', '/api/config', '/api/admin', '/api/audit'];
+      if (sensitivePaths.some(p => path.toLowerCase().startsWith(p)) && req.userRole === 'support') {
+          await logAudit(req, 'SENSITIVE_ACCESS_ATTEMPT', [], { url: req.originalUrl || req.url, method: req.method, role: req.userRole });
+          return res.status(403).json({ error: 'Access Denied: Support role cannot access administrative endpoints.' });
+      }
+
       return next();
     } catch (err) {
       console.warn(`🛑 Invalid JWT from ${req.ip}: ${err.message}`);
@@ -3995,6 +4083,57 @@ router.post('/support/force-reset', apiKeyGuard, async (req, res) => {
     console.log(`[FORCE-RESET] Sending reset email to ${user.email}...`);
     sendAdminResetPasswordEmail(user.email, user.name, newPassword);
     console.log(`[FORCE-RESET] Email dispatch triggered for ${user.email}`);
+// 🛡️ SECURITY: AI Aggregator Background Task (v2.6.194)
+// Periodically checks for completed security event windows and summarizes them via Groq AI.
+setInterval(async () => {
+  try {
+    const pendingSummaries = await SecuritySummary.find({
+      isSummarized: false,
+      firstEventAt: { $lt: new Date(Date.now() - 30 * 60 * 1000) }
+    });
+
+    for (const summary of pendingSummaries) {
+      if (summary.events.length <= 1) {
+        summary.isSummarized = true;
+        await summary.save();
+        continue;
+      }
+
+      console.log(`🤖 [AI] Generating security summary for ${summary.ipAddress} (${summary.events.length} events)`);
+      const aiSummary = await generateSecuritySummary(summary.events);
+      
+      if (SECURITY_WEBHOOK_URL) {
+        const payload = {
+          text: `🌩️ *Security Storm AI Summary: ${summary.ipAddress}*`,
+          attachments: [{
+            color: "#6366F1", // Indigo
+            title: "🌩️ Security Storm Analysis",
+            text: aiSummary,
+            fields: [
+              { title: "Source IP", value: summary.ipAddress, short: true },
+              { title: "Actor", value: summary.actor, short: true },
+              { title: "Total Events", value: String(summary.events.length), short: true },
+              { title: "Window", value: "30 Minutes", short: true }
+            ],
+            footer: "AceTrack AI Guard (v2.6.194) | Groq Llama 3",
+            ts: Math.floor(Date.now() / 1000)
+          }]
+        };
+
+        await fetch(SECURITY_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
+
+      summary.isSummarized = true;
+      await summary.save();
+    }
+  } catch (err) {
+    console.error("AI Aggregator Error:", err.message);
+  }
+}, 5 * 60 * 1000); 
 
     res.json({ 
       success: true, 
