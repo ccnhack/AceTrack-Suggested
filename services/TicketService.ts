@@ -60,9 +60,21 @@ class TicketService {
     const updated = (prevTickets || []).map(t => {
       if (t && t.id === ticketId) {
         const newStatus = (!isAdmin && t.status === 'Awaiting Response') ? 'In Progress' : t.status;
+        
+        // 🛡️ [AUTO-ASSIGNMENT] (v2.6.254)
+        // If ticket is unassigned and staff replies, assign locally for immediate UI feedback
+        let assignedTo = t.assignedTo;
+        const isUnassigned = !assignedTo || assignedTo === 'Unassigned' || assignedTo === '';
+        const isStaff = isAdmin || currentUser?.role === 'support';
+        
+        if (isUnassigned && isStaff) {
+           assignedTo = senderId;
+        }
+
         return { 
           ...t, 
           status: newStatus,
+          assignedTo,
           messages: [...(t.messages || []), msg],
           updatedAt: new Date().toISOString() 
         };

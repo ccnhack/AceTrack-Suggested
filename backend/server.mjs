@@ -1690,6 +1690,21 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
             if (p && p.id) {
               const id = String(p.id).toLowerCase();
               const existing = entityMap.get(id);
+
+              // 🛡️ [AUTO-ASSIGNMENT ENGINE] (v2.6.254)
+              // If supportTickets are being saved and there's a new message from a staff member on an unassigned ticket, assign it.
+              if (key === 'supportTickets' && p.messages?.length > (existing?.messages?.length || 0)) {
+                const lastMsg = p.messages[p.messages.length - 1];
+                const senderId = lastMsg.senderId;
+                const isStaff = senderId !== p.userId && senderId !== 'system'; 
+                const isUnassigned = !p.assignedTo || p.assignedTo === 'Unassigned' || p.assignedTo === '';
+                
+                if (isUnassigned && isStaff) {
+                   p.assignedTo = senderId;
+                   p.assignedAt = new Date().toISOString();
+                   console.log(`[AUTO-ASSIGN] Ticket ${p.id} assigned to ${senderId} on cloud sync.`);
+                }
+              }
               
               // 🛡️ [SLOT_GUARD] (v2.6.107): Prevent over-registration if max reached
               if (key === 'tournaments' && existing) {

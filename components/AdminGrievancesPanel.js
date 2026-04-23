@@ -336,7 +336,11 @@ export const AdminGrievancesPanel = ({
   const filteredTickets = (tickets || [])
     .filter(t => {
       const status = t?.status || 'Open';
-      if (filterStatus === 'Unassigned') return !t.assignedTo;
+      if (filterStatus === 'Unassigned') {
+        const isUnassigned = !t.assignedTo || t.assignedTo === 'Unassigned' || t.assignedTo === '';
+        const isActive = status !== 'Resolved' && status !== 'Closed'; // 🛡️ [INTELLIGENT FILTER] (v2.6.254)
+        return isUnassigned && isActive;
+      }
       return filterStatus === 'All' || status === filterStatus;
     })
     .filter(t => {
@@ -1007,7 +1011,11 @@ export const AdminGrievancesPanel = ({
         {['All', 'Unassigned', ...statusOptions].map(s => {
           const count = (tickets || []).filter(t => {
             if (s === 'All') return true;
-            if (s === 'Unassigned') return !t.assignedTo;
+            if (s === 'Unassigned') {
+              const isUnassigned = !t.assignedTo || t.assignedTo === 'Unassigned' || t.assignedTo === '';
+              const isActive = t.status !== 'Resolved' && t.status !== 'Closed'; // 🛡️ [INTELLIGENT FILTER] (v2.6.254)
+              return isUnassigned && isActive;
+            }
             return (t.status || 'Open') === s;
           }).length;
           const isActive = filterStatus === s;
