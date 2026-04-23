@@ -42,7 +42,7 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const router = express.Router();
-app.set('trust proxy', true);
+app.set('trust proxy', 1); // 🛡️ Hardened for Render (v2.6.252)
 
 // 🕓 Utility: Get current IST timestamp for filenames (v2.6.84)
 const getISTTimestamp = () => {

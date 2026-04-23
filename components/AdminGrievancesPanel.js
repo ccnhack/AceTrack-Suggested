@@ -931,18 +931,17 @@ export const AdminGrievancesPanel = ({
                             <Text style={styles.agentInitials}>{agent.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}</Text>
                           </View>
                           <View style={styles.agentInfo}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 35 }}>
-                              <Text style={styles.agentName} numberOfLines={1}>{agent.name}</Text>
-                              <View style={[styles.loadBadge, { backgroundColor: agent.activeTickets > 5 ? '#FEF2F2' : '#F0FDF4' }]}>
-                                <Text style={[styles.loadText, { color: agent.activeTickets > 5 ? '#EF4444' : '#22C55E' }]}>
-                                  {agent.activeTickets}
-                                </Text>
-                              </View>
-                            </View>
+                            <Text style={styles.agentName} numberOfLines={1}>{agent.name}</Text>
                             <Text style={styles.agentUser}>@{agent.username || agent.id}</Text>
                           </View>
-                          <View style={{ position: 'absolute', right: 0 }}>
-                             <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+                          
+                          <View style={styles.premiumBadgeContainer}>
+                            <View style={[styles.loadBadge, { backgroundColor: agent.activeTickets > 5 ? '#FEF2F2' : '#F0FDF4' }]}>
+                              <Text style={[styles.loadText, { color: agent.activeTickets > 5 ? '#EF4444' : '#22C55E' }]}>
+                                {agent.activeTickets}
+                              </Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
                           </View>
                         </TouchableOpacity>
                       ))}
@@ -1911,17 +1910,23 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 2,
   },
+  premiumBadgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'absolute',
+    right: 0,
+  },
   loadBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
-    marginLeft: 10,
-    marginRight: 12, // 🛡️ [SPACING FIX] (v2.6.250)
+    marginRight: 12, // Gap between badge and chevron
+    minWidth: 32, // Ensures uniform width for premium alignment
+    alignItems: 'center',
   },
   loadText: {
-    fontSize: 9, // Slightly smaller for better fit
-    fontWeight: '800',
-    textTransform: 'uppercase',
+    fontSize: 11,
+    fontWeight: '900',
   },
   noAgentsText: {
     textAlign: 'center',
