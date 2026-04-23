@@ -5,6 +5,7 @@ import storage from '../utils/storage';
 import { syncManager } from '../services/SyncManager';
 import { useSync } from './SyncContext';
 import { useAuth } from './AuthContext';
+import config from '../config';
 
 const SupportContext = createContext(null);
 
