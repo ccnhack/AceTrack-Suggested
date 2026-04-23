@@ -103,7 +103,7 @@ export const SupportProvider = ({ children }) => {
   /** 🛡️ [NEW v2.6.132] Claim a ticket from the unassigned pool */
   const onClaimTicket = useCallback(async (ticketId) => {
     try {
-      const res = await fetch(`${config.API_BASE_URL}/api/support/claim-ticket`, {
+      const res = await fetch(`${config.API_BASE_URL}${config.getEndpoint('CLAIM_TICKET')}`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json', 
@@ -125,7 +125,7 @@ export const SupportProvider = ({ children }) => {
   /** 🛡️ [NEW v2.6.162] Reassign a specific ticket to another agent */
   const onReassignTicket = useCallback(async (ticketId, targetAgentId) => {
     try {
-      const res = await fetch(`${config.API_BASE_URL}/api/support/reassign-ticket`, {
+      const res = await fetch(`${config.API_BASE_URL}${config.getEndpoint('REASSIGN_TICKET')}`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json', 

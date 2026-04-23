@@ -113,7 +113,7 @@ export const SyncProvider = ({ children }) => {
         console.log('[SyncContext] loadData: Starting fetch...');
         
         const cloudUrl = config.API_BASE_URL;
-        const response = await fetch(`${cloudUrl}/api/data`, {
+        const response = await fetch(`${cloudUrl}${config.getEndpoint('DATA_SYNC')}`, {
           headers: { 
             'x-ace-api-key': config.PUBLIC_APP_ID,
             'x-user-id': syncManager.getUserId() || 'guest',
@@ -184,7 +184,7 @@ export const SyncProvider = ({ children }) => {
       }
       lastUpdateCheckRef.current = now;
 
-      const response = await fetch(`${config.API_BASE_URL}/api/status`, {
+      const response = await fetch(`${config.API_BASE_URL}${config.getEndpoint('STATUS')}`, {
         headers: { 
           'x-ace-api-key': config.PUBLIC_APP_ID,
           'x-user-id': syncManager.getUserId() || 'guest',

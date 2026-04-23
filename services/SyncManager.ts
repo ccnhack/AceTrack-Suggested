@@ -238,7 +238,7 @@ class SyncManager {
              const label = user?.name || 'Guest';
              const deviceId = this.hardwareId || await storage.getItem('acetrack_device_id') || 'unknown';
              const allLogs = logger.getLogs();
-             await fetch(`${config.API_BASE_URL}/api/diagnostics`, {
+             await fetch(`${config.API_BASE_URL}${config.getEndpoint('DIAGNOSTICS')}`, {
                method: 'POST',
                headers: {
                  'Content-Type': 'application/json',
@@ -265,7 +265,7 @@ class SyncManager {
 
   private async reportEmergencyStatus(userId: string, error: string) {
     try {
-      await fetch(`${config.API_BASE_URL}/api/diagnostics`, {
+      await fetch(`${config.API_BASE_URL}${config.getEndpoint('DIAGNOSTICS')}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -578,7 +578,7 @@ class SyncManager {
 
       try {
         const cloudUrl = config.API_BASE_URL;
-        const res = await fetch(`${cloudUrl}/api/data`, {
+        const res = await fetch(`${cloudUrl}${config.getEndpoint('DATA_SYNC')}`, {
           headers: { 
             'x-ace-api-key': config.PUBLIC_APP_ID,
             'x-user-id': this.userId || 'guest'
@@ -719,7 +719,7 @@ class SyncManager {
       }
 
       console.log(`[SyncManager] [${new Date().toISOString()}] Pushing to API: ${Object.keys(updates).join(', ')} [v:${this.syncVersion}]`);
-      const response = await fetch(`${cloudUrl}/api/save`, {
+      const response = await fetch(`${cloudUrl}${config.getEndpoint('DATA_SAVE')}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

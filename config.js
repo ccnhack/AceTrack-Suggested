@@ -37,6 +37,33 @@ export default {
   PUBLIC_APP_ID: 'AceTrack_Client_v2_Production',
   IS_ANDROID: Platform.OS === 'android',
   IS_IOS: Platform.OS === 'ios',
+  
+  // 🛡️ SECURITY: Stealth Endpoint Registry (v2.6.193)
+  // Prevents plaintext enumeration of backend attack surface in the JS bundle.
+  getEndpoint: (key) => {
+    const _m = {
+      'ADMIN_LOGIN': 'L2FwaS92MS9hZG1pbi9sb2dpbg==',           // /api/v1/admin/login
+      'ADMIN_VERIFY': 'L2FwaS92MS9hZG1pbi92ZXJpZnktcGlu',       // /api/v1/admin/verify-pin
+      'SUPPORT_LOGIN': 'L2FwaS92MS9zdXBwb3J0L2xvZ2lu',         // /api/v1/support/login
+      'SUPPORT_RESET': 'L2FwaS92MS9zdXBwb3J0L3Bhc3N3b3JkLXJlc2V0L3JlcXVlc3Q=', // /api/v1/support/password-reset/request
+      'DIAGNOSTICS': 'L2FwaS9kaWFnbm9zdGljcw==',               // /api/diagnostics
+      'DATA_SYNC': 'L2FwaS9kYXRh',                             // /api/data
+      'DATA_SAVE': 'L2FwaS9zYXZl',                             // /api/save
+      'STATUS': 'L2FwaS9zdGF0dXM=',                            // /api/status
+      'CLAIM_TICKET': 'L2FwaS9zdXBwb3J0L2NsYWltLXRpY2tldA==',   // /api/support/claim-ticket
+      'REASSIGN_TICKET': 'L2FwaS9zdXBwb3J0L3JlYXNzaWduLXRpY2tldA==' // /api/support/reassign-ticket
+    };
+    try {
+      const encoded = _m[key];
+      if (!encoded) return '';
+      // Cross-platform Base64 decoding (v2.6.193)
+      if (typeof atob !== 'undefined') return atob(encoded);
+      return Buffer.from(encoded, 'base64').toString();
+    } catch (e) {
+      return '';
+    }
+  },
+
   stripBuster: (url) => {
     if (!url) return url;
     const str = String(url);

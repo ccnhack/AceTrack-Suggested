@@ -71,7 +71,7 @@ export const AdminProvider = ({ children }) => {
       const logs = logger.getLogs();
       const currentUser = await syncManager.getSystemFlag('currentUser');
       const hardwareId = await syncManager.getSystemFlag('acetrack_device_id');
-      const response = await fetch(`${config.API_BASE_URL}/api/diagnostics`, {
+      const response = await fetch(`${config.API_BASE_URL}${config.getEndpoint('DIAGNOSTICS')}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -75,7 +75,7 @@ const LoginScreen = ({ navigation }) => {
       // 🌐 [SERVER AUTH FLOW] (v2.6.186)
       try {
         // 1. Admin Login
-        const adminUrl = `${config.API_BASE_URL}/api/v1/admin/login`;
+        const adminUrl = `${config.API_BASE_URL}${config.getEndpoint('ADMIN_LOGIN')}`;
         const adminRes = await fetch(adminUrl, {
           method: 'POST',
           headers: {
@@ -95,7 +95,7 @@ const LoginScreen = ({ navigation }) => {
         }
 
         // 2. Support Login
-        const supportUrl = `${config.API_BASE_URL}/api/v1/support/login`;
+        const supportUrl = `${config.API_BASE_URL}${config.getEndpoint('SUPPORT_LOGIN')}`;
         const supportRes = await fetch(supportUrl, {
           method: 'POST',
           headers: {
@@ -201,7 +201,7 @@ const LoginScreen = ({ navigation }) => {
 
     setIsForgotLoading(true);
     try {
-      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/password-reset/request`, {
+      const res = await fetch(`${config.API_BASE_URL}${config.getEndpoint('SUPPORT_RESET')}`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -378,7 +378,7 @@ const LoginScreen = ({ navigation }) => {
                     if (mfaPin.length < 6) { setMfaError('PIN must be 6 digits.'); return; }
                     setMfaLoading(true); setMfaError('');
                     try {
-                      const resp = await fetch(`${config.API_BASE_URL}/api/v1/admin/verify-pin`, {
+                      const resp = await fetch(`${config.API_BASE_URL}${config.getEndpoint('ADMIN_VERIFY')}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID },
                         body: JSON.stringify({ mfaToken, pin: mfaPin }),
@@ -403,7 +403,7 @@ const LoginScreen = ({ navigation }) => {
                     if (mfaPin.length < 6) { setMfaError('PIN must be 6 digits.'); return; }
                     setMfaLoading(true); setMfaError('');
                     try {
-                      const resp = await fetch(`${config.API_BASE_URL}/api/v1/admin/verify-pin`, {
+                      const resp = await fetch(`${config.API_BASE_URL}${config.getEndpoint('ADMIN_VERIFY')}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID },
                         body: JSON.stringify({ mfaToken, pin: mfaPin }),
