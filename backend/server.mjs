@@ -342,6 +342,7 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
         OSINT: osint,
         Payload: payload
       });
+      }
     }
   } catch (e) {
     console.error("❌ Audit log error:", e.message);
