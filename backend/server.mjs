@@ -86,7 +86,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.213'; 
+const APP_VERSION = '2.6.214'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -94,16 +94,15 @@ const ACE_API_KEY = process.env.ACE_API_KEY || '8f73b6e1a9c4d2e5b0a7f8c9d0e1f2a3
 const JWT_SECRET = process.env.JWT_SECRET || 'acetrack_zero_trust_fallback_secret_1717';
 const SECURITY_WEBHOOK_URL = process.env.SECURITY_WEBHOOK_URL; // OPTIONAL: Discord/Slack alerts
 
-const signToken = (user) => {
-  return jwt.sign(
-    { 
-      id: user.id, 
-      role: user.role || 'user',
-      scopes: user.scopes || (user.role === 'admin' ? ['*'] : ['read:own'])
-    }, 
-    JWT_SECRET, 
-    { expiresIn: '1h' }
-  );
+const signToken = (user, jti = null) => {
+  const payload = {
+    id: user.id, 
+    role: user.role || 'user',
+    scopes: user.scopes || (user.role === 'admin' ? ['*'] : ['read:own'])
+  };
+  if (jti) payload.jti = jti;
+  
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
 };
 
 // 🛡️ SECURITY: Real-time Alerting (v2.6.191)
@@ -938,14 +937,28 @@ const apiKeyGuard = async (req, res, next) => {
     try {
       const decoded = jwt.verify(bearerToken, JWT_SECRET);
       
-      // 🛡️ [ROLE-BASED LOCKDOWN CHECK] (v2.6.213)
-      // Force logout validation for administrative and support sessions
+      // 🛡️ [ROLE-BASED LOCKDOWN CHECK] (v2.6.214)
+      // Force logout and concurrent session validation
       if (decoded.role === 'admin' || decoded.role === 'support') {
          const state = await AppState.findOne().sort({ lastUpdated: -1 }).lean();
          const targetUser = state?.data?.players?.find(p => p.id === decoded.id);
-         if (targetUser && targetUser.lastForceLogoutAt && (decoded.iat * 1000) < targetUser.lastForceLogoutAt) {
-            console.warn(`🛑 Session Blocked: JWT for ${decoded.role} issued before force-logout timestamp.`);
-            return res.status(401).json({ error: 'Session invalidated by security action. Please login again.' });
+         
+         if (targetUser) {
+            // 1. Force Logout Verification
+            if (targetUser.lastForceLogoutAt && (decoded.iat * 1000) < targetUser.lastForceLogoutAt) {
+               console.warn(`🛑 Session Blocked: JWT for ${decoded.role} issued before force-logout timestamp.`);
+               return res.status(401).json({ error: 'Session invalidated by security action. Please login again.' });
+            }
+
+            // 2. Concurrent Session Verification (Support Only - v2.6.214)
+            if (decoded.role === 'support' && decoded.jti) {
+               const activeSessions = targetUser.activeSessions || [];
+               const isSessionActive = activeSessions.some(s => s.jti === decoded.jti);
+               if (!isSessionActive) {
+                  console.warn(`🛑 Session Evicted: Support user ${decoded.id} exceeded concurrent limit.`);
+                  return res.status(401).json({ error: 'Session invalidated: Maximum concurrent sessions (2) exceeded.' });
+               }
+            }
          }
       }
 
@@ -2720,18 +2733,47 @@ router.post('/support/login', loginLimiter, asyncHandler(async (req, res) => {
   }
 
   await trackLoginAttempt(req, search, password, true);
+  
+  // 🛡️ [CONCURRENT SESSION MANAGEMENT] (v2.6.214)
+  // Limit support employees to 2 active sessions
+  const jti = bcrypt.hashSync(Date.now().toString() + supportUser.id, 10).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
+  const activeSessions = [...(supportUser.activeSessions || [])];
+  
+  // Add current session
+  activeSessions.push({ jti, iat: Date.now() });
+  
+  // Keep only the most recent 2 sessions
+  const rotatedSessions = activeSessions.sort((a, b) => b.iat - a.iat).slice(0, 2);
+  
+  // Persist updated session list to database
+  const release = await syncMutex.acquire();
+  try {
+    const freshState = await AppState.findOne().sort({ lastUpdated: -1 });
+    const freshPlayers = [...(freshState?.data?.players || [])];
+    const pIdx = freshPlayers.findIndex(p => p.id === supportUser.id);
+    
+    if (pIdx !== -1) {
+      freshPlayers[pIdx].activeSessions = rotatedSessions;
+      await AppState.findOneAndUpdate(
+        {},
+        { $set: { 'data.players': freshPlayers, version: (freshState.version || 0) + 1, lastUpdated: new Date() } }
+      );
+    }
+  } finally {
+    release();
+  }
 
   // Strip sensitive fields before sending the user object back
   const { password: _pw, pushTokens, devices, ...safeUser } = supportUser;
 
   await logAudit(req, 'SUPPORT_LOGIN_SUCCESS', [], { userId: supportUser.id, email: supportUser.email });
   
-  // 🛡️ Success! Issue JWT with Support scope (v2.6.190)
+  // 🛡️ Success! Issue JWT with Support scope and unique JTI (v2.6.214)
   const token = signToken({ 
     id: supportUser.id, 
     role: 'support', 
     scopes: ['read:basic', 'write:tickets'] 
-  });
+  }, jti);
 
   res.json({ success: true, token, user: safeUser });
 
