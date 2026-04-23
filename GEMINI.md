@@ -24,11 +24,9 @@ This document tracks critical rules and workflows to ensure stability across mob
 - **Focus**: Always investigate `ReferenceError`, `TransformError`, and `HYDRATION` events in logs.
 
 ## 📜 Last 5 Major Objectives Summary
-1.  **v2.6.62 Deployment**: **Landing Page & Security Hardening**. Split iOS/Android landing pages, fixed iPhone layout overlap, and implemented the "Ultimate Admin Guard" to restrict admin privileges to the System Admin ID only.
-2.  **v2.6.61 Deployment**: **Admin Hub Sync & Badge Resolution**. Decoupled badge state from user profile, implemented server-side Union Merge for acknowledgments, and resolved the "Phantom Ticket Generator" bug. Deduped support tickets globally.
-2.  **v2.6.51 Deployment**: **Security Hardening & Admin Guard**. Restricted 'admin' role privileges strictly to the System Admin account (ID: admin). Implemented a server-side role guard that automatically demotes unauthorized admin escalations and removed legacy recovery helpers.
-2.  **v2.6.27 Deployment**: **Insights & Web-Activity_Fixed**. Integrated Insights Tab into Admin Hub for Web/Mobile, hardened WebSocket device status reporting for browser consistency, and synchronized versions across platform.
-2.  **v2.6.26 Deployment**: **Working_Enhanced_Support_Center**. Implemented "Jump to Original Message" (Reply-scroll), Unified Deep Search in Admin Hub, and Draggable AI ChatBot.
-3.  **v2.3.2 Deployment**: Implemented Tournament Interest Workflow, added real-time reactivity to modals, and refined UI font sizes/labels.
-4.  **v2.3.1 Deployment**: Fixed Matchmaking real-time sync, resolved WebSocket race conditions, and hardened identity management.
+1.  **v2.6.257 Deployment**: **Premium Web Landing & Mobile-Browser Stability**. Implemented dedicated responsive web landing portal, decoupled mobile landing screens to prevent regression, and hardened the Login page for mobile-web browsers.
+2.  **v2.6.62 Deployment**: **Landing Page & Security Hardening**. Split iOS/Android landing pages, fixed iPhone layout overlap, and implemented the "Ultimate Admin Guard" to restrict admin privileges to the System Admin ID only.
+3.  **v2.6.61 Deployment**: **Admin Hub Sync & Badge Resolution**. Decoupled badge state from user profile, implemented server-side Union Merge for acknowledgments, and resolved the "Phantom Ticket Generator" bug.
+4.  **v2.6.51 Deployment**: **Security Hardening & Admin Guard**. Restricted 'admin' role privileges strictly to the System Admin account (ID: admin).
+5.  **v2.6.27 Deployment**: **Insights & Web-Activity_Fixed**. Integrated Insights Tab into Admin Hub for Web/Mobile.
 5.  **v2.2.5 Deployment**: Fixed Matchmaking 400 error, session logout bug, and hardened notifications against emulator crashes.
