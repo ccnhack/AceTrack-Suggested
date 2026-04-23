@@ -488,7 +488,7 @@ export function buildCredentialsHtml(name, email, username) {
 
               <div style="margin-top:24px;text-align:center;">
                  <p style="font-size:12px;color:#94A3B8;">Use your password set during setup to log in.</p>
-                 <a href="https://acetrack-suggested.onrender.com/admin" style="display:inline-block;margin-top:12px;background:#0F172A;color:#FFFFFF;padding:12px 32px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;">Access Portal</a>
+                 <a href="https://acetrack-suggested.onrender.com/login" style="display:inline-block;margin-top:12px;background:#0F172A;color:#FFFFFF;padding:12px 32px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;">Access Portal</a>
               </div>
             </td>
           </tr>
@@ -568,7 +568,7 @@ export function buildForceResetHtml(name, newPassword) {
               </div>
 
               <div style="margin-top:32px;text-align:center;">
-                 <a href="https://acetrack-suggested.onrender.com/admin" style="display:inline-block;background:#EF4444;color:#FFFFFF;padding:16px 40px;border-radius:12px;text-decoration:none;font-weight:800;font-size:15px;box-shadow:0 10px 15px -3px rgba(239,68,68,0.3);">Login to AceTrack</a>
+                 <a href="https://acetrack-suggested.onrender.com/login" style="display:inline-block;background:#EF4444;color:#FFFFFF;padding:16px 40px;border-radius:12px;text-decoration:none;font-weight:800;font-size:15px;box-shadow:0 10px 15px -3px rgba(239,68,68,0.3);">Login to AceTrack</a>
               </div>
 
               <p style="margin-top:32px;font-size:12px;color:#94A3B8;line-height:1.6;text-align:center;">
@@ -595,7 +595,7 @@ export async function sendAdminResetPasswordEmail(toEmail, name, newPassword) {
     to: toEmail,
     subject: `\u{26A0}\uFE0F ACTION REQUIRED: Your AceTrack Password Has Been Reset`,
     html: buildForceResetHtml(name, newPassword),
-    text: `Your AceTrack password has been reset due to organizational policy.\nNew Password: ${newPassword}\nLogin: https://acetrack-suggested.onrender.com/admin`
+    text: `Your AceTrack password has been reset due to organizational policy.\nNew Password: ${newPassword}\nLogin: https://acetrack-suggested.onrender.com/login`
   };
   try {
     await getTransporter().sendMail(mailOptions);
