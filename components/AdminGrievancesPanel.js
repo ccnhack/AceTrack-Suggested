@@ -882,20 +882,29 @@ export const AdminGrievancesPanel = ({
                         
                         const isAgent = role === 'support' || role === 'admin';
                         
-                        // 🛡️ [ULTIMATE GUARD] (v2.6.247)
-                        // 1. Explicit exclusion flags
+                        // 🛡️ [SMART LIFECYCLE GUARD] (v2.6.249)
+                        // An agent is inactive if they have a terminatedAt date that is NOT superseded by a reOnboardedAt date
+                        const hasActiveTermination = !!p.terminatedAt && (!p.reOnboardedAt || new Date(p.terminatedAt) > new Date(p.reOnboardedAt));
+
                         const isExplicitlyInactive = 
                           ['terminated', 'inactive', 'suspended', 'left', 'ex-employee'].includes(status) || 
                           ['ex-employee', 'terminated'].includes(level) ||
-                          !!p.terminatedAt;
+                          hasActiveTermination;
                         
                         // 2. Hardcoded Blacklist for known terminated agents (Safety fallback for thinned data)
                         const isBlacklisted = ['aurna', 'riyan'].includes(username);
 
                         if (!isAgent || isExplicitlyInactive || isBlacklisted) return false;
                         
-                        // 3. Current assignee exclusion
                         return p.id !== (selectedTicket?.assignedTo || '');
+                      })
+                      .map(p => {
+                         // 📊 [LOAD TRACKING] Calculate active ticket count (v2.6.249)
+                         const activeTickets = (tickets || []).filter(t => 
+                           (t.assignedTo === p.id || t.assignedTo === p.username) && 
+                           !['Resolved', 'Closed'].includes(t.status)
+                         ).length;
+                         return { ...p, activeTickets };
                       })
                       .filter(p => {
                         if (!reassignSearch) return true;
@@ -922,7 +931,14 @@ export const AdminGrievancesPanel = ({
                             <Text style={styles.agentInitials}>{agent.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}</Text>
                           </View>
                           <View style={styles.agentInfo}>
-                            <Text style={styles.agentName}>{agent.name}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                              <Text style={styles.agentName} numberOfLines={1}>{agent.name}</Text>
+                              <View style={[styles.loadBadge, { backgroundColor: agent.activeTickets > 5 ? '#FEF2F2' : '#F0FDF4' }]}>
+                                <Text style={[styles.loadText, { color: agent.activeTickets > 5 ? '#EF4444' : '#22C55E' }]}>
+                                  {agent.activeTickets} {agent.activeTickets === 1 ? 'ticket' : 'tickets'}
+                                </Text>
+                              </View>
+                            </View>
                             <Text style={styles.agentUser}>@{agent.username || agent.id}</Text>
                           </View>
                           <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
@@ -1892,6 +1908,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#64748B',
     marginTop: 2,
+  },
+  loadBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginLeft: 10,
+  },
+  loadText: {
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
   noAgentsText: {
     textAlign: 'center',

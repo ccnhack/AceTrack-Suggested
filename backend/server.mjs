@@ -4431,10 +4431,13 @@ router.post('/support/reassign-ticket', apiKeyGuard, async (req, res) => {
       const status = (p.supportStatus || '').toLowerCase();
       const level = (p.supportLevel || '').toLowerCase();
       
+      // 🛡️ [SMART LIFECYCLE GUARD] (v2.6.249)
+      const hasActiveTermination = !!p.terminatedAt && (!p.reOnboardedAt || new Date(p.terminatedAt) > new Date(p.reOnboardedAt));
+
       const isExplicitlyInactive = 
         ['terminated', 'inactive', 'suspended', 'left', 'ex-employee'].includes(status) || 
         ['ex-employee', 'terminated'].includes(level) ||
-        !!p.terminatedAt;
+        hasActiveTermination;
       
       const isActiveSupport = role === 'support' && (status === 'active' || !status) && !isExplicitlyInactive;
       const isActiveAdmin = role === 'admin' && !isExplicitlyInactive;
