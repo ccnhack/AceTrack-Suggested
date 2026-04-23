@@ -73,6 +73,24 @@ export const AdminGrievancesPanel = ({
   const swipeableRefs = useRef({}); // 🛡️ Track swipeable instances for snap-back (v2.6.35)
   const [tempHighlightedId, setTempHighlightedId] = useState(null); // 🔦 Temporary highlight on jump
 
+  // 🛡️ [STABILITY] Sync local selectedTicket with updated props (v2.6.228)
+  useEffect(() => {
+    if (selectedTicket) {
+      const updated = (tickets || []).find(t => t.id === selectedTicket.id || t._id === selectedTicket.id);
+      if (updated) {
+        // Only update if something meaningful changed (e.g. status, messages, assignedTo)
+        const hasChanged = updated.status !== selectedTicket.status || 
+                           updated.assignedTo !== selectedTicket.assignedTo ||
+                           (updated.messages?.length !== selectedTicket.messages?.length);
+        
+        if (hasChanged) {
+          console.log(`[AdminGrievancesPanel] [STABILITY] Syncing local selectedTicket: ${selectedTicket.id}`);
+          setSelectedTicket(updated);
+        }
+      }
+    }
+  }, [tickets]);
+
   // 🛡️ [Tick System] Mark as 'Seen' when ticket is opened (v2.6.28)
   useEffect(() => {
     if (selectedTicket && selectedTicket.id) {
@@ -872,7 +890,7 @@ export const AdminGrievancesPanel = ({
 
       {/* Resolution Confirmation Prompt */}
       {showStatusConfirm && (
-        <Modal transparent animationType="fade">
+        <Modal transparent animationType="fade" visible={showStatusConfirm}>
           <View style={styles.modalOverlay}>
             <View style={styles.confirmBox}>
               <View style={styles.confirmIcon}>
@@ -895,7 +913,7 @@ export const AdminGrievancesPanel = ({
 
       {/* Reopen Justification Modal */}
       {showReopenModal && (
-        <Modal transparent animationType="fade">
+        <Modal transparent animationType="fade" visible={showReopenModal}>
           <View style={styles.modalOverlay}>
             <View style={styles.confirmBox}>
               <View style={styles.confirmIcon}>
@@ -935,7 +953,7 @@ export const AdminGrievancesPanel = ({
 
       {/* AI Processing Overlay */}
       {isGeneratingSummary && (
-        <Modal transparent>
+        <Modal transparent visible={isGeneratingSummary}>
           <View style={styles.modalOverlay}>
             <View style={styles.loadingBox}>
               <ActivityIndicator color="#2563EB" size="large" />
