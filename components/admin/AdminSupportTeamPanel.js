@@ -87,7 +87,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
        }
 
        const res = await fetch(`${config.API_BASE_URL}/api/support/analytics${queryParams}`, {
-         headers: { 'x-ace-api-key': config.PUBLIC_APP_ID, 'x-user-id': 'admin' }
+         headers: { 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' }
        });
        if (res.ok) {
          const data = await res.json();
@@ -140,7 +140,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json', 
-          'x-ace-api-key': config.PUBLIC_APP_ID, 
+          'x-ace-api-key': config.ACE_API_KEY, 
           'x-user-id': 'admin' 
         },
         body: JSON.stringify({ targetUserId: userId, status, level })
@@ -174,7 +174,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
               method: 'POST',
               headers: { 
                 'Content-Type': 'application/json', 
-                'x-ace-api-key': config.PUBLIC_APP_ID, 
+                'x-ace-api-key': config.ACE_API_KEY, 
                 'x-user-id': 'admin' 
               },
               body: JSON.stringify({ targetUserId: userId })
@@ -209,7 +209,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
         try {
           const res = await fetch(`${config.API_BASE_URL}/api/support/transfer-tickets`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID, 'x-user-id': 'admin' },
+            headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' },
             body: JSON.stringify({ fromAgentId: fromId, toAgentId: a.id })
           });
           const data = await res.json();
@@ -238,7 +238,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
     try {
       const res = await fetch(`${config.API_BASE_URL}/api/data`, {
         headers: { 
-          'x-ace-api-key': config.PUBLIC_APP_ID,
+          'x-ace-api-key': config.ACE_API_KEY,
           'x-user-id': 'admin'
         }
       });

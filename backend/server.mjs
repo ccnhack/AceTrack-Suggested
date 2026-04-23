@@ -86,11 +86,11 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.202'; 
+const APP_VERSION = '2.6.203'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
-const ACE_API_KEY = process.env.ACE_API_KEY || 'AceTrack_Admin_v1_Secret';
+const ACE_API_KEY = process.env.ACE_API_KEY || '8f73b6e1a9c4d2e5b0a7f8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9';
 const JWT_SECRET = process.env.JWT_SECRET || 'acetrack_zero_trust_fallback_secret_1717';
 const SECURITY_WEBHOOK_URL = process.env.SECURITY_WEBHOOK_URL; // OPTIONAL: Discord/Slack alerts
 
