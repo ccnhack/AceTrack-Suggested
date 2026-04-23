@@ -79,7 +79,7 @@ export function buildOnboardingHtml(displayName, email, setupLink, expiryFormatt
               <!-- Welcome -->
               <h1 style="margin:0 0 8px;font-size:26px;font-weight:800;color:#0F172A;">Welcome to the Team!</h1>
               <p style="margin:0 0 24px;font-size:16px;color:#475569;line-height:1.6;">
-                Hi <strong style="color:#0F172A;">${displayName}</strong>,
+                Hi <strong style="color:#0F172A;">${displayName}</strong>
               </p>
               <p style="margin:0 0 28px;font-size:15px;color:#475569;line-height:1.7;">
                 You've been officially invited to join <strong style="color:#0F172A;">AceTrack</strong> as a <strong style="color:#4F46E5;">Support Agent</strong>. 
@@ -269,7 +269,7 @@ export async function sendOnboardingEmail(toEmail, setupLink, expiresAt, firstNa
   // Plain text version (critical for inbox delivery — spam filters penalize HTML-only emails)
   const textBody = `Welcome to AceTrack!
 
-Hi ${displayName},
+Hi ${displayName}
 
 You've been invited to join AceTrack as a Support Agent. Complete your account setup to get started.
 
@@ -335,7 +335,7 @@ export async function sendPasswordResetEmail(toEmail, resetLink, expiresAt, firs
             <td style="background-color:#FFFFFF;padding:40px;border-radius:0 0 16px 16px;">
               <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#0F172A;">Password Reset Request</h1>
               <p style="margin:0 0 24px;font-size:16px;color:#475569;line-height:1.6;">
-                Hi <strong>${displayName}</strong>,<br><br>
+                Hi <strong>${displayName}</strong><br><br>
                 We received a request to reset the password for your AceTrack account. Click the button below to set a new password.
               </p>
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
@@ -409,7 +409,7 @@ export function buildWelcomeHtml(firstName) {
           <tr>
             <td style="background-color:#FFFFFF;padding:40px;border-radius:0 0 16px 16px;">
               <p style="font-size:18px;color:#0F172A;line-height:1.6;margin-bottom:24px;">
-                Hi <strong>${firstName}</strong>,
+                Hi <strong>${firstName}</strong>
               </p>
               <p style="font-size:16px;color:#475569;line-height:1.7;margin-bottom:20px;">
                 Congratulations on completing your onboarding! You are now officially an <strong style="color:#4F46E5;">AceTrackian</strong>.
@@ -630,7 +630,7 @@ export function buildPromotionHtml(name, newRole) {
               <h2 style="margin:0 0 16px;font-size:22px;font-weight:900;color:#166534;text-align:center;">Congratulations!</h2>
               
               <p style="font-size:16px;color:#475569;line-height:1.6;margin-bottom:24px;">
-                Hi <strong>${name}</strong>,<br><br>
+                Hi <strong>${name}</strong><br><br>
                 We are thrilled to inform you that you have been promoted to the designation of <strong style="color:#15803D;font-size:18px;">${newRole}</strong> !
               </p>
 
@@ -675,7 +675,7 @@ export function buildDemotionHtml(name, newRole) {
               <h2 style="margin:0 0 16px;font-size:22px;font-weight:900;color:#3730A3;text-align:center;">Let's Grow Together!</h2>
               
               <p style="font-size:16px;color:#475569;line-height:1.6;margin-bottom:24px;">
-                Hi <strong>${name}</strong>,<br><br>
+                Hi <strong>${name}</strong><br><br>
                 We have updated your designation within the team to <strong style="color:#4338CA;font-size:18px;">${newRole}</strong>.
               </p>
 
@@ -723,7 +723,7 @@ export function buildTerminationHtml(name) {
               <h2 style="margin:0 0 16px;font-size:20px;font-weight:900;color:#0F172A;">Employment Notice</h2>
               
               <p style="font-size:15px;color:#475569;line-height:1.7;margin-bottom:20px;">
-                Dear <strong>${name}</strong>,<br><br>
+                Dear <strong>${name}</strong><br><br>
                 It is with a heavy heart that we are writing to you today. Due to ongoing restructuring situations within the organization, we have had to make the hard decision to reduce our current workforce.
               </p>
 
