@@ -15,7 +15,7 @@ import { useAuth } from '../context/AuthContext';
 
 const SupportDashboardScreen = ({ navigation, route }) => {
   const { players } = usePlayers();
-  const { supportTickets, onReplyTicket, onUpdateTicketStatus } = useSupport();
+  const { supportTickets, onReplyTicket, onUpdateTicketStatus, onMarkSeen } = useSupport();
   const { isCloudOnline, isUsingCloud, lastSyncTime, onManualSync } = useSync();
   const { currentUser } = useAuth();
   
@@ -187,6 +187,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
           players={players || []}
           onReply={onReplyTicket}
           onUpdateStatus={onUpdateTicketStatus}
+          onMarkSeen={onMarkSeen}
           seenAdminActionIds={new Set()}
           search={search}
         />

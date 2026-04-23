@@ -38,7 +38,7 @@ const AdminHubScreen = ({ navigation, route }) => {
   const { players } = usePlayers();
   const { tournaments, onUpdateTournament, onRemovePendingPlayer } = useTournaments();
   const { matchVideos, onUpdateVideoStatus, onBulkUpdateVideoStatus, onForceRefundVideo, onApproveDeleteVideo, onRejectDeleteVideo, onPermanentDeleteVideo, onBulkPermanentDeleteVideos } = useVideos();
-  const { supportTickets, onReplyTicket, onUpdateTicketStatus, onReassignTicket } = useSupport();
+  const { supportTickets, onReplyTicket, onUpdateTicketStatus, onReassignTicket, onMarkSeen } = useSupport();
 
   const { matchmaking } = useMatchmaking();
   const { evaluations } = useEvaluations();
@@ -266,6 +266,7 @@ const AdminHubScreen = ({ navigation, route }) => {
             players={players || []}
             onReply={onReplyTicket}
             onUpdateStatus={onUpdateTicketStatus}
+            onMarkSeen={onMarkSeen}
             onReassignTicket={onReassignTicket}
             onDetailToggle={(isOpen) => {
               if (!isOpen) {
