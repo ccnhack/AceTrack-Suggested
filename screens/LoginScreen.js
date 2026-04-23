@@ -237,45 +237,67 @@ const LoginScreen = ({ navigation }) => {
   };
 
   if (Platform.OS === 'web') {
+    const { width } = Dimensions.get('window');
+    const isMobileWeb = width < 768;
+
     return (
-      <View style={{ flex: 1, flexDirection: 'row', height: '100vh', backgroundColor: '#F8FAFC' }}>
-        {/* Left Side: Illustration & Branding */}
-        <View style={{ flex: 1.2, backgroundColor: '#0F172A', position: 'relative', overflow: 'hidden' }}>
-          <ImageBackground 
-            source={{ uri: "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?q=80&w=2000&auto=format&fit=crop" }} 
-            style={{ ...StyleSheet.absoluteFillObject, opacity: 0.4 }}
-            resizeMode="cover"
-          />
-          <LinearGradient colors={['transparent', 'rgba(15, 23, 42, 0.9)']} style={StyleSheet.absoluteFillObject} />
-          
-          <View style={{ flex: 1, justifyContent: 'center', padding: 80, zIndex: 10 }}>
-            <Image source={require('../assets/icon.png')} style={{ width: 80, height: 80, borderRadius: 20, marginBottom: 32, shadowColor: '#6366F1', shadowRadius: 20, shadowOpacity: 0.5 }} />
-            <Text style={{ fontSize: 48, fontWeight: '900', color: '#FFFFFF', letterSpacing: -1, lineHeight: 56 }}>
-              The Ultimate Platform for <Text style={{ color: '#6366F1' }}>Sports Excellence.</Text>
-            </Text>
-            <Text style={{ fontSize: 18, color: '#94A3B8', marginTop: 24, lineHeight: 28, maxWidth: 500 }}>
-              Manage tournaments, track player performance, and handle support requests with our state-of-the-art administrative ecosystem.
-            </Text>
+      <View style={{ 
+        flex: 1, 
+        flexDirection: isMobileWeb ? 'column' : 'row', 
+        height: '100vh', 
+        backgroundColor: '#F8FAFC' 
+      }}>
+        {/* Left Side: Illustration & Branding (Hidden on Mobile Web) */}
+        {!isMobileWeb && (
+          <View style={{ flex: 1.2, backgroundColor: '#0F172A', position: 'relative', overflow: 'hidden' }}>
+            <ImageBackground 
+              source={{ uri: "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?q=80&w=2000&auto=format&fit=crop" }} 
+              style={{ ...StyleSheet.absoluteFillObject, opacity: 0.4 }}
+              resizeMode="cover"
+            />
+            <LinearGradient colors={['transparent', 'rgba(15, 23, 42, 0.9)']} style={StyleSheet.absoluteFillObject} />
             
-            <View style={{ flexDirection: 'row', marginTop: 48, gap: 24 }}>
-              <View>
-                <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFF' }}>v{APP_VERSION}</Text>
-                <Text style={{ fontSize: 12, color: '#64748B', textTransform: 'uppercase', letterSpacing: 1 }}>Stability Build</Text>
-              </View>
-              <View style={{ width: 1, backgroundColor: '#334155' }} />
-              <View>
-                <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFF' }}>100%</Text>
-                <Text style={{ fontSize: 12, color: '#64748B', textTransform: 'uppercase', letterSpacing: 1 }}>Cloud Uptime</Text>
+            <View style={{ flex: 1, justifyContent: 'center', padding: 80, zIndex: 10 }}>
+              <Image source={require('../assets/icon.png')} style={{ width: 80, height: 80, borderRadius: 20, marginBottom: 32, shadowColor: '#6366F1', shadowRadius: 20, shadowOpacity: 0.5 }} />
+              <Text style={{ fontSize: 48, fontWeight: '900', color: '#FFFFFF', letterSpacing: -1, lineHeight: 56 }}>
+                The Ultimate Platform for <Text style={{ color: '#6366F1' }}>Sports Excellence.</Text>
+              </Text>
+              <Text style={{ fontSize: 18, color: '#94A3B8', marginTop: 24, lineHeight: 28, maxWidth: 500 }}>
+                Manage tournaments, track player performance, and handle support requests with our state-of-the-art administrative ecosystem.
+              </Text>
+              
+              <View style={{ flexDirection: 'row', marginTop: 48, gap: 24 }}>
+                <View>
+                  <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFF' }}>v{APP_VERSION}</Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', textTransform: 'uppercase', letterSpacing: 1 }}>Stability Build</Text>
+                </View>
+                <View style={{ width: 1, backgroundColor: '#334155' }} />
+                <View>
+                  <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFF' }}>100%</Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', textTransform: 'uppercase', letterSpacing: 1 }}>Cloud Uptime</Text>
+                </View>
               </View>
             </View>
           </View>
-        </View>
+        )}
 
         {/* Right Side: Login Form */}
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+        <View style={{ 
+          flex: 1, 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          padding: isMobileWeb ? 20 : 40 
+        }}>
           <View style={{ width: '100%', maxWidth: 440 }}>
-            <View style={{ marginBottom: 40 }}>
-              <Text style={{ fontSize: 32, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 }}>Welcome Back</Text>
+            {isMobileWeb && (
+              <View style={{ alignItems: 'center', marginBottom: 32 }}>
+                <Image source={require('../assets/icon.png')} style={{ width: 60, height: 60, borderRadius: 15, marginBottom: 16 }} />
+                <Text style={{ fontSize: 24, fontWeight: '900', color: '#0F172A' }}>AceTrack Admin</Text>
+              </View>
+            )}
+
+            <View style={{ marginBottom: isMobileWeb ? 24 : 40 }}>
+              <Text style={{ fontSize: isMobileWeb ? 24 : 32, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 }}>Welcome Back</Text>
               <Text style={{ fontSize: 16, color: '#64748B', marginTop: 8 }}>Sign in to the administrative portal</Text>
             </View>
 
@@ -337,7 +359,7 @@ const LoginScreen = ({ navigation }) => {
               )}
             </TouchableOpacity>
 
-            <Text style={{ textAlign: 'center', color: '#94A3B8', fontSize: 12, marginTop: 40, lineHeight: 18 }}>
+            <Text style={{ textAlign: 'center', color: '#94A3B8', fontSize: 12, marginTop: isMobileWeb ? 24 : 40, lineHeight: 18 }}>
               This portal is restricted to authorized personnel. All activity is logged and subject to audit under policy SEC-402.
             </Text>
           </View>
