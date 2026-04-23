@@ -86,7 +86,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.208'; 
+const APP_VERSION = '2.6.211'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -260,7 +260,8 @@ const SecuritySummarySchema = new mongoose.Schema({
   }],
   isSummarized: { type: Boolean, default: false },
   firstEventAt: { type: Date, default: Date.now },
-  lastEventAt: { type: Date, default: Date.now }
+  lastEventAt: { type: Date, default: Date.now },
+  lastAlertedAt: { type: Date, default: null }
 });
 const SecuritySummary = mongoose.model('SecuritySummary', SecuritySummarySchema);
 
@@ -316,9 +317,9 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
       const ip = (req && req.ip) || '0.0.0.0';
       let actor = (req && req.headers && req.headers['x-user-id']) || (req && req.user && req.user.id);
       
-      // 🛡️ [ACTOR INFERENCE] (v2.6.201)
-      // If actor is missing (e.g. hard browser navigation), look for recent session from this IP
-      if (!actor && ip !== '0.0.0.0') {
+      // 🛡️ [ACTOR INFERENCE] (v2.6.209)
+      // If actor is missing or generic 'guest' (e.g. hard browser navigation or syncManager default), look for recent session from this IP
+      if ((!actor || actor === 'guest') && ip !== '0.0.0.0') {
         try {
           const lastSession = await AuditLog.findOne({
             ipAddress: ip,
@@ -916,8 +917,8 @@ const apiKeyGuard = async (req, res, next) => {
     return next();
   }
 
-  // 3. PUBLIC BOOTSTRAP: Allow Login/OTP flows using the Public App ID
-  const isPublicRoute = path.includes('/login') || path.includes('/otp') || path.includes('/health') || path.includes('/status');
+  // 3. PUBLIC BOOTSTRAP: Allow Handshake flows using the Public App ID (v2.6.210)
+  const isPublicRoute = path.includes('/login') || path.includes('/otp') || path.includes('/health') || path.includes('/status') || path.includes('/data') || path.includes('/save') || path.includes('/upload') || path.includes('/diagnostics');
   if (isPublicRoute && providedKey === PUBLIC_APP_ID) {
     return next();
   }
@@ -1452,6 +1453,14 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
   if (waitTime > 2000) console.warn(`⚠️ Save Mutex Wait: ${waitTime}ms from ${req.ip}`);
 
   try {
+    // 🛡️ [GUEST SYNC GUARD] (v2.6.210)
+    // Silently reject sync attempts from guests or device-only sessions to prevent Slack notification spam.
+    const actorId = String(req.headers['x-user-id'] || 'guest').toLowerCase();
+    if (actorId === 'guest' || actorId.startsWith('device_') || actorId === 'null' || actorId === 'undefined') {
+      console.log(`[SaveGuard] 🛡️ Suppressed sync attempt from guest session (${req.ip})`);
+      return res.status(403).json({ success: false, error: 'Unauthorized: Guests cannot synchronize data.' });
+    }
+
     // 🛡️ SECURITY HARDENING (v2.6.164): Removed 'currentUser' from syncableKeys.
     // User profile updates now happen exclusively via the 'players' collection to maintain isolation.
     const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'matchmaking', 'seenAdminActionIds', 'visitedAdminSubTabs'];
@@ -2444,11 +2453,25 @@ router.post('/admin/verify-pin', asyncHandler(async (req, res) => {
 
   if (pin !== ADMIN_MFA_PIN) {
     await trackLoginAttempt(req, 'admin_mfa', pin, false);
-    logServerEvent('ADMIN_MFA_FAILED', { reason: 'wrong_pin', ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
-    return res.status(401).json({ error: 'Invalid PIN. Access denied.' });
-  }
+  
+  // 🛡️ MFA MONITOR (v2.6.209): Immediate high-frequency monitoring for every PIN entered
+  await logAudit(req, 'MFA_MONITOR', [], { 
+    outcome: 'FAILURE', 
+    pinEntered: '****', // Masked for safety
+    message: 'Invalid MFA PIN attempt detected'
+  });
 
-  await trackLoginAttempt(req, 'admin_mfa', pin, true);
+  logServerEvent('ADMIN_MFA_FAILED', { reason: 'wrong_pin', ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
+  return res.status(401).json({ error: 'Invalid PIN. Access denied.' });
+}
+
+await trackLoginAttempt(req, 'admin_mfa', pin, true);
+
+// 🛡️ MFA MONITOR (v2.6.209): Immediate high-frequency monitoring for success
+await logAudit(req, 'MFA_MONITOR', [], { 
+  outcome: 'SUCCESS', 
+  message: 'Successful MFA PIN verification'
+});
 
   // MFA passed — consume token
   pendingAdminMFA.delete(mfaToken);
@@ -4294,14 +4317,23 @@ setInterval(async () => {
   try {
     const pendingSummaries = await SecuritySummary.find({
       isSummarized: false,
-      firstEventAt: { $lt: new Date(Date.now() - 30 * 60 * 1000) }
+      lastEventAt: { $gt: new Date(Date.now() - 60 * 60 * 1000) } // Active in the last hour
     });
 
-    const formatIST = (date) => new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: 'numeric', hour12: true }).format(date);
+    const formatIST = (date) => new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }).format(date);
     const formatDateIST = (date) => new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'long', year: 'numeric' }).format(date);
 
     for (const summary of pendingSummaries) {
-      if (summary.events.length <= 1) {
+      // 🛡️ Rolling Alert Logic (v2.6.209)
+      const hasEnoughEvents = summary.events.length >= 5;
+      const isNew = !summary.lastAlertedAt;
+      const cooldownPassed = summary.lastAlertedAt && (Date.now() - summary.lastAlertedAt.getTime() > 5 * 60 * 1000);
+      const isIdle = (Date.now() - summary.lastEventAt.getTime() > 30 * 60 * 1000);
+
+      if (!hasEnoughEvents && !isIdle) continue; // Not enough noise yet
+      if (!isNew && !cooldownPassed && !isIdle) continue; // In cooldown
+
+      if (summary.events.length <= 1 && isIdle) {
         summary.isSummarized = true;
         await summary.save();
         continue;
@@ -4340,7 +4372,10 @@ setInterval(async () => {
         });
       }
 
-      summary.isSummarized = true;
+      summary.lastAlertedAt = new Date();
+      if (isIdle) {
+        summary.isSummarized = true;
+      }
       await summary.save();
     }
   } catch (err) {

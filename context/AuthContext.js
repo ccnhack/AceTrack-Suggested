@@ -165,7 +165,7 @@ export const AuthProvider = ({ children }) => {
       'currentUser', 'userToken', 'players', 'tournaments', 'matchVideos', 'matches', 
       'matchmaking', 'evaluations', 'supportTickets', 'auditLogs', 
       'chatbotMessages', 'isUsingCloud', 'seenAdminActionIds', 
-      'visitedAdminSubTabs', 'sessionCustomAvatar'
+      'visitedAdminSubTabs', 'sessionCustomAvatar', 'pendingSync'
     ];
     
     // In dev mode (including E2E testing), storage is our mock backend. 

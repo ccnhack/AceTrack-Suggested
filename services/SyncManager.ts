@@ -627,8 +627,10 @@ class SyncManager {
   }
 
   public async performCloudPush(isInternal: boolean = false): Promise<void> {
-    // 🛡️ [GUEST GUARD] (v2.6.192)
-    if (!this.userId || this.userId === 'guest' || this.isAuthMuted) {
+    // 🛡️ [GUEST GUARD] (v2.6.210)
+    // More robust identity checking to prevent guest/device-only syncs from leaking.
+    const actorId = String(this.userId || 'guest').toLowerCase();
+    if (actorId === 'guest' || actorId === 'null' || actorId === 'undefined' || actorId.startsWith('device_') || this.isAuthMuted) {
       if (this.isAuthMuted) console.log('[SyncManager] performCloudPush: Auth muted due to previous 401.');
       return;
     }
@@ -722,11 +724,12 @@ class SyncManager {
     const cloudUrl = config.API_BASE_URL;
     this.metrics.pushAttemptCount++;
 
-    // 🛡️ [GUEST PUSH GUARD] (v2.6.206)
+    // 🛡️ [GUEST PUSH GUARD] (v2.6.210)
     // Prevent unauthenticated or guest sessions from attempting to persist local cache to cloud.
     // This suppresses noisy "UNAUTHORIZED_ACCESS_BLOCKED" alerts on the landing page.
-    if (!this.userId || this.userId === 'guest' || this.userId.startsWith('device_')) {
-       console.log(`[SyncManager] 🛡️ Push Suppressed: Identity is ${this.userId || 'missing'}. Skipping Cloud Sync.`);
+    const actorId = String(this.userId || 'guest').toLowerCase();
+    if (actorId === 'guest' || actorId === 'null' || actorId === 'undefined' || actorId.startsWith('device_') || this.isAuthMuted) {
+       console.log(`[SyncManager] 🛡️ Push Suppressed: Identity is ${this.userId || 'missing'}${this.isAuthMuted ? ' (Auth Muted)' : ''}. Skipping Cloud Sync.`);
        return { success: false, status: 403 };
     }
     
