@@ -49,6 +49,32 @@ export const AdminProvider = ({ children }) => {
     return unsub;
   }, []);
 
+  // 🛡️ [PERSISTENCE] (v2.6.241)
+  // Ensure that 'seen' status for admin actions is persisted to the cloud/disk.
+  useEffect(() => {
+    if (seenAdminActionIds.size > 0 || visitedAdminSubTabs.size > 0) {
+      const persist = async () => {
+        // Use a small debounce or check if actually different from disk to avoid sync loops
+        const currentIds = await syncManager.getSystemFlag('seenAdminActionIds');
+        const currentTabs = await syncManager.getSystemFlag('visitedAdminSubTabs');
+        
+        const idsArray = Array.from(seenAdminActionIds);
+        const tabsArray = Array.from(visitedAdminSubTabs);
+        
+        const hasIdChanges = JSON.stringify(idsArray) !== JSON.stringify(currentIds || []);
+        const hasTabChanges = JSON.stringify(tabsArray) !== JSON.stringify(currentTabs || []);
+        
+        if (hasIdChanges || hasTabChanges) {
+           syncAndSaveData({ 
+             seenAdminActionIds: idsArray,
+             visitedAdminSubTabs: tabsArray
+           });
+        }
+      };
+      persist();
+    }
+  }, [seenAdminActionIds, visitedAdminSubTabs, syncAndSaveData]);
+
   // 🛡️ [MIGRATION FIX] (v2.6.121) Log failed OTP attempts to tournament
   const onLogFailedOtp = useCallback((tid, coachId, otp) => {
     const operation = async () => {

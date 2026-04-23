@@ -222,7 +222,7 @@ class SyncManager {
               targetUserId: this.userId,
               deviceId: this.hardwareId || Constants.sessionId || 'mobile_client',
               deviceName: Constants.deviceName || Platform.OS,
-              appVersion: Constants.expoConfig?.version || config.APP_VERSION || '2.6.240',
+              appVersion: Constants.expoConfig?.version || config.APP_VERSION || '2.6.241',
               timestamp: Date.now()
             });
           }
@@ -364,7 +364,7 @@ class SyncManager {
               const deviceTracker = {
                 id: this.hardwareId,
                 name: Constants.deviceName || Platform.OS,
-                appVersion: Constants.expoConfig?.version || config.APP_VERSION || '2.6.240',
+                appVersion: Constants.expoConfig?.version || config.APP_VERSION || '2.6.241',
                 platformVersion: `${Platform.OS} (API ${Platform.Version})`,
                 lastActive: now
               };
@@ -400,11 +400,13 @@ class SyncManager {
           }));
         }
 
-        // Support Ticket Delivery Stamping
+        // Support Ticket Delivery Stamping (v2.6.241)
         if (key === 'supportTickets' && Array.isArray(val) && isInternal && this.userId) {
           workingUpdates[key] = val.map((ticket: any) => {
             if (!ticket?.messages) return ticket;
             const updatedMsgs = ticket.messages.map((m: any) => {
+              // Only upgrade to 'delivered' if currently 'sent'. 
+              // Do NOT downgrade 'seen' or 'read' back to 'delivered'.
               if (m.senderId !== this.userId && m.status === 'sent') {
                 return { ...m, status: 'delivered' };
               }
@@ -477,8 +479,8 @@ class SyncManager {
             this.scheduleCloudPush(false);
           }
         }
+        }
       }
-
     }, threshold);
   }
 

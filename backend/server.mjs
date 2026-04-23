@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.240'; 
+const APP_VERSION = '2.6.241'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -1762,6 +1762,23 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
                     merged.isNew = true;
                   }
                   entityMap.set(id, merged);
+                } else if (key === 'supportTickets' && existing) {
+                  // 🛡️ [STATUS_SYNC] (v2.6.241)
+                  // Intelligent message merging to prevent status downgrades (read -> delivered)
+                  const mergedMessages = [...(p.messages || [])];
+                  if (existing.messages && Array.isArray(existing.messages)) {
+                    const STATUS_WEIGHT = { 'read': 3, 'seen': 2, 'delivered': 1, 'sent': 0, 'pending': -1 };
+                    existing.messages.forEach((em, idx) => {
+                      if (mergedMessages[idx] && mergedMessages[idx].id === em.id) {
+                        const incomingStatus = mergedMessages[idx].status || 'sent';
+                        const existingStatus = em.status || 'sent';
+                        if (STATUS_WEIGHT[existingStatus] > STATUS_WEIGHT[incomingStatus]) {
+                          mergedMessages[idx].status = existingStatus;
+                        }
+                      }
+                    });
+                  }
+                  entityMap.set(id, { ...existing, ...p, messages: mergedMessages });
                 } else {
                   entityMap.set(id, existing ? { ...existing, ...p } : p);
                 }
