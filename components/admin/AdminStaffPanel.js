@@ -469,7 +469,26 @@ const AdminStaffPanel = () => {
 
               const botClicks = allClicks.filter(c => isClickABot(c));
               const humanClicks = allClicks.filter(c => !isClickABot(c));
-              const displayClicks = analyticsTab === 'users' ? humanClicks : botClicks;
+              
+              // 🕒 LOGICAL SORTING (v2.6.264): Ensure order is chronological and logical
+              const ACTION_PRIORITY = {
+                'link_click': 1,
+                'form_view': 2,
+                'step_1': 3,
+                'step_2': 4,
+                'step_3': 5,
+                'form_submit': 6
+              };
+
+              const displayClicks = (analyticsTab === 'users' ? humanClicks : botClicks).sort((a, b) => {
+                const timeA = new Date(a.timestamp).getTime();
+                const timeB = new Date(b.timestamp).getTime();
+                if (timeA !== timeB) return timeA - timeB; 
+                
+                const prioA = ACTION_PRIORITY[a.action?.replace(/^BOT:[^:]+:/, '')] || 99;
+                const prioB = ACTION_PRIORITY[b.action?.replace(/^BOT:[^:]+:/, '')] || 99;
+                return prioA - prioB;
+              });
 
               return (
                 <View style={styles.analyticsDetail}>
