@@ -995,7 +995,7 @@ const apiKeyGuard = async (req, res, next) => {
   }
 
   // 3. PUBLIC BOOTSTRAP: Allow Handshake flows using the Public App ID (v2.6.210)
-  const isPublicRoute = path.includes('/login') || path.includes('/otp') || path.includes('/health') || path.includes('/status') || path.includes('/data') || path.includes('/save') || path.includes('/upload') || path.includes('/diagnostics') || path.includes('/slack/interact');
+  const isPublicRoute = path.includes('/login') || path.includes('/otp') || path.includes('/health') || path.includes('/status') || path.includes('/upload') || path.includes('/slack/interact');
   if (isPublicRoute && providedKey === PUBLIC_APP_ID) {
     return next();
   }
@@ -1183,6 +1183,37 @@ const getSanitizedState = (fullData, req) => {
     }
   }
 
+  // 6. Strict Chatbot Message Isolation (v2.6.257)
+  if (sanitized.chatbotMessages) {
+    if (isAdmin) {
+      // Admin sees everything
+    } else if (normalizedReqId && normalizedReqId !== 'guest') {
+      // Users only see their own threads
+      const userThreads = {};
+      if (sanitized.chatbotMessages[normalizedReqId]) {
+        userThreads[normalizedReqId] = sanitized.chatbotMessages[normalizedReqId];
+      }
+      sanitized.chatbotMessages = userThreads;
+    } else {
+      // Guests see nothing
+      sanitized.chatbotMessages = {};
+    }
+  }
+
+  // 7. Global Shield: If unauthenticated and not admin, clear all sensitive collections (v2.6.257)
+  if (!normalizedReqId || normalizedReqId === 'guest') {
+    if (!isAdmin) {
+      sanitized.players = [];
+      sanitized.matches = [];
+      sanitized.supportTickets = [];
+      sanitized.evaluations = [];
+      sanitized.auditLogs = [];
+      sanitized.matchmaking = [];
+      sanitized.seenAdminActionIds = [];
+      sanitized.visitedAdminSubTabs = [];
+    }
+  }
+
   return sanitized;
 };
 
@@ -1354,7 +1385,7 @@ router.get('/health', (req, res) => {
 });
 
 // GET /api/v1/data
-router.get('/data', sensitiveCacheGuard, async (req, res) => {
+router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
   try {
     const state = await AppState.findOne().sort({ lastUpdated: -1 }).lean();
     if (!state || !state.data) return res.json({});
