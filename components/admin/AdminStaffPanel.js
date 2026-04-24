@@ -28,6 +28,7 @@ const AdminStaffPanel = () => {
   const [selectedEvent, setSelectedEvent] = useState(null); // specific event for modal
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('active'); // 'active', 'onboarded', 'resolved'
+  const [analyticsTab, setAnalyticsTab] = useState('users'); // 'users', 'bots'
   const [isRetiring, setIsRetiring] = useState(null); // token of link being retired
 
   useEffect(() => {
@@ -296,8 +297,16 @@ const AdminStaffPanel = () => {
             </View>
           </View>
 
-          <View style={styles.card}>
-            <View style={styles.nameRow}>
+          <View style={styles.modalBody}>
+            {selectedEvent?.botPlatform && (
+              <View style={styles.botBadge}>
+                <Ionicons name="shield-checkmark-outline" size={24} color="#B45309" />
+                <Text style={styles.botBadgeText}>AUTOMATED SCAN DETECTED</Text>
+                <Text style={styles.botPlatform}>{selectedEvent.botPlatform} Platform Service</Text>
+              </View>
+            )}
+
+             <View style={styles.infoSection}>
               <View style={styles.nameField}>
                 <Text style={styles.label}>First Name</Text>
                 <TextInput style={styles.input} placeholder="John" value={firstName} onChangeText={setFirstName} autoCapitalize="words" />
@@ -441,41 +450,91 @@ const AdminStaffPanel = () => {
             )}
 
             {/* Expanded Analytics Detail */}
-            {isExpanded && inv.clicks && (
-              <View style={styles.analyticsDetail}>
-                {invites.find(i => i.token === expandedAnalytics)?.clicks?.map((click, idx) => {
-                  const actionInfo = ACTION_LABELS[click.action] || { icon: '📍', label: click.action || 'Click', color: '#64748B' };
-                  
-                  return (
-                    <TouchableOpacity 
-                      key={idx} 
-                      style={styles.eventRow}
-                      onPress={() => setSelectedEvent({ ...click, ...actionInfo })}
-                      activeOpacity={0.6}
-                    >
-                      <View style={[styles.eventDot, { backgroundColor: actionInfo.color }]} />
-                      <View style={styles.eventContent}>
-                        <View style={styles.eventHeaderRow}>
-                          <Text style={[styles.eventAction, { color: actionInfo.color }]}>
-                            {actionInfo.icon} {actionInfo.label}
-                          </Text>
-                          <Text style={styles.eventTime}>
-                            {new Date(click.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </Text>
-                        </View>
-                        
-                        <View style={styles.eventDetailRow}>
-                          <Ionicons name="location-outline" size={11} color="#94A3B8" />
-                          <Text style={styles.eventDetailText} numberOfLines={1}>
-                            {click.ip} - {[click.city, click.region].filter(Boolean).join(', ')}
-                          </Text>
-                        </View>
-                      </View>
+            {isExpanded && inv.clicks && (() => {
+              const allClicks = inv.clicks || [];
+              const botClicks = allClicks.filter(c => c.botType || c.action?.startsWith('BOT:'));
+              const humanClicks = allClicks.filter(c => !c.botType && !c.action?.startsWith('BOT:'));
+              const displayClicks = analyticsTab === 'users' ? humanClicks : botClicks;
+
+              return (
+                <View style={styles.analyticsDetail}>
+                  {/* Internal Analytics Sub-Tabs */}
+                  <View style={[styles.tabRow, { marginBottom: 12, borderBottomWidth: 0, gap: 16 }]}>
+                    <TouchableOpacity onPress={() => setAnalyticsTab('users')} style={styles.smallTab}>
+                      <Text style={[styles.smallTabText, analyticsTab === 'users' && styles.smallTabTextActive, { fontSize: 11 }]}>
+                        HUMAN ({humanClicks.length})
+                      </Text>
+                      {analyticsTab === 'users' && <View style={[styles.tabIndicator, { height: 1.5 }]} />}
                     </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
+                    <TouchableOpacity onPress={() => setAnalyticsTab('bots')} style={styles.smallTab}>
+                      <Text style={[styles.smallTabText, analyticsTab === 'bots' && styles.smallTabTextActive, { fontSize: 11 }]}>
+                        BOTS ({botClicks.length})
+                      </Text>
+                      {analyticsTab === 'bots' && <View style={[styles.tabIndicator, { height: 1.5, backgroundColor: '#F59E0B' }]} />}
+                    </TouchableOpacity>
+                  </View>
+
+                  {displayClicks.length === 0 ? (
+                    <Text style={{ fontSize: 11, color: '#94A3B8', textAlign: 'center', paddingVertical: 10 }}>
+                      No {analyticsTab} activity recorded.
+                    </Text>
+                  ) : (
+                    displayClicks.map((click, idx) => {
+                      // Extract bot info from action string if it's legacy or newly formatted
+                      let displayAction = click.action || '';
+                      let botPlatform = click.botType;
+                      
+                      if (displayAction.startsWith('BOT:')) {
+                        const parts = displayAction.split(':');
+                        if (parts.length === 3) {
+                          botPlatform = parts[1];
+                          displayAction = parts[2];
+                        } else {
+                          displayAction = parts[1];
+                        }
+                      }
+
+                      const actionInfo = ACTION_LABELS[displayAction] || { icon: '📍', label: displayAction || 'Click', color: click.botType ? '#F59E0B' : '#64748B' };
+                      
+                      return (
+                        <TouchableOpacity 
+                          key={idx} 
+                          style={styles.eventRow}
+                          onPress={() => setSelectedEvent({ ...click, ...actionInfo, botPlatform })}
+                          activeOpacity={0.6}
+                        >
+                          <View style={[styles.eventDot, { backgroundColor: click.botType ? '#F59E0B' : actionInfo.color }]} />
+                          <View style={styles.eventContent}>
+                            <View style={styles.eventHeaderRow}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={[styles.eventAction, { color: click.botType ? '#B45309' : actionInfo.color }]}>
+                                  {actionInfo.icon} {actionInfo.label}
+                                </Text>
+                                {botPlatform && (
+                                  <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, borderWidth: 1, borderColor: '#FDE68A' }}>
+                                    <Text style={{ fontSize: 8, fontWeight: '800', color: '#B45309' }}>{botPlatform}</Text>
+                                  </View>
+                                )}
+                              </View>
+                              <Text style={styles.eventTime}>
+                                {new Date(click.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </Text>
+                            </View>
+                            
+                            <View style={styles.eventDetailRow}>
+                              <Ionicons name="location-outline" size={11} color="#94A3B8" />
+                              <Text style={styles.eventDetailText} numberOfLines={1}>
+                                {click.ip} - {[click.city, click.region].filter(Boolean).join(', ')}
+                              </Text>
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+                </View>
+              );
+            })()}
 
             {isActive && (
               <View style={styles.actionRow}>
@@ -555,12 +614,13 @@ const AdminStaffPanel = () => {
 
             <View style={styles.modalBody}>
               {/* Bot / Preview Badge */}
-              {selectedEvent?.action?.startsWith('BOT:') && (
+              {(selectedEvent?.botPlatform || selectedEvent?.action?.startsWith('BOT:')) && (
                 <View style={styles.botBadge}>
-                  <Ionicons name="robot-outline" size={16} color="#B45309" />
-                  <Text style={styles.botBadgeText}>🤖 BOT / PREVIEW DETECTED</Text>
-                  {selectedEvent.userAgent?.includes('WhatsApp') && <Text style={styles.botPlatform}>platform: WhatsApp</Text>}
-                  {selectedEvent.userAgent?.includes('Telegram') && <Text style={styles.botPlatform}>platform: Telegram</Text>}
+                  <Ionicons name="shield-checkmark-outline" size={20} color="#B45309" />
+                  <Text style={styles.botBadgeText}>AUTOMATED SCAN DETECTED</Text>
+                  <Text style={styles.botPlatform}>
+                    Platform: {selectedEvent?.botPlatform || 'System Scanner'}
+                  </Text>
                 </View>
               )}
 

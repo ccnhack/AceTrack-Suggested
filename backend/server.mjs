@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.260'; 
+const APP_VERSION = '2.6.261'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -964,6 +964,7 @@ const SupportInviteSchema = new mongoose.Schema({
     lat: Number,
     lon: Number,
     timezone: String,
+    botType: String, // 'Google', 'WhatsApp', 'Telegram', etc.
     timestamp: { type: Date, default: Date.now }
   }],
   emailResends: [{
@@ -3126,11 +3127,37 @@ router.post('/support/password-reset/confirm', asyncHandler(async (req, res) => 
 
 }));
 
-// 🌐 IP Geolocation Helper (free ip-api.com — 45 req/min, no key needed)
+// 🌐 IP Geolocation \u0026 Bot Detection Helpers
+function detectBot(userAgent, isp = '') {
+  if (!userAgent) return null;
+  const ua = userAgent.toLowerCase();
+  
+  // 1. Explicit User-Agent Patterns
+  if (ua.includes('whatsapp')) return 'WhatsApp';
+  if (ua.includes('telegrambot')) return 'Telegram';
+  if (ua.includes('twitterbot')) return 'Twitter';
+  if (ua.includes('facebookexternalhit')) return 'Facebook';
+  if (ua.includes('slackbot')) return 'Slack';
+  if (ua.includes('linkedinbot')) return 'LinkedIn';
+  if (ua.includes('discordbot')) return 'Discord';
+  if (ua.includes('googlebot') || ua.includes('google-transparency-report') || ua.includes('google-http-client')) return 'Google';
+  
+  // 2. ISP-based detection (for scanners that mask User-Agent)
+  const provider = (isp || '').toLowerCase();
+  if (provider.includes('google')) return 'Google (Scanner)';
+  if (provider.includes('amazon') || provider.includes('aws')) return 'AWS (Scanner)';
+  if (provider.includes('microsoft') || provider.includes('azure')) return 'Azure (Scanner)';
+  if (provider.includes('digitalocean')) return 'DigitalOcean (Scanner)';
+  if (provider.includes('cloudflare')) return 'Cloudflare (Scanner)';
+
+  // 3. Generic Catch-all
+  if (ua.includes('bot') || ua.includes('crawler') || ua.includes('spider') || ua.includes('headless')) return 'Generic Bot';
+  
+  return null;
+}
+
 function isBotTraffic(userAgent) {
-  if (!userAgent) return false;
-  const bots = ['WhatsApp', 'TelegramBot', 'Twitterbot', 'facebookexternalhit', 'Slackbot', 'LinkedInBot', 'Discordbot', 'Crawler', 'Bot'];
-  return bots.some(bot => userAgent.toLowerCase().includes(bot.toLowerCase()));
+  return !!detectBot(userAgent);
 }
 
 async function resolveIpGeo(ipRaw) {
@@ -3177,9 +3204,23 @@ router.post('/support/invite/click', asyncHandler(async (req, res) => {
   if (invite.status === 'Expired') return res.status(400).json({ error: 'Invite has been Expired' });
   if (invite.expiresAt < new Date()) return res.status(400).json({ error: 'Invite expired' });
   
-  const geo = await resolveIpGeo(ipRaw);
-  if (invite.status === 'Pending') invite.status = 'Clicked';
-  invite.clicks.push({ action: 'link_click', ip: geo.ip, userAgent, city: geo.city, region: geo.region, country: geo.country, isp: geo.isp, lat: geo.lat, lon: geo.lon, timezone: geo.timezone, timestamp: new Date() });
+  const botType = detectBot(userAgent, geo.isp);
+  if (invite.status === 'Pending' && !botType) invite.status = 'Clicked';
+  
+  invite.clicks.push({ 
+    action: botType ? `BOT:${botType}:link_click` : 'link_click', 
+    ip: geo.ip, 
+    userAgent, 
+    city: geo.city, 
+    region: geo.region, 
+    country: geo.country, 
+    isp: geo.isp, 
+    botType,
+    lat: geo.lat, 
+    lon: geo.lon, 
+    timezone: geo.timezone, 
+    timestamp: new Date() 
+  });
   await invite.save();
 
   res.json({ success: true, email: invite.email });
@@ -3196,12 +3237,13 @@ router.post('/support/invite/track', asyncHandler(async (req, res) => {
   const invite = await SupportInvite.findOne({ token });
   if (!invite) return res.status(404).json({ error: 'Invite not found' });
 
-  let action = rawAction;
-  if (isBotTraffic(userAgent)) {
-    action = `BOT:${action}`;
-  }
-
   const geo = await resolveIpGeo(ipRaw);
+  const botType = detectBot(userAgent, geo.isp);
+
+  let action = rawAction;
+  if (botType) {
+    action = `BOT:${botType}:${action}`;
+  }
   invite.clicks.push({ 
     action, 
     ip: geo.ip, 
@@ -3210,6 +3252,7 @@ router.post('/support/invite/track', asyncHandler(async (req, res) => {
     region: geo.region, 
     country: geo.country, 
     isp: geo.isp, 
+    botType,
     lat: geo.lat, 
     lon: geo.lon, 
     timezone: geo.timezone, 
