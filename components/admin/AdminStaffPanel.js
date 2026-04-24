@@ -8,10 +8,10 @@ import { usePlayers } from '../../context/PlayerContext';
 
 const ACTION_LABELS = {
   link_click: { icon: '🔗', label: 'Link Clicked', color: '#3B82F6' },
-  form_view: { icon: '👁️', label: 'Form Viewed', color: '#8B5CF6' },
-  step_1: { icon: '1️⃣', label: 'Step 1: Personal Details', color: '#6366F1' },
-  step_2: { icon: '2️⃣', label: 'Step 2: ID Verification', color: '#A855F7' },
-  step_3: { icon: '3️⃣', label: 'Step 3: Security', color: '#EC4899' },
+  'Form Opened (Step 1)': { icon: '👁️', label: 'Form Opened (Step 1)', color: '#8B5CF6' },
+  'Viewing Personal Info': { icon: '1️⃣', label: 'Personal Info Reached', color: '#6366F1' },
+  'ID Verification Reached': { icon: '2️⃣', label: 'ID Verification Reached', color: '#A855F7' },
+  'Security Setup Reached': { icon: '3️⃣', label: 'Security Setup Reached', color: '#EC4899' },
   form_submit: { icon: '✅', label: 'Form Submitted', color: '#10B981' },
 };
 
@@ -239,10 +239,9 @@ const AdminStaffPanel = () => {
     if (!clicks || clicks.length === 0) return null;
     const actions = clicks.map(c => c.action).filter(Boolean);
     if (actions.includes('form_submit')) return { label: 'Submitted', color: '#10B981', icon: '✅' };
-    if (actions.includes('step_3')) return { label: 'Step 3/3', color: '#EC4899', icon: '🔒' };
-    if (actions.includes('step_2')) return { label: 'Step 2/3', color: '#A855F7', icon: '📄' };
-    if (actions.includes('step_1')) return { label: 'Step 1/3', color: '#6366F1', icon: '✏️' };
-    if (actions.includes('form_view')) return { label: 'Form Opened', color: '#8B5CF6', icon: '👁️' };
+    if (actions.includes('Security Setup Reached')) return { label: 'Step 3/3', color: '#EC4899', icon: '🔒' };
+    if (actions.includes('ID Verification Reached')) return { label: 'Step 2/3', color: '#A855F7', icon: '📄' };
+    if (actions.includes('Form Opened (Step 1)')) return { label: 'Step 1/3', color: '#6366F1', icon: '✏️' };
     if (actions.includes('link_click')) return { label: 'Link Clicked', color: '#3B82F6', icon: '🔗' };
     return null;
   };
@@ -473,10 +472,10 @@ const AdminStaffPanel = () => {
               // 🕒 LOGICAL SORTING (v2.6.264): Ensure order is chronological and logical
               const ACTION_PRIORITY = {
                 'link_click': 1,
-                'form_view': 2,
-                'step_1': 3,
-                'step_2': 4,
-                'step_3': 5,
+                'Form Opened (Step 1)': 2,
+                'Viewing Personal Info': 3,
+                'ID Verification Reached': 4,
+                'Security Setup Reached': 5,
                 'form_submit': 6
               };
 
