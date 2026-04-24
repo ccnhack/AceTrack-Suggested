@@ -995,7 +995,7 @@ const apiKeyGuard = async (req, res, next) => {
   }
 
   // 3. PUBLIC BOOTSTRAP: Allow Handshake flows using the Public App ID (v2.6.210)
-  const isPublicRoute = path.includes('/login') || path.includes('/otp') || path.includes('/health') || path.includes('/status') || path.includes('/upload') || path.includes('/slack/interact');
+  const isPublicRoute = path.includes('/login') || path.includes('/otp') || path.includes('/health') || path.includes('/status') || path.includes('/slack/interact');
   if (isPublicRoute && providedKey === PUBLIC_APP_ID) {
     return next();
   }
@@ -1538,8 +1538,11 @@ router.get('/diagnostics', apiKeyGuard, sensitiveCacheGuard, asyncHandler(async 
 }));
 
 
-// GET /api/v1/diagnostics/:filename
+// GET /api/v1/diagnostics/raw_events (Admin only)
 router.get('/diagnostics/raw_events', apiKeyGuard, asyncHandler(async (req, res) => {
+  if (req.userRole !== 'admin') {
+    return res.status(403).json({ error: 'System Administrator privileges required' });
+  }
   const filepath = path.join(DIAGNOSTICS_DIR, 'server_events.jsonl');
   if (fs.existsSync(filepath)) {
     const data = await fs.promises.readFile(filepath, 'utf8');
@@ -1592,6 +1595,11 @@ router.post('/register-push-token', apiKeyGuard, async (req, res) => {
     const playerIndex = players.findIndex(p => p.id === userId);
 
     if (playerIndex >= 0) {
+      // 🛡️ SECURITY: Verify that users only register tokens for themselves (v2.6.257)
+      if (req.userRole !== 'admin' && req.userId !== userId) {
+        return res.status(403).json({ error: 'Unauthorized: Cannot register push token for another user.' });
+      }
+
       const player = players[playerIndex];
       // 🛡️ [NOTIFY_DEBUG] Sanitize tokens (remove nulls/empty)
       let tokens = (player.pushTokens || []).filter(t => !!t && typeof t === 'string');
@@ -2360,8 +2368,8 @@ router.post('/diagnostics/auto-flush', apiKeyGuard, validate(AutoFlushSchema), a
 
 // GET /api/v1/audit-logs (Admin only)
 router.get('/audit-logs', apiKeyGuard, sensitiveCacheGuard, asyncHandler(async (req, res) => {
-  // 🛡️ SECURITY HARDENING (v2.6.165): Strict Admin ID check
-  if (req.headers['x-user-id'] !== 'admin') {
+  // 🛡️ SECURITY HARDENING (v2.6.257): Use verified role instead of spoofable headers
+  if (req.userRole !== 'admin') {
     return res.status(403).json({ error: 'System Administrator privileges required' });
   }
   const limit = Math.min(parseInt(req.query.limit) || 100, 500);
@@ -2462,8 +2470,11 @@ router.get('/support/invite/preview', (req, res) => {
   res.send(html);
 });
 
-// 2. Fetch All Invites (Admin Dashboard)
+// 2. Fetch All Invites (Admin only)
 router.get('/support/invites', apiKeyGuard, asyncHandler(async (req, res) => {
+  if (req.userRole !== 'admin') {
+    return res.status(403).json({ error: 'System Administrator privileges required' });
+  }
   const invites = await SupportInvite.find().sort({ createdAt: -1 });
   
   // Auto-mark expired links lazily for the response
@@ -4093,8 +4104,8 @@ server.on('error', (e) => {
 // ---------------------------------------------------------
 
 router.get('/support/analytics', apiKeyGuard, async (req, res) => {
-  console.log(`[API] GET /support/analytics requested by ${req.headers['x-user-id']}`);
-  if (req.headers['x-user-id'] !== 'admin') {
+  // 🛡️ SECURITY HARDENING (v2.6.257): Use verified role
+  if (req.userRole !== 'admin') {
     return res.status(403).json({ error: 'System Administrator privileges required' });
   }
   try {
@@ -4302,16 +4313,10 @@ router.get('/support/analytics', apiKeyGuard, async (req, res) => {
   }
 });
 
-// 📥 Export Support Data as CSV
-router.get('/support/export', async (req, res) => {
-  // Allow key in query param since browser direct downloads can't send custom headers easily
-  const providedKey = req.headers['x-ace-api-key'] || req.query.key;
-  const userId = req.headers['x-user-id'] || req.query.userId;
-
-  if (providedKey !== ACE_API_KEY) {
-    return res.status(401).json({ error: 'Unauthorized: Invalid API Key' });
-  }
-  if (userId !== 'admin') {
+// 📥 Export Support Data as CSV (Admin only)
+router.get('/support/export', apiKeyGuard, async (req, res) => {
+  // 🛡️ SECURITY HARDENING (v2.6.257): Enforce verified admin role
+  if (req.userRole !== 'admin') {
     return res.status(403).json({ error: 'System Administrator privileges required' });
   }
 
