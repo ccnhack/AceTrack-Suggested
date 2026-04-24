@@ -73,56 +73,54 @@ const LoginScreen = ({ navigation }) => {
       }
 
       // 🌐 [SERVER AUTH FLOW] (v2.6.259)
-      // Restricted to Web: Admin and Support portals are accessible via Web only.
-      if (Platform.OS === 'web') {
-        try {
-          // 1. Admin Login
-          const adminUrl = `${config.API_BASE_URL}${config.getEndpoint('ADMIN_LOGIN')}`;
-          const adminRes = await fetch(adminUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-ace-api-key': config.PUBLIC_APP_ID,
-            },
-            body: JSON.stringify({ identifier: username, password }),
-          });
-          const adminData = await adminRes.json();
+      try {
+        // 1. Admin Login
+        const adminUrl = `${config.API_BASE_URL}${config.getEndpoint('ADMIN_LOGIN')}`;
+        const adminRes = await fetch(adminUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-ace-api-key': config.PUBLIC_APP_ID,
+          },
+          body: JSON.stringify({ identifier: username, password }),
+        });
+        const adminData = await adminRes.json();
 
-          if (adminRes.ok && adminData.success && adminData.requiresMFA) {
-            setMfaToken(adminData.mfaToken);
-            setMfaPin('');
-            setMfaError('');
-            setShowMFA(true);
-            return;
-          }
-
-          // 2. Support Login
-          const supportUrl = `${config.API_BASE_URL}${config.getEndpoint('SUPPORT_LOGIN')}`;
-          const supportRes = await fetch(supportUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-ace-api-key': config.PUBLIC_APP_ID,
-            },
-            body: JSON.stringify({ identifier: username, password }),
-          });
-          const supportData = await supportRes.json();
-
-          if (supportRes.ok && supportData.success && supportData.user) {
-            onLoginSuccess('support', { ...supportData.user, token: supportData.token });
-            return;
-          } else if (!supportRes.ok) {
-            // 🛡️ [SECURITY HARDENING] (v2.6.238)
-            // If the server reached and explicitly denied access (e.g. 403 Forbidden), 
-            // DO NOT fall back to local auth. This prevents terminated users from 
-            // logging in via stale local cache.
-            setError(supportData.error || supportData.message || 'Login denied by server.');
-            setIsLoading(false);
-            return;
-          }
-        } catch (serverErr) {
-          console.warn('Network issue, falling back to local auth if available:', serverErr.message);
+        if (adminRes.ok && adminData.success && adminData.requiresMFA) {
+          setMfaToken(adminData.mfaToken);
+          setMfaPin('');
+          setMfaError('');
+          setShowMFA(true);
+          return;
         }
+
+        // 2. Support Login
+        const supportUrl = `${config.API_BASE_URL}${config.getEndpoint('SUPPORT_LOGIN')}`;
+        const supportRes = await fetch(supportUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-ace-api-key': config.PUBLIC_APP_ID,
+          },
+          body: JSON.stringify({ identifier: username, password }),
+        });
+        const supportData = await supportRes.json();
+
+        if (supportRes.ok && supportData.success && supportData.user) {
+          onLoginSuccess('support', { ...supportData.user, token: supportData.token });
+          return;
+        } else if (!supportRes.ok && username.toLowerCase().trim() !== 'admin') {
+          // 🛡️ [SECURITY HARDENING] (v2.6.238)
+          // If the server reached and explicitly denied access (e.g. 403 Forbidden), 
+          // DO NOT fall back to local auth. This prevents terminated users from 
+          // logging in via stale local cache.
+          // NOTE: We allow 'admin' to bypass this to handle master recovery flows.
+          setError(supportData.error || supportData.message || 'Login denied by server.');
+          setIsLoading(false);
+          return;
+        }
+      } catch (serverErr) {
+        console.warn('Network issue, falling back to local auth if available:', serverErr.message);
       }
 
       // 🛡️ [LOCAL FALLBACK] (v2.6.170)

@@ -828,9 +828,47 @@ io.on('connection', (socket) => {
     io.emit('admin_ping_device_relay', data);
   });
 
-  socket.on('device_pong', (data) => {
+  socket.on('device_pong', async (data) => {
     logServerEvent('DEVICE_PONG_RECEIVED', { targetUserId: data.targetUserId, deviceId: data.deviceId, deviceName: data.deviceName, fromSocket: socket.id });
     io.emit('device_pong_relay', data);
+
+    // 🛡️ [AUTO-REGISTRATION] (v2.6.259)
+    // If a live pong is received, ensure this device is in the user's permanent history
+    if (data.targetUserId && data.deviceId) {
+      try {
+        const state = await AppState.findOne().sort({ lastUpdated: -1 });
+        if (state && state.data && state.data.players) {
+          const players = [...state.data.players];
+          const uIdx = players.findIndex(p => String(p.id) === String(data.targetUserId));
+          if (uIdx !== -1) {
+            const user = players[uIdx];
+            user.devices = user.devices || [];
+            const dIdx = user.devices.findIndex(d => d && d.id === data.deviceId);
+            
+            if (dIdx === -1) {
+              console.log(`📡 [AUTO-REG] Adding new device ${data.deviceId} to user ${data.targetUserId}`);
+              user.devices.push({
+                id: data.deviceId,
+                name: data.deviceName || 'Unknown Device',
+                appVersion: data.appVersion || '2.6.258',
+                lastActive: Date.now()
+              });
+              state.markModified('data.players');
+              await state.save();
+            } else {
+              // Update last active and metadata
+              user.devices[dIdx].lastActive = Date.now();
+              user.devices[dIdx].name = data.deviceName || user.devices[dIdx].name;
+              user.devices[dIdx].appVersion = data.appVersion || user.devices[dIdx].appVersion;
+              state.markModified('data.players');
+              await state.save();
+            }
+          }
+        }
+      } catch (e) {
+        console.error('❌ [AUTO-REG] Failed:', e.message);
+      }
+    }
   });
 
   // Support chat relay events
