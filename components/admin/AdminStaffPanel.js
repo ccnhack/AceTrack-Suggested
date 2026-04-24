@@ -454,8 +454,21 @@ const AdminStaffPanel = () => {
             {/* Expanded Analytics Detail */}
             {isExpanded && inv.clicks && (() => {
               const allClicks = inv.clicks || [];
-              const botClicks = allClicks.filter(c => c.botType || c.action?.startsWith('BOT:'));
-              const humanClicks = allClicks.filter(c => !c.botType && !c.action?.startsWith('BOT:'));
+              
+              // Helper to detect bots from click data (for legacy events)
+              const isClickABot = (c) => {
+                if (c.botType || c.action?.startsWith('BOT:')) return true;
+                const isp = (c.isp || '').toLowerCase();
+                if (isp.includes('google')) return true;
+                if (isp.includes('amazon') || isp.includes('aws')) return true;
+                if (isp.includes('microsoft') || isp.includes('azure')) return true;
+                if (isp.includes('digitalocean')) return true;
+                if (isp.includes('cloudflare')) return true;
+                return false;
+              };
+
+              const botClicks = allClicks.filter(c => isClickABot(c));
+              const humanClicks = allClicks.filter(c => !isClickABot(c));
               const displayClicks = analyticsTab === 'users' ? humanClicks : botClicks;
 
               return (
@@ -484,7 +497,18 @@ const AdminStaffPanel = () => {
                     displayClicks.map((click, idx) => {
                       // Extract bot info from action string if it's legacy or newly formatted
                       let displayAction = click.action || '';
+                      const isDynamicBot = isClickABot(click);
                       let botPlatform = click.botType;
+
+                      // Legacy ISP-based bot platform detection
+                      if (!botPlatform && isDynamicBot) {
+                        const isp = (click.isp || '').toLowerCase();
+                        if (isp.includes('google')) botPlatform = 'Google';
+                        else if (isp.includes('amazon') || isp.includes('aws')) botPlatform = 'AWS';
+                        else if (isp.includes('microsoft') || isp.includes('azure')) botPlatform = 'Azure';
+                        else if (isp.includes('cloudflare')) botPlatform = 'Cloudflare';
+                        else botPlatform = 'Scanner';
+                      }
                       
                       if (displayAction.startsWith('BOT:')) {
                         const parts = displayAction.split(':');
@@ -496,7 +520,7 @@ const AdminStaffPanel = () => {
                         }
                       }
 
-                      const actionInfo = ACTION_LABELS[displayAction] || { icon: '📍', label: displayAction || 'Click', color: click.botType ? '#F59E0B' : '#64748B' };
+                      const actionInfo = ACTION_LABELS[displayAction] || { icon: '📍', label: displayAction || 'Click', color: isDynamicBot ? '#F59E0B' : '#64748B' };
                       
                       return (
                         <TouchableOpacity 
@@ -505,11 +529,11 @@ const AdminStaffPanel = () => {
                           onPress={() => setSelectedEvent({ ...click, ...actionInfo, botPlatform })}
                           activeOpacity={0.6}
                         >
-                          <View style={[styles.eventDot, { backgroundColor: click.botType ? '#F59E0B' : actionInfo.color }]} />
+                          <View style={[styles.eventDot, { backgroundColor: isDynamicBot ? '#F59E0B' : actionInfo.color }]} />
                           <View style={styles.eventContent}>
                             <View style={styles.eventHeaderRow}>
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <Text style={[styles.eventAction, { color: click.botType ? '#B45309' : actionInfo.color }]}>
+                                <Text style={[styles.eventAction, { color: isDynamicBot ? '#B45309' : actionInfo.color }]}>
                                   {actionInfo.icon} {actionInfo.label}
                                 </Text>
                                 {botPlatform && (
