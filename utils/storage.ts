@@ -19,7 +19,7 @@ const SECURITY_POLICY: Record<string, 'MEMORY' | 'SESSION' | 'PERSISTENT'> = {
   // Semi-Sensitive: Session storage (cleared on tab close)
   'currentUser': 'SESSION',
   'authToken': 'SESSION',
-  'acetrack_device_id': 'SESSION',
+  'acetrack_device_id': 'PERSISTENT',
   'version': 'SESSION',
   
   // Non-Sensitive: Local storage (truly persistent)

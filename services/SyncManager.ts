@@ -229,9 +229,10 @@ class SyncManager {
             if (this.initPromise) await this.initPromise;
             
             console.log('[SyncManager] Received Admin Ping — Replying with Pong');
+            const deviceId = this.hardwareId || await storage.getItem('acetrack_device_id') || Constants.sessionId || 'mobile_client';
             this.socket.emit('device_pong', {
               targetUserId: this.userId,
-              deviceId: this.hardwareId || Constants.sessionId || 'mobile_client',
+              deviceId,
               deviceName: Constants.deviceName || Platform.OS,
               appVersion: Constants.expoConfig?.version || config.APP_VERSION || '2.6.258',
               timestamp: Date.now()

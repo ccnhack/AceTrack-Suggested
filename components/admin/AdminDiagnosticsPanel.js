@@ -598,7 +598,10 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
                   {(p.name || 'User').split(' ')[0]}
                 </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                  <View style={[styles.statusDot, { backgroundColor: onlineDevices[p.id] ? '#10B981' : '#CBD5E1' }]} />
+                  <View style={[
+                    styles.statusDot, 
+                    { backgroundColor: Object.values(onlineDevices).some(d => d.targetUserId === p.id) ? '#10B981' : '#CBD5E1' }
+                  ]} />
                   <Text style={[styles.miniUserId, { color: selectedDiagUser?.id === p.id ? '#FFFFFF' : '#94A3B8' }]} numberOfLines={1}>
                     {p.id}
                   </Text>
