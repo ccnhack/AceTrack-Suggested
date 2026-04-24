@@ -60,6 +60,7 @@ const AdminStaffPanel = () => {
       const res = await fetch(`${config.API_BASE_URL}/api/support/invites`, {
         headers: { 
           'Authorization': `Bearer ${token}`,
+          'x-ace-api-key': config.ACE_API_KEY,
           'x-user-id': 'admin' 
         }
       });
@@ -85,6 +86,7 @@ const AdminStaffPanel = () => {
         headers: { 
           'Content-Type': 'application/json', 
           'Authorization': `Bearer ${token}`,
+          'x-ace-api-key': config.ACE_API_KEY,
           'x-user-id': 'admin' 
         },
         body: JSON.stringify({ email, firstName: firstName.trim(), lastName: lastName.trim() })

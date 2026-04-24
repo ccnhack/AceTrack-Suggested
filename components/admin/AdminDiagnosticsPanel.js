@@ -75,9 +75,8 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
         targetUserId: data.targetUserId
       };
       
-      // Coalesce by Device ID and User ID
+      // Coalesce by Device ID only to support multiple devices per user
       if (data.deviceId) pongBufferRef.current[data.deviceId] = statusObj;
-      if (data.targetUserId) pongBufferRef.current[data.targetUserId] = statusObj;
     };
 
     socket.on('device_pong_relay', handlePong);
