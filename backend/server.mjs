@@ -1077,6 +1077,8 @@ const apiKeyGuard = async (req, res, next) => {
   // 2. MASTER KEY: Full access for administrative/emergency use (from ENV)
   if (providedKey && providedKey === ACE_API_KEY) {
     req.user = { id: 'admin', role: 'admin', scopes: ['*'] };
+    req.userId = 'admin';
+    req.userRole = 'admin';
     return next();
   }
 
@@ -2576,7 +2578,7 @@ router.get('/support/invites', apiKeyGuard, asyncHandler(async (req, res) => {
   // Auto-mark expired links lazily for the response
   const processed = invites.map(inv => {
      let currentStatus = inv.status;
-     if (currentStatus === 'Pending' && inv.expiresAt < new Date()) currentStatus = 'Expired';
+      if ((currentStatus === 'Pending' || currentStatus === 'Clicked') && inv.expiresAt < new Date()) currentStatus = 'Expired';
      return { ...inv.toObject(), status: currentStatus };
   });
 
@@ -2596,7 +2598,9 @@ router.post('/support/invite/expire', apiKeyGuard, asyncHandler(async (req, res)
   if (!invite) return res.status(404).json({ error: 'Invite not found' });
   if (invite.status === 'Used') return res.status(400).json({ error: 'Invite already claimed' });
 
-  invite.status = 'Expired';
+  invite.status = 'Retired';
+  invite.retiredAt = new Date(); // Store the exact retirement time (v2.6.259)
+  
   // Use a special action to track manual retirement
   invite.clicks.push({ 
     action: 'admin_retired', 

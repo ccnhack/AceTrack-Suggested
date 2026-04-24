@@ -392,7 +392,9 @@ const AdminStaffPanel = () => {
               </View>
               <View style={[styles.badge, { backgroundColor: getStatusColor(inv.status) + '20' }]}>
                 <Text style={[styles.badgeText, { color: getStatusColor(inv.status) }]}>
-                  {inv.status === 'Used' ? 'ONBOARDED' : inv.status}
+                  {inv.status === 'Used' ? 'ONBOARDED' : 
+                   inv.status === 'Retired' ? 'RETIRED' : 
+                   inv.status === 'Expired' ? 'EXPIRED' : inv.status}
                 </Text>
               </View>
             </View>
