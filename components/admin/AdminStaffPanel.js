@@ -246,6 +246,7 @@ const AdminStaffPanel = () => {
 
   const isFormValid = email.includes('@') && firstName.trim() && lastName.trim();
 
+  const filteredInvites = invites.filter(inv => {
     // 1. Tab Filtering
     const isInviteActive = (inv.status === 'Pending' || inv.status === 'Clicked') && new Date(inv.expiresAt) > new Date();
     const isInviteExpired = inv.status === 'Expired' || inv.status === 'Retired' || new Date(inv.expiresAt) <= new Date();
