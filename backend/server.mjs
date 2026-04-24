@@ -94,7 +94,7 @@ const APP_VERSION = '2.6.257';
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
-const ACE_API_KEY = process.env.ACE_API_KEY || '8f73b6e1a9c4d2e5b0a7f8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9';
+const ACE_API_KEY = process.env.ACE_API_KEY;
 const JWT_SECRET = process.env.JWT_SECRET || 'acetrack_zero_trust_fallback_secret_1717';
 const SECURITY_WEBHOOK_URL = process.env.SECURITY_WEBHOOK_URL; // OPTIONAL: Discord/Slack alerts
 
@@ -928,7 +928,9 @@ const apiKeyGuard = async (req, res, next) => {
   const providedKey = req.headers['x-ace-api-key'];
   const userId = req.headers['x-user-id'];
   const authHeader = req.headers['authorization'];
-  const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
+  const bearerToken = (authHeader && authHeader.startsWith('Bearer ')) 
+    ? authHeader.substring(7) 
+    : (req.query.token || null);
   const path = req.path;
   
   // 🔍 LOGGED: Audit all API key requests
@@ -1379,8 +1381,12 @@ const sensitiveCacheGuard = (req, res, next) => {
   next();
 };
 
-// Public Health Check (No Key Required)
+// Public Health Check (Requires Health Token for Production Monitoring)
 router.get('/health', (req, res) => {
+  const healthToken = req.headers['x-health-token'];
+  if (process.env.NODE_ENV === 'production' && (!healthToken || healthToken !== process.env.HEALTH_TOKEN)) {
+    return res.status(403).json({ error: 'Access Denied' });
+  }
   res.json({ status: 'ok', uptime: process.uptime(), version: APP_VERSION });
 });
 

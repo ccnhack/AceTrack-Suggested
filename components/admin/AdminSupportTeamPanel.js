@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert,
 import { Ionicons } from '@expo/vector-icons';
 import { colors, shadows } from '../../theme/designSystem';
 import config from '../../config';
+import storage from '../../utils/storage';
 import { usePlayers } from '../../context/PlayerContext';
 import SafeAvatar from '../SafeAvatar';
 
@@ -61,8 +62,9 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
 
-  const handleExportCSV = () => {
-    const url = `${config.API_BASE_URL}/api/support/export?key=${config.PUBLIC_APP_ID}&userId=admin`;
+  const handleExportCSV = async () => {
+    const token = await storage.getItem('userToken');
+    const url = `${config.API_BASE_URL}/api/support/export?token=${token}&userId=admin`;
     Alert.alert(
       "Export Data",
       "This will download a CSV containing all ticket data and metrics.",
@@ -86,8 +88,12 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
          if (dates.from) queryParams = `?from=${encodeURIComponent(dates.from)}&to=${encodeURIComponent(dates.to)}`;
        }
 
+       const token = await storage.getItem('userToken');
        const res = await fetch(`${config.API_BASE_URL}/api/support/analytics${queryParams}`, {
-         headers: { 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' }
+         headers: { 
+           'Authorization': `Bearer ${token}`,
+           'x-user-id': 'admin' 
+         }
        });
        if (res.ok) {
          const data = await res.json();
@@ -136,11 +142,12 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const updateUserStatus = async (userId, status, level) => {
     setIsManaging(userId);
     try {
+      const token = await storage.getItem('userToken');
       const res = await fetch(`${config.API_BASE_URL}/api/support/manage-user`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json', 
-          'x-ace-api-key': config.ACE_API_KEY, 
+          'Authorization': `Bearer ${token}`,
           'x-user-id': 'admin' 
         },
         body: JSON.stringify({ targetUserId: userId, status, level })
@@ -170,11 +177,12 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
         { text: "Reset Password", style: "destructive", onPress: async () => {
           setIsManaging(userId);
           try {
+            const token = await storage.getItem('userToken');
             const res = await fetch(`${config.API_BASE_URL}/api/support/force-reset`, {
               method: 'POST',
               headers: { 
                 'Content-Type': 'application/json', 
-                'x-ace-api-key': config.ACE_API_KEY, 
+                'Authorization': `Bearer ${token}`, 
                 'x-user-id': 'admin' 
               },
               body: JSON.stringify({ targetUserId: userId })
@@ -207,9 +215,14 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       onPress: async () => {
         setIsManaging(fromId);
         try {
+          const token = await storage.getItem('userToken');
           const res = await fetch(`${config.API_BASE_URL}/api/support/transfer-tickets`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' },
+            headers: { 
+              'Content-Type': 'application/json', 
+              'Authorization': `Bearer ${token}`, 
+              'x-user-id': 'admin' 
+            },
             body: JSON.stringify({ fromAgentId: fromId, toAgentId: a.id })
           });
           const data = await res.json();
@@ -236,9 +249,10 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
 
   const fetchServerRoster = useCallback(async () => {
     try {
+      const token = await storage.getItem('userToken');
       const res = await fetch(`${config.API_BASE_URL}/api/data`, {
         headers: { 
-          'x-ace-api-key': config.ACE_API_KEY,
+          'Authorization': `Bearer ${token}`,
           'x-user-id': 'admin'
         }
       });

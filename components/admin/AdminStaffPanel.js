@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert,
 import { Ionicons } from '@expo/vector-icons';
 import { colors, shadows } from '../../theme/designSystem';
 import config from '../../config';
+import storage from '../../utils/storage';
 import { usePlayers } from '../../context/PlayerContext';
 
 const ACTION_LABELS = {
@@ -54,8 +55,12 @@ const AdminStaffPanel = () => {
 
   const fetchInvites = async () => {
     try {
+      const token = await storage.getItem('userToken');
       const res = await fetch(`${config.API_BASE_URL}/api/support/invites`, {
-        headers: { 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' }
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'x-user-id': 'admin' 
+        }
       });
       if (res.ok) {
         const data = await res.json();
@@ -73,9 +78,14 @@ const AdminStaffPanel = () => {
     
     setIsGenerating(true);
     try {
+      const token = await storage.getItem('userToken');
       const res = await fetch(`${config.API_BASE_URL}/api/support/invite`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' },
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${token}`,
+          'x-user-id': 'admin' 
+        },
         body: JSON.stringify({ email, firstName: firstName.trim(), lastName: lastName.trim() })
       });
       const data = await res.json();
@@ -105,9 +115,14 @@ const AdminStaffPanel = () => {
   const resendEmail = async (token, email) => {
     setResendingToken(token);
     try {
+      const token = await storage.getItem('userToken');
       const res = await fetch(`${config.API_BASE_URL}/api/support/invite/resend`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' },
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${token}`,
+          'x-user-id': 'admin' 
+        },
         body: JSON.stringify({ token })
       });
       const data = await res.json();
@@ -135,9 +150,14 @@ const AdminStaffPanel = () => {
           onPress: async () => {
             setIsRetiring(token);
             try {
+              const token = await storage.getItem('userToken');
               const res = await fetch(`${config.API_BASE_URL}/api/support/invite/expire`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' },
+                headers: { 
+                  'Content-Type': 'application/json', 
+                  'Authorization': `Bearer ${token}`,
+                  'x-user-id': 'admin' 
+                },
                 body: JSON.stringify({ token })
               });
               if (res.ok) {

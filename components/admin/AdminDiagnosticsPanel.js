@@ -11,6 +11,7 @@ import { useSync } from '../../context/SyncContext';
 import { useAuth } from '../../context/AuthContext';
 import SafeAvatar from '../SafeAvatar';
 import config from '../../config';
+import storage from '../../utils/storage';
 import logger from '../../utils/logger';
 
 const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => {
@@ -134,8 +135,9 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
     setCloudMatchFiles([]);
     
     try {
+      const token = await storage.getItem('userToken');
       const res = await fetch(`${activeApiUrl}/api/diagnostics`, { 
-        headers: { 'x-ace-api-key': config.ACE_API_KEY } 
+        headers: { 'Authorization': `Bearer ${token}` } 
       });
       if (res.ok) {
         const data = await res.json();
@@ -180,8 +182,9 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
     
     try {
       // Add cache-buster and ensure strict User ID passing
+      const token = await storage.getItem('userToken');
       const res = await fetch(`${activeApiUrl}/api/diagnostics?userId=${p.id}&_t=${Date.now()}`, { 
-        headers: { 'x-ace-api-key': config.ACE_API_KEY }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
         const data = await res.json();
@@ -248,8 +251,9 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
       
       try {
         const safeId = selectedDiagUser.id.toLowerCase();
+        const token = await storage.getItem('userToken');
         const res = await fetch(`${activeApiUrl}/api/diagnostics?userId=${selectedDiagUser.id}&_t=${Date.now()}`, { 
-          headers: { 'x-ace-api-key': config.ACE_API_KEY } 
+          headers: { 'Authorization': `Bearer ${token}` } 
         });
         
         if (res.ok) {
@@ -284,8 +288,9 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
     setDiagContent(null);
     setIsDownloading(true);
     try {
+      const token = await storage.getItem('userToken');
       const res = await fetch(`${activeApiUrl}/api/diagnostics/${file}`, { 
-        headers: { 'x-ace-api-key': config.ACE_API_KEY } 
+        headers: { 'Authorization': `Bearer ${token}` } 
       });
       if (res.ok) {
         const text = await res.text();
