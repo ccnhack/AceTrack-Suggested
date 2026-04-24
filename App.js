@@ -23,9 +23,28 @@ if (Platform.OS === 'web') {
   const originalFetch = window.fetch;
   window.fetch = function(url, options = {}) {
     // Only apply to our own API to avoid leaking cookies to 3rd parties
-    if (typeof url === 'string' && (url.includes('onrender.com') || url.includes('localhost') || url.includes('127.0.0.1'))) {
-      console.log(`[FetchInterceptor] Applying credentials:include to ${url}`);
+    const isInternal = typeof url === 'string' && (url.includes('onrender.com') || url.includes('localhost') || url.includes('127.0.0.1'));
+    
+    if (isInternal) {
+      console.log(`[FetchInterceptor] Applying credentials:include & security headers to ${url}`);
       options.credentials = 'include';
+      
+      // 🛡️ [WEB_AUTH_HARDENING] (v2.6.259)
+      // Automatically add the mandatory API Key for web requests
+      options.headers = {
+        ...options.headers,
+        'x-ace-api-key': config.PUBLIC_APP_ID
+      };
+
+      // 🛡️ [MALFORMED_AUTH_STRIP] (v2.6.259)
+      // If a component sends "Bearer null" (common on web where localStorage is empty),
+      // we strip it to let the server fall back to the HttpOnly cookie.
+      const auth = options.headers['Authorization'] || options.headers['authorization'];
+      if (auth === 'Bearer null' || auth === 'Bearer undefined') {
+        console.log(`[FetchInterceptor] Stripping malformed Authorization header from ${url}`);
+        delete options.headers['Authorization'];
+        delete options.headers['authorization'];
+      }
     }
     return originalFetch(url, options);
   };
@@ -44,7 +63,7 @@ import { useSupport } from './context/SupportContext';
 
 
 // 🛡️ Web Deep Linking Configuration (v2.6.258)
-const APP_VERSION = "2.6.259";
+const APP_VERSION = "2.6.260";
 const linking = {
   prefixes: ['https://acetrack-suggested.onrender.com', 'acetrack://'],
   config: {

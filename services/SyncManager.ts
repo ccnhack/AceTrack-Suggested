@@ -183,11 +183,17 @@ class SyncManager {
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
       query: { userId },
-      auth: { token: this.userToken || config.PUBLIC_APP_ID },
+      auth: { 
+        token: this.userToken || config.PUBLIC_APP_ID,
+        // 🛡️ [WEB_SOCKET_HARDENING] (v2.6.259)
+        // Browsers often block custom headers ('extraHeaders') on WebSockets.
+        // We mirror the API key in the auth object to ensure handshake success.
+        apiKey: config.PUBLIC_APP_ID 
+      },
       // 🛡️ [COOKIE_SOCKET_SUPPORT] (v2.6.258)
       withCredentials: true,
       extraHeaders: { 
-        'x-ace-api-key': config.ACE_API_KEY,
+        'x-ace-api-key': config.PUBLIC_APP_ID,
         ...(Platform.OS !== 'web' && this.userToken ? { 'Authorization': `Bearer ${this.userToken}` } : {})
       }
     });

@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.259'; 
+const APP_VERSION = '2.6.260'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -801,7 +801,7 @@ const io = new Server(httpServer, {
 
 // 🔐 SOCKET SECURITY: Auth Handshake (SEC Fix)
 io.use((socket, next) => {
-  const apiKey = socket.handshake.headers['x-ace-api-key'] || socket.handshake.auth.token;
+  const apiKey = socket.handshake.headers['x-ace-api-key'] || socket.handshake.auth.token || socket.handshake.auth.apiKey;
   
   // 🛡️ [SYNC_RECOVERY] (v2.6.258)
   // Allow both the Master ACE_API_KEY and the PUBLIC_APP_ID to pass handshake.
