@@ -27,7 +27,7 @@ const AdminStaffPanel = () => {
   const [expandedAnalytics, setExpandedAnalytics] = useState(null); // token of expanded card
   const [selectedEvent, setSelectedEvent] = useState(null); // specific event for modal
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('active'); // 'active', 'resolved'
+  const [activeTab, setActiveTab] = useState('active'); // 'active', 'onboarded', 'resolved'
   const [isRetiring, setIsRetiring] = useState(null); // token of link being retired
 
   useEffect(() => {
@@ -246,32 +246,17 @@ const AdminStaffPanel = () => {
 
   const isFormValid = email.includes('@') && firstName.trim() && lastName.trim();
 
-  const filteredInvites = invites.filter(inv => {
     // 1. Tab Filtering
     const isInviteActive = (inv.status === 'Pending' || inv.status === 'Clicked') && new Date(inv.expiresAt) > new Date();
-    if (activeTab === 'active' && !isInviteActive) return false;
-    if (activeTab === 'resolved' && (isInviteActive || inv.status === 'Used')) return false; // Simple logic: Resolved = Expired/Retired. Used is different? User said "retired or expired tab"
+    const isInviteExpired = inv.status === 'Expired' || inv.status === 'Retired' || new Date(inv.expiresAt) <= new Date();
     
-    // Actually, user said Resolved tab should show retired/expired.
-    // Let's refine:
-    // Tab "Active": Pending/Clicked AND not expired.
-    // Tab "Resolved": Used.
-    // Tab "Retired/Expired": Expired or manually retired.
-    
-    // Re-reading user: "subtab inside active provision links to have the retire/expire tab to show the retired or expired links in that"
-    // So 2 tabs: 
-    // 1. "Active Links" (Pending/Clicked/Used) -- Wait, Used is not active.
-    // Let's use:
-    // Tab "Active": Pending/Clicked (not naturally expired)
-    // Tab "Resolved": Used
-    // Tab "Retired": Naturally expired or manually retired.
-    
-    // Let's stick to user phrasing: "Active" and "Retired/Expired"
     if (activeTab === 'active') {
-       if (inv.status === 'Used' || inv.status === 'Expired' || new Date(inv.expiresAt) <= new Date()) return false;
-    } else {
-       if (inv.status !== 'Expired' && new Date(inv.expiresAt) > new Date()) return false;
-       if (inv.status === 'Used') return false; // Used links stay in their own bucket or we show them? User didn't specify Used.
+       if (!isInviteActive || inv.status === 'Used') return false;
+    } else if (activeTab === 'onboarded') {
+       if (inv.status !== 'Used') return false;
+    } else if (activeTab === 'resolved') {
+       if (inv.status === 'Used') return false;
+       if (!isInviteExpired) return false;
     }
 
     if (!searchQuery) return true;
@@ -369,6 +354,14 @@ const AdminStaffPanel = () => {
         </TouchableOpacity>
         
         <TouchableOpacity 
+          style={[styles.smallTab, activeTab === 'onboarded' && styles.smallTabActive]}
+          onPress={() => setActiveTab('onboarded')}
+        >
+          <Text style={[styles.smallTabText, activeTab === 'onboarded' && styles.smallTabTextActive]}>Onboarded</Text>
+          {activeTab === 'onboarded' && <View style={styles.tabIndicator} />}
+        </TouchableOpacity>
+
+        <TouchableOpacity 
           style={[styles.smallTab, activeTab === 'resolved' && styles.smallTabActive]}
           onPress={() => setActiveTab('resolved')}
         >
@@ -397,7 +390,9 @@ const AdminStaffPanel = () => {
                 <Text style={styles.inviteEmail}>{inv.email}</Text>
               </View>
               <View style={[styles.badge, { backgroundColor: getStatusColor(inv.status) + '20' }]}>
-                <Text style={[styles.badgeText, { color: getStatusColor(inv.status) }]}>{inv.status}</Text>
+                <Text style={[styles.badgeText, { color: getStatusColor(inv.status) }]}>
+                  {inv.status === 'Used' ? 'ONBOARDED' : inv.status}
+                </Text>
               </View>
             </View>
             
