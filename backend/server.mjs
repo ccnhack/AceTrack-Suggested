@@ -573,11 +573,7 @@ app.use(async (req, res, next) => {
   next();
 });
 
-// 🛡️ STABILITY FIX (v2.6.76): Root-level health checks (Hardened v2.6.192)
-// NOTE: Must be public for Render Load Balancer to verify service health.
-app.get('/health', (req, res) => {
-  res.status(200).send('OK');
-});
+// [Consolidated with primary /health guard at /api/v1/health]
 
 // 🛡️ SECURITY: Global Hardening (v2.6.192)
 app.disable('x-powered-by'); 
@@ -3240,11 +3236,7 @@ app.use('/api', router);
 app.use('/api/v1', router); // 🛡️ COMPATIBILITY FIX (v2.6.174): Support versioned API calls from web/mobile clients
 
 
-// 🛡️ STABILITY FIX (v2.6.75): Dedicated Root Health Check for Render Load Balancer
-// This bypasses complex middleware to ensure the service stays "Up" during heavy load.
-app.get('/health', (req, res) => {
-  res.status(200).send('OK');
-});
+// [Consolidated with primary /health guard at /api/v1/health]
 
 // 🌐 Password Reset Web Page
 app.get('/reset-password/:token', asyncHandler(async (req, res) => {
