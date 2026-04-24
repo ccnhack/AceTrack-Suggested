@@ -58,13 +58,23 @@ const AdminHubScreen = ({ navigation, route }) => {
   const today = new Date().toISOString().split('T')[0];
 
   const badges = useMemo(() => {
+    // 🛡️ [STATE_RESILIENCE] (v2.6.258): Defensive checks to prevent "(v||[]).filter is not a function"
+    // This handles cases where state might be corrupted (e.g. set to an empty object instead of array)
+    const ensureArray = (arr) => Array.isArray(arr) ? arr : [];
+    
+    const safePlayers = ensureArray(players);
+    const safeVideos = ensureArray(matchVideos);
+    const safeTickets = ensureArray(supportTickets);
+    const safeTournaments = ensureArray(tournaments);
+    const safeMatchmaking = ensureArray(matchmaking);
+
     return {
-      coaches: (players || []).filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !p.isApprovedCoach && !seenAdminActionIds.has(String(p.id))).length,
-      recordings: (matchVideos || []).filter(v => v.adminStatus === 'Deletion Requested' && !seenAdminActionIds.has(String(v.id))).length,
-      grievances: (supportTickets || []).filter(t => (t.status === 'Open' || t.status === 'Awaiting Response') && !seenAdminActionIds.has(String(t.id))).length,
-      assignments: (tournaments || []).filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration' || t.coachStatus === 'Awaiting Assignment') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today) && !seenAdminActionIds.has(String(t.id))).length,
-      payments: (tournaments || []).reduce((acc, t) => acc + (t.pendingPaymentPlayerIds || []).filter(pid => !seenAdminActionIds.has(`${t.id}-${pid}`)).length, 0),
-      matches: (matchmaking || []).filter(m => m.status === 'pending' && !seenAdminActionIds.has(String(m.id))).length
+      coaches: safePlayers.filter(p => p.role === 'coach' && (p.coachStatus === 'pending' || !p.coachStatus) && !p.isApprovedCoach && !seenAdminActionIds.has(String(p.id))).length,
+      recordings: safeVideos.filter(v => v.adminStatus === 'Deletion Requested' && !seenAdminActionIds.has(String(v.id))).length,
+      grievances: safeTickets.filter(t => (t.status === 'Open' || t.status === 'Awaiting Response') && !seenAdminActionIds.has(String(t.id))).length,
+      assignments: safeTournaments.filter(t => (t.coachAssignmentType === 'platform' || t.coachStatus === 'Pending Coach Registration' || t.coachStatus === 'Awaiting Assignment') && !t.assignedCoachId && t.status !== 'completed' && !t.tournamentConcluded && (t.date >= today) && !seenAdminActionIds.has(String(t.id))).length,
+      payments: safeTournaments.reduce((acc, t) => acc + ensureArray(t.pendingPaymentPlayerIds).filter(pid => !seenAdminActionIds.has(`${t.id}-${pid}`)).length, 0),
+      matches: safeMatchmaking.filter(m => m.status === 'pending' && !seenAdminActionIds.has(String(m.id))).length
     };
   }, [players, matchVideos, supportTickets, tournaments, matchmaking, seenAdminActionIds, today]);
 

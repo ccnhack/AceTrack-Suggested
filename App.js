@@ -17,6 +17,20 @@ if (__DEV__) {
   require('./e2e/test_api');
 }
 
+// 🛡️ [FETCH_CREDENTIALS_OVERRIDE] (v2.6.258)
+// Ensure cookies are sent with every API request on the web to support HTTP-Only sessions.
+if (Platform.OS === 'web') {
+  const originalFetch = window.fetch;
+  window.fetch = function(url, options = {}) {
+    // Only apply to our own API to avoid leaking cookies to 3rd parties
+    if (typeof url === 'string' && (url.includes('onrender.com') || url.includes('localhost') || url.includes('127.0.0.1'))) {
+      console.log(`[FetchInterceptor] Applying credentials:include to ${url}`);
+      options.credentials = 'include';
+    }
+    return originalFetch(url, options);
+  };
+}
+
 // Context Architecture (Phase 2)
 import { MultiProvider } from './context/MultiProvider';
 import { useApp } from './context/AppContext';
@@ -29,8 +43,8 @@ import { useSupport } from './context/SupportContext';
 
 
 
-// 🛡️ Web Deep Linking Configuration (v2.6.170)
-const APP_VERSION = '2.6.257';
+// 🛡️ Web Deep Linking Configuration (v2.6.258)
+const APP_VERSION = '2.6.258';
 const linking = {
   prefixes: ['https://acetrack-suggested.onrender.com', 'acetrack://'],
   config: {
@@ -58,14 +72,14 @@ function Root() {
   } = useApp();
   
   const { isFullyConnected, isSyncing } = useSync();
-  const { currentUser, userRole, userId, onMarkNotificationsRead } = useAuth();
+  const { currentUser, userRole, userId, onMarkNotificationsRead, isAuthReady } = useAuth();
   const { players } = usePlayers();
   const { tournaments } = useTournaments();
   const { evaluations } = useEvaluations();
   const { onSaveTicket, chatbotMessages, onSendChatMessage } = useSupport();
 
   const navigationRef = useRef();
-  if (isLoading || !isInitialized) {
+  if (isLoading || !isInitialized || !isAuthReady) {
     return (
       <View testID="app.loading.container" style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#EF4444" />

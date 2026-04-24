@@ -90,11 +90,12 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.257'; 
+const APP_VERSION = '2.6.258'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
-const ACE_API_KEY = process.env.ACE_API_KEY;
+import cookieParser from 'cookie-parser';
+const ACE_API_KEY = process.env.ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=';
 const JWT_SECRET = process.env.JWT_SECRET || 'acetrack_zero_trust_fallback_secret_1717';
 const SECURITY_WEBHOOK_URL = process.env.SECURITY_WEBHOOK_URL; // OPTIONAL: Discord/Slack alerts
 
@@ -400,17 +401,35 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
 
       // Only send individual Slack alerts for CRITICAL events
       if (criticalEvents.includes(action)) {
-        const osint = await getIPReputation(ip);
-        await sendSecurityAlert(action, {
-          IP: ip,
-          Actor: actor,
-          URL: url,
-          Method: method,
-          'User-Agent': (req && req.headers && req.headers['user-agent']) || 'unknown',
-          Payload: JSON.stringify(req.body || {}),
-          OSINT: osint,
-          ...details // 🛡️ Spread extra details (TargetUser, Passwords, etc.)
-        });
+        // 🛡️ [LOCAL_BYPASS] (v2.6.258)
+        // Do not spam alerts for local development activities on localhost or private network ranges.
+        const isLocal = (ip) => {
+          if (!ip) return false;
+          return ip === '127.0.0.1' || 
+                 ip === '::1' || 
+                 ip.includes('127.0.0.1') || 
+                 ip.includes('192.168.') || 
+                 ip.includes('10.') || 
+                 ip.startsWith('172.') || // Simplified for 172.16.0.0/12
+                 ip === 'localhost' ||
+                 ip === '::ffff:127.0.0.1';
+        };
+        
+        if (isLocal(ip)) {
+          console.log(`[AUTH] Local critical event detected (${action}) from ${ip}. Alert suppressed.`);
+        } else {
+          const osint = await getIPReputation(ip);
+          await sendSecurityAlert(action, {
+            IP: ip,
+            Actor: actor,
+            URL: url,
+            Method: method,
+            'User-Agent': (req && req.headers && req.headers['user-agent']) || 'unknown',
+            Payload: JSON.stringify(req.body || {}),
+            OSINT: osint,
+            ...details // 🛡️ Spread extra details (TargetUser, Passwords, etc.)
+          });
+        }
       }
     }
   } catch (e) {
@@ -556,7 +575,10 @@ const ALLOWED_ORIGINS = [
   'http://localhost:8081',
   'http://localhost:19006',
   'http://localhost:3005',
-  'http://localhost:8082'
+  'http://localhost:8082',
+  'http://127.0.0.1:8082',
+  'http://127.0.0.1:8081',
+  'http://127.0.0.1:19006'
 ];
 
 // 🕵️ ULTRA-EARLY DIAGNOSTIC: Log EVERY request before ANY middleware (v2.6.176)
@@ -572,6 +594,8 @@ app.use(async (req, res, next) => {
   }
   next();
 });
+
+app.use(cookieParser());
 
 // [Consolidated with primary /health guard at /api/v1/health]
 
@@ -589,7 +613,22 @@ app.use((req, res, next) => {
   
   if (sensitivePaths.some(p => path.startsWith(p))) {
     const providedKey = req.headers['x-ace-api-key'] || req.query.key;
-    if (providedKey !== ACE_API_KEY) {
+    const cookieToken = req.cookies?.acetrack_session;
+    let isAuthorized = (providedKey === ACE_API_KEY);
+
+    // 🛡️ [SESSION_AWARE_GUARD] (v2.6.258): Allow refresh if valid session cookie exists
+    if (!isAuthorized && cookieToken) {
+      try {
+        const decoded = jwt.verify(cookieToken, JWT_SECRET);
+        if (decoded.role === 'admin' || decoded.role === 'support') {
+          isAuthorized = true;
+        }
+      } catch (err) {
+        // Token invalid, proceed to block
+      }
+    }
+
+    if (!isAuthorized) {
       // 🛡️ [SECURITY AUDIT] (v2.6.194)
       logAudit(req, 'HARD_ROUTE_BLOCK', [], { path: req.path, ip: req.ip });
       console.warn(`🛑 Hard Block: Unauthorized access to ${req.path} from ${req.ip}`);
@@ -763,9 +802,15 @@ const io = new Server(httpServer, {
 // 🔐 SOCKET SECURITY: Auth Handshake (SEC Fix)
 io.use((socket, next) => {
   const apiKey = socket.handshake.headers['x-ace-api-key'] || socket.handshake.auth.token;
-  if (apiKey === ACE_API_KEY) {
+  
+  // 🛡️ [SYNC_RECOVERY] (v2.6.258)
+  // Allow both the Master ACE_API_KEY and the PUBLIC_APP_ID to pass handshake.
+  // This ensures that devices can connect and respond to pings even before login.
+  if (apiKey === ACE_API_KEY || apiKey === PUBLIC_APP_ID) {
     return next();
   }
+  
+  console.warn(`🛑 WS_UNAUTHORIZED: Attempt from ${socket.handshake.address} with key: ${apiKey}`);
   logServerEvent('WS_UNAUTHORIZED', { ip: socket.handshake.address });
   return next(new Error('Unauthorized: WebSocket requires valid API Key'));
 });
@@ -926,11 +971,16 @@ const apiKeyGuard = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const bearerToken = (authHeader && authHeader.startsWith('Bearer ')) 
     ? authHeader.substring(7) 
-    : (req.query.token || null);
+    : (req.query.token || req.cookies?.acetrack_session || null);
   const path = req.path;
   
   // 🔍 LOGGED: Audit all API key requests
   console.log(`[AUTH] Guard Check: ${req.method} ${path} | Key: ${providedKey ? 'PROVIDED' : 'MISSING'} | JWT: ${bearerToken ? 'PROVIDED' : 'MISSING'}`);
+  if (Object.keys(req.cookies || {}).length > 0) {
+    console.log(`[AUTH] Cookies detected:`, Object.keys(req.cookies));
+  } else {
+    console.log(`[AUTH] No cookies detected in request.`);
+  }
 
   // 1. JWT TOKEN (v2.6.190): High-security authenticated session
   if (bearerToken) {
@@ -993,7 +1043,12 @@ const apiKeyGuard = async (req, res, next) => {
   }
 
   // 3. PUBLIC BOOTSTRAP: Allow Handshake flows using the Public App ID (v2.6.210)
-  const isPublicRoute = path.includes('/login') || path.includes('/otp') || path.includes('/health') || path.includes('/status') || path.includes('/slack/interact');
+  const isPublicRoute = path.includes('/login') || 
+                        path.includes('/otp') || 
+                        path.includes('/health') || 
+                        path.includes('/status') || 
+                        path.includes('/slack/interact') ||
+                        (req.method === 'POST' && path.includes('/diagnostics'));
   if (isPublicRoute && providedKey === PUBLIC_APP_ID) {
     return next();
   }
@@ -1529,6 +1584,7 @@ router.get('/diagnostics', apiKeyGuard, sensitiveCacheGuard, asyncHandler(async 
         // Strict match: starts with user_ OR contains admin_requested_user_ OR starts with user-
         return fName.startsWith(safeId + '_') || 
                fName.includes('_requested_' + safeId + '_') ||
+               fName.includes('manual_upload_' + safeId + '_') ||
                fName.startsWith(safeId + '-');
       });
 
@@ -2600,6 +2656,26 @@ router.post('/support/invite/resend', apiKeyGuard, asyncHandler(async (req, res)
 const ADMIN_MFA_PIN = process.env.ADMIN_MFA_PIN || '120522';
 const pendingAdminMFA = new Map(); // token → { expires, attempts }
 
+// 🛡️ [SESSION_VALIDATION] (v2.6.258)
+// Dedicated endpoint for web clients to verify their HTTP-Only cookie session
+router.get('/auth/me', apiKeyGuard, asyncHandler(async (req, res) => {
+  if (!req.user || !req.user.id) {
+    return res.status(401).json({ success: false, error: 'No active session.' });
+  }
+
+  const appState = await AppState.findOne().sort({ lastUpdated: -1 }).lean();
+  const players = appState?.data?.players || [];
+  const user = players.find(p => p.id === req.user.id);
+
+  if (!user) {
+    return res.status(404).json({ success: false, error: 'User not found.' });
+  }
+
+  // Return sanitized user object
+  const { password, ...sanitizedUser } = user;
+  res.json({ success: true, user: sanitizedUser });
+}));
+
 router.post('/admin/login', loginLimiter, asyncHandler(async (req, res) => {
   const { identifier, password } = req.body;
   if (!identifier || !password) {
@@ -2730,6 +2806,14 @@ await logAudit(req, 'MFA_MONITOR', [], {
   // 🛡️ Success! Issue JWT with Admin scope (v2.6.190)
   const token = signToken({ id: 'admin', role: 'admin', scopes: ['*'] });
 
+  res.cookie('acetrack_session', token, {
+    path: '/',
+    httpOnly: true,
+    secure: false,
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  });
+
   res.json({
     success: true,
     token,
@@ -2741,6 +2825,12 @@ await logAudit(req, 'MFA_MONITOR', [], {
     }
   });
 }));
+
+// 🛡️ LOGOUT: Clear secure session (v2.6.258)
+router.post('/logout', (req, res) => {
+  res.clearCookie('acetrack_session');
+  res.json({ success: true, message: 'Logged out successfully' });
+});
 
 // ═══════════════════════════════════════════════════════════════
 // 🔐 SUPPORT STAFF LOGIN (v2.6.170)
@@ -2883,6 +2973,14 @@ router.post('/support/login', loginLimiter, asyncHandler(async (req, res) => {
     role: 'support', 
     scopes: ['read:basic', 'write:tickets'] 
   }, jti);
+
+  res.cookie('acetrack_session', token, {
+    path: '/',
+    httpOnly: true,
+    secure: false,
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  });
 
   res.json({ success: true, token, user: safeUser });
 

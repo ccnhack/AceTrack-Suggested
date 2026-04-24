@@ -9,11 +9,11 @@ import { Platform } from 'react-native';
 // Automatically detect local IP from Expo's host URI (ideal for physical devices + emulators)
 const hostUri = Constants.expoConfig?.hostUri;
 const hostIp = hostUri ? hostUri.split(':')[0] : null;
-let LOCAL_API_URL = hostIp ? `http://${hostIp}:3005` : 'http://localhost:3005';
+let LOCAL_API_URL = hostIp ? `http://${hostIp}:10000` : 'http://localhost:10000';
 
 // Android Emulators have a special alias for the host's localhost
 if (Platform.OS === 'android' && (!hostIp || hostIp === '127.0.0.1' || hostIp === 'localhost')) {
-  LOCAL_API_URL = 'http://10.0.2.2:3005';
+  LOCAL_API_URL = 'http://10.0.2.2:10000';
 }
 
 // ENVIRONMENT SWITCH:
@@ -25,15 +25,15 @@ const GROQ_API_KEY = (Constants.expoConfig && Constants.expoConfig.extra && Cons
   ? Constants.expoConfig.extra.groqApiKey
   : (process.env.EXPO_PUBLIC_GROQ_API_KEY || ['gsk_K7PS6xX6c', '0u1Hl4A5t3tWGdyb3FYnnYM', 'HeT4tzc1hWoTftABTcCT'].join(''));
 
-const PUBLIC_APP_ID = (Constants.expoConfig && Constants.expoConfig.extra && Constants.expoConfig.extra.aceApiKey)
+const ACE_API_KEY = (Constants.expoConfig && Constants.expoConfig.extra && Constants.expoConfig.extra.aceApiKey)
   ? Constants.expoConfig.extra.aceApiKey
-  : process.env.EXPO_PUBLIC_ACE_API_KEY;
+  : (process.env.EXPO_PUBLIC_ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=');
 
 export default {
-  APP_VERSION: '2.6.246',
-  API_BASE_URL: (Constants.appConfig?.extra?.apiUrl || 
-                 'https://acetrack-suggested.onrender.com').replace(/\/$/, ''),
+  APP_VERSION: '2.6.258',
+  API_BASE_URL: API_BASE_URL,
   GROQ_API_KEY,
+  ACE_API_KEY,
   PUBLIC_APP_ID: 'AceTrack_Client_v2_Production',
   IS_ANDROID: Platform.OS === 'android',
   IS_IOS: Platform.OS === 'ios',

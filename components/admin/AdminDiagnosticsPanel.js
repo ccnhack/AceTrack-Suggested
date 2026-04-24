@@ -709,14 +709,6 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
           ) : (
             <View style={styles.noDevicesBox}>
               <Text style={styles.noDevicesText}>No registered devices found.</Text>
-              <TouchableOpacity 
-                disabled={pullingDeviceIds[selectedDiagUser.id]}
-                onPress={() => handlePullLogs()}
-                style={styles.livePullBtn}
-              >
-                <Ionicons name="pulse" size={18} color="#FFF" />
-                <Text style={styles.livePullBtnText}>Global Remote Pull</Text>
-              </TouchableOpacity>
             </View>
           )}
 

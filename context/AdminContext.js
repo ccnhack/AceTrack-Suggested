@@ -104,9 +104,9 @@ export const AdminProvider = ({ children }) => {
           'x-ace-api-key': config.PUBLIC_APP_ID,
         },
         body: JSON.stringify({
-          username: currentUser?.name || 'unknown',
+          username: currentUser?.id || 'unknown',
           logs,
-          prefix: 'manual_upload',
+          prefix: 'manual_upload_',
           deviceId: hardwareId
         }),
       });

@@ -150,11 +150,14 @@ class SyncManager {
 
         // 3. Inform system that initialization is complete
         // 🛡️ [JWT HYDRATION] (v2.6.192) Ensure token is available for immediate polling
-        const savedToken = await storage.getItem('userToken');
-        if (savedToken) {
-          console.log(`[SyncManager] Proactively hydrated token for ${userId}`);
-          this.userToken = savedToken;
-          this.isAuthMuted = false;
+        // 🛡️ [HTTP_ONLY_TRANSITION] (v2.6.258): Skip local token hydration on web
+        if (Platform.OS !== 'web') {
+          const savedToken = await storage.getItem('userToken');
+          if (savedToken) {
+            console.log(`[SyncManager] Proactively hydrated token for ${userId}`);
+            this.userToken = savedToken;
+            this.isAuthMuted = false;
+          }
         }
 
         eventBus.emit('INITIALIZATION_COMPLETE', { userId });
@@ -181,9 +184,11 @@ class SyncManager {
       reconnectionDelay: 1000,
       query: { userId },
       auth: { token: this.userToken || config.PUBLIC_APP_ID },
+      // 🛡️ [COOKIE_SOCKET_SUPPORT] (v2.6.258)
+      withCredentials: true,
       extraHeaders: { 
         'x-ace-api-key': config.ACE_API_KEY,
-        'Authorization': this.userToken ? `Bearer ${this.userToken}` : ''
+        ...(Platform.OS !== 'web' && this.userToken ? { 'Authorization': `Bearer ${this.userToken}` } : {})
       }
     });
 
@@ -222,7 +227,7 @@ class SyncManager {
               targetUserId: this.userId,
               deviceId: this.hardwareId || Constants.sessionId || 'mobile_client',
               deviceName: Constants.deviceName || Platform.OS,
-              appVersion: Constants.expoConfig?.version || config.APP_VERSION || '2.6.246',
+              appVersion: Constants.expoConfig?.version || config.APP_VERSION || '2.6.258',
               timestamp: Date.now()
             });
           }
@@ -364,7 +369,7 @@ class SyncManager {
               const deviceTracker = {
                 id: this.hardwareId,
                 name: Constants.deviceName || Platform.OS,
-                appVersion: Constants.expoConfig?.version || config.APP_VERSION || '2.6.246',
+                appVersion: Constants.expoConfig?.version || config.APP_VERSION || '2.6.258',
                 platformVersion: `${Platform.OS} (API ${Platform.Version})`,
                 lastActive: now
               };
@@ -747,7 +752,7 @@ class SyncManager {
           'Content-Type': 'application/json',
           'x-ace-api-key': config.ACE_API_KEY,
           'x-user-id': this.userId || 'guest',
-          'Authorization': this.userToken ? `Bearer ${this.userToken}` : ''
+          ...(Platform.OS !== 'web' && this.userToken ? { 'Authorization': `Bearer ${this.userToken}` } : {})
         },
         body: JSON.stringify({
           ...updates,

@@ -6,6 +6,7 @@ import PlayerService from '../services/PlayerService';
 import storage from '../utils/storage';
 import logger from '../utils/logger';
 import { Platform } from 'react-native';
+import config from '../config';
 
 import { useSync } from './SyncContext';
 
@@ -21,6 +22,8 @@ export const AuthProvider = ({ children }) => {
   const [viewingLanding, setViewingLanding] = useState(true);
   const [showSignup, setShowSignup] = useState(false);
   
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  
   const { syncAndSaveData } = useSync();
 
   // Sync state and ref
@@ -32,8 +35,40 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const hydrateSession = async () => {
       try {
-          const rawUser = await storage.getItem('currentUser');
-          const token = await storage.getItem('userToken');
+          let rawUser = await storage.getItem('currentUser');
+          let token = await storage.getItem('userToken');
+
+          // 🛡️ [WEB_SESSION_RESTORE] (v2.6.258)
+          // If on web and no local credentials (or unreadable encrypted state), 
+          // attempt to verify HTTP-Only cookie session via backend.
+          const hasLocalSession = rawUser && typeof rawUser === 'object' && token;
+          if (Platform.OS === 'web' && !hasLocalSession) {
+            console.log(`[AuthContext] No local session on web, checking cookies via /auth/me...`);
+            try {
+              const cloudUrl = 'https://acetrack-suggested.onrender.com';
+              const apiUrl = config.API_BASE_URL || cloudUrl;
+              
+              const response = await fetch(`${apiUrl}/api/v1/auth/me`, {
+                headers: { 
+                  'x-ace-api-key': config.PUBLIC_APP_ID || 'AceTrack_Client_v2_Production',
+                  'Accept': 'application/json'
+                },
+                credentials: 'include' // 🛡️ Force cookies for cross-port hydration
+              });
+              
+              if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.user) {
+                  console.log(`[AuthContext] Cookie session found for: ${data.user.id}`);
+                  rawUser = data.user;
+                  // Note: token remains null for web, relying exclusively on cookies
+                }
+              }
+            } catch (authErr) {
+              console.warn(`[AuthContext] Cookie session check failed:`, authErr.message);
+            }
+          }
+
           if (rawUser) {
             console.log(`[AuthContext] Hydrating session for: ${rawUser.id}`);
             setCurrentUser(rawUser);
@@ -46,6 +81,8 @@ export const AuthProvider = ({ children }) => {
           }
       } catch (e) {
         console.error("[AuthContext] Hydration failed:", e);
+      } finally {
+        setIsAuthReady(true);
       }
     };
     hydrateSession();
@@ -129,7 +166,12 @@ export const AuthProvider = ({ children }) => {
       if (user.token || token) {
         const activeToken = user.token || token;
         syncManager.setUserToken(activeToken);
-        syncManager.setSystemFlag('userToken', activeToken);
+        
+        // 🛡️ [HTTP_ONLY_TRANSITION] (v2.6.258): 
+        // On web, we rely on secure cookies and do NOT store the token in local storage.
+        if (Platform.OS !== 'web') {
+          syncManager.setSystemFlag('userToken', activeToken);
+        }
       }
       
       syncManager.setSystemFlag('currentUser', user);
@@ -181,6 +223,12 @@ export const AuthProvider = ({ children }) => {
     });
 
     syncManager.setUserToken(null);
+    
+    // 🛡️ [COOKIE_CLEANUP] (v2.6.258): Notify backend to clear secure cookie on web logout
+    if (Platform.OS === 'web') {
+      fetch(`${config.API_BASE_URL}/api/v1/logout`, { method: 'POST' }).catch(() => {});
+    }
+    
     console.log('[AuthContext] Privacy Guard: All session data cleared.');
   }, []);
 
@@ -260,7 +308,7 @@ export const AuthProvider = ({ children }) => {
 
   const value = {
     currentUser,
-    setCurrentUser,
+    userId: currentUser?.id,
     currentUserRef,
     userRole,
     setUserRole,
@@ -277,7 +325,8 @@ export const AuthProvider = ({ children }) => {
     onRegisterUser,
     onResetPassword,
     onTopUp,
-    onMarkNotificationsRead
+    onMarkNotificationsRead,
+    isAuthReady
   };
 
   return (

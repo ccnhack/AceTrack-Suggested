@@ -43,20 +43,48 @@ const getSessionKey = async () => {
   if (!isWeb || typeof window === 'undefined') return null;
   if (sessionKey) return sessionKey;
   
-  // 🛡️ CONCURRENCY GUARD: If a key is already being generated, wait for that promise
   if (sessionKeyPromise) return sessionKeyPromise;
   
   sessionKeyPromise = (async () => {
     try {
-      // Generate a page-load specific AES-256 key
+      // 🛡️ [KEY_PERSISTENCE] (v2.6.258)
+      // Attempt to restore the master key from sessionStorage to support page refreshes
+      const exportedKey = window.sessionStorage.getItem('__acetrack_k');
+      if (exportedKey) {
+        try {
+          const jwk = JSON.parse(exportedKey);
+          sessionKey = await window.crypto.subtle.importKey(
+            'jwk',
+            jwk,
+            { name: 'AES-GCM' },
+            true,
+            ['encrypt', 'decrypt']
+          );
+          console.log('[WebCrypto] Session key restored from storage');
+          return sessionKey;
+        } catch (restoreErr) {
+          console.warn('[WebCrypto] Failed to restore session key:', restoreErr);
+        }
+      }
+
+      // Generate a new key if restoration failed or was not available
       sessionKey = await window.crypto.subtle.generateKey(
         { name: 'AES-GCM', length: 256 },
         true,
         ['encrypt', 'decrypt']
       );
+
+      // Save to sessionStorage for persistence across refreshes
+      try {
+        const jwk = await window.crypto.subtle.exportKey('jwk', sessionKey);
+        window.sessionStorage.setItem('__acetrack_k', JSON.stringify(jwk));
+      } catch (saveErr) {
+        console.warn('[WebCrypto] Failed to save session key:', saveErr);
+      }
+
       return sessionKey;
     } catch (e) {
-      console.error('[WebCrypto] Key generation failed:', e);
+      console.error('[WebCrypto] Key initialization failed:', e);
       return null;
     } finally {
       sessionKeyPromise = null;
