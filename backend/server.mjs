@@ -3968,8 +3968,27 @@ if (fs.existsSync(publicPath)) {
     res.sendFile(path.join(publicPath, 'index.html'));
   });
 
+  // 🛡️ [HIGH COMPATIBILITY ASSETS]: Explicitly handle Font MIME types and CORS (v2.6.257)
+  app.use((req, res, next) => {
+    if (req.path.endsWith('.ttf')) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Content-Type', 'font/ttf');
+    }
+    // Allow CORS for all static assets to prevent loading issues
+    if (req.path.includes('/assets/')) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    }
+    next();
+  });
+
   // 🛡️ [STATIC ASSETS]: Serve physical files (JS, CSS, Images, etc.)
-  app.use(express.static(publicPath));
+  app.use(express.static(publicPath, {
+    setHeaders: (res, path) => {
+      if (path.endsWith('.ttf')) {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+      }
+    }
+  }));
 
   // 🛡️ [SPA FALLBACK]: Handle deep-links for the Single Page Application.
   // We exclude paths with extensions (containing a dot) to ensure missing assets return 404, not HTML.
