@@ -65,6 +65,8 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   // 🕐 [ATTENDANCE] (v2.6.267): Attendance data state
   const [attendanceData, setAttendanceData] = useState(null);
   const [isLoadingAttendance, setIsLoadingAttendance] = useState(false);
+  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+  const [attendanceDateFilter, setAttendanceDateFilter] = useState(() => new Date().toISOString().split('T')[0]);
 
   const handleExportCSV = async () => {
     const token = await storage.getItem('userToken');
@@ -541,7 +543,16 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
               </Text>
               <View style={[
                 styles.statusDot, 
-                { backgroundColor: (agent.supportStatus === 'terminated' || agent.supportStatus === 'inactive' || agent.supportLevel === 'EX-EMPLOYEE') ? '#EF4444' : agent.supportStatus === 'suspended' ? '#F97316' : (agent.supportStatus === 'overwhelmed' ? '#F59E0B' : '#10B981') }
+                { 
+                  backgroundColor: (() => {
+                    if (agent.supportStatus === 'terminated' || agent.supportStatus === 'inactive' || agent.supportLevel === 'EX-EMPLOYEE') return '#EF4444';
+                    if (agent.supportStatus === 'suspended') return '#F97316';
+                    
+                    // Live Online Status
+                    const agentAtt = attendanceData?.find(a => String(a.id) === String(agent.id));
+                    return agentAtt?.isCurrentlyOnline ? '#10B981' : '#CBD5E1'; // Green if online, Gray if offline
+                  })()
+                }
               ]} />
             </TouchableOpacity>
           ))}
@@ -582,6 +593,17 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                     ]}>
                       {selectedAgent.supportLevel || 'Trainee'}
                     </Text>
+                    
+                    {!isSelectedTerminated && (
+                      <TouchableOpacity 
+                        style={styles.attendanceTriggerBtn}
+                        onPress={() => setShowAttendanceModal(true)}
+                      >
+                        <Ionicons name="time" size={12} color="#6366F1" />
+                        <Text style={styles.attendanceTriggerText}>Attendance</Text>
+                      </TouchableOpacity>
+                    )}
+
                     <View style={[
                       styles.statusPill,
                       { backgroundColor: isSelectedTerminated ? '#FEE2E2' : (selectedAgent.supportStatus === 'suspended' ? '#FFF7ED' : (selectedAgent.supportStatus === 'overwhelmed' ? '#FEF3C7' : '#D1FAE5')) }
@@ -776,128 +798,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
               </View>
             )}
 
-            {/* 🕐 Attendance & Working Hours (v2.6.267) */}
-            {!isSelectedTerminated && (() => {
-              const agentAttendance = attendanceData?.find(a => a.id === selectedAgentId);
-              if (!agentAttendance && isLoadingAttendance) {
-                return (
-                  <View style={styles.attendanceSection}>
-                    <ActivityIndicator size="small" color="#6366F1" style={{ margin: 16 }} />
-                  </View>
-                );
-              }
-              if (!agentAttendance) return null;
-
-              const todayHours = Math.floor(agentAttendance.todayMs / 3600000);
-              const todayMins = Math.floor((agentAttendance.todayMs % 3600000) / 60000);
-              const todayProgress = Math.min((agentAttendance.todayMs / (8 * 3600000)) * 100, 100); // 8h target
-              const maxWeeklyMs = Math.max(...(agentAttendance.weeklyDays || []).map(d => d.totalMs), 1);
-
-              return (
-                <View style={styles.attendanceSection}>
-                  <View style={styles.attendanceHeader}>
-                    <Ionicons name="time-outline" size={16} color="#6366F1" />
-                    <Text style={styles.attendanceTitle}>Attendance & Working Hours</Text>
-                    <TouchableOpacity onPress={fetchAttendance} disabled={isLoadingAttendance}>
-                      <Ionicons name="refresh" size={16} color={isLoadingAttendance ? '#CBD5E1' : '#6366F1'} />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Current Status */}
-                  <View style={[styles.attendanceStatusCard, { borderLeftColor: agentAttendance.isCurrentlyOnline ? '#10B981' : '#94A3B8' }]}>
-                    <View style={[styles.attendanceLiveDot, { backgroundColor: agentAttendance.isCurrentlyOnline ? '#10B981' : '#CBD5E1' }]} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.attendanceStatusText, { color: agentAttendance.isCurrentlyOnline ? '#059669' : '#64748B' }]}>
-                        {agentAttendance.isCurrentlyOnline ? 'Currently Online' : 'Offline'}
-                      </Text>
-                      {!agentAttendance.isCurrentlyOnline && agentAttendance.lastSeen && agentAttendance.lastSeen !== 'Now' && (
-                        <Text style={styles.attendanceLastSeen}>
-                          Last seen {new Date(agentAttendance.lastSeen).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                        </Text>
-                      )}
-                      {agentAttendance.isCurrentlyOnline && agentAttendance.activeSessions?.length > 0 && (
-                        <Text style={styles.attendanceLastSeen}>
-                          Session started {new Date(agentAttendance.activeSessions[0].startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* Today's Hours */}
-                  <View style={styles.todayHoursCard}>
-                    <View style={styles.todayHoursTop}>
-                      <Text style={styles.todayHoursLabel}>Today's Active Time</Text>
-                      <Text style={styles.todayHoursValue}>
-                        {todayHours > 0 ? `${todayHours}h ` : ''}{todayMins}m
-                      </Text>
-                    </View>
-                    <View style={styles.todayProgressBg}>
-                      <View style={[
-                        styles.todayProgressBar, 
-                        { width: `${todayProgress}%`, backgroundColor: todayProgress >= 80 ? '#10B981' : todayProgress >= 50 ? '#F59E0B' : '#3B82F6' }
-                      ]} />
-                    </View>
-                    <Text style={styles.todayProgressLabel}>{Math.round(todayProgress)}% of 8h target</Text>
-                  </View>
-
-                  {/* Weekly Summary */}
-                  <View style={styles.weeklyCard}>
-                    <Text style={styles.weeklyTitle}>This Week</Text>
-                    <View style={styles.weeklyBarsRow}>
-                      {(agentAttendance.weeklyDays || []).map((day, i) => {
-                        const barHeight = Math.max((day.totalMs / maxWeeklyMs) * 60, 3);
-                        const hrs = Math.floor(day.totalMs / 3600000);
-                        const mins = Math.floor((day.totalMs % 3600000) / 60000);
-                        const isToday = day.date === new Date().toISOString().split('T')[0];
-                        return (
-                          <View key={i} style={styles.weeklyBarCol}>
-                            <Text style={styles.weeklyBarValue}>
-                              {day.totalMs > 0 ? (hrs > 0 ? `${hrs}h` : `${mins}m`) : ''}
-                            </Text>
-                            <View style={[
-                              styles.weeklyBar, 
-                              { height: barHeight, backgroundColor: isToday ? '#6366F1' : (day.totalMs > 0 ? '#A5B4FC' : '#E2E8F0') }
-                            ]} />
-                            <Text style={[styles.weeklyBarLabel, isToday && { color: '#6366F1', fontWeight: '900' }]}>
-                              {day.dayName}
-                            </Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </View>
-
-                  {/* Session Log */}
-                  {agentAttendance.recentSessions?.length > 0 && (
-                    <View style={styles.sessionLogCard}>
-                      <Text style={styles.sessionLogTitle}>Recent Sessions ({agentAttendance.totalSessionCount} total)</Text>
-                      {agentAttendance.recentSessions.slice(0, 10).map((sess, i) => {
-                        const startDate = new Date(sess.startTime);
-                        const endDate = new Date(sess.endTime);
-                        const durHrs = Math.floor(sess.durationMs / 3600000);
-                        const durMins = Math.floor((sess.durationMs % 3600000) / 60000);
-                        return (
-                          <View key={i} style={styles.sessionLogRow}>
-                            <View style={styles.sessionLogDot} />
-                            <View style={{ flex: 1 }}>
-                              <Text style={styles.sessionLogDate}>
-                                {startDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-                              </Text>
-                              <Text style={styles.sessionLogTime}>
-                                {startDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} → {endDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                              </Text>
-                            </View>
-                            <Text style={styles.sessionLogDuration}>
-                              {durHrs > 0 ? `${durHrs}h ` : ''}{durMins}m
-                            </Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  )}
-                </View>
-              );
-            })()}
+            {/* Attendance UI moved to Full-Screen Modal */}
           </View>
         ) : (
           <View style={styles.selectHint}>
@@ -1028,6 +929,198 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
           </View>
         </Modal>
       )}
+
+      {/* 🕐 Attendance Modal (Full Screen) */}
+      <Modal visible={showAttendanceModal} transparent animationType="slide" onRequestClose={() => setShowAttendanceModal(false)}>
+        <View style={styles.attendanceModalOverlay}>
+          <View style={styles.attendanceModalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Attendance & Working Hours</Text>
+              <TouchableOpacity onPress={() => setShowAttendanceModal(false)}>
+                <Ionicons name="close-circle" size={28} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            {(() => {
+              const agentAttendance = attendanceData?.find(a => String(a.id) === String(selectedAgentId));
+              if (!agentAttendance && isLoadingAttendance) {
+                return (
+                  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color="#6366F1" />
+                    <Text style={{ marginTop: 12, color: '#64748B', fontWeight: '600' }}>Fetching records...</Text>
+                  </View>
+                );
+              }
+              if (!agentAttendance) {
+                return (
+                  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <Text style={{ color: '#64748B', fontWeight: '600' }}>No attendance data available.</Text>
+                    <TouchableOpacity onPress={fetchAttendance} style={{ marginTop: 12, padding: 8, backgroundColor: '#EFF6FF', borderRadius: 8 }}>
+                      <Text style={{ color: '#3B82F6', fontWeight: 'bold' }}>Retry Sync</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              }
+
+              // Compute stats for selected date
+              const filterDateStr = attendanceDateFilter;
+              const isTodayFilter = filterDateStr === new Date().toISOString().split('T')[0];
+              
+              const dateSessions = (agentAttendance.allSessions || []).filter(s => {
+                const sDate = new Date(s.startTime).toISOString().split('T')[0];
+                return sDate === filterDateStr;
+              });
+
+              // Add live sessions to today's count if today is selected
+              let totalMsForDate = dateSessions.reduce((sum, s) => sum + (s.durationMs || 0), 0);
+              let liveSessionDocs = [];
+              if (isTodayFilter && agentAttendance.isCurrentlyOnline) {
+                liveSessionDocs = agentAttendance.activeSessions || [];
+                totalMsForDate += liveSessionDocs.reduce((sum, s) => sum + (s.durationMs || 0), 0);
+              }
+
+              const displaySessions = [...liveSessionDocs, ...dateSessions.reverse()];
+              const dateHours = Math.floor(totalMsForDate / 3600000);
+              const dateMins = Math.floor((totalMsForDate % 3600000) / 60000);
+              const dateProgress = Math.min((totalMsForDate / (8 * 3600000)) * 100, 100);
+              const maxWeeklyMs = Math.max(...(agentAttendance.weeklyDays || []).map(d => d.totalMs), 1);
+
+              return (
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+                  
+                  {/* Current Live Status (Only show if viewing Today) */}
+                  {isTodayFilter && (
+                    <View style={[styles.attendanceStatusCard, { borderLeftColor: agentAttendance.isCurrentlyOnline ? '#10B981' : '#94A3B8' }]}>
+                      <View style={[styles.attendanceLiveDot, { backgroundColor: agentAttendance.isCurrentlyOnline ? '#10B981' : '#CBD5E1' }]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.attendanceStatusText, { color: agentAttendance.isCurrentlyOnline ? '#059669' : '#64748B' }]}>
+                          {agentAttendance.isCurrentlyOnline ? 'Currently Online' : 'Offline'}
+                        </Text>
+                        {!agentAttendance.isCurrentlyOnline && agentAttendance.lastSeen && agentAttendance.lastSeen !== 'Now' && (
+                          <Text style={styles.attendanceLastSeen}>
+                            Last seen {new Date(agentAttendance.lastSeen).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          </Text>
+                        )}
+                        {agentAttendance.isCurrentlyOnline && agentAttendance.activeSessions?.length > 0 && (
+                          <Text style={styles.attendanceLastSeen}>
+                            Session started {new Date(agentAttendance.activeSessions[0].startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Date Filter Controls */}
+                  <View style={styles.dateFilterContainer}>
+                    <TouchableOpacity 
+                      onPress={() => {
+                        const d = new Date(filterDateStr);
+                        d.setDate(d.getDate() - 1);
+                        setAttendanceDateFilter(d.toISOString().split('T')[0]);
+                      }}
+                      style={styles.dateNavBtn}
+                    >
+                      <Ionicons name="chevron-back" size={20} color="#6366F1" />
+                    </TouchableOpacity>
+                    
+                    <View style={styles.dateDisplayBox}>
+                      <Ionicons name="calendar-outline" size={16} color="#64748B" />
+                      <Text style={styles.dateDisplayText}>
+                        {isTodayFilter ? 'Today' : new Date(filterDateStr).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity 
+                      disabled={isTodayFilter}
+                      onPress={() => {
+                        const d = new Date(filterDateStr);
+                        d.setDate(d.getDate() + 1);
+                        setAttendanceDateFilter(d.toISOString().split('T')[0]);
+                      }}
+                      style={[styles.dateNavBtn, isTodayFilter && { opacity: 0.3 }]}
+                    >
+                      <Ionicons name="chevron-forward" size={20} color="#6366F1" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Hours Chart for Selected Date */}
+                  <View style={styles.todayHoursCard}>
+                    <View style={styles.todayHoursTop}>
+                      <Text style={styles.todayHoursLabel}>Active Time ({isTodayFilter ? 'Today' : 'Selected Date'})</Text>
+                      <Text style={styles.todayHoursValue}>
+                        {dateHours > 0 ? `${dateHours}h ` : ''}{dateMins}m
+                      </Text>
+                    </View>
+                    <View style={styles.todayProgressBg}>
+                      <View style={[
+                        styles.todayProgressBar, 
+                        { width: `${dateProgress}%`, backgroundColor: dateProgress >= 80 ? '#10B981' : dateProgress >= 50 ? '#F59E0B' : '#3B82F6' }
+                      ]} />
+                    </View>
+                    <Text style={styles.todayProgressLabel}>{Math.round(dateProgress)}% of 8h target</Text>
+                  </View>
+
+                  {/* Sessions for Selected Date */}
+                  <View style={styles.sessionLogCard}>
+                    <Text style={styles.sessionLogTitle}>Session Log ({displaySessions.length} total)</Text>
+                    {displaySessions.length > 0 ? displaySessions.map((sess, i) => {
+                      const startDate = new Date(sess.startTime);
+                      const endDate = sess.isLive ? new Date() : new Date(sess.endTime);
+                      const durHrs = Math.floor(sess.durationMs / 3600000);
+                      const durMins = Math.floor((sess.durationMs % 3600000) / 60000);
+                      return (
+                        <View key={i} style={styles.sessionLogRow}>
+                          <View style={[styles.sessionLogDot, sess.isLive && { backgroundColor: '#10B981' }]} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.sessionLogTime}>
+                              {startDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} → {sess.isLive ? 'ACTIVE NOW' : endDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            </Text>
+                          </View>
+                          <Text style={[styles.sessionLogDuration, sess.isLive && { color: '#10B981' }]}>
+                            {durHrs > 0 ? `${durHrs}h ` : ''}{durMins}m
+                          </Text>
+                        </View>
+                      );
+                    }) : (
+                      <View style={{ padding: 20, alignItems: 'center' }}>
+                        <Text style={{ color: '#94A3B8', fontWeight: '600' }}>No sessions on this date.</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Weekly Summary */}
+                  <View style={[styles.weeklyCard, { marginTop: 20 }]}>
+                    <Text style={styles.weeklyTitle}>Current Week Summary</Text>
+                    <View style={styles.weeklyBarsRow}>
+                      {(agentAttendance.weeklyDays || []).map((day, i) => {
+                        const barHeight = Math.max((day.totalMs / maxWeeklyMs) * 60, 3);
+                        const hrs = Math.floor(day.totalMs / 3600000);
+                        const mins = Math.floor((day.totalMs % 3600000) / 60000);
+                        const isToday = day.date === new Date().toISOString().split('T')[0];
+                        return (
+                          <View key={i} style={styles.weeklyBarCol}>
+                            <Text style={styles.weeklyBarValue}>
+                              {day.totalMs > 0 ? (hrs > 0 ? `${hrs}h` : `${mins}m`) : ''}
+                            </Text>
+                            <View style={[
+                              styles.weeklyBar, 
+                              { height: barHeight, backgroundColor: isToday ? '#6366F1' : (day.totalMs > 0 ? '#A5B4FC' : '#E2E8F0') }
+                            ]} />
+                            <Text style={[styles.weeklyBarLabel, isToday && { color: '#6366F1', fontWeight: '900' }]}>
+                              {day.dayName}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                </ScrollView>
+              );
+            })()}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1210,11 +1303,18 @@ const styles = StyleSheet.create({
   drillTicketAgent: { fontSize: 12, color: '#64748B', fontWeight: '600' },
   drillTicketRating: { fontSize: 12, color: '#F59E0B', fontWeight: '800' },
 
-  // 🕐 Attendance & Working Hours (v2.6.267)
-  attendanceSection: { marginTop: 24, backgroundColor: '#FAFBFF', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#E0E7FF' },
-  attendanceHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
-  attendanceTitle: { fontSize: 13, fontWeight: '900', color: '#4F46E5', flex: 1, textTransform: 'uppercase', letterSpacing: 0.5 },
+  attendanceTriggerBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF2FF', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, gap: 4, marginRight: 8 },
+  attendanceTriggerText: { fontSize: 11, fontWeight: '800', color: '#6366F1' },
+
+  // 🕐 Attendance Modal Styles
+  attendanceModalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'flex-end' },
+  attendanceModalContent: { backgroundColor: '#F8FAFC', paddingHorizontal: 20, paddingTop: 24, borderTopLeftRadius: 32, borderTopRightRadius: 32, height: '90%' },
+  dateFilterContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, backgroundColor: '#FFF', borderRadius: 16, padding: 6, borderWidth: 1, borderColor: '#E2E8F0' },
+  dateNavBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F5F9', borderRadius: 12 },
+  dateDisplayBox: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  dateDisplayText: { fontSize: 14, fontWeight: '800', color: '#1E293B' },
   
+  // Existing Attendance Styles (moved to Modal)
   attendanceStatusCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#F1F5F9', borderLeftWidth: 4, gap: 12, marginBottom: 14 },
   attendanceLiveDot: { width: 10, height: 10, borderRadius: 5 },
   attendanceStatusText: { fontSize: 14, fontWeight: '800' },

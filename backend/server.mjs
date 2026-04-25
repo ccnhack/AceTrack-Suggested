@@ -4370,7 +4370,7 @@ router.get('/support/attendance', apiKeyGuard, async (req, res) => {
       // Check if currently online via in-memory tracker
       const activeSessions = [];
       for (const [, sess] of activeSupportSessions) {
-        if (sess.userId === agent.id) {
+        if (String(sess.userId) === String(agent.id)) {
           activeSessions.push({
             startTime: new Date(sess.startTime).toISOString(),
             durationMs: Date.now() - sess.startTime,
@@ -4424,6 +4424,7 @@ router.get('/support/attendance', apiKeyGuard, async (req, res) => {
         activeSessions,
         todayMs,
         weeklyDays,
+        allSessions: sessions, // For client-side date filtering
         recentSessions,
         lastSeen,
         totalSessionCount: sessions.length
