@@ -3492,6 +3492,39 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
 }));
 
 
+// 🛡️ [DEBUG] (v2.6.270): Temporary debug endpoint for active support sessions
+router.get('/debug/active-sessions', (req, res) => {
+  const sessions = [];
+  for (const [socketId, sess] of activeSupportSessions) {
+    sessions.push({ socketId, ...sess, durationMs: Date.now() - sess.startTime });
+  }
+  const connectedSockets = io.sockets.sockets ? io.sockets.sockets.size : 'unknown';
+  res.json({ 
+    activeSupportSessions: sessions, 
+    totalConnectedSockets: connectedSockets,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// 🛡️ [SESSION_CHECK] (v2.6.270): REST-based support session status check
+// Used by AdminDiagnosticsPanel as a fallback when socket ping/pong is unreliable
+router.get('/support/session-status/:userId', apiKeyGuard, (req, res) => {
+  const { userId } = req.params;
+  const sessions = [];
+  for (const [socketId, sess] of activeSupportSessions) {
+    if (String(sess.userId) === String(userId)) {
+      sessions.push({
+        socketId,
+        startTime: new Date(sess.startTime).toISOString(),
+        durationMs: Date.now() - sess.startTime,
+        deviceName: sess.deviceName || 'Browser',
+        isLive: true
+      });
+    }
+  }
+  res.json({ userId, sessions, isOnline: sessions.length > 0, timestamp: new Date().toISOString() });
+});
+
 // ═══════════════════════════════════════════════════════════════
 // 🌐 Mount API v1 + backward-compatible un-versioned routes
 // ═══════════════════════════════════════════════════════════════

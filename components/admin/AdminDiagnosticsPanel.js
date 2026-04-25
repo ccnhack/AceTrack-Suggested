@@ -216,6 +216,41 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
         const fs = filterFiles(data.files);
         setUserDiagFiles(fs);
       }
+
+      // 🛡️ [REST_SESSION_FALLBACK] (v2.6.270): For support users, also check via REST API
+      // The socket ping/pong is unreliable when admin is on mobile and support is on web
+      if (p.role === 'support') {
+        try {
+          const sessionRes = await fetch(`${activeApiUrl}/api/support/session-status/${p.id}`, {
+            headers: { 
+              'x-ace-api-key': config.PUBLIC_APP_ID,
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          if (sessionRes.ok) {
+            const sessionData = await sessionRes.json();
+            if (sessionData.isOnline && sessionData.sessions?.length > 0) {
+              // Inject REST-discovered sessions into onlineDevices state
+              const restSessions = {};
+              sessionData.sessions.forEach((s, idx) => {
+                const key = `rest_${p.id}_${idx}`;
+                restSessions[key] = {
+                  online: true,
+                  version: config.APP_VERSION,
+                  timestamp: Date.now(),
+                  deviceId: `browser_${s.socketId || idx}`,
+                  deviceName: s.deviceName || 'Browser',
+                  targetUserId: p.id
+                };
+              });
+              setOnlineDevices(prev => ({ ...prev, ...restSessions }));
+              console.log(`[DiagPanel] REST fallback found ${sessionData.sessions.length} active session(s) for ${p.id}`);
+            }
+          }
+        } catch (restErr) {
+          console.warn('[DiagPanel] REST session check failed:', restErr.message);
+        }
+      }
     } catch (e) {
       console.warn("Failed to fetch diagnostics:", e);
     } finally {
