@@ -334,13 +334,16 @@ export const AdminGrievancesPanel = ({
   };
 
   const scopedTickets = (tickets || []).filter(t => {
-    if (currentUser?.role === 'support') {
-      const isMine = t.assignedTo === currentUser.id || t.assignedTo === currentUser.username;
+    // 🛡️ [STRICT SCOPING] (v2.6.271) Enforce assignment scoping for ALL non-admins.
+    // This prevents ticket leakage if a support user's session role property is missing or overridden.
+    if (currentUser?.id !== 'admin') {
+      const isMine = (t.assignedTo && t.assignedTo === currentUser?.id) || 
+                     (currentUser?.username && t.assignedTo === currentUser?.username);
       const isUnassigned = (!t.assignedTo || t.assignedTo === 'Unassigned' || t.assignedTo === '');
       const isOpen = (t.status === 'Open' || !t.status);
       return isMine || (isUnassigned && isOpen);
     }
-    return true;
+    return true; // Only the System Administrator ('admin') sees all tickets
   });
 
   const filteredTickets = scopedTickets

@@ -76,7 +76,7 @@ export const AuthProvider = ({ children }) => {
             setViewingLanding(false);
             
             // Re-initialize SyncManager immediately for background processes
-            syncManager.init(rawUser.id);
+            syncManager.init(rawUser.id, rawUser.role);
             if (token) syncManager.setUserToken(token);
           }
       } catch (e) {
@@ -92,7 +92,7 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     if (currentUser?.id) {
       console.log(`[AuthContext] Initializing SyncManager for ${currentUser.id}`);
-      syncManager.init(currentUser.id);
+      syncManager.init(currentUser.id, currentUser.role);
     }
     return () => {
       syncManager.destroy();
@@ -166,7 +166,7 @@ export const AuthProvider = ({ children }) => {
       // the role was read as 'user' instead of 'support'.
       syncManager.setSystemFlag('currentUser', user);
 
-      syncManager.init(user.id);
+      syncManager.init(user.id, user.role);
       
       // If we received a token, persist it (v2.6.190)
       if (user.token || token) {

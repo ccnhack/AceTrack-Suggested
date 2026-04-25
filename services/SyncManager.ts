@@ -118,7 +118,7 @@ class SyncManager {
   /**
    * Initialize the sync engine for a specific user.
    */
-  public async init(userId: string) {
+  public async init(userId: string, forceRole?: string) {
     if (this.userId === userId && this.initPromise) return this.initPromise;
     this.userId = userId;
     
@@ -146,7 +146,7 @@ class SyncManager {
         }
 
         const user = await storage.getItem('currentUser');
-        const role = user?.role || 'user';
+        const role = forceRole || user?.role || 'user';
 
         // 2. Setup Socket.io
         this.setupSocket(userId, role);
