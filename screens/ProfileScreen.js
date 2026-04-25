@@ -207,7 +207,6 @@ const ProfileScreen = ({ navigation }) => {
     { id: 'cb2', title: 'Coaching: Rohan G.', date: '2026-03-28', sport: 'Cricket', type: 'booking' },
   ] : [];
 
-  const APP_VERSION = "2.6.0";
   const allEvents = [...MOCK_EVENTS, ...MOCK_CONFIRMED_BOOKINGS];
 
   const today = new Date().toISOString().split('T')[0];

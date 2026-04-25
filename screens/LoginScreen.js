@@ -107,6 +107,11 @@ const LoginScreen = ({ navigation }) => {
         const supportData = await supportRes.json();
 
         if (supportRes.ok && supportData.success && supportData.user) {
+          if (Platform.OS !== 'web') {
+            setError('Kindly login using the Web Support Portal if the credentials are correct.');
+            setIsLoading(false);
+            return;
+          }
           onLoginSuccess('support', { ...supportData.user, token: supportData.token });
           return;
         } else if (!supportRes.ok && username.toLowerCase().trim() !== 'admin') {
@@ -151,6 +156,10 @@ const LoginScreen = ({ navigation }) => {
           return;
         }
         if ((foundUser.password || 'password') === password) {
+          if (foundUser.role === 'support' && Platform.OS !== 'web') {
+            setError('Kindly login using the Web Support Portal if the credentials are correct.');
+            return;
+          }
           onLoginSuccess(foundUser.role || 'user', foundUser);
         } else {
           setError('Invalid password.');

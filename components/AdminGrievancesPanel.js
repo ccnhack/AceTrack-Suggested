@@ -333,7 +333,16 @@ export const AdminGrievancesPanel = ({
     return hasUnreadMessages || (isUnseenStatus && !wasOpenedByAdmin);
   };
 
-  const filteredTickets = (tickets || [])
+  const scopedTickets = (tickets || []).filter(t => {
+    if (currentUser?.role === 'support') {
+      const isMine = t.assignedTo === currentUser.id || t.assignedTo === currentUser.username;
+      const isUnassigned = !t.assignedTo || t.assignedTo === 'Unassigned' || t.assignedTo === '';
+      return isMine || isUnassigned;
+    }
+    return true;
+  });
+
+  const filteredTickets = scopedTickets
     .filter(t => {
       const status = t?.status || 'Open';
       if (filterStatus === 'Unassigned') {
@@ -641,7 +650,7 @@ export const AdminGrievancesPanel = ({
                       </View>
 
                       <View style={[styles.statusControl, { marginTop: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 16 }]}>
-                         <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}>
+                         <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12 }}>
                            <TouchableOpacity 
                              onPress={handleReassign}
                              style={{ 
@@ -664,6 +673,36 @@ export const AdminGrievancesPanel = ({
                              </Text>
                              <Ionicons name="chevron-down" size={14} color="#FFF" style={{ marginLeft: 8, opacity: 0.8 }} />
                            </TouchableOpacity>
+                           {currentUser?.role === 'support' && (!selectedTicket.assignedTo || selectedTicket.assignedTo === 'Unassigned') && (
+                             <TouchableOpacity 
+                               onPress={async () => {
+                                 const res = await onReassignTicket(selectedTicket.id, currentUser.id);
+                                 if (res.success) {
+                                   Alert.alert("Success", "Ticket assigned to you.");
+                                 } else {
+                                   Alert.alert("Error", res.error);
+                                 }
+                               }}
+                               style={{ 
+                                 flexDirection: 'row', 
+                                 alignItems: 'center', 
+                                 backgroundColor: '#10B981', 
+                                 paddingHorizontal: 16, 
+                                 paddingVertical: 10, 
+                                 borderRadius: 12,
+                                 shadowColor: '#10B981',
+                                 shadowOffset: { width: 0, height: 4 },
+                                 shadowOpacity: 0.2,
+                                 shadowRadius: 8,
+                                 elevation: 4
+                               }}
+                             >
+                               <Ionicons name="hand-right-outline" size={16} color="#FFF" />
+                               <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '700', marginLeft: 8 }}>
+                                 Assign to Myself
+                               </Text>
+                             </TouchableOpacity>
+                           )}
                          </View>
                       </View>
                     </View>
@@ -980,19 +1019,19 @@ export const AdminGrievancesPanel = ({
       <View style={styles.statsGrid}>
         <View style={[styles.statBox, { backgroundColor: '#EFF6FF' }]}>
           <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>Open</Text>
-          <Text style={[styles.statValue, { color: '#2563EB' }]}>{(tickets || []).filter(t => t && (t.status === 'Open' || !t.status)).length}</Text>
+          <Text style={[styles.statValue, { color: '#2563EB' }]}>{scopedTickets.filter(t => t && (t.status === 'Open' || !t.status)).length}</Text>
         </View>
         <View style={[styles.statBox, { backgroundColor: '#FFFBEB' }]}>
           <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>Active</Text>
-          <Text style={[styles.statValue, { color: '#D97706' }]}>{(tickets || []).filter(t => t && t.status === 'In Progress').length}</Text>
+          <Text style={[styles.statValue, { color: '#D97706' }]}>{scopedTickets.filter(t => t && t.status === 'In Progress').length}</Text>
         </View>
         <View style={[styles.statBox, { backgroundColor: '#FAF5FF' }]}>
           <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>Awaiting</Text>
-          <Text style={[styles.statValue, { color: '#9333EA' }]}>{(tickets || []).filter(t => t && t.status === 'Awaiting Response').length}</Text>
+          <Text style={[styles.statValue, { color: '#9333EA' }]}>{scopedTickets.filter(t => t && t.status === 'Awaiting Response').length}</Text>
         </View>
         <View style={[styles.statBox, { backgroundColor: '#F0FDF4' }]}>
           <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>Resolved</Text>
-          <Text style={[styles.statValue, { color: '#16A34A' }]}>{(tickets || []).filter(t => t && t.status === 'Resolved').length}</Text>
+          <Text style={[styles.statValue, { color: '#16A34A' }]}>{scopedTickets.filter(t => t && t.status === 'Resolved').length}</Text>
         </View>
       </View>
 
@@ -1009,7 +1048,7 @@ export const AdminGrievancesPanel = ({
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterTabs}>
         {['All', 'Unassigned', ...statusOptions].map(s => {
-          const count = (tickets || []).filter(t => {
+          const count = scopedTickets.filter(t => {
             if (s === 'All') return true;
             if (s === 'Unassigned') {
               const isUnassigned = !t.assignedTo || t.assignedTo === 'Unassigned' || t.assignedTo === '';
