@@ -1608,21 +1608,13 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
 router.get('/status', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
   try {
     const state = await AppState.findOne().sort({ lastUpdated: -1 }).select('lastUpdated version');
-    // 🛡️ AceTrack Backend Engine (v2.6.170)
-    // Legacy web bundles are hardcoded with v2.6.151.
-    // If we report v2.6.169, they trigger the "obsolete" lockout modal.
-    // We temporarily lie to these specific clients to allow them into the app.
-    let reportedVersion = APP_VERSION;
-    const ua = req.headers['user-agent'] || '';
-    const isLegacyWeb = ua.includes('Mozilla') && !ua.includes('Expo');
-    if (isLegacyWeb) {
-      reportedVersion = '2.6.151'; // Allow v2.6.151 to pass checks
-    }
-
+    // 🛡️ [VERSION_TRUTH] (v2.6.271): Always report the real version.
+    // The legacy web hack (v2.6.170) that reported '2.6.151' to browsers
+    // has been removed. All clients now receive the actual APP_VERSION.
     res.json({ 
       lastUpdated: state?.lastUpdated || 0,
       version: state?.version || 1,
-      latestAppVersion: reportedVersion
+      latestAppVersion: APP_VERSION
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
