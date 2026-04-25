@@ -825,22 +825,38 @@ io.on('connection', async (socket) => {
   
   // 🕐 [SESSION TRACKER] (v2.6.267): Track support employee sessions
   const connUserId = socket.handshake?.query?.userId;
+  const connRole = socket.handshake?.query?.role;
+  
   if (connUserId && connUserId !== 'guest' && connUserId !== 'admin') {
-    try {
-      const state = await AppState.findOne().sort({ lastUpdated: -1 });
-      if (state?.data?.players) {
-        const player = state.data.players.find(p => String(p.id) === String(connUserId));
-        if (player && player.role === 'support') {
-          activeSupportSessions.set(socket.id, {
-            userId: connUserId,
-            startTime: Date.now(),
-            deviceName: 'Browser'
-          });
-          console.log(`🕐 [SESSION] Support employee ${connUserId} session started (socket: ${socket.id})`);
+    console.log(`[DEBUG] WS Connection from user: ${connUserId}, provided role: ${connRole || 'none'}`);
+    
+    // Use the explicitly provided role from the client if available
+    if (connRole === 'support') {
+      activeSupportSessions.set(socket.id, {
+        userId: connUserId,
+        startTime: Date.now(),
+        deviceName: 'Browser'
+      });
+      console.log(`🕐 [SESSION] Support employee ${connUserId} session started via client role (socket: ${socket.id})`);
+    } else {
+      // Fallback: check database if client didn't provide role
+      try {
+        const state = await AppState.findOne().sort({ lastUpdated: -1 });
+        if (state?.data?.players) {
+          const player = state.data.players.find(p => String(p.id) === String(connUserId));
+          console.log(`[DEBUG] Database lookup for ${connUserId} returned role: ${player?.role || 'not found'}`);
+          if (player && player.role === 'support') {
+            activeSupportSessions.set(socket.id, {
+              userId: connUserId,
+              startTime: Date.now(),
+              deviceName: 'Browser'
+            });
+            console.log(`🕐 [SESSION] Support employee ${connUserId} session started via DB lookup (socket: ${socket.id})`);
+          }
         }
+      } catch (e) {
+        console.warn('[SESSION] Failed to check user role on connect:', e.message);
       }
-    } catch (e) {
-      console.warn('[SESSION] Failed to check user role on connect:', e.message);
     }
   }
 
