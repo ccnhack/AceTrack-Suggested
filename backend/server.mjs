@@ -1168,6 +1168,7 @@ const apiKeyGuard = async (req, res, next) => {
                         path.includes('/otp') || 
                         path.includes('/health') || 
                         path.includes('/status') || 
+                        path.includes('/support/session-status') ||
                         path.includes('/slack/interact') ||
                         (req.method === 'POST' && path.includes('/diagnostics'));
   if (isPublicRoute && providedKey === PUBLIC_APP_ID) {
