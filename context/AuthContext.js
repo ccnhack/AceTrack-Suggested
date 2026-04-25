@@ -160,6 +160,12 @@ export const AuthProvider = ({ children }) => {
       setUserRole(user.role);
       setViewingLanding(false);
 
+      // 🛡️ [SESSION_TRACK_FIX] (v2.6.270): Save currentUser to storage BEFORE init()
+      // so that setupSocket can read the role for the WS handshake query params.
+      // Previously, init() was called first which caused a race condition where
+      // the role was read as 'user' instead of 'support'.
+      syncManager.setSystemFlag('currentUser', user);
+
       syncManager.init(user.id);
       
       // If we received a token, persist it (v2.6.190)
@@ -173,8 +179,6 @@ export const AuthProvider = ({ children }) => {
           syncManager.setSystemFlag('userToken', activeToken);
         }
       }
-      
-      syncManager.setSystemFlag('currentUser', user);
       syncAndSaveData({ currentUser: user });
       
       // 🛡️ [PUSH TOKEN SYNC ON LOGIN] (v2.6.121)
