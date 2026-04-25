@@ -212,6 +212,10 @@ class SyncManager {
         eventBus.emit('SYNC_STATUS_CHANGED', { isOnline: false, source: 'socket' });
       });
 
+      this.socket.on('connect_error', (err: any) => {
+        console.error(`[SyncManager] Socket connection error: ${err.message}`);
+      });
+
       this.socket.on('data_updated', async (data) => {
         try {
           if (data?.lastSocketId && this.socket?.id && data.lastSocketId === this.socket.id) {
