@@ -145,8 +145,11 @@ class SyncManager {
           this.pendingSync = savedPending;
         }
 
+        const user = await storage.getItem('currentUser');
+        const role = user?.role || 'user';
+
         // 2. Setup Socket.io
-        this.setupSocket(userId);
+        this.setupSocket(userId, role);
 
         // 3. Inform system that initialization is complete
         // 🛡️ [JWT HYDRATION] (v2.6.192) Ensure token is available for immediate polling
@@ -172,7 +175,7 @@ class SyncManager {
     return this.initPromise;
   }
 
-  private setupSocket(userId: string) {
+  private setupSocket(userId: string, role?: string) {
     if (this.socket) {
         this.socket.disconnect();
     }
@@ -182,7 +185,7 @@ class SyncManager {
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
-      query: { userId },
+      query: { userId, role: role || 'user' },
       auth: { 
         token: this.userToken || config.PUBLIC_APP_ID,
         // 🛡️ [WEB_SOCKET_HARDENING] (v2.6.259)

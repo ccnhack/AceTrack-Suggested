@@ -336,8 +336,9 @@ export const AdminGrievancesPanel = ({
   const scopedTickets = (tickets || []).filter(t => {
     if (currentUser?.role === 'support') {
       const isMine = t.assignedTo === currentUser.id || t.assignedTo === currentUser.username;
-      const isUnassigned = !t.assignedTo || t.assignedTo === 'Unassigned' || t.assignedTo === '';
-      return isMine || isUnassigned;
+      const isUnassigned = (!t.assignedTo || t.assignedTo === 'Unassigned' || t.assignedTo === '');
+      const isOpen = (t.status === 'Open' || !t.status);
+      return isMine || (isUnassigned && isOpen);
     }
     return true;
   });
@@ -1035,15 +1036,17 @@ export const AdminGrievancesPanel = ({
         </View>
       </View>
 
-      <View style={styles.managementBar}>
-        <TouchableOpacity 
-          onPress={() => setShowQueueDashboard(true)}
-          style={styles.queueBtn}
-        >
-          <Ionicons name="apps-outline" size={16} color="#FFF" />
-          <Text style={styles.queueBtnText}>Queue Management</Text>
-        </TouchableOpacity>
-      </View>
+      {currentUser?.role === 'admin' && (
+        <View style={styles.managementBar}>
+          <TouchableOpacity 
+            onPress={() => setShowQueueDashboard(true)}
+            style={styles.queueBtn}
+          >
+            <Ionicons name="apps-outline" size={16} color="#FFF" />
+            <Text style={styles.queueBtnText}>Queue Management</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterTabs}>
