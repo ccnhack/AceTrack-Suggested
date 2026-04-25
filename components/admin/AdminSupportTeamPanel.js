@@ -62,6 +62,10 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
 
+  // 🕐 [ATTENDANCE] (v2.6.267): Attendance data state
+  const [attendanceData, setAttendanceData] = useState(null);
+  const [isLoadingAttendance, setIsLoadingAttendance] = useState(false);
+
   const handleExportCSV = async () => {
     const token = await storage.getItem('userToken');
     const url = `${config.API_BASE_URL}/api/support/export?token=${token}&userId=admin`;
@@ -109,6 +113,35 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   useEffect(() => {
     fetchTeamAnalytics();
   }, [fetchTeamAnalytics]);
+
+  // 🕐 [ATTENDANCE] (v2.6.267): Fetch attendance data
+  const fetchAttendance = useCallback(async () => {
+    setIsLoadingAttendance(true);
+    try {
+      const token = await storage.getItem('userToken');
+      const res = await fetch(`${config.API_BASE_URL}/api/support/attendance`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'x-user-id': 'admin' 
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAttendanceData(data.attendance);
+      }
+    } catch (e) {
+      console.warn('[SUPPORT_PANEL] Failed to fetch attendance data');
+    } finally {
+      setIsLoadingAttendance(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAttendance();
+    // Refresh attendance every 60s for live session tracking
+    const timer = setInterval(fetchAttendance, 60000);
+    return () => clearInterval(timer);
+  }, [fetchAttendance]);
 
   const handleTimeFilterChange = (key) => {
     setTimeFilter(key);
@@ -742,6 +775,129 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                 })}
               </View>
             )}
+
+            {/* 🕐 Attendance & Working Hours (v2.6.267) */}
+            {!isSelectedTerminated && (() => {
+              const agentAttendance = attendanceData?.find(a => a.id === selectedAgentId);
+              if (!agentAttendance && isLoadingAttendance) {
+                return (
+                  <View style={styles.attendanceSection}>
+                    <ActivityIndicator size="small" color="#6366F1" style={{ margin: 16 }} />
+                  </View>
+                );
+              }
+              if (!agentAttendance) return null;
+
+              const todayHours = Math.floor(agentAttendance.todayMs / 3600000);
+              const todayMins = Math.floor((agentAttendance.todayMs % 3600000) / 60000);
+              const todayProgress = Math.min((agentAttendance.todayMs / (8 * 3600000)) * 100, 100); // 8h target
+              const maxWeeklyMs = Math.max(...(agentAttendance.weeklyDays || []).map(d => d.totalMs), 1);
+
+              return (
+                <View style={styles.attendanceSection}>
+                  <View style={styles.attendanceHeader}>
+                    <Ionicons name="time-outline" size={16} color="#6366F1" />
+                    <Text style={styles.attendanceTitle}>Attendance & Working Hours</Text>
+                    <TouchableOpacity onPress={fetchAttendance} disabled={isLoadingAttendance}>
+                      <Ionicons name="refresh" size={16} color={isLoadingAttendance ? '#CBD5E1' : '#6366F1'} />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Current Status */}
+                  <View style={[styles.attendanceStatusCard, { borderLeftColor: agentAttendance.isCurrentlyOnline ? '#10B981' : '#94A3B8' }]}>
+                    <View style={[styles.attendanceLiveDot, { backgroundColor: agentAttendance.isCurrentlyOnline ? '#10B981' : '#CBD5E1' }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.attendanceStatusText, { color: agentAttendance.isCurrentlyOnline ? '#059669' : '#64748B' }]}>
+                        {agentAttendance.isCurrentlyOnline ? 'Currently Online' : 'Offline'}
+                      </Text>
+                      {!agentAttendance.isCurrentlyOnline && agentAttendance.lastSeen && agentAttendance.lastSeen !== 'Now' && (
+                        <Text style={styles.attendanceLastSeen}>
+                          Last seen {new Date(agentAttendance.lastSeen).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      )}
+                      {agentAttendance.isCurrentlyOnline && agentAttendance.activeSessions?.length > 0 && (
+                        <Text style={styles.attendanceLastSeen}>
+                          Session started {new Date(agentAttendance.activeSessions[0].startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Today's Hours */}
+                  <View style={styles.todayHoursCard}>
+                    <View style={styles.todayHoursTop}>
+                      <Text style={styles.todayHoursLabel}>Today's Active Time</Text>
+                      <Text style={styles.todayHoursValue}>
+                        {todayHours > 0 ? `${todayHours}h ` : ''}{todayMins}m
+                      </Text>
+                    </View>
+                    <View style={styles.todayProgressBg}>
+                      <View style={[
+                        styles.todayProgressBar, 
+                        { width: `${todayProgress}%`, backgroundColor: todayProgress >= 80 ? '#10B981' : todayProgress >= 50 ? '#F59E0B' : '#3B82F6' }
+                      ]} />
+                    </View>
+                    <Text style={styles.todayProgressLabel}>{Math.round(todayProgress)}% of 8h target</Text>
+                  </View>
+
+                  {/* Weekly Summary */}
+                  <View style={styles.weeklyCard}>
+                    <Text style={styles.weeklyTitle}>This Week</Text>
+                    <View style={styles.weeklyBarsRow}>
+                      {(agentAttendance.weeklyDays || []).map((day, i) => {
+                        const barHeight = Math.max((day.totalMs / maxWeeklyMs) * 60, 3);
+                        const hrs = Math.floor(day.totalMs / 3600000);
+                        const mins = Math.floor((day.totalMs % 3600000) / 60000);
+                        const isToday = day.date === new Date().toISOString().split('T')[0];
+                        return (
+                          <View key={i} style={styles.weeklyBarCol}>
+                            <Text style={styles.weeklyBarValue}>
+                              {day.totalMs > 0 ? (hrs > 0 ? `${hrs}h` : `${mins}m`) : ''}
+                            </Text>
+                            <View style={[
+                              styles.weeklyBar, 
+                              { height: barHeight, backgroundColor: isToday ? '#6366F1' : (day.totalMs > 0 ? '#A5B4FC' : '#E2E8F0') }
+                            ]} />
+                            <Text style={[styles.weeklyBarLabel, isToday && { color: '#6366F1', fontWeight: '900' }]}>
+                              {day.dayName}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* Session Log */}
+                  {agentAttendance.recentSessions?.length > 0 && (
+                    <View style={styles.sessionLogCard}>
+                      <Text style={styles.sessionLogTitle}>Recent Sessions ({agentAttendance.totalSessionCount} total)</Text>
+                      {agentAttendance.recentSessions.slice(0, 10).map((sess, i) => {
+                        const startDate = new Date(sess.startTime);
+                        const endDate = new Date(sess.endTime);
+                        const durHrs = Math.floor(sess.durationMs / 3600000);
+                        const durMins = Math.floor((sess.durationMs % 3600000) / 60000);
+                        return (
+                          <View key={i} style={styles.sessionLogRow}>
+                            <View style={styles.sessionLogDot} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.sessionLogDate}>
+                                {startDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                              </Text>
+                              <Text style={styles.sessionLogTime}>
+                                {startDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} → {endDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                              </Text>
+                            </View>
+                            <Text style={styles.sessionLogDuration}>
+                              {durHrs > 0 ? `${durHrs}h ` : ''}{durMins}m
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              );
+            })()}
           </View>
         ) : (
           <View style={styles.selectHint}>
@@ -1052,7 +1208,41 @@ const styles = StyleSheet.create({
   drillTicketTitle: { fontSize: 15, fontWeight: '700', color: '#1E293B', marginBottom: 10 },
   drillTicketMeta: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 10 },
   drillTicketAgent: { fontSize: 12, color: '#64748B', fontWeight: '600' },
-  drillTicketRating: { fontSize: 12, color: '#F59E0B', fontWeight: '800' }
+  drillTicketRating: { fontSize: 12, color: '#F59E0B', fontWeight: '800' },
+
+  // 🕐 Attendance & Working Hours (v2.6.267)
+  attendanceSection: { marginTop: 24, backgroundColor: '#FAFBFF', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#E0E7FF' },
+  attendanceHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
+  attendanceTitle: { fontSize: 13, fontWeight: '900', color: '#4F46E5', flex: 1, textTransform: 'uppercase', letterSpacing: 0.5 },
+  
+  attendanceStatusCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#F1F5F9', borderLeftWidth: 4, gap: 12, marginBottom: 14 },
+  attendanceLiveDot: { width: 10, height: 10, borderRadius: 5 },
+  attendanceStatusText: { fontSize: 14, fontWeight: '800' },
+  attendanceLastSeen: { fontSize: 11, color: '#94A3B8', fontWeight: '600', marginTop: 2 },
+
+  todayHoursCard: { backgroundColor: '#FFF', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#F1F5F9', marginBottom: 14 },
+  todayHoursTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  todayHoursLabel: { fontSize: 12, fontWeight: '700', color: '#64748B' },
+  todayHoursValue: { fontSize: 20, fontWeight: '900', color: '#1E293B' },
+  todayProgressBg: { height: 10, backgroundColor: '#F1F5F9', borderRadius: 5, overflow: 'hidden', marginBottom: 6 },
+  todayProgressBar: { height: '100%', borderRadius: 5 },
+  todayProgressLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', textAlign: 'right' },
+
+  weeklyCard: { backgroundColor: '#FFF', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#F1F5F9', marginBottom: 14 },
+  weeklyTitle: { fontSize: 12, fontWeight: '800', color: '#64748B', marginBottom: 12 },
+  weeklyBarsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingTop: 4 },
+  weeklyBarCol: { alignItems: 'center', flex: 1 },
+  weeklyBarValue: { fontSize: 9, fontWeight: '800', color: '#6366F1', marginBottom: 4, minHeight: 12 },
+  weeklyBar: { width: 20, borderRadius: 4, minHeight: 3 },
+  weeklyBarLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', marginTop: 6 },
+
+  sessionLogCard: { backgroundColor: '#FFF', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#F1F5F9' },
+  sessionLogTitle: { fontSize: 12, fontWeight: '800', color: '#64748B', marginBottom: 12 },
+  sessionLogRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F8FAFC', gap: 10 },
+  sessionLogDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#A5B4FC' },
+  sessionLogDate: { fontSize: 12, fontWeight: '700', color: '#1E293B' },
+  sessionLogTime: { fontSize: 11, fontWeight: '600', color: '#94A3B8', marginTop: 1 },
+  sessionLogDuration: { fontSize: 13, fontWeight: '900', color: '#6366F1' }
 });
 
 export default AdminSupportTeamPanel;

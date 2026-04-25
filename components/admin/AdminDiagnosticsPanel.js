@@ -162,21 +162,25 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
     setDiagContent(null);
     setIsFetchingDiags(true);
     
-    // 🛡️ [REPLICATION] Clear stale online status for this user before pinging
+    // 🛡️ [REPLICATION] Only clear STALE entries (>30s old) to avoid race conditions
+    // where the UI renders 'OFFLINE' before the pong arrives
     setOnlineDevices(prev => {
       const next = { ...prev };
-      delete next[p.id];
-      if (p.devices && Array.isArray(p.devices)) {
-        p.devices.forEach(d => { if (d && d.id) delete next[d.id]; });
-      }
+      const staleThreshold = Date.now() - 30000;
+      Object.keys(next).forEach(key => {
+        const entry = next[key];
+        if (entry?.targetUserId === p.id && entry?.timestamp && entry.timestamp < staleThreshold) {
+          delete next[key];
+        }
+      });
       return next;
     });
 
-    // Trigger Ping
+    // Trigger Ping (3 attempts for reliability, especially for web clients)
     if (socketRef?.current?.connected) {
       socketRef.current.emit('admin_ping_device', { targetUserId: p.id });
-      // Multiple pings for reliability
       setTimeout(() => socketRef.current?.emit('admin_ping_device', { targetUserId: p.id }), 1000);
+      setTimeout(() => socketRef.current?.emit('admin_ping_device', { targetUserId: p.id }), 2000);
     }
     
     try {
@@ -631,16 +635,21 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
       )}
 
       {selectedDiagUser && (() => {
-        // Compute Live Sessions (Ponging now but no historical logs in .devices)
-        const liveSessions = Object.values(onlineDevices)
-          .filter(status => 
-            status.targetUserId === selectedDiagUser.id && 
-            !selectedDiagUser.devices?.some(d => d.id === status.deviceId)
-          )
-          // Deduplicate by deviceId
+        const isSupportUser = selectedDiagUser.role === 'support';
+        
+        // For support users: show ALL ponging devices as live (they only use browsers)
+        // For other users: show ponging devices NOT in .devices as live
+        const allUserSessions = Object.values(onlineDevices)
+          .filter(status => status.targetUserId === selectedDiagUser.id)
           .filter((session, index, self) => 
             index === self.findIndex((s) => s.deviceId === session.deviceId)
           );
+        
+        const liveSessions = isSupportUser 
+          ? allUserSessions  // Support users: show ALL as live browser sessions
+          : allUserSessions.filter(status => 
+              !selectedDiagUser.devices?.some(d => d.id === status.deviceId)
+            );
 
         // Deduplicate Registered Devices
         const registeredDevices = (selectedDiagUser.devices || [])
@@ -652,11 +661,15 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
           <View style={styles.diagFileSection}>
             {liveSessions.length > 0 && (
               <View style={styles.liveSessionsContainer}>
-                <Text style={[styles.diagSectionLabel, { color: '#6366F1' }]}>Live Active Sessions (New)</Text>
+                <Text style={[styles.diagSectionLabel, { color: '#6366F1' }]}>
+                  {isSupportUser ? 'Active Browser Sessions' : 'Live Active Sessions (New)'}
+                </Text>
                 {liveSessions.map(session => (
                   <View key={session.deviceId} style={[styles.deviceItem, styles.liveDeviceItem]}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.deviceName}>{session.deviceName || 'New Simulator/Device'}</Text>
+                      <Text style={styles.deviceName}>
+                        {isSupportUser ? ("🌐 " + (session.deviceName || 'Chrome')) : (session.deviceName || 'New Simulator/Device')}
+                      </Text>
                       <View style={styles.deviceMeta}>
                         <View style={[styles.statusDot, { backgroundColor: '#10B981' }]} />
                         <Text style={[styles.statusText, { color: '#10B981' }]}>LIVE NOW</Text>
@@ -676,7 +689,19 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
               </View>
             )}
 
-            <Text style={styles.diagSectionLabel}>Registered History Devices</Text>
+            {/* For support users with no live sessions, show a helpful empty state */}
+            {isSupportUser && liveSessions.length === 0 && (
+              <View style={styles.noDevicesBox}>
+                <Ionicons name="desktop-outline" size={24} color="#CBD5E1" />
+                <Text style={styles.noDevicesText}>No active browser session detected.</Text>
+                <Text style={[styles.noDevicesText, { fontSize: 10, marginTop: 4 }]}>Employee must be logged into the web dashboard.</Text>
+              </View>
+            )}
+
+            {/* Only show registered devices section for non-support users */}
+            {!isSupportUser && (
+              <>
+                <Text style={styles.diagSectionLabel}>Registered History Devices</Text>
             {registeredDevices.length > 0 ? (
               registeredDevices.map(d => (
               <View key={d.id} style={styles.deviceItem}>
@@ -713,6 +738,8 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
               <Text style={styles.noDevicesText}>No registered devices found.</Text>
             </View>
           )}
+              </>
+            )}
 
           <Text style={[styles.diagSectionLabel, { marginTop: 24 }]}>Cloud Storage Logs ({userDiagFiles.length})</Text>
           <View style={styles.fileList}>

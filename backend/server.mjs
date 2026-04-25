@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.266'; 
+const APP_VERSION = '2.6.267'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -815,9 +815,35 @@ io.use((socket, next) => {
   return next(new Error('Unauthorized: WebSocket requires valid API Key'));
 });
 
-io.on('connection', (socket) => {
+// 🕐 [SESSION TRACKER] (v2.6.267)
+// In-memory map tracking active WebSocket sessions for support employees
+// Key: socketId, Value: { userId, startTime, deviceName }
+const activeSupportSessions = new Map();
+
+io.on('connection', async (socket) => {
   logServerEvent('WS_CLIENT_CONNECTED', { socketId: socket.id });
   
+  // 🕐 [SESSION TRACKER] (v2.6.267): Track support employee sessions
+  const connUserId = socket.handshake?.query?.userId;
+  if (connUserId && connUserId !== 'guest' && connUserId !== 'admin') {
+    try {
+      const state = await AppState.findOne().sort({ lastUpdated: -1 });
+      if (state?.data?.players) {
+        const player = state.data.players.find(p => String(p.id) === String(connUserId));
+        if (player && player.role === 'support') {
+          activeSupportSessions.set(socket.id, {
+            userId: connUserId,
+            startTime: Date.now(),
+            deviceName: 'Browser'
+          });
+          console.log(`🕐 [SESSION] Support employee ${connUserId} session started (socket: ${socket.id})`);
+        }
+      }
+    } catch (e) {
+      console.warn('[SESSION] Failed to check user role on connect:', e.message);
+    }
+  }
+
   socket.on('admin_pull_diagnostics', (data) => {
     logServerEvent('ADMIN_PULL_DIAGNOSTICS_REQUESTED', data);
     io.emit('force_upload_diagnostics', data);
@@ -875,8 +901,46 @@ io.on('connection', (socket) => {
   socket.on('typing_start', (data) => io.emit('typing_start', data));
   socket.on('typing_stop', (data) => io.emit('typing_stop', data));
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     logServerEvent('WS_CLIENT_DISCONNECTED', { socketId: socket.id });
+    
+    // 🕐 [SESSION TRACKER] (v2.6.267): Persist session duration on disconnect
+    const session = activeSupportSessions.get(socket.id);
+    if (session) {
+      activeSupportSessions.delete(socket.id);
+      const durationMs = Date.now() - session.startTime;
+      const durationMins = Math.round(durationMs / 60000);
+      console.log(`🕐 [SESSION] Support employee ${session.userId} disconnected after ${durationMins}m`);
+      
+      // Only persist sessions longer than 1 minute to avoid noise from reconnects
+      if (durationMs > 60000) {
+        try {
+          const state = await AppState.findOne().sort({ lastUpdated: -1 });
+          if (state?.data?.players) {
+            const players = state.data.players;
+            const uIdx = players.findIndex(p => String(p.id) === String(session.userId));
+            if (uIdx !== -1) {
+              players[uIdx].sessionHistory = players[uIdx].sessionHistory || [];
+              players[uIdx].sessionHistory.push({
+                startTime: new Date(session.startTime).toISOString(),
+                endTime: new Date().toISOString(),
+                durationMs,
+                device: session.deviceName || 'Browser'
+              });
+              // Cap at 200 entries to prevent unbounded growth
+              if (players[uIdx].sessionHistory.length > 200) {
+                players[uIdx].sessionHistory = players[uIdx].sessionHistory.slice(-200);
+              }
+              state.markModified('data.players');
+              await state.save();
+              console.log(`🕐 [SESSION] Persisted ${durationMins}m session for ${session.userId}`);
+            }
+          }
+        } catch (e) {
+          console.error('🕐 [SESSION] Failed to persist session:', e.message);
+        }
+      }
+    }
   });
 });
 
@@ -4284,6 +4348,94 @@ server.on('error', (e) => {
 // 📊 SUPPORT MANAGEMENT & ANALYTICS (v2.6.132)
 // ---------------------------------------------------------
 
+// 🕐 [ATTENDANCE API] (v2.6.267): Get attendance data for support employees
+router.get('/support/attendance', apiKeyGuard, async (req, res) => {
+  if (req.userRole !== 'admin') {
+    return res.status(403).json({ error: 'System Administrator privileges required' });
+  }
+  try {
+    const state = await AppState.findOne().sort({ lastUpdated: -1 });
+    if (!state?.data) return res.status(404).json({ error: 'State not found' });
+
+    const agents = (state.data.players || []).filter(p => p.role === 'support');
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekStart = new Date(todayStart);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Sunday
+
+    // Build per-agent attendance data
+    const attendance = agents.map(agent => {
+      const sessions = agent.sessionHistory || [];
+      
+      // Check if currently online via in-memory tracker
+      const activeSessions = [];
+      for (const [, sess] of activeSupportSessions) {
+        if (sess.userId === agent.id) {
+          activeSessions.push({
+            startTime: new Date(sess.startTime).toISOString(),
+            durationMs: Date.now() - sess.startTime,
+            device: sess.deviceName || 'Browser',
+            isLive: true
+          });
+        }
+      }
+      const isCurrentlyOnline = activeSessions.length > 0;
+
+      // Today's total hours
+      const todaySessions = sessions.filter(s => new Date(s.startTime) >= todayStart);
+      const todayMs = todaySessions.reduce((sum, s) => sum + (s.durationMs || 0), 0)
+        + activeSessions.reduce((sum, s) => sum + (s.durationMs || 0), 0);
+
+      // Weekly hours (per day)
+      const weeklyDays = [];
+      for (let i = 0; i < 7; i++) {
+        const dayStart = new Date(weekStart);
+        dayStart.setDate(dayStart.getDate() + i);
+        const dayEnd = new Date(dayStart);
+        dayEnd.setDate(dayEnd.getDate() + 1);
+        
+        const daySessions = sessions.filter(s => {
+          const st = new Date(s.startTime);
+          return st >= dayStart && st < dayEnd;
+        });
+        let dayMs = daySessions.reduce((sum, s) => sum + (s.durationMs || 0), 0);
+        // Add live session time for today
+        if (dayStart <= now && dayEnd > now) {
+          dayMs += activeSessions.reduce((sum, s) => sum + (s.durationMs || 0), 0);
+        }
+        weeklyDays.push({
+          date: dayStart.toISOString().split('T')[0],
+          dayName: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dayStart.getDay()],
+          totalMs: dayMs
+        });
+      }
+
+      // Last 20 session entries
+      const recentSessions = sessions.slice(-20).reverse();
+
+      // Last seen
+      const lastSession = sessions[sessions.length - 1];
+      const lastSeen = isCurrentlyOnline ? 'Now' : (lastSession?.endTime || null);
+
+      return {
+        id: agent.id,
+        name: agent.name,
+        isCurrentlyOnline,
+        activeSessions,
+        todayMs,
+        weeklyDays,
+        recentSessions,
+        lastSeen,
+        totalSessionCount: sessions.length
+      };
+    });
+
+    res.json({ attendance, timestamp: new Date().toISOString() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.get('/support/analytics', apiKeyGuard, async (req, res) => {
   // 🛡️ SECURITY HARDENING (v2.6.257): Use verified role
   if (req.userRole !== 'admin') {
@@ -4393,6 +4545,19 @@ router.get('/support/analytics', apiKeyGuard, async (req, res) => {
       activities.sort((a,b) => new Date(b.time) - new Date(a.time));
       const activityTimeline = activities.slice(0, 15);
 
+      // 🕐 [SESSION DATA] (v2.6.267): Include attendance summary in analytics
+      const agentSessions = agent.sessionHistory || [];
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todaySessions = agentSessions.filter(s => new Date(s.startTime) >= todayStart);
+      const todayActiveMs = todaySessions.reduce((sum, s) => sum + (s.durationMs || 0), 0);
+      
+      // Check if currently online
+      let isCurrentlyOnline = false;
+      for (const [, sess] of activeSupportSessions) {
+        if (sess.userId === agentId) { isCurrentlyOnline = true; break; }
+      }
+
       return {
         id: agentId,
         name: agent.name || `${agent.firstName} ${agent.lastName}`,
@@ -4413,7 +4578,13 @@ router.get('/support/analytics', apiKeyGuard, async (req, res) => {
           totalHandled: agentTickets.length,
           manualPicks: agent.metrics?.manualPicks || 0
         },
-        activityTimeline
+        activityTimeline,
+        attendance: {
+          isCurrentlyOnline,
+          todayActiveMs,
+          totalSessions: agentSessions.length,
+          lastSeen: isCurrentlyOnline ? 'Now' : (agentSessions[agentSessions.length - 1]?.endTime || null)
+        }
       };
     });
 
