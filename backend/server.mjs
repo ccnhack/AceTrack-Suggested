@@ -801,12 +801,12 @@ const io = new Server(httpServer, {
 
 // 🔐 SOCKET SECURITY: Auth Handshake (SEC Fix)
 io.use((socket, next) => {
-  const apiKey = socket.handshake.headers['x-ace-api-key'] || socket.handshake.auth.token || socket.handshake.auth.apiKey;
+  const apiKey = socket.handshake.headers['x-ace-api-key'] || socket.handshake.auth.apiKey || socket.handshake.auth.token;
   
   // 🛡️ [SYNC_RECOVERY] (v2.6.258)
   // Allow both the Master ACE_API_KEY and the PUBLIC_APP_ID to pass handshake.
   // This ensures that devices can connect and respond to pings even before login.
-  if (apiKey === ACE_API_KEY || apiKey === PUBLIC_APP_ID) {
+  if (apiKey === ACE_API_KEY || apiKey === PUBLIC_APP_ID || socket.handshake.auth.apiKey === PUBLIC_APP_ID) {
     return next();
   }
   
