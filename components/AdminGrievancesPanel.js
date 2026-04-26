@@ -655,28 +655,30 @@ export const AdminGrievancesPanel = ({
 
                       <View style={[styles.statusControl, { marginTop: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 16 }]}>
                          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12 }}>
-                           <TouchableOpacity 
-                             onPress={handleReassign}
-                             style={{ 
-                               flexDirection: 'row', 
-                               alignItems: 'center', 
-                               backgroundColor: '#6366F1', 
-                               paddingHorizontal: 16, 
-                               paddingVertical: 10, 
-                               borderRadius: 12,
-                               shadowColor: '#6366F1',
-                               shadowOffset: { width: 0, height: 4 },
-                               shadowOpacity: 0.2,
-                               shadowRadius: 8,
-                               elevation: 4
-                             }}
-                           >
-                             <Ionicons name="person-outline" size={16} color="#FFF" />
-                             <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '700', marginLeft: 8 }}>
-                               {selectedTicket.assignedTo ? `Assigned: ${getUserName(selectedTicket.assignedTo)}` : 'Assign Agent'}
-                             </Text>
-                             <Ionicons name="chevron-down" size={14} color="#FFF" style={{ marginLeft: 8, opacity: 0.8 }} />
-                           </TouchableOpacity>
+                           {(currentUser?.id === 'admin' || currentUser?.supportLevel === 'Team Lead' || currentUser?.supportLevel === 'Manager') && (
+                             <TouchableOpacity 
+                               onPress={handleReassign}
+                               style={{ 
+                                 flexDirection: 'row', 
+                                 alignItems: 'center', 
+                                 backgroundColor: '#6366F1', 
+                                 paddingHorizontal: 16, 
+                                 paddingVertical: 10, 
+                                 borderRadius: 12,
+                                 shadowColor: '#6366F1',
+                                 shadowOffset: { width: 0, height: 4 },
+                                 shadowOpacity: 0.2,
+                                 shadowRadius: 8,
+                                 elevation: 4
+                               }}
+                             >
+                               <Ionicons name="person-outline" size={16} color="#FFF" />
+                               <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '700', marginLeft: 8 }}>
+                                 {selectedTicket.assignedTo ? `Assigned: ${getUserName(selectedTicket.assignedTo)}` : 'Assign Agent'}
+                               </Text>
+                               <Ionicons name="chevron-down" size={14} color="#FFF" style={{ marginLeft: 8, opacity: 0.8 }} />
+                             </TouchableOpacity>
+                           )}
                            {currentUser?.role === 'support' && (!selectedTicket.assignedTo || selectedTicket.assignedTo === 'Unassigned') && (
                              <TouchableOpacity 
                                onPress={async () => {

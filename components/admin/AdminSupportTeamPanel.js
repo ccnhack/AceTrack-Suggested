@@ -75,6 +75,8 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const [attendanceRangeMode, setAttendanceRangeMode] = useState(false);
   const [attendanceEndDateFilter, setAttendanceEndDateFilter] = useState(() => new Date().toISOString().split('T')[0]);
   const [selectedSessionForActivity, setSelectedSessionForActivity] = useState(null);
+  const [showActionsModal, setShowActionsModal] = useState(false);
+  const SUPPORT_HIERARCHY = ['Manager', 'Team Lead', 'Grade-7', 'Grade-5', 'Grade-3', 'Intern'];
 
   const sessionActivities = useMemo(() => {
     if (!selectedSessionForActivity || !auditLogs) return [];
@@ -650,57 +652,9 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
             {!isSelectedTerminated && (
               <TouchableOpacity 
                 style={styles.settingsBtn}
-                onPress={() => {
-                     const isSuspended = selectedAgent.supportStatus === 'suspended';
-                     const currentLevel = selectedAgent.supportLevel || 'Trainee';
-                     
-                     // Build dynamic action list
-                     const actions = [{ text: "Cancel", style: "cancel" }];
-                     
-                     // Promote options (only for active)
-                     if (!isSuspended) {
-                       if (currentLevel !== 'Specialist') actions.push({ text: "Promote → Specialist", onPress: () => updateUserStatus(selectedAgent.id, null, 'Specialist') });
-                       if (currentLevel !== 'Senior') actions.push({ text: "Promote → Senior", onPress: () => updateUserStatus(selectedAgent.id, null, 'Senior') });
-                     }
-                     
-                     // Demote options
-                     if (currentLevel === 'Senior') actions.push({ text: "Demote → Specialist", onPress: () => updateUserStatus(selectedAgent.id, null, 'Specialist') });
-                     if (currentLevel !== 'Trainee') actions.push({ text: "Demote → Trainee", onPress: () => updateUserStatus(selectedAgent.id, null, 'Trainee') });
-                     
-                     // Suspend/Unsuspend
-                     if (isSuspended) {
-                       actions.push({ text: "✅ Unsuspend (Reactivate)", onPress: () => updateUserStatus(selectedAgent.id, 'active') });
-                     } else {
-                       actions.push({ 
-                         text: selectedAgent.supportStatus === 'overwhelmed' ? "Resume Distribution" : "Pause Distribution", 
-                         onPress: () => updateUserStatus(selectedAgent.id, selectedAgent.supportStatus === 'overwhelmed' ? 'active' : 'overwhelmed') 
-                       });
-                       actions.push({ text: "🔒 Suspend Account", onPress: () => {
-                         Alert.alert("Confirm Suspension", "This will temporarily freeze the account and unassign all open tickets. The employee can be unsuspended later.", [
-                           { text: "Cancel" },
-                           { text: "Suspend", style: 'destructive', onPress: () => updateUserStatus(selectedAgent.id, 'suspended') }
-                         ]);
-                       }});
-                     }
-                     
-                     // Transfer Tickets
-                     if (!isSuspended) {
-                       actions.push({ text: "🔄 Transfer All Tickets", onPress: () => handleTransferTickets(selectedAgent.id) });
-                     }
-                     
-                     // Terminate & Reset
-                     actions.push({ text: "Terminate Access", style: 'destructive', onPress: () => {
-                       Alert.alert("Confirm Termination", "This will unassign all tickets instantly and revoke dashboard access. The employee will be moved to Ex-Employees. Proceed?", [
-                         { text: "Cancel" },
-                         { text: "Terminate", style: 'destructive', onPress: () => updateUserStatus(selectedAgent.id, 'terminated') }
-                       ]);
-                     }});
-                     actions.push({ text: "Reset Password", onPress: () => handleForceReset(selectedAgent.id) });
-                     
-                     Alert.alert("Employee Actions", `Manage ${selectedAgent.name}\nLevel: ${currentLevel} | Status: ${isSuspended ? 'Suspended' : (selectedAgent.supportStatus || 'Active')}`, actions);
-                  }}
-                >
-                  <Ionicons name="settings" size={20} color="#6366F1" />
+                onPress={() => setShowActionsModal(true)}
+              >
+                <Ionicons name="settings" size={20} color="#6366F1" />
               </TouchableOpacity>
             )}
 
@@ -1252,7 +1206,111 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
         )}
       </Modal>
 
-      {/* Session Activity Modal */}
+      {/* 🛡️ Employee Actions Modal (v2.6.279): Better Web/Mobile Support */}
+      <Modal
+        visible={showActionsModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowActionsModal(false)}
+      >
+        <View style={styles.actionsModalOverlay}>
+          <View style={styles.actionsModalContent}>
+            <View style={styles.actionsHeader}>
+              <Text style={styles.actionsTitle}>Manage Employee</Text>
+              <TouchableOpacity onPress={() => setShowActionsModal(false)}>
+                <Ionicons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {selectedAgent && (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.actionUserCard}>
+                  <SafeAvatar uri={selectedAgent.avatar} name={selectedAgent.name} role="support" size={50} borderRadius={16} />
+                  <View style={{ marginLeft: 16 }}>
+                    <Text style={styles.actionUserName}>{selectedAgent.name}</Text>
+                    <Text style={styles.actionUserMeta}>{selectedAgent.supportLevel || 'Intern'} • {selectedAgent.supportStatus || 'Active'}</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.actionSectionTitle}>ORGANIZATION ROLE</Text>
+                <View style={styles.hierarchyGrid}>
+                  {SUPPORT_HIERARCHY.map((level) => {
+                    const isCurrent = (selectedAgent.supportLevel || 'Intern') === level;
+                    return (
+                      <TouchableOpacity 
+                        key={level}
+                        onPress={() => {
+                          updateUserStatus(selectedAgent.id, null, level);
+                          setShowActionsModal(false);
+                        }}
+                        style={[styles.hierarchyBtn, isCurrent && styles.hierarchyBtnActive]}
+                      >
+                        <Text style={[styles.hierarchyBtnText, isCurrent && styles.hierarchyBtnTextActive]}>{level}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <Text style={styles.actionSectionTitle}>ACCOUNT CONTROLS</Text>
+                <View style={styles.actionRow}>
+                  <TouchableOpacity 
+                    style={styles.actionBtn}
+                    onPress={() => {
+                      const newStatus = selectedAgent.supportStatus === 'suspended' ? 'active' : 'suspended';
+                      updateUserStatus(selectedAgent.id, newStatus);
+                      setShowActionsModal(false);
+                    }}
+                  >
+                    <Ionicons name={selectedAgent.supportStatus === 'suspended' ? "play-circle" : "pause-circle"} size={20} color="#6366F1" />
+                    <Text style={styles.actionBtnText}>{selectedAgent.supportStatus === 'suspended' ? "Unsuspend" : "Suspend"}</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={styles.actionBtn}
+                    onPress={() => {
+                      handleForceReset(selectedAgent.id);
+                      setShowActionsModal(false);
+                    }}
+                  >
+                    <Ionicons name="key-outline" size={20} color="#F59E0B" />
+                    <Text style={styles.actionBtnText}>Reset Password</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.actionRow}>
+                  <TouchableOpacity 
+                    style={styles.actionBtn}
+                    onPress={() => {
+                      handleTransferTickets(selectedAgent.id);
+                      setShowActionsModal(false);
+                    }}
+                  >
+                    <Ionicons name="swap-horizontal" size={20} color="#10B981" />
+                    <Text style={styles.actionBtnText}>Transfer Tickets</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={[styles.actionBtn, { borderColor: '#FEE2E2' }]}
+                    onPress={() => {
+                      Alert.alert("Confirm Termination", "This will unassign all tickets instantly and revoke dashboard access. Proceed?", [
+                        { text: "Cancel" },
+                        { text: "Terminate", style: 'destructive', onPress: () => {
+                          updateUserStatus(selectedAgent.id, 'terminated');
+                          setShowActionsModal(false);
+                        }}
+                      ]);
+                    }}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                    <Text style={[styles.actionBtnText, { color: '#EF4444' }]}>Terminate</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       {selectedSessionForActivity && (
         <Modal transparent={false} animationType="slide">
           <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
@@ -1552,7 +1610,25 @@ const styles = StyleSheet.create({
   sessionLogDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#A5B4FC' },
   sessionLogDate: { fontSize: 12, fontWeight: '700', color: '#1E293B' },
   sessionLogTime: { fontSize: 11, fontWeight: '600', color: '#94A3B8', marginTop: 1 },
-  sessionLogDuration: { fontSize: 13, fontWeight: '900', color: '#6366F1' }
+  sessionLogDuration: { fontSize: 13, fontWeight: '900', color: '#6366F1' },
+
+  // Actions Modal
+  actionsModalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  actionsModalContent: { backgroundColor: '#FFFFFF', borderRadius: 24, width: '100%', maxWidth: 450, padding: 24, ...shadows.lg },
+  actionsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  actionsTitle: { fontSize: 18, fontWeight: '900', color: '#0F172A' },
+  actionUserCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', padding: 16, borderRadius: 16, marginBottom: 24 },
+  actionUserName: { fontSize: 16, fontWeight: '800', color: '#1E293B' },
+  actionUserMeta: { fontSize: 12, color: '#64748B', fontWeight: '600', marginTop: 2 },
+  actionSectionTitle: { fontSize: 11, fontWeight: '900', color: '#94A3B8', letterSpacing: 1, marginBottom: 12, marginTop: 8 },
+  hierarchyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24 },
+  hierarchyBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#FFF' },
+  hierarchyBtnActive: { backgroundColor: '#EEF2FF', borderColor: '#6366F1' },
+  hierarchyBtnText: { fontSize: 12, fontWeight: '700', color: '#64748B' },
+  hierarchyBtnTextActive: { color: '#6366F1' },
+  actionRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#F1F5F9', gap: 10 },
+  actionBtnText: { fontSize: 13, fontWeight: '700', color: '#1E293B' }
 });
 
 export default AdminSupportTeamPanel;
