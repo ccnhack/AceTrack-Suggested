@@ -734,47 +734,79 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
             )}
 
             {/* Only show registered devices section for non-support users */}
-            {!isSupportUser && (
-              <>
-                <Text style={styles.diagSectionLabel}>Registered History Devices</Text>
-            {registeredDevices.length > 0 ? (
-              registeredDevices.map(d => (
-              <View key={d.id} style={styles.deviceItem}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.deviceName}>{d.name || 'Unknown Device'}</Text>
-                    <View style={styles.deviceMeta}>
-                      <View style={[
-                        styles.statusDot, 
-                        { backgroundColor: onlineDevices[d.id] ? '#10B981' : '#EF4444' }
-                      ]} />
-                      <Text style={[
-                        styles.statusText, 
-                        { color: onlineDevices[d.id] ? '#10B981' : '#EF4444' }
-                      ]}>
-                        {onlineDevices[d.id] ? 'ONLINE' : 'OFFLINE'}
-                      </Text>
-                      <Text style={styles.deviceAppVersion}>
-                        v{(onlineDevices[d.id]?.version || d.appVersion || '???')}
-                      </Text>
+            {!isSupportUser && (() => {
+              const activeDevices = registeredDevices.filter(d => onlineDevices[d.id]);
+              const offlineDevices = registeredDevices.filter(d => !onlineDevices[d.id]);
+
+              return (
+                <>
+                  {/* Active Devices Section */}
+                  {activeDevices.length > 0 && (
+                    <View style={{ marginBottom: 16 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
+                        <Text style={[styles.diagSectionLabel, { color: '#059669', marginBottom: 0 }]}>
+                          Active Devices ({activeDevices.length})
+                        </Text>
+                      </View>
+                      {activeDevices.map(d => (
+                        <View key={d.id} style={[styles.deviceItem, { borderColor: '#10B981', borderWidth: 1, backgroundColor: '#F0FDF4' }]}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.deviceName}>{d.name || 'Unknown Device'}</Text>
+                            <View style={styles.deviceMeta}>
+                              <View style={[styles.statusDot, { backgroundColor: '#10B981' }]} />
+                              <Text style={[styles.statusText, { color: '#10B981' }]}>ONLINE</Text>
+                              <Text style={styles.deviceAppVersion}>
+                                v{(onlineDevices[d.id]?.version || d.appVersion || '???')}
+                              </Text>
+                            </View>
+                          </View>
+                          <TouchableOpacity 
+                            disabled={pullingDeviceIds[d.id]}
+                            onPress={() => handlePullLogs(d.id)}
+                            style={[styles.pullBtn, pullingDeviceIds[d.id] && styles.pullBtnDisabled]}
+                          >
+                            {pullingDeviceIds[d.id] ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="cloud-download-outline" size={14} color="#FFF" />}
+                            <Text style={styles.pullBtnText}>{pullingDeviceIds[d.id] ? 'PULLING...' : 'PULL'}</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ))}
                     </View>
-                </View>
-                <TouchableOpacity 
-                   disabled={pullingDeviceIds[d.id] || !onlineDevices[d.id]}
-                   onPress={() => handlePullLogs(d.id)}
-                   style={[styles.pullBtn, (!onlineDevices[d.id] || pullingDeviceIds[d.id]) && styles.pullBtnDisabled]}
-                >
-                  {pullingDeviceIds[d.id] ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="cloud-download-outline" size={14} color="#FFF" />}
-                  <Text style={styles.pullBtnText}>{pullingDeviceIds[d.id] ? 'PULLING...' : 'PULL'}</Text>
-                </TouchableOpacity>
-              </View>
-            ))
-          ) : (
-            <View style={styles.noDevicesBox}>
-              <Text style={styles.noDevicesText}>No registered devices found.</Text>
-            </View>
-          )}
-              </>
-            )}
+                  )}
+
+                  {/* Registered History Devices */}
+                  <Text style={styles.diagSectionLabel}>Registered History Devices ({offlineDevices.length})</Text>
+                  {offlineDevices.length > 0 ? (
+                    offlineDevices.map(d => (
+                      <View key={d.id} style={styles.deviceItem}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.deviceName}>{d.name || 'Unknown Device'}</Text>
+                          <View style={styles.deviceMeta}>
+                            <View style={[styles.statusDot, { backgroundColor: '#EF4444' }]} />
+                            <Text style={[styles.statusText, { color: '#EF4444' }]}>OFFLINE</Text>
+                            <Text style={styles.deviceAppVersion}>
+                              v{(onlineDevices[d.id]?.version || d.appVersion || '???')}
+                            </Text>
+                          </View>
+                        </View>
+                        <TouchableOpacity 
+                          disabled={true}
+                          onPress={() => handlePullLogs(d.id)}
+                          style={[styles.pullBtn, styles.pullBtnDisabled]}
+                        >
+                          <Ionicons name="cloud-download-outline" size={14} color="#FFF" />
+                          <Text style={styles.pullBtnText}>PULL</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))
+                  ) : (
+                    <View style={styles.noDevicesBox}>
+                      <Text style={styles.noDevicesText}>All devices are currently active.</Text>
+                    </View>
+                  )}
+                </>
+              );
+            })()}
 
           <Text style={[styles.diagSectionLabel, { marginTop: 24 }]}>Cloud Storage Logs ({userDiagFiles.length})</Text>
           <View style={styles.fileList}>
