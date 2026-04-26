@@ -5,6 +5,7 @@ import { colors, shadows } from '../../theme/designSystem';
 import config from '../../config';
 import storage from '../../utils/storage';
 import { usePlayers } from '../../context/PlayerContext';
+import { useAdmin } from '../../context/AdminContext';
 import SafeAvatar from '../SafeAvatar';
 import PureJSDateTimePicker from '../PureJSDateTimePicker';
 
@@ -46,6 +47,7 @@ const formatDuration = (ms) => {
 
 const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const { players } = usePlayers();
+  const { auditLogs } = useAdmin();
   
   const [search, setSearch] = useState('');
   const [analytics, setAnalytics] = useState(null);
@@ -69,6 +71,21 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [attendanceDateFilter, setAttendanceDateFilter] = useState(() => new Date().toISOString().split('T')[0]);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedSessionForActivity, setSelectedSessionForActivity] = useState(null);
+
+  const sessionActivities = useMemo(() => {
+    if (!selectedSessionForActivity || !auditLogs) return [];
+    const agentId = selectedSessionForActivity.agentId;
+    const start = new Date(selectedSessionForActivity.startTime).getTime();
+    const end = selectedSessionForActivity.isLive ? Date.now() : new Date(selectedSessionForActivity.endTime).getTime();
+    
+    return auditLogs.filter(log => {
+      if (log.userId !== agentId) return false;
+      if (log.category !== 'support_activity') return false;
+      const logTime = new Date(log.timestamp).getTime();
+      return logTime >= start && logTime <= end;
+    }).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  }, [selectedSessionForActivity, auditLogs]);
 
   const handleExportCSV = async () => {
     const token = await storage.getItem('userToken');
@@ -1074,17 +1091,22 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                       const durHrs = Math.floor(sess.durationMs / 3600000);
                       const durMins = Math.floor((sess.durationMs % 3600000) / 60000);
                       return (
-                        <View key={i} style={styles.sessionLogRow}>
-                          <View style={[styles.sessionLogDot, sess.isLive && { backgroundColor: '#10B981' }]} />
+                        <TouchableOpacity 
+                          key={i} 
+                          style={[styles.sessionLogRow, { borderLeftWidth: 3, borderLeftColor: sess.isLive ? '#10B981' : '#6366F1' }]}
+                          onPress={() => setSelectedSessionForActivity({ ...sess, agentId: selectedAgentId })}
+                        >
                           <View style={{ flex: 1 }}>
                             <Text style={styles.sessionLogTime}>
                               {startDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} → {sess.isLive ? 'ACTIVE NOW' : endDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                             </Text>
+                            <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Tap to view activities</Text>
                           </View>
                           <Text style={[styles.sessionLogDuration, sess.isLive && { color: '#10B981' }]}>
                             {durHrs > 0 ? `${durHrs}h ` : ''}{durMins}m
                           </Text>
-                        </View>
+                          <Ionicons name="chevron-forward" size={16} color="#CBD5E1" style={{ marginLeft: 8 }} />
+                        </TouchableOpacity>
                       );
                     }) : (
                       <View style={{ padding: 20, alignItems: 'center' }}>
@@ -1146,6 +1168,54 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
           </Modal>
         )}
       </Modal>
+
+      {/* Session Activity Modal */}
+      {selectedSessionForActivity && (
+        <Modal transparent animationType="slide">
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalSheet, { height: '90%', marginTop: 'auto' }]}>
+              <View style={styles.modalHeader}>
+                <View>
+                  <Text style={styles.modalTitle}>Session Activities</Text>
+                  <Text style={styles.modalSubTitle}>
+                    {new Date(selectedSessionForActivity.startTime).toLocaleTimeString()} → {selectedSessionForActivity.isLive ? 'ACTIVE NOW' : new Date(selectedSessionForActivity.endTime).toLocaleTimeString()}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => setSelectedSessionForActivity(null)} style={styles.closeModalBtn}>
+                  <Ionicons name="close" size={24} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={{ flex: 1, padding: 20 }}>
+                {sessionActivities.length > 0 ? sessionActivities.map((log, idx) => (
+                  <View key={log.id} style={{ marginBottom: 16, padding: 16, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Ionicons name="checkmark-circle" size={16} color="#3B82F6" />
+                        <Text style={{ fontWeight: 'bold', color: '#0F172A' }}>{log.action.replace(/_/g, ' ')}</Text>
+                      </View>
+                      <Text style={{ fontSize: 12, color: '#64748B' }}>
+                        {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                      </Text>
+                    </View>
+                    <Text style={{ color: '#475569' }}>{log.details}</Text>
+                    {log.entityId && (
+                      <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 8 }}>Ticket ID: {log.entityId}</Text>
+                    )}
+                  </View>
+                )) : (
+                  <View style={{ alignItems: 'center', padding: 40, backgroundColor: '#FFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                    <Ionicons name="cafe-outline" size={48} color="#CBD5E1" />
+                    <Text style={{ marginTop: 16, fontSize: 16, fontWeight: 'bold', color: '#64748B' }}>Idle Session</Text>
+                    <Text style={{ marginTop: 8, fontSize: 13, color: '#94A3B8', textAlign: 'center' }}>
+                      No support activities were tracked during this time frame.
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 };

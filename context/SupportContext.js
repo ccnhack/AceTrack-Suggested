@@ -45,6 +45,28 @@ export const SupportProvider = ({ children }) => {
     return unsub;
   }, []);
 
+  // 🛡️ [SUPPORT TELEMETRY] (v2.6.273)
+  const logSupportActivity = useCallback(async (action, entityId, details) => {
+    if (!currentUserRef.current || userRole !== 'support') return;
+    try {
+      const currentLogs = await syncManager.getSystemFlag('auditLogs') || [];
+      const newLog = {
+        id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        userId: currentUserRef.current.id,
+        action,
+        entityId,
+        details,
+        timestamp: new Date().toISOString(),
+        category: 'support_activity'
+      };
+      
+      const updatedLogs = [...currentLogs, newLog].slice(-200); // Max 200 per session/cache
+      syncAndSaveData({ auditLogs: updatedLogs });
+    } catch (e) {
+      console.warn("[SupportContext] Failed to log support activity:", e);
+    }
+  }, [userRole, syncAndSaveData]);
+
   const onSendChatMessage = useCallback((messages) => {
     if (!currentUserRef.current) return;
     const userId = currentUserRef.current.id;
@@ -60,6 +82,7 @@ export const SupportProvider = ({ children }) => {
       setSupportTickets(result.tickets);
       // 🛡️ [FIX v2.6.121] Atomic push to prevent replies from being lost on stale cloud pull
       syncAndSaveData({ supportTickets: result.tickets }, true);
+      logSupportActivity('TICKET_REPLY', id, `Replied to ticket ${id}`);
     }
     return result;
   }, [supportTickets, userRole, syncAndSaveData]);
@@ -70,6 +93,7 @@ export const SupportProvider = ({ children }) => {
       setSupportTickets(result.tickets);
       // 🛡️ [FIX v2.6.121] Atomic push to prevent status changes from being rolled back
       syncAndSaveData({ supportTickets: result.tickets }, true);
+      logSupportActivity('TICKET_STATUS_CHANGE', id, `Changed status to ${status}`);
     }
     return result;
   }, [supportTickets, syncAndSaveData]);
@@ -80,6 +104,7 @@ export const SupportProvider = ({ children }) => {
     if (result.success) {
       setSupportTickets(result.tickets);
       syncAndSaveData({ supportTickets: result.tickets });
+      logSupportActivity('TICKET_SAVE', ticket.id || 'new', `Saved/Created ticket`);
     }
     return result;
   }, [supportTickets, userRole, syncAndSaveData]);
@@ -114,6 +139,7 @@ export const SupportProvider = ({ children }) => {
         body: JSON.stringify({ ticketId })
       });
       if (res.ok) {
+        logSupportActivity('TICKET_CLAIMED', ticketId, `Claimed ticket from pool`);
         // The server updated the master state; we rely on the next ENTITY_UPDATED to refresh.
         return { success: true };
       }
@@ -138,6 +164,7 @@ export const SupportProvider = ({ children }) => {
       });
       const data = await res.json();
       if (res.ok) {
+        logSupportActivity('TICKET_ASSIGNED', ticketId, `Assigned ticket to agent ${targetAgentId}`);
         return { success: true, message: data.message };
       }
       return { success: false, error: data.error || "Failed to reassign ticket" };
