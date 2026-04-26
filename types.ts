@@ -1,7 +1,25 @@
 export enum Sport {
   BADMINTON = 'Badminton',
   TABLE_TENNIS = 'Table Tennis',
-  CRICKET = 'Cricket'
+  CRICKET = 'Cricket',
+  TENNIS = 'Tennis',
+  BASKETBALL = 'Basketball',
+  FOOTBALL = 'Football',
+  VOLLEYBALL = 'Volleyball',
+  SWIMMING = 'Swimming',
+  ATHLETICS = 'Athletics',
+  GYMNASTICS = 'Gymnastics',
+  MARTIAL_ARTS = 'Martial Arts',
+  BOXING = 'Boxing',
+  WRESTLING = 'Wrestling',
+  CHESS = 'Chess',
+  SQUASH = 'Squash',
+  ARCHERY = 'Archery',
+  SHOOTING = 'Shooting',
+  GOLF = 'Golf',
+  HOCKEY = 'Hockey',
+  CYCLING = 'Cycling',
+  SKATING = 'Skating'
 }
 
 export enum SkillLevel {

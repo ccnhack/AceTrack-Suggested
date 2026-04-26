@@ -61,6 +61,7 @@ const SignupScreen = ({ navigation }) => {
   const [usernameStatus, setUsernameStatus] = useState('idle');
   const [usernameSuggestions, setUsernameSuggestions] = useState([]);
   const [isSportsDropdownOpen, setIsSportsDropdownOpen] = useState(false);
+  const [sportsSearchQuery, setSportsSearchQuery] = useState('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [newlyCreatedUser, setNewlyCreatedUser] = useState(null);
@@ -491,7 +492,10 @@ const SignupScreen = ({ navigation }) => {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Managed Sports</Text>
               <TouchableOpacity 
-                onPress={() => setIsSportsDropdownOpen(!isSportsDropdownOpen)}
+                onPress={() => {
+                  setIsSportsDropdownOpen(!isSportsDropdownOpen);
+                  if (isSportsDropdownOpen) setSportsSearchQuery('');
+                }}
                 style={styles.dropdownButton}
               >
                 <Text style={styles.dropdownButtonText}>
@@ -504,23 +508,34 @@ const SignupScreen = ({ navigation }) => {
               
               {isSportsDropdownOpen && (
                 <View style={styles.dropdownList}>
-                  {Object.values(Sport).map(s => {
-                    const isSelected = formData.managedSports.includes(s);
-                    return (
-                      <TouchableOpacity
-                        key={s}
-                        onPress={() => {
-                          const newSports = isSelected
-                            ? formData.managedSports.filter(sport => sport !== s)
-                            : [...formData.managedSports, s];
-                          setFormData({ ...formData, managedSports: newSports });
-                        }}
-                        style={[styles.dropdownItem, isSelected && styles.dropdownItemActive]}
-                      >
-                        <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemTextActive]}>{s}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                  <TextInput
+                    style={[styles.input, { borderWidth: 0, borderBottomWidth: 1, borderRadius: 0, paddingVertical: 10 }]}
+                    placeholder="Search sports..."
+                    value={sportsSearchQuery}
+                    onChangeText={setSportsSearchQuery}
+                    autoCapitalize="none"
+                  />
+                  <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled={true}>
+                    {Object.values(Sport)
+                      .filter(s => s.toLowerCase().includes(sportsSearchQuery.toLowerCase()))
+                      .map(s => {
+                      const isSelected = formData.managedSports.includes(s);
+                      return (
+                        <TouchableOpacity
+                          key={s}
+                          onPress={() => {
+                            const newSports = isSelected
+                              ? formData.managedSports.filter(sport => sport !== s)
+                              : [...formData.managedSports, s];
+                            setFormData({ ...formData, managedSports: newSports });
+                          }}
+                          style={[styles.dropdownItem, isSelected && styles.dropdownItemActive]}
+                        >
+                          <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemTextActive]}>{s}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
                 </View>
               )}
             </View>
@@ -643,7 +658,10 @@ const SignupScreen = ({ navigation }) => {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Certified Sports</Text>
               <TouchableOpacity 
-                onPress={() => setIsSportsDropdownOpen(!isSportsDropdownOpen)}
+                onPress={() => {
+                  setIsSportsDropdownOpen(!isSportsDropdownOpen);
+                  if (isSportsDropdownOpen) setSportsSearchQuery('');
+                }}
                 style={styles.dropdownButton}
               >
                 <Text style={styles.dropdownButtonText}>
@@ -656,23 +674,34 @@ const SignupScreen = ({ navigation }) => {
               
               {isSportsDropdownOpen && (
                 <View style={styles.dropdownList}>
-                  {Object.values(Sport).map(s => {
-                    const isSelected = formData.certifiedSports.includes(s);
-                    return (
-                      <TouchableOpacity
-                        key={s}
-                        onPress={() => {
-                          const newSports = isSelected
-                            ? formData.certifiedSports.filter(sport => sport !== s)
-                            : [...formData.certifiedSports, s];
-                          setFormData({ ...formData, certifiedSports: newSports });
-                        }}
-                        style={[styles.dropdownItem, isSelected && styles.dropdownItemActive]}
-                      >
-                        <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemTextActive]}>{s}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                  <TextInput
+                    style={[styles.input, { borderWidth: 0, borderBottomWidth: 1, borderRadius: 0, paddingVertical: 10 }]}
+                    placeholder="Search sports..."
+                    value={sportsSearchQuery}
+                    onChangeText={setSportsSearchQuery}
+                    autoCapitalize="none"
+                  />
+                  <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled={true}>
+                    {Object.values(Sport)
+                      .filter(s => s.toLowerCase().includes(sportsSearchQuery.toLowerCase()))
+                      .map(s => {
+                      const isSelected = formData.certifiedSports.includes(s);
+                      return (
+                        <TouchableOpacity
+                          key={s}
+                          onPress={() => {
+                            const newSports = isSelected
+                              ? formData.certifiedSports.filter(sport => sport !== s)
+                              : [...formData.certifiedSports, s];
+                            setFormData({ ...formData, certifiedSports: newSports });
+                          }}
+                          style={[styles.dropdownItem, isSelected && styles.dropdownItemActive]}
+                        >
+                          <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemTextActive]}>{s}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
                 </View>
               )}
             </View>
