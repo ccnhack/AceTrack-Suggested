@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.273'; 
+const APP_VERSION = '2.6.274'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -831,14 +831,23 @@ io.on('connection', async (socket) => {
   if (connUserId && connUserId !== 'guest' && connUserId !== 'admin') {
     console.log(`[DEBUG] WS Connection from user: ${connUserId}, provided role: ${connRole || 'none'}, device: ${connDeviceName}`);
     
+    // 🛡️ [DEDUP] (v2.6.274): Evict stale sessions for the same userId to prevent duplicates
+    // This handles the case where setUserToken triggers a socket reconnect before the old one disconnects
+    for (const [existingSocketId, existingSess] of activeSupportSessions) {
+      if (existingSess.userId === connUserId && existingSocketId !== socket.id) {
+        console.log(`🕐 [SESSION] Evicting stale session for ${connUserId} (old socket: ${existingSocketId}, new: ${socket.id})`);
+        activeSupportSessions.delete(existingSocketId);
+      }
+    }
+
     // Use the explicitly provided role from the client if available
     if (connRole === 'support') {
       activeSupportSessions.set(socket.id, {
         userId: connUserId,
         startTime: Date.now(),
-        deviceName: 'Browser'
+        deviceName: connDeviceName
       });
-      console.log(`🕐 [SESSION] Support employee ${connUserId} session started via client role (socket: ${socket.id})`);
+      console.log(`🕐 [SESSION] Support employee ${connUserId} session started via client role (socket: ${socket.id}, device: ${connDeviceName})`);
     } else {
       // Fallback: check database if client didn't provide role
       try {
@@ -850,9 +859,9 @@ io.on('connection', async (socket) => {
             activeSupportSessions.set(socket.id, {
               userId: connUserId,
               startTime: Date.now(),
-              deviceName: 'Browser'
+              deviceName: connDeviceName
             });
-            console.log(`🕐 [SESSION] Support employee ${connUserId} session started via DB lookup (socket: ${socket.id})`);
+            console.log(`🕐 [SESSION] Support employee ${connUserId} session started via DB lookup (socket: ${socket.id}, device: ${connDeviceName})`);
           }
         }
       } catch (e) {
@@ -863,6 +872,15 @@ io.on('connection', async (socket) => {
 
   socket.on('admin_pull_diagnostics', (data) => {
     logServerEvent('ADMIN_PULL_DIAGNOSTICS_REQUESTED', data);
+    // 🛡️ [TARGETED_RELAY] (v2.6.274): Only send to sockets belonging to the target user
+    // instead of broadcasting to everyone, which was causing missed deliveries
+    for (const [sid, sess] of activeSupportSessions) {
+      if (String(sess.userId) === String(data.targetUserId)) {
+        io.to(sid).emit('force_upload_diagnostics', data);
+        console.log(`[DIAG] Relayed force_upload_diagnostics to socket ${sid} for user ${data.targetUserId}`);
+      }
+    }
+    // Also broadcast to non-support users (regular mobile clients)
     io.emit('force_upload_diagnostics', data);
   });
 

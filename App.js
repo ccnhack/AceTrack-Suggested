@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { 
-  View, Text, StyleSheet, StatusBar, ActivityIndicator, Modal, TouchableOpacity, Platform
+  View, Text, StyleSheet, StatusBar, ActivityIndicator, Modal, TouchableOpacity, Platform, Alert
 } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -63,7 +63,7 @@ import { useSupport } from './context/SupportContext';
 
 
 // 🛡️ Web Deep Linking Configuration (v2.6.258)
-const APP_VERSION = "2.6.273";
+const APP_VERSION = "2.6.274";
 const linking = {
   prefixes: ['https://acetrack-suggested.onrender.com', 'acetrack://'],
   config: {

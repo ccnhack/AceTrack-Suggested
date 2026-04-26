@@ -71,6 +71,9 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [attendanceDateFilter, setAttendanceDateFilter] = useState(() => new Date().toISOString().split('T')[0]);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [attendanceRangeMode, setAttendanceRangeMode] = useState(false);
+  const [attendanceEndDateFilter, setAttendanceEndDateFilter] = useState(() => new Date().toISOString().split('T')[0]);
   const [selectedSessionForActivity, setSelectedSessionForActivity] = useState(null);
 
   const sessionActivities = useMemo(() => {
@@ -981,19 +984,26 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                 );
               }
 
-              // Compute stats for selected date
-              const filterDateStr = attendanceDateFilter;
-              const isTodayFilter = filterDateStr === new Date().toISOString().split('T')[0];
+              // Compute stats for selected date or range
+              const isTodayFilter = !attendanceRangeMode && attendanceDateFilter === new Date().toISOString().split('T')[0];
               
               const dateSessions = (agentAttendance.allSessions || []).filter(s => {
                 const sDate = new Date(s.startTime).toISOString().split('T')[0];
-                return sDate === filterDateStr;
+                if (attendanceRangeMode) {
+                  return sDate >= attendanceDateFilter && sDate <= attendanceEndDateFilter;
+                }
+                return sDate === attendanceDateFilter;
               });
 
-              // Add live sessions to today's count if today is selected
+              // Add live sessions to today's count if today is within filter
               let totalMsForDate = dateSessions.reduce((sum, s) => sum + (s.durationMs || 0), 0);
               let liveSessionDocs = [];
-              if (isTodayFilter && agentAttendance.isCurrentlyOnline) {
+              const todayStr = new Date().toISOString().split('T')[0];
+              const isTodayInRange = attendanceRangeMode 
+                ? (todayStr >= attendanceDateFilter && todayStr <= attendanceEndDateFilter)
+                : (todayStr === attendanceDateFilter);
+
+              if (isTodayInRange && agentAttendance.isCurrentlyOnline) {
                 liveSessionDocs = agentAttendance.activeSessions || [];
                 totalMsForDate += liveSessionDocs.reduce((sum, s) => sum + (s.durationMs || 0), 0);
               }
@@ -1029,46 +1039,81 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                     </View>
                   )}
 
-                  {/* Date Filter Controls */}
-                  <View style={styles.dateFilterContainer}>
+                  {/* Mode Toggle & Date Filter Controls */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 16 }}>
                     <TouchableOpacity 
-                      onPress={() => {
-                        const d = new Date(filterDateStr);
-                        d.setDate(d.getDate() - 1);
-                        setAttendanceDateFilter(d.toISOString().split('T')[0]);
-                      }}
-                      style={styles.dateNavBtn}
+                      onPress={() => setAttendanceRangeMode(!attendanceRangeMode)}
+                      style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}
                     >
-                      <Ionicons name="chevron-back" size={20} color="#6366F1" />
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      style={styles.dateDisplayBox}
-                      onPress={() => setShowDatePicker(true)}
-                    >
-                      <Ionicons name="calendar-outline" size={16} color="#64748B" />
-                      <Text style={styles.dateDisplayText}>
-                        {isTodayFilter ? 'Today' : new Date(filterDateStr).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                      <Ionicons name={attendanceRangeMode ? "calendar" : "calendar-outline"} size={14} color="#6366F1" />
+                      <Text style={{ marginLeft: 6, fontSize: 12, fontWeight: 'bold', color: '#475569' }}>
+                        {attendanceRangeMode ? "Range Mode ON" : "Single Date Mode"}
                       </Text>
                     </TouchableOpacity>
+                  </View>
 
-                    <TouchableOpacity 
-                      disabled={isTodayFilter}
-                      onPress={() => {
-                        const d = new Date(filterDateStr);
-                        d.setDate(d.getDate() + 1);
-                        setAttendanceDateFilter(d.toISOString().split('T')[0]);
-                      }}
-                      style={[styles.dateNavBtn, isTodayFilter && { opacity: 0.3 }]}
-                    >
-                      <Ionicons name="chevron-forward" size={20} color="#6366F1" />
-                    </TouchableOpacity>
+                  <View style={styles.dateFilterContainer}>
+                    {!attendanceRangeMode && (
+                      <TouchableOpacity 
+                        onPress={() => {
+                          const d = new Date(attendanceDateFilter);
+                          d.setDate(d.getDate() - 1);
+                          setAttendanceDateFilter(d.toISOString().split('T')[0]);
+                        }}
+                        style={styles.dateNavBtn}
+                      >
+                        <Ionicons name="chevron-back" size={20} color="#6366F1" />
+                      </TouchableOpacity>
+                    )}
+                    
+                    <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'center', gap: 10 }}>
+                      <TouchableOpacity 
+                        style={[styles.dateDisplayBox, attendanceRangeMode && { flex: 1 }]}
+                        onPress={() => setShowDatePicker(true)}
+                      >
+                        <Ionicons name="calendar-outline" size={16} color="#64748B" />
+                        <Text style={styles.dateDisplayText}>
+                          {new Date(attendanceDateFilter).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                        </Text>
+                      </TouchableOpacity>
+
+                      {attendanceRangeMode && (
+                        <>
+                          <Text style={{ alignSelf: 'center', color: '#94A3B8', fontWeight: 'bold' }}>→</Text>
+                          <TouchableOpacity 
+                            style={[styles.dateDisplayBox, { flex: 1 }]}
+                            onPress={() => setShowEndDatePicker(true)}
+                          >
+                            <Ionicons name="calendar-outline" size={16} color="#64748B" />
+                            <Text style={styles.dateDisplayText}>
+                              {new Date(attendanceEndDateFilter).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                            </Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                    </View>
+
+                    {!attendanceRangeMode && (
+                      <TouchableOpacity 
+                        disabled={isTodayFilter}
+                        onPress={() => {
+                          const d = new Date(attendanceDateFilter);
+                          d.setDate(d.getDate() + 1);
+                          setAttendanceDateFilter(d.toISOString().split('T')[0]);
+                        }}
+                        style={[styles.dateNavBtn, isTodayFilter && { opacity: 0.3 }]}
+                      >
+                        <Ionicons name="chevron-forward" size={20} color="#6366F1" />
+                      </TouchableOpacity>
+                    )}
                   </View>
 
                   {/* Hours Chart for Selected Date */}
                   <View style={styles.todayHoursCard}>
                     <View style={styles.todayHoursTop}>
-                      <Text style={styles.todayHoursLabel}>Active Time ({isTodayFilter ? 'Today' : 'Selected Date'})</Text>
+                      <Text style={styles.todayHoursLabel}>
+                        {attendanceRangeMode ? 'Total Active Time (Range)' : `Active Time (${isTodayFilter ? 'Today' : 'Selected Date'})`}
+                      </Text>
                       <Text style={styles.todayHoursValue}>
                         {dateHours > 0 ? `${dateHours}h ` : ''}{dateMins}m
                       </Text>
@@ -1079,7 +1124,11 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                         { width: `${dateProgress}%`, backgroundColor: dateProgress >= 80 ? '#10B981' : dateProgress >= 50 ? '#F59E0B' : '#3B82F6' }
                       ]} />
                     </View>
-                    <Text style={styles.todayProgressLabel}>{Math.round(dateProgress)}% of 8h target</Text>
+                    <Text style={styles.todayProgressLabel}>
+                      {attendanceRangeMode 
+                        ? `${(totalMsForDate / 3600000).toFixed(1)}h over selected period` 
+                        : `${Math.round(dateProgress)}% of 8h target`}
+                    </Text>
                   </View>
 
                   {/* Sessions for Selected Date */}
@@ -1100,7 +1149,19 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                             <Text style={styles.sessionLogTime}>
                               {startDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} → {sess.isLive ? 'ACTIVE NOW' : endDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                             </Text>
-                            <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Tap to view activities</Text>
+                            {(() => {
+                              const count = auditLogs.filter(log => {
+                                if (log.userId !== selectedAgentId) return false;
+                                if (log.category !== 'support_activity') return false;
+                                const logTime = new Date(log.timestamp).getTime();
+                                return logTime >= sess.startTime && logTime <= (sess.isLive ? Date.now() : sess.endTime);
+                              }).length;
+                              return (
+                                <Text style={{ fontSize: 11, color: count > 0 ? '#6366F1' : '#94A3B8', marginTop: 2, fontWeight: count > 0 ? '700' : '400' }}>
+                                  Tap to view activities {count > 0 ? `(${count} activities)` : '(Idle)'}
+                                </Text>
+                              );
+                            })()}
                           </View>
                           <Text style={[styles.sessionLogDuration, sess.isLive && { color: '#10B981' }]}>
                             {durHrs > 0 ? `${durHrs}h ` : ''}{durMins}m
@@ -1152,7 +1213,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
             <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.8)', justifyContent: 'center', alignItems: 'center' }}>
               <View style={{ width: '90%', maxWidth: 400, backgroundColor: '#FFF', borderRadius: 24, padding: 24, paddingBottom: 40, maxHeight: '80%' }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0F172A' }}>Select Date</Text>
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0F172A' }}>{attendanceRangeMode ? "Select Start Date" : "Select Date"}</Text>
                     <TouchableOpacity onPress={() => setShowDatePicker(false)}>
                         <Ionicons name="close" size={24} color="#0F172A" />
                     </TouchableOpacity>
@@ -1160,8 +1221,30 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                 <PureJSDateTimePicker 
                     mode="date"
                     value={attendanceDateFilter}
-                    maxDate={new Date().toISOString().split('T')[0]}
+                    maxDate={attendanceRangeMode ? attendanceEndDateFilter : new Date().toISOString().split('T')[0]}
                     onChange={(val) => { setAttendanceDateFilter(val); setShowDatePicker(false); }}
+                />
+              </View>
+            </View>
+          </Modal>
+        )}
+
+        {showEndDatePicker && (
+          <Modal transparent animationType="fade">
+            <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.8)', justifyContent: 'center', alignItems: 'center' }}>
+              <View style={{ width: '90%', maxWidth: 400, backgroundColor: '#FFF', borderRadius: 24, padding: 24, paddingBottom: 40, maxHeight: '80%' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0F172A' }}>Select End Date</Text>
+                    <TouchableOpacity onPress={() => setShowEndDatePicker(false)}>
+                        <Ionicons name="close" size={24} color="#0F172A" />
+                    </TouchableOpacity>
+                </View>
+                <PureJSDateTimePicker 
+                    mode="date"
+                    value={attendanceEndDateFilter}
+                    minDate={attendanceDateFilter}
+                    maxDate={new Date().toISOString().split('T')[0]}
+                    onChange={(val) => { setAttendanceEndDateFilter(val); setShowEndDatePicker(false); }}
                 />
               </View>
             </View>
@@ -1171,48 +1254,80 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
 
       {/* Session Activity Modal */}
       {selectedSessionForActivity && (
-        <Modal transparent animationType="slide">
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalSheet, { height: '90%', marginTop: 'auto' }]}>
-              <View style={styles.modalHeader}>
-                <View>
-                  <Text style={styles.modalTitle}>Session Activities</Text>
-                  <Text style={styles.modalSubTitle}>
-                    {new Date(selectedSessionForActivity.startTime).toLocaleTimeString()} → {selectedSessionForActivity.isLive ? 'ACTIVE NOW' : new Date(selectedSessionForActivity.endTime).toLocaleTimeString()}
-                  </Text>
-                </View>
-                <TouchableOpacity onPress={() => setSelectedSessionForActivity(null)} style={styles.closeModalBtn}>
-                  <Ionicons name="close" size={24} color="#64748B" />
-                </TouchableOpacity>
+        <Modal transparent={false} animationType="slide">
+          <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+            <View style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              paddingHorizontal: 20, 
+              paddingTop: Platform.OS === 'ios' ? 60 : 20, 
+              paddingBottom: 20, 
+              backgroundColor: '#FFF', 
+              borderBottomWidth: 1, 
+              borderBottomColor: '#E2E8F0',
+              elevation: 4,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 4
+            }}>
+              <TouchableOpacity 
+                onPress={() => setSelectedSessionForActivity(null)} 
+                style={{ padding: 8, marginRight: 12, backgroundColor: '#F1F5F9', borderRadius: 12 }}
+              >
+                <Ionicons name="arrow-back" size={24} color="#0F172A" />
+              </TouchableOpacity>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: '#0F172A' }}>Session Activities</Text>
+                <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '600' }}>
+                  {new Date(selectedSessionForActivity.startTime).toLocaleTimeString()} → {selectedSessionForActivity.isLive ? 'ACTIVE NOW' : new Date(selectedSessionForActivity.endTime).toLocaleTimeString()}
+                </Text>
               </View>
-              <ScrollView style={{ flex: 1, padding: 20 }}>
-                {sessionActivities.length > 0 ? sessionActivities.map((log, idx) => (
-                  <View key={log.id} style={{ marginBottom: 16, padding: 16, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Ionicons name="checkmark-circle" size={16} color="#3B82F6" />
-                        <Text style={{ fontWeight: 'bold', color: '#0F172A' }}>{log.action.replace(/_/g, ' ')}</Text>
-                      </View>
-                      <Text style={{ fontSize: 12, color: '#64748B' }}>
-                        {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                      </Text>
+            </View>
+            <ScrollView style={{ flex: 1, padding: 20 }}>
+              {sessionActivities.length > 0 ? (
+                <>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 8 }}>
+                    <View style={{ padding: 8, backgroundColor: '#E0E7FF', borderRadius: 8 }}>
+                      <Ionicons name="flash" size={18} color="#6366F1" />
                     </View>
-                    <Text style={{ color: '#475569' }}>{log.details}</Text>
-                    {log.entityId && (
-                      <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 8 }}>Ticket ID: {log.entityId}</Text>
-                    )}
-                  </View>
-                )) : (
-                  <View style={{ alignItems: 'center', padding: 40, backgroundColor: '#FFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                    <Ionicons name="cafe-outline" size={48} color="#CBD5E1" />
-                    <Text style={{ marginTop: 16, fontSize: 16, fontWeight: 'bold', color: '#64748B' }}>Idle Session</Text>
-                    <Text style={{ marginTop: 8, fontSize: 13, color: '#94A3B8', textAlign: 'center' }}>
-                      No support activities were tracked during this time frame.
+                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#475569' }}>
+                      {sessionActivities.length} Actions Recorded
                     </Text>
                   </View>
-                )}
-              </ScrollView>
-            </View>
+                  {sessionActivities.map((log, idx) => (
+                    <View key={log.id} style={{ marginBottom: 16, padding: 16, backgroundColor: '#FFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', ...shadows.sm }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#6366F1' }} />
+                          <Text style={{ fontWeight: '800', color: '#0F172A', fontSize: 13 }}>{log.action.replace(/_/g, ' ')}</Text>
+                        </View>
+                        <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '700' }}>
+                          {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        </Text>
+                      </View>
+                      <Text style={{ color: '#475569', fontSize: 14, lineHeight: 20 }}>{log.details}</Text>
+                      {log.entityId && (
+                        <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="ticket-outline" size={12} color="#94A3B8" />
+                          <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '600' }}>Ticket: {log.entityId}</Text>
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </>
+              ) : (
+                <View style={{ alignItems: 'center', padding: 60, marginTop: 40 }}>
+                  <View style={{ width: 100, height: 100, borderRadius: 50, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center', marginBottom: 24 }}>
+                    <Ionicons name="cafe-outline" size={48} color="#CBD5E1" />
+                  </View>
+                  <Text style={{ fontSize: 20, fontWeight: '900', color: '#1E293B' }}>Idle Session</Text>
+                  <Text style={{ marginTop: 12, fontSize: 15, color: '#64748B', textAlign: 'center', lineHeight: 22 }}>
+                    The support agent was online, but no ticket interactions were recorded during this specific time window.
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
           </View>
         </Modal>
       )}
