@@ -48,6 +48,9 @@ const LoginScreen = ({ navigation }) => {
   const [showForgot, setShowForgot] = useState(false);
   const [forgotStep, setForgotStep] = useState(1); // 1: ID, 2: Done
   const [forgotUser, setForgotUser] = useState('');
+  const [forgotFoundUser, setForgotFoundUser] = useState(null);
+  const [forgotPhone, setForgotPhone] = useState('');
+  const [forgotOtp, setForgotOtp] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [isForgotLoading, setIsForgotLoading] = useState(false);
 
@@ -116,13 +119,11 @@ const LoginScreen = ({ navigation }) => {
           return;
         } else if (!supportRes.ok && username.toLowerCase().trim() !== 'admin') {
           // 🛡️ [SECURITY HARDENING] (v2.6.238)
-          // If the server reached and explicitly denied access (e.g. 403 Forbidden), 
-          // DO NOT fall back to local auth. This prevents terminated users from 
-          // logging in via stale local cache.
-          // NOTE: We allow 'admin' to bypass this to handle master recovery flows.
-          setError(supportData.error || supportData.message || 'Login denied by server.');
-          setIsLoading(false);
-          return;
+          if (supportRes.status === 403) {
+            setError(supportData.error || supportData.message || 'Login denied by server.');
+            setIsLoading(false);
+            return;
+          }
         }
       } catch (serverErr) {
         console.warn('Network issue, falling back to local auth if available:', serverErr.message);
@@ -178,6 +179,10 @@ const LoginScreen = ({ navigation }) => {
 
   const handleStartForgot = () => {
     setForgotStep(1);
+    setForgotUser('');
+    setForgotFoundUser(null);
+    setForgotPhone('');
+    setForgotOtp('');
     setShowForgot(true);
   };
 
@@ -187,7 +192,6 @@ const LoginScreen = ({ navigation }) => {
     const normalize = (s) => String(s || '').trim().toLowerCase();
     const nUser = normalize(forgotUser);
 
-    // 🛡️ ADMIN GUARD (v2.6.131): Strictly block resets for the system administrator
     if (nUser === 'admin') {
       Alert.alert(
         "Security Restriction", 
@@ -202,45 +206,123 @@ const LoginScreen = ({ navigation }) => {
       return;
     }
 
-    // 🛡️ TERMINATION GUARD
-    const isTerminated = players?.find(p => 
-      (String(p.email || '').toLowerCase() === nUser || String(p.username || '').toLowerCase() === nUser) && 
-      p.supportStatus === 'terminated'
-    );
-    
-    if (isTerminated) {
-      Alert.alert(
-        "Account Suspended",
-        "Your employment profile has been deactivated. Password reset is unavailable.",
-        [{ text: "OK" }]
+    if (Platform.OS === 'web') {
+      const isTerminated = players?.find(p => 
+        (String(p.email || '').toLowerCase() === nUser || String(p.username || '').toLowerCase() === nUser) && 
+        p.supportStatus === 'terminated'
       );
+      
+      if (isTerminated) {
+        Alert.alert(
+          "Account Suspended",
+          "Your employment profile has been deactivated. Password reset is unavailable.",
+          [{ text: "OK" }]
+        );
+        return;
+      }
+
+      setIsForgotLoading(true);
+      try {
+        const res = await fetch(`${config.API_BASE_URL}${config.getEndpoint('SUPPORT_RESET')}`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-ace-api-key': config.PUBLIC_APP_ID
+          },
+          body: JSON.stringify({ identifier: nUser })
+        });
+        
+        const data = await res.json();
+        if (res.ok) {
+          setForgotStep(2);
+          if (Platform.OS === 'web') {
+            window.alert("Success: Password recovery link has been sent to your registered email.");
+          } else {
+            Alert.alert("Success", "Mail Sent! Check your registered email inbox.");
+          }
+        } else {
+          Alert.alert("Error", data.message || data.error || "Failed to process request.");
+        }
+      } catch (e) {
+        Alert.alert("Network Error", "Please check your connection and try again.");
+      } finally {
+        setIsForgotLoading(false);
+      }
+    } else {
+      let foundUser = players.find(p => 
+        (p.email || '').toLowerCase() === nUser || 
+        String(p.id || '').toLowerCase() === nUser || 
+        (p.username || '').toLowerCase() === nUser
+      );
+      
+      if (!foundUser) {
+        Alert.alert("User Not Found", "No account found with that username or email.");
+        return;
+      }
+      
+      if (foundUser.role === 'support' && (foundUser.supportStatus === 'terminated' || foundUser.supportStatus === 'inactive' || foundUser.supportStatus === 'suspended')) {
+        Alert.alert("Account Suspended", "Your profile has been deactivated.");
+        return;
+      }
+
+      setForgotFoundUser(foundUser);
+      setForgotStep('mobile_phone');
+    }
+  };
+
+  const handleSendMobileOtp = async () => {
+    const enteredPhone = forgotPhone.trim();
+    if (!enteredPhone) {
+      Alert.alert("Error", "Please enter your mobile number.");
+      return;
+    }
+    if (enteredPhone !== (forgotFoundUser?.phone || '')) {
+      Alert.alert("Error", "Mobile number does not match our records.");
       return;
     }
 
     setIsForgotLoading(true);
     try {
-      const res = await fetch(`${config.API_BASE_URL}${config.getEndpoint('SUPPORT_RESET')}`, {
+      await fetch(`${config.API_BASE_URL}${config.getEndpoint('OTP_SEND')}`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-ace-api-key': config.PUBLIC_APP_ID
-        },
-        body: JSON.stringify({ identifier: nUser })
+        headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID },
+        body: JSON.stringify({ target: enteredPhone, type: 'phone' })
+      });
+      await fetch(`${config.API_BASE_URL}${config.getEndpoint('OTP_SEND')}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID },
+        body: JSON.stringify({ target: forgotFoundUser.email, type: 'email' })
       });
       
+      setForgotStep('mobile_otp');
+    } catch (e) {
+      Alert.alert("Error", "Failed to send OTP.");
+    } finally {
+      setIsForgotLoading(false);
+    }
+  };
+
+  const handleVerifyMobileOtp = async () => {
+    if (forgotOtp.length !== 6) {
+      Alert.alert("Error", "Enter 6-digit OTP");
+      return;
+    }
+    setIsForgotLoading(true);
+    try {
+      const res = await fetch(`${config.API_BASE_URL}${config.getEndpoint('OTP_VERIFY')}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID },
+        body: JSON.stringify({ code: forgotOtp, target: forgotPhone, type: 'phone' })
+      });
       const data = await res.json();
-      if (res.ok) {
-        setForgotStep(2); // Success step: Show check email instruction
-        if (Platform.OS === 'web') {
-          window.alert("Success: Password recovery link has been sent to your registered email.");
-        } else {
-          Alert.alert("Success", "Mail Sent! Check your registered email inbox.");
-        }
+      if (res.ok && data.success) {
+        setShowForgot(false);
+        onLoginSuccess(forgotFoundUser.role || 'user', forgotFoundUser);
       } else {
-        Alert.alert("Error", data.message || data.error || "Failed to process request.");
+        Alert.alert("Error", data.error || "Invalid OTP");
       }
     } catch (e) {
-      Alert.alert("Network Error", "Please check your connection and try again.");
+      Alert.alert("Error", "Verification failed");
     } finally {
       setIsForgotLoading(false);
     }
@@ -650,7 +732,7 @@ const LoginScreen = ({ navigation }) => {
                   autoCapitalize="none"
                 />
                 <TouchableOpacity style={styles.modalBtn} onPress={handleIdentify} disabled={isForgotLoading}>
-                  {isForgotLoading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalBtnText}>Send Reset Link</Text>}
+                  {isForgotLoading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalBtnText}>Next</Text>}
                 </TouchableOpacity>
               </View>
             )}
@@ -671,6 +753,47 @@ const LoginScreen = ({ navigation }) => {
                 </Text>
                 <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#EF4444' }]} onPress={() => { setShowForgot(false); setForgotStep(1); }}>
                   <Text style={styles.modalBtnText}>Finish</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {forgotStep === 'mobile_phone' && (
+              <View style={styles.stepContainer}>
+                <Text style={styles.stepDesc}>Please enter your registered mobile number for verification.</Text>
+                <TextInput 
+                  style={styles.modalInput} 
+                  placeholder="+91 9876543210" 
+                  value={forgotPhone} 
+                  onChangeText={setForgotPhone}
+                  keyboardType="phone-pad"
+                />
+                <TouchableOpacity style={styles.modalBtn} onPress={handleSendMobileOtp} disabled={isForgotLoading}>
+                  {isForgotLoading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalBtnText}>Send OTP</Text>}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {forgotStep === 'mobile_otp' && (
+              <View style={styles.stepContainer}>
+                <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                  <Ionicons name="shield-checkmark" size={48} color="#6366F1" />
+                </View>
+                <Text style={[styles.stepDesc, { textAlign: 'center', fontWeight: 'bold', color: '#0F172A' }]}>
+                  Verify OTP
+                </Text>
+                <Text style={[styles.stepDesc, { textAlign: 'center' }]}>
+                  Enter the 6-digit verification code sent to your phone and email.
+                </Text>
+                <TextInput 
+                  style={[styles.modalInput, { textAlign: 'center', fontSize: 24, letterSpacing: 8 }]} 
+                  placeholder="000000" 
+                  value={forgotOtp} 
+                  onChangeText={setForgotOtp}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                />
+                <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#EF4444' }]} onPress={handleVerifyMobileOtp} disabled={isForgotLoading}>
+                  {isForgotLoading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalBtnText}>Verify & Login</Text>}
                 </TouchableOpacity>
               </View>
             )}
