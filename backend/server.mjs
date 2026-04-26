@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.282'; 
+const APP_VERSION = '2.6.283'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -1202,6 +1202,13 @@ const apiKeyGuard = async (req, res, next) => {
     error: 'Unauthorized. Please login again.',
     suggestion: 'Clear your browser cache if this persists.'
   });
+};
+
+const authGuard = (req, res, next) => {
+  if (!req.userRole) {
+    return res.status(401).json({ error: 'Authentication required. Please login again.' });
+  }
+  next();
 };
 
 
