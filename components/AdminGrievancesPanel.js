@@ -490,54 +490,53 @@ export const AdminGrievancesPanel = ({
           onSwipeableOpen={() => {
             if (isClosed) return;
             setReplyToMsg(msg);
-            // 🛡️ Snap-back: Close swipeable once action is registered (v2.6.35)
             swipeableRefs.current[msg.id || msg.timestamp]?.close();
-            
-            // 🛡️ Auto-focus and scroll to bottom on reply (v2.6.25)
             setTimeout(() => {
               scrollViewRef.current?.scrollToEnd({ animated: true });
               textInputRef.current?.focus();
             }, 100);
           }}
         >
-        <View style={[
-          styles.messageBubble, 
-          isMe ? styles.myBubble : styles.otherBubble,
-          (tempHighlightedId === (msg.id || msg.timestamp)) && styles.highlightedMessage
-        ]}>
-          {renderMessageReply(msg.replyTo)}
-          {!isMe && <Text style={styles.senderLabel}>{senderName}</Text>}
-          {msg.image && (
-            <Image source={{ uri: config.sanitizeUrl(msg.image) }} style={styles.msgImage} resizeMode="contain" />
-          )}
-          <Text style={[styles.messageText, isMe ? styles.myText : styles.otherText]}>
-            {text?.startsWith('CLOSURE_REQUEST_EVENT:') 
-              ? `User requested closure: ${text.replace('CLOSURE_REQUEST_EVENT:', '').trim()}` 
-              : text}
-          </Text>
-          <View style={styles.msgFooter}>
-            <Text style={styles.timestamp}>
-              {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
-            {isMe && (
-              <View style={styles.statusContainer}>
-                {msg.status === 'pending' ? (
-                  <TouchableOpacity onPress={() => onRetryMessage?.(selectedTicket.id, msg.id)}>
-                    <Ionicons name="alert-circle" size={14} color="#94A3B8" />
-                  </TouchableOpacity>
-                ) : (
-                <Ionicons 
-                  name={['delivered', 'seen'].includes(msg.status) ? "checkmark-done" : "checkmark"} 
-                  size={15} 
-                  color={msg.status === 'seen' ? "#34B7F1" : "#94A3B8"} 
-                  style={{ marginLeft: 4, opacity: msg.status === 'pending' ? 0.3 : 1 }} 
-                />
+          <View style={[styles.messageRow, isMe ? styles.messageMe : styles.messageOther]}>
+            <View style={[
+              styles.bubble, 
+              isMe ? styles.bubbleMe : styles.bubbleOther,
+              (tempHighlightedId === (msg.id || msg.timestamp)) && styles.highlightedMessage
+            ]}>
+              {renderMessageReply(msg.replyTo)}
+              {!isMe && <Text style={[styles.msgSender, { color: '#64748B' }]}>{senderName}</Text>}
+              {msg.image && (
+                <Image source={{ uri: config.sanitizeUrl(msg.image) }} style={styles.msgImage} resizeMode="contain" />
+              )}
+              <Text style={[styles.msgText, { color: isMe ? '#FFF' : '#334155' }]}>
+                {text?.startsWith('CLOSURE_REQUEST_EVENT:') 
+                  ? `User requested closure: ${text.replace('CLOSURE_REQUEST_EVENT:', '').trim()}` 
+                  : text}
+              </Text>
+              <View style={styles.msgFooter}>
+                <Text style={[styles.msgTime, { color: isMe ? 'rgba(255,255,255,0.7)' : '#94A3B8' }]}>
+                  {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+                {isMe && (
+                  <View style={styles.statusContainer}>
+                    {msg.status === 'pending' ? (
+                      <TouchableOpacity onPress={() => onRetryMessage?.(selectedTicket.id, msg.id)}>
+                        <Ionicons name="alert-circle" size={14} color="#FFF" />
+                      </TouchableOpacity>
+                    ) : (
+                    <Ionicons 
+                      name={['delivered', 'seen'].includes(msg.status) ? "checkmark-done" : "checkmark"} 
+                      size={15} 
+                      color={msg.status === 'seen' ? "#A5B4FC" : "#FFF"} 
+                      style={{ marginLeft: 4, opacity: 0.8 }} 
+                    />
+                    )}
+                  </View>
                 )}
               </View>
-            )}
+            </View>
           </View>
-        </View>
-      </Swipeable>
+        </Swipeable>
     </View>
     );
   };
@@ -1330,7 +1329,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   bubbleMe: {
-    backgroundColor: '#EF4444',
+    backgroundColor: '#2563EB',
     borderBottomRightRadius: 4,
   },
   bubbleOther: {

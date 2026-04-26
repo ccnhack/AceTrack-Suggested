@@ -251,7 +251,7 @@ export const SupportTicketSystem = ({
       text = msg?.image ? '' : 'Empty message';
     }
     const timestamp = msg?.timestamp || new Date().toISOString();
-    const senderId = msg?.senderId || userId;
+    const senderId = msg?.senderId || (text?.startsWith('ISSUE_DESCRIPTION:') ? (selectedTicket?.userId || 'user') : userId);
     const isMe = String(senderId) === String(userId);
     
     // 🛡️ Format internal system/event messages for the user
@@ -314,48 +314,55 @@ export const SupportTicketSystem = ({
         onLayout={(e) => { messageYOffsets.current[msg.id || msg.timestamp] = e.nativeEvent.layout.y; }}
       >
         <Swipeable
+          ref={ref => { swipeableRefs.current[msg.id || msg.timestamp] = ref; }}
           renderRightActions={isMe ? renderRightActions : undefined}
           renderLeftActions={!isMe ? renderRightActions : undefined}
           onSwipeableOpen={() => {
             setReplyToMsg(msg);
-            // 🛡️ Auto-focus and scroll to bottom on reply (v2.6.25)
+            swipeableRefs.current[msg.id || msg.timestamp]?.close();
             setTimeout(() => {
               scrollViewRef.current?.scrollToEnd({ animated: true });
               textInputRef.current?.focus();
             }, 100);
           }}
         >
-          <View style={[styles.messageBubble, isMe ? styles.myBubble : styles.otherBubble]}>
-            {!isMe && <Text style={styles.adminLabel}>Admin Support</Text>}
-            {renderMessageReply(msg.replyTo)}
-            {msg.image && (
-              <Image source={{ uri: config.sanitizeUrl(msg.image) }} style={styles.msgImage} resizeMode="contain" />
-            )}
-            <Text style={[styles.messageText, isMe ? styles.myText : styles.otherText]}>
-              {text?.startsWith('CLOSURE_REQUEST_EVENT:') 
-                ? `Requested Closure: ${text.replace('CLOSURE_REQUEST_EVENT:', '').trim()}` 
-                : text}
-            </Text>
-            <View style={styles.msgFooter}>
-              <Text style={styles.timestamp}>
-                {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </Text>
-              {isMe && (
-                <View style={styles.statusContainer}>
-                  {msg.status === 'pending' ? (
-                    <TouchableOpacity onPress={() => onRetryMessage?.(selectedTicket.id, msg.id)}>
-                      <Ionicons name="alert-circle" size={14} color="#94A3B8" />
-                    </TouchableOpacity>
-                  ) : (
-                    <Ionicons 
-                      name={['delivered', 'seen'].includes(msg.status) ? "checkmark-done" : "checkmark"} 
-                      size={12} 
-                      color={msg.status === 'seen' ? "#3B82F6" : (msg.status === 'delivered' ? "#10B981" : "#94A3B8")} 
-                      style={{ marginLeft: 4, opacity: msg.status === 'pending' ? 0.3 : 1 }} 
-                    />
-                  )}
-                </View>
+          <View style={[styles.messageContainer, isMe ? styles.myContainer : styles.otherContainer]}>
+            <View style={[
+              styles.messageBubble, 
+              isMe ? styles.myBubble : styles.otherBubble,
+              isHighlighted && styles.highlightedBubble
+            ]}>
+              {!isMe && <Text style={styles.adminLabel}>{senderId === 'admin' ? 'Support Agent' : 'User'}</Text>}
+              {renderMessageReply(msg.replyTo)}
+              {msg.image && (
+                <Image source={{ uri: config.sanitizeUrl(msg.image) }} style={styles.msgImage} resizeMode="contain" />
               )}
+              <Text style={[styles.messageText, isMe ? styles.myText : styles.otherText]}>
+                {text?.startsWith('CLOSURE_REQUEST_EVENT:') 
+                  ? `Requested Closure: ${text.replace('CLOSURE_REQUEST_EVENT:', '').trim()}` 
+                  : text}
+              </Text>
+              <View style={styles.msgFooter}>
+                <Text style={[styles.timestamp, isMe ? styles.myTimestamp : styles.otherTimestamp]}>
+                  {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+                {isMe && (
+                  <View style={styles.statusContainer}>
+                    {msg.status === 'pending' ? (
+                      <TouchableOpacity onPress={() => onRetryMessage?.(selectedTicket.id, msg.id)}>
+                        <Ionicons name="alert-circle" size={14} color="#94A3B8" />
+                      </TouchableOpacity>
+                    ) : (
+                      <Ionicons 
+                        name={['delivered', 'seen'].includes(msg.status) ? "checkmark-done" : "checkmark"} 
+                        size={12} 
+                        color={msg.status === 'seen' ? "#A5B4FC" : (msg.status === 'delivered' ? "#10B981" : "#94A3B8")} 
+                        style={{ marginLeft: 4, opacity: msg.status === 'pending' ? 0.3 : 1 }} 
+                      />
+                    )}
+                  </View>
+                )}
+              </View>
             </View>
           </View>
         </Swipeable>
@@ -1288,27 +1295,46 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingBottom: 40,
   },
+  messageContainer: {
+    width: '100%',
+    paddingHorizontal: 4,
+    marginVertical: 2,
+  },
+  myContainer: {
+    alignItems: 'flex-end',
+  },
+  otherContainer: {
+    alignItems: 'flex-start',
+  },
   messageBubble: {
     padding: 12,
     borderRadius: 20,
-    marginBottom: 8,
     maxWidth: '85%',
+    ...shadows.sm,
   },
   myBubble: {
     backgroundColor: '#2563EB',
-    alignSelf: 'flex-end',
     borderBottomRightRadius: 4,
   },
   otherBubble: {
-    backgroundColor: '#F1F5F9',
-    alignSelf: 'flex-start',
+    backgroundColor: '#FFFFFF',
     borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  highlightedBubble: {
+    borderColor: '#2563EB',
+    borderWidth: 2,
   },
   myText: {
     color: '#FFFFFF',
+    fontSize: 14,
+    lineHeight: 20,
   },
   otherText: {
     color: '#0F172A',
+    fontSize: 14,
+    lineHeight: 20,
   },
   msgImage: {
     width: 200,
