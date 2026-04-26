@@ -63,7 +63,7 @@ import { useSupport } from './context/SupportContext';
 
 
 // 🛡️ Web Deep Linking Configuration (v2.6.258)
-const APP_VERSION = "2.6.283";
+const APP_VERSION = "2.6.284";
 const linking = {
   prefixes: ['https://acetrack-suggested.onrender.com', 'acetrack://'],
   config: {
@@ -202,8 +202,10 @@ function Root() {
                     await Updates.fetchUpdateAsync();
                     await Updates.reloadAsync();
                   } else {
-                    console.log("[UpdateEngine] No update available on this channel.");
-                    Alert.alert("Up to Date", "No new updates found on your current branch. Please try again in 30 seconds.");
+                    const channel = Updates.channel || 'unknown';
+                    const runtimeVersion = Updates.runtimeVersion || 'unknown';
+                    console.log(`[UpdateEngine] No update available. Channel: ${channel}, Runtime: ${runtimeVersion}`);
+                    Alert.alert("Up to Date", `No new updates found on your current branch (${channel}).\nRuntime: ${runtimeVersion}\nCurrent: ${appVersion}\nLatest: ${latestAppVersion}`);
                   }
                 } catch (e) {
                   console.error("Update error:", e);
