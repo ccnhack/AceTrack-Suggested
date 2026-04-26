@@ -90,6 +90,8 @@ function Root() {
     showForceUpdate, setShowForceUpdate, showNotifications, setShowNotifications
   } = useApp();
   
+  const [isUpdating, setIsUpdating] = useState(false);
+  
   const { isFullyConnected, isSyncing } = useSync();
   const { currentUser, userRole, userId, onMarkNotificationsRead, isAuthReady } = useAuth();
   const { players } = usePlayers();
@@ -169,50 +171,54 @@ function Root() {
             Version {appVersion} is obsolete. {Platform.OS === 'web' ? 'Please refresh this page to load the latest release.' : `Please update to ${latestAppVersion} to restore network access.`}
           </Text>
           <TouchableOpacity 
-            style={styles.updateButton}
+            style={[styles.updateButton, isUpdating && { opacity: 0.7 }]}
+            disabled={isUpdating}
             onPress={async () => {
+              if (isUpdating) return;
+              setIsUpdating(true);
               if (Platform.OS === 'web') {
                 if (typeof window !== 'undefined') {
                   // 🚀 HARD REFRESH ENGINE (v2.6.170)
-                  // Aggressive cache bypass to ensure obsolete sessions get the new bundle.
                   try {
-                    // 1. Unregister all service workers
                     if ('serviceWorker' in navigator) {
                       const registrations = await navigator.serviceWorker.getRegistrations();
-                      for (let registration of registrations) {
-                        await registration.unregister();
-                      }
+                      for (let registration of registrations) await registration.unregister();
                     }
-                    // 2. Clear cache storage if supported
                     if (window.caches) {
                       const cacheNames = await window.caches.keys();
-                      for (let name of cacheNames) {
-                        await window.caches.delete(name);
-                      }
+                      for (let name of cacheNames) await window.caches.delete(name);
                     }
-                  } catch (e) {
-                    console.warn("Silent cache clear failed:", e);
-                  }
-                  
-                  // 3. Force reload with cache-busting query param
+                  } catch (e) {}
                   const currentUrl = new URL(window.location.href);
                   currentUrl.searchParams.set('v', Date.now().toString());
                   window.location.href = currentUrl.toString();
                 }
               } else {
                 try {
+                  console.log("[UpdateEngine] Checking for updates...");
                   const update = await Updates.checkForUpdateAsync();
                   if (update.isAvailable) {
+                    console.log("[UpdateEngine] Update found, fetching...");
                     await Updates.fetchUpdateAsync();
                     await Updates.reloadAsync();
+                  } else {
+                    console.log("[UpdateEngine] No update available on this channel.");
+                    Alert.alert("Up to Date", "No new updates found on your current branch. Please try again in 30 seconds.");
                   }
                 } catch (e) {
                   console.error("Update error:", e);
+                  Alert.alert("Update Error", "Failed to reach update server. Check your connection or try again later.");
+                } finally {
+                  setIsUpdating(false);
                 }
               }
             }}
           >
-            <Text style={styles.updateButtonText}>{Platform.OS === 'web' ? 'Refresh Browser' : 'Download OTA Update'}</Text>
+            {isUpdating ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.updateButtonText}>{Platform.OS === 'web' ? 'Refresh Browser' : 'Download OTA Update'}</Text>
+            )}
           </TouchableOpacity>
         </View>
       </Modal>
