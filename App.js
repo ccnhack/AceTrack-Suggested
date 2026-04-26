@@ -63,7 +63,7 @@ import { useSupport } from './context/SupportContext';
 
 
 // 🛡️ Web Deep Linking Configuration (v2.6.258)
-const APP_VERSION = "2.6.284";
+const APP_VERSION = "2.6.285";
 const linking = {
   prefixes: ['https://acetrack-suggested.onrender.com', 'acetrack://'],
   config: {
@@ -196,7 +196,14 @@ function Root() {
               } else {
                 try {
                   console.log("[UpdateEngine] Checking for updates...");
-                  const update = await Updates.checkForUpdateAsync();
+                  
+                  // 🛡️ [UPDATE_SAFETY_TIMEOUT] (v2.6.285)
+                  // Prevent the UI from hanging if the update server is unreachable
+                  const updatePromise = Updates.checkForUpdateAsync();
+                  const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000));
+                  
+                  const update = await Promise.race([updatePromise, timeoutPromise]);
+                  
                   if (update.isAvailable) {
                     console.log("[UpdateEngine] Update found, fetching...");
                     await Updates.fetchUpdateAsync();
@@ -205,11 +212,20 @@ function Root() {
                     const channel = Updates.channel || 'unknown';
                     const runtimeVersion = Updates.runtimeVersion || 'unknown';
                     console.log(`[UpdateEngine] No update available. Channel: ${channel}, Runtime: ${runtimeVersion}`);
-                    Alert.alert("Up to Date", `No new updates found on your current branch (${channel}).\nRuntime: ${runtimeVersion}\nCurrent: ${appVersion}\nLatest: ${latestAppVersion}`);
+                    Alert.alert(
+                      "Up to Date", 
+                      `No new updates found on your current branch (${channel}).\nRuntime: ${runtimeVersion}\nCurrent: ${appVersion}\nLatest: ${latestAppVersion}`,
+                      [{ text: "OK" }, { text: "Force Reload", onPress: () => Updates.reloadAsync() }]
+                    );
                   }
                 } catch (e) {
                   console.error("Update error:", e);
-                  Alert.alert("Update Error", "Failed to reach update server. Check your connection or try again later.");
+                  const errorMsg = e.message === 'Timeout' ? "Update server timed out. Try again." : "Failed to reach update server.";
+                  Alert.alert(
+                    "Update Error", 
+                    `${errorMsg}\n\nTechnical details: ${e.message}`,
+                    [{ text: "Retry" }, { text: "Force Reload", onPress: () => Updates.reloadAsync() }]
+                  );
                 } finally {
                   setIsUpdating(false);
                 }
