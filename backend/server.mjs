@@ -2662,7 +2662,7 @@ router.get('/support/invite/preview', (req, res) => {
 });
 
 // 2. Fetch All Invites (Admin only)
-router.get('/support/invites', apiKeyGuard, asyncHandler(async (req, res) => {
+router.get('/support/invites', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
   if (req.userRole !== 'admin') {
     return res.status(403).json({ error: 'System Administrator privileges required' });
   }
@@ -4410,7 +4410,7 @@ server.on('error', (e) => {
 // ---------------------------------------------------------
 
 // 🕐 [ATTENDANCE API] (v2.6.267): Get attendance data for support employees
-router.get('/support/attendance', apiKeyGuard, async (req, res) => {
+router.get('/support/attendance', apiKeyGuard, authGuard, async (req, res) => {
   if (req.userRole !== 'admin') {
     return res.status(403).json({ error: 'System Administrator privileges required' });
   }
@@ -4498,7 +4498,7 @@ router.get('/support/attendance', apiKeyGuard, async (req, res) => {
   }
 });
 
-router.get('/support/analytics', apiKeyGuard, async (req, res) => {
+router.get('/support/analytics', apiKeyGuard, authGuard, async (req, res) => {
   // 🛡️ SECURITY HARDENING (v2.6.257): Use verified role
   if (req.userRole !== 'admin') {
     return res.status(403).json({ error: 'System Administrator privileges required' });
@@ -4728,7 +4728,7 @@ router.get('/support/analytics', apiKeyGuard, async (req, res) => {
 });
 
 // 📥 Export Support Data as CSV (Admin only)
-router.get('/support/export', apiKeyGuard, async (req, res) => {
+router.get('/support/export', apiKeyGuard, authGuard, async (req, res) => {
   // 🛡️ SECURITY HARDENING (v2.6.257): Enforce verified admin role
   if (req.userRole !== 'admin') {
     return res.status(403).json({ error: 'System Administrator privileges required' });
