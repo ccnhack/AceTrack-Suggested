@@ -51,6 +51,8 @@ const LoginScreen = ({ navigation }) => {
   const [forgotFoundUser, setForgotFoundUser] = useState(null);
   const [forgotPhone, setForgotPhone] = useState('');
   const [forgotOtp, setForgotOtp] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [isForgotLoading, setIsForgotLoading] = useState(false);
 
@@ -183,6 +185,8 @@ const LoginScreen = ({ navigation }) => {
     setForgotFoundUser(null);
     setForgotPhone('');
     setForgotOtp('');
+    setForgotNewPassword('');
+    setForgotConfirmPassword('');
     setShowForgot(true);
   };
 
@@ -316,8 +320,7 @@ const LoginScreen = ({ navigation }) => {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setShowForgot(false);
-        onLoginSuccess(forgotFoundUser.role || 'user', forgotFoundUser);
+        setForgotStep('mobile_reset');
       } else {
         Alert.alert("Error", data.error || "Invalid OTP");
       }
@@ -326,6 +329,25 @@ const LoginScreen = ({ navigation }) => {
     } finally {
       setIsForgotLoading(false);
     }
+  };
+
+  const handleResetSubmit = () => {
+    if (!forgotNewPassword) {
+      Alert.alert("Error", "Please enter a new password");
+      return;
+    }
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      Alert.alert("Error", "Passwords do not match");
+      return;
+    }
+    
+    onResetPassword(forgotFoundUser.id, forgotNewPassword, players);
+    
+    Alert.alert(
+      "Security Update",
+      "Your password has been successfully reset.\\n\\nAll previous active device sessions have been invalidated. Please log in again using your new credentials.",
+      [{ text: "Login", onPress: () => setShowForgot(false) }]
+    );
   };
 
   if (Platform.OS === 'web') {
@@ -793,7 +815,38 @@ const LoginScreen = ({ navigation }) => {
                   maxLength={6}
                 />
                 <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#EF4444' }]} onPress={handleVerifyMobileOtp} disabled={isForgotLoading}>
-                  {isForgotLoading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalBtnText}>Verify & Login</Text>}
+                  {isForgotLoading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalBtnText}>Verify OTP</Text>}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {forgotStep === 'mobile_reset' && (
+              <View style={styles.stepContainer}>
+                <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                  <Ionicons name="key-outline" size={48} color="#10B981" />
+                </View>
+                <Text style={[styles.stepDesc, { textAlign: 'center', fontWeight: 'bold', color: '#0F172A' }]}>
+                  Create New Password
+                </Text>
+                <Text style={[styles.stepDesc, { textAlign: 'center', marginBottom: 20 }]}>
+                  Please choose a strong password. This will log you out of all other active sessions.
+                </Text>
+                <TextInput 
+                  style={[styles.modalInput, { marginBottom: 12 }]} 
+                  placeholder="New Password" 
+                  value={forgotNewPassword} 
+                  onChangeText={setForgotNewPassword}
+                  secureTextEntry
+                />
+                <TextInput 
+                  style={styles.modalInput} 
+                  placeholder="Confirm New Password" 
+                  value={forgotConfirmPassword} 
+                  onChangeText={setForgotConfirmPassword}
+                  secureTextEntry
+                />
+                <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#10B981', marginTop: 16 }]} onPress={handleResetSubmit}>
+                  <Text style={styles.modalBtnText}>Reset Password</Text>
                 </TouchableOpacity>
               </View>
             )}

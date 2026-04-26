@@ -79,7 +79,7 @@ class PlayerService {
    */
   static resetPassword(userId, newPassword, players) {
     const updatedPlayers = (players || []).map(p => 
-      String(p.id).toLowerCase() === String(userId).toLowerCase() ? { ...p, password: newPassword } : p
+      String(p.id).toLowerCase() === String(userId).toLowerCase() ? { ...p, password: newPassword, activeSessions: [] } : p
     );
     
     return {
