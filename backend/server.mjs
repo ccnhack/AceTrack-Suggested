@@ -826,9 +826,10 @@ io.on('connection', async (socket) => {
   // 🕐 [SESSION TRACKER] (v2.6.267): Track support employee sessions
   const connUserId = socket.handshake?.query?.userId;
   const connRole = socket.handshake?.query?.role;
+  const connDeviceName = socket.handshake?.query?.deviceName || 'Browser';
   
   if (connUserId && connUserId !== 'guest' && connUserId !== 'admin') {
-    console.log(`[DEBUG] WS Connection from user: ${connUserId}, provided role: ${connRole || 'none'}`);
+    console.log(`[DEBUG] WS Connection from user: ${connUserId}, provided role: ${connRole || 'none'}, device: ${connDeviceName}`);
     
     // Use the explicitly provided role from the client if available
     if (connRole === 'support') {

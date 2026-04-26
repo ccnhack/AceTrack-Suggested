@@ -180,12 +180,23 @@ class SyncManager {
         this.socket.disconnect();
     }
 
+    const getDeviceName = () => {
+      if (Platform.OS !== 'web') return Platform.OS;
+      if (typeof navigator === 'undefined') return 'Browser';
+      const ua = navigator.userAgent;
+      if (ua.includes('Chrome') && !ua.includes('Edg')) return 'Chrome';
+      if (ua.includes('Safari') && !ua.includes('Chrome')) return 'Safari';
+      if (ua.includes('Firefox')) return 'Firefox';
+      if (ua.includes('Edg')) return 'Edge';
+      return 'Browser';
+    };
+
     this.socket = io(config.API_BASE_URL, {
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
-      query: { userId, role: role || 'user' },
+      query: { userId, role: role || 'user', deviceName: getDeviceName() },
       auth: { 
         token: this.userToken || config.PUBLIC_APP_ID,
         // 🛡️ [WEB_SOCKET_HARDENING] (v2.6.259)
@@ -264,7 +275,7 @@ class SyncManager {
              });
              
              const user = await storage.getItem('currentUser');
-             const label = user?.name || 'Guest';
+             const label = this.userId || user?.name || 'Guest';
              const deviceId = this.hardwareId || await storage.getItem('acetrack_device_id') || 'unknown';
              const allLogs = logger.getLogs();
              await fetch(`${config.API_BASE_URL}${config.getEndpoint('DIAGNOSTICS')}`, {

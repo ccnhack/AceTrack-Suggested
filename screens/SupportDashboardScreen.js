@@ -15,7 +15,7 @@ import { useAuth } from '../context/AuthContext';
 
 const SupportDashboardScreen = ({ navigation, route }) => {
   const { players } = usePlayers();
-  const { supportTickets, onReplyTicket, onUpdateTicketStatus, onMarkSeen } = useSupport();
+  const { supportTickets, onReplyTicket, onUpdateTicketStatus, onMarkSeen, onReassignTicket } = useSupport();
   const { isCloudOnline, isUsingCloud, lastSyncTime, onManualSync } = useSync();
   const { currentUser } = useAuth();
   
@@ -26,14 +26,26 @@ const SupportDashboardScreen = ({ navigation, route }) => {
   const [search, setSearch] = useState('');
 
   const ticketStats = useMemo(() => {
-    const tickets = supportTickets || [];
+    let tickets = supportTickets || [];
+    
+    // Apply strict scoping rules for support staff
+    if (currentUser?.id !== 'admin') {
+      tickets = tickets.filter(t => {
+        const isMine = (t.assignedTo && t.assignedTo === currentUser?.id) || 
+                       (currentUser?.username && t.assignedTo === currentUser?.username);
+        const isUnassigned = (!t.assignedTo || t.assignedTo === 'Unassigned' || t.assignedTo === '');
+        const isOpen = (t.status === 'Open' || !t.status);
+        return isMine || (isUnassigned && isOpen);
+      });
+    }
+
     return {
       open: tickets.filter(t => t.status === 'Open' || !t.status).length,
       inProgress: tickets.filter(t => t.status === 'In Progress').length,
       awaiting: tickets.filter(t => t.status === 'Awaiting Response').length,
       resolved: tickets.filter(t => t.status === 'Resolved').length
     };
-  }, [supportTickets]);
+  }, [supportTickets, currentUser]);
 
   const renderWebSidebar = () => (
     <>
@@ -188,6 +200,8 @@ const SupportDashboardScreen = ({ navigation, route }) => {
           onReply={onReplyTicket}
           onUpdateStatus={onUpdateTicketStatus}
           onMarkSeen={onMarkSeen}
+          onReassignTicket={onReassignTicket}
+          currentUser={currentUser}
           seenAdminActionIds={new Set()}
           search={search}
         />

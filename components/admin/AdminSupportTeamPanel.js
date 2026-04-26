@@ -6,6 +6,7 @@ import config from '../../config';
 import storage from '../../utils/storage';
 import { usePlayers } from '../../context/PlayerContext';
 import SafeAvatar from '../SafeAvatar';
+import PureJSDateTimePicker from '../PureJSDateTimePicker';
 
 // 🕐 Time Filter Presets
 const TIME_FILTERS = [
@@ -67,6 +68,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const [isLoadingAttendance, setIsLoadingAttendance] = useState(false);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [attendanceDateFilter, setAttendanceDateFilter] = useState(() => new Date().toISOString().split('T')[0]);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const handleExportCSV = async () => {
     const token = await storage.getItem('userToken');
@@ -1023,12 +1025,15 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                       <Ionicons name="chevron-back" size={20} color="#6366F1" />
                     </TouchableOpacity>
                     
-                    <View style={styles.dateDisplayBox}>
+                    <TouchableOpacity 
+                      style={styles.dateDisplayBox}
+                      onPress={() => setShowDatePicker(true)}
+                    >
                       <Ionicons name="calendar-outline" size={16} color="#64748B" />
                       <Text style={styles.dateDisplayText}>
                         {isTodayFilter ? 'Today' : new Date(filterDateStr).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
                       </Text>
-                    </View>
+                    </TouchableOpacity>
 
                     <TouchableOpacity 
                       disabled={isTodayFilter}
@@ -1120,6 +1125,26 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
             })()}
           </View>
         </View>
+        {showDatePicker && (
+          <Modal transparent animationType="fade">
+            <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.8)', justifyContent: 'center', alignItems: 'center' }}>
+              <View style={{ width: '90%', maxWidth: 400, backgroundColor: '#FFF', borderRadius: 24, padding: 24, paddingBottom: 40, maxHeight: '80%' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0F172A' }}>Select Date</Text>
+                    <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                        <Ionicons name="close" size={24} color="#0F172A" />
+                    </TouchableOpacity>
+                </View>
+                <PureJSDateTimePicker 
+                    mode="date"
+                    value={attendanceDateFilter}
+                    maxDate={new Date().toISOString().split('T')[0]}
+                    onChange={(val) => { setAttendanceDateFilter(val); setShowDatePicker(false); }}
+                />
+              </View>
+            </View>
+          </Modal>
+        )}
       </Modal>
     </View>
   );
