@@ -134,7 +134,8 @@ export const SupportProvider = ({ children }) => {
         headers: { 
           'Content-Type': 'application/json', 
           'Authorization': `Bearer ${await storage.getItem('userToken')}`, // authenticateToken usage
-          'x-ace-api-key': config.PUBLIC_APP_ID
+          'x-ace-api-key': config.PUBLIC_APP_ID,
+          'x-user-id': currentUserRef.current?.id || 'admin'
         },
         body: JSON.stringify({ ticketId })
       });
@@ -147,7 +148,7 @@ export const SupportProvider = ({ children }) => {
     } catch (e) {
       return { success: false, error: e.message };
     }
-  }, []);
+  }, [currentUserRef, logSupportActivity]);
 
   /** 🛡️ [NEW v2.6.162] Reassign a specific ticket to another agent */
   const onReassignTicket = useCallback(async (ticketId, targetAgentId) => {
@@ -158,7 +159,7 @@ export const SupportProvider = ({ children }) => {
           'Content-Type': 'application/json', 
           'Authorization': `Bearer ${await storage.getItem('userToken')}`, 
           'x-ace-api-key': config.PUBLIC_APP_ID,
-          'x-user-id': 'admin'
+          'x-user-id': currentUserRef.current?.id || 'admin'
         },
         body: JSON.stringify({ ticketId, targetAgentId })
       });
@@ -171,7 +172,7 @@ export const SupportProvider = ({ children }) => {
     } catch (e) {
       return { success: false, error: e.message };
     }
-  }, []);
+  }, [currentUserRef, logSupportActivity]);
 
 
   const value = {

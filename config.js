@@ -30,7 +30,7 @@ const ACE_API_KEY = (Constants.expoConfig && Constants.expoConfig.extra && Const
   : (process.env.EXPO_PUBLIC_ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=');
 
 export default {
-  APP_VERSION: '2.6.293',
+  APP_VERSION: '2.6.294',
   API_BASE_URL: API_BASE_URL,
   GROQ_API_KEY,
   ACE_API_KEY,
