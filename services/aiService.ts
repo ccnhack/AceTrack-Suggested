@@ -10,57 +10,42 @@ export interface ChatMessage {
   text: string;
 }
 
-const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-
-
 /**
- * Generates a response using Groq.
+ * Generates a response using Groq via Backend Proxy.
  */
 export const generateAIResponse = async (messages: ChatMessage[]): Promise<string> => {
-  const groqKey = config.GROQ_API_KEY;
-  console.log("AI Service: Groq Key present?", !!groqKey);
-  
-  if (!groqKey) {
-    throw new Error("AI Configuration Error: Groq API key is missing.");
-  }
-
   try {
     const groqMessages = messages.map(m => ({
       role: m.role === 'model' || m.role === 'assistant' ? 'assistant' : (m.role === 'user' ? 'user' : 'system'),
       content: String(m.text || '')
     }));
 
-    console.log("AI Service: Requesting summary from llama-3.1-70b-versatile...");
-    const response = await fetch(GROQ_API_URL, {
+    console.log("AI Service: Requesting summary from backend proxy...");
+    const response = await fetch(`${config.API_BASE_URL}/api/support/ai-summary`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${groqKey}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'x-ace-api-key': config.PUBLIC_APP_ID
       },
-      body: JSON.stringify({
-        model: "llama-3.1-70b-versatile",
-        messages: groqMessages,
-        temperature: 0.5, // Lower temperature for more factual summaries
-        max_tokens: 512
-      })
+      body: JSON.stringify({ messages: groqMessages })
     });
 
     const data = await response.json();
-    if (data.choices && data.choices[0] && data.choices[0].message) {
-      console.log("AI Service: Groq response success");
-      return data.choices[0].message.content;
+    if (data.success && data.text) {
+      console.log("AI Service: Response success");
+      return data.text;
     }
     
     if (data.error) {
-      console.error("AI Service: Groq API Error:", data.error);
-      throw new Error(data.error.message || "Groq API Error");
+      console.error("AI Service: Backend Proxy API Error:", data.error);
+      throw new Error(data.error.message || data.error || "Backend AI Proxy Error");
     }
   } catch (error: any) {
     console.error("AI Service: Error in generateAIResponse:", error.message);
     throw error;
   }
 
-  throw new Error("Groq AI failed to return a response.");
+  throw new Error("AI failed to return a response.");
 };
 
 /**

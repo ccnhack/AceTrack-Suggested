@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.296'; 
+const APP_VERSION = '2.6.297'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -4899,6 +4899,39 @@ router.post('/support/transfer-tickets', apiKeyGuard, async (req, res) => {
 
     logServerEvent('SUPPORT_TICKETS_TRANSFERRED', { fromAgentId, toAgentId, count: transferCount });
     res.json({ success: true, transferred: transferCount, message: `${transferCount} ticket(s) transferred to ${toAgent.name}` });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/** 🤖 [NEW v2.6.297] Generate AI Closure Summary (Proxy for Web CORS bypass) */
+router.post('/support/ai-summary', apiKeyGuard, async (req, res) => {
+  const { messages } = req.body;
+  if (!messages) return res.status(400).json({ error: "Messages array required" });
+  
+  try {
+    const groqKey = process.env.GROQ_API_KEY;
+    if (!groqKey) return res.status(500).json({ error: "GROQ_API_KEY is not set" });
+
+    const aiRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${groqKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: "llama-3.1-70b-versatile",
+        messages: messages,
+        temperature: 0.5,
+        max_tokens: 512
+      })
+    });
+    const data = await aiRes.json();
+    if (data.choices && data.choices[0] && data.choices[0].message) {
+      res.json({ success: true, text: data.choices[0].message.content });
+    } else {
+      res.status(500).json({ error: data.error?.message || "AI Error" });
+    }
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
