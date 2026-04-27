@@ -454,8 +454,9 @@ export const AdminGrievancesPanel = ({
     const timestamp = msg?.timestamp || new Date().toISOString();
     const legacySender = selectedTicket?.userId || 'user';
     const senderId = msg?.senderId || legacySender;
-    const isMe = senderId === 'admin';
-    const senderName = isMe ? 'Admin Support' : getUserName(senderId);
+    const myId = currentUser?.id || 'admin';
+    const isMe = String(senderId) === String(myId) || (senderId === 'admin' && currentUser?.role === 'admin');
+    const senderName = isMe ? (currentUser?.name || 'You') : getUserName(senderId);
 
     if (msg.type === 'event' || senderId === 'system') {
       return (
