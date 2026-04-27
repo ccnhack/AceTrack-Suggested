@@ -292,16 +292,21 @@ export const AdminGrievancesPanel = ({
     setIsGeneratingSummary(true);
 
     try {
-      const history = (selectedTicket.messages || []).map(m => 
-        `${m.senderId === 'admin' ? 'Admin' : (players.find(p => p.id === m.senderId)?.name || 'User')}: ${m.text || ''}`
-      ).join('\n');
+      // 🛡️ [OPTIMIZATION] (v2.6.291): Limit history to last 20 messages to prevent token overflow
+      const recentMessages = (selectedTicket.messages || []).slice(-20);
+      const history = recentMessages.map(m => {
+        const sender = m.senderId === 'admin' ? 'Admin' : (players.find(p => p.id === m.senderId)?.name || 'User');
+        const text = (m.text || '').trim();
+        return `${sender}: ${text}`;
+      }).filter(line => line.split(': ')[1]).join('\n');
     
       const prompt = [
         { role: 'system', text: "You are a professional support analyst. Read the conversation history and summarize it into exactly 3 concise sentences. 1) The original issue. 2) The troubleshooting steps taken. 3) The final fix/resolution. Be clear and objective." },
         { role: 'user', text: `History:\n${history}` }
       ];
     
-      const aiSummary = await generateAIResponse(prompt);
+      const rawAiSummary = await generateAIResponse(prompt);
+      const aiSummary = rawAiSummary ? rawAiSummary.trim() : null;
       const res = await onUpdateStatus(selectedTicket.id, pendingStatus, aiSummary);
       notify(res);
     } catch (e) {

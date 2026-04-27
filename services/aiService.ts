@@ -27,10 +27,10 @@ export const generateAIResponse = async (messages: ChatMessage[]): Promise<strin
   try {
     const groqMessages = messages.map(m => ({
       role: m.role === 'model' || m.role === 'assistant' ? 'assistant' : (m.role === 'user' ? 'user' : 'system'),
-      content: m.text
+      content: String(m.text || '')
     }));
 
-    console.log("AI Service: Fetching Groq...");
+    console.log("AI Service: Requesting summary from llama-3.1-70b-versatile...");
     const response = await fetch(GROQ_API_URL, {
       method: 'POST',
       headers: {
@@ -38,10 +38,10 @@ export const generateAIResponse = async (messages: ChatMessage[]): Promise<strin
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: "llama-3.1-70b-versatile",
         messages: groqMessages,
-        temperature: 0.7,
-        max_tokens: 1024
+        temperature: 0.5, // Lower temperature for more factual summaries
+        max_tokens: 512
       })
     });
 
@@ -52,11 +52,11 @@ export const generateAIResponse = async (messages: ChatMessage[]): Promise<strin
     }
     
     if (data.error) {
-      console.log("AI Service: Groq API Error Data:", JSON.stringify(data));
+      console.error("AI Service: Groq API Error:", data.error);
       throw new Error(data.error.message || "Groq API Error");
     }
   } catch (error: any) {
-    console.log("AI Service: Error in generateAIResponse:", error.message);
+    console.error("AI Service: Error in generateAIResponse:", error.message);
     throw error;
   }
 
