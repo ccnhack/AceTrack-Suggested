@@ -232,6 +232,14 @@ export const AdminGrievancesPanel = ({
     const isInactive = selectedTicket?.status === 'Resolved' || selectedTicket?.status === 'Closed';
     
     if (isInactive && activeStates.includes(status)) {
+      if (selectedTicket?.updatedAt) {
+        const updatedTime = new Date(selectedTicket.updatedAt).getTime();
+        const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+        if (Date.now() - updatedTime > threeDaysMs) {
+          Alert.alert("Reopening Denied", "Tickets cannot be reopened after 3 days of being closed or resolved. Please request the user to create a new ticket.");
+          return;
+        }
+      }
       setPendingReopenStatus(status);
       setShowReopenModal(true);
       return;
@@ -716,7 +724,7 @@ export const AdminGrievancesPanel = ({
                     </View>
 
 
-                    {selectedTicket.closureSummary && (
+                    {(selectedTicket.status === 'Resolved' || selectedTicket.status === 'Closed') && selectedTicket.closureSummary && (
                       <View style={styles.resolutionCard}>
                         <View style={styles.resHeader}>
                           <Ionicons name="shield-checkmark" size={16} color="#059669" />
