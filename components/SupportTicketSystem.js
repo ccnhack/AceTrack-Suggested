@@ -9,6 +9,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { generateAIResponse } from '../services/aiService';
 import notify from '../utils/notify';
 import config from '../config';
+import { shadows } from '../theme/designSystem';
 
 const TICKET_TYPES = [
   'Technical Issue', 'Bug', 'Refund', 'Enhancement Request',
