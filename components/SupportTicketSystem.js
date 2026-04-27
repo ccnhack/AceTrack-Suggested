@@ -59,6 +59,8 @@ export const SupportTicketSystem = ({
   const scrollViewRef = useRef(null);
   const textInputRef = useRef(null);
   const messageYOffsets = useRef({}); // 📍 Track message coordinates (v2.6.27)
+  const swipeableRefs = useRef({});   // 🛡️ [SYNC v2.6.293] Fix ReferenceError on mobile chat
+
 
   // 🛡️ [Tick System] Mark as 'Seen' when ticket is opened (v2.6.28)
   useEffect(() => {
@@ -768,7 +770,7 @@ export const SupportTicketSystem = ({
             contentContainerStyle={styles.chatContent}
             onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
           >
-            {selectedTicket.closureSummary && (
+            {(selectedTicket.status === 'Resolved' || selectedTicket.status === 'Closed') && selectedTicket.closureSummary && (
               <View style={styles.resolutionCard}>
                 <View style={styles.resHeader}>
                   <Ionicons name="shield-checkmark" size={16} color="#059669" />
