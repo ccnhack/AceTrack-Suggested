@@ -129,14 +129,17 @@ export const SupportProvider = ({ children }) => {
   /** 🛡️ [NEW v2.6.132] Claim a ticket from the unassigned pool */
   const onClaimTicket = useCallback(async (ticketId) => {
     try {
+      const token = await storage.getItem('userToken');
+      const headers = { 
+        'Content-Type': 'application/json', 
+        'x-ace-api-key': config.PUBLIC_APP_ID,
+        'x-user-id': currentUserRef.current?.id || 'admin'
+      };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(`${config.API_BASE_URL}${config.getEndpoint('CLAIM_TICKET')}`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json', 
-          'Authorization': `Bearer ${await storage.getItem('userToken')}`, // authenticateToken usage
-          'x-ace-api-key': config.PUBLIC_APP_ID,
-          'x-user-id': currentUserRef.current?.id || 'admin'
-        },
+        headers,
         credentials: 'include',
         body: JSON.stringify({ ticketId })
       });
@@ -161,14 +164,17 @@ export const SupportProvider = ({ children }) => {
   /** 🛡️ [NEW v2.6.162] Reassign a specific ticket to another agent */
   const onReassignTicket = useCallback(async (ticketId, targetAgentId) => {
     try {
+      const token = await storage.getItem('userToken');
+      const headers = { 
+        'Content-Type': 'application/json', 
+        'x-ace-api-key': config.PUBLIC_APP_ID,
+        'x-user-id': currentUserRef.current?.id || 'admin'
+      };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(`${config.API_BASE_URL}${config.getEndpoint('REASSIGN_TICKET')}`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json', 
-          'Authorization': `Bearer ${await storage.getItem('userToken')}`, 
-          'x-ace-api-key': config.PUBLIC_APP_ID,
-          'x-user-id': currentUserRef.current?.id || 'admin'
-        },
+        headers,
         credentials: 'include',
         body: JSON.stringify({ ticketId, targetAgentId })
       });
