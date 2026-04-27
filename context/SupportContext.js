@@ -139,9 +139,16 @@ export const SupportProvider = ({ children }) => {
         },
         body: JSON.stringify({ ticketId })
       });
+      const data = await res.json();
       if (res.ok) {
         logSupportActivity('TICKET_CLAIMED', ticketId, `Claimed ticket from pool`);
-        // The server updated the master state; we rely on the next ENTITY_UPDATED to refresh.
+        
+        // 🛡️ [REAL-TIME FIX] Update local state immediately
+        if (data && data.ticket) {
+           setSupportTickets(prev => prev.map(t => t.id === ticketId ? data.ticket : t));
+        }
+        
+        // The server updated the master state; we rely on the next ENTITY_UPDATED to refresh globally.
         return { success: true };
       }
       return { success: false, error: "Failed to claim ticket" };
