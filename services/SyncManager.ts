@@ -278,12 +278,16 @@ class SyncManager {
              const label = this.userId || user?.name || 'Guest';
              const deviceId = this.hardwareId || await storage.getItem('acetrack_device_id') || 'unknown';
              const allLogs = logger.getLogs();
+             const headers = {
+               'Content-Type': 'application/json',
+               'x-ace-api-key': config.ACE_API_KEY
+             };
+             if (this.userToken && Platform.OS !== 'web') headers['Authorization'] = `Bearer ${this.userToken}`;
+
              await fetch(`${config.API_BASE_URL}${config.getEndpoint('DIAGNOSTICS')}`, {
                method: 'POST',
-               headers: {
-                 'Content-Type': 'application/json',
-                 'x-ace-api-key': config.ACE_API_KEY
-               },
+               headers,
+               credentials: 'include',
                body: JSON.stringify({
                  username: label,
                  logs: allLogs,
@@ -305,12 +309,16 @@ class SyncManager {
 
   private async reportEmergencyStatus(userId: string, error: string) {
     try {
+      const headers = {
+        'Content-Type': 'application/json',
+        'x-ace-api-key': config.ACE_API_KEY
+      };
+      if (this.userToken && Platform.OS !== 'web') headers['Authorization'] = `Bearer ${this.userToken}`;
+
       await fetch(`${config.API_BASE_URL}${config.getEndpoint('DIAGNOSTICS')}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-ace-api-key': config.ACE_API_KEY
-        },
+        headers,
+        credentials: 'include',
         body: JSON.stringify({
           username: userId,
           logs: [{ 
@@ -613,11 +621,15 @@ class SyncManager {
 
       try {
         const cloudUrl = config.API_BASE_URL;
+        const headers = { 
+          'x-ace-api-key': config.ACE_API_KEY,
+          'x-user-id': this.userId || 'guest'
+        };
+        if (this.userToken && Platform.OS !== 'web') headers['Authorization'] = `Bearer ${this.userToken}`;
+
         const res = await fetch(`${cloudUrl}${config.getEndpoint('DATA_SYNC')}`, {
-          headers: { 
-            'x-ace-api-key': config.ACE_API_KEY,
-            'x-user-id': this.userId || 'guest'
-          },
+          headers,
+          credentials: 'include',
           signal: controller.signal
         });
         clearTimeout(timeoutId);
@@ -771,20 +783,23 @@ class SyncManager {
       }
 
       console.log(`[SyncManager] [${new Date().toISOString()}] Pushing to API: ${Object.keys(updates).join(', ')} [v:${this.syncVersion}]`);
+      const headers = {
+        'Content-Type': 'application/json',
+        'x-ace-api-key': config.ACE_API_KEY,
+        'x-user-id': this.userId || 'guest'
+      };
+      if (this.userToken && Platform.OS !== 'web') headers['Authorization'] = `Bearer ${this.userToken}`;
+
       const response = await fetch(`${cloudUrl}${config.getEndpoint('DATA_SAVE')}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-ace-api-key': config.ACE_API_KEY,
-          'x-user-id': this.userId || 'guest',
-          ...(Platform.OS !== 'web' && this.userToken ? { 'Authorization': `Bearer ${this.userToken}` } : {})
-        },
+        headers,
         body: JSON.stringify({
           ...updates,
           version: this.syncVersion,
           isInternal,
           atomicKeys: ['matchmaking', ...(updates.atomicKeys || [])]
         }),
+        credentials: 'include',
         signal: controller.signal
       });
 

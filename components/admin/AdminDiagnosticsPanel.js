@@ -135,8 +135,12 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
     
     try {
       const token = await storage.getItem('userToken');
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(`${activeApiUrl}/api/diagnostics`, { 
-        headers: { 'Authorization': `Bearer ${token}` } 
+        headers,
+        credentials: 'include'
       });
       if (res.ok) {
         const data = await res.json();
@@ -186,8 +190,12 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
     try {
       // Add cache-buster and ensure strict User ID passing
       const token = await storage.getItem('userToken');
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(`${activeApiUrl}/api/diagnostics?userId=${p.id}&_t=${Date.now()}`, { 
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers,
+        credentials: 'include'
       });
       if (res.ok) {
         const data = await res.json();
@@ -221,11 +229,14 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
       // The socket ping/pong is unreliable when admin is on mobile and support is on web
       if (p.role === 'support') {
         try {
+          const headers = { 
+            'x-ace-api-key': config.PUBLIC_APP_ID
+          };
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+
           const sessionRes = await fetch(`${activeApiUrl}/api/support/session-status/${p.id}`, {
-            headers: { 
-              'x-ace-api-key': config.PUBLIC_APP_ID,
-              'Authorization': `Bearer ${token}`
-            }
+            headers,
+            credentials: 'include'
           });
           if (sessionRes.ok) {
             const sessionData = await sessionRes.json();
@@ -290,8 +301,12 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
       try {
         const safeId = selectedDiagUser.id.toLowerCase();
         const token = await storage.getItem('userToken');
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
         const res = await fetch(`${activeApiUrl}/api/diagnostics?userId=${selectedDiagUser.id}&_t=${Date.now()}`, { 
-          headers: { 'Authorization': `Bearer ${token}` } 
+          headers,
+          credentials: 'include'
         });
         
         if (res.ok) {
@@ -327,8 +342,12 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
     setIsDownloading(true);
     try {
       const token = await storage.getItem('userToken');
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(`${activeApiUrl}/api/diagnostics/${file}`, { 
-        headers: { 'Authorization': `Bearer ${token}` } 
+        headers,
+        credentials: 'include'
       });
       if (res.ok) {
         const text = await res.text();

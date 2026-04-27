@@ -113,12 +113,16 @@ export const SyncProvider = ({ children }) => {
         console.log('[SyncContext] loadData: Starting fetch...');
         
         const cloudUrl = config.API_BASE_URL;
+        const token = await syncManager.getSystemFlag('userToken');
+        const headers = { 
+          'x-ace-api-key': config.PUBLIC_APP_ID,
+          'x-user-id': syncManager.getUserId() || 'guest'
+        };
+        if (token && Platform.OS !== 'web') headers['Authorization'] = `Bearer ${token}`;
+
         const response = await fetch(`${cloudUrl}${config.getEndpoint('DATA_SYNC')}`, {
-          headers: { 
-            'x-ace-api-key': config.PUBLIC_APP_ID,
-            'x-user-id': syncManager.getUserId() || 'guest',
-            'Authorization': (await syncManager.getSystemFlag('userToken')) ? `Bearer ${await syncManager.getSystemFlag('userToken')}` : ''
-          },
+          headers,
+          credentials: 'include',
           signal: controller.signal
         });
 
@@ -191,12 +195,16 @@ export const SyncProvider = ({ children }) => {
       }
       lastUpdateCheckRef.current = now;
 
+      const token = await syncManager.getSystemFlag('userToken');
+      const headers = { 
+        'x-ace-api-key': config.PUBLIC_APP_ID,
+        'x-user-id': syncManager.getUserId() || 'guest'
+      };
+      if (token && Platform.OS !== 'web') headers['Authorization'] = `Bearer ${token}`;
+
       const response = await fetch(`${config.API_BASE_URL}${config.getEndpoint('STATUS')}`, {
-        headers: { 
-          'x-ace-api-key': config.PUBLIC_APP_ID,
-          'x-user-id': syncManager.getUserId() || 'guest',
-          'Authorization': (await syncManager.getSystemFlag('userToken')) ? `Bearer ${await syncManager.getSystemFlag('userToken')}` : ''
-        }
+        headers,
+        credentials: 'include'
       });
 
       if (response.status === 429) {
