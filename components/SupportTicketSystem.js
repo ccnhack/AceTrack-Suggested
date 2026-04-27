@@ -724,9 +724,9 @@ export const SupportTicketSystem = ({
                     ) : (
                       <>
                         <Text style={styles.ticketTitleDetail} numberOfLines={1}>{selectedTicket.title}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 }}>
-                            <Text style={styles.typeTag}>{selectedTicket.type}</Text>
-                            <Text style={[styles.typeTag, { backgroundColor: '#F1F5F9', color: '#64748B' }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2, flexWrap: 'wrap', flexShrink: 1 }}>
+                            <Text style={styles.typeTag} numberOfLines={1}>{selectedTicket.type}</Text>
+                            <Text style={[styles.typeTag, { backgroundColor: '#F1F5F9', color: '#64748B', flexShrink: 1 }]} numberOfLines={1}>
                                 {selectedTicket.assignedTo ? `Assigned to ${selectedTicket.assignedTo === userId ? 'You' : 'Agent'}` : 'Unassigned'}
                             </Text>
                         </View>
