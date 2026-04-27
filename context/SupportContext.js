@@ -137,6 +137,7 @@ export const SupportProvider = ({ children }) => {
           'x-ace-api-key': config.PUBLIC_APP_ID,
           'x-user-id': currentUserRef.current?.id || 'admin'
         },
+        credentials: 'include',
         body: JSON.stringify({ ticketId })
       });
       const data = await res.json();
@@ -168,11 +169,15 @@ export const SupportProvider = ({ children }) => {
           'x-ace-api-key': config.PUBLIC_APP_ID,
           'x-user-id': currentUserRef.current?.id || 'admin'
         },
+        credentials: 'include',
         body: JSON.stringify({ ticketId, targetAgentId })
       });
       const data = await res.json();
       if (res.ok) {
         logSupportActivity('TICKET_ASSIGNED', ticketId, `Assigned ticket to agent ${targetAgentId}`);
+        if (data && data.ticket) {
+           setSupportTickets(prev => prev.map(t => t.id === ticketId ? data.ticket : t));
+        }
         return { success: true, message: data.message };
       }
       return { success: false, error: data.error || "Failed to reassign ticket" };
