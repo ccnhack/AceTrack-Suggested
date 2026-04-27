@@ -88,7 +88,7 @@ class TicketService {
   /**
    * Updates ticket status and logs administrative events.
    */
-  static updateStatus(ticketId, newStatus, summary, prevTickets) {
+  static updateStatus(ticketId, newStatus, summary, prevTickets, justification) {
     logger.logAction('TICKET_STATUS_UPDATE', { ticketId, status: newStatus });
     
     const updated = (prevTickets || []).map(t => {
@@ -108,25 +108,35 @@ class TicketService {
           patch.closedAt = new Date().toISOString();
         }
 
+        const messages = [...(t.messages || [])];
+
+        // 🛡️ [INTERNAL JUSTIFICATION] (v2.6.290)
+        if (justification) {
+          messages.push({
+            id: `justification-${Date.now()}`,
+            senderId: 'system',
+            text: `REOPEN JUSTIFICATION: ${justification}`,
+            timestamp: new Date().toISOString(),
+            type: 'internal' // Private note
+          });
+        }
+
         // 📅 System Event Message
         const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const eventMsg = {
           id: `system-${Date.now()}`,
           senderId: 'system',
-          type: 'event',
-          text: `---------${newStatus} was ${oldStatus}-------\n(${time})`,
-          timestamp: new Date().toISOString()
+          text: `-------- ${newStatus.toUpperCase()} WAS ${oldStatus.toUpperCase()} --------\n(${time})`,
+          timestamp: new Date().toISOString(),
+          type: 'event'
         };
-
-        return { 
-          ...t, 
-          ...patch,
-          messages: [...(t.messages || []), eventMsg]
-        };
+        messages.push(eventMsg);
+        
+        patch.messages = messages;
+        return { ...t, ...patch };
       }
       return t;
     });
-
     return { success: true, tickets: updated };
   }
 

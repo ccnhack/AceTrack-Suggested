@@ -264,9 +264,10 @@ export const AdminGrievancesPanel = ({
       alert("Please provide a justification for reopening this ticket.");
       return;
     }
-    const statusRes = await onUpdateStatus(selectedTicket.id, pendingReopenStatus);
+    // 🛡️ [FIX v2.6.290] Atomic Status + Justification Update
+    const statusRes = onUpdateStatus(selectedTicket.id, pendingReopenStatus, null, reopenJustification.trim());
+    
     if (statusRes.success) {
-      await onReply(selectedTicket.id, `REOPEN JUSTIFICATION: ${reopenJustification.trim()}`);
       setShowReopenModal(false);
       setReopenJustification('');
       setPendingReopenStatus(null);
@@ -466,14 +467,25 @@ export const AdminGrievancesPanel = ({
     const isMe = String(senderId) === String(myId) || (senderId === 'admin' && currentUser?.role === 'admin');
     const senderName = isMe ? (currentUser?.name || 'You') : getUserName(senderId);
 
-    if (msg.type === 'event' || senderId === 'system') {
+    if (msg.type === 'event' || senderId === 'system' || msg.type === 'internal') {
+      const isInternal = msg.type === 'internal';
       return (
         <View 
           key={msg.id || msg.timestamp || index} 
-          style={[styles.eventCard, (tempHighlightedId === (msg.id || msg.timestamp)) && styles.highlightedMessage]}
+          style={[
+            styles.eventCard, 
+            isInternal && styles.internalCard,
+            (tempHighlightedId === (msg.id || msg.timestamp)) && styles.highlightedMessage
+          ]}
           onLayout={(e) => { messageYOffsets.current[msg.id || msg.timestamp] = e.nativeEvent.layout.y; }}
         >
-          <Text style={styles.eventText}>{text}</Text>
+          {isInternal && (
+            <View style={styles.internalHeader}>
+              <Ionicons name="lock-closed" size={12} color="#475569" />
+              <Text style={styles.internalBadge}>INTERNAL NOTE</Text>
+            </View>
+          )}
+          <Text style={[styles.eventText, isInternal && styles.internalText]}>{text}</Text>
         </View>
       );
     }
@@ -1159,6 +1171,35 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     textAlign: 'center',
+  },
+  internalCard: {
+    backgroundColor: '#F1F5F9',
+    marginHorizontal: 20,
+    padding: 12,
+    borderRadius: 12,
+    alignItems: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+  },
+  internalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 6,
+  },
+  internalBadge: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#475569',
+    letterSpacing: 0.5,
+  },
+  internalText: {
+    fontSize: 12,
+    color: '#334155',
+    textTransform: 'none',
+    textAlign: 'left',
+    fontWeight: '600',
   },
   dateHeader: {
     alignItems: 'center',

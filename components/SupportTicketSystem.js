@@ -254,6 +254,9 @@ export const SupportTicketSystem = ({
     const timestamp = msg?.timestamp || new Date().toISOString();
     const senderId = msg?.senderId || (text?.startsWith('ISSUE_DESCRIPTION:') ? (selectedTicket?.userId || 'user') : userId);
     const isMe = String(senderId) === String(userId);
+
+    // 🛡️ [INTERNAL FILTER] (v2.6.290): Skip rendering private admin notes
+    if (msg.type === 'internal') return null;
     
     // 🛡️ Format internal system/event messages for the user
     if (msg.type === 'event' || senderId === 'system') {

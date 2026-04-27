@@ -87,8 +87,8 @@ export const SupportProvider = ({ children }) => {
     return result;
   }, [supportTickets, userRole, syncAndSaveData]);
 
-  const onUpdateTicketStatus = useCallback((id, status, summary) => {
-    const result = TicketService.updateStatus(id, status, summary, supportTickets);
+  const onUpdateTicketStatus = useCallback((id, status, summary, justification) => {
+    const result = TicketService.updateStatus(id, status, summary, supportTickets, justification);
     if (result.success) {
       setSupportTickets(result.tickets);
       // 🛡️ [FIX v2.6.121] Atomic push to prevent status changes from being rolled back
