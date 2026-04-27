@@ -25,6 +25,15 @@ class TicketService {
     const updated = ticketsArray.map(t => t && t.id === enrichmentTicket.id ? enrichmentTicket : t);
     
     if (!ticketsArray.find(t => t && t.id === enrichmentTicket.id)) {
+      // 🛡️ [AUTO-RESPONSE] (v2.6.295): Inject welcome message on new ticket creation
+      const autoResponse = {
+        id: `auto-${Date.now()}`,
+        senderId: 'admin',
+        text: 'Thanks for reaching out to AceTrack Support Team, Our team will look into the issue and provide an update shortly',
+        timestamp: new Date(Date.now() + 1000).toISOString(), // +1s to appear after user's message
+        status: 'delivered'
+      };
+      enrichmentTicket.messages = [...(enrichmentTicket.messages || []), autoResponse];
       updated.unshift(enrichmentTicket);
     }
     

@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.294'; 
+const APP_VERSION = '2.6.295'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -5040,9 +5040,54 @@ router.post('/support/claim-ticket', apiKeyGuard, async (req, res) => {
     tickets[ticketIdx].assignedAt = new Date().toISOString();
     tickets[ticketIdx].assignmentSource = 'manual_pool';
 
-    // Increment agent's pool bonus metrics
+    // 🛡️ [AUTO-INTRO MESSAGE] (v2.6.295): Generate personalized greeting on claim
     const players = [...(state.data.players || [])];
     const agentIdx = players.findIndex(p => p.id === agentId);
+    const agentName = (agentIdx !== -1 && players[agentIdx].name) ? players[agentIdx].name : 'Support Agent';
+    const ticketUserId = tickets[ticketIdx].userId;
+    const userIdx = players.findIndex(p => p.id === ticketUserId);
+    const userName = (userIdx !== -1 && players[userIdx].name) ? players[userIdx].name : 'User';
+
+    // Build AI issue description from ticket title + first user message
+    const ticketTitle = tickets[ticketIdx].title || '';
+    const ticketType = tickets[ticketIdx].type || '';
+    const firstUserMsg = (tickets[ticketIdx].messages || []).find(m => m.senderId !== 'admin' && m.senderId !== 'system');
+    const issueContext = firstUserMsg ? (firstUserMsg.text || '').replace('ISSUE_DESCRIPTION: ', '') : ticketTitle;
+
+    let issueDescription = `${ticketType}: ${ticketTitle}`;
+    try {
+      const groqKey = process.env.GROQ_API_KEY;
+      if (groqKey && issueContext) {
+        const aiRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: "llama-3.1-70b-versatile",
+            messages: [{ role: 'user', content: `Summarize this support issue in one short sentence (max 20 words), no quotes: "${issueContext}"` }],
+            temperature: 0.3, max_tokens: 50
+          })
+        });
+        const aiData = await aiRes.json();
+        const aiText = aiData?.choices?.[0]?.message?.content?.trim();
+        if (aiText) issueDescription = aiText;
+      }
+    } catch (aiErr) {
+      console.warn('[AI] Issue description generation failed:', aiErr.message);
+    }
+
+    // Inject the introduction message into the ticket's messages
+    const introMsg = {
+      id: `intro-${Date.now()}`,
+      senderId: agentId,
+      text: `Hi ${userName}, I am ${agentName} and I will be working on resolving the issue related to ${issueDescription}.`,
+      timestamp: new Date().toISOString(),
+      status: 'delivered'
+    };
+    tickets[ticketIdx].messages = [...(tickets[ticketIdx].messages || []), introMsg];
+    tickets[ticketIdx].status = 'In Progress';
+    tickets[ticketIdx].updatedAt = new Date().toISOString();
+
+    // Increment agent's pool bonus metrics
     if (agentIdx !== -1) {
       if (!players[agentIdx].metrics) players[agentIdx].metrics = { totalHandled: 0, closedTickets: 0, manualPicks: 0, avgRating: 0 };
       players[agentIdx].metrics.manualPicks += 1;
