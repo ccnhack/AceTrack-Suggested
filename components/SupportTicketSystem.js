@@ -245,7 +245,7 @@ export const SupportTicketSystem = ({
     );
   };
 
-  const renderMessage = (msg, index) => {
+  const renderMessage = (msg, index, isHighlighted) => {
     // Resilient data extraction
     let text = msg?.text ?? msg?.message ?? (typeof msg === 'string' ? msg : null);
     if (text === null || text === '') {
@@ -791,7 +791,7 @@ export const SupportTicketSystem = ({
                    onLayout={(e) => { messageYOffsets.current[msg.id || msg.timestamp] = e.nativeEvent.layout.y; }}
                 >
                   {showDateHeader && !chatSearchText && renderDateHeader(msg.timestamp)}
-                  {renderMessage(msg, idx)}
+                  {renderMessage(msg, idx, isHighlighted)}
                 </View>
               );
             })}
