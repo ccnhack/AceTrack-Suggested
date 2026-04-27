@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.297'; 
+const APP_VERSION = '2.6.298'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -1188,6 +1188,7 @@ const apiKeyGuard = async (req, res, next) => {
                         path.includes('/health') || 
                         path.includes('/status') || 
                         path.includes('/support/session-status') ||
+                        path.includes('/support/ai-summary') ||
                         path.includes('/slack/interact') ||
                         (req.method === 'POST' && path.includes('/diagnostics'));
   if (isPublicRoute && providedKey === PUBLIC_APP_ID) {
