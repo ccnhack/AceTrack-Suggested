@@ -4921,7 +4921,7 @@ router.post('/support/ai-summary', apiKeyGuard, async (req, res) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: "llama-3.1-70b-versatile",
+        model: "llama-3.3-70b-versatile",
         messages: messages,
         temperature: 0.5,
         max_tokens: 512
