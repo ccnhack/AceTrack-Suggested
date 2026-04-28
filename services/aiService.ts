@@ -27,6 +27,7 @@ export const generateAIResponse = async (messages: ChatMessage[]): Promise<strin
         'Content-Type': 'application/json',
         'x-ace-api-key': config.PUBLIC_APP_ID
       },
+      credentials: 'include',
       body: JSON.stringify({ messages: groqMessages })
     });
 

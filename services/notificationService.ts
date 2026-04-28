@@ -106,6 +106,7 @@ export async function sendTokenToBackend(userId: string, token: string) {
         'Content-Type': 'application/json',
         'x-ace-api-key': config.PUBLIC_APP_ID,
       },
+      credentials: 'include',
       body: JSON.stringify({ userId, pushToken: token }),
     });
 

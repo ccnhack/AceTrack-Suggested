@@ -97,12 +97,17 @@ export const AdminProvider = ({ children }) => {
       const logs = logger.getLogs();
       const currentUser = await syncManager.getSystemFlag('currentUser');
       const hardwareId = await syncManager.getSystemFlag('acetrack_device_id');
+      const token = await storage.getItem('userToken');
+      const headers = {
+        'Content-Type': 'application/json',
+        'x-ace-api-key': config.PUBLIC_APP_ID,
+      };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const response = await fetch(`${config.API_BASE_URL}${config.getEndpoint('DIAGNOSTICS')}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-ace-api-key': config.PUBLIC_APP_ID,
-        },
+        headers,
+        credentials: 'include',
         body: JSON.stringify({
           username: currentUser?.id || 'unknown',
           logs,

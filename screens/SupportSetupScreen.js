@@ -34,6 +34,7 @@ const SupportSetupScreen = ({ route, navigation }) => {
       const res = await fetch(`${config.API_BASE_URL}/api/support/invite/click`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ token })
       });
       
@@ -68,6 +69,7 @@ const SupportSetupScreen = ({ route, navigation }) => {
       const res = await fetch(`${config.API_BASE_URL}/api/support/invite/setup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ token, password })
       });
       

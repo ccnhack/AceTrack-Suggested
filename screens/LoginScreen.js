@@ -87,6 +87,7 @@ const LoginScreen = ({ navigation }) => {
             'Content-Type': 'application/json',
             'x-ace-api-key': config.PUBLIC_APP_ID,
           },
+          credentials: 'include',
           body: JSON.stringify({ identifier: username, password }),
         });
         const adminData = await adminRes.json();
@@ -107,6 +108,7 @@ const LoginScreen = ({ navigation }) => {
             'Content-Type': 'application/json',
             'x-ace-api-key': config.PUBLIC_APP_ID,
           },
+          credentials: 'include',
           body: JSON.stringify({ identifier: username, password }),
         });
         const supportData = await supportRes.json();
@@ -233,6 +235,7 @@ const LoginScreen = ({ navigation }) => {
             'Content-Type': 'application/json',
             'x-ace-api-key': config.PUBLIC_APP_ID
           },
+          credentials: 'include',
           body: JSON.stringify({ identifier: nUser })
         });
         
@@ -290,11 +293,13 @@ const LoginScreen = ({ navigation }) => {
       await fetch(`${config.API_BASE_URL}${config.getEndpoint('OTP_SEND')}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID },
+        credentials: 'include',
         body: JSON.stringify({ target: enteredPhone, type: 'phone' })
       });
       await fetch(`${config.API_BASE_URL}${config.getEndpoint('OTP_SEND')}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID },
+        credentials: 'include',
         body: JSON.stringify({ target: forgotFoundUser.email, type: 'email' })
       });
       
@@ -316,6 +321,7 @@ const LoginScreen = ({ navigation }) => {
       const res = await fetch(`${config.API_BASE_URL}${config.getEndpoint('OTP_VERIFY')}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID },
+        credentials: 'include',
         body: JSON.stringify({ code: forgotOtp, target: forgotPhone, type: 'phone' })
       });
       const data = await res.json();
@@ -578,6 +584,7 @@ const LoginScreen = ({ navigation }) => {
                       const resp = await fetch(`${config.API_BASE_URL}${config.getEndpoint('ADMIN_VERIFY')}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID },
+                        credentials: 'include',
                         body: JSON.stringify({ mfaToken, pin: mfaPin }),
                       });
                       const result = await resp.json();
@@ -603,6 +610,7 @@ const LoginScreen = ({ navigation }) => {
                       const resp = await fetch(`${config.API_BASE_URL}${config.getEndpoint('ADMIN_VERIFY')}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID },
+                        credentials: 'include',
                         body: JSON.stringify({ mfaToken, pin: mfaPin }),
                       });
                       const result = await resp.json();

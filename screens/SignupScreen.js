@@ -144,6 +144,7 @@ const SignupScreen = ({ navigation }) => {
           'Content-Type': 'application/json',
           'x-ace-api-key': config.PUBLIC_APP_ID
         },
+        credentials: 'include',
         body: JSON.stringify({ target, type })
       });
       
@@ -178,6 +179,7 @@ const SignupScreen = ({ navigation }) => {
           'Content-Type': 'application/json',
           'x-ace-api-key': config.PUBLIC_APP_ID
         },
+        credentials: 'include',
         body: JSON.stringify({ 
           target: verificationModal.target, 
           type: verificationModal.type, 
