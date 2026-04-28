@@ -351,8 +351,8 @@ export const AdminGrievancesPanel = ({
     // 🛡️ [STRICT SCOPING] (v2.6.271) Enforce assignment scoping for ALL non-admins.
     // This prevents ticket leakage if a support user's session role property is missing or overridden.
     if (currentUser?.id !== 'admin') {
-      const isMine = (t.assignedTo && t.assignedTo === currentUser?.id) || 
-                     (currentUser?.username && t.assignedTo === currentUser?.username);
+      const isMine = (t.assignedTo && String(t.assignedTo) === String(currentUser?.id)) || 
+                     (currentUser?.username && String(t.assignedTo) === String(currentUser?.username));
       const isUnassigned = (!t.assignedTo || t.assignedTo === 'Unassigned' || t.assignedTo === '');
       const isOpen = (t.status === 'Open' || !t.status);
       return isMine || (isUnassigned && isOpen);
@@ -984,10 +984,11 @@ export const AdminGrievancesPanel = ({
                       })
                       .map(p => {
                          // 📊 [LOAD TRACKING] Calculate active ticket count (v2.6.249)
-                         const activeTickets = (tickets || []).filter(t => 
-                           (t.assignedTo === p.id || t.assignedTo === p.username) && 
-                           !['Resolved', 'Closed'].includes(t.status)
-                         ).length;
+                         const activeTickets = (tickets || []).filter(t => {
+                           const assigned = String(t.assignedTo || '');
+                           return (assigned === String(p.id) || assigned === String(p.username)) && 
+                           !['Resolved', 'Closed'].includes(t.status);
+                         }).length;
                          return { ...p, activeTickets };
                       })
                       .filter(p => {

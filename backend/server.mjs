@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.305'; 
+const APP_VERSION = '2.6.306'; 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -4536,7 +4536,7 @@ router.get('/support/analytics', apiKeyGuard, authGuard, async (req, res) => {
     // 📊 Compute detailed per-agent metrics from actual ticket data
     const agentMetrics = agents.map(agent => {
       const agentId = agent.id;
-      const agentTickets = tickets.filter(t => t.assignedTo === agentId);
+      const agentTickets = tickets.filter(t => String(t.assignedTo) === String(agentId) || String(t.assignedTo) === String(agent.username));
 
       // Active caseload (open tickets)
       const activeTickets = agentTickets.filter(t => 
