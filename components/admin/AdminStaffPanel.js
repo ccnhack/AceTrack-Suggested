@@ -57,12 +57,12 @@ const AdminStaffPanel = () => {
   const fetchInvites = async () => {
     try {
       const token = await storage.getItem('userToken');
+      const headers = { 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(`${config.API_BASE_URL}/api/support/invites`, {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'x-ace-api-key': config.ACE_API_KEY,
-          'x-user-id': 'admin' 
-        }
+        headers,
+        credentials: 'include'
       });
       if (res.ok) {
         const data = await res.json();
@@ -81,14 +81,13 @@ const AdminStaffPanel = () => {
     setIsGenerating(true);
     try {
       const token = await storage.getItem('userToken');
+      const headers = { 'Content-Type': 'application/json', 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(`${config.API_BASE_URL}/api/support/invite`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json', 
-          'Authorization': `Bearer ${token}`,
-          'x-ace-api-key': config.ACE_API_KEY,
-          'x-user-id': 'admin' 
-        },
+        headers,
+        credentials: 'include',
         body: JSON.stringify({ email, firstName: firstName.trim(), lastName: lastName.trim() })
       });
       const data = await res.json();
@@ -118,14 +117,14 @@ const AdminStaffPanel = () => {
   const resendEmail = async (token, email) => {
     setResendingToken(token);
     try {
-      const token = await storage.getItem('userToken');
+      const authToken = await storage.getItem('userToken');
+      const headers = { 'Content-Type': 'application/json', 'x-user-id': 'admin' };
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
       const res = await fetch(`${config.API_BASE_URL}/api/support/invite/resend`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json', 
-          'Authorization': `Bearer ${token}`,
-          'x-user-id': 'admin' 
-        },
+        headers,
+        credentials: 'include',
         body: JSON.stringify({ token })
       });
       const data = await res.json();
@@ -153,14 +152,14 @@ const AdminStaffPanel = () => {
           onPress: async () => {
             setIsRetiring(token);
             try {
-              const token = await storage.getItem('userToken');
+              const authToken = await storage.getItem('userToken');
+              const headers = { 'Content-Type': 'application/json', 'x-user-id': 'admin' };
+              if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
               const res = await fetch(`${config.API_BASE_URL}/api/support/invite/expire`, {
                 method: 'POST',
-                headers: { 
-                  'Content-Type': 'application/json', 
-                  'Authorization': `Bearer ${token}`,
-                  'x-user-id': 'admin' 
-                },
+                headers,
+                credentials: 'include',
                 body: JSON.stringify({ token })
               });
               if (res.ok) {

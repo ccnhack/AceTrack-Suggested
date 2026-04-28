@@ -120,11 +120,19 @@ export const TournamentProvider = ({ children }) => {
     syncAndSaveData({ tournaments: result.tournaments }, true);
   }, [tournaments, syncAndSaveData]);
 
-  const onApproveCoach = useCallback((tid) => {
-    const result = TournamentService.approveCoach(tid, tournaments);
-    setTournaments(result.tournaments);
-    syncAndSaveData({ tournaments: result.tournaments });
-  }, [tournaments, syncAndSaveData]);
+  const onApproveCoach = useCallback((coachId, status = 'approved', reason = '') => {
+    const result = TournamentService.approveCoach(coachId, status, playersRef.current);
+    if (result.success) {
+      // 🛡️ [FIX v2.6.303]: approveCoach modifies players, not tournaments
+      const updatedPlayers = reason 
+        ? result.players.map(p => String(p.id).toLowerCase() === String(coachId).toLowerCase() 
+            ? { ...p, coachRejectReason: reason } 
+            : p)
+        : result.players;
+      setPlayers(updatedPlayers);
+      syncAndSaveData({ players: updatedPlayers });
+    }
+  }, [setPlayers, syncAndSaveData]);
 
   const onSaveCoachComment = useCallback((tid, comment) => {
     if (!currentUserRef.current) return;

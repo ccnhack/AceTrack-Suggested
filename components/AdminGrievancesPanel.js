@@ -1562,7 +1562,6 @@ const styles = StyleSheet.create({
   chatContainer: {
     flex: 1,
     backgroundColor: '#F8FAFC',
-    overflow: 'hidden',
   },
   chatScroll: {
     flex: 1,
@@ -1572,9 +1571,10 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   detailHeaderScrollWrapper: {
-    maxHeight: 180,
+    maxHeight: Platform.OS === 'web' ? 160 : 180,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
+    overflow: Platform.OS === 'web' ? 'auto' : undefined,
   },
   detailHeaderList: {
     flexGrow: 0,

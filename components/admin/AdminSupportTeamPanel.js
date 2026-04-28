@@ -122,11 +122,12 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
        }
 
        const token = await storage.getItem('userToken');
+       const headers = { 'x-user-id': 'admin' };
+       if (token) headers['Authorization'] = `Bearer ${token}`;
+
        const res = await fetch(`${config.API_BASE_URL}/api/support/analytics${queryParams}`, {
-         headers: { 
-           'Authorization': `Bearer ${token}`,
-           'x-user-id': 'admin' 
-         }
+         headers,
+         credentials: 'include'
        });
        if (res.ok) {
          const data = await res.json();
@@ -148,11 +149,12 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
     setIsLoadingAttendance(true);
     try {
       const token = await storage.getItem('userToken');
+      const headers = { 'x-user-id': 'admin' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(`${config.API_BASE_URL}/api/support/attendance`, {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'x-user-id': 'admin' 
-        }
+        headers,
+        credentials: 'include'
       });
       if (res.ok) {
         const data = await res.json();
@@ -205,13 +207,13 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
     setIsManaging(userId);
     try {
       const token = await storage.getItem('userToken');
+      const headers = { 'Content-Type': 'application/json', 'x-user-id': 'admin' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(`${config.API_BASE_URL}/api/support/manage-user`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json', 
-          'Authorization': `Bearer ${token}`,
-          'x-user-id': 'admin' 
-        },
+        headers,
+        credentials: 'include',
         body: JSON.stringify({ targetUserId: userId, status, level, comment })
       });
       if (res.ok) {
@@ -240,13 +242,13 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
           setIsManaging(userId);
           try {
             const token = await storage.getItem('userToken');
+            const headers = { 'Content-Type': 'application/json', 'x-user-id': 'admin' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
             const res = await fetch(`${config.API_BASE_URL}/api/support/force-reset`, {
               method: 'POST',
-              headers: { 
-                'Content-Type': 'application/json', 
-                'Authorization': `Bearer ${token}`, 
-                'x-user-id': 'admin' 
-              },
+              headers,
+              credentials: 'include',
               body: JSON.stringify({ targetUserId: userId })
             });
             if (res.ok) {
@@ -278,13 +280,13 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
         setIsManaging(fromId);
         try {
           const token = await storage.getItem('userToken');
+          const headers = { 'Content-Type': 'application/json', 'x-user-id': 'admin' };
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+
           const res = await fetch(`${config.API_BASE_URL}/api/support/transfer-tickets`, {
             method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json', 
-              'Authorization': `Bearer ${token}`, 
-              'x-user-id': 'admin' 
-            },
+            headers,
+            credentials: 'include',
             body: JSON.stringify({ fromAgentId: fromId, toAgentId: a.id })
           });
           const data = await res.json();
@@ -312,11 +314,12 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const fetchServerRoster = useCallback(async () => {
     try {
       const token = await storage.getItem('userToken');
+      const headers = { 'x-user-id': 'admin' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(`${config.API_BASE_URL}/api/data`, {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'x-user-id': 'admin'
-        }
+        headers,
+        credentials: 'include'
       });
       if (res.ok) {
         const data = await res.json();
