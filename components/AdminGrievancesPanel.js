@@ -985,6 +985,7 @@ export const AdminGrievancesPanel = ({
                       .map(p => {
                          // 📊 [LOAD TRACKING] Calculate active ticket count (v2.6.249)
                          const activeTickets = (tickets || []).filter(t => {
+                           if (!t) return false;
                            const assigned = String(t.assignedTo || '');
                            return (assigned === String(p.id) || assigned === String(p.username)) && 
                            !['Resolved', 'Closed'].includes(t.status);
