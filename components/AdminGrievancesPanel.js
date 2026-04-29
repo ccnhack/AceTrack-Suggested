@@ -64,6 +64,7 @@ export const AdminGrievancesPanel = ({
   const [isBlinkVisible, setIsBlinkVisible] = useState(false);
   const [reopenJustification, setReopenJustification] = useState('');
   const [pendingReopenStatus, setPendingReopenStatus] = useState(null);
+  const [showReopenModal, setShowReopenModal] = useState(false);
   const [isSearchingChat, setIsSearchingChat] = useState(false);
   const [chatSearchText, setChatSearchText] = useState('');
   const [searchMatchIndices, setSearchMatchIndices] = useState([]);
