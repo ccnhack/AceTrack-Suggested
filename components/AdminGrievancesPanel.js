@@ -46,7 +46,7 @@ const formatTicketDateFull = (dateStr) => {
 };
 
 export const AdminGrievancesPanel = ({
-  tickets, players, onReply, onUpdateStatus, onReassignTicket, onTypingStart, onTypingStop, search, onRetryMessage, onMarkSeen, onDetailToggle, autoSelectUser, autoSelectTicketId, onConsumeTicketId, onConsumeAutoSelect, currentUser, setSeenAdminActionIds, ...restProps
+  tickets, players, onReply, onUpdateStatus, onReassignTicket, onTypingStart, onTypingStop, search, onRetryMessage, onMarkSeen, onDetailToggle, autoSelectUser, autoSelectTicketId, onConsumeTicketId, onConsumeAutoSelect, currentUser, setSeenAdminActionIds, highlightActionTimestamp, ...restProps
 }) => {
 
   const [selectedTicket, setSelectedTicket] = useState(null);
@@ -58,9 +58,11 @@ export const AdminGrievancesPanel = ({
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [showStatusConfirm, setShowStatusConfirm] = useState(false);
-  const [showReopenModal, setShowReopenModal] = useState(false);
-  const [reopenJustification, setReopenJustification] = useState('');
   const [pendingStatus, setPendingStatus] = useState(null);
+  const [tempHighlightedId, setTempHighlightedId] = useState(null); // 🔦 Temporary highlight on jump
+  const [blinkHighlightedId, setBlinkHighlightedId] = useState(null); // 🔦 Blinking highlight for Session Activities
+  const [isBlinkVisible, setIsBlinkVisible] = useState(false);
+  const [reopenJustification, setReopenJustification] = useState('');
   const [pendingReopenStatus, setPendingReopenStatus] = useState(null);
   const [isSearchingChat, setIsSearchingChat] = useState(false);
   const [chatSearchText, setChatSearchText] = useState('');
@@ -71,7 +73,6 @@ export const AdminGrievancesPanel = ({
   const textInputRef = useRef(null);
   const messageYOffsets = useRef({}); // 📍 Track message coordinates (v2.6.27)
   const swipeableRefs = useRef({}); // 🛡️ Track swipeable instances for snap-back (v2.6.35)
-  const [tempHighlightedId, setTempHighlightedId] = useState(null); // 🔦 Temporary highlight on jump
   const [showReassignModal, setShowReassignModal] = useState(false); // 🛡️ Searchable Reassign (v2.6.242)
   const [reassignSearch, setReassignSearch] = useState('');
 
@@ -148,10 +149,54 @@ export const AdminGrievancesPanel = ({
   useEffect(() => {
     if (selectedTicket && scrollViewRef.current && typeof scrollViewRef.current.scrollToEnd === 'function') {
       setTimeout(() => {
-        if (!isSearchingChat) scrollViewRef.current?.scrollToEnd({ animated: true });
+        if (!isSearchingChat && !highlightActionTimestamp) scrollViewRef.current?.scrollToEnd({ animated: true });
       }, 100);
     }
   }, [selectedTicket?.messages?.length]);
+
+  // 🔦 Handle Session Activity highlight
+  useEffect(() => {
+    if (selectedTicket && highlightActionTimestamp && messageYOffsets.current) {
+      const actionTime = new Date(highlightActionTimestamp).getTime();
+      let closestMsg = null;
+      let minDiff = Infinity;
+      
+      selectedTicket.messages?.forEach(msg => {
+        const msgTime = new Date(msg.timestamp).getTime();
+        const diff = Math.abs(msgTime - actionTime);
+        // Look within 10 seconds of the action timestamp
+        if (diff < minDiff && diff < 10000) { 
+          minDiff = diff;
+          closestMsg = msg;
+        }
+      });
+
+      if (closestMsg) {
+        const msgId = closestMsg.id || closestMsg.timestamp;
+        
+        setTimeout(() => {
+          const targetY = messageYOffsets.current[msgId];
+          if (targetY !== undefined) {
+            scrollViewRef.current?.scrollTo({ y: Math.max(0, targetY - 50), animated: true });
+            
+            setBlinkHighlightedId(msgId);
+            setIsBlinkVisible(true);
+            
+            let blinkCount = 0;
+            const interval = setInterval(() => {
+              setIsBlinkVisible(prev => !prev);
+              blinkCount++;
+              if (blinkCount >= 5) { // 3 blinks (true->false->true->false->true->false)
+                clearInterval(interval);
+                setBlinkHighlightedId(null);
+                setIsBlinkVisible(false);
+              }
+            }, 400);
+          }
+        }, 500); // Wait for rendering
+      }
+    }
+  }, [selectedTicket?.id, highlightActionTimestamp]);
 
   // 🔍 Conversational Search Logic (v2.6.33)
   useEffect(() => {
@@ -474,13 +519,15 @@ export const AdminGrievancesPanel = ({
 
     if (msg.type === 'event' || senderId === 'system' || msg.type === 'internal') {
       const isInternal = msg.type === 'internal';
+      const isBlinking = blinkHighlightedId === (msg.id || msg.timestamp) && isBlinkVisible;
       return (
         <View 
           key={msg.id || msg.timestamp || index} 
           style={[
             styles.eventCard, 
             isInternal && styles.internalCard,
-            (tempHighlightedId === (msg.id || msg.timestamp)) && styles.highlightedMessage
+            (tempHighlightedId === (msg.id || msg.timestamp)) && styles.highlightedMessage,
+            isBlinking && styles.blinkingHighlight
           ]}
           onLayout={(e) => { messageYOffsets.current[msg.id || msg.timestamp] = e.nativeEvent.layout.y; }}
         >
@@ -527,7 +574,8 @@ export const AdminGrievancesPanel = ({
             <View style={[
               styles.bubble, 
               isMe ? styles.bubbleMe : styles.bubbleOther,
-              (tempHighlightedId === (msg.id || msg.timestamp)) && styles.highlightedMessage
+              (tempHighlightedId === (msg.id || msg.timestamp)) && styles.highlightedMessage,
+              (blinkHighlightedId === (msg.id || msg.timestamp) && isBlinkVisible) && styles.blinkingHighlight
             ]}>
               {renderMessageReply(msg.replyTo)}
               {!isMe && <Text style={[styles.msgSender, { color: '#64748B' }]}>{senderName}</Text>}
@@ -1693,6 +1741,12 @@ const styles = StyleSheet.create({
   },
   highlightedMessage: {
     backgroundColor: '#FEF9C3', // Amber highlight
+    borderRadius: 12,
+  },
+  blinkingHighlight: {
+    backgroundColor: '#DBEAFE', // Blue-100 highlight
+    borderColor: '#3B82F6',
+    borderWidth: 1,
     borderRadius: 12,
   },
   plusBtn: {

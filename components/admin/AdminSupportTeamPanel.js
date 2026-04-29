@@ -1114,7 +1114,9 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                                 if (log.userId !== selectedAgentId) return false;
                                 if (log.category !== 'support_activity') return false;
                                 const logTime = new Date(log.timestamp).getTime();
-                                return logTime >= sess.startTime && logTime <= (sess.isLive ? Date.now() : sess.endTime);
+                                const sessStart = new Date(sess.startTime).getTime();
+                                const sessEnd = sess.isLive ? Date.now() : new Date(sess.endTime).getTime();
+                                return logTime >= sessStart && logTime <= sessEnd;
                               }).length;
                               return (
                                 <Text style={{ fontSize: 11, color: count > 0 ? '#6366F1' : '#94A3B8', marginTop: 2, fontWeight: count > 0 ? '700' : '400' }}>
@@ -1468,7 +1470,17 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                     </Text>
                   </View>
                   {sessionActivities.map((log, idx) => (
-                    <View key={log.id} style={{ marginBottom: 16, padding: 16, backgroundColor: '#FFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', ...shadows.sm }}>
+                    <TouchableOpacity 
+                      key={log.id} 
+                      style={{ marginBottom: 16, padding: 16, backgroundColor: '#FFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', ...shadows.sm }}
+                      activeOpacity={log.entityId ? 0.6 : 1}
+                      onPress={() => {
+                        if (log.entityId && onOpenTicket) {
+                          setSelectedSessionForActivity(null);
+                          setTimeout(() => onOpenTicket(log.entityId, log.timestamp), 150);
+                        }
+                      }}
+                    >
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                           <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#6366F1' }} />
@@ -1481,11 +1493,11 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                       <Text style={{ color: '#475569', fontSize: 14, lineHeight: 20 }}>{log.details}</Text>
                       {log.entityId && (
                         <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                          <Ionicons name="ticket-outline" size={12} color="#94A3B8" />
-                          <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '600' }}>Ticket: {log.entityId}</Text>
+                          <Ionicons name="open-outline" size={12} color="#6366F1" />
+                          <Text style={{ fontSize: 11, color: '#6366F1', fontWeight: '700' }}>Ticket: {log.entityId} — Tap to open</Text>
                         </View>
                       )}
-                    </View>
+                    </TouchableOpacity>
                   ))}
                 </>
               ) : (

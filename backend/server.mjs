@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.307'; // 🚀 FORCE REDEPLOY CACHE BUST v2.6.307 
+const APP_VERSION = '2.6.308'; // 🚀 FORCE REDEPLOY CACHE BUST v2.6.308 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -405,6 +405,7 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
         // Do not spam alerts for local development activities on localhost or private network ranges.
         const isLocal = (ip) => {
           if (!ip) return false;
+          if (process.env.NODE_ENV === 'production') return false; // Never suppress in production
           return ip === '127.0.0.1' || 
                  ip === '::1' || 
                  ip.includes('127.0.0.1') || 
@@ -415,7 +416,7 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
                  ip === '::ffff:127.0.0.1';
         };
         
-        if (isLocal(ip)) {
+        if (isLocal(ip) && process.env.TEST_ALERTS_LOCALLY !== 'true') {
           console.log(`[AUTH] Local critical event detected (${action}) from ${ip}. Alert suppressed.`);
         } else {
           const osint = await getIPReputation(ip);

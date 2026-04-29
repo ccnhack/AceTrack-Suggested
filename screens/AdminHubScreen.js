@@ -51,6 +51,7 @@ const AdminHubScreen = ({ navigation, route }) => {
   const [search, setSearch] = useState('');
   const [autoSelectUser, setAutoSelectUser] = useState(null);
   const [autoSelectTicketId, setAutoSelectTicketId] = useState(null);
+  const [highlightActionTimestamp, setHighlightActionTimestamp] = useState(null);
   const { width: windowWidth } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
   const isMobileWeb = isWeb && windowWidth < 1024;
@@ -264,10 +265,14 @@ const AdminHubScreen = ({ navigation, route }) => {
       case 'support_team':
         return (
           <AdminSupportTeamPanel 
-            onOpenTicket={(ticketId) => {
-              setAutoSelectTicketId(null); // Clear first to guarantee re-trigger
+            onOpenTicket={(ticketId, actionTimestamp) => {
+              setAutoSelectTicketId(null);
+              setHighlightActionTimestamp(null);
               handleTabChange('grievances');
-              setTimeout(() => setAutoSelectTicketId(ticketId), 100);
+              setTimeout(() => {
+                setAutoSelectTicketId(ticketId);
+                if (actionTimestamp) setHighlightActionTimestamp(actionTimestamp);
+              }, 100);
             }} 
           />
         );
@@ -290,7 +295,8 @@ const AdminHubScreen = ({ navigation, route }) => {
             seenAdminActionIds={seenAdminActionIds}
             setSeenAdminActionIds={setSeenAdminActionIds}
             autoSelectTicketId={autoSelectTicketId}
-            onConsumeTicketId={() => setAutoSelectTicketId(null)}
+            highlightActionTimestamp={highlightActionTimestamp}
+            onConsumeTicketId={() => { setAutoSelectTicketId(null); setHighlightActionTimestamp(null); }}
             onConsumeAutoSelect={() => setAutoSelectUser(null)}
           />
 
