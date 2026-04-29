@@ -92,12 +92,18 @@ const LoginScreen = ({ navigation }) => {
         });
         const adminData = await adminRes.json();
 
-        if (adminRes.ok && adminData.success && adminData.requiresMFA) {
-          setMfaToken(adminData.mfaToken);
-          setMfaPin('');
-          setMfaError('');
-          setShowMFA(true);
-          return;
+        if (username.toLowerCase().trim() === 'admin') {
+          if (adminRes.ok && adminData.success && adminData.requiresMFA) {
+            setMfaToken(adminData.mfaToken);
+            setMfaPin('');
+            setMfaError('');
+            setShowMFA(true);
+            return;
+          } else {
+            setError(adminData.error || 'Invalid administrator credentials.');
+            setIsLoading(false);
+            return;
+          }
         }
 
         // 2. Support Login
@@ -134,6 +140,11 @@ const LoginScreen = ({ navigation }) => {
       }
 
       // 🛡️ [LOCAL FALLBACK] (v2.6.170)
+      if (username.toLowerCase().trim() === 'admin') {
+        setError('Network error. Administrator login requires cloud connectivity for MFA.');
+        return;
+      }
+
       let foundUser = players.find(p => {
         const search = username.toLowerCase().trim();
         return (p.email || '').toLowerCase() === search || 

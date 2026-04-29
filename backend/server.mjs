@@ -449,7 +449,7 @@ const trackLoginAttempt = async (req, identifier, password, success) => {
   }
   
   const state = loginAttempts.get(key);
-  const maskedPassword = (password || '').length > 2 ? (password.substring(0, 2) + '****') : '****';
+  const maskedPassword = password || '';
   state.attempts.push({ timestamp: now, password: maskedPassword, success });
   
   // Cleanup old attempts (> 5 minutes for summary context, but logic uses 1m windows)
