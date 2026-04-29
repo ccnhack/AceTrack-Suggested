@@ -141,6 +141,29 @@ const sendSecurityAlert = async (event, data) => {
         }]
       };
 
+      // 🤖 [AI EVENT INSIGHT] (v2.6.309)
+      if (process.env.GROQ_API_KEY) {
+        try {
+          const prompt = `As a cybersecurity expert, provide a concise 1-2 sentence explanation of why this security event was triggered and its potential implications. Event: ${event}, IP: ${data.IP}, URL: ${data.URL}, Method: ${data.Method}, Actor: ${data.Actor}.`;
+          const aiResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${process.env.GROQ_API_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: "llama-3.3-70b-versatile",
+              messages: [{ role: 'user', content: prompt }],
+              temperature: 0.3,
+              max_tokens: 150
+            })
+          });
+          const result = await aiResponse.json();
+          if (result?.choices?.[0]?.message?.content) {
+            payload.attachments[0].fields.push({ title: "🤖 AI Event Summary", value: result.choices[0].message.content, short: false });
+          }
+        } catch (e) {
+          // Fail silently, don't block alert
+        }
+      }
+
       // 🛡️ [BRUTE FORCE ENRICHMENT] (v2.6.202)
       if (data.TargetUser) {
         payload.attachments[0].fields.push({ title: "Target User", value: data.TargetUser, short: true });
