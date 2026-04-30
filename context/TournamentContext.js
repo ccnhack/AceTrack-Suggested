@@ -97,7 +97,7 @@ export const TournamentProvider = ({ children }) => {
              tournaments: result.tournaments, 
              players: result.players, 
              currentUser: result.currentUser 
-           }, true);
+           }, false);
            console.log('[TournamentContext] Sync result:', syncSuccess);
         }
 
