@@ -2850,6 +2850,11 @@ router.get('/auth/me', apiKeyGuard, asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, error: 'User not found.' });
   }
 
+  // Return sanitized user object
+  const { password, ...sanitizedUser } = user;
+  res.json({ success: true, user: sanitizedUser });
+}));
+
 // 🛡️ [EMERGENCY RECOVERY] (v2.6.312)
 // Restores the previous AppState document if a wipe occurred.
 router.post('/admin/restore-last-state', apiKeyGuard, asyncHandler(async (req, res) => {
@@ -2894,11 +2899,6 @@ router.post('/admin/restore-last-state', apiKeyGuard, asyncHandler(async (req, r
     message: `State recovered successfully. Restored data from ${previous.lastUpdated.toISOString()}.`,
     newVersion: recovered.version
   });
-}));
-
-// Return sanitized user object
-const { password, ...sanitizedUser } = user;
-res.json({ success: true, user: sanitizedUser });
 }));
 
 router.post('/admin/login', loginLimiter, asyncHandler(async (req, res) => {
