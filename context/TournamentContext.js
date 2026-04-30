@@ -52,18 +52,26 @@ export const TournamentProvider = ({ children }) => {
   }, []);
 
   const onRegister = useCallback(async (t, method, cost, isResched, fromTid) => {
-    if (!currentUserRef.current || !t) return { success: false, message: 'Invalid registration state.' };
-    const tid = typeof t === 'object' ? t.id : t;
-    
-    // 🛡️ [SYNC REFRESH] (v2.6.311)
-    const tournament = tournamentsRef.current.find(it => it.id === tid);
-    
-    if (!tournament) {
-      console.warn('[TournamentContext] Registration target not found:', tid);
-      return { success: false, message: 'Arena not found. Please refresh.' };
-    }
-
     try {
+      if (!currentUserRef.current || !t) {
+        console.warn('[TournamentContext] Registration aborted: Missing User or Tournament');
+        return { success: false, message: 'Invalid registration state.' };
+      }
+      
+      const tid = typeof t === 'object' ? t.id : t;
+      const tournament = tournamentsRef.current.find(it => it.id === tid);
+      
+      if (!tournament) {
+        console.warn('[TournamentContext] Registration target not found:', tid);
+        return { success: false, message: 'Arena not found. Please refresh.' };
+      }
+
+      console.log(`[TournamentContext] Starting registration for ${tid} via ${method}`);
+      
+      if (typeof TournamentService.register !== 'function') {
+        throw new Error('TournamentService.register is not a function! Check imports.');
+      }
+
       const result = TournamentService.register(
         tid, 
         currentUserRef.current.id, 
@@ -74,35 +82,40 @@ export const TournamentProvider = ({ children }) => {
         cost
       );
       
-      if (result.success) {
+      if (result && result.success) {
         setTournaments(result.tournaments);
         setPlayers(result.players);
         setCurrentUser(result.currentUser);
         
-        // 🛡️ [SYNC GUARD] (v2.6.311): Await persistence to ensure data reaches storage/cloud
-        // before we tell the user "Success". This prevents the "revert on refresh" bug.
-        const syncSuccess = await syncAndSaveData({ 
-          tournaments: result.tournaments, 
-          players: result.players, 
-          currentUser: result.currentUser 
-        }, true);
-
-        if (!syncSuccess) {
-          throw new Error('Local persistence failed. Sync timed out or storage full.');
+        console.log('[TournamentContext] State updated locally. Syncing...');
+        
+        if (typeof syncAndSaveData !== 'function') {
+           console.error('[TournamentContext] syncAndSaveData is undefined!');
+           // We continue because local state is updated, but this is why refresh fails
+        } else {
+           const syncSuccess = await syncAndSaveData({ 
+             tournaments: result.tournaments, 
+             players: result.players, 
+             currentUser: result.currentUser 
+           }, true);
+           console.log('[TournamentContext] Sync result:', syncSuccess);
         }
 
-        if (result.type === 'UPI_PENDING') {
+        if (result.type === 'UPI_PENDING' || result.type === 'UPI_SUCCESS') {
           // Handled by ExploreScreen
         } else if (result.referralBonus > 0) {
           Alert.alert('Referral Bonus!', `You earned ₹${result.referralBonus} for your first tournament registration!`);
         }
       } else {
-        Alert.alert('Registration Failed', result.message || 'Could not complete registration.');
+        const msg = result?.message || 'Could not complete registration.';
+        Alert.alert('Registration Failed', msg);
       }
       return result;
     } catch (e) {
-      console.error('[TournamentContext] onRegister Error:', e);
-      throw e; // Let ExploreScreen catch and show detail
+      console.error('[TournamentContext] FATAL_ON_REGISTER_ERROR:', e);
+      // Detailed alert for the user to help debug
+      Alert.alert('System Error', `Line: onRegister\nError: ${e.message}\nStack: ${e.stack?.substring(0, 100)}`);
+      throw e; 
     }
   }, [setTournaments, setPlayers, setCurrentUser, syncAndSaveData]);
 

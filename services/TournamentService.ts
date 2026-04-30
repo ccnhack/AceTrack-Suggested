@@ -23,26 +23,32 @@ class TournamentService {
    * Handles capacity checks, referral bonuses, and payment methods.
    */
   static register(tid, userId, tournaments, players, currentUser, method = 'credits', cost = 0) {
-    logger.logAction('TOURNAMENT_REGISTER_START', { tid, userId, method, cost });
+    if (typeof logger?.logAction === 'function') {
+      logger.logAction('TOURNAMENT_REGISTER_START', { tid, userId, method, cost });
+    } else {
+      console.warn('[TournamentService] logger.logAction is not available');
+    }
 
     const safeTid = String(tid || '').trim();
     const safeUserId = String(userId || '').trim();
     const safeTournaments = Array.isArray(tournaments) ? tournaments : [];
     const safePlayers = Array.isArray(players) ? players : [];
 
-    const tournament = safeTournaments.find(t => String(t.id) === safeTid);
+    const tournament = safeTournaments.find(t => t && String(t.id) === safeTid);
     if (!tournament) return { success: false, message: 'Tournament not found' };
 
     // 1. Capacity Guard
     const registeredCount = (tournament.registeredPlayerIds || []).length;
-    const pendingCount = (tournament.pendingPaymentPlayerIds || []).filter(pid => String(pid) !== safeUserId).length;
+    const pendingCount = (tournament.pendingPaymentPlayerIds || []).filter(pid => pid && String(pid) !== safeUserId).length;
     const max = (tournament.maxPlayers || Infinity);
-    const wasAlreadyRegistered = (tournament.registeredPlayerIds || []).some(pid => String(pid) === safeUserId);
-    const wasPending = (tournament.pendingPaymentPlayerIds || []).some(pid => String(pid) === safeUserId);
+    const wasAlreadyRegistered = (tournament.registeredPlayerIds || []).some(pid => pid && String(pid) === safeUserId);
+    const wasPending = (tournament.pendingPaymentPlayerIds || []).some(pid => pid && String(pid) === safeUserId);
 
     // Strict Slot Guard: registered + other pending must be less than max
     if (registeredCount + pendingCount >= max && !wasAlreadyRegistered && !wasPending) {
-      logger.logAction('TOURNAMENT_REGISTER_FULL', { tid: safeTid, userId: safeUserId });
+      if (typeof logger?.logAction === 'function') {
+        logger.logAction('TOURNAMENT_REGISTER_FULL', { tid: safeTid, userId: safeUserId });
+      }
       return { success: false, message: 'Slots Full', type: 'FULL' };
     }
 
@@ -124,7 +130,9 @@ class TournamentService {
       });
     }
 
-    logger.logAction('TOURNAMENT_REGISTER_SUCCESS', { tid: safeTid, userId: safeUserId, method, bonus: referralBonus });
+    if (typeof logger?.logAction === 'function') {
+      logger.logAction('TOURNAMENT_REGISTER_SUCCESS', { tid: safeTid, userId: safeUserId, method, bonus: referralBonus });
+    }
 
     return {
       success: true,
