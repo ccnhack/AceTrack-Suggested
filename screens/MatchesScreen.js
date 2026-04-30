@@ -432,15 +432,26 @@ const MatchesScreen = ({ route, navigation }) => {
 
     const finalize = (method) => {
         console.log(`🧪 [JS_DEBUG] Finalize called with method: ${method}`);
-        onRegister(regPaymentTarget, method, totalAdjustedCost, false, null);
+        const result = onRegister(regPaymentTarget, method, totalAdjustedCost, false, null);
         console.log('🧪 [JS_DEBUG] onRegister completed, clearing regPaymentTarget');
-        setRegPaymentTarget(null);
-        if (!__DEV__) {
-            setTimeout(() => {
-                Alert.alert("Success", "Registration successful!");
-            }, 300);
-        } else {
-            console.log('🧪 [JS_DEBUG] Bypassing native success alert for E2E reliability');
+        
+        if (result && result.success) {
+            setRegPaymentTarget(null);
+            
+            if (!__DEV__) {
+                setTimeout(() => {
+                    if (result.type === 'UPI_PENDING') {
+                        Alert.alert(
+                            "Verification Pending", 
+                            "Your registration is being processed. Please share the payment screenshot with the organizer or wait for admin confirmation."
+                        );
+                    } else {
+                        Alert.alert("Success", "Registration successful!");
+                    }
+                }, 300);
+            } else {
+                console.log('🧪 [JS_DEBUG] Bypassing native success alert for E2E reliability');
+            }
         }
     };
 

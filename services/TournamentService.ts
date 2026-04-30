@@ -16,43 +16,33 @@ class TournamentService {
 
   /**
    * Registers a user for a tournament.
-   * Handles capacity checks and referral bonuses.
+   * Handles capacity checks, referral bonuses, and payment methods.
    */
-  static register(tid, userId, tournaments, players, currentUser) {
-    logger.logAction('TOURNAMENT_REGISTER_START', { tid, userId });
+  /**
+   * Registers a user for a tournament.
+   * Handles capacity checks, referral bonuses, and payment methods.
+   */
+  static register(tid, userId, tournaments, players, currentUser, method = 'credits', cost = 0) {
+    logger.logAction('TOURNAMENT_REGISTER_START', { tid, userId, method, cost });
 
     const tournament = tournaments.find(t => t.id === tid);
     if (!tournament) return { success: false, message: 'Tournament not found' };
 
     // 1. Capacity Guard
     const registeredCount = (tournament.registeredPlayerIds || []).length;
-    const isFull = registeredCount >= (tournament.maxPlayers || Infinity);
+    const pendingCount = (tournament.pendingPaymentPlayerIds || []).filter(pid => pid !== userId).length;
+    const max = (tournament.maxPlayers || Infinity);
     const wasAlreadyRegistered = (tournament.registeredPlayerIds || []).includes(userId);
+    const wasPending = (tournament.pendingPaymentPlayerIds || []).includes(userId);
 
-    if (isFull && !wasAlreadyRegistered) {
+    // Strict Slot Guard: registered + other pending must be less than max
+    if (registeredCount + pendingCount >= max && !wasAlreadyRegistered && !wasPending) {
       logger.logAction('TOURNAMENT_REGISTER_FULL', { tid, userId });
-      // Cleanup pending payment if they were in that state
-      const updatedTournaments = tournaments.map(t => {
-        if (t.id === tid) {
-          const ts = { ...(t.pendingPaymentTimestamps || {}) };
-          delete ts[userId];
-          return {
-            ...t,
-            pendingPaymentPlayerIds: (t.pendingPaymentPlayerIds || []).filter(pid => pid !== userId),
-            pendingPaymentTimestamps: ts,
-            playerStatuses: (() => {
-               const ps = { ...(t.playerStatuses || {}) };
-               delete ps[userId];
-               return ps;
-            })()
-          };
-        }
-        return t;
-      });
-      return { success: false, message: 'Slots Full', type: 'FULL', tournaments: updatedTournaments };
+      return { success: false, message: 'Slots Full', type: 'FULL' };
     }
 
-    // 2. Update Tournament State
+    // 2. Finalize Registration State (v2.6.309: Instant UPI support)
+    // As per user request, UPI payments now lead to immediate registration.
     const updatedTournaments = tournaments.map(t => {
       if (t.id === tid) {
         return {
@@ -76,7 +66,7 @@ class TournamentService {
       return t;
     });
 
-    // 3. Referral Bonus Logic
+    // 3. Referral Bonus & Wallet Update
     const isFirstRegistration = (currentUser.registeredTournamentIds || []).length === 0;
     const referralBonus = (isFirstRegistration && currentUser.referredBy) ? 100 : 0;
     
@@ -84,6 +74,21 @@ class TournamentService {
       ...currentUser,
       registeredTournamentIds: [...new Set([...(currentUser.registeredTournamentIds || []), tid])]
     };
+
+    // Deduct credits ONLY if method is 'credits'
+    if (method === 'credits' && cost > 0) {
+      updatedCurrentUser.credits = Math.max(0, (updatedCurrentUser.credits || 0) - cost);
+      updatedCurrentUser.walletHistory = [
+        { 
+          id: `reg-deduct-${Date.now()}`, 
+          amount: -cost, 
+          type: 'debit', 
+          description: `Registration for ${tournament.title}`, 
+          date: new Date().toISOString() 
+        },
+        ...(updatedCurrentUser.walletHistory || [])
+      ];
+    }
 
     if (referralBonus > 0) {
       updatedCurrentUser.credits = (updatedCurrentUser.credits || 0) + referralBonus;
@@ -114,10 +119,11 @@ class TournamentService {
       });
     }
 
-    logger.logAction('TOURNAMENT_REGISTER_SUCCESS', { tid, userId, bonus: referralBonus });
+    logger.logAction('TOURNAMENT_REGISTER_SUCCESS', { tid, userId, method, bonus: referralBonus });
 
     return {
       success: true,
+      type: 'SUCCESS',
       tournaments: updatedTournaments,
       players: updatedPlayers,
       currentUser: updatedCurrentUser,

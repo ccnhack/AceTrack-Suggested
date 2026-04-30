@@ -354,10 +354,21 @@ const ExploreScreen = ({ navigation, route }) => {
 
     const finalize = async (method) => {
         try {
-            await onRegister(regPaymentTarget, method, totalAdjustedCost, isRescheduling, reschedulingFrom);
-            setRegPaymentTarget(null);
-            setSelectedTournament(null);
-            Alert.alert("Success", isRescheduling ? "Arena swapped successfully!" : "Registration successful!");
+            const result = await onRegister(regPaymentTarget, method, totalAdjustedCost, isRescheduling, reschedulingFrom);
+            
+            if (result && result.success) {
+                setRegPaymentTarget(null);
+                setSelectedTournament(null);
+                
+                if (result.type === 'UPI_PENDING') {
+                    Alert.alert(
+                        "Verification Pending", 
+                        "Your registration is being processed. Please share the payment screenshot with the organizer or wait for admin confirmation."
+                    );
+                } else {
+                    Alert.alert("Success", isRescheduling ? "Arena swapped successfully!" : "Registration successful!");
+                }
+            }
         } catch (e) {
             console.error('[ExploreScreen] Finalize Error:', e);
             Alert.alert("Error", "Could not complete registration. Please try again.");

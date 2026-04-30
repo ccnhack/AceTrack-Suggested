@@ -31,6 +31,12 @@ cron.schedule('*/5 * * * *', async () => {
       
       const toExpire = pending.filter(pid => {
         const ts = timestamps[pid];
+        const status = (t.playerStatuses || {})[pid];
+        
+        // 🛡️ [UPI_GUARD] (v2.6.309): Do NOT auto-expire UPI payments. 
+        // These require manual admin verification and shouldn't be swept by the 30-min timer.
+        if (status === 'Pending UPI') return false;
+
         return ts && (now - ts) > THIRTY_MINS;
       });
 

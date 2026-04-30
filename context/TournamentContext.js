@@ -61,18 +61,31 @@ export const TournamentProvider = ({ children }) => {
       return null;
     }
 
-    const result = TournamentService.register(tid, currentUserRef.current.id, tournamentsRef.current, playersRef.current, currentUserRef.current);
+    const result = TournamentService.register(
+      tid, 
+      currentUserRef.current.id, 
+      tournamentsRef.current, 
+      playersRef.current, 
+      currentUserRef.current,
+      method,
+      cost
+    );
     
     if (result.success) {
       setTournaments(result.tournaments);
       setPlayers(result.players);
       setCurrentUser(result.currentUser);
+      
+      // 🛡️ [SYNC GUARD] (v2.6.309): Atomic save for tournaments/players/currentUser
       syncAndSaveData({ 
         tournaments: result.tournaments, 
         players: result.players, 
         currentUser: result.currentUser 
       });
-      if (result.referralBonus > 0) {
+
+      if (result.type === 'UPI_PENDING') {
+        // No alert here, handled by ExploreScreen for better UI flow
+      } else if (result.referralBonus > 0) {
         Alert.alert('Referral Bonus!', `You earned ₹${result.referralBonus} for your first tournament registration!`);
       }
     } else {
