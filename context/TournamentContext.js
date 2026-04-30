@@ -51,48 +51,60 @@ export const TournamentProvider = ({ children }) => {
     return unsub;
   }, []);
 
-  const onRegister = useCallback((t, method, cost, isResched, fromTid) => {
-    if (!currentUserRef.current || !t) return null;
+  const onRegister = useCallback(async (t, method, cost, isResched, fromTid) => {
+    if (!currentUserRef.current || !t) return { success: false, message: 'Invalid registration state.' };
     const tid = typeof t === 'object' ? t.id : t;
+    
+    // 🛡️ [SYNC REFRESH] (v2.6.311)
     const tournament = tournamentsRef.current.find(it => it.id === tid);
     
     if (!tournament) {
       console.warn('[TournamentContext] Registration target not found:', tid);
-      return null;
+      return { success: false, message: 'Arena not found. Please refresh.' };
     }
 
-    const result = TournamentService.register(
-      tid, 
-      currentUserRef.current.id, 
-      tournamentsRef.current, 
-      playersRef.current, 
-      currentUserRef.current,
-      method,
-      cost
-    );
-    
-    if (result.success) {
-      setTournaments(result.tournaments);
-      setPlayers(result.players);
-      setCurrentUser(result.currentUser);
+    try {
+      const result = TournamentService.register(
+        tid, 
+        currentUserRef.current.id, 
+        tournamentsRef.current, 
+        playersRef.current, 
+        currentUserRef.current,
+        method,
+        cost
+      );
       
-      // 🛡️ [SYNC GUARD] (v2.6.309): Atomic save for tournaments/players/currentUser
-      syncAndSaveData({ 
-        tournaments: result.tournaments, 
-        players: result.players, 
-        currentUser: result.currentUser 
-      });
+      if (result.success) {
+        setTournaments(result.tournaments);
+        setPlayers(result.players);
+        setCurrentUser(result.currentUser);
+        
+        // 🛡️ [SYNC GUARD] (v2.6.311): Await persistence to ensure data reaches storage/cloud
+        // before we tell the user "Success". This prevents the "revert on refresh" bug.
+        const syncSuccess = await syncAndSaveData({ 
+          tournaments: result.tournaments, 
+          players: result.players, 
+          currentUser: result.currentUser 
+        }, true);
 
-      if (result.type === 'UPI_PENDING') {
-        // No alert here, handled by ExploreScreen for better UI flow
-      } else if (result.referralBonus > 0) {
-        Alert.alert('Referral Bonus!', `You earned ₹${result.referralBonus} for your first tournament registration!`);
+        if (!syncSuccess) {
+          throw new Error('Local persistence failed. Sync timed out or storage full.');
+        }
+
+        if (result.type === 'UPI_PENDING') {
+          // Handled by ExploreScreen
+        } else if (result.referralBonus > 0) {
+          Alert.alert('Referral Bonus!', `You earned ₹${result.referralBonus} for your first tournament registration!`);
+        }
+      } else {
+        Alert.alert('Registration Failed', result.message || 'Could not complete registration.');
       }
-    } else {
-      Alert.alert('Registration Failed', result.message || 'Could not complete registration.');
+      return result;
+    } catch (e) {
+      console.error('[TournamentContext] onRegister Error:', e);
+      throw e; // Let ExploreScreen catch and show detail
     }
-    return result;
-  }, [currentUser, setTournaments, setPlayers, setCurrentUser, syncAndSaveData]);
+  }, [setTournaments, setPlayers, setCurrentUser, syncAndSaveData]);
 
   const onJoinWaitlist = useCallback((t) => {
     if (!currentUserRef.current || !t) return null;
