@@ -4,46 +4,35 @@
  */
 
 export const colors = {
-  // 🛡️ Premium Brand Palette (v2.6.310)
+  // Brand HSL tokens (Hue, Saturation, Lightness)
+  // Base HSL allows for programmatic derivations (hover, active, opacity)
   primary: {
-    base: '#EF4444',    // Vibrant Red
-    dark: '#DC2626',
-    light: '#F87171',
-    glow: 'rgba(239, 68, 68, 0.4)',
+    base: 'hsl(217, 91%, 60%)', // #3B82F6
+    dark: 'hsl(221, 83%, 53%)',  // #2563EB
+    light: 'hsl(213, 94%, 68%)', // #60A5FA
   },
   
-  secondary: {
-    base: '#3B82F6',    // Electric Blue
-    dark: '#2563EB',
-    light: '#60A5FA',
-    glow: 'rgba(59, 130, 246, 0.4)',
-  },
-  
-  // 🌌 Deep Space Backgrounds (Slate)
+  // Neutral HSL (Slate)
   navy: {
-    900: '#0F172A', // Main Background
-    800: '#1E293B', // Card Background
-    700: '#334155', // Sub-card / Elevated
-    600: '#475569',
-    500: '#64748B',
-    400: '#94A3B8',
-    100: '#F1F5F9',
-    50: '#F8FAFC',
+    900: 'hsl(222, 47%, 11%)', // #0F172A
+    800: 'hsl(217, 33%, 17%)', // #1E293B
+    700: 'hsl(215, 25%, 27%)', // #334155
+    600: 'hsl(215, 19%, 35%)', // #475569
+    500: 'hsl(215, 16%, 47%)', // #64748B
+    400: 'hsl(215, 20%, 65%)', // #94A3B8
+    100: 'hsl(210, 40%, 96%)', // #F1F5F9
+    50: 'hsl(210, 40%, 98%)',  // #F8FAFC
   },
 
   // Status
-  success: '#10B981',
-  warning: '#F59E0B',
-  error: '#EF4444',
-  info: '#3B82F6',
+  success: 'hsl(160, 84%, 39%)', // #10B981
+  warning: 'hsl(38, 92%, 50%)',  // #F59E0B
+  error: 'hsl(0, 84%, 60%)',     // #EF4444
+  info: 'hsl(217, 91%, 60%)',
 
-  // ✨ Glassmorphism Architecture
-  glass: {
-    thin: 'rgba(255, 255, 255, 0.05)',
-    medium: 'rgba(255, 255, 255, 0.1)',
-    thick: 'rgba(255, 255, 255, 0.15)',
-    border: 'rgba(255, 255, 255, 0.1)',
-  }
+  // Glassmorphism helpers
+  glass: 'rgba(255, 255, 255, 0.1)',
+  glassDark: 'rgba(0, 0, 0, 0.2)',
 };
 
 export const typography = {
@@ -62,13 +51,13 @@ export const spacing = {
 };
 
 export const borderRadius = {
-  sm: 8, md: 12, lg: 20, xl: 32, full: 999
+  sm: 6, md: 12, lg: 16, xl: 24, full: 999
 };
 
 export const shadows = {
-  red: { shadowColor: colors.primary.base, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 8 },
-  blue: { shadowColor: colors.secondary.base, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 8 },
-  glass: { shadowColor: "#000", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.3, shadowRadius: 24, elevation: 12 }
+  sm: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  md: { shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 4 },
+  lg: { shadowColor: "#000", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.15, shadowRadius: 24, elevation: 8 }
 };
 
 export default { colors, typography, spacing, borderRadius, shadows };

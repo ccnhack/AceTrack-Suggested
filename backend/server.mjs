@@ -90,7 +90,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.311'; // 🚀 FORCE REDEPLOY CACHE BUST v2.6.311 
+const APP_VERSION = '2.6.310'; // 🚀 FORCE REDEPLOY CACHE BUST v2.6.310 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -1983,17 +1983,8 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
                                         !(existing.registeredPlayerIds || []).includes(currentUserId);
 
                 if (isUserRegistering && existingReg >= (existing.maxPlayers || 0)) {
-                  console.warn(`🛑 [SLOT_GUARD] Rejecting registration for ${currentUserId} in tournament ${p.id}. Slot already taken (Registered: ${existingReg}/${existing.maxPlayers}).`);
+                  console.warn(`🛑 [SLOT_GUARD] Rejecting registration for ${currentUserId} in tournament ${p.id}. Slot already taken.`);
                   
-                  // 🛡️ [DIAGNOSTICS] (v2.6.311)
-                  // Log this rejection to Audit Logs so we can see it in the Admin Hub
-                  logAudit(req, 'TOURNAMENT_REGISTRATION_REJECTED_FULL', ['tournaments'], { 
-                    tournamentId: p.id, 
-                    userId: currentUserId,
-                    registeredCount: existingReg,
-                    maxPlayers: existing.maxPlayers
-                  }).catch(() => {});
-
                   // Revert to original state (which should be Pending)
                   // processTournamentWaitlist will later handle demoting them to Waitlist + Notification
                   p.registeredPlayerIds = [...(existing.registeredPlayerIds || [])];

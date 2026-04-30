@@ -371,12 +371,7 @@ const ExploreScreen = ({ navigation, route }) => {
             }
         } catch (e) {
             console.error('[ExploreScreen] Finalize Error:', e);
-            // 🛡️ [DIAGNOSTICS] (v2.6.311)
-            // Log the error details to the persistent logger for remote debugging
-            if (logger?.addLog) {
-                logger.addLog('error', 'registration_failure', { error: e.message, stack: e.stack, tid: regPaymentTarget?.id });
-            }
-            Alert.alert("Error", `Could not complete registration: ${e.message || 'Please try again.'}`);
+            Alert.alert("Error", "Could not complete registration. Please try again.");
         }
     };
 

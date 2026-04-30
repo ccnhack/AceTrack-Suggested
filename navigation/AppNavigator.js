@@ -97,12 +97,11 @@ const MainTabs = memo(() => {
     },
     tabBarLabel: route.name === 'Matchmaking' && role === 'coach' ? 'Bookings' : route.name,
     tabBarActiveTintColor: '#EF4444',
-    tabBarInactiveTintColor: '#94A3B8',
+    tabBarInactiveTintColor: '#CBD5E1',
     headerShown: false,
     tabBarStyle: Platform.OS === 'web' ? { display: 'none' } : {
-      backgroundColor: '#0F172A',
-      borderTopColor: 'rgba(255, 255, 255, 0.1)',
-      borderTopWidth: 1,
+      borderTopLeftRadius: 32,
+      borderTopRightRadius: 32,
       height: 70,
       paddingBottom: 10,
     }

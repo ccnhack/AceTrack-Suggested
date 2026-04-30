@@ -63,7 +63,7 @@ import { useSupport } from './context/SupportContext';
 
 
 // 🛡️ Web Deep Linking Configuration (v2.6.286)
-const APP_VERSION = "2.6.311";
+const APP_VERSION = "2.6.310";
 const linking = {
   prefixes: ['https://acetrack-suggested.onrender.com', 'acetrack://'],
   config: {
@@ -111,8 +111,8 @@ function Root() {
 
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0F172A' }}>
-      <StatusBar barStyle="light-content" />
+    <View style={{ flex: 1 }}>
+      <StatusBar barStyle="dark-content" />
       
       <NavigationContainer ref={navigationRef} linking={linking}>
         <AppNavigator />
@@ -165,7 +165,7 @@ function Root() {
       {/* Mandatory OTA Update & Web Refresh Modal */}
       <Modal testID="app.update.modal" visible={showForceUpdate} transparent={false} animationType="fade">
         <View style={styles.updateModalContainer}>
-          <Ionicons name="cloud-download" size={80} color="#EF4444" style={{ marginBottom: 24 }} />
+          <Ionicons name="cloud-download" size={80} color="#38BDF8" style={{ marginBottom: 24 }} />
           <Text style={styles.updateTitle}>Update Required</Text>
           <Text style={styles.updateDescription}>
             Version {appVersion} is obsolete. {Platform.OS === 'web' ? 'Please refresh this page to load the latest release.' : `Please update to ${latestAppVersion} to restore network access.`}
@@ -263,11 +263,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
+    backgroundColor: '#FFFFFF',
   },
   loadingText: {
     marginTop: 12,
-    color: '#F8FAFC',
+    color: '#64748B',
     fontSize: 14,
     fontWeight: '500',
   },
@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
   updateButton: {
     width: '100%',
     paddingVertical: 18,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#10B981',
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 50,
     right: 20,
-    backgroundColor: 'rgba(239, 68, 68, 0.8)',
+    backgroundColor: 'rgba(15, 23, 42, 0.8)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
