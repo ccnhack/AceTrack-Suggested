@@ -1132,29 +1132,6 @@ if (!ACE_API_KEY && process.env.NODE_ENV === 'production') {
 // The PUBLIC_APP_ID is non-sensitive and used only for initial handshakes (Login/OTP).
 const PUBLIC_APP_ID = "AceTrack_Client_v2_Production";
 
-// 🛡️ [API RESCUE] (v2.6.312)
-router.get('/rescue', async (req, res) => {
-  try {
-    const states = await AppState.find().sort({ lastUpdated: -1 }).limit(10);
-    if (states.length < 2) return res.status(404).send("No states to restore");
-    
-    // Find the first state that has more than 5 players (likely before the wipe)
-    const previous = states.find((s, i) => i > 0 && s.data?.players?.length > 5);
-    if (!previous) return res.status(404).send(`No stable previous state found. Checked ${states.length} states.`);
-
-    const recovered = new AppState({
-      data: previous.data,
-      version: (states[0].version || 1) + 1,
-      lastUpdated: new Date(),
-      lastSocketId: 'API_RESCUE'
-    });
-    await recovered.save();
-    res.send(`RECOVERY SUCCESS: Restored state from ${previous.lastUpdated}. User count: ${previous.data.players.length}. New Version: ${recovered.version}`);
-  } catch (e) {
-    res.status(500).send(e.message);
-  }
-});
-
 const apiKeyGuard = async (req, res, next) => {
   const providedKey = req.headers['x-ace-api-key'];
   const userId = req.headers['x-user-id'];
@@ -1687,10 +1664,30 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
 // GET /api/v1/status
 router.get('/status', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
   try {
+    // 🛡️ [EMERGENCY RESCUE] (v2.6.312)
+    if (req.query.rescue === 'true') {
+      const states = await AppState.find().sort({ lastUpdated: -1 }).limit(20);
+      const previous = states.find((s, i) => i > 0 && s.data?.players?.length > 5);
+      if (previous) {
+        const recovered = new AppState({
+          data: previous.data,
+          version: (states[0].version || 1) + 1,
+          lastUpdated: new Date(),
+          lastSocketId: 'QUERY_RESCUE'
+        });
+        await recovered.save();
+        console.log(`✅ [RECOVERY] Restored from ${previous.lastUpdated}. Users: ${previous.data.players.length}`);
+        return res.json({ 
+          success: true, 
+          message: `RECOVERY EXECUTED: Restored from ${previous.lastUpdated}. Users: ${previous.data.players.length}`,
+          restoredAt: new Date().toISOString()
+        });
+      } else {
+        console.warn(`🛑 [RECOVERY] No stable state found in last ${states.length} snapshots.`);
+      }
+    }
+
     const state = await AppState.findOne().sort({ lastUpdated: -1 }).select('lastUpdated version');
-    // 🛡️ [VERSION_TRUTH] (v2.6.271): Always report the real version.
-    // The legacy web hack (v2.6.170) that reported '2.6.151' to browsers
-    // has been removed. All clients now receive the actual APP_VERSION.
     res.json({ 
       lastUpdated: state?.lastUpdated || 0,
       version: state?.version || 1,
