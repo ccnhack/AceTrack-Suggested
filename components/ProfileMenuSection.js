@@ -23,7 +23,7 @@ const ProfileMenuSection = memo(({
           onPress={onCoachOnboarding}
           style={styles.menuItem}
         >
-          <View style={[styles.menuIcon, { backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
+          <View style={[styles.menuIcon, { backgroundColor: '#F0FDF4' }]}>
             <Ionicons name="ribbon" size={20} color="#16A34A" />
           </View>
           <Text style={styles.menuLabel}>Affiliation</Text>
@@ -39,7 +39,7 @@ const ProfileMenuSection = memo(({
         }}
         style={styles.menuItem}
       >
-        <View style={[styles.menuIcon, { backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}>
+        <View style={[styles.menuIcon, { backgroundColor: '#F8FAFC' }]}>
           <Ionicons name="person-outline" size={20} color="#334155" />
         </View>
         <Text style={styles.menuLabel}>Profile Details</Text>
@@ -53,7 +53,7 @@ const ProfileMenuSection = memo(({
         }}
         style={styles.menuItem}
       >
-        <View style={[styles.menuIcon, { backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}>
+        <View style={[styles.menuIcon, { backgroundColor: '#F8FAFC' }]}>
           <Ionicons name="bug-outline" size={20} color="#334155" />
         </View>
         <Text style={styles.menuLabel}>System Diagnostics</Text>
@@ -67,7 +67,7 @@ const ProfileMenuSection = memo(({
         }}
         style={styles.menuItem}
       >
-        <View style={[styles.menuIcon, { backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}>
+        <View style={[styles.menuIcon, { backgroundColor: '#F8FAFC' }]}>
           <Ionicons name="lock-closed-outline" size={20} color="#334155" />
         </View>
         <Text style={styles.menuLabel}>Change Password</Text>
@@ -82,7 +82,7 @@ const ProfileMenuSection = memo(({
           }}
           style={styles.menuItem}
         >
-          <View style={[styles.menuIcon, { backgroundColor: 'rgba(79, 70, 229, 0.1)' }]}>
+          <View style={[styles.menuIcon, { backgroundColor: '#EEF2FF' }]}>
             <Ionicons name="gift-outline" size={20} color="#4F46E5" />
           </View>
           <Text style={styles.menuLabel}>Refer Friends, Play Along</Text>
@@ -102,7 +102,7 @@ const ProfileMenuSection = memo(({
         }}
         style={styles.menuItem}
       >
-        <View style={[styles.menuIcon, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
+        <View style={[styles.menuIcon, { backgroundColor: '#EFF6FF' }]}>
           <Ionicons name="help-buoy" size={20} color="#3B82F6" />
         </View>
         <Text style={styles.menuLabel}>{user?.role === 'admin' ? 'Support Center' : 'Help & Support'}</Text>
@@ -143,7 +143,7 @@ const ProfileMenuSection = memo(({
         style={styles.menuItem}
         disabled={isUpdatingBinary}
       >
-        <View style={[styles.menuIcon, { backgroundColor: 'rgba(3, 105, 161, 0.1)' }]}>
+        <View style={[styles.menuIcon, { backgroundColor: '#F0F9FF' }]}>
           <Ionicons name={isUpdatingBinary ? "hourglass-outline" : "cloud-download-outline"} size={20} color="#0369A1" />
         </View>
         <Text style={[styles.menuLabel, { color: '#0369A1', fontWeight: 'bold' }]}>
@@ -160,7 +160,7 @@ const ProfileMenuSection = memo(({
         }}
         style={[styles.menuItem, styles.logoutItem]}
       >
-        <View style={[styles.menuIcon, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+        <View style={[styles.menuIcon, { backgroundColor: '#FEF2F2' }]}>
           <Ionicons name="log-out" size={20} color="#EF4444" />
         </View>
         <Text style={[styles.menuLabel, { color: '#EF4444' }]}>Logout</Text>
@@ -173,34 +173,32 @@ ProfileMenuSection.displayName = 'ProfileMenuSection';
 
 const styles = StyleSheet.create({
   menuSection: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingTop: 8,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    borderBottomColor: '#F8FAFC',
   },
   menuIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
+    marginRight: 12,
   },
   menuLabel: {
     flex: 1,
     fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: '500',
+    color: '#334155',
   },
   logoutItem: {
-    marginTop: 12,
+    marginTop: 8,
     borderBottomWidth: 0,
   },
 });
