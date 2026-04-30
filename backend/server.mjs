@@ -1132,24 +1132,24 @@ if (!ACE_API_KEY && process.env.NODE_ENV === 'production') {
 // The PUBLIC_APP_ID is non-sensitive and used only for initial handshakes (Login/OTP).
 const PUBLIC_APP_ID = "AceTrack_Client_v2_Production";
 
-// 🛡️ [TOP-LEVEL RESCUE] (v2.6.312)
-app.get('/rescue', async (req, res) => {
+// 🛡️ [API RESCUE] (v2.6.312)
+router.get('/rescue', async (req, res) => {
   try {
-    const states = await AppState.find().sort({ lastUpdated: -1 }).limit(5);
+    const states = await AppState.find().sort({ lastUpdated: -1 }).limit(10);
     if (states.length < 2) return res.status(404).send("No states to restore");
     
     // Find the first state that has more than 5 players (likely before the wipe)
     const previous = states.find((s, i) => i > 0 && s.data?.players?.length > 5);
-    if (!previous) return res.status(404).send("No stable previous state found");
+    if (!previous) return res.status(404).send(`No stable previous state found. Checked ${states.length} states.`);
 
     const recovered = new AppState({
       data: previous.data,
       version: (states[0].version || 1) + 1,
       lastUpdated: new Date(),
-      lastSocketId: 'TOP_LEVEL_RESCUE'
+      lastSocketId: 'API_RESCUE'
     });
     await recovered.save();
-    res.send(`RECOVERY SUCCESS: Restored state from ${previous.lastUpdated}. User count: ${previous.data.players.length}`);
+    res.send(`RECOVERY SUCCESS: Restored state from ${previous.lastUpdated}. User count: ${previous.data.players.length}. New Version: ${recovered.version}`);
   } catch (e) {
     res.status(500).send(e.message);
   }
