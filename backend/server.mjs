@@ -90,7 +90,8 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.311'; // 🚀 FORCE REDEPLOY CACHE BUST v2.6.311 
+const APP_VERSION = "2.6.312"; 
+ // 🚀 FORCE REDEPLOY CACHE BUST v2.6.312 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -637,7 +638,7 @@ app.use((req, res, next) => {
 // 1. HARDENED ROUTE GUARD: Explicitly block sensitive enumeration at top level
 app.use((req, res, next) => {
   const path = req.path.toLowerCase();
-  const sensitivePaths = ['/admin', '/debug', '/config', '/metrics', '/swagger', '/env', '/graphql', '/.env', '/config.php'];
+  const sensitivePaths = ['/admin', '/debug', '/config', '/metrics', '/swagger', '/env', '/env', '/graphql', '/.env', '/config.php'];
   
   if (sensitivePaths.some(p => path.startsWith(p))) {
     const providedKey = req.headers['x-ace-api-key'] || req.query.key;
@@ -3339,6 +3340,7 @@ router.post('/support/invite/click', asyncHandler(async (req, res) => {
   if (invite.status === 'Expired') return res.status(400).json({ error: 'Invite has been Expired' });
   if (invite.expiresAt < new Date()) return res.status(400).json({ error: 'Invite expired' });
   
+  const geo = await resolveIpGeo(ipRaw);
   const botType = detectBot(userAgent, geo.isp);
   if (invite.status === 'Pending' && !botType) invite.status = 'Clicked';
   
@@ -4427,7 +4429,7 @@ app.use((err, req, res, next) => {
   res.status(status).json({
     "success": false,
     "error": message,
-    "version": APP_VERSION,
+    "version": "2.6.312",
     "timestamp": getISTDate()
   });
 });
