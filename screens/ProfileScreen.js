@@ -11,6 +11,7 @@ import { Calendar } from 'react-native-calendars';
 import { colors, shadows, typography, borderRadius, spacing } from '../theme/designSystem';
 import { Sport } from '../types';
 import SafeAvatar from '../components/SafeAvatar';
+import GlobalHeader from '../components/GlobalHeader';
 import * as ImagePicker from 'expo-image-picker';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Updates from 'expo-updates';
@@ -464,25 +465,51 @@ const ProfileScreen = ({ navigation }) => {
     );
   };
   const content = (
-    <View style={[styles.container, isWeb && { maxWidth: 900, alignSelf: 'center', width: '100%', backgroundColor: '#FFFFFF', padding: 24, marginVertical: 16, borderRadius: 24, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.08, shadowRadius: 40, overflow: 'hidden', flex: 1 }, { paddingTop: Math.max(insets.top, 16) }]}>
+    <View style={styles.container}>
+      <GlobalHeader title="PROFILE" />
       <ScrollView 
         testID="profile.scrollview"
         contentContainerStyle={styles.scrollContent} 
         showsVerticalScrollIndicator={false}
       >
-        <ProfileHeader
-          user={user}
-          academyTier={academyTier}
-          imageError={imageError}
-          isCloudOnline={isCloudOnline}
-          isUsingCloud={isUsingCloud}
-          lastSyncTime={lastSyncTime}
-          onManualSync={onManualSync}
-          onAvatarPress={() => setShowAvatarPicker(true)}
-          onNotificationPress={() => setShowNotifications(true)}
-          onWalletPress={() => setShowWalletModal(true)}
-          logger={logger}
-        />
+        {/* Profile Card / Header Replacement */}
+        <View style={styles.profileCard}>
+          <View style={styles.profileHeaderContent}>
+            <TouchableOpacity onPress={() => setShowAvatarPicker(true)}>
+              <SafeAvatar 
+                user={user} 
+                size={80} 
+                borderWidth={4}
+                borderColor={colors.glass.border}
+              />
+              <View style={styles.editAvatarBadge}>
+                <Ionicons name="camera" size={12} color="#FFFFFF" />
+              </View>
+            </TouchableOpacity>
+            
+            <View style={styles.profileNameGroup}>
+              <Text style={styles.profileName}>{user?.name}</Text>
+              <Text style={styles.profileRole}>{user?.role?.toUpperCase()} • {user?.skillLevel || 'Pro'}</Text>
+            </View>
+
+            <View style={styles.profileStatsRow}>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>₹{user?.credits || 0}</Text>
+                <Text style={styles.statLabel}>Credits</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>{user?.winRate || '0%'}</Text>
+                <Text style={styles.statLabel}>Win Rate</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>{user?.totalMatches || 0}</Text>
+                <Text style={styles.statLabel}>Matches</Text>
+              </View>
+            </View>
+          </View>
+        </View>
 
         {/* Skill Dashboard (Optional, based on user roles etc) */}
 
@@ -1238,71 +1265,85 @@ const ProfileScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.navy[900],
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  profileCard: {
     padding: 24,
-    backgroundColor: '#F8FAFC',
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
+    backgroundColor: colors.navy[900],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.glass.border,
   },
-  avatarContainer: {
-    position: 'relative',
+  profileHeaderContent: {
+    alignItems: 'center',
+    gap: spacing.md,
   },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 4,
-    borderColor: '#FFFFFF',
-  },
-  editBtn: {
+  editAvatarBadge: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: '#0F172A',
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    backgroundColor: colors.primary.base,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: colors.navy[900],
   },
-  userInfo: {
-    marginLeft: 20,
-    flex: 1,
+  profileNameGroup: {
+    alignItems: 'center',
+    gap: 4,
   },
-  userName: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: '#0F172A',
-    textTransform: 'uppercase',
-  },
-  userHandle: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#94A3B8',
-    marginTop: 2,
-  },
-  roleBadge: {
-    backgroundColor: '#0F172A',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  roleText: {
-    fontSize: 8,
-    fontWeight: '900',
+  profileName: {
+    ...typography.h1,
     color: '#FFFFFF',
-    textTransform: 'uppercase',
+  },
+  profileRole: {
+    ...typography.caption,
+    color: colors.primary.base,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  profileStatsRow: {
+    flexDirection: 'row',
+    backgroundColor: colors.glass.medium,
+    borderRadius: 20,
+    padding: 16,
+    marginTop: spacing.lg,
+    width: '100%',
+    justifyContent: 'space-around',
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  statItem: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  statValue: {
+    ...typography.h3,
+    color: '#FFFFFF',
+  },
+  statLabel: {
+    ...typography.micro,
+    color: colors.navy[400],
+  },
+  statDivider: {
+    width: 1,
+    height: '60%',
+    backgroundColor: colors.glass.border,
+    alignSelf: 'center',
+  },
+  section: {
+    padding: 24,
+    gap: 16,
+  },
+  sectionTitle: {
+    ...typography.micro,
+    color: colors.navy[400],
+    letterSpacing: 2,
   },
   statsGrid: {
     flexDirection: 'row',

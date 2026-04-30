@@ -25,40 +25,44 @@ class TournamentService {
   static register(tid, userId, tournaments, players, currentUser, method = 'credits', cost = 0) {
     logger.logAction('TOURNAMENT_REGISTER_START', { tid, userId, method, cost });
 
-    const tournament = tournaments.find(t => t.id === tid);
+    const safeTid = String(tid || '').trim();
+    const safeUserId = String(userId || '').trim();
+    const safeTournaments = Array.isArray(tournaments) ? tournaments : [];
+    const safePlayers = Array.isArray(players) ? players : [];
+
+    const tournament = safeTournaments.find(t => String(t.id) === safeTid);
     if (!tournament) return { success: false, message: 'Tournament not found' };
 
     // 1. Capacity Guard
     const registeredCount = (tournament.registeredPlayerIds || []).length;
-    const pendingCount = (tournament.pendingPaymentPlayerIds || []).filter(pid => pid !== userId).length;
+    const pendingCount = (tournament.pendingPaymentPlayerIds || []).filter(pid => String(pid) !== safeUserId).length;
     const max = (tournament.maxPlayers || Infinity);
-    const wasAlreadyRegistered = (tournament.registeredPlayerIds || []).includes(userId);
-    const wasPending = (tournament.pendingPaymentPlayerIds || []).includes(userId);
+    const wasAlreadyRegistered = (tournament.registeredPlayerIds || []).some(pid => String(pid) === safeUserId);
+    const wasPending = (tournament.pendingPaymentPlayerIds || []).some(pid => String(pid) === safeUserId);
 
     // Strict Slot Guard: registered + other pending must be less than max
     if (registeredCount + pendingCount >= max && !wasAlreadyRegistered && !wasPending) {
-      logger.logAction('TOURNAMENT_REGISTER_FULL', { tid, userId });
+      logger.logAction('TOURNAMENT_REGISTER_FULL', { tid: safeTid, userId: safeUserId });
       return { success: false, message: 'Slots Full', type: 'FULL' };
     }
 
     // 2. Finalize Registration State (v2.6.309: Instant UPI support)
-    // As per user request, UPI payments now lead to immediate registration.
-    const updatedTournaments = tournaments.map(t => {
-      if (t.id === tid) {
+    const updatedTournaments = safeTournaments.map(t => {
+      if (String(t.id) === safeTid) {
         return {
           ...t,
-          registeredPlayerIds: [...new Set([...(t.registeredPlayerIds || []), userId])],
-          pendingPaymentPlayerIds: (t.pendingPaymentPlayerIds || []).filter(pid => pid !== userId),
+          registeredPlayerIds: [...new Set([...(t.registeredPlayerIds || []), safeUserId])],
+          pendingPaymentPlayerIds: (t.pendingPaymentPlayerIds || []).filter(pid => String(pid) !== safeUserId),
           pendingPaymentTimestamps: (() => {
             const ts = { ...(t.pendingPaymentTimestamps || {}) };
-            delete ts[userId];
+            delete ts[safeUserId];
             return ts;
           })(),
-          waitlistedPlayerIds: (t.waitlistedPlayerIds || []).filter(pid => pid !== userId),
-          optedOutPlayerIds: (t.optedOutPlayerIds || []).filter(pid => pid !== userId),
+          waitlistedPlayerIds: (t.waitlistedPlayerIds || []).filter(pid => String(pid) !== safeUserId),
+          optedOutPlayerIds: (t.optedOutPlayerIds || []).filter(pid => String(pid) !== safeUserId),
           playerStatuses: (() => {
             const rest = { ...(t.playerStatuses || {}) };
-            delete rest[userId];
+            delete rest[safeUserId];
             return rest;
           })()
         };
@@ -72,7 +76,7 @@ class TournamentService {
     
     let updatedCurrentUser = {
       ...currentUser,
-      registeredTournamentIds: [...new Set([...(currentUser.registeredTournamentIds || []), tid])]
+      registeredTournamentIds: [...new Set([...(currentUser.registeredTournamentIds || []), safeTid])]
     };
 
     // Deduct credits ONLY if method is 'credits'
@@ -98,14 +102,15 @@ class TournamentService {
       ];
     }
 
-    let updatedPlayers = players.map(p => 
-      String(p.id).toLowerCase() === String(userId).toLowerCase() ? updatedCurrentUser : p
-    );
+    let updatedPlayers = safePlayers.map(p => {
+      if (!p || !p.id) return p;
+      return String(p.id).toLowerCase() === safeUserId.toLowerCase() ? updatedCurrentUser : p;
+    });
 
     if (referralBonus > 0 && currentUser.referredBy) {
-      const referrerId = currentUser.referredBy;
+      const referrerId = String(currentUser.referredBy).toLowerCase();
       updatedPlayers = updatedPlayers.map(p => {
-        if (String(p.id).toLowerCase() === String(referrerId).toLowerCase()) {
+        if (p && String(p.id).toLowerCase() === referrerId) {
           return {
             ...p,
             credits: (p.credits || 0) + 100,
@@ -119,11 +124,11 @@ class TournamentService {
       });
     }
 
-    logger.logAction('TOURNAMENT_REGISTER_SUCCESS', { tid, userId, method, bonus: referralBonus });
+    logger.logAction('TOURNAMENT_REGISTER_SUCCESS', { tid: safeTid, userId: safeUserId, method, bonus: referralBonus });
 
     return {
       success: true,
-      type: 'SUCCESS',
+      type: method === 'upi' ? 'UPI_SUCCESS' : 'SUCCESS',
       tournaments: updatedTournaments,
       players: updatedPlayers,
       currentUser: updatedCurrentUser,

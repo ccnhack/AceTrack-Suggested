@@ -11,6 +11,7 @@ import * as Location from 'expo-location';
 import logger from '../utils/logger';
 import TournamentDetailModal from '../components/TournamentDetailModal';
 import TournamentCard from '../components/TournamentCard';
+import GlobalHeader from '../components/GlobalHeader';
 import { colors, shadows, typography, borderRadius, spacing } from '../theme/designSystem';
 import { isTournamentPast, getVisibleTournaments, formatDateIST } from '../utils/tournamentUtils';
 import { useIsFocused } from '@react-navigation/native';
@@ -322,6 +323,15 @@ const ExploreScreen = ({ navigation, route }) => {
     });
   }, [displayTournaments, userLocation]);
 
+  const upcomingUserMatches = useMemo(() => {
+    if (!userId) return [];
+    return tournaments.filter(t => {
+      const isRegistered = (t.registeredPlayerIds || []).some(id => String(id).toLowerCase() === String(userId).toLowerCase());
+      const isPending = (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(userId).toLowerCase());
+      return (isRegistered || isPending) && !isTournamentPast(t.date, serverClockOffset);
+    }).sort((a, b) => new Date(a.date) - new Date(b.date));
+  }, [tournaments, userId, serverClockOffset]);
+
   const recommendedTournaments = useMemo(() => {
     return (sortedTournaments || [])
       .filter(t => {
@@ -371,7 +381,10 @@ const ExploreScreen = ({ navigation, route }) => {
             }
         } catch (e) {
             console.error('[ExploreScreen] Finalize Error:', e);
-            Alert.alert("Error", "Could not complete registration. Please try again.");
+            // 🛡️ [DIAGNOSTICS] (v2.6.311)
+            // Log the error details to the persistent logger for remote debugging
+            logger.addLog('error', 'registration_failure', { error: e.message, stack: e.stack, tid: regPaymentTarget?.id });
+            Alert.alert("Error", `Could not complete registration: ${e.message || 'Please try again.'}`);
         }
     };
 
@@ -442,34 +455,28 @@ const ExploreScreen = ({ navigation, route }) => {
 
   return (
     <View style={styles.container}>
-      <LinearGradient 
-        colors={[colors.navy[900], colors.navy[900]]} 
-        style={[styles.hero, { paddingTop: Math.max(insets.top, 16) }]}
-      >
-        <View style={styles.heroContent}>
-          <View style={styles.headerRow}>
-            <View>
-              <Text style={[styles.heroTitle, { color: '#FFFFFF', textTransform: 'uppercase' }]}>ACETRACK</Text>
-              <Text style={[styles.heroSubtitle, { color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' }]}>
-                {selectedHub.includes('Current Location') ? 'Nearby Arenas' : `${cityFilter} Circuit`}
-              </Text>
-            </View>
-            <TouchableOpacity 
-              testID="explore.city.picker"
-              style={[styles.compactCityPicker, isCityDropdownVisible && styles.compactCityPickerActive]} 
-              onPress={toggleCityDropdown}
-            >
-              <Ionicons name="location" size={14} color="#FFFFFF" />
-              <Text style={styles.compactCityText} numberOfLines={1}>
-                {selectedHub.includes('Current Location') 
-                   ? (selectedHub.includes('(') ? selectedHub.split('(')[1].replace(')', '') : 'Current Location') 
-                   : (cityFilter === 'All' ? 'India' : cityFilter)
-                }
-              </Text>
-              <Ionicons name="chevron-down" size={12} color="rgba(255,255,255,0.6)" />
-            </TouchableOpacity>
-          </View>
-        </View>
+      <GlobalHeader title="DASHBOARD" />
+      
+      <View style={styles.filterSection}>
+        <TouchableOpacity 
+          testID="explore.city.picker"
+          style={[styles.compactCityPicker, isCityDropdownVisible && styles.compactCityPickerActive]} 
+          onPress={toggleCityDropdown}
+        >
+          <Ionicons name="location" size={14} color="#FFFFFF" />
+          <Text style={styles.compactCityText} numberOfLines={1}>
+            {selectedHub.includes('Current Location') 
+               ? (selectedHub.includes('(') ? selectedHub.split('(')[1].replace(')', '') : 'Current Location') 
+               : (cityFilter === 'All' ? 'India' : cityFilter)
+            }
+          </Text>
+          <Ionicons name="chevron-down" size={12} color="rgba(255,255,255,0.6)" />
+        </TouchableOpacity>
+
+        <Text style={styles.filterSubtitle}>
+          {selectedHub.includes('Current Location') ? 'NEARBY ARENAS' : `${cityFilter.toUpperCase()} CIRCUIT`}
+        </Text>
+      </View>
 
         {isCityDropdownVisible && (
           <View style={styles.cityDropdown}>
@@ -527,7 +534,6 @@ const ExploreScreen = ({ navigation, route }) => {
             ))}
           </ScrollView>
         </View>
-      </LinearGradient>
 
       <FlatList
         data={sortedTournaments}
@@ -535,9 +541,63 @@ const ExploreScreen = ({ navigation, route }) => {
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
-          sortedTournaments.length > 0 ? (
-            <View style={styles.main}>
-              {recommendedTournaments.length > 0 && !reschedulingFrom && userRole !== 'coach' && (
+          <View style={styles.main}>
+            {/* Quick Stats Section */}
+            {!reschedulingFrom && userRole !== 'coach' && (
+              <View style={styles.statsSection}>
+                <View style={styles.statCard}>
+                  <Text style={styles.statTitle}>WALLET</Text>
+                  <Text style={styles.statValue}>₹{currentUser?.credits || 0}</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statTitle}>WIN RATE</Text>
+                  <Text style={styles.statValue}>{currentUser?.winRate || '0%'}</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statTitle}>MATCHES</Text>
+                  <Text style={styles.statValue}>{currentUser?.totalMatches || 0}</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Upcoming Matches Slider */}
+            {upcomingUserMatches.length > 0 && !reschedulingFrom && (
+              <View style={styles.dashboardSection}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Your Next Arena</Text>
+                  <TouchableOpacity onPress={() => navigation.navigate('Matches')}>
+                    <Text style={styles.viewAllText}>View All</Text>
+                  </TouchableOpacity>
+                </View>
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false} 
+                  contentContainerStyle={styles.upcomingSlider}
+                >
+                  {upcomingUserMatches.map(match => (
+                    <TouchableOpacity 
+                      key={`next-${match.id}`} 
+                      style={styles.upcomingMatchCard}
+                      onPress={() => setSelectedTournament(match)}
+                    >
+                      <View style={styles.matchCardTop}>
+                        <View style={styles.matchSportBadge}>
+                          <Text style={styles.matchSportText}>{match.sport}</Text>
+                        </View>
+                        <Text style={styles.matchDateText}>{formatDateIST(match.date)}</Text>
+                      </View>
+                      <Text style={styles.matchTitleText} numberOfLines={1}>{match.title}</Text>
+                      <View style={styles.matchCardBottom}>
+                        <Ionicons name="location" size={12} color={colors.primary.base} />
+                        <Text style={styles.matchLocationText} numberOfLines={1}>{match.location}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {recommendedTournaments.length > 0 && !reschedulingFrom && userRole !== 'coach' && (
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Recommended for you</Text>
                   {recommendedTournaments.map(t => (
@@ -569,9 +629,8 @@ const ExploreScreen = ({ navigation, route }) => {
                     <Text style={styles.cancelText}>Cancel</Text>
                   </TouchableOpacity>
                 </View>
-              )}
-            </View>
-          ) : null
+            )}
+          </View>
         }
         ListEmptyComponent={
           <View style={[styles.main, { flex: 1, justifyContent: 'center', alignItems: 'center' }]}>
@@ -636,20 +695,33 @@ const ExploreScreen = ({ navigation, route }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.navy[50] },
-  hero: { borderBottomLeftRadius: 40, borderBottomRightRadius: 40, paddingBottom: 20, ...shadows.md },
-  heroContent: { paddingHorizontal: 24, paddingTop: 16, marginBottom: 12 },
-  heroTitle: { ...typography.display, letterSpacing: -1 },
-  heroSubtitle: { ...typography.micro, marginTop: 4 },
-  filterContainer: { paddingHorizontal: 24, gap: 12 },
-  filterButton: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 16, backgroundColor: 'rgba(255, 255, 255, 0.1)' },
-  filterButtonActive: { backgroundColor: colors.primary.base },
-  filterButtonText: { fontSize: 12, fontWeight: '900', color: '#CBD5E1', textTransform: 'uppercase', letterSpacing: 1 },
-  filterButtonTextActive: { color: '#FFFFFF' },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  compactCityPicker: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', maxWidth: '40%' },
-  compactCityPickerActive: { backgroundColor: 'rgba(255,255,255,0.2)', borderColor: '#EF4444' },
-  compactCityText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800', marginHorizontal: 4 },
+  container: { flex: 1, backgroundColor: colors.navy[900] },
+  filterSection: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    backgroundColor: colors.navy[900],
+  },
+  filterSubtitle: {
+    ...typography.micro,
+    color: colors.primary.base,
+    letterSpacing: 2,
+  },
+  compactCityPicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.glass.medium,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    gap: 6,
+  },
+  compactCityPickerActive: { borderColor: colors.primary.base },
+  compactCityText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
   cityDropdown: { backgroundColor: '#1E293B', borderRadius: 20, marginTop: 8, padding: 12, marginHorizontal: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 15, elevation: 20 },
   dropdownHeader: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(15, 23, 42, 0.6)', borderRadius: 12, paddingHorizontal: 12, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
   dropdownSearchInput: { flex: 1, height: 40, color: '#FFFFFF', fontSize: 13, marginLeft: 8 },
@@ -690,45 +762,134 @@ const styles = StyleSheet.create({
   sportChipActive: { backgroundColor: '#EF4444', borderColor: '#EF4444' },
   sportChipText: { fontSize: 12, color: '#94A3B8', fontWeight: '900', textTransform: 'uppercase' },
   sportChipTextActive: { color: '#fff' },
-  main: {
-    padding: 24,
-    paddingBottom: 20,
-  },
-  distanceIndicator: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#64748B',
-    marginTop: 2,
-    textTransform: 'uppercase',
-  },
-  section: {
-    marginBottom: 32,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginBottom: 32,
+  main: { paddingBottom: 40 },
+  section: { paddingHorizontal: 24, marginTop: 32 },
+  sectionHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    paddingHorizontal: 24, 
+    marginTop: 32,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: '900',
-    color: '#0F172A',
+    color: '#FFFFFF',
     textTransform: 'uppercase',
     letterSpacing: -0.5,
   },
   liveBadge: {
-    backgroundColor: '#FEF2F2',
-    paddingHorizontal: 8,
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.2)',
   },
   liveBadgeText: {
     fontSize: 10,
-    fontWeight: 'bold',
-    color: '#EF4444',
+    fontWeight: '900',
+    color: '#22C55E',
     textTransform: 'uppercase',
+  },
+  
+  // New Dashboard Styles
+  statsSection: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 24,
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: colors.glass.medium,
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    alignItems: 'center',
+    gap: 4,
+  },
+  statTitle: {
+    ...typography.micro,
+    color: colors.navy[400],
     letterSpacing: 1,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+  dashboardSection: {
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  viewAllText: {
+    ...typography.micro,
+    color: colors.primary.base,
+    fontWeight: '900',
+  },
+  upcomingSlider: {
+    paddingHorizontal: 24,
+    gap: 16,
+    paddingBottom: 8,
+  },
+  upcomingMatchCard: {
+    width: width * 0.75,
+    backgroundColor: colors.navy[800],
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  matchCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  matchSportBadge: {
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
+  },
+  matchSportText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#3B82F6',
+    textTransform: 'uppercase',
+  },
+  matchDateText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: colors.navy[400],
+  },
+  matchTitleText: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    marginBottom: 12,
+  },
+  matchCardBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  matchLocationText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.navy[400],
+    flex: 1,
   },
   recCard: {
     backgroundColor: '#1E293B',

@@ -12,6 +12,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import logger from '../utils/logger';
 import { parseTournamentDateTime, isTournamentPast } from '../utils/tournamentUtils';
 import MatchCard from '../components/MatchCard';
+import GlobalHeader from '../components/GlobalHeader';
+import { colors, typography, borderRadius, spacing } from '../theme/designSystem';
 import { useIsFocused } from '@react-navigation/native';
 import { FlatList } from 'react-native';
 
@@ -522,12 +524,10 @@ const MatchesScreen = ({ route, navigation }) => {
 
 
   return (
-    <View testID="matches.screen.container" style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
+    <View testID="matches.screen.container" style={styles.container}>
+      <GlobalHeader title="SCHEDULE" />
+      
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Matches</Text>
-          <Text style={styles.headerSubtitle}>Your Schedule</Text>
-        </View>
         <View style={styles.tabs}>
           {isCoach && (
             <TouchableOpacity
