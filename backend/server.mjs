@@ -2850,9 +2850,55 @@ router.get('/auth/me', apiKeyGuard, asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, error: 'User not found.' });
   }
 
-  // Return sanitized user object
-  const { password, ...sanitizedUser } = user;
-  res.json({ success: true, user: sanitizedUser });
+// 🛡️ [EMERGENCY RECOVERY] (v2.6.312)
+// Restores the previous AppState document if a wipe occurred.
+router.post('/admin/restore-last-state', apiKeyGuard, asyncHandler(async (req, res) => {
+  const { confirm } = req.body;
+  if (confirm !== 'RESTORE_PREVIOUS_STATE') {
+    return res.status(400).json({ error: 'Confirmation string required.' });
+  }
+
+  // Find the last 2 states
+  const states = await AppState.find().sort({ lastUpdated: -1 }).limit(2);
+  
+  if (states.length < 2) {
+    return res.status(404).json({ error: 'No previous state found for recovery.' });
+  }
+
+  const current = states[0];
+  const previous = states[1];
+
+  console.log(`🛡️ [RECOVERY] Attempting restoration. Current: ${current._id} (v${current.version}), Previous: ${previous._id} (v${previous.version})`);
+  
+  // Create a NEW state document that copies the PREVIOUS state's data but with a NEW timestamp and incremented version
+  const recovered = new AppState({
+    data: previous.data,
+    version: (current.version || 1) + 1,
+    lastUpdated: new Date(),
+    lastSocketId: 'SYSTEM_RECOVERY'
+  });
+
+  await recovered.save();
+
+  console.log(`✅ [RECOVERY] Successfully promoted previous state to latest. New Version: ${recovered.version}`);
+  
+  // 🛡️ [AUDIT]
+  await logAudit(req, 'STATE_RECOVERY_EXECUTED', [], { 
+    fromVersion: current.version, 
+    toVersion: recovered.version,
+    restoredFrom: previous.lastUpdated
+  });
+
+  res.json({ 
+    success: true, 
+    message: `State recovered successfully. Restored data from ${previous.lastUpdated.toISOString()}.`,
+    newVersion: recovered.version
+  });
+}));
+
+// Return sanitized user object
+const { password, ...sanitizedUser } = user;
+res.json({ success: true, user: sanitizedUser });
 }));
 
 router.post('/admin/login', loginLimiter, asyncHandler(async (req, res) => {
