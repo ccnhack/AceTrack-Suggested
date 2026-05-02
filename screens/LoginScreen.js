@@ -167,6 +167,12 @@ const LoginScreen = ({ navigation }) => {
       }
 
       if (foundUser) {
+        // 🛡️ [WEB ACCESS GUARD] (v2.6.314) Prevent regular mobile users from logging into the web portal
+        if (Platform.OS === 'web' && foundUser.role !== 'admin' && foundUser.role !== 'support') {
+          setError('User not found.');
+          return;
+        }
+
         if (foundUser.role === 'support' && (foundUser.supportStatus === 'terminated' || foundUser.supportStatus === 'inactive' || foundUser.supportStatus === 'suspended')) {
           setError('Access Suspended: Profile deactivated.');
           return;

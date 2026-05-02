@@ -90,8 +90,8 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = "2.6.313"; 
- // 🚀 FORCE REDEPLOY CACHE BUST v2.6.313 
+const APP_VERSION = "2.6.314"; 
+ // 🚀 FORCE REDEPLOY CACHE BUST v2.6.314 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -4502,7 +4502,7 @@ app.use((err, req, res, next) => {
   res.status(status).json({
     "success": false,
     "error": message,
-    "version": "2.6.313",
+    "version": "2.6.314",
     "timestamp": getISTDate()
   });
 });
