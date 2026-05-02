@@ -90,8 +90,8 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = "2.6.312"; 
- // 🚀 FORCE REDEPLOY CACHE BUST v2.6.312 
+const APP_VERSION = "2.6.313"; 
+ // 🚀 FORCE REDEPLOY CACHE BUST v2.6.313 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -1942,33 +1942,27 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
 
         if (['players', 'matchmaking', 'tournaments', 'matches', 'auditLogs', 'matchVideos', 'supportTickets', 'evaluations'].includes(key) && Array.isArray(incoming)) {
           const atomicKeys = req.body.atomicKeys || [];
-          if (atomicKeys.includes(key)) {
-            console.log(`[SYNC_DEBUG] Atomic Overwrite for key: ${key} (${incoming.length} items)`);
-            
-            // 🛡️ IRON-CLAD ADMIN GUARD (v2.6.197): Prevent thinned atomic sync from wiping passwords/tokens
-            if (key === 'players' && currentData.players) {
-              const incomingHasThinning = incoming.some(p => p._thinned);
-              if (incomingHasThinning) {
-                console.warn(`🛑 Blocked thinned atomic overwrite of 'players' from ${req.ip}. Falling back to merge.`);
-              } else {
-                // Not thinned? Still preserve the admin password no matter what
-                const oldAdmin = currentData.players.find(p => p.id === 'admin');
-                if (oldAdmin) {
-                  const newAdminIdx = incoming.findIndex(p => p.id === 'admin');
-                  if (newAdminIdx !== -1) {
-                    incoming[newAdminIdx].password = oldAdmin.password;
-                    incoming[newAdminIdx].pushTokens = oldAdmin.pushTokens;
-                    incoming[newAdminIdx].devices = oldAdmin.devices;
-                    console.log('🛡️ [GUARD] Preserved Admin Credentials during atomic overwrite.');
-                  }
-                }
-                newMasterData[key] = incoming;
-                continue;
-              }
-            } else {
-              newMasterData[key] = incoming;
-              continue; 
+
+          // 🛡️ [PRODUCTION SAFETY] (v2.6.313): NEVER allow atomic overwrites for 'players'
+          // Players contain auth credentials, wallet data, and identity. Atomic overwrites 
+          // from clients with thinned/stale data are the #1 cause of data loss incidents.
+          if (key === 'players' && atomicKeys.includes(key)) {
+            console.warn(`🛑 [SAFETY] Blocked atomic overwrite of 'players' from ${req.ip}. Forced to merge mode.`);
+            // Fall through to merge logic below
+          }
+          // 🛡️ [PAYLOAD SIZE GUARD] (v2.6.313): Reject players arrays that are suspiciously small
+          // compared to current data. This prevents accidental wipes from partially-loaded clients.
+          else if (key === 'players' && currentData.players && currentData.players.length > 5) {
+            if (incoming.length < currentData.players.length * 0.5) {
+              console.error(`🛑 [SIZE_GUARD] BLOCKED: Incoming players (${incoming.length}) is less than 50% of current (${currentData.players.length}). Skipping key.`);
+              await logAudit(req, 'PLAYERS_SIZE_GUARD_BLOCKED', ['players'], { incomingCount: incoming.length, currentCount: currentData.players.length });
+              continue;
             }
+          }
+          else if (atomicKeys.includes(key) && key !== 'players') {
+            console.log(`[SYNC_DEBUG] Atomic Overwrite for key: ${key} (${incoming.length} items)`);
+            newMasterData[key] = incoming;
+            continue; 
           }
           const entityMap = new Map();
           (currentData[key] || []).forEach(e => { if (e && e.id) entityMap.set(String(e.id).toLowerCase(), e); });
@@ -2050,11 +2044,20 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
                   });
                 }
                 // 🛡️ PASSWORD GUARD (v2.6.145): Preserve server-side password for support users
-                // Prevents mobile sync from overwriting admin force-reset passwords
                 const preservedPassword = (existing.role === 'support') ? existing.password : (p.password || existing.password);
                 const preservedStatus = (existing.role === 'support' && existing.supportStatus) 
                   ? existing.supportStatus : (p.supportStatus || existing.supportStatus);
-                entityMap.set(id, { ...existing, ...p, devices: mergedDevices, password: preservedPassword, supportStatus: preservedStatus });
+                
+                // 🛡️ [DEFINED-ONLY MERGE] (v2.6.313): Only overwrite fields that are explicitly
+                // present in the incoming data. Thinned players have many fields set to undefined;
+                // spreading them would silently delete wallet, history, notifications, etc.
+                const definedFields = {};
+                for (const [fieldKey, fieldVal] of Object.entries(p)) {
+                  if (fieldVal !== undefined && fieldKey !== 'devices' && fieldKey !== 'password' && fieldKey !== 'supportStatus') {
+                    definedFields[fieldKey] = fieldVal;
+                  }
+                }
+                entityMap.set(id, { ...existing, ...definedFields, devices: mergedDevices, password: preservedPassword, supportStatus: preservedStatus });
               } else {
                 if (key === 'matchmaking') {
                   const statusChanged = existing && p.status && p.status !== existing.status;
@@ -2150,10 +2153,14 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
 
     const nextVersion = currentVersion + 1;
 
+    // 🛡️ [BUG-1 + BUG-3 FIX] (v2.6.313): 
+    // 1. Use nextVersion (server-incremented) instead of clientVersion to ensure monotonic OCC.
+    // 2. Target the specific document by _id to prevent writing to orphaned AppState documents.
+    const updateFilter = state?._id ? { _id: state._id } : {};
     const updatedState = await AppState.findOneAndUpdate(
-      {},
-      { $set: { data: newMasterData, version: clientVersion, lastUpdated: now } },
-      { upsert: true, returnDocument: 'after' } // 🛡️ Modern Mongoose (v2.6.48)
+      updateFilter,
+      { $set: { data: newMasterData, version: nextVersion, lastUpdated: now } },
+      { upsert: true, returnDocument: 'after' }
     );
 
     const socketId = req.headers['x-socket-id'];
@@ -4495,7 +4502,7 @@ app.use((err, req, res, next) => {
   res.status(status).json({
     "success": false,
     "error": message,
-    "version": "2.6.312",
+    "version": "2.6.313",
     "timestamp": getISTDate()
   });
 });

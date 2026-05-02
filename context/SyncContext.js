@@ -98,6 +98,10 @@ export const SyncProvider = ({ children }) => {
     }
   }, []);
 
+  // 🛡️ [BUG-9 FIX] (v2.6.313): Retry counter to prevent unbounded recursion on persistent timeouts
+  const loadDataRetryCountRef = useRef(0);
+  const MAX_LOAD_RETRIES = 3;
+
   const loadData = useCallback(async (forceCloud = false, isSilent = false) => {
     const operation = async () => {
       const controller = new AbortController();
@@ -151,20 +155,28 @@ export const SyncProvider = ({ children }) => {
           console.log('[SyncContext] loadData: Success, syncing to local storage...');
           // Data from pull is 'Internal' by default to prevent echo-backs
           await syncManager.syncAndSaveData(data, false, true);
+          // Reset retry counter on success
+          loadDataRetryCountRef.current = 0;
           return data;
         }
         return null;
       } catch (error) {
         clearTimeout(timeoutId);
         if (error.name === 'AbortError') {
-          console.warn('[SyncContext] loadData: TIMEOUT (10s reached)');
-          // 🛡️ [SYNC RECOVERY] (v2.6.121) Retry after transient timeout
-          setTimeout(() => {
-            if (!syncManager.isSyncActive()) {
-              console.log('[SyncContext] Attempting recovery pull after timeout...');
-              loadData(true, true);
-            }
-          }, 2000);
+          console.warn('[SyncContext] loadData: TIMEOUT (30s reached)');
+          // 🛡️ [BUG-9 FIX] (v2.6.313): Bounded retry with counter
+          if (loadDataRetryCountRef.current < MAX_LOAD_RETRIES) {
+            loadDataRetryCountRef.current++;
+            console.log(`[SyncContext] Retry ${loadDataRetryCountRef.current}/${MAX_LOAD_RETRIES} after timeout...`);
+            setTimeout(() => {
+              if (!syncManager.isSyncActive()) {
+                loadData(true, true);
+              }
+            }, 2000 * loadDataRetryCountRef.current); // Exponential backoff
+          } else {
+            console.warn('[SyncContext] Max retries reached. Stopping retry loop.');
+            loadDataRetryCountRef.current = 0;
+          }
         } else {
           console.error('[SyncContext] loadData failed:', error);
         }

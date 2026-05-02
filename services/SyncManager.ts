@@ -797,7 +797,7 @@ class SyncManager {
           ...updates,
           version: this.syncVersion,
           isInternal,
-          atomicKeys: ['matchmaking', ...(updates.atomicKeys || [])]
+          atomicKeys: [...(updates.atomicKeys || [])]
         }),
         credentials: 'include',
         signal: controller.signal

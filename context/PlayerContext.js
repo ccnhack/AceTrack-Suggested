@@ -62,8 +62,13 @@ export const PlayerProvider = ({ children }) => {
 
   // 🛡️ [REFERRAL CODE BACKFILL] (v2.6.121) 
   // One-time migration: Generate deterministic referral codes for legacy players missing them
+  // 🛡️ [BUG-7 FIX] (v2.6.313): Backfill is now local-only. Pushing thinned player data to cloud
+  // via syncAndSaveData was causing full profiles to be overwritten with thinned copies.
+  const backfillDoneRef = useRef(false);
   useEffect(() => {
+    if (backfillDoneRef.current) return;
     if (players.length > 0 && players.some(p => !p.referralCode)) {
+      backfillDoneRef.current = true;
       const getStableSuffix = (id) => {
         const str = String(id);
         let hash = 0;
@@ -82,9 +87,10 @@ export const PlayerProvider = ({ children }) => {
       });
 
       if (updated.some((p, i) => p !== players[i])) {
-        console.log('[PlayerContext] Backfilling referral codes for legacy players...');
+        console.log('[PlayerContext] Backfilling referral codes for legacy players (local only)...');
         setPlayers(updated);
-        syncAndSaveData({ players: updated });
+        // 🛡️ Save to local storage only — do NOT push thinned data to cloud
+        storage.setItem('players', updated);
       }
     }
   }, [players.length]); // Only run when player count changes (initial load)
