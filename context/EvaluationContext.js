@@ -1,54 +1,36 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import storage from '../utils/storage';
+import React, { createContext, useContext, useCallback, useMemo } from 'react';
 import { syncManager } from '../services/SyncManager';
 import { useSync } from './SyncContext';
-import { eventBus } from '../services/EventBus';
+import { useEvaluationsStore } from '../stores';
+import { useEvaluationsQuery } from '../stores/hooks';
 
 const EvaluationContext = createContext(null);
 
-export const useEvaluations = () => useContext(EvaluationContext);
+export const useEvaluations = () => {
+  const { data: evaluations } = useEvaluationsQuery();
+  const context = useContext(EvaluationContext);
+
+  return { 
+    evaluations: evaluations || [], 
+    ...context 
+  };
+};
 
 export const EvaluationProvider = ({ children }) => {
-  const [evaluations, setEvaluations] = useState([]);
-  const evaluationsRef = useRef([]);
+  const setEvaluationsStore = useEvaluationsStore(s => s.setEvaluations);
   const { syncAndSaveData } = useSync();
 
-  useEffect(() => {
-    evaluationsRef.current = evaluations;
-  }, [evaluations]);
-
-  // Initial Hydration
-  useEffect(() => {
-    const hydrate = async () => {
-      const saved = await syncManager.getSystemFlag('evaluations');
-      if (saved) setEvaluations(saved);
-    };
-    hydrate();
-  }, []);
-
-  // Entity Listener
-  useEffect(() => {
-    const unsub = eventBus.subscribe('ENTITY_UPDATED', async (e) => {
-      const { entity, source } = e.payload;
-      if (entity === 'evaluations' && (source === 'socket' || source === 'api')) {
-        const freshData = await syncManager.getSystemFlag('evaluations');
-        if (freshData) setEvaluations(freshData);
-      }
-    });
-    return unsub;
-  }, []);
-
   const onSaveEvaluation = useCallback((evaluationData) => {
-    const updated = [evaluationData, ...evaluationsRef.current];
-    setEvaluations(updated);
+    const currentEvaluations = useEvaluationsStore.getState().evaluations;
+    const updated = [evaluationData, ...currentEvaluations];
+    setEvaluationsStore(updated);
     syncAndSaveData({ evaluations: updated });
-  }, [syncAndSaveData]);
+  }, [syncAndSaveData, setEvaluationsStore]);
 
-  const value = {
-    evaluations,
-    setEvaluations,
+  const value = useMemo(() => ({
+    setEvaluations: setEvaluationsStore,
     onSaveEvaluation
-  };
+  }), [setEvaluationsStore, onSaveEvaluation]);
 
   return (
     <EvaluationContext.Provider value={value}>

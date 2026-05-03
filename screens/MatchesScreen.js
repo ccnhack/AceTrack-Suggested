@@ -68,20 +68,22 @@ const MatchesScreen = ({ route, navigation }) => {
   }, [viewMode]);
 
   // 🧪 [E2E DIAGNOSTIC] Temporary debug log to understand Phase 4 data flow
-  console.log('--- MatchesScreen Render ---', { 
-    userId: user?.id, 
-    userRole: user?.role, 
-    viewMode, 
-    totalTournaments: tournaments?.length,
-    tournamentTitles: (tournaments || []).map(t => t.title),
-    assignedCount: (tournaments || []).filter(t => 
-      (t.registeredPlayerIds || []).some(id => String(id).toLowerCase() === String(user?.id).toLowerCase()) ||
-      (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user?.id).toLowerCase())
-    ).length,
-    pendingPaymentMatches: (tournaments || []).filter(t => 
-      (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user?.id).toLowerCase())
-    ).map(t => t.title)
-  });
+  if (__DEV__) {
+    console.log('--- MatchesScreen Render ---', { 
+      userId: user?.id, 
+      userRole: user?.role, 
+      viewMode, 
+      totalTournaments: tournaments?.length,
+      tournamentTitles: (tournaments || []).map(t => t.title),
+      assignedCount: (tournaments || []).filter(t => 
+        (t.registeredPlayerIds || []).some(id => String(id).toLowerCase() === String(user?.id).toLowerCase()) ||
+        (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user?.id).toLowerCase())
+      ).length,
+      pendingPaymentMatches: (tournaments || []).filter(t => 
+        (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user?.id).toLowerCase())
+      ).map(t => t.title)
+    });
+  }
 
   if (!user) return null;
 

@@ -10,6 +10,10 @@ import { useNavigation } from '@react-navigation/native';
 import { generateAIResponse } from '../services/aiService';
 import config from '../config';
 import { isTournamentPast, getVisibleTournaments, parseTournamentDate } from '../utils/tournamentUtils';
+import { useTournaments } from '../context/TournamentContext';
+import { usePlayers } from '../context/PlayerContext';
+import { useEvaluations } from '../context/EvaluationContext';
+import { useSupport } from '../context/SupportContext';
 
 const { width } = Dimensions.get('window');
 
@@ -122,10 +126,13 @@ const TicketPromptCard = ({ type, description, onConfirm, onCancel }) => {
 };
 
 const ChatBot = ({ 
-  user, userRole, userId, userSports, evaluations, 
-  chatbotMessages, onSendChatMessage, tournaments, 
-  onSaveTicket, players = [] 
+  user, userRole, userId, userSports
 }) => {
+  const { tournaments } = useTournaments();
+  const { players } = usePlayers();
+  const { evaluations } = useEvaluations();
+  const { chatbotMessages, onSendChatMessage, onSaveTicket } = useSupport();
+
   const [isOpen, setIsOpen] = useState(false);
   const navigation = useNavigation();
   const initialMessage = { role: 'model', text: 'Hi! I am your AceTrack assistant. Ask me anything about tournaments, rules, or training tips!' };

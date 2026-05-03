@@ -1,57 +1,33 @@
-import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
-import { eventBus } from '../services/EventBus';
+import React, { createContext, useContext, useCallback, useMemo } from 'react';
 import TicketService from '../services/TicketService';
 import storage from '../utils/storage';
 import { syncManager } from '../services/SyncManager';
 import { useSync } from './SyncContext';
 import { useAuth } from './AuthContext';
 import config from '../config';
+import { useSupportStore } from '../stores';
+import { useSupportTicketsQuery } from '../stores/hooks';
 
 const SupportContext = createContext(null);
 
-export const useSupport = () => useContext(SupportContext);
+export const useSupport = () => {
+  const { data: supportTickets } = useSupportTicketsQuery();
+  const chatbotMessages = useSupportStore(s => s.chatbotMessages);
+  const context = useContext(SupportContext);
+
+  return {
+    supportTickets: supportTickets || [],
+    chatbotMessages: chatbotMessages || {},
+    ...context
+  };
+};
 
 export const SupportProvider = ({ children }) => {
-  const [supportTickets, setSupportTickets] = useState([]);
-  const [chatbotMessages, setChatbotMessages] = useState({});
-  
-  // 🛡️ [C-3/C-4 FIX] (v2.6.315): Refs to prevent stale closure in rapid callbacks
-  const supportTicketsRef = useRef([]);
-  const chatbotMessagesRef = useRef({});
+  const setSupportTicketsStore = useSupportStore(s => s.setSupportTickets);
+  const setChatbotMessagesStore = useSupportStore(s => s.setChatbotMessages);
   
   const { syncAndSaveData } = useSync();
   const { currentUser, userRole, currentUserRef } = useAuth();
-
-  // Keep refs in sync
-  useEffect(() => { supportTicketsRef.current = supportTickets; }, [supportTickets]);
-  useEffect(() => { chatbotMessagesRef.current = chatbotMessages; }, [chatbotMessages]);
-
-  // Entity Listener & Hydration
-  useEffect(() => {
-    // 1. Initial Hydration
-    const hydrate = async () => {
-      const tickets = await syncManager.getSystemFlag('supportTickets');
-      if (tickets) setSupportTickets(tickets);
-      const chat = await syncManager.getSystemFlag('chatbotMessages');
-      if (chat) setChatbotMessages(chat);
-    };
-    hydrate();
-
-    // 2. Real-time Subscription
-    const unsub = eventBus.subscribe('ENTITY_UPDATED', async (e) => {
-      const { entity, source } = e.payload;
-      if (source === 'socket' || source === 'api') {
-        if (entity === 'supportTickets') {
-          const freshData = await syncManager.getSystemFlag('supportTickets');
-          if (freshData) setSupportTickets(freshData);
-        } else if (entity === 'chatbotMessages') {
-          const freshChat = await syncManager.getSystemFlag('chatbotMessages');
-          if (freshChat) setChatbotMessages(freshChat);
-        }
-      }
-    });
-    return unsub;
-  }, []);
 
   // 🛡️ [SUPPORT TELEMETRY] (v2.6.273)
   const logSupportActivity = useCallback(async (action, entityId, details) => {
@@ -73,74 +49,69 @@ export const SupportProvider = ({ children }) => {
     } catch (e) {
       console.warn("[SupportContext] Failed to log support activity:", e);
     }
-  }, [userRole, syncAndSaveData]);
+  }, [userRole, syncAndSaveData, currentUserRef]);
 
-  // 🛡️ [C-3 FIX] (v2.6.315): Use ref to prevent stale closure
   const onSendChatMessage = useCallback((messages) => {
     if (!currentUserRef.current) return;
     const userId = currentUserRef.current.id;
-    const updatedMessages = { ...chatbotMessagesRef.current, [userId]: messages };
-    setChatbotMessages(updatedMessages);
+    const currentMessages = useSupportStore.getState().chatbotMessages;
+    const updatedMessages = { ...currentMessages, [userId]: messages };
+    setChatbotMessagesStore(updatedMessages);
     syncAndSaveData({ chatbotMessages: updatedMessages });
-  }, [syncAndSaveData]);
+  }, [syncAndSaveData, currentUserRef, setChatbotMessagesStore]);
 
-  // 🛡️ [C-4 FIX] (v2.6.315): Use ref to prevent stale closure
   const onReplyTicket = useCallback((id, text, image, replyToMsg) => {
     const isAdmin = userRole === 'admin';
-    const result = TicketService.replyToTicket(id, text, image, replyToMsg, currentUserRef.current, supportTicketsRef.current, isAdmin);
+    const currentTickets = useSupportStore.getState().supportTickets;
+    const result = TicketService.replyToTicket(id, text, image, replyToMsg, currentUserRef.current, currentTickets, isAdmin);
     if (result.success) {
-      setSupportTickets(result.tickets);
-      // 🛡️ [FIX v2.6.121] Atomic push to prevent replies from being lost on stale cloud pull
+      setSupportTicketsStore(result.tickets);
       syncAndSaveData({ supportTickets: result.tickets }, true);
       logSupportActivity('TICKET_REPLY', id, `Replied to ticket ${id}`);
     }
     return result;
-  }, [userRole, syncAndSaveData, logSupportActivity]);
+  }, [userRole, syncAndSaveData, logSupportActivity, currentUserRef, setSupportTicketsStore]);
 
-  // 🛡️ [C-4 FIX] (v2.6.315): Use ref to prevent stale closure
   const onUpdateTicketStatus = useCallback((id, status, summary, justification) => {
-    const result = TicketService.updateStatus(id, status, summary, supportTicketsRef.current, justification);
+    const currentTickets = useSupportStore.getState().supportTickets;
+    const result = TicketService.updateStatus(id, status, summary, currentTickets, justification);
     if (result.success) {
-      setSupportTickets(result.tickets);
-      // 🛡️ [FIX v2.6.121] Atomic push to prevent status changes from being rolled back
+      setSupportTicketsStore(result.tickets);
       syncAndSaveData({ supportTickets: result.tickets }, true);
       logSupportActivity('TICKET_STATUS_CHANGE', id, `Changed status to ${status}`);
     }
     return result;
-  }, [syncAndSaveData, logSupportActivity]);
+  }, [syncAndSaveData, logSupportActivity, setSupportTicketsStore]);
 
-  // 🛡️ [C-4 FIX] (v2.6.315): Use ref to prevent stale closure
   const onSaveTicket = useCallback(async (ticket) => {
     const isAdmin = userRole === 'admin';
-    const result = await TicketService.saveTicket(ticket, supportTicketsRef.current, isAdmin);
+    const currentTickets = useSupportStore.getState().supportTickets;
+    const result = await TicketService.saveTicket(ticket, currentTickets, isAdmin);
     if (result.success) {
-      setSupportTickets(result.tickets);
+      setSupportTicketsStore(result.tickets);
       syncAndSaveData({ supportTickets: result.tickets });
       logSupportActivity('TICKET_SAVE', ticket.id || 'new', `Saved/Created ticket`);
     }
     return result;
-  }, [userRole, syncAndSaveData, logSupportActivity]);
+  }, [userRole, syncAndSaveData, logSupportActivity, setSupportTicketsStore]);
 
-  // 🛡️ [C-4 FIX] (v2.6.315): Use ref to prevent stale closure
   const onMarkSeen = useCallback((ticketId) => {
     if (!currentUserRef.current) return;
-    const result = TicketService.markSeen(ticketId, currentUserRef.current.id, supportTicketsRef.current);
+    const currentTickets = useSupportStore.getState().supportTickets;
+    const result = TicketService.markSeen(ticketId, currentUserRef.current.id, currentTickets);
     if (result.success) {
-      setSupportTickets(result.tickets);
+      setSupportTicketsStore(result.tickets);
       syncAndSaveData({ supportTickets: result.tickets }, true);
     }
     return result;
-  }, [syncAndSaveData]);
+  }, [syncAndSaveData, currentUserRef, setSupportTicketsStore]);
 
-  // 🛡️ [MIGRATION FIX] (v2.6.121) Retry failed message sync
-  // 🛡️ [C-4 FIX] (v2.6.315): Use ref to prevent stale closure
   const onRetryMessage = useCallback((ticketId, msgId) => {
     console.log(`🛡️ Retrying sync for message ${msgId} in ticket ${ticketId}`);
-    // Force a re-push of supportTickets to sync the pending message
-    syncAndSaveData({ supportTickets: supportTicketsRef.current }, true);
+    const currentTickets = useSupportStore.getState().supportTickets;
+    syncAndSaveData({ supportTickets: currentTickets }, true);
   }, [syncAndSaveData]);
 
-  /** 🛡️ [NEW v2.6.132] Claim a ticket from the unassigned pool */
   const onClaimTicket = useCallback(async (ticketId) => {
     try {
       const token = await storage.getItem('userToken');
@@ -160,22 +131,18 @@ export const SupportProvider = ({ children }) => {
       const data = await res.json();
       if (res.ok) {
         logSupportActivity('TICKET_CLAIMED', ticketId, `Claimed ticket from pool`);
-        
-        // 🛡️ [REAL-TIME FIX] Update local state immediately
         if (data && data.ticket) {
-           setSupportTickets(prev => prev.map(t => t.id === ticketId ? data.ticket : t));
+           const currentTickets = useSupportStore.getState().supportTickets;
+           setSupportTicketsStore(currentTickets.map(t => t.id === ticketId ? data.ticket : t));
         }
-        
-        // The server updated the master state; we rely on the next ENTITY_UPDATED to refresh globally.
         return { success: true };
       }
       return { success: false, error: "Failed to claim ticket" };
     } catch (e) {
       return { success: false, error: e.message };
     }
-  }, [currentUserRef, logSupportActivity]);
+  }, [currentUserRef, logSupportActivity, setSupportTicketsStore]);
 
-  /** 🛡️ [NEW v2.6.162] Reassign a specific ticket to another agent */
   const onReassignTicket = useCallback(async (ticketId, targetAgentId) => {
     try {
       const token = await storage.getItem('userToken');
@@ -196,7 +163,8 @@ export const SupportProvider = ({ children }) => {
       if (res.ok) {
         logSupportActivity('TICKET_ASSIGNED', ticketId, `Assigned ticket to agent ${targetAgentId}`);
         if (data && data.ticket) {
-           setSupportTickets(prev => prev.map(t => t.id === ticketId ? data.ticket : t));
+           const currentTickets = useSupportStore.getState().supportTickets;
+           setSupportTicketsStore(currentTickets.map(t => t.id === ticketId ? data.ticket : t));
         }
         return { success: true, message: data.message };
       }
@@ -204,14 +172,11 @@ export const SupportProvider = ({ children }) => {
     } catch (e) {
       return { success: false, error: e.message };
     }
-  }, [currentUserRef, logSupportActivity]);
+  }, [currentUserRef, logSupportActivity, setSupportTicketsStore]);
 
-
-  const value = {
-    supportTickets,
-    setSupportTickets,
-    chatbotMessages,
-    setChatbotMessages,
+  const value = useMemo(() => ({
+    setSupportTickets: setSupportTicketsStore,
+    setChatbotMessages: setChatbotMessagesStore,
     onSendChatMessage,
     onReplyTicket,
     onMarkSeen,
@@ -219,10 +184,12 @@ export const SupportProvider = ({ children }) => {
     onSaveTicket,
     onClaimTicket,
     onReassignTicket,
-    // 🛡️ [MIGRATION FIX] (v2.6.121) Missing handler
     onRetryMessage
-  };
-
+  }), [
+    setSupportTicketsStore, setChatbotMessagesStore, onSendChatMessage,
+    onReplyTicket, onMarkSeen, onUpdateTicketStatus, onSaveTicket,
+    onClaimTicket, onReassignTicket, onRetryMessage
+  ]);
 
   return (
     <SupportContext.Provider value={value}>

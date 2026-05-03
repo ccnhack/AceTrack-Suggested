@@ -1,12 +1,20 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useCallback, useMemo } from 'react';
 import { syncManager } from '../services/SyncManager';
-import { eventBus } from '../services/EventBus';
 import MatchService from '../services/MatchService';
 import { useSync } from './SyncContext';
+import { useMatchmakingQuery } from '../stores/hooks';
 
 const MatchmakingContext = createContext(null);
 
-export const useMatchmaking = () => useContext(MatchmakingContext);
+export const useMatchmaking = () => {
+  const { data: matchmaking } = useMatchmakingQuery();
+  const context = useContext(MatchmakingContext);
+  
+  return { 
+    matchmaking: matchmaking || [], 
+    ...context 
+  };
+};
 
 /**
  * MATCHMAKING CONTEXT (Phase 1.3+)
@@ -14,34 +22,7 @@ export const useMatchmaking = () => useContext(MatchmakingContext);
  * all business logic to MatchService and all state authority to SyncManager.
  */
 export const MatchmakingProvider = ({ children }) => {
-  const [matchmaking, setMatchmaking] = useState([]);
-  const matchmakingRef = useRef([]);
   const { syncAndSaveData } = useSync();
-
-  useEffect(() => {
-    matchmakingRef.current = matchmaking;
-  }, [matchmaking]);
-
-  // Initial Hydration from Authority
-  useEffect(() => {
-    const hydrate = async () => {
-      const saved = await syncManager.getSystemFlag('matchmaking');
-      if (saved) setMatchmaking(saved);
-    };
-    hydrate();
-  }, []);
-
-  // Reactive Listener: Sync state whenever the Authority (SyncManager) updates it
-  useEffect(() => {
-    const unsub = eventBus.subscribe('ENTITY_UPDATED', async (e) => {
-      const { entity } = e.payload;
-      if (entity === 'matchmaking') {
-        const freshData = await syncManager.getSystemFlag('matchmaking');
-        if (freshData) setMatchmaking(freshData);
-      }
-    });
-    return unsub;
-  }, []);
 
   /**
    * Delegates a challenge creation to the service and authority.
@@ -113,14 +94,19 @@ export const MatchmakingProvider = ({ children }) => {
     }
   }, [syncAndSaveData]);
 
-  const value = {
-    matchmaking,
+  const value = useMemo(() => ({
     createChallenge,
     respondToChallenge,
     proposeCounter,
     finalizeMatch,
     onUpdateMatchmaking
-  };
+  }), [
+    createChallenge,
+    respondToChallenge,
+    proposeCounter,
+    finalizeMatch,
+    onUpdateMatchmaking
+  ]);
 
   return (
     <MatchmakingContext.Provider value={value}>

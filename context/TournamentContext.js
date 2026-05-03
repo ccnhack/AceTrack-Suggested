@@ -1,20 +1,34 @@
-import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Alert } from 'react-native';
-import { eventBus } from '../services/EventBus';
 import TournamentService from '../services/TournamentService';
 import storage from '../utils/storage';
-import { syncManager } from '../services/SyncManager';
 import { useSync } from './SyncContext';
 import { useAuth } from './AuthContext';
 import { usePlayers } from './PlayerContext';
+import { useTournamentsStore } from '../stores';
+import { useTournamentsQuery } from '../stores/hooks';
 
 const TournamentContext = createContext(null);
 
-export const useTournaments = () => useContext(TournamentContext);
+export const useTournaments = () => {
+  const { data: tournaments } = useTournamentsQuery();
+  const context = useContext(TournamentContext);
+  
+  // Provide tournamentsRef for backward compatibility if components need it
+  const tournamentsRef = useRef(tournaments || []);
+  useEffect(() => {
+    tournamentsRef.current = tournaments || [];
+  }, [tournaments]);
+
+  return { 
+    tournaments: tournaments || [], 
+    tournamentsRef, 
+    ...context 
+  };
+};
 
 export const TournamentProvider = ({ children }) => {
-  const [tournaments, setTournaments] = useState([]);
-  const tournamentsRef = useRef([]);
+  const setTournamentsStore = useTournamentsStore(s => s.setTournaments);
   const [reschedulingFrom, setReschedulingFrom] = useState(null);
 
   const { syncAndSaveData } = useSync();
@@ -23,33 +37,8 @@ export const TournamentProvider = ({ children }) => {
   const playersRef = useRef(players);
 
   useEffect(() => {
-    tournamentsRef.current = tournaments;
-  }, [tournaments]);
-
-  useEffect(() => {
     playersRef.current = players;
   }, [players]);
-
-  // Initial Hydration
-  useEffect(() => {
-    const hydrate = async () => {
-      const saved = await syncManager.getSystemFlag('tournaments');
-      if (saved) setTournaments(saved);
-    };
-    hydrate();
-  }, []);
-
-  // Entity Listener
-  useEffect(() => {
-    const unsub = eventBus.subscribe('ENTITY_UPDATED', async (e) => {
-      const { entity, source } = e.payload;
-      if (entity === 'tournaments') {
-        const freshData = await syncManager.getSystemFlag('tournaments');
-        if (freshData) setTournaments(freshData);
-      }
-    });
-    return unsub;
-  }, []);
 
   const onRegister = useCallback(async (t, method, cost, isResched, fromTid) => {
     try {
@@ -59,7 +48,8 @@ export const TournamentProvider = ({ children }) => {
       }
       
       const tid = typeof t === 'object' ? t.id : t;
-      const tournament = tournamentsRef.current.find(it => it.id === tid);
+      const currentTournaments = useTournamentsStore.getState().tournaments;
+      const tournament = currentTournaments.find(it => it.id === tid);
       
       if (!tournament) {
         console.warn('[TournamentContext] Registration target not found:', tid);
@@ -75,7 +65,7 @@ export const TournamentProvider = ({ children }) => {
       const result = TournamentService.register(
         tid, 
         currentUserRef.current.id, 
-        tournamentsRef.current, 
+        currentTournaments, 
         playersRef.current, 
         currentUserRef.current,
         method,
@@ -83,7 +73,7 @@ export const TournamentProvider = ({ children }) => {
       );
       
       if (result && result.success) {
-        setTournaments(result.tournaments);
+        setTournamentsStore(result.tournaments);
         setPlayers(result.players);
         setCurrentUser(result.currentUser);
         
@@ -91,7 +81,6 @@ export const TournamentProvider = ({ children }) => {
         
         if (typeof syncAndSaveData !== 'function') {
            console.error('[TournamentContext] syncAndSaveData is undefined!');
-           // We continue because local state is updated, but this is why refresh fails
         } else {
            const syncSuccess = await syncAndSaveData({ 
              tournaments: result.tournaments, 
@@ -113,55 +102,58 @@ export const TournamentProvider = ({ children }) => {
       return result;
     } catch (e) {
       console.error('[TournamentContext] FATAL_ON_REGISTER_ERROR:', e);
-      // Detailed alert for the user to help debug
       Alert.alert('System Error', `Line: onRegister\nError: ${e.message}\nStack: ${e.stack?.substring(0, 100)}`);
       throw e; 
     }
-  }, [setTournaments, setPlayers, setCurrentUser, syncAndSaveData]);
+  }, [setTournamentsStore, setPlayers, setCurrentUser, syncAndSaveData]);
 
   const onJoinWaitlist = useCallback((t) => {
     if (!currentUserRef.current || !t) return null;
     const tid = typeof t === 'object' ? t.id : t;
+    const currentTournaments = useTournamentsStore.getState().tournaments;
     
-    const result = TournamentService.joinWaitlist(tid, currentUserRef.current.id, tournamentsRef.current);
+    const result = TournamentService.joinWaitlist(tid, currentUserRef.current.id, currentTournaments);
     
     if (result.success) {
-      setTournaments(result.tournaments);
+      setTournamentsStore(result.tournaments);
       syncAndSaveData({ tournaments: result.tournaments });
     } else {
       Alert.alert('Waitlist Error', result.message || 'Could not join waitlist.');
     }
     return result;
-  }, [setTournaments, syncAndSaveData]);
+  }, [setTournamentsStore, syncAndSaveData]);
 
   const onStartTournament = useCallback((tid) => {
-    const result = TournamentService.startTournament(tid, tournamentsRef.current);
-    setTournaments(result.tournaments);
+    const currentTournaments = useTournamentsStore.getState().tournaments;
+    const result = TournamentService.startTournament(tid, currentTournaments);
+    setTournamentsStore(result.tournaments);
     syncAndSaveData({ tournaments: result.tournaments }, true);
-  }, [syncAndSaveData]);
+  }, [setTournamentsStore, syncAndSaveData]);
 
   const onEndTournament = useCallback((tid) => {
-    const result = TournamentService.endTournament(tid, tournamentsRef.current);
-    setTournaments(result.tournaments);
+    const currentTournaments = useTournamentsStore.getState().tournaments;
+    const result = TournamentService.endTournament(tid, currentTournaments);
+    setTournamentsStore(result.tournaments);
     syncAndSaveData({ tournaments: result.tournaments }, true);
-  }, [syncAndSaveData]);
+  }, [setTournamentsStore, syncAndSaveData]);
 
   const onAssignCoach = useCallback((tid, cid) => {
-    const result = TournamentService.assignCoach(tid, cid, tournamentsRef.current);
-    setTournaments(result.tournaments);
+    const currentTournaments = useTournamentsStore.getState().tournaments;
+    const result = TournamentService.assignCoach(tid, cid, currentTournaments);
+    setTournamentsStore(result.tournaments);
     syncAndSaveData({ tournaments: result.tournaments });
-  }, [syncAndSaveData]);
+  }, [setTournamentsStore, syncAndSaveData]);
 
   const onRemoveCoach = useCallback((tid) => {
-    const result = TournamentService.removeCoach(tid, tournamentsRef.current);
-    setTournaments(result.tournaments);
+    const currentTournaments = useTournamentsStore.getState().tournaments;
+    const result = TournamentService.removeCoach(tid, currentTournaments);
+    setTournamentsStore(result.tournaments);
     syncAndSaveData({ tournaments: result.tournaments }, true);
-  }, [syncAndSaveData]);
+  }, [setTournamentsStore, syncAndSaveData]);
 
   const onApproveCoach = useCallback((coachId, status = 'approved', reason = '') => {
     const result = TournamentService.approveCoach(coachId, status, playersRef.current);
     if (result.success) {
-      // 🛡️ [FIX v2.6.303]: approveCoach modifies players, not tournaments
       const updatedPlayers = reason 
         ? result.players.map(p => String(p.id).toLowerCase() === String(coachId).toLowerCase() 
             ? { ...p, coachRejectReason: reason } 
@@ -174,67 +166,75 @@ export const TournamentProvider = ({ children }) => {
 
   const onSaveCoachComment = useCallback((tid, comment) => {
     if (!currentUserRef.current) return;
-    const result = TournamentService.addCoachComment(tid, currentUserRef.current.id, comment, tournamentsRef.current);
-    setTournaments(result.tournaments);
+    const currentTournaments = useTournamentsStore.getState().tournaments;
+    const result = TournamentService.addCoachComment(tid, currentUserRef.current.id, comment, currentTournaments);
+    setTournamentsStore(result.tournaments);
     syncAndSaveData({ tournaments: result.tournaments });
-  }, [syncAndSaveData]);
+  }, [setTournamentsStore, syncAndSaveData]);
 
   const onAddPlayer = useCallback((tid, playerName, playerPhone) => {
-    const result = TournamentService.addPlayer(tid, playerName, playerPhone, tournamentsRef.current, playersRef.current);
+    const currentTournaments = useTournamentsStore.getState().tournaments;
+    const result = TournamentService.addPlayer(tid, playerName, playerPhone, currentTournaments, playersRef.current);
     if (result.success) {
-      setTournaments(result.tournaments);
+      setTournamentsStore(result.tournaments);
       syncAndSaveData({ tournaments: result.tournaments });
       Alert.alert("Success", "Player added to tournament.");
     } else {
       Alert.alert("Error", result.message || "Failed to add player.");
     }
-  }, [syncAndSaveData]);
+  }, [setTournamentsStore, syncAndSaveData]);
 
   const onRemovePendingPlayer = useCallback((tid, pid) => {
-    const result = TournamentService.removePendingPlayer(tid, pid, tournamentsRef.current);
-    setTournaments(result.tournaments);
+    const currentTournaments = useTournamentsStore.getState().tournaments;
+    const result = TournamentService.removePendingPlayer(tid, pid, currentTournaments);
+    setTournamentsStore(result.tournaments);
     syncAndSaveData({ tournaments: result.tournaments }, true);
-  }, [syncAndSaveData]);
+  }, [setTournamentsStore, syncAndSaveData]);
 
   const onManageInterested = useCallback((tid, pid, action) => {
-    const result = TournamentService.manageInterested(tid, pid, action, tournamentsRef.current);
-    setTournaments(result.tournaments);
+    const currentTournaments = useTournamentsStore.getState().tournaments;
+    const result = TournamentService.manageInterested(tid, pid, action, currentTournaments);
+    setTournamentsStore(result.tournaments);
     syncAndSaveData({ tournaments: result.tournaments }, true);
-  }, [syncAndSaveData]);
+  }, [setTournamentsStore, syncAndSaveData]);
 
   const onDeclineCoachRequest = useCallback((t) => {
-    const result = TournamentService.declineCoachRequest(t.id, tournamentsRef.current);
-    setTournaments(result.tournaments);
+    const currentTournaments = useTournamentsStore.getState().tournaments;
+    const result = TournamentService.declineCoachRequest(t.id, currentTournaments);
+    setTournamentsStore(result.tournaments);
     syncAndSaveData({ tournaments: result.tournaments }, true);
-  }, [syncAndSaveData]);
+  }, [setTournamentsStore, syncAndSaveData]);
 
-  // 🛡️ [MIGRATION FIX] (v2.6.121) Missing handler used by MatchCard
   const onConfirmCoachRequest = useCallback((t) => {
     if (!currentUserRef.current) return;
-    const updated = tournamentsRef.current.map(item => 
+    const currentTournaments = useTournamentsStore.getState().tournaments;
+    const updated = currentTournaments.map(item => 
       item.id === t.id ? { ...item, assignedCoachId: currentUserRef.current.id, coachStatus: 'Coach Confirmed' } : item
     );
-    setTournaments(updated);
+    setTournamentsStore(updated);
     syncAndSaveData({ tournaments: updated });
-  }, [syncAndSaveData]);
+  }, [setTournamentsStore, syncAndSaveData]);
 
   const onSaveTournament = useCallback((newT) => {
-    const updated = [newT, ...tournamentsRef.current];
-    setTournaments(updated);
+    const currentTournaments = useTournamentsStore.getState().tournaments;
+    const updated = [newT, ...currentTournaments];
+    setTournamentsStore(updated);
     syncAndSaveData({ tournaments: updated });
-  }, [syncAndSaveData]);
+  }, [setTournamentsStore, syncAndSaveData]);
 
   const onUpdateTournament = useCallback((updated) => {
-    const updatedTournaments = tournamentsRef.current.map(t => t.id === updated.id ? updated : t);
-    setTournaments(updatedTournaments);
+    const currentTournaments = useTournamentsStore.getState().tournaments;
+    const updatedTournaments = currentTournaments.map(t => t.id === updated.id ? updated : t);
+    setTournamentsStore(updatedTournaments);
     syncAndSaveData({ tournaments: updatedTournaments });
-  }, [syncAndSaveData]);
+  }, [setTournamentsStore, syncAndSaveData]);
 
   const onDeleteTournament = useCallback((tid) => {
-    const updated = tournamentsRef.current.filter(t => t.id !== tid);
-    setTournaments(updated);
+    const currentTournaments = useTournamentsStore.getState().tournaments;
+    const updated = currentTournaments.filter(t => t.id !== tid);
+    setTournamentsStore(updated);
     syncAndSaveData({ tournaments: updated }, true);
-  }, [syncAndSaveData]);
+  }, [setTournamentsStore, syncAndSaveData]);
 
   const onReschedule = useCallback((tournamentId) => {
     setReschedulingFrom(tournamentId);
@@ -242,15 +242,13 @@ export const TournamentProvider = ({ children }) => {
 
   const onOptOut = useCallback((tid) => {
     if (!currentUserRef.current) return;
-    const result = TournamentService.optOut(tid, currentUserRef.current.id, tournamentsRef.current, playersRef.current, currentUserRef.current);
+    const currentTournaments = useTournamentsStore.getState().tournaments;
+    const result = TournamentService.optOut(tid, currentUserRef.current.id, currentTournaments, playersRef.current, currentUserRef.current);
     if (result.success) {
-      setTournaments(result.tournaments);
+      setTournamentsStore(result.tournaments);
       if (result.players) setPlayers(result.players);
       if (result.currentUser) setCurrentUser(result.currentUser);
       
-      // 🛡️ [BUG-6 FIX] (v2.6.313): Only push tournaments atomically.
-      // Players must NEVER be pushed atomically — thinned local copies can wipe the server.
-      // Players and currentUser are pushed separately via non-atomic merge.
       syncAndSaveData({ tournaments: result.tournaments }, true);
       syncAndSaveData({ 
         players: result.players || playersRef.current,
@@ -261,12 +259,10 @@ export const TournamentProvider = ({ children }) => {
     } else {
       Alert.alert('Error', result.message || 'Failed to opt out.');
     }
-  }, [setTournaments, setPlayers, setCurrentUser, syncAndSaveData]);
+  }, [setTournamentsStore, setPlayers, setCurrentUser, syncAndSaveData]);
 
-  const value = {
-    tournaments,
-    setTournaments,
-    tournamentsRef,
+  const value = useMemo(() => ({
+    setTournaments: setTournamentsStore,
     reschedulingFrom,
     setReschedulingFrom,
     onRegister,
@@ -287,7 +283,13 @@ export const TournamentProvider = ({ children }) => {
     onDeleteTournament,
     onReschedule,
     onConfirmCoachRequest
-  };
+  }), [
+    setTournamentsStore, reschedulingFrom, onRegister, onOptOut, onJoinWaitlist,
+    onStartTournament, onEndTournament, onAssignCoach, onRemoveCoach, onApproveCoach,
+    onSaveCoachComment, onDeclineCoachRequest, onAddPlayer, onRemovePendingPlayer,
+    onManageInterested, onSaveTournament, onUpdateTournament, onDeleteTournament,
+    onReschedule, onConfirmCoachRequest
+  ]);
 
   return (
     <TournamentContext.Provider value={value}>

@@ -24,6 +24,7 @@ import storage from '../utils/storage';
 import { syncManager } from '../services/SyncManager';
 import ProfileHeader, { AvatarPlaceholder, getInitials } from '../components/ProfileHeader';
 import ProfileMenuSection from '../components/ProfileMenuSection';
+import { OTPVerificationModal, CalendarWidget } from '../components/ProfileSubComponents';
 
 const calculateAcademyTier = (uid, tournaments = []) => {
   const hostedCount = (tournaments || []).filter(t => t.creatorId === uid).length;
@@ -353,7 +354,7 @@ const ProfileScreen = ({ navigation }) => {
 
   const pickImage = async () => {
     try {
-      console.log("📸 Requesting media library permissions...");
+      if (__DEV__) console.log("📸 Requesting media library permissions...");
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission Denied', 'Sorry, we need camera roll permissions to make this work!');
@@ -361,7 +362,7 @@ const ProfileScreen = ({ navigation }) => {
       }
 
       setIsPickingImage(true);
-      console.log("📸 Opening image library...");
+      if (__DEV__) console.log("📸 Opening image library...");
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -369,7 +370,7 @@ const ProfileScreen = ({ navigation }) => {
         quality: 0.7,
       });
 
-      console.log("📸 Image pick result:", JSON.stringify(result));
+      if (__DEV__) console.log("📸 Image pick result:", JSON.stringify(result));
       if (!result.canceled && result.assets && result.assets.length > 0) {
         setEditAvatar(result.assets[0].uri);
       }
@@ -382,87 +383,7 @@ const ProfileScreen = ({ navigation }) => {
   };
 
 
-  const renderOTPModal = (isNested = false) => {
-    if (!showVerifyModal) return null;
-    
-    const otpContent = (
-      <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
-        <View style={styles.otpModalContent}>
-          <View style={styles.otpIconContainer}>
-            <Ionicons name={showVerifyModal === 'email' ? "mail-unread" : "chatbubble-ellipses"} size={32} color="#EF4444" />
-          </View>
-          <Text style={styles.otpTitle}>Verify {showVerifyModal === 'email' ? 'Email' : 'Phone'}</Text>
-          <Text style={styles.otpDescription}>
-            We've sent a 6-digit verification code to your {showVerifyModal === 'email' ? 'email address' : 'phone number'}.
-          </Text>
-          
-          <TextInput 
-            style={styles.otpInput}
-            placeholder="123456"
-            placeholderTextColor="#CBD5E1"
-            maxLength={6}
-            keyboardType="number-pad"
-            value={verificationCode}
-            onChangeText={setVerificationCode}
-            autoFocus={true}
-            selectionColor="#3B82F6"
-          />
-          
-          <View style={styles.otpActions}>
-            <TouchableOpacity 
-              style={[styles.otpVerifyBtn, (verificationCode.length !== 6 || isVerifying) && styles.disabledBtn]}
-              disabled={verificationCode.length !== 6 || isVerifying}
-              onPress={() => {
-                setIsVerifying(true);
-                // Simulate API call
-                setTimeout(() => {
-                  const type = showVerifyModal;
-                  if (onVerifyAccount) {
-                    onVerifyAccount(type);
-                  } else {
-                    onUpdateUser({
-                      ...user,
-                      [type === 'email' ? 'isEmailVerified' : 'isPhoneVerified']: true
-                    });
-                  }
-                  setShowVerifyModal(null);
-                  setVerificationCode('');
-                  setIsVerifying(false);
-                  Alert.alert("Success", `${type === 'email' ? 'Email' : 'Phone'} verified successfully!`);
-                }, 1500);
-              }}
-            >
-              <Text style={styles.otpVerifyText}>{isVerifying ? 'Verifying...' : 'Verify'}</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.otpCancelBtn}
-              onPress={() => {
-                setShowVerifyModal(null);
-                setVerificationCode('');
-              }}
-            >
-              <Text style={styles.otpCancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    );
-
-    if (isNested) {
-      return (
-        <View style={[StyleSheet.absoluteFill, { zIndex: 9999 }]}>
-          {otpContent}
-        </View>
-      );
-    }
-
-    return (
-      <Modal visible={!!showVerifyModal} animationType="fade" transparent={true} onRequestClose={() => setShowVerifyModal(null)}>
-        {otpContent}
-      </Modal>
-    );
-  };
+  // OTP Modal was extracted to components/ProfileSubComponents.js
   const content = (
     <View style={[styles.container, isWeb && { maxWidth: 900, alignSelf: 'center', width: '100%', backgroundColor: '#FFFFFF', padding: 24, marginVertical: 16, borderRadius: 24, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.08, shadowRadius: 40, overflow: 'hidden', flex: 1 }, { paddingTop: Math.max(insets.top, 16) }]}>
       <ScrollView 
@@ -1137,94 +1058,34 @@ const ProfileScreen = ({ navigation }) => {
       )}
 
             {/* Calendar Modal */}
-            {isCalendarModalVisible && (
-              <Modal visible={isCalendarModalVisible} animationType="slide" transparent onRequestClose={() => setIsCalendarModalVisible(false)}>
-                  <View style={styles.modalOverlay}>
-                      <View style={styles.calendarModalContent}>
-                          <View style={styles.calendarModalHeader}>
-                              <Text style={styles.calendarModalTitle}>{user.role === 'coach' ? 'Calendar' : 'Tournament Calendar'}</Text>
-                              <TouchableOpacity onPress={() => setIsCalendarModalVisible(false)} style={styles.calendarCloseBtn}>
-                                  <Ionicons name="close" size={28} color="#333" />
-                              </TouchableOpacity>
-                          </View>
-                          
-                          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-                              <Calendar 
-                                onDayPress={(day) => {
-                                  if (selectedCalendarDate === day.dateString) {
-                                    setSelectedCalendarDate(null);
-                                  } else {
-                                    setSelectedCalendarDate(day.dateString);
-                                  }
-                                }}
-                                onMonthChange={(month) => setCurrentMonth(month.dateString.substring(0, 7))}
-                                theme={{
-                                  todayTextColor: colors.primary.base,
-                                  arrowColor: colors.primary.base,
-                                  dotColor: colors.primary.base,
-                                  selectedDayBackgroundColor: colors.primary.base,
-                                  selectedDayTextColor: '#fff',
-                                }}
-                                markedDates={markedDates}
-                              />
-                            
-                            <View style={styles.eventsSection}>
-                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                                <Text style={styles.calendarSectionTitle}>{getCalendarTitle()}</Text>
-                                {selectedCalendarDate && (
-                                  <TouchableOpacity onPress={() => setSelectedCalendarDate(null)}>
-                                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary, padding: 4 }}>Clear</Text>
-                                  </TouchableOpacity>
-                                )}
-                              </View>
-                              {filteredEvents && filteredEvents.length > 0 ? (
-                                filteredEvents.map(item => {
-                                  const eventDate = new Date(item.date);
-                                  const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-                                  return (
-                                    <View key={item.id} style={styles.eventCard}>
-                                      <View style={styles.dateBox}>
-                                        <Text style={styles.dateDay}>{item.date.split('-')[2]}</Text>
-                                        <Text style={styles.dateMonth}>{monthNames[eventDate.getMonth()]}</Text>
-                                      </View>
-                                      <View style={styles.eventInfo}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                            <Text style={styles.eventTitle}>{item.title}</Text>
-                                            {item.type === 'booking' && (
-                                                <View style={{ backgroundColor: '#F0FDF4', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#BBF7D0' }}>
-                                                    <Text style={{ fontSize: 8, fontWeight: '900', color: '#16A34A' }}>CONFIRMED BOOKING</Text>
-                                                </View>
-                                            )}
-                                        </View>
-                                        <Text style={styles.eventSport}>{item.sport}</Text>
-                                      </View>
-                                    </View>
-                                  );
-                                })
-                              ) : (
-                                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-                                  <Text style={{ color: '#94A3B8', fontSize: 13, fontWeight: '600', fontStyle: 'italic' }}>
-                                    {selectedCalendarDate ? 'No events found for this date' : 'No upcoming events for this month'}
-                                  </Text>
-                                </View>
-                              )}
-                            </View>
-
-                            <TouchableOpacity style={styles.calendarCloseBtnLarge} onPress={() => setIsCalendarModalVisible(false)}>
-                                <Text style={styles.calendarCloseBtnText}>Close</Text>
-                            </TouchableOpacity>
-                        </ScrollView>
-                    </View>
-                </View>
-            </Modal>
-          )}
+            <CalendarWidget
+              isCalendarModalVisible={isCalendarModalVisible}
+              setIsCalendarModalVisible={setIsCalendarModalVisible}
+              selectedCalendarDate={selectedCalendarDate}
+              setSelectedCalendarDate={setSelectedCalendarDate}
+              currentMonth={currentMonth}
+              setCurrentMonth={setCurrentMonth}
+              filteredEvents={filteredEvents}
+              markedDates={markedDates}
+              getCalendarTitle={getCalendarTitle}
+            />
     </View>
   );
 
   const fullContent = (
     <View style={{ flex: 1 }}>
       {content}
-      {renderOTPModal()}
+      <OTPVerificationModal
+        showVerifyModal={showVerifyModal}
+        setShowVerifyModal={setShowVerifyModal}
+        verificationCode={verificationCode}
+        setVerificationCode={setVerificationCode}
+        isVerifying={isVerifying}
+        setIsVerifying={setIsVerifying}
+        onVerifyAccount={onVerifyAccount}
+        onUpdateUser={onUpdateUser}
+        user={user}
+      />
     </View>
   );
 

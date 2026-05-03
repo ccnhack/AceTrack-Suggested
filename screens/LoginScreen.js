@@ -30,12 +30,14 @@ const LoginScreen = ({ navigation }) => {
   };
   useEffect(() => {
     // DIAGNOSTIC LOGGING
-    console.log(`📱 [DIAGNOSTIC] LoginScreen Dimensions: ${JSON.stringify({
-      window: { width: Dimensions.get('window').width, height: Dimensions.get('window').height },
-      screen: { width: Dimensions.get('screen').width, height: Dimensions.get('screen').height },
-      platform: Platform.OS,
-      isShortScreen: Dimensions.get('window').height < 750
-    })}`);
+    if (__DEV__) {
+      console.log(`📱 [DIAGNOSTIC] LoginScreen Dimensions: ${JSON.stringify({
+        window: { width: Dimensions.get('window').width, height: Dimensions.get('window').height },
+        screen: { width: Dimensions.get('screen').width, height: Dimensions.get('screen').height },
+        platform: Platform.OS,
+        isShortScreen: Dimensions.get('window').height < 750
+      })}`);
+    }
   }, []);
 
   const isShortScreen = height < 700;
@@ -748,7 +750,7 @@ const LoginScreen = ({ navigation }) => {
         <View style={styles.footer}>
           <Text style={styles.footerText}>Don't have an account? </Text>
           <TouchableOpacity onPress={() => {
-            console.log("🔑 LoginScreen: Sign Up pressed");
+            if (__DEV__) console.log("🔑 LoginScreen: Sign Up pressed");
             if (onSignup) onSignup();
             else if (onBack) onBack();
           }}>

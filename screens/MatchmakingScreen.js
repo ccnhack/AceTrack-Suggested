@@ -93,11 +93,11 @@ export default function MatchmakingScreen({ route }) {
       const now = Date.now();
       // Throttle sync to once every 2 seconds to break potential infinite refocus loops
       if (onManualSync && now - lastSyncRef.current > 2000) {
-        console.log("🔄 Matchmaking Screen focused, triggering background sync...");
+        if (__DEV__) console.log("🔄 Matchmaking Screen focused, triggering background sync...");
         lastSyncRef.current = now;
         onManualSync(true); // true = force background sync
       } else if (onManualSync) {
-        console.log("⏳ Matchmaking sync throttled (last sync < 2s ago)");
+        if (__DEV__) console.log("⏳ Matchmaking sync throttled (last sync < 2s ago)");
       }
     }, [onManualSync])
   );

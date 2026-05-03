@@ -99,10 +99,6 @@ function Root() {
   
   const { isFullyConnected, isSyncing } = useSync();
   const { currentUser, userRole, userId, onMarkNotificationsRead, isAuthReady } = useAuth();
-  const { players } = usePlayers();
-  const { tournaments } = useTournaments();
-  const { evaluations } = useEvaluations();
-  const { onSaveTicket, chatbotMessages, onSendChatMessage } = useSupport();
 
   const navigationRef = useRef();
   if (isLoading || !isInitialized || !isAuthReady) {
@@ -134,12 +130,6 @@ function Root() {
             userRole={userRole}
             userId={userId}
             userSports={currentUser.preferredSports || []}
-            evaluations={evaluations}
-            chatbotMessages={chatbotMessages}
-            onSendChatMessage={onSendChatMessage}
-            tournaments={tournaments}
-            onSaveTicket={onSaveTicket}
-            players={players}
           />
         )}
 
