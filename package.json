@@ -46,6 +46,7 @@
     "expo-status-bar": "~1.11.1",
     "expo-updates": "~0.24.13",
     "firebase": "^10.8.1",
+    "pdf-lib": "^1.17.1",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-native": "0.73.6",

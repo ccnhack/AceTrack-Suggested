@@ -49,7 +49,7 @@ class TicketService {
     const msgText = typeof text === 'string' ? text : (text?.text || String(text || ''));
     const senderId = currentUser?.id || 'admin';
     
-    const msg = { 
+    const msg: Record<string, any> = { 
       id: `m-${Date.now()}`, 
       senderId, 
       text: msgText, 
@@ -103,7 +103,7 @@ class TicketService {
     const updated = (prevTickets || []).map(t => {
       if (t && t.id === ticketId) {
         const oldStatus = t.status || 'Open';
-        const patch = { status: newStatus, updatedAt: new Date().toISOString() };
+        const patch: Record<string, any> = { status: newStatus, updatedAt: new Date().toISOString() };
         if (summary) patch.closureSummary = summary;
         
         // 🔄 Transition logic

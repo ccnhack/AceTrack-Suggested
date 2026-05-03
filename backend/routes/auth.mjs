@@ -1,6 +1,6 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
-import { AppState, SupportPasswordReset } from '../models/index.mjs';
+import { AppState, SupportPasswordReset, Player } from '../models/index.mjs';
 import { asyncHandler } from '../helpers/utils.mjs';
 import { apiKeyGuard } from '../middleware/security.mjs';
 
@@ -363,6 +363,10 @@ export default function createAuthRoutes({
           {},
           { $set: { 'data.players': freshPlayers, version: (freshState.version || 0) + 1, lastUpdated: new Date() } }
         );
+        await Player.updateOne(
+          { id: supportUser.id },
+          { $set: { "data.activeSessions": rotatedSessions, lastUpdated: new Date() } }
+        );
       }
     } finally {
       release();
@@ -479,6 +483,11 @@ export default function createAuthRoutes({
     appState.lastUpdated = new Date();
     appState.markModified('data.players'); 
     await appState.save();
+
+    await Player.updateOne(
+      { id: players[userIndex].id },
+      { $set: { "data.password": players[userIndex].password, "data.devices": players[userIndex].devices, lastUpdated: new Date() } }
+    );
 
 
     await SupportPasswordReset.deleteOne({ token });

@@ -5,7 +5,7 @@
 
 import logger from '../utils/logger';
 import MatchService from '../services/MatchService';
-import { SyncManager } from '../services/SyncManager';
+import { syncManager } from '../services/SyncManager';
 
 // ──────────────────────────────────────────────
 // MOCK FOUNDATION
@@ -36,7 +36,6 @@ const mockStorage = {
 
 // Injection: Override the internal storage reference for testing
 // Note: In a real environment we'd use jest.mock, here we rely on the singleton pattern.
-const syncManager = SyncManager.getInstance();
 (syncManager as any).storage = mockStorage; // Direct injection
 
 // ──────────────────────────────────────────────

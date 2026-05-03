@@ -165,8 +165,8 @@ export const dataMerger = {
           if (msgMap.has(lm.id)) {
             const cm = msgMap.get(lm.id);
             // 🛡️ [SEEN PERSISTENCE] If local knows it's seen, cloud shouldn't downgrade it
-            if (lm.status === 'seen' && cm.status !== 'seen') {
-              msgMap.set(lm.id, { ...cm, status: 'seen' });
+            if (lm.status === 'seen' && (cm as any).status !== 'seen') {
+              msgMap.set(lm.id, { ...(cm as any), status: 'seen' });
             }
           } else {
             // 🛡️ [LOCAL PRESERVATION] New local message (not yet in cloud) - add to the map

@@ -58,6 +58,19 @@ class SyncManager {
   };
   private currentSchemaVersion = 1;
 
+  // 🏗️ Phase A-2: Fast structural hash for deep comparison.
+  // Replaces O(n) JSON.stringify equality checks with a bounded hash.
+  // Caps at 10K chars to prevent blowup on large arrays (25+ players).
+  private fastHash(obj: any): number {
+    const str = typeof obj === 'string' ? obj : JSON.stringify(obj);
+    let hash = 0;
+    const len = Math.min(str.length, 10000);
+    for (let i = 0; i < len; i++) {
+      hash = ((hash << 5) - hash) + str.charCodeAt(i) | 0;
+    }
+    return hash;
+  }
+
   private constructor() {}
 
   /**
@@ -855,8 +868,8 @@ class SyncManager {
       const current = localState[key];
       const next = result[key];
       
-      // Perform deep comparison to suppress redundant updates
-      if (JSON.stringify(current) === JSON.stringify(next)) {
+      // 🏗️ Phase A-2: Fast hash comparison instead of full JSON.stringify
+      if (this.fastHash(current) === this.fastHash(next)) {
         continue;
       }
 
@@ -948,7 +961,8 @@ class SyncManager {
           }
 
           // GUARD 12: Idempotency (Deduplication)
-          if (existing && JSON.stringify(existing) === JSON.stringify(merged)) {
+          // 🏗️ Phase A-2: Fast hash comparison instead of full JSON.stringify
+          if (existing && this.fastHash(existing) === this.fastHash(merged)) {
             this.metrics.noOpSkippedCount++;
             continue;
           }

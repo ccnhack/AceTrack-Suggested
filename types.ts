@@ -124,7 +124,7 @@ export interface Player {
   purchasedHighlights?: string[];
   favouritedVideos?: string[];
   walletHistory?: { id: string; amount: number; type: 'credit' | 'debit'; description: string; date: string; status?: 'Pending' | 'Completed' }[];
-  referralCode: string;
+  referralCode?: string;
   referredBy?: string | null;
 }
 

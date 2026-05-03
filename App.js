@@ -14,6 +14,10 @@ import OfflineScreen from './components/OfflineScreen';
 import ChatBot from './components/ChatBot';
 import NotificationsModal from './components/NotificationsModal';
 import config from './config';
+
+// 🏗️ Phase 3: React Query
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './stores/queryClient';
 if (__DEV__) {
   require('./e2e/test_api');
 }
@@ -250,9 +254,11 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ErrorBoundary>
-          <MultiProvider>
-            <Root />
-          </MultiProvider>
+          <QueryClientProvider client={queryClient}>
+            <MultiProvider>
+              <Root />
+            </MultiProvider>
+          </QueryClientProvider>
         </ErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>

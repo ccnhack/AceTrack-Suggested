@@ -101,3 +101,72 @@ const SupportPasswordResetSchema = new mongoose.Schema({
 });
 
 export const SupportPasswordReset = mongoose.model('SupportPasswordReset', SupportPasswordResetSchema);
+
+// ═══════════════════════════════════════════════════════════════
+// 🏗️ PHASE 1 (DATABASE): DISTINCT ENTITY COLLECTIONS
+// Flexible schemas to prevent data loss during migration.
+// ═══════════════════════════════════════════════════════════════
+
+// PLAYER
+const PlayerSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true, index: true },
+  data: { type: mongoose.Schema.Types.Mixed, required: true },
+  lastUpdated: { type: Date, default: Date.now, index: true }
+}, { minimize: false, strict: false });
+export const Player = mongoose.model('Player', PlayerSchema);
+
+// TOURNAMENT
+const TournamentSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true, index: true },
+  data: { type: mongoose.Schema.Types.Mixed, required: true },
+  lastUpdated: { type: Date, default: Date.now, index: true }
+}, { minimize: false, strict: false });
+export const Tournament = mongoose.model('Tournament', TournamentSchema);
+
+// MATCH
+const MatchSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true, index: true },
+  data: { type: mongoose.Schema.Types.Mixed, required: true },
+  lastUpdated: { type: Date, default: Date.now, index: true }
+}, { minimize: false, strict: false });
+export const Match = mongoose.model('Match', MatchSchema);
+
+// MATCH VIDEO
+const MatchVideoSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true, index: true },
+  data: { type: mongoose.Schema.Types.Mixed, required: true },
+  lastUpdated: { type: Date, default: Date.now, index: true }
+}, { minimize: false, strict: false });
+export const MatchVideo = mongoose.model('MatchVideo', MatchVideoSchema);
+
+// SUPPORT TICKET
+const SupportTicketSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true, index: true },
+  data: { type: mongoose.Schema.Types.Mixed, required: true },
+  lastUpdated: { type: Date, default: Date.now, index: true }
+}, { minimize: false, strict: false });
+export const SupportTicket = mongoose.model('SupportTicket', SupportTicketSchema);
+
+// EVALUATION
+const EvaluationSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true, index: true },
+  data: { type: mongoose.Schema.Types.Mixed, required: true },
+  lastUpdated: { type: Date, default: Date.now, index: true }
+}, { minimize: false, strict: false });
+export const Evaluation = mongoose.model('Evaluation', EvaluationSchema);
+
+// MATCHMAKING
+const MatchmakingSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true, index: true },
+  data: { type: mongoose.Schema.Types.Mixed, required: true },
+  lastUpdated: { type: Date, default: Date.now, index: true }
+}, { minimize: false, strict: false });
+export const Matchmaking = mongoose.model('Matchmaking', MatchmakingSchema);
+
+// CHATBOT THREAD
+const ChatbotThreadSchema = new mongoose.Schema({
+  userId: { type: String, required: true, unique: true, index: true },
+  data: { type: mongoose.Schema.Types.Mixed, required: true },
+  lastUpdated: { type: Date, default: Date.now, index: true }
+}, { minimize: false, strict: false });
+export const ChatbotThread = mongoose.model('ChatbotThread', ChatbotThreadSchema);

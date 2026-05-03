@@ -1,4 +1,4 @@
-import { AppState } from '../models/index.mjs';
+import { AppState, Player } from '../models/index.mjs';
 
 /**
  * Initializes and registers all WebSocket handlers.
@@ -11,6 +11,19 @@ io.on('connection', async (socket) => {
   const connUserId = socket.handshake?.query?.userId;
   const connRole = socket.handshake?.query?.role;
   const connDeviceName = socket.handshake?.query?.deviceName || 'Browser';
+
+  // 🏗️ PHASE 4: Join user-specific room for targeted emissions
+  if (connUserId && connUserId !== 'guest') {
+    socket.join(`user:${connUserId}`);
+    console.log(`🎯 [ROOM] ${connUserId} joined room user:${connUserId}`);
+  }
+  // All authenticated users join a global 'authenticated' room
+  if (connUserId && connUserId !== 'guest') {
+    socket.join('authenticated');
+  }
+  // Role-based rooms
+  if (connRole === 'admin') socket.join('role:admin');
+  if (connRole === 'support') socket.join('role:support');
   
   if (connUserId && connUserId !== 'guest' && connUserId !== 'admin') {
     console.log(`[DEBUG] WS Connection from user: ${connUserId}, provided role: ${connRole || 'none'}, device: ${connDeviceName}`);
@@ -70,12 +83,14 @@ io.on('connection', async (socket) => {
 
   socket.on('admin_ping_device', (data) => {
     logServerEvent('ADMIN_PING_DEVICE', { targetUserId: data.targetUserId, fromSocket: socket.id });
-    io.emit('admin_ping_device_relay', data);
+    // 🏗️ PHASE 4: Target the specific user's room instead of global broadcast
+    io.to(`user:${data.targetUserId}`).emit('admin_ping_device_relay', data);
   });
 
   socket.on('device_pong', async (data) => {
     logServerEvent('DEVICE_PONG_RECEIVED', { targetUserId: data.targetUserId, deviceId: data.deviceId, deviceName: data.deviceName, fromSocket: socket.id });
-    io.emit('device_pong_relay', data);
+    // 🏗️ PHASE 4: Send pong only to admin room instead of global broadcast
+    io.to('role:admin').emit('device_pong_relay', data);
 
     // 🛡️ [AUTO-REGISTRATION] (v2.6.259)
     // If a live pong is received, ensure this device is in the user's permanent history
@@ -116,9 +131,34 @@ io.on('connection', async (socket) => {
     }
   });
 
-  // Support chat relay events
-  socket.on('typing_start', (data) => io.emit('typing_start', data));
-  socket.on('typing_stop', (data) => io.emit('typing_stop', data));
+  // Support chat relay events — 🏗️ PHASE 4: Target ticket participants only
+  socket.on('typing_start', (data) => {
+    if (data.ticketId && data.recipientId) {
+      io.to(`user:${data.recipientId}`).emit('typing_start', data);
+    } else {
+      io.emit('typing_start', data);
+    }
+  });
+  socket.on('typing_stop', (data) => {
+    if (data.ticketId && data.recipientId) {
+      io.to(`user:${data.recipientId}`).emit('typing_stop', data);
+    } else {
+      io.emit('typing_stop', data);
+    }
+  });
+
+  // 🏗️ PHASE 4: Tournament room management
+  socket.on('join_tournament', (data) => {
+    if (data.tournamentId) {
+      socket.join(`tournament:${data.tournamentId}`);
+      console.log(`🎯 [ROOM] ${connUserId || socket.id} joined tournament:${data.tournamentId}`);
+    }
+  });
+  socket.on('leave_tournament', (data) => {
+    if (data.tournamentId) {
+      socket.leave(`tournament:${data.tournamentId}`);
+    }
+  });
 
   socket.on('disconnect', async () => {
     logServerEvent('WS_CLIENT_DISCONNECTED', { socketId: socket.id });

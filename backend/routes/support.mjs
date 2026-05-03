@@ -2,7 +2,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
-import { AppState, AuditLog, SupportInvite } from '../models/index.mjs';
+import { AppState, AuditLog, SupportInvite, Player, SupportTicket } from '../models/index.mjs';
 import { asyncHandler, getISTTimestamp, getISTDate } from '../helpers/utils.mjs';
 import { apiKeyGuard, authGuard } from '../middleware/security.mjs';
 import {
@@ -16,6 +16,25 @@ import {
   sendTerminationEmail,
   sendReOnboardingEmail
 } from '../emailService.mjs';
+
+// 🏗️ PHASE 1 (DATABASE) MIGRATION HELPER
+// Ensures that direct backend state mutations are immediately synced to distinct collections
+async function syncCollectionsFromState(state) {
+    const upsertEntities = async (Model, entities) => {
+       if (!entities || entities.length === 0) return;
+       const bulkOps = entities.map(entity => {
+          const entityId = String(entity.id || entity._id || Math.random().toString(36).substring(7));
+          return {
+             updateOne: { filter: { id: entityId }, update: { $set: { id: entityId, data: entity, lastUpdated: new Date() } }, upsert: true }
+          };
+       });
+       if (bulkOps.length > 0) await Model.bulkWrite(bulkOps);
+    };
+    await Promise.all([
+      upsertEntities(Player, state?.data?.players),
+      upsertEntities(SupportTicket, state?.data?.supportTickets)
+    ]);
+}
 
 export default function createSupportRoutes({
   io,
@@ -515,6 +534,8 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
     { _id: appState._id },
     { $set: { "data.players": players, lastUpdated: Date.now() } }
   );
+  appState.data.players = players;
+  await syncCollectionsFromState(appState);
 
   // C. Invalidate token
   invite.status = 'Used';
@@ -1013,6 +1034,7 @@ router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
     state.data.players = players;
     state.markModified('data');
     await state.save();
+    await syncCollectionsFromState(state);
 
     logServerEvent('SUPPORT_USER_MANAGED', { admin: req.headers['x-user-id'] || 'admin', targetUserId, status, level });
     res.json({ success: true, user: players[idx] });
@@ -1053,6 +1075,7 @@ router.post('/support/transfer-tickets', apiKeyGuard, async (req, res) => {
 
     state.markModified('data');
     await state.save();
+    await syncCollectionsFromState(state);
 
     logServerEvent('SUPPORT_TICKETS_TRANSFERRED', { fromAgentId, toAgentId, count: transferCount });
     res.json({ success: true, transferred: transferCount, message: `${transferCount} ticket(s) transferred to ${toAgent.name}` });
@@ -1185,6 +1208,7 @@ router.post('/support/reassign-ticket', apiKeyGuard, async (req, res) => {
 
     state.markModified('data');
     await state.save();
+    await syncCollectionsFromState(state);
 
     logServerEvent('SUPPORT_TICKET_REASSIGNED', { ticketId, fromAgentId: oldAgentId, toAgentId: targetAgentId });
     res.json({ 
@@ -1247,6 +1271,7 @@ router.post('/support/rate-ticket', apiKeyGuard, async (req, res) => {
 
     state.markModified('data');
     await state.save();
+    await syncCollectionsFromState(state);
 
     logServerEvent('TICKET_RATED', { ticketId, rating, agentId });
     res.json({ success: true, ticket });
@@ -1336,6 +1361,7 @@ router.post('/support/claim-ticket', apiKeyGuard, async (req, res) => {
     state.data.players = players;
     state.markModified('data');
     await state.save();
+    await syncCollectionsFromState(state);
 
     logAudit(req, 'TICKET_CLAIMED', ['supportTickets'], { ticketId, agentId });
 
@@ -1380,6 +1406,7 @@ router.post('/support/force-reset', apiKeyGuard, async (req, res) => {
 
     appState.markModified('data.players');
     await appState.save();
+    await syncCollectionsFromState(appState);
     console.log(`[FORCE-RESET] Database updated for ${user.email}`);
 
     // Log Event

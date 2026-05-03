@@ -2,7 +2,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import mongoose from 'mongoose';
-import { AppState, AuditLog } from '../models/index.mjs';
+import { AppState, AuditLog, Player, Tournament, Match, MatchVideo, SupportTicket, Evaluation, Matchmaking, ChatbotThread } from '../models/index.mjs';
 import { asyncHandler, getISTTimestamp } from '../helpers/utils.mjs';
 import { processTournamentWaitlist } from '../promotion_logic.mjs';
 import { apiKeyGuard, sensitiveCacheGuard, validate, SaveDataSchema, DiagnosticsSchema, AutoFlushSchema, getSanitizedState } from '../middleware/security.mjs';
@@ -24,11 +24,48 @@ export default function createDataRoutes({
 
 router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
   try {
-    const state = await AppState.findOne().sort({ lastUpdated: -1 }).lean();
-    if (!state || !state.data) return res.json({});
+    const [
+      state,
+      playersDocs,
+      tournamentsDocs,
+      matchesDocs,
+      videosDocs,
+      ticketsDocs,
+      evalsDocs,
+      matchmakingDocs,
+      chatbotDocs
+    ] = await Promise.all([
+      AppState.findOne().sort({ lastUpdated: -1 }).lean(),
+      Player.find().lean(),
+      Tournament.find().lean(),
+      Match.find().lean(),
+      MatchVideo.find().lean(),
+      SupportTicket.find().lean(),
+      Evaluation.find().lean(),
+      Matchmaking.find().lean(),
+      ChatbotThread.find().lean()
+    ]);
+
+    const baseData = (state && state.data) ? state.data : {};
     
-    if (state.data.players && Array.isArray(state.data.players)) {
-      state.data.players = state.data.players.map(p => {
+    // Stitch from Distinct Collections
+    const chatbotMessages = {};
+    chatbotDocs.forEach(doc => { chatbotMessages[doc.userId] = doc.data; });
+
+    const composedData = {
+      ...baseData,
+      players: playersDocs.map(d => d.data),
+      tournaments: tournamentsDocs.map(d => d.data),
+      matches: matchesDocs.map(d => d.data),
+      matchVideos: videosDocs.map(d => d.data),
+      supportTickets: ticketsDocs.map(d => d.data),
+      evaluations: evalsDocs.map(d => d.data),
+      matchmaking: matchmakingDocs.map(d => d.data),
+      chatbotMessages
+    };
+
+    if (composedData.players && Array.isArray(composedData.players)) {
+      composedData.players = composedData.players.map(p => {
         if (p && p.role === 'admin' && String(p.id).toLowerCase() !== 'admin') {
           return { ...p, role: 'user' };
         }
@@ -36,8 +73,8 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       });
     }
 
-    if (state.data.currentUser && state.data.currentUser.role === 'admin' && String(state.data.currentUser.id).toLowerCase() !== 'admin') {
-      state.data.currentUser.role = 'user';
+    if (composedData.currentUser && composedData.currentUser.role === 'admin' && String(composedData.currentUser.id).toLowerCase() !== 'admin') {
+      composedData.currentUser.role = 'user';
     }
 
     // 🛡️ SECURITY HARDENING: Explicitly exclude 'currentUser' and sanitize based on identity.
@@ -49,14 +86,14 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       reqUserId = 'admin';
     }
 
-    const users = state.data.players || [];
+    const users = composedData.players || [];
     const requestingUser = users.find(u => String(u.id).toLowerCase() === String(reqUserId || '').toLowerCase());
     const reqUserRole = requestingUser?.role || (reqUserId === 'admin' ? 'admin' : 'user');
 
-    const sanitizedData = getSanitizedState(state.data, req);
+    const sanitizedData = getSanitizedState(composedData, req);
     delete sanitizedData.currentUser;
 
-    res.json({ ...sanitizedData, lastUpdated: state.lastUpdated, version: state.version || 1 });
+    res.json({ ...sanitizedData, lastUpdated: state?.lastUpdated || new Date(), version: state?.version || 1 });
   } catch (error) {
     console.error('❌ Data Fetch Error:', error.message);
     res.status(500).json({ error: error.message });
@@ -537,6 +574,60 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
       { $set: { data: newMasterData, version: nextVersion, lastUpdated: now } },
       { upsert: true, returnDocument: 'after' }
     );
+
+    // 🏗️ PHASE 1 (DATABASE) MIGRATION: DUAL WRITE TO DISTINCT COLLECTIONS
+    // This allows the frontend to continue using the monolithic payload format,
+    // while we safely persist the data atomically into the new collections.
+    const upsertEntities = async (Model, entities) => {
+       if (!entities || entities.length === 0) return;
+       const bulkOps = entities.map(entity => {
+          const entityId = String(entity.id || entity._id || Math.random().toString(36).substring(7));
+          return {
+             updateOne: {
+                filter: { id: entityId },
+                update: { $set: { id: entityId, data: entity, lastUpdated: now } },
+                upsert: true
+             }
+          };
+       });
+       if (bulkOps.length > 0) {
+          await Model.bulkWrite(bulkOps);
+       }
+    };
+
+    // If atomic overwrites happened, clear the collection first
+    const handleAtomicWipe = async (Model, key) => {
+      if (req.body.atomicKeys && req.body.atomicKeys.includes(key) && key !== 'players') {
+        await Model.deleteMany({});
+      }
+    };
+
+    await Promise.all([
+      handleAtomicWipe(Player, 'players').then(() => upsertEntities(Player, newMasterData.players)),
+      handleAtomicWipe(Tournament, 'tournaments').then(() => upsertEntities(Tournament, newMasterData.tournaments)),
+      handleAtomicWipe(Match, 'matches').then(() => upsertEntities(Match, newMasterData.matches)),
+      handleAtomicWipe(MatchVideo, 'matchVideos').then(() => upsertEntities(MatchVideo, newMasterData.matchVideos)),
+      handleAtomicWipe(SupportTicket, 'supportTickets').then(() => upsertEntities(SupportTicket, newMasterData.supportTickets)),
+      handleAtomicWipe(Evaluation, 'evaluations').then(() => upsertEntities(Evaluation, newMasterData.evaluations)),
+      handleAtomicWipe(Matchmaking, 'matchmaking').then(() => upsertEntities(Matchmaking, newMasterData.matchmaking)),
+    ]);
+    
+    // Handle ChatbotMessages (which is an object with userId keys)
+    if (newMasterData.chatbotMessages && typeof newMasterData.chatbotMessages === 'object') {
+       const userIds = Object.keys(newMasterData.chatbotMessages);
+       const bulkOps = userIds.map(userId => {
+         return {
+           updateOne: {
+             filter: { userId: String(userId) },
+             update: { $set: { userId: String(userId), data: newMasterData.chatbotMessages[userId], lastUpdated: now } },
+             upsert: true
+           }
+         };
+       });
+       if (bulkOps.length > 0) {
+         await ChatbotThread.bulkWrite(bulkOps);
+       }
+    }
 
     const socketId = req.headers['x-socket-id'];
     const broadcastPayload = { 

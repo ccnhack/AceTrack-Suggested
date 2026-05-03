@@ -1,5 +1,5 @@
 import express from 'express';
-import { AppState } from '../models/index.mjs';
+import { AppState, Player } from '../models/index.mjs';
 
 export default function createInfrastructureRoutes({ APP_VERSION, syncMutex }) {
   const router = express.Router();
@@ -57,6 +57,10 @@ export default function createInfrastructureRoutes({ APP_VERSION, syncMutex }) {
               await AppState.findOneAndUpdate(
                 {},
                 { $set: { 'data.players': players, version: appState.version + 1, lastUpdated: now } }
+              );
+              await Player.updateOne(
+                { id: lockedUser.id },
+                { $set: { "data.loginBlockedUntil": lockedUser.loginBlockedUntil, "data.lastForceLogoutAt": lockedUser.lastForceLogoutAt, lastUpdated: new Date() } }
               );
               
               console.warn(`🛡️ [LOCKDOWN] Account ${lockedUser.id} (${lockedUser.role}) LOCKED for 5 mins via Slack Action [Triggered by ${payload.user.name}]`);
