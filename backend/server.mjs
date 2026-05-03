@@ -50,6 +50,8 @@ import createDataRoutes from './routes/data.mjs';
 import createSupportRoutes from './routes/support.mjs';
 import createWebRoutes from './routes/web.mjs';
 import registerWebSocketHandlers from './services/websocket.mjs';
+import initScheduler from './services/scheduler.mjs';
+import createInfrastructureRoutes from './routes/infrastructure.mjs';
 
 dotenv.config();
 
@@ -57,7 +59,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const router = express.Router();
 app.set('trust proxy', 1); // 🛡️ Hardened for Render (v2.6.252)
 
 // getISTTimestamp: MOVED to ./helpers/utils.mjs (Phase 1 Modularization)
@@ -511,37 +512,8 @@ const trackLoginAttempt = async (req, identifier, password, success) => {
   }
 };
 
-// 🛡️ [CUMULATIVE SECURITY SUMMARY] (v2.6.208)
-// Runs every 5 minutes to report ongoing high-volume attacks
-setInterval(async () => {
-  const now = Date.now();
-  for (const [key, state] of loginAttempts.entries()) {
-    const failures = state.attempts.filter(a => !a.success);
-    if (failures.length >= 10 && (now - state.lastSummaryAt >= 300000)) {
-      const [identifier, ip] = key.split('_');
-      const uniquePasswords = [...new Set(failures.map(f => f.password))].slice(0, 10).join(', ');
-      
-      console.log(`🛡️ [SUMMARY] Reporting sustained attack for ${identifier} from ${ip}`);
-      await sendSecurityAlert({
-          action: 'BRUTE_FORCE_CUMULATIVE_SUMMARY',
-          ipAddress: ip,
-          actor: identifier,
-          details: {
-            TargetUser: identifier,
-            TotalAttempts: state.attempts.length,
-            FailureCount: failures.length,
-            SamplePasswords: uniquePasswords,
-            Timeframe: 'Last 5 minutes'
-          }
-      });
-      state.lastSummaryAt = now;
-      // If no activity for 5 minutes, we'll eventually cleanup
-      if (state.attempts.length === 0) loginAttempts.delete(key);
-    } else if (state.attempts.length === 0 || (now - state.attempts[state.attempts.length-1].timestamp > 600000)) {
-       loginAttempts.delete(key);
-    }
-  }
-}, 60000); // Check every minute
+// Cumulative Security Summary moved to services/scheduler.mjs
+initScheduler(loginAttempts, sendSecurityAlert);
 
 
 // getISTDate: MOVED to ./helpers/utils.mjs (Phase 1 Modularization)
@@ -679,12 +651,7 @@ app.use(helmet({
   },
 }));
 
-app.get('/', (req, res, next) => {
-  if (req.headers.accept?.includes('application/json')) {
-    return res.json({ status: 'ok', version: APP_VERSION });
-  }
-  next();
-});
+// Root heartbeat moved to routes/infrastructure.mjs
 
 
 // 🔐 SECURITY: CORS with whitelist (SEC Fix #3)
@@ -897,69 +864,7 @@ if (!ACE_API_KEY && process.env.NODE_ENV === 'production') {
 // 🛡️ PUBLIC_APP_ID, apiKeyGuard, authGuard: MOVED to ./middleware/security.mjs (Phase 1b Modularization)
 
 
-// 🛡️ [SLACK INTERACTION ENDPOINT] (v2.6.212)
-// Handles "Approve" and "Block" buttons from Slack security alerts
-router.post('/api/v1/slack/interact', async (req, res) => {
-  try {
-    // Slack sends payload as a string-encoded JSON in 'payload' field
-    if (!req.body.payload) {
-      return res.status(400).send("Missing payload");
-    }
-
-    const payload = JSON.parse(req.body.payload);
-    const actionData = JSON.parse(payload.actions[0].value);
-    const { action, target, ip } = actionData;
-
-    console.log(`📡 [SLACK_ACTION] Received ${action} for ${target} from IP ${ip}`);
-
-    if (action === 'block') {
-      const release = await syncMutex.acquire();
-      try {
-        const appState = await AppState.findOne().sort({ lastUpdated: -1 });
-        if (appState?.data?.players) {
-          const players = [...appState.data.players];
-          const userIdx = players.findIndex(p => 
-            String(p.id).toLowerCase() === String(target).toLowerCase() || 
-            String(p.email).toLowerCase() === String(target).toLowerCase() ||
-            String(p.username).toLowerCase() === String(target).toLowerCase()
-          );
-
-          if (userIdx !== -1) {
-            const now = Date.now();
-            const lockedUser = players[userIdx];
-            players[userIdx].loginBlockedUntil = now + (5 * 60 * 1000); // 5 min cooldown
-            players[userIdx].lastForceLogoutAt = now; // Invalidate current JWTs
-            
-            await AppState.findOneAndUpdate(
-              {},
-              { $set: { 'data.players': players, version: appState.version + 1, lastUpdated: now } }
-            );
-            
-            console.warn(`🛡️ [LOCKDOWN] Account ${lockedUser.id} (${lockedUser.role}) LOCKED for 5 mins via Slack Action [Triggered by ${payload.user.name}]`);
-            
-            return res.json({
-              replace_original: false,
-              text: `🛑 *LOCKDOWN SUCCESSFUL*: Account *${lockedUser.id}* blocked for 5 minutes. All active sessions invalidated. (Action by: ${payload.user.name})`
-            });
-          }
-        }
-      } finally {
-        release();
-      }
-    } else if (action === 'approve') {
-       console.log(`✅ [SLACK_ACTION] Admin login approved by ${payload.user.name}`);
-       return res.json({
-          replace_original: false,
-          text: `✅ *APPROVED*: Login session authorized by ${payload.user.name}.`
-       });
-    }
-
-    res.status(200).send();
-  } catch (err) {
-    console.error("❌ Slack interaction failed:", err.message);
-    res.status(500).send("Internal Server Error");
-  }
-});
+// Slack interaction endpoint moved to routes/infrastructure.mjs
 
 // Rate limiters: MOVED to ./middleware/security.mjs (Phase 1b Modularization)
 // Created via createRateLimiters() after initSecurity() call
@@ -1065,14 +970,7 @@ const syncMutex = new AsyncMutex();
 // Prevents exposing raw JSON state to casual inspectors or via disk forensics.
 // sensitiveCacheGuard: MOVED to ./middleware/security.mjs (Phase 1b Modularization)
 
-// Public Health Check (Requires Health Token for Production Monitoring)
-router.get('/health', (req, res) => {
-  const healthToken = req.headers['x-health-token'];
-  if (process.env.NODE_ENV === 'production' && (!healthToken || healthToken !== process.env.HEALTH_TOKEN)) {
-    return res.status(403).json({ error: 'Access Denied' });
-  }
-  res.json({ status: 'ok', uptime: process.uptime(), version: APP_VERSION });
-});
+// Health Check route moved to routes/infrastructure.mjs
 
 // ═══════════════════════════════════════════════════════════════
 // DATA & SYNC ROUTES MOVED TO routes/data.mjs (Phase 1d)
@@ -1132,8 +1030,10 @@ const supportRoutes = createSupportRoutes({
 app.use('/api', supportRoutes);
 app.use('/api/v1', supportRoutes);
 
-app.use('/api', router);
-app.use('/api/v1', router); // 🛡️ COMPATIBILITY FIX (v2.6.174): Support versioned API calls from web/mobile clients
+const infrastructureRoutes = createInfrastructureRoutes({ APP_VERSION, syncMutex });
+app.use('/', infrastructureRoutes);
+app.use('/api', infrastructureRoutes);
+app.use('/api/v1', infrastructureRoutes); // 🛡️ COMPATIBILITY FIX (v2.6.174): Support versioned API calls from web/mobile clients
 
 
 // [Consolidated with primary /health guard at /api/v1/health]
@@ -1200,74 +1100,5 @@ server.on('error', (e) => {
 // SUPPORT MANAGEMENT ROUTES MOVED TO routes/support.mjs (Phase 1e)
 // ═══════════════════════════════════════════════════════════════
 
-// 🛡️ SECURITY: AI Aggregator Background Task (v2.6.195) — un-nested from force-reset
-setInterval(async () => {
-  try {
-    const pendingSummaries = await SecuritySummary.find({
-      isSummarized: false,
-      lastEventAt: { $gt: new Date(Date.now() - 60 * 60 * 1000) } // Active in the last hour
-    });
-
-    const formatIST = (date) => new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }).format(date);
-    const formatDateIST = (date) => new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'long', year: 'numeric' }).format(date);
-
-    for (const summary of pendingSummaries) {
-      // 🛡️ Rolling Alert Logic (v2.6.209)
-      const hasEnoughEvents = summary.events.length >= 5;
-      const isNew = !summary.lastAlertedAt;
-      const cooldownPassed = summary.lastAlertedAt && (Date.now() - summary.lastAlertedAt.getTime() > 5 * 60 * 1000);
-      const isIdle = (Date.now() - summary.lastEventAt.getTime() > 30 * 60 * 1000);
-
-      if (!hasEnoughEvents && !isIdle) continue; // Not enough noise yet
-      if (!isNew && !cooldownPassed && !isIdle) continue; // In cooldown
-
-      if (summary.events.length <= 1 && isIdle) {
-        summary.isSummarized = true;
-        await summary.save();
-        continue;
-      }
-
-      const successCount = summary.events.filter(e => e.action.includes('SUCCESS')).length;
-      const failCount = summary.events.length - successCount;
-      const timeRange = `${formatIST(summary.firstEventAt)} - ${formatIST(summary.lastEventAt)} IST`;
-      const dateStr = formatDateIST(summary.firstEventAt);
-
-      console.log(`🤖 [AI] Summarizing storm: ${summary.ipAddress} (${successCount}S, ${failCount}F)`);
-      const aiSummary = await generateSecuritySummary(summary.events);
-      
-      if (SECURITY_WEBHOOK_URL) {
-        const payload = {
-          text: `🌩️ *Security Storm AI Summary: ${summary.ipAddress}*`,
-          attachments: [{
-            color: "#6366F1", 
-            title: "🌩️ Security Storm Analysis",
-            text: `*Date:* ${dateStr}\n*Time Window:* ${timeRange}\n\n${aiSummary}`,
-            fields: [
-              { title: "Source IP", value: summary.ipAddress, short: true },
-              { title: "Actor", value: summary.actor, short: true },
-              { title: "Successful Attempts", value: String(successCount), short: true },
-              { title: "Blocked/Failed", value: String(failCount), short: true }
-            ],
-            footer: "AceTrack AI Guard (v2.6.195) | Groq Llama 3",
-            ts: Math.floor(Date.now() / 1000)
-          }]
-        };
-
-        await fetch(SECURITY_WEBHOOK_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      }
-
-      summary.lastAlertedAt = new Date();
-      if (isIdle) {
-        summary.isSummarized = true;
-      }
-      await summary.save();
-    }
-  } catch (err) {
-    console.error("AI Aggregator Error:", err.message);
-  }
-}, 5 * 60 * 1000); 
+// AI Aggregator moved to services/scheduler.mjs
 
