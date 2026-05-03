@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo, memo } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, Image, 
-  StyleSheet, Dimensions, FlatList, Modal, Alert, ActivityIndicator, TextInput, InteractionManager, Platform, LayoutAnimation
+  StyleSheet, Dimensions, Modal, Alert, ActivityIndicator, TextInput, InteractionManager, Platform, LayoutAnimation
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { FlashList } from '@shopify/flash-list';
 import * as Location from 'expo-location';
 import logger from '../utils/logger';
 import TournamentDetailModal from '../components/TournamentDetailModal';
@@ -534,10 +535,11 @@ const ExploreScreen = ({ navigation, route }) => {
         </View>
       </LinearGradient>
 
-      <FlatList
+      <FlashList
         data={sortedTournaments}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
+        estimatedItemSize={180}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           sortedTournaments.length > 0 ? (

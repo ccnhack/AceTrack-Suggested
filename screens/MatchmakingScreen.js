@@ -1,12 +1,13 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  View, Text, StyleSheet, TouchableOpacity,
   Image, Modal, TextInput, Alert, ScrollView, Platform, LayoutAnimation, Pressable
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { FlashList } from '@shopify/flash-list';
 import * as Location from 'expo-location';
 import { colors, shadows, typography, borderRadius, spacing } from '../theme/designSystem';
 import { Sport } from '../types';
@@ -1176,16 +1177,14 @@ export default function MatchmakingScreen({ route }) {
       )}
 
       {(activeTab === 'Challenge' && role !== 'coach') && (
-        <FlatList
+        <FlashList
           data={filteredOpponents}
           renderItem={renderOpponent}
           keyExtractor={item => item.id}
           style={{ flex: 1 }}
           contentContainerStyle={styles.list}
           ListEmptyComponent={<Text style={styles.emptyText}>No Matching {role === 'academy' ? 'Academies' : 'Players'} Found Near You</Text>}
-          initialNumToRender={10}
-          maxToRenderPerBatch={10}
-          windowSize={5}
+          estimatedItemSize={100}
         />
       )}
       {(activeTab === 'Requests' || (role === 'coach' && activeTab === 'Bookings')) && renderRequested()}

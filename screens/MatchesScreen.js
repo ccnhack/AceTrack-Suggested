@@ -13,7 +13,7 @@ import logger from '../utils/logger';
 import { parseTournamentDateTime, isTournamentPast } from '../utils/tournamentUtils';
 import MatchCard from '../components/MatchCard';
 import { useIsFocused } from '@react-navigation/native';
-import { FlatList } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 
 // Styles
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -554,11 +554,12 @@ const MatchesScreen = ({ route, navigation }) => {
         </View>
       </View>
 
-      <FlatList
+      <FlashList
         testID="matches.list"
         data={displayedMatches}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
+        estimatedItemSize={120}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
@@ -747,10 +748,12 @@ const MatchesScreen = ({ route, navigation }) => {
                 const allTeamsDecided = teams.every(team => team.isPending || currentRoundDecisions[team.id] !== undefined);
 
                 return (
-                  <FlatList
-                    data={teams}
-                    keyExtractor={t => t.id}
-                    renderItem={({ item: team }) => {
+                  <View style={{ flex: 1, minHeight: 200 }}>
+                    <FlashList
+                      data={teams}
+                      keyExtractor={t => t.id}
+                      estimatedItemSize={80}
+                      renderItem={({ item: team }) => {
                       const decision = currentRoundDecisions[team.id];
                       const teamEvaluated = team.playerIds.every(id =>
                         evaluations.some(e => String(e.playerId).toLowerCase() === String(id).toLowerCase() && String(e.tournamentId).toLowerCase() === String(activeTournament?.id).toLowerCase() && String(e.coachId).toLowerCase() === String(user?.id).toLowerCase() && (e.round || 1) === currentRound)
@@ -796,6 +799,7 @@ const MatchesScreen = ({ route, navigation }) => {
                       ) : null
                     }
                   />
+                  </View>
                 );
               })()}
             </View>

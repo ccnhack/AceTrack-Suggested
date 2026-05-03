@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { 
-  View, Text, StyleSheet, FlatList, TouchableOpacity, 
+  View, Text, StyleSheet, TouchableOpacity, 
   Image, Modal, Alert, ScrollView, TextInput, SafeAreaView, Platform, LayoutAnimation
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { FlashList } from '@shopify/flash-list';
 import SafeAvatar from '../components/SafeAvatar';
 import { colors, shadows, typography, borderRadius, spacing } from '../theme/designSystem';
 import { Calendar } from 'react-native-calendars';
@@ -267,15 +268,13 @@ export default function CoachDirectoryScreen({ navigation }) {
         </View>
       </LinearGradient>
 
-      <FlatList 
+      <FlashList 
         data={filteredCoaches}
         renderItem={renderCoachCard}
         keyExtractor={keyExtractor}
         contentContainerStyle={styles.coachList}
         getItemLayout={getItemLayout}
-        initialNumToRender={8}
-        maxToRenderPerBatch={10}
-        windowSize={5}
+        estimatedItemSize={112}
         removeClippedSubviews={Platform.OS !== 'web'}
         ListEmptyComponent={
           <View style={styles.emptyView}>
