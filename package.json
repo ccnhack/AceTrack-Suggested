@@ -1,7 +1,6 @@
 {
   "name": "acetrack-mobile",
   "version": "2.6.191",
-
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
@@ -26,6 +25,8 @@
     "@react-navigation/bottom-tabs": "^6.5.11",
     "@react-navigation/native": "^6.1.9",
     "@react-navigation/native-stack": "^6.9.17",
+    "@shopify/flash-list": "1.6.3",
+    "@tanstack/react-query": "^5.100.8",
     "@types/react": "~18.2.45",
     "expo": "~50.0.0",
     "expo-av": "~13.10.5",
@@ -57,10 +58,12 @@
     "react-native-svg": "14.1.0",
     "react-native-web": "~0.19.6",
     "socket.io-client": "^4.8.3",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
+    "babel-plugin-transform-remove-console": "^6.9.4",
     "detox": "^20.18.1",
     "jest": "^29.7.0",
     "jest-circus": "^29.7.0",
