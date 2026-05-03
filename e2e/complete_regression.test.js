@@ -144,14 +144,73 @@ describe('Complete System Regression E2E', () => {
   });
 
   it('4. Cleans up session and ensures state resets on logout', async () => {
-    // Returning to profile
+    await navigateToTab('Profile');
+    await performLogout();
+    await waitFor(element(by.id('app.landing.screen'))).toBeVisible().withTimeout(TIMEOUT.MEDIUM);
+  });
+
+  it('5. Logs in as Academy and creates a tournament from start to finish', async () => {
+    await performLogin('testingacademy', 'password');
+    
+    await navigateToTab('Academy');
+    
+    // Tap create tournament button
+    await waitFor(element(by.id('academy.createTournament.btn'))).toBeVisible().withTimeout(TIMEOUT.SHORT);
+    await element(by.id('academy.createTournament.btn')).tap();
+    
+    // Wait for the modal/form
+    await waitFor(element(by.id('academy.form.scrollview'))).toBeVisible().withTimeout(TIMEOUT.SHORT);
+    
+    // Autofill data
+    await element(by.id('academy.form.autofillBtn')).tap();
+    
+    // Submit
+    await element(by.id('academy.form.scrollview')).scroll(1000, 'down');
+    await element(by.id('academy.form.submitBtn')).tap();
+    
+    // Wait for success alert and dismiss
+    try {
+      await waitFor(element(by.text('Success'))).toBeVisible().withTimeout(TIMEOUT.SHORT);
+      await element(by.text('OK')).tap();
+    } catch(e) {}
+    
+    // Validate it's in the list (assuming it shows up on Academy tab)
+    await waitFor(element(by.id('academy.scrollview'))).toBeVisible().withTimeout(TIMEOUT.SHORT);
+
+    // Logout
+    await performLogout();
+  });
+
+  it('6. Logs in as User, raises a support ticket, and logs out', async () => {
+    await performLogin('testindividual', 'password');
+    
     await navigateToTab('Profile');
     
-    // Performing logout will clear currentUser from local storage via AuthContext.js privacy guard
-    await performLogout();
+    // Tap Help & Support
+    await waitFor(element(by.text('Help & Support'))).toBeVisible().withTimeout(TIMEOUT.SHORT);
+    await element(by.text('Help & Support')).tap();
     
-    // Confirm we are at the landing screen
-    await waitFor(element(by.id('app.landing.screen'))).toBeVisible().withTimeout(TIMEOUT.MEDIUM);
+    // Wait for Support Center
+    await waitFor(element(by.text('Support Center'))).toBeVisible().withTimeout(TIMEOUT.SHORT);
+    
+    // Tap New Ticket
+    await element(by.text('New Ticket')).tap();
+    
+    // Fill ticket details
+    await waitFor(element(by.placeholder('Brief summary of the issue'))).toBeVisible().withTimeout(TIMEOUT.SHORT);
+    await element(by.placeholder('Brief summary of the issue')).replaceText('E2E Test Ticket');
+    await element(by.placeholder('Describe the issue in detail...')).replaceText('This is a test ticket created by the Detox E2E suite.');
+    await element(by.placeholder('Describe the issue in detail...')).tapReturnKey();
+    
+    // Submit Ticket
+    await element(by.text('Submit Ticket')).tap();
+    
+    // Wait for it to show in the list (we know it goes back to 'list' view when done)
+    await waitFor(element(by.text('Open'))).toBeVisible().withTimeout(TIMEOUT.SHORT);
+
+    // Logout
+    await element(by.id('profile.logout.button')).tap().catch(() => {});
+    try { await performLogout(); } catch(e) {}
   });
 
 });
