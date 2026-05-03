@@ -17,6 +17,7 @@ import { useSupport } from '../context/SupportContext';
 export { useAuth };
 import { useAdmin } from '../context/AdminContext';
 import { useMatchmaking } from '../context/MatchmakingContext';
+import ScreenErrorBoundary from '../components/ScreenErrorBoundary';
 
 // Screens
 import LandingScreen from '../screens/LandingScreen';
@@ -147,7 +148,8 @@ export default function AppNavigator() {
   const { currentUser, viewingLanding, setViewingLanding } = useAuth();
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <ScreenErrorBoundary>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!currentUser ? (
         <>
           <Stack.Screen name="Landing">
@@ -178,5 +180,6 @@ export default function AppNavigator() {
       <Stack.Screen name="Onboarding" component={OnboardingScreen} />
       <Stack.Screen name="SupportSetup" component={SupportSetupScreen} />
     </Stack.Navigator>
+    </ScreenErrorBoundary>
   );
 }
