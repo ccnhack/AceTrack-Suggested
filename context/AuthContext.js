@@ -26,6 +26,9 @@ export const AuthProvider = ({ children }) => {
   
   const { syncAndSaveData } = useSync();
 
+  // 🛡️ [C-1 FIX] (v2.6.315): Ref-based logout to prevent stale closure in AUTH_FAILURE listener
+  const onLogoutRef = useRef(null);
+
   // Sync state and ref
   useEffect(() => {
     currentUserRef.current = currentUser;
@@ -45,8 +48,7 @@ export const AuthProvider = ({ children }) => {
           if (Platform.OS === 'web' && !hasLocalSession) {
             console.log(`[AuthContext] No local session on web, checking cookies via /auth/me...`);
             try {
-              const cloudUrl = 'https://acetrack-suggested.onrender.com';
-              const apiUrl = config.API_BASE_URL || cloudUrl;
+              const apiUrl = config.API_BASE_URL || 'https://acetrack-suggested.onrender.com';
               
               const response = await fetch(`${apiUrl}/api/v1/auth/me`, {
                 headers: { 
@@ -126,24 +128,24 @@ export const AuthProvider = ({ children }) => {
   }, [currentUser]);
 
   // 🛡️ [AUTH FAILURE GUARD] (v2.6.192)
-  // Listen for terminal 401 failures from SyncManager to trigger graceful logout
+  // 🛡️ [C-1 FIX] (v2.6.315): Use onLogoutRef to avoid stale closure dependency
   useEffect(() => {
     const unsub = eventBus.subscribe('AUTH_FAILURE', (e) => {
       console.warn(`[AuthContext] 🛑 Terminal Auth Failure detected on ${e.payload.endpoint}.`);
-      if (currentUserRef.current) {
+      if (currentUserRef.current && onLogoutRef.current) {
         Alert.alert(
           "Session Expired",
           "Your security session has expired or is no longer valid. Please login again to continue syncing.",
-          [{ text: "OK", onPress: () => onLogout() }]
+          [{ text: "OK", onPress: () => onLogoutRef.current() }]
         );
         // Fallback for web where Alert.alert might be subtle or blocked
         if (Platform.OS === 'web') {
-          onLogout();
+          onLogoutRef.current();
         }
       }
     });
     return unsub;
-  }, [onLogout]);
+  }, []);
 
   const onLogin = useCallback((arg1, arg2) => {
     // Handle polymorphic arguments: onLogin(user) OR onLogin(role, user)
@@ -235,6 +237,10 @@ export const AuthProvider = ({ children }) => {
     
     console.log('[AuthContext] Privacy Guard: All session data cleared.');
   }, []);
+
+  // 🛡️ [C-1 FIX] (v2.6.315): Keep ref in sync so AUTH_FAILURE listener always has latest
+  onLogoutRef.current = onLogout;
+
 
   const onRegisterUser = useCallback((newUser, players) => {
     const result = PlayerService.register(newUser, players);

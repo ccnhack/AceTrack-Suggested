@@ -54,7 +54,7 @@ export const AppProvider = ({ children, initialVersion }) => {
         await logger.initialize();
         logger.enableInterception();
         
-        const cloudUrl = 'https://acetrack-suggested.onrender.com';
+        const cloudUrl = config.API_BASE_URL || 'https://acetrack-suggested.onrender.com';
         logger.checkAndUploadCrash(cloudUrl, config.PUBLIC_APP_ID);
         
         const syncManager = SyncManager.getInstance();
@@ -158,7 +158,7 @@ export const AppProvider = ({ children, initialVersion }) => {
         const syncManager = SyncManager.getInstance();
         const user = await syncManager.getSystemFlag('currentUser');
         if (user?.id && localDeviceIdRef.current) {
-          const cloudUrl = 'https://acetrack-suggested.onrender.com';
+          const cloudUrl = config.API_BASE_URL || 'https://acetrack-suggested.onrender.com';
           logger.initAutoFlush(
             cloudUrl,
             config.PUBLIC_APP_ID,

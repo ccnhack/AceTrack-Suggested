@@ -2076,16 +2076,19 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
                   entityMap.set(id, merged);
                 } else if (key === 'supportTickets' && existing) {
                   // 🛡️ [STATUS_SYNC] (v2.6.241)
-                  // Intelligent message merging to prevent status downgrades (read -> delivered)
+                  // 🛡️ [M-7 FIX] (v2.6.315): ID-based message matching instead of index-based
+                  // This prevents status downgrades when messages arrive in different order.
                   const mergedMessages = [...(p.messages || [])];
                   if (existing.messages && Array.isArray(existing.messages)) {
                     const STATUS_WEIGHT = { 'read': 3, 'seen': 2, 'delivered': 1, 'sent': 0, 'pending': -1 };
-                    existing.messages.forEach((em, idx) => {
-                      if (mergedMessages[idx] && mergedMessages[idx].id === em.id) {
-                        const incomingStatus = mergedMessages[idx].status || 'sent';
-                        const existingStatus = em.status || 'sent';
-                        if (STATUS_WEIGHT[existingStatus] > STATUS_WEIGHT[incomingStatus]) {
-                          mergedMessages[idx].status = existingStatus;
+                    const existingMsgMap = new Map(existing.messages.map(em => [em.id, em]));
+                    mergedMessages.forEach((mm, idx) => {
+                      const existingMsg = existingMsgMap.get(mm.id);
+                      if (existingMsg) {
+                        const incomingStatus = mm.status || 'sent';
+                        const existingStatus = existingMsg.status || 'sent';
+                        if ((STATUS_WEIGHT[existingStatus] || 0) > (STATUS_WEIGHT[incomingStatus] || 0)) {
+                          mergedMessages[idx] = { ...mm, status: existingStatus };
                         }
                       }
                     });
@@ -2098,41 +2101,12 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
             }
           });
           newMasterData[key] = Array.from(entityMap.values());
-        } else if (key === 'currentUser' && incoming && incoming.id) {
-          const id = String(incoming.id).toLowerCase();
-          
-          // 🛡️ ULTIMATE ADMIN GUARD: Protect the current user object if it targets the 'admin' ID
-          if (id === 'admin') {
-            console.warn(`🛑 Blocked unauthorized attempt to modify System Admin (Current User)`);
-            return; // Ignore any incoming 'currentUser' update for the 'admin' ID
-          }
-
-          // 🛡️ ADMIN GUARD: Secure the current user object as well
-          if (incoming.role === 'admin' && id !== 'admin') {
-            console.warn(`🛑 Unauthorized Admin Escalation Attempt (Current User): userId=${id}`);
-            incoming.role = 'user';
-          }
-
-          newMasterData.currentUser = incoming;
-          if (newMasterData.players && Array.isArray(newMasterData.players)) {
-            const id = String(incoming.id).toLowerCase();
-            const pIndex = newMasterData.players.findIndex(p => p && String(p.id).toLowerCase() === id);
-            if (pIndex >= 0) {
-              const existing = newMasterData.players[pIndex];
-              const mergedDevices = [...(existing.devices || [])];
-              if (incoming.devices && Array.isArray(incoming.devices)) {
-                incoming.devices.forEach(d => {
-                  if (!d || !d.id) return;
-                  const dIndex = mergedDevices.findIndex(ed => ed.id === d.id);
-                  if (dIndex >= 0) mergedDevices[dIndex] = { ...mergedDevices[dIndex], ...d };
-                  else mergedDevices.push(d);
-                });
-              }
-              // 🛡️ PASSWORD GUARD (v2.6.145): Same protection as players merge
-              const preservedPw = (existing.role === 'support') ? existing.password : (incoming.password || existing.password);
-              newMasterData.players[pIndex] = { ...existing, ...incoming, devices: mergedDevices, password: preservedPw };
-            }
-          }
+        } else if (key === 'currentUser') {
+          // 🛡️ [C-5 FIX] (v2.6.315): SKIP currentUser entirely.
+          // currentUser is a per-session, per-device concept. Writing it into the shared 
+          // global AppState.data causes cross-user data leakage. The client already excludes 
+          // it from syncableKeys (SyncManager L489). This handler only fired on legacy clients.
+          console.log(`[SYNC_DEBUG] Skipping 'currentUser' key — per-session data not stored in global state.`);
         } else if (['seenAdminActionIds', 'visitedAdminSubTabs'].includes(key) && Array.isArray(incoming)) {
           // 🛡️ UNION MERGE: Additive only to prevent acknowledgments from being lost (v2.6.50)
           const existing = Array.isArray(currentData[key]) ? currentData[key] : [];
@@ -2153,10 +2127,9 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
 
     const nextVersion = currentVersion + 1;
 
-    // 🛡️ [BUG-1 + BUG-3 FIX] (v2.6.313): 
-    // 1. Use nextVersion (server-incremented) instead of clientVersion to ensure monotonic OCC.
-    // 2. Target the specific document by _id to prevent writing to orphaned AppState documents.
-    const updateFilter = state?._id ? { _id: state._id } : {};
+    // 🛡️ [C-6 FIX] (v2.6.315): Avoid empty {} filter which can cause duplicate singletons
+    // If state._id exists, target it exactly. If not, create a new document with a generated ID.
+    const updateFilter = state?._id ? { _id: state._id } : { _id: new mongoose.Types.ObjectId() };
     const updatedState = await AppState.findOneAndUpdate(
       updateFilter,
       { $set: { data: newMasterData, version: nextVersion, lastUpdated: now } },

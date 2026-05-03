@@ -15,8 +15,16 @@ export const SupportProvider = ({ children }) => {
   const [supportTickets, setSupportTickets] = useState([]);
   const [chatbotMessages, setChatbotMessages] = useState({});
   
+  // 🛡️ [C-3/C-4 FIX] (v2.6.315): Refs to prevent stale closure in rapid callbacks
+  const supportTicketsRef = useRef([]);
+  const chatbotMessagesRef = useRef({});
+  
   const { syncAndSaveData } = useSync();
   const { currentUser, userRole, currentUserRef } = useAuth();
+
+  // Keep refs in sync
+  useEffect(() => { supportTicketsRef.current = supportTickets; }, [supportTickets]);
+  useEffect(() => { chatbotMessagesRef.current = chatbotMessages; }, [chatbotMessages]);
 
   // Entity Listener & Hydration
   useEffect(() => {
@@ -67,17 +75,19 @@ export const SupportProvider = ({ children }) => {
     }
   }, [userRole, syncAndSaveData]);
 
+  // 🛡️ [C-3 FIX] (v2.6.315): Use ref to prevent stale closure
   const onSendChatMessage = useCallback((messages) => {
     if (!currentUserRef.current) return;
     const userId = currentUserRef.current.id;
-    const updatedMessages = { ...chatbotMessages, [userId]: messages };
+    const updatedMessages = { ...chatbotMessagesRef.current, [userId]: messages };
     setChatbotMessages(updatedMessages);
     syncAndSaveData({ chatbotMessages: updatedMessages });
-  }, [chatbotMessages, syncAndSaveData]);
+  }, [syncAndSaveData]);
 
+  // 🛡️ [C-4 FIX] (v2.6.315): Use ref to prevent stale closure
   const onReplyTicket = useCallback((id, text, image, replyToMsg) => {
     const isAdmin = userRole === 'admin';
-    const result = TicketService.replyToTicket(id, text, image, replyToMsg, currentUserRef.current, supportTickets, isAdmin);
+    const result = TicketService.replyToTicket(id, text, image, replyToMsg, currentUserRef.current, supportTicketsRef.current, isAdmin);
     if (result.success) {
       setSupportTickets(result.tickets);
       // 🛡️ [FIX v2.6.121] Atomic push to prevent replies from being lost on stale cloud pull
@@ -85,10 +95,11 @@ export const SupportProvider = ({ children }) => {
       logSupportActivity('TICKET_REPLY', id, `Replied to ticket ${id}`);
     }
     return result;
-  }, [supportTickets, userRole, syncAndSaveData]);
+  }, [userRole, syncAndSaveData, logSupportActivity]);
 
+  // 🛡️ [C-4 FIX] (v2.6.315): Use ref to prevent stale closure
   const onUpdateTicketStatus = useCallback((id, status, summary, justification) => {
-    const result = TicketService.updateStatus(id, status, summary, supportTickets, justification);
+    const result = TicketService.updateStatus(id, status, summary, supportTicketsRef.current, justification);
     if (result.success) {
       setSupportTickets(result.tickets);
       // 🛡️ [FIX v2.6.121] Atomic push to prevent status changes from being rolled back
@@ -96,35 +107,38 @@ export const SupportProvider = ({ children }) => {
       logSupportActivity('TICKET_STATUS_CHANGE', id, `Changed status to ${status}`);
     }
     return result;
-  }, [supportTickets, syncAndSaveData]);
+  }, [syncAndSaveData, logSupportActivity]);
 
+  // 🛡️ [C-4 FIX] (v2.6.315): Use ref to prevent stale closure
   const onSaveTicket = useCallback(async (ticket) => {
     const isAdmin = userRole === 'admin';
-    const result = await TicketService.saveTicket(ticket, supportTickets, isAdmin);
+    const result = await TicketService.saveTicket(ticket, supportTicketsRef.current, isAdmin);
     if (result.success) {
       setSupportTickets(result.tickets);
       syncAndSaveData({ supportTickets: result.tickets });
       logSupportActivity('TICKET_SAVE', ticket.id || 'new', `Saved/Created ticket`);
     }
     return result;
-  }, [supportTickets, userRole, syncAndSaveData]);
+  }, [userRole, syncAndSaveData, logSupportActivity]);
 
+  // 🛡️ [C-4 FIX] (v2.6.315): Use ref to prevent stale closure
   const onMarkSeen = useCallback((ticketId) => {
     if (!currentUserRef.current) return;
-    const result = TicketService.markSeen(ticketId, currentUserRef.current.id, supportTickets);
+    const result = TicketService.markSeen(ticketId, currentUserRef.current.id, supportTicketsRef.current);
     if (result.success) {
       setSupportTickets(result.tickets);
       syncAndSaveData({ supportTickets: result.tickets }, true);
     }
     return result;
-  }, [supportTickets, syncAndSaveData]);
+  }, [syncAndSaveData]);
 
   // 🛡️ [MIGRATION FIX] (v2.6.121) Retry failed message sync
+  // 🛡️ [C-4 FIX] (v2.6.315): Use ref to prevent stale closure
   const onRetryMessage = useCallback((ticketId, msgId) => {
     console.log(`🛡️ Retrying sync for message ${msgId} in ticket ${ticketId}`);
     // Force a re-push of supportTickets to sync the pending message
-    syncAndSaveData({ supportTickets }, true);
-  }, [supportTickets, syncAndSaveData]);
+    syncAndSaveData({ supportTickets: supportTicketsRef.current }, true);
+  }, [syncAndSaveData]);
 
   /** 🛡️ [NEW v2.6.132] Claim a ticket from the unassigned pool */
   const onClaimTicket = useCallback(async (ticketId) => {

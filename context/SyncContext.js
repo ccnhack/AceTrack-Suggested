@@ -90,7 +90,8 @@ export const SyncProvider = ({ children }) => {
     try {
       await syncManager.syncAndSaveData(updates, isAtomic, isInternal);
       setLastSyncTime(new Date().toISOString());
-      setIsCloudOnline(true);
+      // 🛡️ [C-2 FIX] (v2.6.315): Removed false setIsCloudOnline(true) here.
+      // Cloud status is only set true by loadData/checkForUpdates after actual network success.
       return true;
     } catch (error) {
       console.error('[SyncContext] Sync failed:', error);

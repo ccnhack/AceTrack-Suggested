@@ -13,6 +13,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import OfflineScreen from './components/OfflineScreen';
 import ChatBot from './components/ChatBot';
 import NotificationsModal from './components/NotificationsModal';
+import config from './config';
 if (__DEV__) {
   require('./e2e/test_api');
 }
@@ -65,7 +66,7 @@ import { useSupport } from './context/SupportContext';
 // 🛡️ Web Deep Linking Configuration (v2.6.286)
 const APP_VERSION = "2.6.314";
 const linking = {
-  prefixes: ['https://acetrack-suggested.onrender.com', 'acetrack://'],
+  prefixes: [config.API_BASE_URL || 'https://acetrack-suggested.onrender.com', 'acetrack://'],
   config: {
     screens: {
       SupportSetup: 'setup/:token',
