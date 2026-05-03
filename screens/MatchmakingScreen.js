@@ -16,69 +16,11 @@ import { Calendar } from 'react-native-calendars';
 import { LinearGradient } from 'expo-linear-gradient';
 import venuesData from '../data/venues.json';
 import { syncManager } from '../services/SyncManager';
-
-// Performance: Memoized Sub-components for long list rendering
-const TimeSlotItem = React.memo(({ index, slot, isBlocked, isInPast, isSelBase, isExpanded, onExpand, onSelect, expandedSlot }) => {
-  const isRightSide = index % 4 >= 2;
-  return (
-    <View style={[styles.slotWrapper, { zIndex: isExpanded ? 100 : 1 }]}>
-      <TouchableOpacity 
-        disabled={isBlocked || isInPast}
-        style={[
-          styles.slotBtn, 
-          isSelBase && styles.slotBtnActive,
-          (isBlocked || isInPast) && { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0', opacity: 0.5 }
-        ]}
-        onPress={() => onExpand(isExpanded ? null : slot)}
-      >
-        <Text style={[
-          styles.slotText, 
-          isSelBase && styles.slotTextActive,
-          isBlocked && { color: '#94A3B8' }
-        ]}>{isSelBase ? (onSelect.targetTime || slot) : slot}</Text>
-      </TouchableOpacity>
-
-      {isExpanded && !isBlocked && (
-        <View style={[styles.subIntervalsPopup, isRightSide ? { left: undefined, right: 0 } : { left: 0 }]}>
-           {[':00', ':15', ':30', ':45'].map((mins, subIndex) => {
-             const fullTime = slot.replace(':00', mins);
-             const isSel = onSelect.targetTime === fullTime;
-             return (
-               <TouchableOpacity 
-                 key={`mins-${subIndex}`}
-                 style={[styles.subBtn, isSel && styles.subBtnActive]}
-                 onPress={() => onSelect(fullTime)}
-               >
-                 <Text style={[styles.subBtnText, isSel && styles.subBtnTextActive]}>{fullTime}</Text>
-               </TouchableOpacity>
-             );
-           })}
-        </View>
-      )}
-    </View>
-  );
-});
-
-const VenueItem = React.memo(({ venue, isSelected, onSelect, selectedSport }) => {
-  return (
-    <TouchableOpacity 
-      style={[styles.venueItem, isSelected && styles.venueItemSelected]}
-      onPress={() => onSelect(venue)}
-    >
-      <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={[styles.venueName, isSelected && styles.venueNameSelected]}>
-            {venue.venueName}{venue.area ? ` - ${venue.area}` : ''}
-          </Text>
-          <Text style={styles.venueDistance}>{venue.distance ? `${venue.distance} km` : ''}</Text>
-        </View>
-        {venue.sport && <Text style={styles.venueSportText}>({venue.sport})</Text>}
-        <Text style={styles.venueAddress} numberOfLines={1}>{venue.address}</Text>
-      </View>
-      {isSelected && <Ionicons name="checkmark-circle" size={20} color="#6366F1" />}
-    </TouchableOpacity>
-  );
-});
+import { 
+  TimeSlotItem, VenueItem, OpponentCard,
+  SentRequestCard, ReceivedRequestCard, CounteredRequestCard,
+  ExpiredRequestCard, AcceptedMatchCard, HistoryMatchCard
+} from '../components/MatchmakingSubComponents';
 
 
 // Mock tournament hostings to check for busy slots
@@ -838,35 +780,15 @@ export default function MatchmakingScreen({ route }) {
   };
 
   const renderOpponent = useCallback(({ item }) => {
-    const isAcademy = role === 'academy';
     const isSent = sentRequests.some(r => r.id === item.id);
-    const imageUri = item.avatar || item.headshot || item.profileImage;
-
     return (
-      <View style={styles.card}>
-        <SafeAvatar 
-          uri={imageUri} 
-          name={item.name} 
-          role={item.role} 
-          size={50} 
-          borderRadius={25} 
-          style={styles.avatar} 
-        />
-        <View style={styles.info}>
-          <Text style={styles.name}>{item.name}</Text>
-          <Text style={styles.details}>
-            {isAcademy ? (item.managedSports?.join(', ')) : (item.sport || item.certifiedSports?.[0] || 'Badminton')} • {item.skillLevel || item.level || 'Intermediate'}
-          </Text>
-          <Text style={styles.dist}><Ionicons name="location" size={12} /> {item.city || 'Near You'}</Text>
-        </View>
-        <TouchableOpacity
-          testID="matchmaking.challenge.button"
-          style={[styles.btn, isSent && styles.btnSent]}
-          onPress={() => isSent ? null : handleChallenge(item)}
-        >
-          <Text style={styles.btnText}>{isSent ? 'Requests' : 'Challenge'}</Text>
-        </TouchableOpacity>
-      </View>
+      <OpponentCard 
+        item={item} 
+        role={role} 
+        isSent={isSent} 
+        onChallenge={handleChallenge} 
+        styles={styles} 
+      />
     );
   }, [role, sentRequests, handleChallenge]);
 
@@ -884,29 +806,15 @@ export default function MatchmakingScreen({ route }) {
             </View>
             {actualSentRequests.length === 0 && <Text style={styles.emptyText}>No Pending Requests Sent</Text>}
             {actualSentRequests.map((req, index) => (
-              <TouchableOpacity key={req.id || `sent-${index}`} style={styles.requestCard} onPress={() => openDetails(req)}>
-                <View style={styles.info}>
-                  <Text style={styles.name} numberOfLines={1}>{getOpponentName(req)}</Text>
-                  <Text style={styles.details}>{req.sport} • {req.proposedDate} at {req.proposedTime} • {req.status || 'Pending'}</Text>
-                </View>
-                <View style={styles.actionRow}>
-                  <TouchableOpacity 
-                    testID="matchmaking.counter.button"
-                    style={styles.smallBtn} 
-                    onPress={() => handleCounter(req)}
-                  >
-                    <Text style={styles.smallBtnText}>Counter</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    testID="matchmaking.cancel.button"
-                    style={[styles.smallBtn, { backgroundColor: '#FFEEF2' }]} 
-                    onPress={() => handleCancelChallenge(req)}
-                  >
-
-                    <Text style={[styles.smallBtnText, { color: '#E11D48' }]}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
+              <SentRequestCard
+                key={req.id || `sent-${index}`}
+                req={req}
+                getOpponentName={getOpponentName}
+                onOpenDetails={openDetails}
+                onCounter={handleCounter}
+                onCancel={handleCancelChallenge}
+                styles={styles}
+              />
             ))}
           </View>
         )}
@@ -920,42 +828,17 @@ export default function MatchmakingScreen({ route }) {
             <Text style={styles.emptyText}>No Requests Received</Text>
           ) : (
             receivedRequests.map((req, index) => (
-              <TouchableOpacity 
-                key={req.id || `received-${index}`} 
-                style={[styles.requestCard, req.isNew && styles.unreadRequestCard]} 
-                onPress={() => openDetails(req)}
-              >
-                <View style={styles.info}>
-                  <Text style={styles.name}>{getOpponentName(req)}</Text>
-                  <Text style={[styles.details, req.status === 'Counter Proposed' && { color: '#D97706' }]}>
-                    {req.sport} • {req.time || (req.proposedDate + ' @ ' + req.proposedTime)}
-                    {req.status === 'Counter Proposed' ? ' (Negotiating)' : ''}
-                  </Text>
-                </View>
-                <View style={styles.actionRow}>
-                  <TouchableOpacity 
-                    testID="matchmaking.decline.button"
-                    style={[styles.smallBtn, { backgroundColor: '#F1F5F9' }]} 
-                    onPress={() => handleDeclineChallenge(req)}
-                  >
-                    <Text style={[styles.smallBtnText, { color: '#64748B' }]}>Decline</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    testID="matchmaking.counter.button"
-                    style={styles.smallBtn} 
-                    onPress={() => handleCounter(req)}
-                  >
-                    <Text style={styles.smallBtnText}>Counter</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    testID="matchmaking.accept.button"
-                    style={[styles.smallBtn, { backgroundColor: '#22C55E' }]} 
-                    onPress={() => handleAcceptChallenge(req)}
-                  >
-                    <Text style={styles.smallBtnText}>{role === 'coach' ? 'Confirm' : 'Accept'}</Text>
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
+              <ReceivedRequestCard
+                key={req.id || `received-${index}`}
+                req={req}
+                role={role}
+                getOpponentName={getOpponentName}
+                onOpenDetails={openDetails}
+                onDecline={handleDeclineChallenge}
+                onCounter={handleCounter}
+                onAccept={handleAcceptChallenge}
+                styles={styles}
+              />
             ))
           )}
         </View>
@@ -974,32 +857,16 @@ export default function MatchmakingScreen({ route }) {
             <Text style={styles.emptyText}>No Countered Challenges</Text>
           )}
           {counteredRequests.map((req, index) => (
-            <TouchableOpacity key={req.id || `countered-${index}`} style={[styles.requestCard, { borderLeftColor: '#F59E0B' }]} onPress={() => openDetails(req)}>
-              <View style={styles.info}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                  <Text style={[styles.name, { flex: 1 }]} numberOfLines={1}>{getOpponentName(req)}</Text>
-                  {req.hasUserResponse && (
-                    <View style={styles.responseTag}>
-                      <Text style={styles.responseTagText}>USER RESPONDED</Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={styles.details}>{req.sport} • {req.proposedDate} at {req.proposedTime} • {req.status}</Text>
-              </View>
-              <View style={styles.actionRow}>
-                <TouchableOpacity style={styles.smallBtn} onPress={() => handleCounter(req)}>
-                  <Text style={styles.smallBtnText}>Counter</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.smallBtn, { backgroundColor: (role === 'coach' ? (req.hasUserResponse ? '#22C55E' : '#E2E8F0') : '#22C55E') }]} 
-                  onPress={() => role === 'coach' ? (req.hasUserResponse ? handleConfirmBooking(req) : null) : handleAcceptCountered(req)}
-                >
-                  <Text style={[styles.smallBtnText, { color: (role === 'coach' ? (req.hasUserResponse ? '#fff' : '#94A3B8') : '#fff') }]}>
-                    {role === 'coach' ? 'Confirm' : 'Accept'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
+            <CounteredRequestCard
+              key={req.id || `countered-${index}`}
+              req={req}
+              role={role}
+              getOpponentName={getOpponentName}
+              onOpenDetails={openDetails}
+              onCounter={handleCounter}
+              onAccept={role === 'coach' ? handleConfirmBooking : handleAcceptCountered}
+              styles={styles}
+            />
           ))}
         </View>
       </ScrollView>
@@ -1026,14 +893,11 @@ export default function MatchmakingScreen({ route }) {
           {expiredRequests.map((req, index) => {
             const isUnread = !req.isExpiredRead;
             return (
-              <TouchableOpacity 
-                key={req.id || `expired-${index}`} 
-                style={[
-                  styles.requestCard, 
-                  { borderLeftColor: '#94A3B8' },
-                  isUnread && styles.unreadRequestCard
-                ]} 
-                onPress={() => {
+              <ExpiredRequestCard
+                key={req.id || `expired-${index}`}
+                req={req}
+                getOpponentName={getOpponentName}
+                onOpenDetails={(req) => {
                   if (isUnread) {
                     syncManager.handleMatchUpdate({ 
                       data: { updatedMatch: { ...req, isExpiredRead: true } } 
@@ -1041,21 +905,10 @@ export default function MatchmakingScreen({ route }) {
                   }
                   openDetails(req);
                 }}
-              >
-                <View style={styles.info}>
-                  <Text style={styles.name} numberOfLines={1}>{getOpponentName(req)}</Text>
-                  <Text style={styles.details}>{req.sport} • {req.proposedDate} at {req.proposedTime}</Text>
-                  <Text style={[styles.details, { color: '#EF4444', fontSize: 10, fontWeight: '700' }]}>EXPIRED</Text>
-                </View>
-                <View style={styles.actionRow}>
-                  <TouchableOpacity 
-                    style={[styles.smallBtn, { backgroundColor: '#F1F5F9' }]} 
-                    onPress={() => handleRemoveExpired(req.id)}
-                  >
-                    <Ionicons name="trash-outline" size={16} color="#64748B" />
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
+                onRemove={handleRemoveExpired}
+                isUnread={isUnread}
+                styles={styles}
+              />
             );
           })}
         </View>
@@ -1067,14 +920,15 @@ export default function MatchmakingScreen({ route }) {
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
       {upcomingMatches.length === 0 && <Text style={styles.emptyText}>No Upcoming Matches Found</Text>}
       {upcomingMatches.map((match, index) => (
-        <TouchableOpacity key={match.id || `accepted-${index}`} style={styles.acceptedCard} onPress={() => openDetails(match)}>
-          <View style={styles.acceptedHeader}>
-             <Ionicons name="calendar" size={20} color={colors.primary} />
-             <Text style={styles.acceptedTime}>{match.time}</Text>
-          </View>
-          <Text style={styles.acceptedTitle}>{role === 'coach' ? 'Booked by ' : 'vs '}{getOpponentName(match)}</Text>
-          <Text style={styles.acceptedDetail}>{match.sport} • {match.location}</Text>
-        </TouchableOpacity>
+        <AcceptedMatchCard
+          key={match.id || `accepted-${index}`}
+          match={match}
+          role={role}
+          getOpponentName={getOpponentName}
+          onOpenDetails={openDetails}
+          styles={styles}
+          colors={colors}
+        />
       ))}
     </ScrollView>
   );
@@ -1093,13 +947,13 @@ export default function MatchmakingScreen({ route }) {
       <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
         {allHistory.length === 0 && <Text style={styles.emptyText}>No Match History Found</Text>}
         {allHistory.map((item, index) => (
-          <TouchableOpacity key={item.id || `history-${index}`} style={styles.historyCard} onPress={() => openDetails(item)}>
-            <View>
-              <Text style={styles.historyName}>{getOpponentName(item)}</Text>
-              <Text style={styles.historyDetail}>{item.sport} • {item.date || item.proposedDate}</Text>
-              {item.location && <Text style={styles.historySubDetail}>{item.location}</Text>}
-            </View>
-          </TouchableOpacity>
+          <HistoryMatchCard
+            key={item.id || `history-${index}`}
+            item={item}
+            getOpponentName={getOpponentName}
+            onOpenDetails={openDetails}
+            styles={styles}
+          />
         ))}
       </ScrollView>
     );
