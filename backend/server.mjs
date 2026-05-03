@@ -35,6 +35,10 @@ import {
 
 import SupportMetricsService from './services/SupportMetricsService.mjs';
 
+// 🏗️ [PHASE 1 MODULARIZATION] (v2.6.315): Extracted modules
+import { AppState, AuditLog, SecuritySummary } from './models/index.mjs';
+import { getISTTimestamp, getISTDate, addInAppNotification, asyncHandler } from './helpers/utils.mjs';
+
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -44,15 +48,7 @@ const app = express();
 const router = express.Router();
 app.set('trust proxy', 1); // 🛡️ Hardened for Render (v2.6.252)
 
-// 🕓 Utility: Get current IST timestamp for filenames (v2.6.84)
-const getISTTimestamp = () => {
-  const now = new Date();
-  const istOffset = 5.5 * 60 * 60 * 1000;
-  return new Date(now.getTime() + istOffset).toISOString()
-    .replace(/T/, '_')
-    .replace(/\..+/, '')
-    .replace(/:/g, '-');
-};
+// getISTTimestamp: MOVED to ./helpers/utils.mjs (Phase 1 Modularization)
 
 // ═══════════════════════════════════════════════════════════════
 // ☁️ Cloudinary Configuration
@@ -251,28 +247,10 @@ const sendSecurityAlert = async (event, data) => {
   }
 };
 
-// 📊 Schemas (SE Fix: Database indexing)
-const AppStateSchema = new mongoose.Schema({
-  data: mongoose.Schema.Types.Mixed,
-  version: { type: Number, default: 1 },
-  lastUpdated: { type: Date, default: Date.now, index: true }
-}, { minimize: false });
+// 📊 Schemas: MOVED to ./models/index.mjs (Phase 1 Modularization)
+// AppState, AuditLog, SecuritySummary are now imported at the top.
 
-const AppState = mongoose.model('AppState', AppStateSchema);
-
-const AuditLogSchema = new mongoose.Schema({
-  userId: { type: String, index: true },
-  action: { type: String, index: true },
-  changedCollections: [String],
-  ipAddress: String,
-  userAgent: String,
-  details: mongoose.Schema.Types.Mixed,
-  timestamp: { type: Date, default: Date.now, index: true },
-  createdAt: { type: Date, default: Date.now, index: { expires: '30d' } }
-});
-AuditLogSchema.index({ timestamp: -1 });
-
-const AuditLog = mongoose.model('AuditLog', AuditLogSchema);
+// AuditLog schema: MOVED to ./models/index.mjs (Phase 1 Modularization)
 
 // 🛡️ SECURITY: Reputation & OSINT Helpers (v2.6.192)
 // Checks if an IP has a record of successful authentication in the last 24 hours.
@@ -310,23 +288,7 @@ const getIPReputation = async (ip) => {
   }
 };
 
-const SecuritySummarySchema = new mongoose.Schema({
-  ipAddress: String,
-  userId: String,
-  actor: String,
-  events: [{
-    timestamp: { type: Date, default: Date.now },
-    action: String,
-    url: String,
-    method: String,
-    details: mongoose.Schema.Types.Mixed
-  }],
-  isSummarized: { type: Boolean, default: false },
-  firstEventAt: { type: Date, default: Date.now },
-  lastEventAt: { type: Date, default: Date.now },
-  lastAlertedAt: { type: Date, default: null }
-});
-const SecuritySummary = mongoose.model('SecuritySummary', SecuritySummarySchema);
+// SecuritySummary schema: MOVED to ./models/index.mjs (Phase 1 Modularization)
 
 // 🛡️ SECURITY: AI Summary Helper (v2.6.194)
 const generateSecuritySummary = async (events) => {
@@ -565,26 +527,9 @@ setInterval(async () => {
 }, 60000); // Check every minute
 
 
-// 🕓 Utility: Get current IST timestamp (v2.6.89)
-const getISTDate = () => {
-  const now = new Date();
-  return new Date(now.getTime() + (5.5 * 60 * 60 * 1000)).toISOString();
-};
+// getISTDate: MOVED to ./helpers/utils.mjs (Phase 1 Modularization)
 
-// 🛡️ Helper: Persistent In-App Notifications (v2.6.89)
-const addInAppNotification = (player, title, message, data = {}) => {
-  if (!player) return;
-  if (!player.notifications) player.notifications = [];
-  player.notifications.unshift({
-    id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-    title,
-    message,
-    date: getISTDate(),
-    read: false,
-    ...data
-  });
-  if (player.notifications.length > 50) player.notifications = player.notifications.slice(0, 50);
-};
+// addInAppNotification: MOVED to ./helpers/utils.mjs (Phase 1 Modularization)
 
 // 🛡️ STABILITY: Panic Handlers
 process.on('uncaughtException', (err) => {
@@ -1525,9 +1470,7 @@ const logServerEvent = async (action, details = {}) => {
   }
 };
 
-const asyncHandler = (fn) => (req, res, next) => {
-  Promise.resolve(fn(req, res, next)).catch(next);
-};
+// asyncHandler: MOVED to ./helpers/utils.mjs (Phase 1 Modularization)
 
 // logAudit moved to top
 
