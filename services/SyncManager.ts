@@ -783,6 +783,7 @@ class SyncManager {
 
   private async pushToApi(updates: Record<string, any>, isInternal: boolean): Promise<{ success: boolean, status?: number }> {
     const cloudUrl = config.API_BASE_URL;
+    console.log(`[SyncManager] pushToApi: Sending to ${cloudUrl}${config.getEndpoint('DATA_SAVE')}`);
     this.metrics.pushAttemptCount++;
 
     // 🛡️ [GUEST PUSH GUARD] (v2.6.210)

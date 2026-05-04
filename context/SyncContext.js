@@ -126,6 +126,11 @@ export const SyncProvider = ({ children }) => {
         console.log('[SyncContext] loadData: Starting fetch...');
         
         const cloudUrl = config.API_BASE_URL;
+        const endpoint = config.getEndpoint('DATA_SYNC');
+        const fullUrl = `${cloudUrl}${endpoint}`;
+        
+        console.log(`[SyncContext] loadData: Fetching from ${fullUrl}`);
+        
         const token = await syncManager.getSystemFlag('userToken');
         const headers = { 
           'x-ace-api-key': config.PUBLIC_APP_ID,

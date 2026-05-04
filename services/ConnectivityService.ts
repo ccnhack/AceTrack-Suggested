@@ -28,7 +28,11 @@ class ConnectivityService {
     // Subscribe to network state changes
     NetInfo.addEventListener((state: NetInfoState) => {
       const wasOnline = this.isOnline;
-      this.isOnline = !!state.isConnected && !!state.isInternetReachable;
+      // 🛡️ [DEV_CONNECTIVITY_RELAXATION] (v2.6.317)
+      // In development, we allow 'online' even if isInternetReachable is false/null,
+      // as long as isConnected is true (local backend access).
+      const reachable = (__DEV__) ? true : !!state.isInternetReachable;
+      this.isOnline = !!state.isConnected && reachable;
       this.connectionType = state.type;
 
       if (wasOnline !== this.isOnline) {
