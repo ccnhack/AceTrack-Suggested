@@ -49,7 +49,8 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
 
     const [
       state,
-      playersDocs,
+      requesterDoc,
+      publicPlayersDocs,
       tournamentsDocs,
       matchesDocs,
       videosDocs,
@@ -59,10 +60,16 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       chatbotDocs
     ] = await Promise.all([
       AppState.findOne().sort({ lastUpdated: -1 }).lean(),
-      Player.find().lean(), // Active players fetched (PII sanitized later)
+      // 🛡️ SCALABILITY FIX (v2.6.316): Fetch full profile only for the requester
+      Player.findOne({ id: normalizedReqId }).lean(),
+      // 🛡️ SCALABILITY FIX (v2.6.316): Fetch all other players with a thin discovery projection (PII-free)
+      Player.find(
+        { id: { $ne: normalizedReqId } }, 
+        { "data.id": 1, "data.name": 1, "data.avatar": 1, "data.role": 1, "data.skillLevel": 1, "data.rating": 1, "data.trueSkillRating": 1 }
+      ).lean(),
       Tournament.find().lean(),
       Match.find(matchQuery).lean(),
-      MatchVideo.find().lean(),
+      MatchVideo.find().lean(), // Consider scoping this further in Phase 2
       SupportTicket.find(ticketQuery).lean(),
       Evaluation.find(evalQuery).lean(),
       Matchmaking.find().lean(),
@@ -75,9 +82,14 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
     const chatbotMessages = {};
     chatbotDocs.forEach(doc => { chatbotMessages[doc.userId] = doc.data; });
 
+    // Combine requester and public profiles
+    const players = [];
+    if (requesterDoc && requesterDoc.data) players.push(requesterDoc.data);
+    publicPlayersDocs.forEach(d => { if (d.data) players.push(d.data); });
+
     const composedData = {
       ...baseData,
-      players: playersDocs.map(d => d.data),
+      players,
       tournaments: tournamentsDocs.map(d => d.data),
       matches: matchesDocs.map(d => d.data),
       matchVideos: videosDocs.map(d => d.data),
@@ -101,11 +113,6 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
     }
 
     // 🛡️ SECURITY HARDENING: Explicitly exclude 'currentUser' and sanitize based on identity.
-    
-    const users = composedData.players || [];
-    const requestingUser = users.find(u => String(u.id).toLowerCase() === String(reqUserId || '').toLowerCase());
-    const reqUserRole = requestingUser?.role || (reqUserId === 'admin' ? 'admin' : 'user');
-
     const sanitizedData = getSanitizedState(composedData, req);
     delete sanitizedData.currentUser;
 

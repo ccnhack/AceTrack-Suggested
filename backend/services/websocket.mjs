@@ -68,16 +68,15 @@ io.on('connection', async (socket) => {
 
   socket.on('admin_pull_diagnostics', (data) => {
     logServerEvent('ADMIN_PULL_DIAGNOSTICS_REQUESTED', data);
-    // 🛡️ [TARGETED_RELAY] (v2.6.274): Only send to sockets belonging to the target user
-    // instead of broadcasting to everyone, which was causing missed deliveries
-    for (const [sid, sess] of activeSupportSessions) {
-      if (String(sess.userId) === String(data.targetUserId)) {
-        io.to(sid).emit('force_upload_diagnostics', data);
-        console.log(`[DIAG] Relayed force_upload_diagnostics to socket ${sid} for user ${data.targetUserId}`);
-      }
+    // 🛡️ [TARGETED_RELAY] (v2.6.316): Target the specific user's room for efficiency
+    // This avoids global broadcasts and loops, ensuring only the target device receives the trigger.
+    if (data.targetUserId) {
+      io.to(`user:${data.targetUserId}`).emit('force_upload_diagnostics', data);
+      console.log(`[DIAG] Target relay: force_upload_diagnostics to user:${data.targetUserId}`);
+    } else {
+      // Emergency fallback for legacy admin hub pings that might miss a targetId
+      io.to('authenticated').emit('force_upload_diagnostics', data);
     }
-    // Also broadcast to non-support users (regular mobile clients)
-    io.emit('force_upload_diagnostics', data);
   });
 
   socket.on('admin_ping_device', (data) => {

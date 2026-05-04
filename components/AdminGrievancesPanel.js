@@ -808,39 +808,41 @@ export const AdminGrievancesPanel = ({
                   style={styles.flex}
                 >
                   <View style={styles.chatContainer}>
-                    <ScrollView 
-                      ref={scrollViewRef} 
-                      style={styles.chatScroll} 
+                    <FlatList
+                      ref={scrollViewRef}
+                      data={selectedTicket?.messages || []}
+                      keyExtractor={(msg, idx) => `${msg.timestamp || 'no-ts'}-${idx}`}
+                      renderItem={({ item: msg, index: idx }) => {
+                        const currentMsgDate = new Date(msg.timestamp).toDateString();
+                        const prevMsgDate = idx > 0 ? new Date(selectedTicket.messages[idx - 1].timestamp).toDateString() : null;
+                        const showDateHeader = currentMsgDate !== prevMsgDate;
+                        const isHighlighted = searchMatchIndices[activeMatchIndex] === idx;
+
+                        return (
+                          <View 
+                            style={isHighlighted && styles.highlightedMessage}
+                            onLayout={(e) => { messageYOffsets.current[msg.id || msg.timestamp] = e.nativeEvent.layout.y; }}
+                          >
+                            {showDateHeader && !chatSearchText && renderDateHeader(msg.timestamp)}
+                            {renderMessage(msg, idx)}
+                          </View>
+                        );
+                      }}
+                      style={styles.chatScroll}
                       contentContainerStyle={styles.chatScrollContent}
                       onContentSizeChange={() => {
                         if (!isSearchingChat) scrollViewRef.current?.scrollToEnd({ animated: true });
                       }}
                       showsVerticalScrollIndicator={true}
-                    >
-                      {(selectedTicket?.messages || [])
-                        .map((msg, idx) => {
-                          const currentMsgDate = new Date(msg.timestamp).toDateString();
-                          const prevMsgDate = idx > 0 ? new Date(selectedTicket.messages[idx-1].timestamp).toDateString() : null;
-                          const showDateHeader = currentMsgDate !== prevMsgDate;
-                          const isHighlighted = searchMatchIndices[activeMatchIndex] === idx;
-
-                          return (
-                            <View 
-                              key={`${msg.timestamp || 'no-ts'}-${idx}`} 
-                              style={isHighlighted && styles.highlightedMessage}
-                              onLayout={(e) => { messageYOffsets.current[msg.id || msg.timestamp] = e.nativeEvent.layout.y; }}
-                            >
-                              {showDateHeader && !chatSearchText && renderDateHeader(msg.timestamp)}
-                              {renderMessage(msg, idx)}
-                            </View>
-                          );
-                        })}
-                      {isUserTyping && (
+                      initialNumToRender={20}
+                      maxToRenderPerBatch={10}
+                      windowSize={5}
+                      ListFooterComponent={isUserTyping ? (
                         <View style={styles.typingIndicator}>
                           <Text style={styles.typingText}>User is typing...</Text>
                         </View>
-                      )}
-                    </ScrollView>
+                      ) : null}
+                    />
 
                     <View style={styles.inputArea}>
                       {replyToMsg && (
@@ -1159,16 +1161,16 @@ export const AdminGrievancesPanel = ({
         })}
       </ScrollView>
 
-      <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-        {(filteredTickets || []).map((ticket, idx) => {
+      <FlatList
+        data={filteredTickets || []}
+        keyExtractor={(item, idx) => item.id || `temp-${idx}`}
+        renderItem={({ item: ticket }) => {
           const status = ticket.status || 'Open';
           const st = statusColors[status] || statusColors['Open'];
-          const date = ticket.createdAt ? new Date(ticket.createdAt) : null;
           const isUnread = isTicketUnread(ticket);
           return (
             <TouchableOpacity 
               testID={`admin.support.card.${ticket.id}`}
-              key={ticket.id || `temp-${idx}`} 
               onPress={() => setSelectedTicket(ticket)}
               style={[styles.ticketCard, isUnread && styles.unreadCard]}
             >
@@ -1192,8 +1194,14 @@ export const AdminGrievancesPanel = ({
               </View>
             </TouchableOpacity>
           );
-        })}
-      </ScrollView>
+        }}
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={Platform.OS !== 'web'}
+      />
 
       <QueueManagementDashboard 
         visible={showQueueDashboard}

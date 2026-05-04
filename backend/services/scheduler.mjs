@@ -112,5 +112,23 @@ export default function initScheduler(loginAttempts, sendSecurityAlert) {
     }
   }, 5 * 60 * 1000); 
 
-  console.log('🕒 Scheduler initialized (Cumulative Security, AI Aggregator)');
+  // 🛡️ SCALABILITY: Background Data Pruning (v2.6.316)
+  // Prunes stale Matchmaking and ChatbotThread documents to prevent DB bloat.
+  setInterval(async () => {
+    try {
+      const { Matchmaking, ChatbotThread } = await import('../models/index.mjs');
+      
+      const matchmakingPruneDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const mRes = await Matchmaking.deleteMany({ lastUpdated: { $lt: matchmakingPruneDate } });
+      if (mRes.deletedCount > 0) console.log(`🕒 [CLEANUP] Pruned ${mRes.deletedCount} stale matchmaking records.`);
+
+      const chatbotPruneDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const cRes = await ChatbotThread.deleteMany({ lastUpdated: { $lt: chatbotPruneDate } });
+      if (cRes.deletedCount > 0) console.log(`🕒 [CLEANUP] Pruned ${cRes.deletedCount} stale chatbot threads.`);
+    } catch (err) {
+      console.error("Cleanup Job Error:", err.message);
+    }
+  }, 24 * 60 * 60 * 1000); // Run daily
+
+  console.log('🕒 Scheduler initialized (Security, AI Aggregator, Pruning)');
 }
