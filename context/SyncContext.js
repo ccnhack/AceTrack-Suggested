@@ -29,7 +29,7 @@ export const SyncProvider = ({ children }) => {
   const [isCloudOnline, setIsCloudOnline] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState(null);
-  const [isUsingCloud, setIsUsingCloud] = useState(true);
+  const [isUsingCloud, setIsUsingCloud] = useState(!__DEV__);
   const [serverClockOffset, setServerClockOffset] = useState(0);
   const [isFullyConnected, setIsFullyConnected] = useState(true);
   const [isNotificationsEnabled, setIsNotificationsEnabled] = useState(true);
@@ -72,6 +72,14 @@ export const SyncProvider = ({ children }) => {
     (async () => {
       const savedNotifs = await syncManager.getSystemFlag('isNotificationsEnabled');
       if (savedNotifs !== null) setIsNotificationsEnabled(savedNotifs);
+
+      // 🛡️ [DEV_SYNC] (v2.6.315) Restore API mode from storage
+      const savedUsingCloud = await syncManager.getSystemFlag('isUsingCloud');
+      if (savedUsingCloud !== null && __DEV__) {
+        setIsUsingCloud(savedUsingCloud);
+        config.API_BASE_URL = savedUsingCloud ? config.CLOUD_API_URL : config.LOCAL_API_URL;
+        console.log(`[SyncContext] Hydrated API URL Mode: ${savedUsingCloud ? 'CLOUD' : 'LOCAL'} (${config.API_BASE_URL})`);
+      }
     })();
   }, []);
 
@@ -154,6 +162,21 @@ export const SyncProvider = ({ children }) => {
         if (data) {
           setIsCloudOnline(true);
           console.log('[SyncContext] loadData: Success, syncing to local storage...');
+          
+          // 🛡️ [DATA VALIDATION] (v2.6.315): Sanitize pulled data before storing.
+          // Removes corrupted tournaments/players with missing required fields.
+          if (Array.isArray(data.tournaments)) {
+            const before = data.tournaments.length;
+            data.tournaments = data.tournaments.filter(t => t && t.id && t.title);
+            const removed = before - data.tournaments.length;
+            if (removed > 0) {
+              console.warn(`[SyncContext] Stripped ${removed} corrupted tournament(s) missing id/title.`);
+            }
+          }
+          if (Array.isArray(data.players)) {
+            data.players = data.players.filter(p => p && p.id);
+          }
+          
           // Data from pull is 'Internal' by default to prevent echo-backs
           await syncManager.syncAndSaveData(data, false, true);
           // Reset retry counter on success
@@ -336,11 +359,12 @@ export const SyncProvider = ({ children }) => {
 
   useEffect(() => {
     if (hasActiveTickets && isCloudOnline) {
+      // 🛡️ [PERFORMANCE FIX] (v2.6.315): Reduced from 10s to 30s to lower battery drain
       const pollTimer = setInterval(() => {
         if (!syncManager.isSyncActive()) {
           checkForUpdates(false);
         }
-      }, 10000);
+      }, 30000);
       return () => clearInterval(pollTimer);
     }
   }, [hasActiveTickets, isCloudOnline, checkForUpdates]);
@@ -360,7 +384,14 @@ export const SyncProvider = ({ children }) => {
     const nextValue = !isUsingCloud;
     setIsUsingCloud(nextValue);
     syncManager.setSystemFlag('isUsingCloud', nextValue);
-    logger.logAction('CLOUD_MODE_TOGGLED', { nextValue });
+    
+    // 🛡️ [DEV_HOTSWAP] (v2.6.315) Dynamically update API base and reconnect socket
+    if (__DEV__) {
+      config.API_BASE_URL = nextValue ? config.CLOUD_API_URL : config.LOCAL_API_URL;
+      syncManager.reconnect();
+    }
+    
+    logger.logAction('CLOUD_MODE_TOGGLED', { nextValue, newUrl: config.API_BASE_URL });
   }, [isUsingCloud]);
 
   const onToggleNotifications = useCallback(() => {

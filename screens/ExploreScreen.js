@@ -515,10 +515,7 @@ const ExploreScreen = ({ navigation, route }) => {
             </View>
           </View>
         }
-        contentContainerStyle={[
-          { paddingBottom: 40 },
-          sortedTournaments.length === 0 && { flexGrow: 1 }
-        ]}
+        contentContainerStyle={{ paddingBottom: 40 }}
       />
 
 

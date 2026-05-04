@@ -24,6 +24,7 @@ class SyncManager {
   private isAuthMuted: boolean = false;
   private userId: string | null = null;
   private userToken: string | null = null;
+  private userRole: string | null = null;
   private hardwareId: string | null = null;
   private initPromise: Promise<void> | null = null;
   private socket: Socket | null = null;
@@ -115,7 +116,19 @@ class SyncManager {
     if (token) this.isAuthMuted = false; // Reset mute on new token
     // Re-setup socket if token changed to ensure high-security connection
     if (this.userId && this.socket) {
-      this.setupSocket(this.userId);
+      this.setupSocket(this.userId, this.userRole || 'user');
+    }
+  }
+
+  /**
+   * 🛡️ [SYNC_RECOVERY] (v2.6.315)
+   * Force a socket reconnection to the current config.API_BASE_URL.
+   * Useful when switching between Local and Cloud modes in Dev.
+   */
+  public reconnect() {
+    if (this.userId) {
+      console.log(`[SyncManager] Reconnecting to: ${config.API_BASE_URL}`);
+      this.setupSocket(this.userId, this.userRole || 'user');
     }
   }
 
@@ -160,6 +173,7 @@ class SyncManager {
 
         const user = await storage.getItem('currentUser');
         const role = forceRole || user?.role || 'user';
+        this.userRole = role;
 
         // 2. Setup Socket.io
         this.setupSocket(userId, role);
@@ -443,9 +457,11 @@ class SyncManager {
           delete workingUpdates[key];
         }
 
-        // Tournament Sanitization
+        // Tournament Sanitization & Ghost Pruning
         if (key === 'tournaments' && Array.isArray(val)) {
-          workingUpdates[key] = val.map(t => ({
+          workingUpdates[key] = val
+            .filter((t: any) => t && t.id && t.title && String(t.title).trim() !== '')
+            .map((t: any) => ({
             ...t,
             registeredPlayerIds: Array.isArray(t.registeredPlayerIds) ? t.registeredPlayerIds.filter((id: any) => id !== null) : []
           }));

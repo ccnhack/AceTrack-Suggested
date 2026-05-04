@@ -953,7 +953,18 @@ const ProfileScreen = ({ navigation }) => {
               </View>
             </KeyboardAvoidingView>
           </View>
-          {renderOTPModal(true)}
+          <OTPVerificationModal 
+            showVerifyModal={showVerifyModal}
+            setShowVerifyModal={setShowVerifyModal}
+            verificationCode={verificationCode}
+            setVerificationCode={setVerificationCode}
+            isVerifying={isVerifying}
+            setIsVerifying={setIsVerifying}
+            onVerifyAccount={onVerifyAccount}
+            onUpdateUser={onUpdateUser}
+            user={user}
+            isNested={true}
+          />
         </Modal>
       )}
 

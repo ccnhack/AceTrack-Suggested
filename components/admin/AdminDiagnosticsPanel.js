@@ -16,7 +16,7 @@ import logger from '../../utils/logger';
 
 const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => {
   const { players } = usePlayers();
-  const { socketRef, isUsingCloud, isCloudOnline, activeApiUrl, metrics, refreshMetrics } = useSync();
+  const { socketRef, isUsingCloud, isCloudOnline, activeApiUrl, metrics, refreshMetrics, loadData } = useSync();
   const { currentUser } = useAuth();
   
   // Real-time metrics polling
@@ -573,9 +573,13 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
       <View style={styles.diagHeaderRow}>
         <Text style={styles.sectionTitle}>System Diagnostics</Text>
         <TouchableOpacity 
-          onPress={() => handleSelectDiagPlayer(selectedDiagUser)}
+          onPress={() => {
+            loadData?.(true);
+            if (selectedDiagUser) {
+              handleSelectDiagPlayer(selectedDiagUser);
+            }
+          }}
           style={styles.diagSyncBtn}
-          disabled={!selectedDiagUser}
         >
           <Ionicons name="refresh-circle" size={16} color="#FFFFFF" />
           <Text style={styles.diagSyncBtnText}>Refresh</Text>

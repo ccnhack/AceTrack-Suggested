@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { colors, typography, borderRadius, shadows } from '../theme/designSystem';
 
 class ScreenErrorBoundary extends Component {

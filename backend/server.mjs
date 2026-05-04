@@ -106,7 +106,13 @@ const APP_VERSION = "2.6.314";
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 const ACE_API_KEY = process.env.ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=';
-const JWT_SECRET = process.env.JWT_SECRET || 'acetrack_zero_trust_fallback_secret_1717';
+// 🛡️ [SECURITY HARDENING] (v2.6.315): If JWT_SECRET env var is missing, generate a
+// random per-boot secret. Sessions won't survive restarts, but tokens can't be forged.
+const JWT_SECRET = process.env.JWT_SECRET || (() => {
+  const fallback = crypto.randomBytes(32).toString('base64');
+  console.warn('⚠️ [SECURITY] JWT_SECRET env var not set! Using ephemeral random secret. Sessions will not persist across restarts.');
+  return fallback;
+})();
 const SECURITY_WEBHOOK_URL = process.env.SECURITY_WEBHOOK_URL; // OPTIONAL: Discord/Slack alerts
 
 const signToken = (user, jti = null) => {
@@ -544,19 +550,10 @@ const ALLOWED_ORIGINS = [
   'http://127.0.0.1:19006'
 ];
 
-// 🕵️ ULTRA-EARLY DIAGNOSTIC: Log EVERY request before ANY middleware (v2.6.176)
-app.use(async (req, res, next) => {
-  // Throttled logging to avoid DB flood, but enough to see activity
-  if (req.method !== 'OPTIONS') {
-    logAudit(req, 'RAW_REQUEST_RECEIVED', [], { 
-      method: req.method, 
-      url: req.originalUrl || req.url,
-      origin: req.headers.origin || 'NO_ORIGIN',
-      ip: req.ip
-    }).catch(() => {});
-  }
-  next();
-});
+// 🛡️ [PERFORMANCE FIX] (v2.6.315): Removed RAW_REQUEST_RECEIVED audit.
+// Previously logged EVERY non-OPTIONS request to MongoDB, causing massive DB growth
+// and adding 5-15ms latency per request. Security events are still tracked by
+// logAudit calls in specific route handlers and the HARD_ROUTE_BLOCK middleware.
 
 app.use(cookieParser());
 
@@ -812,28 +809,9 @@ const startServices = async () => {
     console.log('✅ MongoDB Connected Successfully');
     dbStatus = 'connected';
     
-    // 🛡️ [REPAIR_GUARD] (v2.6.197): Restore Admin Access if wiped by thinned sync
-    (async () => {
-      try {
-        const state = await AppState.findOne().sort({ lastUpdated: -1 });
-        if (state && state.data && state.data.players) {
-          const players = state.data.players;
-          const adminIdx = players.findIndex(p => p.id === 'admin');
-          if (adminIdx !== -1) {
-            const admin = players[adminIdx];
-            if (!admin.password || admin.password === '') {
-               console.log('🛡️ [REPAIR] Wiped Admin Password Detected. Restoring Default...');
-               players[adminIdx].password = 'Password@123';
-               state.markModified('data.players');
-               await state.save();
-               console.log('✅ [REPAIR] Admin Password Restored Successfully.');
-            }
-          }
-        }
-      } catch (e) {
-        console.error('❌ [REPAIR] Failed to check/repair admin password:', e.message);
-      }
-    })();
+    // 🛡️ [SECURITY HARDENING] (v2.6.315): Removed auto-repair of admin password.
+    // Previously restored admin password to 'Password@123' on every boot.
+    // Admin password should be managed through the proper reset flow.
   }).catch(err => {
     console.error('❌ MongoDB Connection Error:', err.message);
     dbStatus = 'error_connection';

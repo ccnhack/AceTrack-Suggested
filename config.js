@@ -20,18 +20,24 @@ if (Platform.OS === 'android' && (!hostIp || hostIp === '127.0.0.1' || hostIp ==
 // In development (__DEV__ is true), use the local auto-detected IP.
 // In production (built APK/IPA), always use the stable Render Cloud URL.
 const CLOUD_API_URL = 'https://acetrack-suggested.onrender.com';
-const API_BASE_URL = __DEV__ ? LOCAL_API_URL : CLOUD_API_URL;
-const GROQ_API_KEY = (Constants.expoConfig && Constants.expoConfig.extra && Constants.expoConfig.extra.groqApiKey)
-  ? Constants.expoConfig.extra.groqApiKey
-  : (process.env.EXPO_PUBLIC_GROQ_API_KEY || ['gsk_K7PS6xX6c', '0u1Hl4A5t3tWGdyb3FYnnYM', 'HeT4tzc1hWoTftABTcCT'].join(''));
+let _API_BASE_URL = __DEV__ ? LOCAL_API_URL : CLOUD_API_URL;
+// 🛡️ [SECURITY HARDENING] (v2.6.315): Keys loaded from environment only.
+// GROQ_API_KEY is NOT needed on the client — AI calls route through the backend proxy.
+// ACE_API_KEY is read from app.json > extra or EXPO_PUBLIC env var.
+const GROQ_API_KEY = (Constants.expoConfig?.extra?.groqApiKey)
+  || process.env.EXPO_PUBLIC_GROQ_API_KEY
+  || null;
 
-const ACE_API_KEY = (Constants.expoConfig && Constants.expoConfig.extra && Constants.expoConfig.extra.aceApiKey)
-  ? Constants.expoConfig.extra.aceApiKey
-  : (process.env.EXPO_PUBLIC_ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=');
+const ACE_API_KEY = (Constants.expoConfig?.extra?.aceApiKey)
+  || process.env.EXPO_PUBLIC_ACE_API_KEY
+  || null;
 
 export default {
   APP_VERSION: '2.6.314',
-  API_BASE_URL: API_BASE_URL,
+  get API_BASE_URL() { return _API_BASE_URL; },
+  set API_BASE_URL(val) { _API_BASE_URL = val; },
+  CLOUD_API_URL,
+  LOCAL_API_URL,
   GROQ_API_KEY,
   ACE_API_KEY,
   PUBLIC_APP_ID: 'AceTrack_Client_v2_Production',

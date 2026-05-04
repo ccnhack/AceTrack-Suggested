@@ -9,14 +9,19 @@ const TIERS = [
   { id: '3', name: 'Enterprise', price: '₹9,999/mo', features: ['Unlimited', '64 Max Players', 'Multi-Camera AI', 'Custom Branding'] },
 ];
 
-export default function SubscriptionScreen() {
+export default function SubscriptionScreen({ navigation }) {
   const [selected, setSelected] = useState('2');
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Academy Plans</Text>
-        <Text style={styles.subtitle}>Scale your sports business</Text>
+      <View style={[styles.header, { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start' }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 4, marginRight: 16 }}>
+          <Ionicons name="arrow-back" size={24} color={colors.primary.base} />
+        </TouchableOpacity>
+        <View>
+          <Text style={styles.title}>Academy Plans</Text>
+          <Text style={styles.subtitle}>Scale your sports business</Text>
+        </View>
       </View>
       <View style={styles.list}>
         {TIERS.map(tier => (

@@ -216,15 +216,10 @@ export const AuthProvider = ({ children }) => {
       'visitedAdminSubTabs', 'sessionCustomAvatar', 'pendingSync'
     ];
     
-    // In dev mode (including E2E testing), storage is our mock backend. 
-    // We preserve it across logouts to allow offline multi-user tests to succeed.
-    const isTesting = __DEV__;
-    
+    // 🛡️ [SECURITY FIX] (v2.6.315): Always clear ALL user data on logout.
+    // Previously skipped clearing in dev mode (__DEV__), which masked production bugs.
+    // E2E tests that need data persistence should use a dedicated mock backend instead.
     syncableKeys.forEach(key => {
-      // Only wipe session keys if in dev mode
-      if (isTesting && !['currentUser', 'sessionCustomAvatar', 'visitedAdminSubTabs'].includes(key)) {
-        return;
-      }
       syncManager.removeSystemFlag(key);
     });
 

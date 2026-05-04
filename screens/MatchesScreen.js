@@ -376,9 +376,14 @@ const MatchesScreen = ({ route, navigation }) => {
   return (
     <View testID="matches.screen.container" style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Matches</Text>
-          <Text style={styles.headerSubtitle}>Your Schedule</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 4, marginRight: 4 }}>
+            <Ionicons name="arrow-back" size={24} color="#0F172A" />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.headerTitle}>Matches</Text>
+            <Text style={styles.headerSubtitle}>Your Schedule</Text>
+          </View>
         </View>
         <View style={styles.tabs}>
           {isCoach && (
@@ -413,6 +418,7 @@ const MatchesScreen = ({ route, navigation }) => {
         keyExtractor={(item) => item.id}
         estimatedItemSize={120}
         contentContainerStyle={styles.content}
+        ItemSeparatorComponent={() => <View style={{ height: 32 }} />}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View testID="matches.empty" style={styles.empty}>
@@ -791,7 +797,6 @@ const styles = StyleSheet.create({
   content: {
     padding: 24,
     paddingBottom: 100,
-    gap: 32,
   },
   matchCard: {
     backgroundColor: '#F2F4F7',

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity } from 'react-native';
 import { Calendar } from 'react-native-calendars';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, shadows, typography, borderRadius, spacing } from '../theme/designSystem';
 
 const MOCK_EVENTS = [
@@ -12,7 +13,7 @@ const MOCK_EVENTS = [
   { id: '6', title: 'South Bangalore Masters', date: '2026-05-15', sport: 'Table Tennis' },
 ];
 
-export default function TournamentCalendarScreen() {
+export default function TournamentCalendarScreen({ navigation }) {
   const [selectedDate, setSelectedDate] = useState(null);
   const today = new Date().toISOString().split('T')[0];
   
@@ -78,6 +79,9 @@ export default function TournamentCalendarScreen() {
         />
         <View style={styles.eventsSection}>
           <View style={styles.headerRow}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 4, marginRight: 10 }}>
+              <Ionicons name="arrow-back" size={24} color="#0F172A" />
+            </TouchableOpacity>
             <Text style={styles.sectionTitle}>{sectionTitle}</Text>
             {selectedDate && (
               <TouchableOpacity onPress={() => setSelectedDate(null)}>

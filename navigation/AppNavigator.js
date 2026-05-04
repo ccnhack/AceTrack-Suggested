@@ -171,13 +171,17 @@ export default function AppNavigator() {
           <Stack.Screen name="Signup" component={SignupScreen} />
         </>
       ) : (
-        <Stack.Screen name="Main" component={MainTabs} />
+        <>
+          <Stack.Screen name="Main" component={MainTabs} />
+          {/* 🛡️ [AUTH GUARD] (v2.6.315): Secondary screens moved inside auth branch */}
+          <Stack.Screen name="CoachDirectory" component={CoachDirectoryScreen} />
+          <Stack.Screen name="Subscriptions" component={SubscriptionScreen} />
+          <Stack.Screen name="LiveScoring" component={LiveScoringScreen} />
+          <Stack.Screen name="TournamentCalendar" component={TournamentCalendarScreen} />
+          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+        </>
       )}
-      <Stack.Screen name="CoachDirectory" component={CoachDirectoryScreen} />
-      <Stack.Screen name="Subscriptions" component={SubscriptionScreen} />
-      <Stack.Screen name="LiveScoring" component={LiveScoringScreen} />
-      <Stack.Screen name="TournamentCalendar" component={TournamentCalendarScreen} />
-      <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+      {/* SupportSetup stays outside auth: it's a pre-login onboarding link */}
       <Stack.Screen name="SupportSetup" component={SupportSetupScreen} />
     </Stack.Navigator>
     </ScreenErrorBoundary>

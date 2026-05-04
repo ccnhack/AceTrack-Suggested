@@ -1031,15 +1031,16 @@ export default function MatchmakingScreen({ route }) {
       )}
 
       {(activeTab === 'Challenge' && role !== 'coach') && (
-        <FlashList
-          data={filteredOpponents}
-          renderItem={renderOpponent}
-          keyExtractor={item => item.id}
-          style={{ flex: 1 }}
-          contentContainerStyle={styles.list}
-          ListEmptyComponent={<Text style={styles.emptyText}>No Matching {role === 'academy' ? 'Academies' : 'Players'} Found Near You</Text>}
-          estimatedItemSize={100}
-        />
+        <View style={{ flex: 1 }}>
+          <FlashList
+            data={filteredOpponents}
+            renderItem={renderOpponent}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.list}
+            ListEmptyComponent={<Text style={styles.emptyText}>No Matching {role === 'academy' ? 'Academies' : 'Players'} Found Near You</Text>}
+            estimatedItemSize={100}
+          />
+        </View>
       )}
       {(activeTab === 'Requests' || (role === 'coach' && activeTab === 'Bookings')) && renderRequested()}
       {activeTab === 'Accepted' && renderAccepted()}

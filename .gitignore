@@ -39,5 +39,37 @@ yarn-debug.log*
 yarn-error.log*
 backend/diagnostics/
 *.zip
+
+# 🛡️ [REPO HYGIENE] (v2.6.315): Debug & test artifacts
+detox_*.log
+detox_*.txt
+app_logs.txt
+build_log*.txt
+rebuild_log.txt
+crash_view.txt
+view_hierarchy.txt
+*.log
+
+# Data dumps (keep config JSONs)
+cloud_state.json
+players_list.json
+server_dump.json
+backup_*.json
+latest_*.json
+real_crash.json
+recent_crash.json
+full_data.json
+diag*.json
+nishant_*.json
+shashank_*.json
+system_diag_*.json
+output.json
+render_services.json
+dump_*.xml
+mockData.ts
+
+# Scratch/debug scripts in root
+scratch/
+
 # backend/public/ — tracked for web dashboard deployment
 backend/firebase-service-account.json

@@ -250,8 +250,15 @@ export default function CoachDirectoryScreen({ navigation }) {
         colors={[colors.primary.base, colors.primary.dark]} 
         style={styles.pageHeader}
       >
-        <Text style={[styles.pageTitle, { color: '#FFFFFF' }]}>Coach Discovery</Text>
-        <Text style={[styles.pageSubtitle, { color: 'rgba(255,255,255,0.8)' }]}>Expert guidance for your sporting career</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 4, marginRight: 12 }}>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <View>
+            <Text style={[styles.pageTitle, { color: '#FFFFFF' }]}>Coach Discovery</Text>
+            <Text style={[styles.pageSubtitle, { color: 'rgba(255,255,255,0.8)' }]}>Expert guidance for your sporting career</Text>
+          </View>
+        </View>
         
         <View style={styles.searchBar}>
           <Ionicons name="search" size={20} color={colors.navy[400]} />
