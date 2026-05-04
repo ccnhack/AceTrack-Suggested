@@ -336,9 +336,41 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
     const now = Date.now();
     const clientVersion = req.body.version;
 
-    const state = await AppState.findOne().sort({ lastUpdated: -1 });
+    // 🛡️ SCALABILITY FIX (v2.6.316): Hydrate from distinct collections instead of monolithic AppState
+    const [
+      state,
+      playersDocs,
+      tournamentsDocs,
+      matchesDocs,
+      videosDocs,
+      ticketsDocs,
+      evalsDocs,
+      matchmakingDocs,
+      chatbotDocs
+    ] = await Promise.all([
+      AppState.findOne().sort({ lastUpdated: -1 }).lean(),
+      Player.find().lean(),
+      Tournament.find().lean(),
+      Match.find().lean(),
+      MatchVideo.find().lean(),
+      SupportTicket.find().lean(),
+      Evaluation.find().lean(),
+      Matchmaking.find().lean(),
+      ChatbotThread.find().lean()
+    ]);
+
     const currentData = (state && state.data) ? state.data : {};
     const currentVersion = state?.version || 1;
+
+    currentData.players = playersDocs.map(d => d.data);
+    currentData.tournaments = tournamentsDocs.map(d => d.data);
+    currentData.matches = matchesDocs.map(d => d.data);
+    currentData.matchVideos = videosDocs.map(d => d.data);
+    currentData.supportTickets = ticketsDocs.map(d => d.data);
+    currentData.evaluations = evalsDocs.map(d => d.data);
+    currentData.matchmaking = matchmakingDocs.map(d => d.data);
+    currentData.chatbotMessages = {};
+    chatbotDocs.forEach(doc => { currentData.chatbotMessages[doc.userId] = doc.data; });
 
     if (clientVersion === undefined) {
       console.warn(`🛑 Rejected: Request missing version from ${req.ip}`);
@@ -361,6 +393,17 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
     
     // 🛡️ SECURITY HARDENING (v2.6.164): Purge any legacy currentUser leaked into global state
     delete newMasterData.currentUser;
+
+    // 🛡️ DELTA TRACKER (v2.6.316): Only update documents that actually changed to achieve O(K) writes
+    const modifiedEntities = {
+      players: new Map(),
+      tournaments: new Map(),
+      matches: new Map(),
+      matchVideos: new Map(),
+      supportTickets: new Map(),
+      evaluations: new Map(),
+      matchmaking: new Map()
+    };
 
     for (const key of syncableKeys) {
       if (req.body[key] !== undefined) {
@@ -496,7 +539,9 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
                     definedFields[fieldKey] = fieldVal;
                   }
                 }
-                entityMap.set(id, { ...existing, ...definedFields, devices: mergedDevices, password: preservedPassword, supportStatus: preservedStatus });
+                const merged = { ...existing, ...definedFields, devices: mergedDevices, password: preservedPassword, supportStatus: preservedStatus };
+                entityMap.set(id, merged);
+                modifiedEntities[key].set(id, merged);
               } else {
                 if (key === 'matchmaking') {
                   const statusChanged = existing && p.status && p.status !== existing.status;
@@ -513,6 +558,7 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
                     merged.isNew = true;
                   }
                   entityMap.set(id, merged);
+                  if (modifiedEntities[key]) modifiedEntities[key].set(id, merged);
                 } else if (key === 'supportTickets' && existing) {
                   // 🛡️ [STATUS_SYNC] (v2.6.241)
                   // 🛡️ [M-7 FIX] (v2.6.315): ID-based message matching instead of index-based
@@ -532,9 +578,13 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
                       }
                     });
                   }
-                  entityMap.set(id, { ...existing, ...p, messages: mergedMessages });
+                  const merged = { ...existing, ...p, messages: mergedMessages };
+                  entityMap.set(id, merged);
+                  if (modifiedEntities[key]) modifiedEntities[key].set(id, merged);
                 } else {
-                  entityMap.set(id, existing ? { ...existing, ...p } : p);
+                  const merged = existing ? { ...existing, ...p } : p;
+                  entityMap.set(id, merged);
+                  if (modifiedEntities[key]) modifiedEntities[key].set(id, merged);
                 }
               }
             }
@@ -559,19 +609,39 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
     // ═══════════════════════════════════════════════════════════════
     // 🏆 WAITLIST PROMOTION & PRIORITY LOGIC (v2.6.103)
     if (newMasterData.tournaments && Array.isArray(newMasterData.tournaments)) {
-      newMasterData.tournaments = newMasterData.tournaments.map(t => 
-        processTournamentWaitlist(t, newMasterData.players || [])
-      );
+      newMasterData.tournaments = newMasterData.tournaments.map(t => {
+        const originalWaitlistStr = JSON.stringify(t.waitlistedPlayerIds || []);
+        const originalPendingStr = JSON.stringify(t.pendingPaymentPlayerIds || []);
+        const originalRegStr = JSON.stringify(t.registeredPlayerIds || []);
+        
+        const processed = processTournamentWaitlist(t, newMasterData.players || []);
+        
+        // 🛡️ SCALABILITY FIX (v2.6.316): Register side-effects in the delta tracker
+        const changed = 
+          JSON.stringify(processed.waitlistedPlayerIds || []) !== originalWaitlistStr ||
+          JSON.stringify(processed.pendingPaymentPlayerIds || []) !== originalPendingStr ||
+          JSON.stringify(processed.registeredPlayerIds || []) !== originalRegStr;
+          
+        if (changed) {
+          modifiedEntities.tournaments.set(processed.id, processed);
+        }
+        return processed;
+      });
     }
 
     const nextVersion = currentVersion + 1;
+
+    // 🛡️ [16MB BOMB DEFUSAL] (v2.6.316): Strip distinct collections before saving monolithic AppState
+    const appStateDataToSave = { ...newMasterData };
+    const distinctKeys = ['players', 'tournaments', 'matches', 'matchVideos', 'supportTickets', 'evaluations', 'matchmaking', 'chatbotMessages'];
+    distinctKeys.forEach(k => delete appStateDataToSave[k]);
 
     // 🛡️ [C-6 FIX] (v2.6.315): Avoid empty {} filter which can cause duplicate singletons
     // If state._id exists, target it exactly. If not, create a new document with a generated ID.
     const updateFilter = state?._id ? { _id: state._id } : { _id: new mongoose.Types.ObjectId() };
     const updatedState = await AppState.findOneAndUpdate(
       updateFilter,
-      { $set: { data: newMasterData, version: nextVersion, lastUpdated: now } },
+      { $set: { data: appStateDataToSave, version: nextVersion, lastUpdated: now } },
       { upsert: true, returnDocument: 'after' }
     );
 
@@ -602,20 +672,31 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
       }
     };
 
+    const getEntitiesToUpsert = (key) => {
+      // 🛡️ SCALABILITY FIX (v2.6.316): O(N) -> O(K) reduction
+      // If atomic overwrite, save the full collection
+      if (req.body.atomicKeys && req.body.atomicKeys.includes(key) && key !== 'players') {
+        return newMasterData[key] || [];
+      }
+      // Otherwise, ONLY save the delta that was actually modified in this request
+      return Array.from(modifiedEntities[key].values());
+    };
+
     await Promise.all([
-      handleAtomicWipe(Player, 'players').then(() => upsertEntities(Player, newMasterData.players)),
-      handleAtomicWipe(Tournament, 'tournaments').then(() => upsertEntities(Tournament, newMasterData.tournaments)),
-      handleAtomicWipe(Match, 'matches').then(() => upsertEntities(Match, newMasterData.matches)),
-      handleAtomicWipe(MatchVideo, 'matchVideos').then(() => upsertEntities(MatchVideo, newMasterData.matchVideos)),
-      handleAtomicWipe(SupportTicket, 'supportTickets').then(() => upsertEntities(SupportTicket, newMasterData.supportTickets)),
-      handleAtomicWipe(Evaluation, 'evaluations').then(() => upsertEntities(Evaluation, newMasterData.evaluations)),
-      handleAtomicWipe(Matchmaking, 'matchmaking').then(() => upsertEntities(Matchmaking, newMasterData.matchmaking)),
+      handleAtomicWipe(Player, 'players').then(() => upsertEntities(Player, getEntitiesToUpsert('players'))),
+      handleAtomicWipe(Tournament, 'tournaments').then(() => upsertEntities(Tournament, getEntitiesToUpsert('tournaments'))),
+      handleAtomicWipe(Match, 'matches').then(() => upsertEntities(Match, getEntitiesToUpsert('matches'))),
+      handleAtomicWipe(MatchVideo, 'matchVideos').then(() => upsertEntities(MatchVideo, getEntitiesToUpsert('matchVideos'))),
+      handleAtomicWipe(SupportTicket, 'supportTickets').then(() => upsertEntities(SupportTicket, getEntitiesToUpsert('supportTickets'))),
+      handleAtomicWipe(Evaluation, 'evaluations').then(() => upsertEntities(Evaluation, getEntitiesToUpsert('evaluations'))),
+      handleAtomicWipe(Matchmaking, 'matchmaking').then(() => upsertEntities(Matchmaking, getEntitiesToUpsert('matchmaking'))),
     ]);
     
     // Handle ChatbotMessages (which is an object with userId keys)
-    if (newMasterData.chatbotMessages && typeof newMasterData.chatbotMessages === 'object') {
-       const userIds = Object.keys(newMasterData.chatbotMessages);
-       const bulkOps = userIds.map(userId => {
+    if (req.body.chatbotMessages && typeof req.body.chatbotMessages === 'object') {
+       // Only process the incoming keys, not the entire database
+       const incomingUserIds = Object.keys(req.body.chatbotMessages);
+       const bulkOps = incomingUserIds.map(userId => {
          return {
            updateOne: {
              filter: { userId: String(userId) },
