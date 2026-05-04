@@ -65,7 +65,7 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       // 🛡️ SCALABILITY FIX (v2.6.316): Fetch all other players with a thin discovery projection (PII-free)
       Player.find(
         { id: { $ne: normalizedReqId } }, 
-        { "data.id": 1, "data.name": 1, "data.avatar": 1, "data.role": 1, "data.skillLevel": 1, "data.rating": 1, "data.trueSkillRating": 1 }
+        { "data.id": 1, "data.name": 1, "data.username": 1, "data.email": 1, "data.avatar": 1, "data.role": 1, "data.skillLevel": 1, "data.rating": 1, "data.trueSkillRating": 1 }
       ).lean(),
       Tournament.find().lean(),
       Match.find(matchQuery).lean(),
