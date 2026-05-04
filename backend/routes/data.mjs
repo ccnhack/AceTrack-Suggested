@@ -101,14 +101,7 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
     }
 
     // 🛡️ SECURITY HARDENING: Explicitly exclude 'currentUser' and sanitize based on identity.
-    let reqUserId = req.headers['x-user-id'];
     
-    // 🛡️ LEGACY WEB SHIM: Web bundles v2.6.151 lack x-user-id. Infer admin status from Referer.
-    const referer = req.headers['referer'] || '';
-    if (!reqUserId && referer.includes('/admin')) {
-      reqUserId = 'admin';
-    }
-
     const users = composedData.players || [];
     const requestingUser = users.find(u => String(u.id).toLowerCase() === String(reqUserId || '').toLowerCase());
     const reqUserRole = requestingUser?.role || (reqUserId === 'admin' ? 'admin' : 'user');
@@ -353,7 +346,40 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
     const now = Date.now();
     const clientVersion = req.body.version;
 
-    // 🛡️ SCALABILITY FIX (v2.6.316): Hydrate from distinct collections instead of monolithic AppState
+    // 🛡️ SCALABILITY FIX (v2.6.316): O(N) -> O(K) Scoped Hydration
+    // Collect the exact IDs of the incoming documents to prevent loading the entire DB into memory.
+    const reqIds = { players: new Set(), tournaments: new Set(), matches: new Set(), matchVideos: new Set(), supportTickets: new Set(), evaluations: new Set(), matchmaking: new Set(), chatbotMessages: new Set() };
+    
+    for (const key of syncableKeys) {
+      if (req.body[key]) {
+        if (key === 'chatbotMessages' && typeof req.body[key] === 'object') {
+          Object.keys(req.body[key]).forEach(userId => reqIds.chatbotMessages.add(String(userId).toLowerCase()));
+        } else if (Array.isArray(req.body[key])) {
+          req.body[key].forEach(item => {
+            if (item && item.id) reqIds[key].add(String(item.id).toLowerCase());
+            
+            // Extract player dependencies for tournament waitlist logic
+            if (key === 'tournaments') {
+              (item.waitlistedPlayerIds || []).forEach(pid => reqIds.players.add(String(pid).toLowerCase()));
+              (item.pendingPaymentPlayerIds || []).forEach(pid => reqIds.players.add(String(pid).toLowerCase()));
+              (item.registeredPlayerIds || []).forEach(pid => reqIds.players.add(String(pid).toLowerCase()));
+            }
+          });
+        }
+      }
+    }
+
+    const buildQuery = (key) => {
+      const isAtomicWipe = req.body.atomicKeys && req.body.atomicKeys.includes(key) && key !== 'players';
+      if (isAtomicWipe) return {}; // We need all of them to overwrite
+      if (reqIds[key].size === 0) return { id: null }; // Fetch nothing
+      return { id: { $in: Array.from(reqIds[key]) } };
+    };
+
+    const chatbotQuery = reqIds.chatbotMessages.size > 0 
+      ? { userId: { $in: Array.from(reqIds.chatbotMessages) } } 
+      : { userId: null };
+
     const [
       state,
       playersDocs,
@@ -366,14 +392,14 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
       chatbotDocs
     ] = await Promise.all([
       AppState.findOne().sort({ lastUpdated: -1 }).lean(),
-      Player.find().lean(),
-      Tournament.find().lean(),
-      Match.find().lean(),
-      MatchVideo.find().lean(),
-      SupportTicket.find().lean(),
-      Evaluation.find().lean(),
-      Matchmaking.find().lean(),
-      ChatbotThread.find().lean()
+      Player.find(buildQuery('players')).lean(),
+      Tournament.find(buildQuery('tournaments')).lean(),
+      Match.find(buildQuery('matches')).lean(),
+      MatchVideo.find(buildQuery('matchVideos')).lean(),
+      SupportTicket.find(buildQuery('supportTickets')).lean(),
+      Evaluation.find(buildQuery('evaluations')).lean(),
+      Matchmaking.find(buildQuery('matchmaking')).lean(),
+      ChatbotThread.find(chatbotQuery).lean()
     ]);
 
     const currentData = (state && state.data) ? state.data : {};
@@ -626,6 +652,14 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
     // ═══════════════════════════════════════════════════════════════
     // 🏆 WAITLIST PROMOTION & PRIORITY LOGIC (v2.6.103)
     if (newMasterData.tournaments && Array.isArray(newMasterData.tournaments)) {
+      // Create a snapshot of player notification lengths before processing
+      const playerNotifMap = new Map();
+      (newMasterData.players || []).forEach(p => {
+        if (p && p.id) {
+          playerNotifMap.set(String(p.id), (p.notifications || []).length);
+        }
+      });
+
       newMasterData.tournaments = newMasterData.tournaments.map(t => {
         const originalWaitlistStr = JSON.stringify(t.waitlistedPlayerIds || []);
         const originalPendingStr = JSON.stringify(t.pendingPaymentPlayerIds || []);
@@ -643,6 +677,20 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
           modifiedEntities.tournaments.set(processed.id, processed);
         }
         return processed;
+      });
+
+      // 🛡️ [SIDE-EFFECT REPAIR] (v2.6.316): Explicitly register mutated players
+      // processTournamentWaitlist appends in-app notifications directly to the masterPlayers array in memory.
+      // We must explicitly register these mutated players in the delta tracker so they are saved to the DB.
+      (newMasterData.players || []).forEach(p => {
+        if (p && p.id) {
+          const originalLen = playerNotifMap.get(String(p.id)) || 0;
+          const newLen = (p.notifications || []).length;
+          if (newLen > originalLen) {
+            console.log(`[SIDE-EFFECT] Waitlist promotion detected. Explicitly marking player ${p.id} for sync.`);
+            modifiedEntities.players.set(String(p.id).toLowerCase(), p);
+          }
+        }
       });
     }
 
