@@ -99,16 +99,14 @@ router.post('/support/invite', apiKeyGuard, asyncHandler(async (req, res) => {
   }
 
   // 🛡️ SCALABILITY FIX (v2.6.316): Employee-Exists Guard reads from Player collection
-  const existingPlayerDocs = await Player.find().lean();
-  const existingPlayers = existingPlayerDocs.map(d => d.data);
-  const existingEmployee = existingPlayers.find(p =>
-    p.role === 'support' && p.email?.toLowerCase() === email.toLowerCase().trim()
-  );
-  if (existingEmployee && existingEmployee.supportStatus !== 'terminated') {
+  const escapedEmail = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const existingAgent = await Player.findOne({ "data.role": "support", "data.email": { $regex: new RegExp(`^${escapedEmail}$`, 'i') } }).lean();
+
+  if (existingAgent && existingAgent.data.supportStatus !== 'terminated') {
     return res.status(422).json({
       error: 'Employee Already Exists',
-      message: `The email ${email} is already associated with an active support employee (${existingEmployee.name || existingEmployee.firstName + ' ' + existingEmployee.lastName}). Use the Support tab to manage their account.`,
-      employeeName: existingEmployee.name || `${existingEmployee.firstName} ${existingEmployee.lastName}`
+      message: `The email ${email} is already associated with an active support employee (${existingAgent.data.name || existingAgent.data.firstName + ' ' + existingAgent.data.lastName}). Use the Support tab to manage their account.`,
+      employeeName: existingAgent.data.name || `${existingAgent.data.firstName} ${existingAgent.data.lastName}`
     });
   }
 
@@ -445,24 +443,24 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
   }
 
   // B. Modify Global State
-  // 🛡️ SCALABILITY FIX (v2.6.316): Read/write players from Player distinct collection
-  const playerDocs = await Player.find().lean();
-  const players = playerDocs.map(d => d.data);
+  // 🛡️ SCALABILITY FIX (v2.6.316): Read/write players using scoped DB queries
+  const escapedEmail = invite.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const existingAgentDoc = await Player.findOne({
+    "data.role": "support",
+    "data.email": { $regex: new RegExp(`^${escapedEmail}$`, 'i') },
+    id: { $ne: 'admin' } // 🛡️ ADMIN GUARD: Protect admin from setup takeover
+  }).lean();
   
-  const existingIndex = players.findIndex(p => 
-    p.role === 'support' && 
-    p.email?.toLowerCase() === invite.email.toLowerCase() && 
-    p.id !== 'admin' // 🛡️ ADMIN GUARD: Protect admin from setup takeover
-  );
+  const existing = existingAgentDoc ? existingAgentDoc.data : null;
   
   let finalUsername = '';
+  let finalPlayerToSave = null;
 
-  if (existingIndex !== -1) {
+  if (existing) {
     // ♻️ RE-ONBOARDING EXISTING (Ex-Employee)
-    const existing = players[existingIndex];
     finalUsername = existing.username;
 
-    players[existingIndex] = {
+    finalPlayerToSave = {
       ...existing,
       name: `${firstName} ${lastName}`,
       firstName,
@@ -485,18 +483,20 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
     };
   } else {
     // ✨ NEW ONBOARDING
-    const generateSupportUsername = (fName, lName, existingPlayers) => {
+    const generateSupportUsername = async (fName, lName) => {
       const base = (fName.substring(0, 3) + lName.substring(0, 2)).toLowerCase().replace(/[^a-z0-9]/g, '');
       let un = base;
       let counter = 1;
-      while (existingPlayers.some(p => p.username === un || p.id === un)) {
+      while (true) {
+        const conflict = await Player.exists({ $or: [{ id: un }, { "data.username": un }] });
+        if (!conflict) break;
         un = `${base}${counter}`;
         counter++;
       }
       return un;
     };
 
-    finalUsername = generateSupportUsername(firstName, lastName, players);
+    finalUsername = await generateSupportUsername(firstName, lastName);
 
     const newSupportAgent = {
       id: `sup_${Date.now().toString(36)}`,
@@ -526,7 +526,7 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
       username: finalUsername
     };
 
-    players.push(newSupportAgent);
+    finalPlayerToSave = newSupportAgent;
   }
   // 🛡️ SCALABILITY FIX (v2.6.316): Persist directly to Player collection
   const upsertPlayer = async (playerData) => {
@@ -537,11 +537,8 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
       { upsert: true }
     );
   };
-  if (existingIndex !== -1) {
-    await upsertPlayer(players[existingIndex]);
-  } else {
-    await upsertPlayer(players[players.length - 1]);
-  }
+  
+  await upsertPlayer(finalPlayerToSave);
 
   // C. Invalidate token
   invite.status = 'Used';
@@ -607,10 +604,8 @@ router.get('/support/attendance', apiKeyGuard, authGuard, async (req, res) => {
   }
   try {
     // 🛡️ SCALABILITY FIX (v2.6.316): Read from Player distinct collection
-    const playerDocs = await Player.find().lean();
-    const allPlayers = playerDocs.map(d => d.data);
-
-    const agents = allPlayers.filter(p => p.role === 'support');
+    const playerDocs = await Player.find({ "data.role": "support" }).lean();
+    const agents = playerDocs.map(d => d.data);
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekStart = new Date(todayStart);
@@ -696,29 +691,25 @@ router.get('/support/analytics', apiKeyGuard, authGuard, async (req, res) => {
     return res.status(403).json({ error: 'System Administrator privileges required' });
   }
   try {
-    // 🛡️ SCALABILITY FIX (v2.6.316): Read from distinct collections
-    const [playerDocs, ticketDocs] = await Promise.all([
-      Player.find().lean(),
-      SupportTicket.find().lean()
-    ]);
-    const allPlayers = playerDocs.map(d => d.data);
-    const agents = allPlayers.filter(p => p.role === 'support');
-    const allTickets = ticketDocs.map(d => d.data);
-
-    // 🕐 TIME FILTER: Parse optional from/to query params
+    // 🕐 TIME FILTER: Push timestamp filter to MongoDB instead of in-memory JS filter
     const fromDate = req.query.from ? new Date(req.query.from) : null;
     const toDate = req.query.to ? new Date(req.query.to) : null;
 
-    // Filter tickets by time range (based on createdAt)
-    const tickets = allTickets.filter(t => {
-      if (!fromDate && !toDate) return true;
-      const created = new Date(t.createdAt);
-      if (fromDate && created < fromDate) return false;
-      if (toDate && created > toDate) return false;
-      return true;
-    });
+    const ticketQuery = {};
+    if (fromDate || toDate) {
+      ticketQuery["data.createdAt"] = {};
+      if (fromDate) ticketQuery["data.createdAt"].$gte = fromDate.toISOString();
+      if (toDate) ticketQuery["data.createdAt"].$lte = toDate.toISOString();
+    }
 
-    console.log(`[API] Analytics: ${agents.length} agents, ${tickets.length}/${allTickets.length} tickets (filtered)`);
+    // 🛡️ SCALABILITY FIX (v2.6.316): O(K) Scoped Web Hydration
+    const [playerDocs, ticketDocs] = await Promise.all([
+      Player.find({ "data.role": "support" }).lean(),
+      SupportTicket.find(ticketQuery).lean()
+    ]);
+    const allPlayers = playerDocs.map(d => d.data);
+    const agents = allPlayers;
+    const tickets = ticketDocs.map(d => d.data);
 
     // 📊 Compute detailed per-agent metrics from actual ticket data
     const agentMetrics = agents.map(agent => {
@@ -889,7 +880,7 @@ router.get('/support/analytics', apiKeyGuard, authGuard, async (req, res) => {
       totalOpenTickets: tickets.filter(t => ['Open', 'In Progress', 'Awaiting Response'].includes(t.status)).length,
       totalClosedResolved: tickets.filter(t => t.status === 'Closed' || t.status === 'Resolved').length,
       unassignedQueue: tickets.filter(t => !t.assignedTo && t.status === 'Open').length,
-      ticketsToday: allTickets.filter(t => {
+      ticketsToday: tickets.filter(t => {
         const created = new Date(t.createdAt);
         const today = new Date();
         return created.toDateString() === today.toDateString();
@@ -904,7 +895,7 @@ router.get('/support/analytics', apiKeyGuard, authGuard, async (req, res) => {
       globalAvgRating,
       teamSummary,
       filteredTicketCount: tickets.length,
-      totalTicketCount: allTickets.length,
+      totalTicketCount: tickets.length,
       tickets: tickets.map(t => ({
         id: t.id,
         type: t.type || 'Other',
@@ -930,10 +921,8 @@ router.get('/support/export', apiKeyGuard, authGuard, async (req, res) => {
   }
 
   try {
-    const state = await AppState.findOne().sort({ lastUpdated: -1 });
-    if (!state) return res.status(404).json({ error: "State not found" });
-
-    const tickets = state.data.supportTickets || [];
+    const ticketDocs = await SupportTicket.find().lean();
+    const tickets = ticketDocs.map(d => d.data);
     const fields = ['id', 'type', 'status', 'assignedTo', 'createdAt', 'resolvedAt', 'closedAt', 'rating'];
     let csv = fields.join(',') + '\n';
     
@@ -972,32 +961,32 @@ router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
 
     // Apply updates
     if (status) {
-      players[idx].supportStatus = status;
+      user.supportStatus = status;
       if (status === 'terminated') {
-        players[idx].terminatedAt = new Date().toISOString();
+        user.terminatedAt = new Date().toISOString();
       } else if (status === 'suspended') {
         // 🔒 SUSPEND: Freeze account without full termination
-        players[idx].suspendedAt = new Date().toISOString();
-        console.log(`[SUSPEND] ${players[idx].email} suspended by admin`);
+        user.suspendedAt = new Date().toISOString();
+        console.log(`[SUSPEND] ${user.email} suspended by admin`);
       } else if (status === 'active') {
         // Re-onboarding or unsuspend: clear metadata
-        delete players[idx].terminatedAt;
-        delete players[idx].suspendedAt;
-        players[idx].reOnboardedAt = new Date().toISOString();
+        delete user.terminatedAt;
+        delete user.suspendedAt;
+        user.reOnboardedAt = new Date().toISOString();
         
         // 🔑 Generate fresh credentials for re-onboarded employee
         const newPassword = Math.random().toString(36).substring(2, 12);
-        players[idx].password = newPassword;
-        console.log(`[RE-ONBOARD] Generated new credentials for ${players[idx].email}`);
+        user.password = bcrypt.hashSync(newPassword, 10);
+        console.log(`[RE-ONBOARD] Generated new credentials for ${user.email}`);
         
         // 📧 Send Welcome Back email with new access key
-        sendReOnboardingEmail(players[idx].email, players[idx].name, newPassword);
+        sendReOnboardingEmail(user.email, user.name, newPassword);
       }
     }
     if (level) {
-      const oldLevel = players[idx].supportLevel || 'Trainee';
-      players[idx].supportLevel = level;
-      players[idx].designation = level; // 🔄 Sync designation with support level
+      const oldLevel = user.supportLevel || 'Trainee';
+      user.supportLevel = level;
+      user.designation = level; // 🔄 Sync designation with support level
 
       // 📧 Trigger Promotion/Demotion Email if level changed (v2.6.148)
       if (oldLevel !== level) {
@@ -1007,12 +996,12 @@ router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
 
          if (newRank < oldRank) {
             // Demotion: Use the supportive, growth-focused template
-            console.log(`[LEVEL] Demoting ${players[idx].email} from ${oldLevel} to ${level}`);
-            sendDemotionEmail(players[idx].email, players[idx].name, level);
+            console.log(`[LEVEL] Demoting ${user.email} from ${oldLevel} to ${level}`);
+            sendDemotionEmail(user.email, user.name, level);
          } else {
             // Promotion: Use the celebratory template
-            console.log(`[LEVEL] Promoting ${players[idx].email} from ${oldLevel} to ${level}`);
-            sendPromotionEmail(players[idx].email, players[idx].name, level);
+            console.log(`[LEVEL] Promoting ${user.email} from ${oldLevel} to ${level}`);
+            sendPromotionEmail(user.email, user.name, level);
          }
       }
     }
@@ -1137,20 +1126,21 @@ router.post('/support/reassign-ticket', apiKeyGuard, async (req, res) => {
   if (!ticketId || !targetAgentId) return res.status(400).json({ error: 'Both ticketId and targetAgentId are required' });
 
   try {
-    // 🛡️ SCALABILITY FIX (v2.6.316): Read/write from distinct collections
-    const [playerDocs, ticketDoc] = await Promise.all([
-      Player.find().lean(),
+    // 🛡️ SCALABILITY FIX (v2.6.316): Read/write from distinct collections scoped efficiently
+    const [targetAgentDoc, ticketDoc] = await Promise.all([
+      Player.findOne({ id: targetAgentId }).lean(),
       SupportTicket.findOne({ id: ticketId })
     ]);
-    const players = playerDocs.map(d => d.data);
-    const targetAgent = players.find(p => {
-      if (p.id !== targetAgentId) return false;
-      const role = (p.role || '').toLowerCase();
-      const status = (p.supportStatus || '').toLowerCase();
-      const level = (p.supportLevel || '').toLowerCase();
+    const targetAgent = targetAgentDoc ? targetAgentDoc.data : null;
+    
+    let isAuthorized = false;
+    if (targetAgent) {
+      const role = (targetAgent.role || '').toLowerCase();
+      const status = (targetAgent.supportStatus || '').toLowerCase();
+      const level = (targetAgent.supportLevel || '').toLowerCase();
       
       // 🛡️ [SMART LIFECYCLE GUARD] (v2.6.249)
-      const hasActiveTermination = !!p.terminatedAt && (!p.reOnboardedAt || new Date(p.terminatedAt) > new Date(p.reOnboardedAt));
+      const hasActiveTermination = !!targetAgent.terminatedAt && (!targetAgent.reOnboardedAt || new Date(targetAgent.terminatedAt) > new Date(targetAgent.reOnboardedAt));
 
       const isExplicitlyInactive = 
         ['terminated', 'inactive', 'suspended', 'left', 'ex-employee'].includes(status) || 
@@ -1160,9 +1150,10 @@ router.post('/support/reassign-ticket', apiKeyGuard, async (req, res) => {
       const isActiveSupport = role === 'support' && (status === 'active' || !status) && !isExplicitlyInactive;
       const isActiveAdmin = role === 'admin' && !isExplicitlyInactive;
 
-      return isActiveSupport || isActiveAdmin;
-    });
-    if (!targetAgent) return res.status(404).json({ error: "Target agent not found, inactive, or unauthorized" });
+      isAuthorized = isActiveSupport || isActiveAdmin;
+    }
+    
+    if (!targetAgent || !isAuthorized) return res.status(404).json({ error: "Target agent not found, inactive, or unauthorized" });
 
     if (!ticketDoc || !ticketDoc.data) return res.status(404).json({ error: "Ticket not found" });
     const ticket = ticketDoc.data;
@@ -1307,16 +1298,19 @@ router.post('/support/claim-ticket', apiKeyGuard, async (req, res) => {
   if (!agentId) return res.status(400).json({ error: "Agent ID required in headers" });
 
   try {
-    // 🛡️ SCALABILITY FIX (v2.6.316): Read/write from distinct collections
-    const [playerDocs, ticketDoc] = await Promise.all([
-      Player.find().lean(),
-      SupportTicket.findOne({ id: ticketId })
-    ]);
-    const players = playerDocs.map(d => d.data);
-
+    // 🛡️ SCALABILITY FIX (v2.6.316): Targeted read/write from distinct collections
+    const ticketDoc = await SupportTicket.findOne({ id: ticketId });
     if (!ticketDoc || !ticketDoc.data) return res.status(404).json({ error: "Ticket not found" });
     const ticket = ticketDoc.data;
+
+    const [agentDoc, userDoc] = await Promise.all([
+      Player.findOne({ id: agentId }).lean(),
+      Player.findOne({ id: ticket.userId }).lean()
+    ]);
     
+    const agentData = agentDoc ? agentDoc.data : null;
+    const userData = userDoc ? userDoc.data : null;
+
     if (ticket.assignedTo) return res.status(409).json({ error: "Ticket already assigned" });
 
     // Assign to agent
@@ -1324,14 +1318,11 @@ router.post('/support/claim-ticket', apiKeyGuard, async (req, res) => {
     ticket.assignedAt = new Date().toISOString();
     ticket.assignmentSource = 'manual_pool';
 
-    const agentIdx = players.findIndex(p => p.id === agentId);
-    const agentName = (agentIdx !== -1 && players[agentIdx].name) ? players[agentIdx].name : 'Support Agent';
+    const agentName = (agentData && agentData.name) ? agentData.name : 'Support Agent';
     ticket.assignedAgentName = agentName;
 
     // 🛡️ [AUTO-INTRO MESSAGE] (v2.6.295): Generate personalized greeting on claim
-    const ticketUserId = ticket.userId;
-    const userIdx = players.findIndex(p => p.id === ticketUserId);
-    const userName = (userIdx !== -1 && players[userIdx].name) ? players[userIdx].name : 'User';
+    const userName = (userData && userData.name) ? userData.name : 'User';
 
     // Build AI issue description from ticket title + first user message
     const ticketTitle = ticket.title || '';

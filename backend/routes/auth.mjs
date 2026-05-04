@@ -396,17 +396,20 @@ export default function createAuthRoutes({
       });
     }
 
-    // 🛡️ SCALABILITY FIX (v2.6.316): Read from Player distinct collection
-    const playerDocs = await Player.find().lean();
-    const players = playerDocs.map(d => d.data);
-    console.log(`[DIAG] Recovery Attempt: ${search} | Total Players: ${players.length}`);
-    const user = players.find(p => {
-      const pEmail = String(p.email || '').toLowerCase().trim();
-      const pId = String(p.id || '').toLowerCase().trim();
-      const pUsername = String(p.username || '').toLowerCase().trim();
-      const pName = String(p.name || '').toLowerCase().trim();
-      return pEmail === search || pId === search || pUsername === search || pName === search;
-    });
+    // 🛡️ SCALABILITY FIX (v2.6.316): Read from Player distinct collection efficiently
+    const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const searchReg = new RegExp(`^${escapedSearch}$`, 'i');
+    const userDoc = await Player.findOne({
+      $or: [
+        { "data.email": searchReg },
+        { id: searchReg },
+        { "data.username": searchReg },
+        { "data.name": searchReg }
+      ]
+    }).lean();
+    
+    console.log(`[DIAG] Recovery Attempt: ${search} | Found: ${!!userDoc}`);
+    const user = userDoc ? userDoc.data : null;
 
     if (!user) {
       // 🛡️ SECURITY: Use generic message to prevent account enum
@@ -444,19 +447,15 @@ export default function createAuthRoutes({
     if (!resetReq) return res.status(400).json({ error: 'Invalid or expired reset token' });
 
     // 🛡️ SCALABILITY FIX (v2.6.316): Read and write via Player distinct collection
-    const playerDocs = await Player.find().lean();
-    const players = playerDocs.map(d => d.data);
-    const user = players.find(p => 
-      p.email?.toLowerCase() === resetReq.email.toLowerCase() && 
-      p.id !== 'admin' // 🛡️ ADMIN GUARD (v2.6.170): Never reset admin password via support portal
-    );
-
-    if (!user) return res.status(404).json({ error: 'User account not found' });
+    const escapedEmail = resetReq.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const agentDoc = await Player.findOne({ "data.email": { $regex: new RegExp(`^${escapedEmail}$`, 'i') }, "data.role": "support" }).lean();
+    
+    if (!agentDoc || agentDoc.id === 'admin') return res.status(404).json({ error: 'User account not found' });
 
     // Update password directly in the Player collection
     const hashedPassword = bcrypt.hashSync(newPassword, 10);
     await Player.updateOne(
-      { id: user.id },
+      { id: agentDoc.id },
       { $set: { "data.password": hashedPassword, "data.devices": [], lastUpdated: new Date() } }
     );
 

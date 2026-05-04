@@ -30,14 +30,14 @@ router.get('/reset-password/:token', asyncHandler(async (req, res) => {
     `);
   }
 
-  // 🛡️ SCALABILITY FIX (v2.6.316): Read from Player distinct collection
-  const playerDocs = await Player.find().lean();
-  const players = playerDocs.map(d => d.data);
-  const user = players.find(p => p.email?.toLowerCase() === resetReq.email.toLowerCase());
+  // 🛡️ SCALABILITY FIX (v2.6.316): Read from Player distinct collection using scoped query
+  const escapedEmail = resetReq.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const userDoc = await Player.findOne({ "data.email": { $regex: new RegExp(`^${escapedEmail}$`, 'i') } }).lean();
   
-  if (!user) {
+  if (!userDoc || !userDoc.data) {
     return res.status(404).send('User not found');
   }
+  const user = userDoc.data;
 
   const html = `
 <!DOCTYPE html>
@@ -172,21 +172,20 @@ router.get('/', (req, res, next) => {
 // ═══════════════════════════════════════════════════════════════
 router.get('/results/:tournamentId', async (req, res) => {
   try {
-    // 🛡️ SCALABILITY FIX (v2.6.316): Read from distinct collections
-    const [tournamentDocs, matchDocs, playerDocs] = await Promise.all([
-      Tournament.find().lean(),
-      Match.find().lean(),
-      Player.find().lean()
-    ]);
-    const tournaments = tournamentDocs.map(d => d.data);
-    const tournament = tournaments.find(t => t && t.id === req.params.tournamentId);
-    if (!tournament) return res.status(404).send('Tournament not found');
+    // 🛡️ SCALABILITY FIX (v2.6.316): O(K) Scoped Web Hydration
+    const tournamentDoc = await Tournament.findOne({ id: req.params.tournamentId }).lean();
+    if (!tournamentDoc || !tournamentDoc.data) return res.status(404).send('Tournament not found');
+    const tournament = tournamentDoc.data;
     
-    const allMatches = matchDocs.map(d => d.data);
-    const matches = allMatches.filter(m => m && m.tournamentId === tournament.id);
     const registeredIds = Array.isArray(tournament.registeredPlayerIds) ? tournament.registeredPlayerIds.map(String) : [];
-    const allPlayers = playerDocs.map(d => d.data);
-    const players = allPlayers.filter(p => p && p.id && registeredIds.includes(String(p.id)));
+    
+    const [matchDocs, playerDocs] = await Promise.all([
+      Match.find({ "data.tournamentId": tournament.id }).lean(),
+      Player.find({ id: { $in: registeredIds } }).lean()
+    ]);
+    
+    const matches = matchDocs.map(d => d.data);
+    const players = playerDocs.map(d => d.data);
     
     const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
