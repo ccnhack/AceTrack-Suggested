@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { AppState, SupportPasswordReset } from '../models/index.mjs';
+import { AppState, SupportPasswordReset, Player, Tournament, Match } from '../models/index.mjs';
 import { asyncHandler } from '../helpers/utils.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -30,8 +30,9 @@ router.get('/reset-password/:token', asyncHandler(async (req, res) => {
     `);
   }
 
-  const appState = await AppState.findOne().sort({ lastUpdated: -1 });
-  const players = appState?.data?.players || [];
+  // 🛡️ SCALABILITY FIX (v2.6.316): Read from Player distinct collection
+  const playerDocs = await Player.find().lean();
+  const players = playerDocs.map(d => d.data);
   const user = players.find(p => p.email?.toLowerCase() === resetReq.email.toLowerCase());
   
   if (!user) {
@@ -171,15 +172,20 @@ router.get('/', (req, res, next) => {
 // ═══════════════════════════════════════════════════════════════
 router.get('/results/:tournamentId', async (req, res) => {
   try {
-    const state = await AppState.findOne().sort({ lastUpdated: -1 });
-    if (!state || !state.data) return res.status(404).send('No data');
-    const tournaments = (state.data && Array.isArray(state.data.tournaments)) ? state.data.tournaments : [];
+    // 🛡️ SCALABILITY FIX (v2.6.316): Read from distinct collections
+    const [tournamentDocs, matchDocs, playerDocs] = await Promise.all([
+      Tournament.find().lean(),
+      Match.find().lean(),
+      Player.find().lean()
+    ]);
+    const tournaments = tournamentDocs.map(d => d.data);
     const tournament = tournaments.find(t => t && t.id === req.params.tournamentId);
     if (!tournament) return res.status(404).send('Tournament not found');
     
-    const matches = (state.data && Array.isArray(state.data.matches)) ? state.data.matches.filter(m => m && m.tournamentId === tournament.id) : [];
+    const allMatches = matchDocs.map(d => d.data);
+    const matches = allMatches.filter(m => m && m.tournamentId === tournament.id);
     const registeredIds = Array.isArray(tournament.registeredPlayerIds) ? tournament.registeredPlayerIds.map(String) : [];
-    const allPlayers = (state.data && Array.isArray(state.data.players)) ? state.data.players : [];
+    const allPlayers = playerDocs.map(d => d.data);
     const players = allPlayers.filter(p => p && p.id && registeredIds.includes(String(p.id)));
     
     const html = `<!DOCTYPE html>

@@ -98,19 +98,18 @@ router.post('/support/invite', apiKeyGuard, asyncHandler(async (req, res) => {
     });
   }
 
-  // 🛡️ Employee-Exists Guard: Check if email is already associated with an active employee
-  const appStateCheck = await AppState.findOne().sort({ lastUpdated: -1 });
-  if (appStateCheck?.data?.players) {
-    const existingEmployee = appStateCheck.data.players.find(p =>
-      p.role === 'support' && p.email?.toLowerCase() === email.toLowerCase().trim()
-    );
-    if (existingEmployee && existingEmployee.supportStatus !== 'terminated') {
-      return res.status(422).json({
-        error: 'Employee Already Exists',
-        message: `The email ${email} is already associated with an active support employee (${existingEmployee.name || existingEmployee.firstName + ' ' + existingEmployee.lastName}). Use the Support tab to manage their account.`,
-        employeeName: existingEmployee.name || `${existingEmployee.firstName} ${existingEmployee.lastName}`
-      });
-    }
+  // 🛡️ SCALABILITY FIX (v2.6.316): Employee-Exists Guard reads from Player collection
+  const existingPlayerDocs = await Player.find().lean();
+  const existingPlayers = existingPlayerDocs.map(d => d.data);
+  const existingEmployee = existingPlayers.find(p =>
+    p.role === 'support' && p.email?.toLowerCase() === email.toLowerCase().trim()
+  );
+  if (existingEmployee && existingEmployee.supportStatus !== 'terminated') {
+    return res.status(422).json({
+      error: 'Employee Already Exists',
+      message: `The email ${email} is already associated with an active support employee (${existingEmployee.name || existingEmployee.firstName + ' ' + existingEmployee.lastName}). Use the Support tab to manage their account.`,
+      employeeName: existingEmployee.name || `${existingEmployee.firstName} ${existingEmployee.lastName}`
+    });
   }
 
   const token = bcrypt.hashSync(Date.now().toString() + email, 10).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
@@ -446,10 +445,9 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
   }
 
   // B. Modify Global State
-  const appState = await AppState.findOne().sort({ lastUpdated: -1 });
-  if (!appState || !appState.data) return res.status(500).json({ error: 'System state missing' });
-
-  const players = appState.data.players || [];
+  // 🛡️ SCALABILITY FIX (v2.6.316): Read/write players from Player distinct collection
+  const playerDocs = await Player.find().lean();
+  const players = playerDocs.map(d => d.data);
   
   const existingIndex = players.findIndex(p => 
     p.role === 'support' && 
@@ -530,12 +528,20 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
 
     players.push(newSupportAgent);
   }
-  await AppState.updateOne(
-    { _id: appState._id },
-    { $set: { "data.players": players, lastUpdated: Date.now() } }
-  );
-  appState.data.players = players;
-  await syncCollectionsFromState(appState);
+  // 🛡️ SCALABILITY FIX (v2.6.316): Persist directly to Player collection
+  const upsertPlayer = async (playerData) => {
+    const entityId = String(playerData.id);
+    await Player.updateOne(
+      { id: entityId },
+      { $set: { id: entityId, data: playerData, lastUpdated: new Date() } },
+      { upsert: true }
+    );
+  };
+  if (existingIndex !== -1) {
+    await upsertPlayer(players[existingIndex]);
+  } else {
+    await upsertPlayer(players[players.length - 1]);
+  }
 
   // C. Invalidate token
   invite.status = 'Used';
@@ -600,10 +606,11 @@ router.get('/support/attendance', apiKeyGuard, authGuard, async (req, res) => {
     return res.status(403).json({ error: 'System Administrator privileges required' });
   }
   try {
-    const state = await AppState.findOne().sort({ lastUpdated: -1 });
-    if (!state?.data) return res.status(404).json({ error: 'State not found' });
+    // 🛡️ SCALABILITY FIX (v2.6.316): Read from Player distinct collection
+    const playerDocs = await Player.find().lean();
+    const allPlayers = playerDocs.map(d => d.data);
 
-    const agents = (state.data.players || []).filter(p => p.role === 'support');
+    const agents = allPlayers.filter(p => p.role === 'support');
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekStart = new Date(todayStart);
@@ -689,11 +696,14 @@ router.get('/support/analytics', apiKeyGuard, authGuard, async (req, res) => {
     return res.status(403).json({ error: 'System Administrator privileges required' });
   }
   try {
-    const state = await AppState.findOne().sort({ lastUpdated: -1 });
-    if (!state || !state.data) return res.status(404).json({ error: "State not found" });
-
-    const agents = (state.data.players || []).filter(p => p.role === 'support');
-    const allTickets = state.data.supportTickets || [];
+    // 🛡️ SCALABILITY FIX (v2.6.316): Read from distinct collections
+    const [playerDocs, ticketDocs] = await Promise.all([
+      Player.find().lean(),
+      SupportTicket.find().lean()
+    ]);
+    const allPlayers = playerDocs.map(d => d.data);
+    const agents = allPlayers.filter(p => p.role === 'support');
+    const allTickets = ticketDocs.map(d => d.data);
 
     // 🕐 TIME FILTER: Parse optional from/to query params
     const fromDate = req.query.from ? new Date(req.query.from) : null;
@@ -955,12 +965,10 @@ router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
   if (req.headers['x-user-id'] !== 'admin') return res.status(403).json({ error: 'System Administrator privileges required' });
 
   try {
-    const state = await AppState.findOne().sort({ lastUpdated: -1 });
-    if (!state) return res.status(404).json({ error: "State not found" });
-
-    const players = [...(state.data.players || [])];
-    const idx = players.findIndex(p => p.id === targetUserId);
-    if (idx === -1) return res.status(404).json({ error: "User not found" });
+    // 🛡️ SCALABILITY FIX (v2.6.316): Read/write from distinct collections
+    const playerDoc = await Player.findOne({ id: targetUserId });
+    if (!playerDoc || !playerDoc.data) return res.status(404).json({ error: "User not found" });
+    const user = playerDoc.data;
 
     // Apply updates
     if (status) {
@@ -1013,31 +1021,29 @@ router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
     // Automated Unassign Trigger: If terminated or suspended, free up their tickets
     if (status === 'terminated' || status === 'suspended') {
        // 🛡️ SECURITY LOCKDOWN (v2.6.238): Immediately invalidate all active JWTs
-       players[idx].lastForceLogoutAt = Date.now();
-       players[idx].activeSessions = [];
-       console.log(`[AUTH_LOCK] Invalidated all sessions for ${players[idx].email} due to ${status}`);
+       user.lastForceLogoutAt = Date.now();
+       user.activeSessions = [];
+       console.log(`[AUTH_LOCK] Invalidated all sessions for ${user.email} due to ${status}`);
 
-       const tickets = (state.data.supportTickets || []).map(t => {
-         if (t.assignedTo === targetUserId) {
-           return { ...t, assignedTo: null, assignedAt: null };
-         }
-         return t;
-       });
-       state.data.supportTickets = tickets;
+       // Update all assigned tickets directly in DB
+       await SupportTicket.updateMany(
+         { "data.assignedTo": targetUserId },
+         { $set: { "data.assignedTo": null, "data.assignedAt": null, lastUpdated: new Date() } }
+       );
 
        if (status === 'terminated') {
          // 📧 Trigger Termination Email
-         sendTerminationEmail(players[idx].email, players[idx].name);
+         sendTerminationEmail(user.email, user.name);
        }
     }
 
-    state.data.players = players;
-    state.markModified('data');
-    await state.save();
-    await syncCollectionsFromState(state);
+    playerDoc.data = user;
+    playerDoc.lastUpdated = new Date();
+    playerDoc.markModified('data');
+    await playerDoc.save();
 
     logServerEvent('SUPPORT_USER_MANAGED', { admin: req.headers['x-user-id'] || 'admin', targetUserId, status, level });
-    res.json({ success: true, user: players[idx] });
+    res.json({ success: true, user: user });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -1052,30 +1058,36 @@ router.post('/support/transfer-tickets', apiKeyGuard, async (req, res) => {
   if (fromAgentId === toAgentId) return res.status(400).json({ error: 'Source and target agent cannot be the same' });
 
   try {
-    const state = await AppState.findOne().sort({ lastUpdated: -1 });
-    if (!state) return res.status(404).json({ error: "State not found" });
-
-    const players = state.data.players || [];
-    const fromAgent = players.find(p => p.id === fromAgentId);
-    const toAgent = players.find(p => p.id === toAgentId && p.role === 'support' && p.supportStatus === 'active');
+    // 🛡️ SCALABILITY FIX (v2.6.316): Read/write from distinct collections
+    const [fromDoc, toDoc] = await Promise.all([
+      Player.findOne({ id: fromAgentId }).lean(),
+      Player.findOne({ id: toAgentId }).lean()
+    ]);
+    const fromAgent = fromDoc?.data;
+    const toAgent = toDoc?.data;
+    
     if (!fromAgent) return res.status(404).json({ error: "Source agent not found" });
-    if (!toAgent) return res.status(404).json({ error: "Target agent not found or not active" });
-
-    const tickets = state.data.supportTickets || [];
-    let transferCount = 0;
-
-    for (const ticket of tickets) {
-      if (ticket.assignedTo === fromAgentId && ['Open', 'In Progress', 'Awaiting Response'].includes(ticket.status)) {
-        ticket.assignedTo = toAgentId;
-        ticket.assignedAt = new Date().toISOString();
-        ticket.reassignedFrom = fromAgentId;
-        transferCount++;
-      }
+    if (!toAgent || toAgent.role !== 'support' || toAgent.supportStatus !== 'active') {
+      return res.status(404).json({ error: "Target agent not found or not active" });
     }
 
-    state.markModified('data');
-    await state.save();
-    await syncCollectionsFromState(state);
+    // Bulk update tickets assigned to the source agent
+    const result = await SupportTicket.updateMany(
+      { 
+        "data.assignedTo": fromAgentId,
+        "data.status": { $in: ['Open', 'In Progress', 'Awaiting Response'] }
+      },
+      { 
+        $set: { 
+          "data.assignedTo": toAgentId,
+          "data.assignedAt": new Date().toISOString(),
+          "data.reassignedFrom": fromAgentId,
+          lastUpdated: new Date()
+        } 
+      }
+    );
+
+    const transferCount = result.modifiedCount || 0;
 
     logServerEvent('SUPPORT_TICKETS_TRANSFERRED', { fromAgentId, toAgentId, count: transferCount });
     res.json({ success: true, transferred: transferCount, message: `${transferCount} ticket(s) transferred to ${toAgent.name}` });
@@ -1125,10 +1137,12 @@ router.post('/support/reassign-ticket', apiKeyGuard, async (req, res) => {
   if (!ticketId || !targetAgentId) return res.status(400).json({ error: 'Both ticketId and targetAgentId are required' });
 
   try {
-    const state = await AppState.findOne().sort({ lastUpdated: -1 });
-    if (!state || !state.data) return res.status(404).json({ error: "State not found" });
-
-    const players = state.data.players || [];
+    // 🛡️ SCALABILITY FIX (v2.6.316): Read/write from distinct collections
+    const [playerDocs, ticketDoc] = await Promise.all([
+      Player.find().lean(),
+      SupportTicket.findOne({ id: ticketId })
+    ]);
+    const players = playerDocs.map(d => d.data);
     const targetAgent = players.find(p => {
       if (p.id !== targetAgentId) return false;
       const role = (p.role || '').toLowerCase();
@@ -1150,27 +1164,28 @@ router.post('/support/reassign-ticket', apiKeyGuard, async (req, res) => {
     });
     if (!targetAgent) return res.status(404).json({ error: "Target agent not found, inactive, or unauthorized" });
 
-    const tickets = state.data.supportTickets || [];
-    const ticketIdx = tickets.findIndex(t => t.id === ticketId);
-    if (ticketIdx === -1) return res.status(404).json({ error: "Ticket not found" });
+    if (!ticketDoc || !ticketDoc.data) return res.status(404).json({ error: "Ticket not found" });
+    const ticket = ticketDoc.data;
 
-    const oldAgentId = tickets[ticketIdx].assignedTo;
+    const oldAgentId = ticket.assignedTo;
     
     // Perform reassignment
-    tickets[ticketIdx].assignedTo = targetAgentId;
-    tickets[ticketIdx].assignedAt = new Date().toISOString();
-    tickets[ticketIdx].reassignedFrom = oldAgentId;
-    tickets[ticketIdx].assignedAgentName = targetAgent.name;
+    ticket.assignedTo = targetAgentId;
+    ticket.assignedAt = new Date().toISOString();
+    ticket.reassignedFrom = oldAgentId;
+    ticket.assignedAgentName = targetAgent.name;
 
     // 🛡️ [AUTO-INTRO MESSAGE] Generate personalized greeting on reassign
-    const ticketUserId = tickets[ticketIdx].userId;
+    const ticketUserId = ticket.userId;
     const userIdx = players.findIndex(p => p.id === ticketUserId);
     const userName = (userIdx !== -1 && players[userIdx].name) ? players[userIdx].name : 'User';
 
-    // Build AI issue description from ticket title + first user message
-    const ticketTitle = tickets[ticketIdx].title || '';
-    const ticketType = tickets[ticketIdx].type || '';
-    const firstUserMsg = (tickets[ticketIdx].messages || []).find(m => m.senderId !== 'admin' && m.senderId !== 'system');
+    tickets[ticketIdx] = ticket;
+
+    // 🛡️ [AUTO-INTRO MESSAGE] Generate personalized greeting on reassign
+    const ticketTitle = ticket.title || '';
+    const ticketType = ticket.type || '';
+    const firstUserMsg = (ticket.messages || []).find(m => m.senderId !== 'admin' && m.senderId !== 'system');
     const issueContext = firstUserMsg ? (firstUserMsg.text || '').replace('ISSUE_DESCRIPTION: ', '') : ticketTitle;
 
     let issueDescription = `${ticketType}: ${ticketTitle}`;
@@ -1202,19 +1217,20 @@ router.post('/support/reassign-ticket', apiKeyGuard, async (req, res) => {
       timestamp: new Date().toISOString(),
       status: 'delivered'
     };
-    tickets[ticketIdx].messages = [...(tickets[ticketIdx].messages || []), introMsg];
-    tickets[ticketIdx].status = 'In Progress';
-    tickets[ticketIdx].updatedAt = new Date().toISOString();
+    ticket.messages = [...(ticket.messages || []), introMsg];
+    ticket.status = 'In Progress';
+    ticket.updatedAt = new Date().toISOString();
 
-    state.markModified('data');
-    await state.save();
-    await syncCollectionsFromState(state);
+    ticketDoc.data = ticket;
+    ticketDoc.lastUpdated = new Date();
+    ticketDoc.markModified('data');
+    await ticketDoc.save();
 
     logServerEvent('SUPPORT_TICKET_REASSIGNED', { ticketId, fromAgentId: oldAgentId, toAgentId: targetAgentId });
     res.json({ 
       success: true, 
       message: `Ticket #${ticketId.slice(-4)} reassigned to ${targetAgent.name}`,
-      ticket: tickets[ticketIdx]
+      ticket: ticket
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1233,13 +1249,11 @@ router.post('/support/rate-ticket', apiKeyGuard, async (req, res) => {
   }
 
   try {
-    const state = await AppState.findOne().sort({ lastUpdated: -1 });
-    if (!state) return res.status(404).json({ error: "State not found" });
+    // 🛡️ SCALABILITY FIX (v2.6.316): Read/write from distinct collections
+    const ticketDoc = await SupportTicket.findOne({ id: ticketId });
+    if (!ticketDoc || !ticketDoc.data) return res.status(404).json({ error: "Ticket not found" });
 
-    const ticketIdx = (state.data.supportTickets || []).findIndex(t => t.id === ticketId);
-    if (ticketIdx === -1) return res.status(404).json({ error: "Ticket not found" });
-
-    const ticket = state.data.supportTickets[ticketIdx];
+    const ticket = ticketDoc.data;
     if (ticket.userId !== userId) {
       return res.status(403).json({ error: "You can only rate your own tickets" });
     }
@@ -1257,21 +1271,27 @@ router.post('/support/rate-ticket', apiKeyGuard, async (req, res) => {
     // Update agent's overall metrics
     const agentId = ticket.assignedTo;
     if (agentId) {
-      const agentIdx = (state.data.players || []).findIndex(p => p.id === agentId);
-      if (agentIdx !== -1) {
-        const p = state.data.players[agentIdx];
+      const playerDoc = await Player.findOne({ id: agentId });
+      if (playerDoc && playerDoc.data) {
+        const p = playerDoc.data;
         if (!p.metrics) p.metrics = {};
         const oldRatedCount = p.metrics.ratedTickets || 0;
         const oldAvg = p.metrics.avgRating || 0;
         
         p.metrics.avgRating = ((oldAvg * oldRatedCount) + rating) / (oldRatedCount + 1);
         p.metrics.ratedTickets = oldRatedCount + 1;
+        
+        playerDoc.data = p;
+        playerDoc.lastUpdated = new Date();
+        playerDoc.markModified('data');
+        await playerDoc.save();
       }
     }
 
-    state.markModified('data');
-    await state.save();
-    await syncCollectionsFromState(state);
+    ticketDoc.data = ticket;
+    ticketDoc.lastUpdated = new Date();
+    ticketDoc.markModified('data');
+    await ticketDoc.save();
 
     logServerEvent('TICKET_RATED', { ticketId, rating, agentId });
     res.json({ success: true, ticket });
@@ -1287,34 +1307,36 @@ router.post('/support/claim-ticket', apiKeyGuard, async (req, res) => {
   if (!agentId) return res.status(400).json({ error: "Agent ID required in headers" });
 
   try {
-    const state = await AppState.findOne().sort({ lastUpdated: -1 });
-    if (!state) return res.status(404).json({ error: "State not found" });
+    // 🛡️ SCALABILITY FIX (v2.6.316): Read/write from distinct collections
+    const [playerDocs, ticketDoc] = await Promise.all([
+      Player.find().lean(),
+      SupportTicket.findOne({ id: ticketId })
+    ]);
+    const players = playerDocs.map(d => d.data);
 
-    const tickets = [...(state.data.supportTickets || [])];
-    const ticketIdx = tickets.findIndex(t => t.id === ticketId);
+    if (!ticketDoc || !ticketDoc.data) return res.status(404).json({ error: "Ticket not found" });
+    const ticket = ticketDoc.data;
     
-    if (ticketIdx === -1) return res.status(404).json({ error: "Ticket not found" });
-    if (tickets[ticketIdx].assignedTo) return res.status(409).json({ error: "Ticket already assigned" });
+    if (ticket.assignedTo) return res.status(409).json({ error: "Ticket already assigned" });
 
     // Assign to agent
-    tickets[ticketIdx].assignedTo = agentId;
-    tickets[ticketIdx].assignedAt = new Date().toISOString();
-    tickets[ticketIdx].assignmentSource = 'manual_pool';
+    ticket.assignedTo = agentId;
+    ticket.assignedAt = new Date().toISOString();
+    ticket.assignmentSource = 'manual_pool';
 
-    const players = [...(state.data.players || [])];
     const agentIdx = players.findIndex(p => p.id === agentId);
     const agentName = (agentIdx !== -1 && players[agentIdx].name) ? players[agentIdx].name : 'Support Agent';
-    tickets[ticketIdx].assignedAgentName = agentName;
+    ticket.assignedAgentName = agentName;
 
     // 🛡️ [AUTO-INTRO MESSAGE] (v2.6.295): Generate personalized greeting on claim
-    const ticketUserId = tickets[ticketIdx].userId;
+    const ticketUserId = ticket.userId;
     const userIdx = players.findIndex(p => p.id === ticketUserId);
     const userName = (userIdx !== -1 && players[userIdx].name) ? players[userIdx].name : 'User';
 
     // Build AI issue description from ticket title + first user message
-    const ticketTitle = tickets[ticketIdx].title || '';
-    const ticketType = tickets[ticketIdx].type || '';
-    const firstUserMsg = (tickets[ticketIdx].messages || []).find(m => m.senderId !== 'admin' && m.senderId !== 'system');
+    const ticketTitle = ticket.title || '';
+    const ticketType = ticket.type || '';
+    const firstUserMsg = (ticket.messages || []).find(m => m.senderId !== 'admin' && m.senderId !== 'system');
     const issueContext = firstUserMsg ? (firstUserMsg.text || '').replace('ISSUE_DESCRIPTION: ', '') : ticketTitle;
 
     let issueDescription = `${ticketType}: ${ticketTitle}`;
@@ -1346,26 +1368,31 @@ router.post('/support/claim-ticket', apiKeyGuard, async (req, res) => {
       timestamp: new Date().toISOString(),
       status: 'delivered'
     };
-    tickets[ticketIdx].messages = [...(tickets[ticketIdx].messages || []), introMsg];
-    tickets[ticketIdx].status = 'In Progress';
-    tickets[ticketIdx].updatedAt = new Date().toISOString();
+    ticket.messages = [...(ticket.messages || []), introMsg];
+    ticket.status = 'In Progress';
+    ticket.updatedAt = new Date().toISOString();
 
     // Increment agent's pool bonus metrics
     if (agentIdx !== -1) {
-      if (!players[agentIdx].metrics) players[agentIdx].metrics = { totalHandled: 0, closedTickets: 0, manualPicks: 0, avgRating: 0 };
-      players[agentIdx].metrics.manualPicks += 1;
-      players[agentIdx].metrics.totalHandled += 1;
+      const playerDoc = await Player.findOne({ id: agentId });
+      if (playerDoc && playerDoc.data) {
+        if (!playerDoc.data.metrics) playerDoc.data.metrics = { totalHandled: 0, closedTickets: 0, manualPicks: 0, avgRating: 0 };
+        playerDoc.data.metrics.manualPicks += 1;
+        playerDoc.data.metrics.totalHandled += 1;
+        playerDoc.lastUpdated = new Date();
+        playerDoc.markModified('data');
+        await playerDoc.save();
+      }
     }
 
-    state.data.supportTickets = tickets;
-    state.data.players = players;
-    state.markModified('data');
-    await state.save();
-    await syncCollectionsFromState(state);
+    ticketDoc.data = ticket;
+    ticketDoc.lastUpdated = new Date();
+    ticketDoc.markModified('data');
+    await ticketDoc.save();
 
     logAudit(req, 'TICKET_CLAIMED', ['supportTickets'], { ticketId, agentId });
 
-    res.json({ success: true, ticket: tickets[ticketIdx] });
+    res.json({ success: true, ticket: ticket });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -1381,15 +1408,11 @@ router.post('/support/force-reset', apiKeyGuard, async (req, res) => {
   if (!targetUserId) return res.status(400).json({ error: 'Target user ID required' });
 
   try {
-    const appState = await AppState.findOne().sort({ lastUpdated: -1 });
-    if (!appState) return res.status(500).json({ error: 'System state unavailable' });
-
-    const players = appState.data.players || [];
-    const userIndex = players.findIndex(p => p.id === targetUserId);
-
-    if (userIndex === -1) return res.status(404).json({ error: 'User account not found' });
+    // 🛡️ SCALABILITY FIX (v2.6.316): Read/write from distinct collections
+    const playerDoc = await Player.findOne({ id: targetUserId });
+    if (!playerDoc || !playerDoc.data) return res.status(404).json({ error: 'User account not found' });
     
-    const user = players[userIndex];
+    const user = playerDoc.data;
     if (user.role !== 'support') {
       return res.status(400).json({ error: 'Can only force-reset support accounts via this portal.' });
     }
@@ -1399,14 +1422,15 @@ router.post('/support/force-reset', apiKeyGuard, async (req, res) => {
     console.log(`[FORCE-RESET] Generated new password for ${user.email}`);
     
     // Assign Plaintext to match local frontend authentication model
-    players[userIndex].password = bcrypt.hashSync(newPassword, 10);
+    user.password = bcrypt.hashSync(newPassword, 10);
     
     // Security Guard: Invalidate all existing sessions
-    players[userIndex].devices = [];
+    user.devices = [];
 
-    appState.markModified('data.players');
-    await appState.save();
-    await syncCollectionsFromState(appState);
+    playerDoc.data = user;
+    playerDoc.lastUpdated = new Date();
+    playerDoc.markModified('data');
+    await playerDoc.save();
     console.log(`[FORCE-RESET] Database updated for ${user.email}`);
 
     // Log Event

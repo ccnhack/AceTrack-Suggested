@@ -113,6 +113,8 @@ const PlayerSchema = new mongoose.Schema({
   data: { type: mongoose.Schema.Types.Mixed, required: true },
   lastUpdated: { type: Date, default: Date.now, index: true }
 }, { minimize: false, strict: false });
+PlayerSchema.index({ "data.email": 1 });
+PlayerSchema.index({ "data.role": 1 });
 export const Player = mongoose.model('Player', PlayerSchema);
 
 // TOURNAMENT
@@ -129,6 +131,11 @@ const MatchSchema = new mongoose.Schema({
   data: { type: mongoose.Schema.Types.Mixed, required: true },
   lastUpdated: { type: Date, default: Date.now, index: true }
 }, { minimize: false, strict: false });
+MatchSchema.index({ "data.player1Id": 1 });
+MatchSchema.index({ "data.player2Id": 1 });
+MatchSchema.index({ "data.challengerId": 1 });
+MatchSchema.index({ "data.opponentId": 1 });
+MatchSchema.index({ "data.tournamentId": 1 });
 export const Match = mongoose.model('Match', MatchSchema);
 
 // MATCH VIDEO
@@ -145,6 +152,9 @@ const SupportTicketSchema = new mongoose.Schema({
   data: { type: mongoose.Schema.Types.Mixed, required: true },
   lastUpdated: { type: Date, default: Date.now, index: true }
 }, { minimize: false, strict: false });
+SupportTicketSchema.index({ "data.userId": 1 });
+SupportTicketSchema.index({ "data.assignedTo": 1 });
+SupportTicketSchema.index({ "data.status": 1 });
 export const SupportTicket = mongoose.model('SupportTicket', SupportTicketSchema);
 
 // EVALUATION
@@ -153,6 +163,7 @@ const EvaluationSchema = new mongoose.Schema({
   data: { type: mongoose.Schema.Types.Mixed, required: true },
   lastUpdated: { type: Date, default: Date.now, index: true }
 }, { minimize: false, strict: false });
+EvaluationSchema.index({ "data.playerId": 1 });
 export const Evaluation = mongoose.model('Evaluation', EvaluationSchema);
 
 // MATCHMAKING

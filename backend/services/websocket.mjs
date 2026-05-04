@@ -48,18 +48,17 @@ io.on('connection', async (socket) => {
     } else {
       // Fallback: check database if client didn't provide role
       try {
-        const state = await AppState.findOne().sort({ lastUpdated: -1 });
-        if (state?.data?.players) {
-          const player = state.data.players.find(p => String(p.id) === String(connUserId));
-          console.log(`[DEBUG] Database lookup for ${connUserId} returned role: ${player?.role || 'not found'}`);
-          if (player && player.role === 'support') {
-            activeSupportSessions.set(socket.id, {
-              userId: connUserId,
-              startTime: Date.now(),
-              deviceName: connDeviceName
-            });
-            console.log(`🕐 [SESSION] Support employee ${connUserId} session started via DB lookup (socket: ${socket.id}, device: ${connDeviceName})`);
-          }
+        // 🛡️ SCALABILITY FIX (v2.6.316): Read from Player distinct collection
+        const playerDoc = await Player.findOne({ id: String(connUserId) }).lean();
+        const player = playerDoc?.data;
+        console.log(`[DEBUG] Database lookup for ${connUserId} returned role: ${player?.role || 'not found'}`);
+        if (player && player.role === 'support') {
+          activeSupportSessions.set(socket.id, {
+            userId: connUserId,
+            startTime: Date.now(),
+            deviceName: connDeviceName
+          });
+          console.log(`🕐 [SESSION] Support employee ${connUserId} session started via DB lookup (socket: ${socket.id}, device: ${connDeviceName})`);
         }
       } catch (e) {
         console.warn('[SESSION] Failed to check user role on connect:', e.message);
@@ -96,12 +95,10 @@ io.on('connection', async (socket) => {
     // If a live pong is received, ensure this device is in the user's permanent history
     if (data.targetUserId && data.deviceId) {
       try {
-        const state = await AppState.findOne().sort({ lastUpdated: -1 });
-        if (state && state.data && state.data.players) {
-          const players = [...state.data.players];
-          const uIdx = players.findIndex(p => String(p.id) === String(data.targetUserId));
-          if (uIdx !== -1) {
-            const user = players[uIdx];
+        // 🛡️ SCALABILITY FIX (v2.6.316): Read/write via Player distinct collection
+        const playerDoc = await Player.findOne({ id: String(data.targetUserId) });
+        if (playerDoc && playerDoc.data) {
+            const user = playerDoc.data;
             user.devices = user.devices || [];
             const dIdx = user.devices.findIndex(d => d && d.id === data.deviceId);
             
@@ -110,20 +107,19 @@ io.on('connection', async (socket) => {
               user.devices.push({
                 id: data.deviceId,
                 name: data.deviceName || 'Unknown Device',
-                appVersion: data.appVersion || '2.6.258',
+                appVersion: data.appVersion || '2.6.316',
                 lastActive: Date.now()
               });
-              state.markModified('data.players');
-              await state.save();
             } else {
               // Update last active and metadata
               user.devices[dIdx].lastActive = Date.now();
               user.devices[dIdx].name = data.deviceName || user.devices[dIdx].name;
               user.devices[dIdx].appVersion = data.appVersion || user.devices[dIdx].appVersion;
-              state.markModified('data.players');
-              await state.save();
             }
-          }
+            playerDoc.data = user;
+            playerDoc.lastUpdated = new Date();
+            playerDoc.markModified('data');
+            await playerDoc.save();
         }
       } catch (e) {
         console.error('❌ [AUTO-REG] Failed:', e.message);
@@ -174,26 +170,24 @@ io.on('connection', async (socket) => {
       // Only persist sessions longer than 1 minute to avoid noise from reconnects
       if (durationMs > 60000) {
         try {
-          const state = await AppState.findOne().sort({ lastUpdated: -1 });
-          if (state?.data?.players) {
-            const players = state.data.players;
-            const uIdx = players.findIndex(p => String(p.id) === String(session.userId));
-            if (uIdx !== -1) {
-              players[uIdx].sessionHistory = players[uIdx].sessionHistory || [];
-              players[uIdx].sessionHistory.push({
-                startTime: new Date(session.startTime).toISOString(),
-                endTime: new Date().toISOString(),
-                durationMs,
-                device: session.deviceName || 'Browser'
-              });
-              // Cap at 200 entries to prevent unbounded growth
-              if (players[uIdx].sessionHistory.length > 200) {
-                players[uIdx].sessionHistory = players[uIdx].sessionHistory.slice(-200);
-              }
-              state.markModified('data.players');
-              await state.save();
-              console.log(`🕐 [SESSION] Persisted ${durationMins}m session for ${session.userId}`);
+          // 🛡️ SCALABILITY FIX (v2.6.316): Persist session directly to Player collection
+          const playerDoc = await Player.findOne({ id: String(session.userId) });
+          if (playerDoc && playerDoc.data) {
+            playerDoc.data.sessionHistory = playerDoc.data.sessionHistory || [];
+            playerDoc.data.sessionHistory.push({
+              startTime: new Date(session.startTime).toISOString(),
+              endTime: new Date().toISOString(),
+              durationMs,
+              device: session.deviceName || 'Browser'
+            });
+            // Cap at 200 entries to prevent unbounded growth
+            if (playerDoc.data.sessionHistory.length > 200) {
+              playerDoc.data.sessionHistory = playerDoc.data.sessionHistory.slice(-200);
             }
+            playerDoc.lastUpdated = new Date();
+            playerDoc.markModified('data');
+            await playerDoc.save();
+            console.log(`🕐 [SESSION] Persisted ${durationMins}m session for ${session.userId}`);
           }
         } catch (e) {
           console.error('🕐 [SESSION] Failed to persist session:', e.message);

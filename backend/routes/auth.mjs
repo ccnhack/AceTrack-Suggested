@@ -26,9 +26,9 @@ export default function createAuthRoutes({
       return res.status(401).json({ success: false, error: 'No active session.' });
     }
 
-    const appState = await AppState.findOne().sort({ lastUpdated: -1 }).lean();
-    const players = appState?.data?.players || [];
-    const user = players.find(p => p.id === req.user.id);
+    // 🛡️ SCALABILITY FIX (v2.6.316): Read from Player distinct collection
+    const playerDoc = await Player.findOne({ id: req.user.id }).lean();
+    const user = playerDoc?.data;
 
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found.' });
@@ -97,16 +97,11 @@ export default function createAuthRoutes({
       return res.status(401).json({ error: 'Invalid administrator credentials.' });
     }
 
-    // Validate password against the database record
-    const appState = await AppState.findOne().sort({ lastUpdated: -1 });
-    if (!appState || !appState.data) {
-      return res.status(500).json({ error: 'System state unavailable.' });
-    }
+    // 🛡️ SCALABILITY FIX (v2.6.316): Read from Player distinct collection
+    const adminDoc = await Player.findOne({ id: 'admin' }).lean();
+    const adminUser = adminDoc?.data;
 
-    const players = appState.data.players || [];
-    const adminUser = players.find(p => p.id === 'admin' && p.role === 'admin');
-
-    if (!adminUser) {
+    if (!adminUser || adminUser.role !== 'admin') {
       return res.status(500).json({ error: 'Administrator account not found in system.' });
     }
 
@@ -260,13 +255,9 @@ export default function createAuthRoutes({
     // 🕵️ SUPER DIAGNOSTIC: Log EXACTLY what the browser sent
     await logAudit(req, 'DEBUG_SUPPORT_LOGIN_PAYLOAD', [], { receivedIdentifier: identifier, processedSearch: search });
 
-    const appState = await AppState.findOne().sort({ lastUpdated: -1 });
-
-    if (!appState || !appState.data) {
-      return res.status(500).json({ error: 'System state unavailable.' });
-    }
-
-    const players = appState.data.players || [];
+    // 🛡️ SCALABILITY FIX (v2.6.316): Read from Player distinct collection
+    const playerDocs = await Player.find().lean();
+    const players = playerDocs.map(d => d.data);
     console.log(`[DIAG] Support Login Attempt: ${search} | Total Players: ${players.length}`);
     const supportUser = players.find(p => {
       const role = String(p.role || '').toLowerCase().trim();
@@ -351,23 +342,13 @@ export default function createAuthRoutes({
     const rotatedSessions = activeSessions.sort((a, b) => b.iat - a.iat).slice(0, 2);
     
     // Persist updated session list to database
+    // 🛡️ SCALABILITY FIX (v2.6.316): Persist session directly to Player collection
     const release = await syncMutex.acquire();
     try {
-      const freshState = await AppState.findOne().sort({ lastUpdated: -1 });
-      const freshPlayers = [...(freshState?.data?.players || [])];
-      const pIdx = freshPlayers.findIndex(p => p.id === supportUser.id);
-      
-      if (pIdx !== -1) {
-        freshPlayers[pIdx].activeSessions = rotatedSessions;
-        await AppState.findOneAndUpdate(
-          {},
-          { $set: { 'data.players': freshPlayers, version: (freshState.version || 0) + 1, lastUpdated: new Date() } }
-        );
-        await Player.updateOne(
-          { id: supportUser.id },
-          { $set: { "data.activeSessions": rotatedSessions, lastUpdated: new Date() } }
-        );
-      }
+      await Player.updateOne(
+        { id: supportUser.id },
+        { $set: { "data.activeSessions": rotatedSessions, lastUpdated: new Date() } }
+      );
     } finally {
       release();
     }
@@ -415,9 +396,9 @@ export default function createAuthRoutes({
       });
     }
 
-    // Find user in AppState (Sort by lastUpdated to ensure we use the master record)
-    const appState = await AppState.findOne().sort({ lastUpdated: -1 });
-    const players = appState?.data?.players || [];
+    // 🛡️ SCALABILITY FIX (v2.6.316): Read from Player distinct collection
+    const playerDocs = await Player.find().lean();
+    const players = playerDocs.map(d => d.data);
     console.log(`[DIAG] Recovery Attempt: ${search} | Total Players: ${players.length}`);
     const user = players.find(p => {
       const pEmail = String(p.email || '').toLowerCase().trim();
@@ -462,33 +443,22 @@ export default function createAuthRoutes({
     const resetReq = await SupportPasswordReset.findOne({ token, expiresAt: { $gt: new Date() } });
     if (!resetReq) return res.status(400).json({ error: 'Invalid or expired reset token' });
 
-    const appState = await AppState.findOne().sort({ lastUpdated: -1 });
-    if (!appState) return res.status(500).json({ error: 'System state unavailable' });
-
-    const players = appState.data.players || [];
-    const userIndex = players.findIndex(p => 
+    // 🛡️ SCALABILITY FIX (v2.6.316): Read and write via Player distinct collection
+    const playerDocs = await Player.find().lean();
+    const players = playerDocs.map(d => d.data);
+    const user = players.find(p => 
       p.email?.toLowerCase() === resetReq.email.toLowerCase() && 
       p.id !== 'admin' // 🛡️ ADMIN GUARD (v2.6.170): Never reset admin password via support portal
     );
 
-    if (userIndex === -1) return res.status(404).json({ error: 'User account not found' });
+    if (!user) return res.status(404).json({ error: 'User account not found' });
 
-    // Update password
-    players[userIndex].password = bcrypt.hashSync(newPassword, 10);
-    
-    // Clean up device sessions for security
-    players[userIndex].devices = [];
-
-    // 🛡️ SYNC PROTECTION: Explicitly update timestamp to prevent overwrite by stale devices
-    appState.lastUpdated = new Date();
-    appState.markModified('data.players'); 
-    await appState.save();
-
+    // Update password directly in the Player collection
+    const hashedPassword = bcrypt.hashSync(newPassword, 10);
     await Player.updateOne(
-      { id: players[userIndex].id },
-      { $set: { "data.password": players[userIndex].password, "data.devices": players[userIndex].devices, lastUpdated: new Date() } }
+      { id: user.id },
+      { $set: { "data.password": hashedPassword, "data.devices": [], lastUpdated: new Date() } }
     );
-
 
     await SupportPasswordReset.deleteOne({ token });
 

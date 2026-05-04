@@ -24,6 +24,29 @@ export default function createDataRoutes({
 
 router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
   try {
+    // 🛡️ SCALABILITY ARCHITECTURE (v2.6.316): Prevent OOM crashes on large scale users usage
+    // Pre-filter heavy collections at the database level instead of loading the entire DB into Node.js memory.
+    let reqUserId = req.headers['x-user-id'];
+    const referer = req.headers['referer'] || '';
+    if (!reqUserId && referer.includes('/admin')) {
+      reqUserId = 'admin';
+    }
+    const normalizedReqId = String(reqUserId || '').toLowerCase();
+    const isAdmin = req.user?.role === 'admin' || normalizedReqId === 'admin' || (req.user?.scopes || []).includes('*');
+    const canReadSupport = isAdmin || (req.user?.scopes || []).includes('read:support') || (req.user?.scopes || []).includes('read:basic');
+
+    const matchQuery = isAdmin ? {} : { 
+      $or: [
+        { "data.player1Id": normalizedReqId },
+        { "data.player2Id": normalizedReqId },
+        { "data.challengerId": normalizedReqId },
+        { "data.opponentId": normalizedReqId }
+      ]
+    };
+    const ticketQuery = canReadSupport ? {} : { "data.userId": normalizedReqId };
+    const evalQuery = isAdmin ? {} : { "data.playerId": normalizedReqId };
+    const chatQuery = isAdmin ? {} : { "userId": normalizedReqId };
+
     const [
       state,
       playersDocs,
@@ -36,14 +59,14 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       chatbotDocs
     ] = await Promise.all([
       AppState.findOne().sort({ lastUpdated: -1 }).lean(),
-      Player.find().lean(),
+      Player.find().lean(), // Active players fetched (PII sanitized later)
       Tournament.find().lean(),
-      Match.find().lean(),
+      Match.find(matchQuery).lean(),
       MatchVideo.find().lean(),
-      SupportTicket.find().lean(),
-      Evaluation.find().lean(),
+      SupportTicket.find(ticketQuery).lean(),
+      Evaluation.find(evalQuery).lean(),
       Matchmaking.find().lean(),
-      ChatbotThread.find().lean()
+      ChatbotThread.find(chatQuery).lean()
     ]);
 
     const baseData = (state && state.data) ? state.data : {};
@@ -275,39 +298,33 @@ router.post('/register-push-token', apiKeyGuard, async (req, res) => {
   if (!userId || !pushToken) return res.status(400).json({ error: 'Missing userId or pushToken' });
 
   try {
-    const state = await AppState.findOne().sort({ lastUpdated: -1 });
-    if (!state || !state.data) return res.status(404).json({ error: 'System state not found' });
-
-    const players = state.data.players || [];
-    const playerIndex = players.findIndex(p => p.id === userId);
-
-    if (playerIndex >= 0) {
-      // 🛡️ SECURITY: Verify that users only register tokens for themselves (v2.6.257)
-      if (req.userRole !== 'admin' && req.userId !== userId) {
-        return res.status(403).json({ error: 'Unauthorized: Cannot register push token for another user.' });
-      }
-
-      const player = players[playerIndex];
-      // 🛡️ [NOTIFY_DEBUG] Sanitize tokens (remove nulls/empty)
-      let tokens = (player.pushTokens || []).filter(t => !!t && typeof t === 'string');
-      
-      if (!tokens.includes(pushToken)) {
-        tokens.push(pushToken);
-        players[playerIndex] = { ...player, pushTokens: tokens };
-        
-        await AppState.updateOne(
-          { _id: state._id },
-          { $set: { "data.players": players, lastUpdated: Date.now() } }
-        );
-        console.log(`📱 [NOTIFY_DEBUG] Token Registered: ${pushToken.substring(0, 15)}... for user ${userId}. Total: ${tokens.length}`);
-      } else {
-        console.log(`📱 [NOTIFY_DEBUG] Token already exists for user ${userId}`);
-      }
-      res.json({ success: true });
-    } else {
+    // 🛡️ SCALABILITY FIX (v2.6.316): Read from Player distinct collection instead of AppState
+    const playerDoc = await Player.findOne({ id: userId });
+    if (!playerDoc || !playerDoc.data) {
       console.warn(`🛑 [NOTIFY_DEBUG] Registration failed: User ${userId} not found`);
-      res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: 'User not found' });
     }
+
+    // 🛡️ SECURITY: Verify that users only register tokens for themselves (v2.6.257)
+    if (req.userRole !== 'admin' && req.userId !== userId) {
+      return res.status(403).json({ error: 'Unauthorized: Cannot register push token for another user.' });
+    }
+
+    const player = playerDoc.data;
+    // 🛡️ [NOTIFY_DEBUG] Sanitize tokens (remove nulls/empty)
+    let tokens = (player.pushTokens || []).filter(t => !!t && typeof t === 'string');
+    
+    if (!tokens.includes(pushToken)) {
+      tokens.push(pushToken);
+      playerDoc.data = { ...player, pushTokens: tokens };
+      playerDoc.lastUpdated = new Date();
+      playerDoc.markModified('data');
+      await playerDoc.save();
+      console.log(`📱 [NOTIFY_DEBUG] Token Registered: ${pushToken.substring(0, 15)}... for user ${userId}. Total: ${tokens.length}`);
+    } else {
+      console.log(`📱 [NOTIFY_DEBUG] Token already exists for user ${userId}`);
+    }
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
