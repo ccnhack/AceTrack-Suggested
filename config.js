@@ -47,41 +47,22 @@ export default {
   // 🛡️ SECURITY: Stealth Endpoint Registry (v2.6.193)
   // Prevents plaintext enumeration of backend attack surface in the JS bundle.
   getEndpoint: (key) => {
-    // 🔧 [HOTFIX v2.6.196]: Polyfill atob for React Native stability
-    const _atob = (input) => {
-      if (typeof atob !== 'undefined') return atob(input);
-      try {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-        let str = String(input).replace(/[=]+$/, '');
-        let output = '';
-        for (let bc = 0, bs, buffer, idx = 0; buffer = str.charAt(idx++); ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer, bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0) {
-          buffer = chars.indexOf(buffer);
-        }
-        return output;
-      } catch (e) { return ''; }
-    };
-
+    // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Removed base64 security theater
     const _m = {
-      'ADMIN_LOGIN': 'L2FwaS92MS9hZG1pbi9sb2dpbg==',           // /api/v1/admin/login
-      'ADMIN_VERIFY': 'L2FwaS92MS9hZG1pbi92ZXJpZnktcGlu',       // /api/v1/admin/verify-pin
-      'SUPPORT_LOGIN': 'L2FwaS92MS9zdXBwb3J0L2xvZ2lu',         // /api/v1/support/login
-      'SUPPORT_RESET': 'L2FwaS92MS9zdXBwb3J0L3Bhc3N3b3JkLXJlc2V0L3JlcXVlc3Q=', // /api/v1/support/password-reset/request
-      'DIAGNOSTICS': 'L2FwaS9kaWFnbm9zdGljcw==',               // /api/diagnostics
-      'DATA_SYNC': 'L2FwaS9kYXRh',                             // /api/data
-      'DATA_SAVE': 'L2FwaS9zYXZl',                             // /api/save
-      'STATUS': 'L2FwaS9zdGF0dXM=',                            // /api/status
-      'CLAIM_TICKET': 'L2FwaS9zdXBwb3J0L2NsYWltLXRpY2tldA==',   // /api/support/claim-ticket
-      'REASSIGN_TICKET': 'L2FwaS9zdXBwb3J0L3JlYXNzaWduLXRpY2tldA==', // /api/support/reassign-ticket
-      'OTP_SEND': 'L2FwaS9vdHAvc2VuZA==',                      // /api/otp/send
-      'OTP_VERIFY': 'L2FwaS9vdHAvdmVyaWZ5'                     // /api/otp/verify
+      'ADMIN_LOGIN': '/api/v1/admin/login',
+      'ADMIN_VERIFY': '/api/v1/admin/verify-pin',
+      'SUPPORT_LOGIN': '/api/v1/support/login',
+      'SUPPORT_RESET': '/api/v1/support/password-reset/request',
+      'DIAGNOSTICS': '/api/diagnostics',
+      'DATA_SYNC': '/api/data',
+      'DATA_SAVE': '/api/save',
+      'STATUS': '/api/status',
+      'CLAIM_TICKET': '/api/support/claim-ticket',
+      'REASSIGN_TICKET': '/api/support/reassign-ticket',
+      'OTP_SEND': '/api/otp/send',
+      'OTP_VERIFY': '/api/otp/verify'
     };
-    try {
-      const encoded = _m[key];
-      if (!encoded) return '';
-      return _atob(encoded);
-    } catch (e) {
-      return '';
-    }
+    return _m[key] || '';
   },
 
   stripBuster: (url) => {

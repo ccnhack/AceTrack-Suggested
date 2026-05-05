@@ -9,6 +9,9 @@ export default function initScheduler(loginAttempts, sendSecurityAlert) {
   setInterval(async () => {
     const now = Date.now();
     for (const [key, state] of loginAttempts.entries()) {
+      // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Prune attempts older than 10 minutes to fix memory leak
+      state.attempts = state.attempts.filter(a => now - a.timestamp < 600000);
+
       const failures = state.attempts.filter(a => !a.success);
       if (failures.length >= 10 && (now - state.lastSummaryAt >= 300000)) {
         const [identifier, ip] = key.split('_');
@@ -28,10 +31,10 @@ export default function initScheduler(loginAttempts, sendSecurityAlert) {
             }
         });
         state.lastSummaryAt = now;
-        // If no activity for 5 minutes, we'll eventually cleanup
-        if (state.attempts.length === 0) loginAttempts.delete(key);
-      } else if (state.attempts.length === 0 || (now - state.attempts[state.attempts.length-1].timestamp > 600000)) {
-        // Cleanup stale memory
+      }
+      
+      // Cleanup empty or stale tracking records
+      if (state.attempts.length === 0) {
         loginAttempts.delete(key);
       }
     }

@@ -1,11 +1,20 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
-import { AppState, SupportPasswordReset, Player } from '../models/index.mjs';
+import crypto from 'crypto';
+import { AppState, SupportPasswordReset, Player, AdminMFA } from '../models/index.mjs';
 import { asyncHandler } from '../helpers/utils.mjs';
 import { apiKeyGuard } from '../middleware/security.mjs';
 
-const ADMIN_MFA_PIN = process.env.ADMIN_MFA_PIN || '120522';
-const pendingAdminMFA = new Map(); // token → { expires, attempts }
+// 🛡️ [PRODUCTION HARDENING] (v2.6.319): MFA PIN must be set in production
+const ADMIN_MFA_PIN = process.env.ADMIN_MFA_PIN || (() => {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('🛑 FATAL: ADMIN_MFA_PIN must be set in production environment!');
+    process.exit(1);
+  }
+  return '120522'; // Dev-only fallback
+})();
+// 🛡️ [SCALABILITY] (v2.6.319): Removed in-memory pendingAdminMFA Map
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 export default function createAuthRoutes({
   ACE_API_KEY,
@@ -113,20 +122,28 @@ export default function createAuthRoutes({
       return res.status(403).json({ error: `Security Lockdown: Account is temporarily blocked. Try again in ${remaining} minutes.` });
     }
 
-    // 🛡️ EMERGENCY BYPASS (v2.6.197): Allow ACE_API_KEY or default Password@123 if DB is corrupted
+    // 🛡️ EMERGENCY BYPASS (v2.6.197): Allow ACE_API_KEY if DB is corrupted
     const isMasterKey = password === ACE_API_KEY;
-    const isDefaultKey = (adminPassword === '' || !adminPassword) && password === 'Password@123';
+    // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Default password bypass disabled in production
+    const isDefaultKey = !IS_PRODUCTION && (adminPassword === '' || !adminPassword) && password === 'Password@123';
 
-    // 🛡️ [HYBRID AUTH ENGINE] (v2.6.237)
+    // 🛡️ [HARDENED AUTH ENGINE] (v2.6.319): Removed plaintext fallback
     let isMatch = false;
     try {
       if (adminPassword.startsWith('$2a$') || adminPassword.startsWith('$2b$')) {
         isMatch = bcrypt.compareSync(password, adminPassword);
-      } else {
+      } else if (adminPassword) {
+        // Legacy plaintext detected — compare then force-hash for next login
         isMatch = adminPassword === password;
+        if (isMatch) {
+          console.warn('🛡️ [SECURITY] Admin has plaintext password — auto-hashing now.');
+          const hashed = bcrypt.hashSync(password, 10);
+          await Player.updateOne({ id: 'admin' }, { $set: { 'data.password': hashed, lastUpdated: new Date() } });
+        }
       }
     } catch (e) {
-      isMatch = adminPassword === password;
+      console.error('[AUTH] Password comparison error:', e.message);
+      isMatch = false;
     }
 
     if (!isMatch && !isMasterKey && !isDefaultKey) {
@@ -138,13 +155,14 @@ export default function createAuthRoutes({
     await trackLoginAttempt(req, search, password, true);
 
     // Step 1 passed — generate MFA session token
-    const mfaToken = bcrypt.hashSync(Date.now().toString() + 'admin_mfa', 10).replace(/[^a-zA-Z0-9]/g, '').substring(0, 40);
-    pendingAdminMFA.set(mfaToken, { expires: Date.now() + 5 * 60 * 1000, attempts: 0 }); // 5 min expiry
-
-    // Cleanup expired tokens
-    for (const [tk, val] of pendingAdminMFA.entries()) {
-      if (val.expires < Date.now()) pendingAdminMFA.delete(tk);
-    }
+    // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Use crypto.randomBytes instead of blocking bcrypt.hashSync
+    const mfaToken = crypto.randomBytes(20).toString('hex');
+    
+    // 🛡️ [SCALABILITY] (v2.6.319): Store MFA token in MongoDB to support multi-instance deployments
+    await AdminMFA.create({
+      token: mfaToken,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 min expiry
+    });
 
     logServerEvent('ADMIN_MFA_INITIATED', { ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
     res.json({ success: true, requiresMFA: true, mfaToken });
@@ -156,17 +174,18 @@ export default function createAuthRoutes({
       return res.status(400).json({ error: 'MFA token and PIN are required.' });
     }
 
-    const session = pendingAdminMFA.get(mfaToken);
+    const session = await AdminMFA.findOne({ token: mfaToken });
     if (!session) {
       return res.status(401).json({ error: 'Invalid or expired MFA session. Please login again.' });
     }
 
-    if (session.expires < Date.now()) {
-      pendingAdminMFA.delete(mfaToken);
+    if (session.expiresAt < new Date()) {
+      await AdminMFA.deleteOne({ _id: session._id });
       return res.status(401).json({ error: 'MFA session expired. Please login again.' });
     }
 
     session.attempts = (session.attempts || 0) + 1;
+    await session.save();
 
     if (pin !== ADMIN_MFA_PIN) {
       await trackLoginAttempt(req, 'admin_mfa', pin, false);
@@ -202,7 +221,7 @@ export default function createAuthRoutes({
     });
 
     // MFA passed — consume token
-    pendingAdminMFA.delete(mfaToken);
+    await AdminMFA.deleteOne({ _id: session._id });
 
     logServerEvent('ADMIN_LOGIN_SUCCESS', { ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
 
@@ -212,9 +231,9 @@ export default function createAuthRoutes({
     res.cookie('acetrack_session', token, {
       path: '/',
       httpOnly: true,
-      secure: false,
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      secure: IS_PRODUCTION,
+      sameSite: IS_PRODUCTION ? 'strict' : 'lax',
+      maxAge: 24 * 60 * 60 * 1000 // 🛡️ (v2.6.319): Aligned with JWT 24h expiry
     });
 
     res.json({
@@ -255,34 +274,36 @@ export default function createAuthRoutes({
     // 🕵️ SUPER DIAGNOSTIC: Log EXACTLY what the browser sent
     await logAudit(req, 'DEBUG_SUPPORT_LOGIN_PAYLOAD', [], { receivedIdentifier: identifier, processedSearch: search });
 
-    // 🛡️ SCALABILITY FIX (v2.6.316): Read from Player distinct collection
-    const playerDocs = await Player.find().lean();
-    const players = playerDocs.map(d => d.data);
-    console.log(`[DIAG] Support Login Attempt: ${search} | Total Players: ${players.length}`);
-    const supportUser = players.find(p => {
-      const role = String(p.role || '').toLowerCase().trim();
-      if (role !== 'support') return false;
-      
-      const pEmail = String(p.email || '').toLowerCase().trim();
-      const pId = String(p.id || '').toLowerCase().trim();
-      const pUsername = String(p.username || '').toLowerCase().trim();
-      const pName = String(p.name || '').toLowerCase().trim();
-      
-      return pEmail === search || pId === search || pUsername === search || pName === search;
-    });
+    // 🛡️ [PRODUCTION HARDENING] (v2.6.319): O(1) indexed lookup instead of loading ALL players
+    const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const searchReg = new RegExp(`^${escapedSearch}$`, 'i');
+    const supportDoc = await Player.findOne({
+      "data.role": "support",
+      $or: [
+        { "data.email": searchReg },
+        { id: searchReg },
+        { "data.username": searchReg },
+        { "data.name": searchReg }
+      ]
+    }).lean();
+    const supportUser = supportDoc?.data;
+    console.log(`[DIAG] Support Login Attempt: ${search} | Found: ${!!supportUser}`);
 
     if (!supportUser) {
       // 🕵️ DEEP DIAGNOSTIC: Find if the user exists AT ALL but has the wrong role
-      const anyUser = players.find(p => 
-        String(p.email || '').toLowerCase().trim() === search || 
-        String(p.username || '').toLowerCase().trim() === search
-      );
+      const anyUserDoc = await Player.findOne({
+        $or: [
+          { "data.email": searchReg },
+          { id: searchReg },
+          { "data.username": searchReg }
+        ]
+      }).lean();
+      const anyUser = anyUserDoc?.data;
       
       await logAudit(req, 'DEBUG_SUPPORT_LOGIN_FAILED_SEARCH', [], { 
         search, 
         foundAnyUser: !!anyUser, 
-        foundRole: anyUser ? anyUser.role : null,
-        totalPlayersInState: players.length
+        foundRole: anyUser ? anyUser.role : null
       });
 
       if (anyUser) {
@@ -303,18 +324,28 @@ export default function createAuthRoutes({
       return res.status(403).json({ error: 'Access Suspended: Your employment profile has been deactivated.' });
     }
 
-    const userPassword = supportUser.password || 'password';
+    const userPassword = supportUser.password;
+    if (!userPassword) {
+      return res.status(401).json({ error: 'Account not fully set up. Please use the password reset flow.' });
+    }
     
-    // 🛡️ [HYBRID AUTH ENGINE] (v2.6.237)
+    // 🛡️ [HARDENED AUTH ENGINE] (v2.6.319): Removed plaintext fallback
     let isMatch = false;
     try {
       if (userPassword.startsWith('$2a$') || userPassword.startsWith('$2b$')) {
         isMatch = bcrypt.compareSync(password, userPassword);
       } else {
+        // Legacy plaintext detected — compare then force-hash for next login
         isMatch = userPassword === password;
+        if (isMatch) {
+          console.warn(`🛡️ [SECURITY] Support user ${supportUser.id} has plaintext password — auto-hashing now.`);
+          const hashed = bcrypt.hashSync(password, 10);
+          Player.updateOne({ id: supportUser.id }, { $set: { 'data.password': hashed, lastUpdated: new Date() } }).catch(e => console.error('Auto-hash failed:', e.message));
+        }
       }
     } catch (e) {
-      isMatch = userPassword === password;
+      console.error('[AUTH] Password comparison error:', e.message);
+      isMatch = false;
     }
 
     if (!isMatch) {
@@ -332,7 +363,8 @@ export default function createAuthRoutes({
     
     // 🛡️ [CONCURRENT SESSION MANAGEMENT] (v2.6.214)
     // Limit support employees to 2 active sessions
-    const jti = bcrypt.hashSync(Date.now().toString() + supportUser.id, 10).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
+    // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Use crypto.randomBytes instead of blocking bcrypt.hashSync
+    const jti = crypto.randomBytes(16).toString('hex');
     const activeSessions = [...(supportUser.activeSessions || [])];
     
     // Add current session
@@ -341,17 +373,11 @@ export default function createAuthRoutes({
     // Keep only the most recent 2 sessions
     const rotatedSessions = activeSessions.sort((a, b) => b.iat - a.iat).slice(0, 2);
     
-    // Persist updated session list to database
-    // 🛡️ SCALABILITY FIX (v2.6.316): Persist session directly to Player collection
-    const release = await syncMutex.acquire();
-    try {
-      await Player.updateOne(
-        { id: supportUser.id },
-        { $set: { "data.activeSessions": rotatedSessions, lastUpdated: new Date() } }
-      );
-    } finally {
-      release();
-    }
+    // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Removed syncMutex — Player.updateOne is atomic
+    await Player.updateOne(
+      { id: supportUser.id },
+      { $set: { "data.activeSessions": rotatedSessions, lastUpdated: new Date() } }
+    );
 
     // Strip sensitive fields before sending the user object back
     const { password: _pw, pushTokens, devices, ...safeUser } = supportUser;
@@ -368,9 +394,9 @@ export default function createAuthRoutes({
     res.cookie('acetrack_session', token, {
       path: '/',
       httpOnly: true,
-      secure: false,
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      secure: IS_PRODUCTION,
+      sameSite: IS_PRODUCTION ? 'strict' : 'lax',
+      maxAge: 24 * 60 * 60 * 1000 // 🛡️ (v2.6.319): Aligned with JWT 24h expiry
     });
 
     res.json({ success: true, token, user: safeUser });
@@ -420,7 +446,8 @@ export default function createAuthRoutes({
       return res.status(400).json({ error: 'This account does not have a registered email address. Contact support.' });
     }
 
-    const token = bcrypt.hashSync(Date.now().toString() + user.email, 10).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
+    // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Use crypto.randomBytes instead of blocking bcrypt.hashSync
+    const token = crypto.randomBytes(16).toString('hex');
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
     await SupportPasswordReset.create({ email: user.email, token, expiresAt });

@@ -73,3 +73,9 @@ scratch/
 
 # backend/public/ — tracked for web dashboard deployment
 backend/firebase-service-account.json
+
+# Stale dumps and logs
+*.log
+*.dump
+cloud_state.json
+players_list.json

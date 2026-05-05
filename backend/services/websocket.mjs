@@ -179,6 +179,8 @@ io.on('connection', async (socket) => {
               durationMs,
               device: session.deviceName || 'Browser'
             });
+            // ⚠️ [TECH DEBT] (v2.6.319): Embedding sessionHistory in Player data inflates the document.
+            // Next phase: Move this to a separate Collection or time-series DB.
             // Cap at 200 entries to prevent unbounded growth
             if (playerDoc.data.sessionHistory.length > 200) {
               playerDoc.data.sessionHistory = playerDoc.data.sessionHistory.slice(-200);

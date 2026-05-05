@@ -49,10 +49,13 @@ export const dataMerger = {
     }
 
     // 3. Specialized User Merge (Badge history preservation)
+    // 🛡️ [PERFORMANCE] (v2.6.319): Dead code removed. Server explicitly deletes currentUser from sync payloads.
+    /*
     if (localData.currentUser || cloudData.currentUser) {
       mergedResult.currentUser = this.mergeCurrentUser(localData.currentUser, cloudData.currentUser);
       fieldsChanged.push('currentUser');
     }
+    */
 
     // 4. Merge static keys
     const staticKeys = ['isCloudOnline', 'isUsingCloud', 'seenAdminActionIds', 'visitedAdminSubTabs'];

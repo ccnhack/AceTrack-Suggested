@@ -681,7 +681,7 @@ router.get('/support/attendance', apiKeyGuard, authGuard, async (req, res) => {
 
     res.json({ attendance, timestamp: new Date().toISOString() });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : e.message });
   }
 });
 
@@ -909,7 +909,7 @@ router.get('/support/analytics', apiKeyGuard, authGuard, async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : e.message });
   }
 });
 
@@ -944,7 +944,7 @@ router.get('/support/export', apiKeyGuard, authGuard, async (req, res) => {
     res.setHeader('Content-Disposition', 'attachment; filename="support_tickets.csv"');
     res.send(csv);
   } catch(e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : e.message });
   }
 });
 
@@ -1034,7 +1034,7 @@ router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
     logServerEvent('SUPPORT_USER_MANAGED', { admin: req.headers['x-user-id'] || 'admin', targetUserId, status, level });
     res.json({ success: true, user: user });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : e.message });
   }
 });
 
@@ -1081,7 +1081,7 @@ router.post('/support/transfer-tickets', apiKeyGuard, async (req, res) => {
     logServerEvent('SUPPORT_TICKETS_TRANSFERRED', { fromAgentId, toAgentId, count: transferCount });
     res.json({ success: true, transferred: transferCount, message: `${transferCount} ticket(s) transferred to ${toAgent.name}` });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : e.message });
   }
 });
 
@@ -1114,7 +1114,7 @@ router.post('/support/ai-summary', apiKeyGuard, async (req, res) => {
       res.status(500).json({ error: data.error?.message || "AI Error" });
     }
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : e.message });
   }
 });
 
@@ -1224,7 +1224,7 @@ router.post('/support/reassign-ticket', apiKeyGuard, async (req, res) => {
       ticket: ticket
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : e.message });
   }
 });
 
@@ -1287,7 +1287,7 @@ router.post('/support/rate-ticket', apiKeyGuard, async (req, res) => {
     logServerEvent('TICKET_RATED', { ticketId, rating, agentId });
     res.json({ success: true, ticket });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : e.message });
   }
 });
 
@@ -1385,7 +1385,7 @@ router.post('/support/claim-ticket', apiKeyGuard, async (req, res) => {
 
     res.json({ success: true, ticket: ticket });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : e.message });
   }
 });
 
@@ -1440,7 +1440,7 @@ router.post('/support/force-reset', apiKeyGuard, async (req, res) => {
     });
   } catch (e) {
     console.error(`[FORCE-RESET] CRITICAL ERROR: ${e.message}`, e.stack);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : e.message });
   }
 });
 

@@ -61,14 +61,16 @@ class SyncManager {
 
   // 🏗️ Phase A-2: Fast structural hash for deep comparison.
   // Replaces O(n) JSON.stringify equality checks with a bounded hash.
-  // Caps at 10K chars to prevent blowup on large arrays (25+ players).
+  // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Increased cap to 50K and mix in total length to prevent silent collisions
   private fastHash(obj: any): number {
     const str = typeof obj === 'string' ? obj : JSON.stringify(obj);
     let hash = 0;
-    const len = Math.min(str.length, 10000);
+    const len = Math.min(str.length, 50000);
     for (let i = 0; i < len; i++) {
       hash = ((hash << 5) - hash) + str.charCodeAt(i) | 0;
     }
+    // Mix in the total length to prevent collisions between identical prefixes of different lengths
+    hash = ((hash << 5) - hash) + str.length | 0;
     return hash;
   }
 

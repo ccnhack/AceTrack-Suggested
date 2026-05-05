@@ -47,6 +47,15 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
     const evalQuery = isAdmin ? {} : { "data.playerId": normalizedReqId };
     const chatQuery = isAdmin ? {} : { "userId": normalizedReqId };
 
+    // 🛡️ [PERFORMANCE] (v2.6.319): Scope unbounded queries
+    const matchmakingQuery = isAdmin ? {} : {
+      $or: [
+        { "data.creatorId": normalizedReqId },
+        { "data.opponentId": normalizedReqId },
+        { "data.status": { $nin: ["completed", "cancelled", "expired"] } }
+      ]
+    };
+
     const [
       state,
       requesterDoc,
@@ -63,16 +72,17 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       // 🛡️ SCALABILITY FIX (v2.6.316): Fetch full profile only for the requester
       Player.findOne({ id: normalizedReqId }).lean(),
       // 🛡️ SCALABILITY FIX (v2.6.316): Fetch all other players with a thin discovery projection (PII-free)
-      Player.find(
+      // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Removed email from projection to prevent PII leak, and fetch full for admins
+      isAdmin ? Player.find({ id: { $ne: normalizedReqId } }).lean() : Player.find(
         { id: { $ne: normalizedReqId } }, 
-        { "data.id": 1, "data.name": 1, "data.username": 1, "data.email": 1, "data.avatar": 1, "data.role": 1, "data.skillLevel": 1, "data.rating": 1, "data.trueSkillRating": 1 }
+        { "data.id": 1, "data.name": 1, "data.username": 1, "data.avatar": 1, "data.role": 1, "data.skillLevel": 1, "data.rating": 1, "data.trueSkillRating": 1 }
       ).lean(),
-      Tournament.find().lean(),
+      isAdmin ? Tournament.find().lean() : Tournament.find().sort({ lastUpdated: -1 }).limit(100).lean(),
       Match.find(matchQuery).lean(),
-      MatchVideo.find().lean(), // Consider scoping this further in Phase 2
+      isAdmin ? MatchVideo.find().lean() : MatchVideo.find().sort({ lastUpdated: -1 }).limit(50).lean(),
       SupportTicket.find(ticketQuery).lean(),
       Evaluation.find(evalQuery).lean(),
-      Matchmaking.find().lean(),
+      Matchmaking.find(matchmakingQuery).lean(),
       ChatbotThread.find(chatQuery).lean()
     ]);
 
@@ -112,14 +122,14 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       composedData.currentUser.role = 'user';
     }
 
-    // 🛡️ SECURITY HARDENING: Explicitly exclude 'currentUser' and sanitize based on identity.
-    const sanitizedData = getSanitizedState(composedData, req);
-    delete sanitizedData.currentUser;
+    // 🛡️ SECURITY HARDENING: Explicitly exclude 'currentUser'
+    // 🛡️ [PERFORMANCE] (v2.6.319): Removed getSanitizedState() double-pass. Data is already scoped at DB query level.
+    delete composedData.currentUser;
 
-    res.json({ ...sanitizedData, lastUpdated: state?.lastUpdated || new Date(), version: state?.version || 1 });
+    res.json({ ...composedData, lastUpdated: state?.lastUpdated || new Date(), version: state?.version || 1 });
   } catch (error) {
     console.error('❌ Data Fetch Error:', error.message);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message });
   }
 });
 
@@ -127,7 +137,11 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
 router.get('/status', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
   try {
     // 🛡️ [EMERGENCY RESCUE] (v2.6.312)
+    // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Restricted to admin role only
     if (req.query.rescue === 'true') {
+      if (req.userRole !== 'admin') {
+        return res.status(403).json({ error: 'System Administrator privileges required for state recovery.' });
+      }
       const states = await AppState.find().sort({ lastUpdated: -1 }).limit(20);
       const previous = states.find((s, i) => i > 0 && s.data?.players?.length > 5);
       if (previous) {
@@ -156,7 +170,7 @@ router.get('/status', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       latestAppVersion: APP_VERSION
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message });
   }
 });
 
@@ -243,7 +257,7 @@ router.get('/diagnostics', apiKeyGuard, sensitiveCacheGuard, asyncHandler(async 
     res.json({ success: true, files: sortedFiles });
   } catch (error) {
     console.error('Diagnostics Fetch Error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message });
   }
 }));
 
@@ -326,7 +340,7 @@ router.post('/register-push-token', apiKeyGuard, async (req, res) => {
     }
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message });
   }
 });
 
@@ -704,6 +718,8 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
     const nextVersion = currentVersion + 1;
 
     // 🛡️ [16MB BOMB DEFUSAL] (v2.6.316): Strip distinct collections before saving monolithic AppState
+    // ⚠️ [TECH DEBT] (v2.6.319): AppState is still updated on EVERY save, making it a single point of contention.
+    // Next phase: Move metadata (seenAdminActionIds, etc) to Player/Config and eliminate AppState completely.
     const appStateDataToSave = { ...newMasterData };
     const distinctKeys = ['players', 'tournaments', 'matches', 'matchVideos', 'supportTickets', 'evaluations', 'matchmaking', 'chatbotMessages'];
     distinctKeys.forEach(k => delete appStateDataToSave[k]);
@@ -868,13 +884,10 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
         
         // 🛡️ [DATA VALIDATION] (v2.6.171)
         // Guard against "Ghost Tickets" by rejecting malformed payloads
+        // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Response already sent above — log only, don't send another response
         const invalidTickets = incomingTickets.filter(t => !t.title || t.title === 'undefined' || !t.description || t.description === 'undefined');
         if (invalidTickets.length > 0) {
-          console.warn(`🛡️ [GUARD] Rejecting sync due to ${invalidTickets.length} malformed tickets.`);
-          return res.status(400).json({ 
-            error: "MALFORMED_TICKET_DATA", 
-            details: "Subject and Description are required for all tickets." 
-          });
+          console.warn(`🛡️ [GUARD] Detected ${invalidTickets.length} malformed tickets in post-save notification hook. Skipping ticket notifications.`);
         }
 
         for (let i = 0; i < incomingTickets.length; i++) {
@@ -1059,7 +1072,7 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
     }
   } catch (error) {
     console.error("❌ Save Error:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message });
   } finally {
     release();
   }
@@ -1106,7 +1119,7 @@ router.post('/upload', apiKeyGuard, upload.single('video'), async (req, res) => 
     fs.createReadStream(req.file.path).pipe(stream);
   } catch (error) {
     console.error('Upload Process Error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message });
   }
 });
 

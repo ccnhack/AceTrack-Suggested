@@ -99,16 +99,20 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = "2.6.318"; 
+const APP_VERSION = "2.6.320"; 
  // 🚀 FORCE REDEPLOY CACHE BUST v2.6.314 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 const ACE_API_KEY = process.env.ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=';
-// 🛡️ [SECURITY HARDENING] (v2.6.315): If JWT_SECRET env var is missing, generate a
-// random per-boot secret. Sessions won't survive restarts, but tokens can't be forged.
+// 🛡️ [PRODUCTION HARDENING] (v2.6.319): JWT_SECRET MUST be set in production.
+// In dev, falls back to ephemeral random secret (sessions won't survive restarts).
 const JWT_SECRET = process.env.JWT_SECRET || (() => {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('🛑 FATAL: JWT_SECRET must be set in production! Sessions cannot be validated without it.');
+    process.exit(1);
+  }
   const fallback = crypto.randomBytes(32).toString('base64');
   console.warn('⚠️ [SECURITY] JWT_SECRET env var not set! Using ephemeral random secret. Sessions will not persist across restarts.');
   return fallback;
@@ -773,6 +777,9 @@ io.use((socket, next) => {
 // 🕐 [SESSION TRACKER] (v2.6.267)
 // In-memory map tracking active WebSocket sessions for support employees
 // Key: socketId, Value: { userId, startTime, deviceName }
+// 🛡️ [SCALABILITY WARNING] (v2.6.319): activeSupportSessions is an in-memory Map.
+// If Render scales to multiple instances, this will fragment and sessions won't be universally tracked.
+// Next phase: migrate to Redis or MongoDB for multi-instance support.
 const activeSupportSessions = new Map();
 
 // ═══════════════════════════════════════════════════════════════

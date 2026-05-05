@@ -411,7 +411,8 @@ export const thinPlayer = (p: any) => {
     referralCode, devices, phone,
     // 🛡️ [IDENTITY_GUARD] (v2.6.121) 
     // Always preserve verification and login identifiers in the thinned list
-    email, username, isEmailVerified, isPhoneVerified
+    email, username, isEmailVerified, isPhoneVerified,
+    notifications, walletHistory, trueSkillHistory
   } = p;
   
   return { 
@@ -420,6 +421,10 @@ export const thinPlayer = (p: any) => {
     isApprovedCoach, coachStatus, preferredFormat, mostPlayedVenue,
     referralCode, devices, phone,
     email, username, isEmailVerified, isPhoneVerified,
+    // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Include UI-required arrays but cap to 5 items to protect CursorWindow
+    notifications: Array.isArray(notifications) ? notifications.slice(0, 5) : notifications,
+    walletHistory: Array.isArray(walletHistory) ? walletHistory.slice(0, 5) : walletHistory,
+    trueSkillHistory: Array.isArray(trueSkillHistory) ? trueSkillHistory.slice(-5) : trueSkillHistory,
     _thinned: true // Meta-flag for diagnostics
   };
 };

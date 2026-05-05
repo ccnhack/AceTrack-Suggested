@@ -53,6 +53,8 @@ const SecuritySummarySchema = new mongoose.Schema({
   lastEventAt: { type: Date, default: Date.now },
   lastAlertedAt: { type: Date, default: null }
 });
+// 🛡️ [PRODUCTION HARDENING] (v2.6.319): Auto-expire after 30 days
+SecuritySummarySchema.index({ lastEventAt: 1 }, { expireAfterSeconds: 30 * 24 * 60 * 60 });
 
 export const SecuritySummary = mongoose.model('SecuritySummary', SecuritySummarySchema);
 
@@ -99,8 +101,21 @@ const SupportPasswordResetSchema = new mongoose.Schema({
   expiresAt: { type: Date, required: true },
   createdAt: { type: Date, default: Date.now }
 });
+// 🛡️ [PRODUCTION HARDENING] (v2.6.319): Auto-delete expired tokens
+SupportPasswordResetSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 export const SupportPasswordReset = mongoose.model('SupportPasswordReset', SupportPasswordResetSchema);
+
+// ═══════════════════════════════════════════════════════════════
+// 🔐 ADMIN MFA TOKEN SCHEMA (v2.6.319)
+// ═══════════════════════════════════════════════════════════════
+const AdminMFASchema = new mongoose.Schema({
+  token: { type: String, required: true, unique: true },
+  attempts: { type: Number, default: 0 },
+  expiresAt: { type: Date, required: true, index: { expires: 0 } },
+  createdAt: { type: Date, default: Date.now }
+});
+export const AdminMFA = mongoose.model('AdminMFA', AdminMFASchema);
 
 // ═══════════════════════════════════════════════════════════════
 // 🏗️ PHASE 1 (DATABASE): DISTINCT ENTITY COLLECTIONS
@@ -110,6 +125,8 @@ export const SupportPasswordReset = mongoose.model('SupportPasswordReset', Suppo
 // PLAYER
 const PlayerSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, index: true },
+  // ⚠️ [TECH DEBT] (v2.6.319): Schema.Types.Mixed provides ZERO schema validation. 
+  // Any malformed data is silently accepted. Next phase: define strict subdocuments.
   data: { type: mongoose.Schema.Types.Mixed, required: true },
   lastUpdated: { type: Date, default: Date.now, index: true }
 }, { minimize: false, strict: false });
