@@ -33,7 +33,7 @@ const ACE_API_KEY = (Constants.expoConfig?.extra?.aceApiKey)
   || null;
 
 export default {
-  APP_VERSION: '2.6.320',
+  APP_VERSION: '2.6.322',
   get API_BASE_URL() { return _API_BASE_URL; },
   set API_BASE_URL(val) { _API_BASE_URL = val; },
   CLOUD_API_URL,
