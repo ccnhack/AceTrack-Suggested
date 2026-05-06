@@ -30,9 +30,12 @@ class ScreenErrorBoundary extends Component {
           <Text style={styles.subtitle}>
             We've encountered an unexpected error on this screen. Our team has been notified.
           </Text>
-          {__DEV__ && this.state.error && (
+          {this.state.error && (
             <ScrollView style={styles.errorBox}>
-              <Text style={styles.errorText}>{this.state.error.toString()}</Text>
+              <Text style={styles.errorText}>
+                {this.state.error.toString()}{'\n'}
+                {this.state.errorInfo?.componentStack}
+              </Text>
             </ScrollView>
           )}
           <TouchableOpacity style={styles.button} onPress={this.handleReset}>
