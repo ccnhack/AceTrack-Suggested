@@ -33,7 +33,8 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
     }
     const normalizedReqId = String(reqUserId || '').toLowerCase();
     const isAdmin = req.user?.role === 'admin' || normalizedReqId === 'admin' || (req.user?.scopes || []).includes('*');
-    const canReadSupport = isAdmin || (req.user?.scopes || []).includes('read:support') || (req.user?.scopes || []).includes('read:basic');
+    const isSupport = req.user?.role === 'support' || (req.user?.scopes || []).includes('read:support');
+    const canReadSupport = isAdmin || isSupport || (req.user?.scopes || []).includes('read:basic');
 
     const matchQuery = isAdmin ? {} : { 
       $or: [
@@ -72,8 +73,8 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       // 🛡️ SCALABILITY FIX (v2.6.316): Fetch full profile only for the requester
       Player.findOne({ id: normalizedReqId }).lean(),
       // 🛡️ SCALABILITY FIX (v2.6.316): Fetch all other players with a thin discovery projection (PII-free)
-      // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Removed email from projection to prevent PII leak, and fetch full for admins
-      isAdmin ? Player.find({ id: { $ne: normalizedReqId } }).lean() : Player.find(
+      // 🛡️ [PRODUCTION HARDENING] (v2.6.320): Support staff need full details (email/phone) to resolve tickets
+      (isAdmin || isSupport) ? Player.find({ id: { $ne: normalizedReqId } }).lean() : Player.find(
         { id: { $ne: normalizedReqId } }, 
         { "data.id": 1, "data.name": 1, "data.username": 1, "data.avatar": 1, "data.role": 1, "data.skillLevel": 1, "data.rating": 1, "data.trueSkillRating": 1 }
       ).lean(),
@@ -90,22 +91,28 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
     
     // Stitch from Distinct Collections
     const chatbotMessages = {};
-    chatbotDocs.forEach(doc => { chatbotMessages[doc.userId] = doc.data; });
+    if (chatbotDocs && Array.isArray(chatbotDocs)) {
+      chatbotDocs.forEach(doc => { 
+        if (doc && doc.userId) chatbotMessages[doc.userId] = doc.data || []; 
+      });
+    }
 
     // Combine requester and public profiles
     const players = [];
     if (requesterDoc && requesterDoc.data) players.push(requesterDoc.data);
-    publicPlayersDocs.forEach(d => { if (d.data) players.push(d.data); });
+    if (publicPlayersDocs && Array.isArray(publicPlayersDocs)) {
+      publicPlayersDocs.forEach(d => { if (d && d.data) players.push(d.data); });
+    }
 
     const composedData = {
       ...baseData,
       players,
-      tournaments: tournamentsDocs.map(d => d.data),
-      matches: matchesDocs.map(d => d.data),
-      matchVideos: videosDocs.map(d => d.data),
-      supportTickets: ticketsDocs.map(d => d.data),
-      evaluations: evalsDocs.map(d => d.data),
-      matchmaking: matchmakingDocs.map(d => d.data),
+      tournaments: (tournamentsDocs || []).map(d => d.data).filter(Boolean),
+      matches: (matchesDocs || []).map(d => d.data).filter(Boolean),
+      matchVideos: (videosDocs || []).map(d => d.data).filter(Boolean),
+      supportTickets: (ticketsDocs || []).map(d => d.data).filter(Boolean),
+      evaluations: (evalsDocs || []).map(d => d.data).filter(Boolean),
+      matchmaking: (matchmakingDocs || []).map(d => d.data).filter(Boolean),
       chatbotMessages
     };
 
@@ -118,18 +125,13 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       });
     }
 
-    if (composedData.currentUser && composedData.currentUser.role === 'admin' && String(composedData.currentUser.id).toLowerCase() !== 'admin') {
-      composedData.currentUser.role = 'user';
-    }
-
-    // 🛡️ SECURITY HARDENING: Explicitly exclude 'currentUser'
-    // 🛡️ [PERFORMANCE] (v2.6.319): Removed getSanitizedState() double-pass. Data is already scoped at DB query level.
+    // 🛡️ SECURITY HARDENING: Explicitly exclude 'currentUser' to prevent session shadowing
     delete composedData.currentUser;
 
     res.json({ ...composedData, lastUpdated: state?.lastUpdated || new Date(), version: state?.version || 1 });
   } catch (error) {
-    console.error('❌ Data Fetch Error:', error.message);
-    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message });
+    console.error('❌ Data Fetch Error:', error.stack);
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error during data synchronization.' : error.message });
   }
 });
 
