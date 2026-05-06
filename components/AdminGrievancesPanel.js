@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, TextInput, 
-  StyleSheet, Modal, SafeAreaView, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Alert
+  StyleSheet, Modal, SafeAreaView, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Alert,
+  FlatList
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
