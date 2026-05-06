@@ -73,7 +73,7 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       // 🛡️ SCALABILITY FIX (v2.6.316): Fetch full profile only for the requester
       Player.findOne({ id: normalizedReqId }).lean(),
       // 🛡️ SCALABILITY FIX (v2.6.316): Fetch all other players with a thin discovery projection (PII-free)
-      // 🛡️ [PRODUCTION HARDENING] (v2.6.320): Support staff need full details (email/phone) to resolve tickets
+      // 🛡️ [PRODUCTION HARDENING] (v2.6.322): Support staff need full details (email/phone) to resolve tickets
       (isAdmin || isSupport) ? Player.find({ id: { $ne: normalizedReqId } }).lean() : Player.find(
         { id: { $ne: normalizedReqId } }, 
         { "data.id": 1, "data.name": 1, "data.username": 1, "data.avatar": 1, "data.role": 1, "data.skillLevel": 1, "data.rating": 1, "data.trueSkillRating": 1 }
