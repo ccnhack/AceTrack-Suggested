@@ -358,8 +358,9 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
     });
 
     // 🚨 Real-time Alert for Critical Events (v2.6.195)
-    const criticalEvents = ['UNAUTHORIZED_ACCESS_BLOCKED', 'HARD_ROUTE_BLOCK', 'OTP_BRUTE_FORCE_DETECTED', 'ADMIN_PRIVILEGE_ESCALATION', 'SENSITIVE_ACCESS_ATTEMPT', 'BRUTE_FORCE_DETECTED'];
-    const aggregationEvents = [...criticalEvents, 'LOGIN_SUCCESS', 'SUPPORT_LOGIN_SUCCESS'];
+    // 🛡️ [PRODUCTION HARDENING] (v2.6.320): Demoted noisy route blocks to batch-only aggregation
+    const criticalEvents = ['OTP_BRUTE_FORCE_DETECTED', 'ADMIN_PRIVILEGE_ESCALATION', 'SENSITIVE_ACCESS_ATTEMPT', 'BRUTE_FORCE_DETECTED'];
+    const aggregationEvents = [...criticalEvents, 'UNAUTHORIZED_ACCESS_BLOCKED', 'HARD_ROUTE_BLOCK', 'LOGIN_SUCCESS', 'SUPPORT_LOGIN_SUCCESS'];
 
     if (aggregationEvents.includes(action)) {
       const ip = (req && req.ip) || '0.0.0.0';
