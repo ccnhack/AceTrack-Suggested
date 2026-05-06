@@ -99,7 +99,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = "2.6.320"; 
+const APP_VERSION = "2.6.322"; 
  // 🚀 FORCE REDEPLOY CACHE BUST v2.6.314 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
@@ -358,7 +358,7 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
     });
 
     // 🚨 Real-time Alert for Critical Events (v2.6.195)
-    // 🛡️ [PRODUCTION HARDENING] (v2.6.320): Demoted noisy route blocks to batch-only aggregation
+    // 🛡️ [PRODUCTION HARDENING] (v2.6.322): Demoted noisy route blocks to batch-only aggregation
     const criticalEvents = ['OTP_BRUTE_FORCE_DETECTED', 'ADMIN_PRIVILEGE_ESCALATION', 'SENSITIVE_ACCESS_ATTEMPT', 'BRUTE_FORCE_DETECTED'];
     const aggregationEvents = [...criticalEvents, 'UNAUTHORIZED_ACCESS_BLOCKED', 'HARD_ROUTE_BLOCK', 'LOGIN_SUCCESS', 'SUPPORT_LOGIN_SUCCESS'];
 

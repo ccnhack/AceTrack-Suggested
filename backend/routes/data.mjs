@@ -97,22 +97,26 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       });
     }
 
-    // Combine requester and public profiles
-    const players = [];
-    if (requesterDoc && requesterDoc.data) players.push(requesterDoc.data);
-    if (publicPlayersDocs && Array.isArray(publicPlayersDocs)) {
-      publicPlayersDocs.forEach(d => { if (d && d.data) players.push(d.data); });
-    }
+    // 🛡️ [PHASE 1 TRANSITION GUARD] (v2.6.322): Union Merge for all entities
+    // This prevents data loss if some documents are still in the legacy AppState blob.
+    const mergeEntities = (legacy = [], distinctDocs = []) => {
+      const map = new Map();
+      legacy.forEach(item => { if (item && item.id) map.set(String(item.id), item); });
+      distinctDocs.forEach(doc => { 
+        if (doc && doc.data && (doc.data.id || doc.id)) map.set(String(doc.data.id || doc.id), doc.data); 
+      });
+      return Array.from(map.values());
+    };
 
     const composedData = {
       ...baseData,
-      players,
-      tournaments: (tournamentsDocs || []).map(d => d.data).filter(Boolean),
-      matches: (matchesDocs || []).map(d => d.data).filter(Boolean),
-      matchVideos: (videosDocs || []).map(d => d.data).filter(Boolean),
-      supportTickets: (ticketsDocs || []).map(d => d.data).filter(Boolean),
-      evaluations: (evalsDocs || []).map(d => d.data).filter(Boolean),
-      matchmaking: (matchmakingDocs || []).map(d => d.data).filter(Boolean),
+      players: mergeEntities(baseData.players, [requesterDoc, ...(publicPlayersDocs || [])].filter(Boolean)),
+      tournaments: mergeEntities(baseData.tournaments, tournamentsDocs),
+      matches: mergeEntities(baseData.matches, matchesDocs),
+      matchVideos: mergeEntities(baseData.matchVideos, videosDocs),
+      supportTickets: mergeEntities(baseData.supportTickets, ticketsDocs),
+      evaluations: mergeEntities(baseData.evaluations, evalsDocs),
+      matchmaking: mergeEntities(baseData.matchmaking, matchmakingDocs),
       chatbotMessages
     };
 
