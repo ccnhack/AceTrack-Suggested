@@ -26,28 +26,14 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
   try {
     // 🛡️ SCALABILITY ARCHITECTURE (v2.6.316): Prevent OOM crashes on large scale users usage
     // Pre-filter heavy collections at the database level instead of loading the entire DB into Node.js memory.
-    let reqUserId = req.user?.id || req.headers['x-user-id'];
-    const referer = req.headers['referer'] || '';
-    if (!reqUserId && referer.includes('/admin')) {
-      reqUserId = 'admin';
-    }
-    const normalizedReqId = String(reqUserId || '').toLowerCase();
+    // 🛡️ [SEC-1 FIX] STRICT ZERO-TRUST ENFORCER
+    // Trust ONLY the verified JWT identity provided by security.mjs
+    const reqUserId = req.user?.id || req.userId || 'guest';
+    const normalizedReqId = String(reqUserId).toLowerCase();
     
-    // 🛡️ [ROLE RESOLUTION] (v2.6.322): Resolve role from JWT first, then DB fallback.
-    // Without this, support agents using x-user-id header (no JWT) are treated as regular users
-    // and get zero tickets because ticketQuery filters to only their own userId.
-    let resolvedRole = req.user?.role || req.userRole || null;
-    let resolvedScopes = req.user?.scopes || [];
-    
-    if (!resolvedRole && normalizedReqId && normalizedReqId !== 'guest') {
-      const userDoc = await Player.findOne({ id: normalizedReqId }).lean();
-      if (userDoc?.data?.role) {
-        resolvedRole = userDoc.data.role;
-        if (resolvedRole === 'support') resolvedScopes = ['read:support', 'read:basic'];
-        if (resolvedRole === 'admin') resolvedScopes = ['*'];
-        console.log(`[DATA] Role resolved from DB for ${normalizedReqId}: ${resolvedRole}`);
-      }
-    }
+    // Role must come directly from the verified JWT payload
+    const resolvedRole = req.user?.role || req.userRole || null;
+    const resolvedScopes = req.user?.scopes || [];
     
     const isAdmin = resolvedRole === 'admin' || normalizedReqId === 'admin' || resolvedScopes.includes('*');
     const isSupport = resolvedRole === 'support' || resolvedScopes.includes('read:support');

@@ -105,7 +105,7 @@ const APP_VERSION = "2.6.323";
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
-const ACE_API_KEY = process.env.ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=';
+const ACE_API_KEY = process.env.ACE_API_KEY;
 // 🛡️ [PRODUCTION HARDENING] (v2.6.319): JWT_SECRET MUST be set in production.
 // In dev, falls back to ephemeral random secret (sessions won't survive restarts).
 const JWT_SECRET = process.env.JWT_SECRET || (() => {

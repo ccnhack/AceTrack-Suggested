@@ -2,7 +2,7 @@ import fetch from 'node-fetch';
 
 const BASE_URL = 'http://localhost:3005';
 const CONCURRENT_REQUESTS = 100;
-const ACE_API_KEY = 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=';
+const ACE_API_KEY = process.env.ACE_API_KEY;
 
 async function runLoadTest() {
   console.log(`🚀 Starting Load Test: ${CONCURRENT_REQUESTS} concurrent requests to /api/data...`);

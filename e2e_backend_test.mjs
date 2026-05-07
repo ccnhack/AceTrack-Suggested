@@ -8,7 +8,7 @@
 // To override Target: export TEST_URL='https://acetrack-suggested.onrender.com'
 // To allow POST/PURGE on Production: export BYPASS_PROD_SAFETY=true
 const BASE_URL = process.env.TEST_URL || 'http://localhost:3000';
-const API_KEY = process.env.ACE_API_KEY || 'QnQdpSDrLodmhJoctmv89cQeTcjWn0Vp+pBpUE0bcY8=';
+const API_KEY = process.env.ACE_API_KEY;
 const BYPASS_PROD_SAFETY = process.env.BYPASS_PROD_SAFETY === 'true';
 
 const HEADERS = {

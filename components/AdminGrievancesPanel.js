@@ -617,6 +617,39 @@ export const AdminGrievancesPanel = ({
     );
   };
 
+  const renderTicketItem = useCallback(({ item: ticket }) => {
+    const status = ticket.status || 'Open';
+    const st = statusColors[status] || statusColors['Open'];
+    const isUnread = isTicketUnread(ticket);
+    return (
+      <TouchableOpacity 
+        testID={`admin.support.card.${ticket.id}`}
+        onPress={() => setSelectedTicket(ticket)}
+        style={[styles.ticketCard, isUnread && styles.unreadCard]}
+      >
+        <View style={styles.ticketTop}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.ticketTitle} numberOfLines={1}>{ticket.title || 'Untitled Ticket'}</Text>
+            <Text style={styles.ticketMeta}>{getUserName(ticket.userId)} • ID: {ticket.id || 'NO-ID'}</Text>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <View style={[styles.statusBadge, { backgroundColor: st.bg, borderColor: st.border }]}>
+              <Text style={[styles.statusBadgeText, { color: st.text }]}>{status}</Text>
+            </View>
+            <Text style={{ fontSize: 8, color: ticket.assignedTo ? '#64748B' : '#EF4444', fontWeight: 'bold', marginTop: 4 }}>
+              {ticket.assignedTo ? getUserName(ticket.assignedTo) : 'Unassigned'}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.ticketBottom}>
+          <Text style={styles.ticketType}>{ticket.type || 'General'}</Text>
+          <Text style={styles.ticketDate}>{formatTicketDateFull(ticket.createdAt)}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  }, [isTicketUnread, setSelectedTicket, getUserName]);
+
+
   return (
     <View style={styles.container}>
       <Modal
@@ -1165,37 +1198,8 @@ export const AdminGrievancesPanel = ({
       <FlatList
         data={filteredTickets || []}
         keyExtractor={(item, idx) => item.id || `temp-${idx}`}
-        renderItem={({ item: ticket }) => {
-          const status = ticket.status || 'Open';
-          const st = statusColors[status] || statusColors['Open'];
-          const isUnread = isTicketUnread(ticket);
-          return (
-            <TouchableOpacity 
-              testID={`admin.support.card.${ticket.id}`}
-              onPress={() => setSelectedTicket(ticket)}
-              style={[styles.ticketCard, isUnread && styles.unreadCard]}
-            >
-              <View style={styles.ticketTop}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.ticketTitle} numberOfLines={1}>{ticket.title || 'Untitled Ticket'}</Text>
-                  <Text style={styles.ticketMeta}>{getUserName(ticket.userId)} • ID: {ticket.id || 'NO-ID'}</Text>
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <View style={[styles.statusBadge, { backgroundColor: st.bg, borderColor: st.border }]}>
-                    <Text style={[styles.statusBadgeText, { color: st.text }]}>{status}</Text>
-                  </View>
-                  <Text style={{ fontSize: 8, color: ticket.assignedTo ? '#64748B' : '#EF4444', fontWeight: 'bold', marginTop: 4 }}>
-                    {ticket.assignedTo ? getUserName(ticket.assignedTo) : 'Unassigned'}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.ticketBottom}>
-                <Text style={styles.ticketType}>{ticket.type || 'General'}</Text>
-                <Text style={styles.ticketDate}>{formatTicketDateFull(ticket.createdAt)}</Text>
-              </View>
-            </TouchableOpacity>
-          );
-        }}
+        renderItem={renderTicketItem}
+        getItemLayout={(data, index) => ({ length: 90, offset: 90 * index, index })}
         style={styles.list}
         contentContainerStyle={styles.listContent}
         initialNumToRender={10}

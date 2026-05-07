@@ -5,7 +5,7 @@ import storage from '../utils/storage';
 import { useSync } from './SyncContext';
 import { useAuth } from './AuthContext';
 import { usePlayers } from './PlayerContext';
-import { useTournamentsStore } from '../stores';
+import { useTournamentsStore, usePlayersStore } from '../stores';
 import { useTournamentsQuery } from '../stores/hooks';
 
 const TournamentContext = createContext(null);
@@ -34,11 +34,6 @@ export const TournamentProvider = ({ children }) => {
   const { syncAndSaveData } = useSync();
   const { currentUser, setCurrentUser, currentUserRef } = useAuth();
   const { players, setPlayers } = usePlayers();
-  const playersRef = useRef(players);
-
-  useEffect(() => {
-    playersRef.current = players;
-  }, [players]);
 
   const onRegister = useCallback(async (t, method, cost, isResched, fromTid) => {
     try {
@@ -66,7 +61,7 @@ export const TournamentProvider = ({ children }) => {
         tid, 
         currentUserRef.current.id, 
         currentTournaments, 
-        playersRef.current, 
+        usePlayersStore.getState().players, 
         currentUserRef.current,
         method,
         cost
@@ -152,7 +147,7 @@ export const TournamentProvider = ({ children }) => {
   }, [setTournamentsStore, syncAndSaveData]);
 
   const onApproveCoach = useCallback((coachId, status = 'approved', reason = '') => {
-    const result = TournamentService.approveCoach(coachId, status, playersRef.current);
+    const result = TournamentService.approveCoach(coachId, status, usePlayersStore.getState().players);
     if (result.success) {
       const updatedPlayers = reason 
         ? result.players.map(p => String(p.id).toLowerCase() === String(coachId).toLowerCase() 
@@ -174,7 +169,7 @@ export const TournamentProvider = ({ children }) => {
 
   const onAddPlayer = useCallback((tid, playerName, playerPhone) => {
     const currentTournaments = useTournamentsStore.getState().tournaments;
-    const result = TournamentService.addPlayer(tid, playerName, playerPhone, currentTournaments, playersRef.current);
+    const result = TournamentService.addPlayer(tid, playerName, playerPhone, currentTournaments, usePlayersStore.getState().players);
     if (result.success) {
       setTournamentsStore(result.tournaments);
       syncAndSaveData({ tournaments: result.tournaments });
@@ -243,7 +238,7 @@ export const TournamentProvider = ({ children }) => {
   const onOptOut = useCallback((tid) => {
     if (!currentUserRef.current) return;
     const currentTournaments = useTournamentsStore.getState().tournaments;
-    const result = TournamentService.optOut(tid, currentUserRef.current.id, currentTournaments, playersRef.current, currentUserRef.current);
+    const result = TournamentService.optOut(tid, currentUserRef.current.id, currentTournaments, usePlayersStore.getState().players, currentUserRef.current);
     if (result.success) {
       setTournamentsStore(result.tournaments);
       if (result.players) setPlayers(result.players);
@@ -254,7 +249,7 @@ export const TournamentProvider = ({ children }) => {
       // That caused a race condition where the second call could overwrite the first.
       syncAndSaveData({ 
         tournaments: result.tournaments,
-        players: result.players || playersRef.current,
+        players: result.players || usePlayersStore.getState().players,
         currentUser: result.currentUser || currentUserRef.current
       }, true);
 

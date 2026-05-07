@@ -98,8 +98,140 @@ const AdminRecordingsDashboard = ({
   const getPlayerNames = (pids) => (pids || []).map(id => (players || []).find(p => p.id === id)?.name || id).join(' vs ');
   const getTournamentName = (tid) => (tournaments || []).find(t => t.id === tid)?.title || tid;
 
+  const renderVideoItem = useCallback(({ item: video }) => {
+    const st = statusColors[video.adminStatus || 'Active'] || statusColors['Active'];
+    const isSelected = selectedVideoIds.includes(video.id);
+
+    return (
+      <View style={[styles.videoCard, { marginBottom: 20 }]}>
+        <View style={styles.videoPlayerPlaceholder}>
+          <TouchableOpacity 
+            onPress={() => toggleSelectVideo(video.id)}
+            style={[styles.checkbox, isSelected && styles.checkboxSelected]}
+          >
+            {isSelected && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
+          </TouchableOpacity>
+          <Image 
+            source={getSafePreview(video.previewUrl)} 
+            style={styles.previewImage} 
+          />
+          <View style={styles.playOverlay}>
+            <Ionicons name="play-circle" size={48} color="#FFFFFF" />
+          </View>
+          <View style={[styles.statusTag, { backgroundColor: st.bg }]}>
+              <Text style={[styles.statusTagText, { color: st.text }]}>{video.adminStatus || 'Active'}</Text>
+          </View>
+        </View>
+
+        <View style={styles.videoContent}>
+          <Text style={styles.matchTitle}>{getPlayerNames(video.playerIds)}</Text>
+          <Text style={styles.matchSub}>{getTournamentName(video.tournamentId)} • {video.sport}</Text>
+          
+          <View style={styles.miniStats}>
+              <View style={styles.miniStat}>
+                  <Text style={styles.miniStatValue}>{(video.viewerIds || []).length}</Text>
+                  <Text style={styles.miniStatLabel}>Views</Text>
+              </View>
+              <TouchableOpacity 
+                onPress={() => setExpandedPurchaserId(expandedPurchaserId === video.id ? null : video.id)}
+                style={[styles.miniStat, expandedPurchaserId === video.id && styles.miniStatActive]}
+              >
+                  <Text style={styles.miniStatValue}>{video.purchases || 0}</Text>
+                  <Text style={styles.miniStatLabel}>Sales</Text>
+              </TouchableOpacity>
+              <View style={[styles.miniStat, { backgroundColor: '#F0FDF4' }]}>
+                  <Text style={[styles.miniStatValue, { color: '#16A34A' }]}>₹{video.revenue || 0}</Text>
+                  <Text style={styles.miniStatLabel}>Revenue</Text>
+              </View>
+          </View>
+
+          {expandedPurchaserId === video.id && (
+              <View style={styles.purchaserPanel}>
+                  <Text style={styles.panelTitle}>Purchased By</Text>
+                  {(players || []).filter(p => (p.purchasedVideos || []).includes(video.id)).map(p => {
+                      const displayName = p.name || p.username || p.id;
+                      return (
+                          <View key={p.id} style={styles.purchaserChip}>
+                              <SafeAvatar 
+                                uri={p.avatar} 
+                                name={displayName} 
+                                role={p.role} 
+                                size={24} 
+                                borderRadius={12} 
+                                style={styles.chipAvatar} 
+                              />
+                              <Text style={styles.chipName}>{displayName}</Text>
+                          </View>
+                      );
+                  })}
+              </View>
+          )}
+
+          <View style={styles.actionGrid}>
+              {!showTrashOnly ? (
+                <>
+                  <TouchableOpacity 
+                      onPress={() => onUpdateVideoStatus(video.id, video.adminStatus === 'Locked' ? 'Active' : 'Locked')}
+                      style={styles.actionBtn}
+                  >
+                      <Text style={styles.actionBtnText}>{video.adminStatus === 'Locked' ? 'Unlock' : 'Lock'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                      onPress={() => onUpdateVideoStatus(video.id, 'Removed')}
+                      style={[styles.actionBtn, styles.actionBtnDanger]}
+                  >
+                      <Text style={[styles.actionBtnText, { color: '#EF4444' }]}>Remove</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity 
+                      onPress={() => onUpdateVideoStatus(video.id, 'Active')}
+                      style={[styles.actionBtn, styles.actionBtnSuccess]}
+                  >
+                      <Text style={[styles.actionBtnText, { color: '#16A34A' }]}>Retrieve</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                      onPress={() => {
+                        if (Platform.OS === 'web') {
+                          if (window.confirm("Permanent Delete\nAre you sure you want to delete this video permanently? This action cannot be undone.")) {
+                            onPermanentDeleteVideo(video.id);
+                          }
+                        } else {
+                          Alert.alert(
+                            "Permanent Delete",
+                            "Are you sure you want to delete this video permanently? This action cannot be undone.",
+                            [
+                              { text: "Cancel", style: "cancel" },
+                              { text: "Delete", style: "destructive", onPress: () => onPermanentDeleteVideo(video.id) }
+                            ]
+                          );
+                        }
+                      }}
+                      style={[styles.actionBtn, styles.actionBtnDanger]}
+                  >
+                      <Text style={[styles.actionBtnText, { color: '#EF4444' }]}>Delete Immediately</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+          </View>
+        </View>
+      </View>
+    );
+  }, [statusColors, selectedVideoIds, expandedPurchaserId, showTrashOnly, toggleSelectVideo, getPlayerNames, getTournamentName, players, onUpdateVideoStatus, onPermanentDeleteVideo]);
+
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <View style={[styles.container, { paddingTop: 0 }]}>
+      <FlatList
+        data={filteredVideos || []}
+        keyExtractor={item => item.id}
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={5}
+        windowSize={5}
+        maxToRenderPerBatch={5}
+        contentContainerStyle={{ paddingTop: 16, paddingHorizontal: 16, paddingBottom: 100 }}
+        renderItem={renderVideoItem}
+        ListHeaderComponent={<>
       {/* Overview Cards */}
       <LinearGradient colors={['#6366F1', '#4F46E5']} style={styles.premiumOverview}>
         <Text style={styles.premiumLabel}>Video Infrastructure & Analytics</Text>
@@ -239,130 +371,8 @@ const AdminRecordingsDashboard = ({
         </View>
       </View>
 
-      {/* Video Cards */}
-      <View style={styles.videosList}>
-        {(filteredVideos || []).map(video => {
-          const st = statusColors[video.adminStatus || 'Active'] || statusColors['Active'];
-          const isSelected = selectedVideoIds.includes(video.id);
-
-          return (
-            <View key={video.id} style={styles.videoCard}>
-              <View style={styles.videoPlayerPlaceholder}>
-                <TouchableOpacity 
-                  onPress={() => toggleSelectVideo(video.id)}
-                  style={[styles.checkbox, isSelected && styles.checkboxSelected]}
-                >
-                  {isSelected && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
-                </TouchableOpacity>
-                <Image 
-                  source={getSafePreview(video.previewUrl)} 
-                  style={styles.previewImage} 
-                />
-                <View style={styles.playOverlay}>
-                  <Ionicons name="play-circle" size={48} color="#FFFFFF" />
-                </View>
-                <View style={[styles.statusTag, { backgroundColor: st.bg }]}>
-                    <Text style={[styles.statusTagText, { color: st.text }]}>{video.adminStatus || 'Active'}</Text>
-                </View>
-              </View>
-
-              <View style={styles.videoContent}>
-                <Text style={styles.matchTitle}>{getPlayerNames(video.playerIds)}</Text>
-                <Text style={styles.matchSub}>{getTournamentName(video.tournamentId)} • {video.sport}</Text>
-                
-                <View style={styles.miniStats}>
-                    <View style={styles.miniStat}>
-                        <Text style={styles.miniStatValue}>{(video.viewerIds || []).length}</Text>
-                        <Text style={styles.miniStatLabel}>Views</Text>
-                    </View>
-                    <TouchableOpacity 
-                      onPress={() => setExpandedPurchaserId(expandedPurchaserId === video.id ? null : video.id)}
-                      style={[styles.miniStat, expandedPurchaserId === video.id && styles.miniStatActive]}
-                    >
-                        <Text style={styles.miniStatValue}>{video.purchases || 0}</Text>
-                        <Text style={styles.miniStatLabel}>Sales</Text>
-                    </TouchableOpacity>
-                    <View style={[styles.miniStat, { backgroundColor: '#F0FDF4' }]}>
-                        <Text style={[styles.miniStatValue, { color: '#16A34A' }]}>₹{video.revenue || 0}</Text>
-                        <Text style={styles.miniStatLabel}>Revenue</Text>
-                    </View>
-                </View>
-
-                {expandedPurchaserId === video.id && (
-                    <View style={styles.purchaserPanel}>
-                        <Text style={styles.panelTitle}>Purchased By</Text>
-                        {(players || []).filter(p => (p.purchasedVideos || []).includes(video.id)).map(p => {
-                            const displayName = p.name || p.username || p.id;
-                            return (
-                                <View key={p.id} style={styles.purchaserChip}>
-                                    <SafeAvatar 
-                                      uri={p.avatar} 
-                                      name={displayName} 
-                                      role={p.role} 
-                                      size={24} 
-                                      borderRadius={12} 
-                                      style={styles.chipAvatar} 
-                                    />
-                                    <Text style={styles.chipName}>{displayName}</Text>
-                                </View>
-                            );
-                        })}
-                    </View>
-                )}
-
-                <View style={styles.actionGrid}>
-                    {!showTrashOnly ? (
-                      <>
-                        <TouchableOpacity 
-                            onPress={() => onUpdateVideoStatus(video.id, video.adminStatus === 'Locked' ? 'Active' : 'Locked')}
-                            style={styles.actionBtn}
-                        >
-                            <Text style={styles.actionBtnText}>{video.adminStatus === 'Locked' ? 'Unlock' : 'Lock'}</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                            onPress={() => onUpdateVideoStatus(video.id, 'Removed')}
-                            style={[styles.actionBtn, styles.actionBtnDanger]}
-                        >
-                            <Text style={[styles.actionBtnText, { color: '#EF4444' }]}>Remove</Text>
-                        </TouchableOpacity>
-                      </>
-                    ) : (
-                      <>
-                        <TouchableOpacity 
-                            onPress={() => onUpdateVideoStatus(video.id, 'Active')}
-                            style={[styles.actionBtn, styles.actionBtnSuccess]}
-                        >
-                            <Text style={[styles.actionBtnText, { color: '#16A34A' }]}>Retrieve</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                            onPress={() => {
-                              if (Platform.OS === 'web') {
-                                if (window.confirm("Permanent Delete\nAre you sure you want to delete this video permanently? This action cannot be undone.")) {
-                                  onPermanentDeleteVideo(video.id);
-                                }
-                              } else {
-                                Alert.alert(
-                                  "Permanent Delete",
-                                  "Are you sure you want to delete this video permanently? This action cannot be undone.",
-                                  [
-                                    { text: "Cancel", style: "cancel" },
-                                    { text: "Delete", style: "destructive", onPress: () => onPermanentDeleteVideo(video.id) }
-                                  ]
-                                );
-                              }
-                            }}
-                            style={[styles.actionBtn, styles.actionBtnDanger]}
-                        >
-                            <Text style={[styles.actionBtnText, { color: '#EF4444' }]}>Delete Immediately</Text>
-                        </TouchableOpacity>
-                      </>
-                    )}
-                </View>
-              </View>
-            </View>
-          );
-        })}
-      </View>
+        </>} // End Header
+      />
 
       {/* Popups (Simplified with Modals) */}
       {/* Trash Bin Modal */}
@@ -534,7 +544,7 @@ const AdminRecordingsDashboard = ({
         </SafeAreaView>
       </Modal>
 
-    </ScrollView>
+    </View>
   );
 };
 
