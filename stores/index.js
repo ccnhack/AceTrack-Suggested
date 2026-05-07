@@ -102,16 +102,6 @@ export const useAuthStore = create((set, get) => {
 // 🎯 APP STORE — Replaces AppContext state
 // ═══════════════════════════════════════════════════════════════
 export const useAppStore = create((set) => {
-  // Subscribe to version obsolete events
-  eventBus.subscribe('VERSION_OBSOLETE', (e) => {
-    if (e.payload.latestVersion) {
-      set({ 
-        latestAppVersion: e.payload.latestVersion, 
-        showForceUpdate: true 
-      });
-    }
-  });
-
   return {
     // State
     isLoading: true,

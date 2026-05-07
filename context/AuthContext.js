@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Alert } from 'react-native';
 import { syncManager } from '../services/SyncManager';
 import { eventBus } from '../services/EventBus';
@@ -311,7 +311,8 @@ export const AuthProvider = ({ children }) => {
     onUpdateUser(updated);
   }, [onUpdateUser]);
 
-  const value = {
+  // 🛡️ [AUDIT FIX] (v2.6.323): Memoize value to prevent unnecessary re-renders
+  const value = useMemo(() => ({
     currentUser,
     userId: currentUser?.id,
     currentUserRef,
@@ -332,7 +333,11 @@ export const AuthProvider = ({ children }) => {
     onTopUp,
     onMarkNotificationsRead,
     isAuthReady
-  };
+  }), [
+    currentUser, userRole, verificationLatch, viewingLanding, showSignup,
+    isAuthReady, onLogin, onLogout, onUpdateUser, onVerifyAccount,
+    onRegisterUser, onResetPassword, onTopUp, onMarkNotificationsRead
+  ]);
 
   return (
     <AuthContext.Provider value={value}>

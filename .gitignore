@@ -21,6 +21,7 @@ android/.gradle/
 # Environment variables
 .env
 .env.local
+.env.render
 .env.development.local
 .env.test.local
 .env.production.local
@@ -64,6 +65,7 @@ nishant_*.json
 shashank_*.json
 system_diag_*.json
 output.json
+output.txt
 render_services.json
 dump_*.xml
 mockData.ts
@@ -71,11 +73,5 @@ mockData.ts
 # Scratch/debug scripts in root
 scratch/
 
-# backend/public/ — tracked for web dashboard deployment
+# 🛡️ [SECURITY] (v2.6.323): Firebase credentials must never be committed
 backend/firebase-service-account.json
-
-# Stale dumps and logs
-*.log
-*.dump
-cloud_state.json
-players_list.json

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { eventBus } from '../services/EventBus';
 import VideoService from '../services/VideoService';
 import storage from '../utils/storage';
@@ -6,6 +6,7 @@ import { syncManager } from '../services/SyncManager';
 import { useSync } from './SyncContext';
 import { useAuth } from './AuthContext';
 import { usePlayers } from './PlayerContext';
+import { usePlayersStore } from '../stores';
 
 const VideoContext = createContext(null);
 
@@ -105,7 +106,9 @@ export const VideoProvider = ({ children }) => {
       
       setMatchVideos(updatedMatchVideos);
       setCurrentUser(updatedUser);
-      setPlayers(prev => prev.map(p => p.id === updatedUser.id ? updatedUser : p));
+      // 🛡️ [AUDIT FIX F-3] (v2.6.323): Use Zustand getState() instead of functional updater
+      const currentPlayers = usePlayersStore.getState().players;
+      setPlayers(currentPlayers.map(p => p.id === updatedUser.id ? updatedUser : p));
       
       syncAndSaveData({ currentUser: updatedUser, matchVideos: updatedMatchVideos });
     }
@@ -117,7 +120,9 @@ export const VideoProvider = ({ children }) => {
     if (result.success) {
       const updatedUser = result.currentUser;
       setCurrentUser(updatedUser);
-      setPlayers(prev => prev.map(p => p.id === updatedUser.id ? updatedUser : p));
+      // 🛡️ [AUDIT FIX F-3] (v2.6.323): Use Zustand getState() instead of functional updater
+      const currentPlayers = usePlayersStore.getState().players;
+      setPlayers(currentPlayers.map(p => p.id === updatedUser.id ? updatedUser : p));
       syncAndSaveData({ currentUser: updatedUser });
     }
   }, [syncAndSaveData, setCurrentUser, setPlayers]);
@@ -141,7 +146,9 @@ export const VideoProvider = ({ children }) => {
     const updatedUser = { ...currentUserRef.current, favouritedVideos: updatedFavs };
     
     setCurrentUser(updatedUser);
-    setPlayers(prev => prev.map(p => String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p));
+    // 🛡️ [AUDIT FIX F-3] (v2.6.323): Use Zustand getState() instead of functional updater
+    const currentPlayers = usePlayersStore.getState().players;
+    setPlayers(currentPlayers.map(p => String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p));
     syncAndSaveData({ currentUser: updatedUser });
   }, [syncAndSaveData, setCurrentUser, setPlayers]);
 
@@ -152,7 +159,8 @@ export const VideoProvider = ({ children }) => {
     syncAndSaveData({ matchVideos: updated });
   }, [syncAndSaveData]);
 
-  const value = {
+  // 🛡️ [AUDIT FIX] (v2.6.323): Memoize value to prevent unnecessary re-renders
+  const value = useMemo(() => ({
     matchVideos,
     setMatchVideos,
     matchVideosRef,
@@ -170,10 +178,16 @@ export const VideoProvider = ({ children }) => {
     onPurchaseAiHighlights,
     onSaveVideo,
     onCancelVideo,
-    // 🛡️ [MIGRATION FIX] (v2.6.121) Missing handlers
     onToggleFavourite,
     onUpdateVideoStatus
-  };
+  }), [
+    matchVideos, matches,
+    onVideoPlay, onBulkUpdateVideoStatus, onBulkPermanentDeleteVideos,
+    onForceRefundVideo, onApproveDeleteVideo, onRejectDeleteVideo,
+    onPermanentDeleteVideo, onRequestDeletion, onUnlockVideo,
+    onPurchaseAiHighlights, onSaveVideo, onCancelVideo,
+    onToggleFavourite, onUpdateVideoStatus
+  ]);
 
   return (
     <VideoContext.Provider value={value}>

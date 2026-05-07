@@ -249,11 +249,14 @@ export const TournamentProvider = ({ children }) => {
       if (result.players) setPlayers(result.players);
       if (result.currentUser) setCurrentUser(result.currentUser);
       
-      syncAndSaveData({ tournaments: result.tournaments }, true);
+      // 🛡️ [AUDIT FIX F-2/S-1] (v2.6.323): Single atomic sync call instead of two separate ones
+      // Previously this was two calls — one atomic (tournaments only) then one non-atomic (players+currentUser).
+      // That caused a race condition where the second call could overwrite the first.
       syncAndSaveData({ 
+        tournaments: result.tournaments,
         players: result.players || playersRef.current,
         currentUser: result.currentUser || currentUserRef.current
-      });
+      }, true);
 
       Alert.alert('Success', 'You have successfully opted out of this tournament.');
     } else {

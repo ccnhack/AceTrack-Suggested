@@ -705,7 +705,10 @@ class SyncManager {
     
     console.log('[SyncManager] Starting Cloud Push sequence...');
 
+    // 🛡️ [AUDIT FIX S-2] (v2.6.323): Snapshot pending updates before clearing.
+    // If the push fails, we restore them so they aren't permanently lost.
     const updates = { ...this.pendingSyncUpdates };
+    const savedPendingSync = [...this.pendingSync];
     this.pendingSyncUpdates = {};
     if (this.syncTimeout) clearTimeout(this.syncTimeout);
     this.syncTimeout = null;
@@ -760,7 +763,14 @@ class SyncManager {
       });
 
       if (success === true) return;
-      if (success === false) return; // Terminal failure
+      if (success === false) {
+        // 🛡️ [AUDIT FIX S-2] (v2.6.323): Restore pending updates so they can be retried
+        Object.assign(this.pendingSyncUpdates, updates);
+        this.pendingSync = savedPendingSync;
+        await storage.setItem('pendingSync', savedPendingSync);
+        console.log(`[SyncManager] Push failed. Restored ${Object.keys(updates).length} pending updates for retry.`);
+        return; // Terminal failure
+      }
 
       // Handle Retries
       retryCount++;
