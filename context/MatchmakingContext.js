@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useCallback, useMemo } from 'react';
-import { syncManager } from '../services/SyncManager';
+import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 import MatchService from '../services/MatchService';
 import { useSync } from './SyncContext';
 import { useMatchmakingQuery } from '../stores/hooks';
@@ -19,7 +19,7 @@ export const useMatchmaking = () => {
 /**
  * MATCHMAKING CONTEXT (Phase 1.3+)
  * Thin orchestrator that maintains UI state reactivity while delegating
- * all business logic to MatchService and all state authority to SyncManager.
+ * all business logic to MatchService and all state authority to SyncOrchestrator.
  */
 export const MatchmakingProvider = ({ children }) => {
   const { syncAndSaveData } = useSync();
@@ -38,7 +38,7 @@ export const MatchmakingProvider = ({ children }) => {
     );
     
     if (response.success) {
-      syncManager.handleMatchUpdate(response);
+      syncOrchestrator.handleMatchUpdate(response);
     }
     return response;
   }, []);
@@ -49,7 +49,7 @@ export const MatchmakingProvider = ({ children }) => {
   const respondToChallenge = useCallback((challenge, action, userId, userName, overrides = {}) => {
     const response = MatchService.respond(challenge, action, userId, userName, overrides);
     if (response.success) {
-      syncManager.handleMatchUpdate(response);
+      syncOrchestrator.handleMatchUpdate(response);
     }
     return response;
   }, []);
@@ -60,7 +60,7 @@ export const MatchmakingProvider = ({ children }) => {
   const proposeCounter = useCallback((challenge, userId, userName, date, time, venue, comment) => {
     const response = MatchService.proposeCounter(challenge, userId, userName, date, time, venue, comment);
     if (response.success) {
-      syncManager.handleMatchUpdate(response);
+      syncOrchestrator.handleMatchUpdate(response);
     }
     return response;
   }, []);
@@ -71,14 +71,14 @@ export const MatchmakingProvider = ({ children }) => {
   const finalizeMatch = useCallback((match, sets, sport) => {
     const response = MatchService.finalizeMatch(match, sets, sport);
     if (response.success) {
-      syncManager.handleMatchUpdate(response);
+      syncOrchestrator.handleMatchUpdate(response);
     }
     return response;
   }, []);
 
   /**
    * Legacy Compatibility Layer (v2.6.118)
-   * UI components should ideally use SyncManager.handleMatchUpdate directly,
+   * UI components should ideally use SyncOrchestrator.handleMatchUpdate directly,
    * but we restore this to prevent crashes in older screen logic.
    */
   const onUpdateMatchmaking = useCallback((updatedData) => {
@@ -90,7 +90,7 @@ export const MatchmakingProvider = ({ children }) => {
       syncAndSaveData({ matchmaking: updatedData }, true);
     } else {
       // Single item update via handleMatchUpdate
-      syncManager.handleMatchUpdate(updatedData);
+      syncOrchestrator.handleMatchUpdate(updatedData);
     }
   }, [syncAndSaveData]);
 

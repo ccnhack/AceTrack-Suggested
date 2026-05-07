@@ -1,5 +1,5 @@
 import storage from '../utils/storage';
-import { syncManager } from '../services/SyncManager';
+import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 import { connectivityService } from '../services/ConnectivityService';
 import { eventBus } from '../services/EventBus';
 
@@ -141,7 +141,7 @@ if (__DEV__ || process.env.TESTING) {
       // Re-seed test accounts after clearing
       await seedTestAccounts();
       // Re-init sync manager with guest
-      await syncManager.init('guest_test');
+      await syncOrchestrator.init('guest_test');
     },
 
     /**
@@ -173,7 +173,7 @@ if (__DEV__ || process.env.TESTING) {
      */
     injectSyncEvent: async (key, data) => {
       console.log(`🧪 [TEST_API] Injecting sync event for ${key}`);
-      await syncManager.syncAndSaveData({ [key]: data }, false, true);
+      await syncOrchestrator.syncAndSaveData({ [key]: data }, false, true);
     },
 
     /**
@@ -181,7 +181,7 @@ if (__DEV__ || process.env.TESTING) {
      */
     injectMaliciousUpdate: async (fakeId, fakeName) => {
       console.log(`🧪 [TEST_API] Attempting Malicious Update: ${fakeId}`);
-      await syncManager.syncAndSaveData({ 
+      await syncOrchestrator.syncAndSaveData({ 
         currentUser: { id: fakeId, name: fakeName, role: 'admin' } 
       }, false, true);
     },
@@ -197,7 +197,7 @@ if (__DEV__ || process.env.TESTING) {
         { id: 'exp_2', senderId: userId, receiverId: 'saboteur', proposedDate: oldDate, proposedTime: '02:00 PM', sport: 'Badminton', status: 'Countered' }
       ];
       await storage.setItem('matchmaking', expiredMatches);
-      await syncManager.loadData(); // Reload memory state
+      await syncOrchestrator.loadData(); // Reload memory state
     },
 
     /**
@@ -205,8 +205,8 @@ if (__DEV__ || process.env.TESTING) {
      */
     injectConflict: async (entityType, entityId) => {
       console.log(`🧪 [TEST_API] Injecting conflict for ${entityType}:${entityId}`);
-      if (syncManager.injectStaleData) {
-        await syncManager.injectStaleData(entityType, entityId);
+      if (syncOrchestrator.injectStaleData) {
+        await syncOrchestrator.injectStaleData(entityType, entityId);
       }
     }
   };

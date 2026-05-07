@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions, Platform } from 'react-native';
-import SyncManager from '../services/SyncManager';
+import SyncOrchestrator from '../services/sync/SyncOrchestrator';
 import { Ionicons } from '@expo/vector-icons';
 
 /**
@@ -74,7 +74,7 @@ const OnboardingScreen = ({ onComplete, initialStep = 0 }) => {
 
   const handleComplete = async () => {
     try {
-      await SyncManager.getInstance().setSystemFlag('hasSeenOnboarding', 'true');
+      await SyncOrchestrator.getInstance().setSystemFlag('hasSeenOnboarding', 'true');
     } catch (e) { /* silent */ }
     onComplete();
   };

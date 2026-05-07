@@ -2,12 +2,12 @@
  * 🏗️ PHASE 3: Zustand Stores
  * 
  * Lightweight stores that replace the nested React Context state.
- * These stores subscribe to the existing EventBus and SyncManager
+ * These stores subscribe to the existing EventBus and SyncOrchestrator
  * to stay in sync — zero risk to existing functionality.
  */
 import { create } from 'zustand';
 import { eventBus } from '../services/EventBus';
-import { syncManager } from '../services/SyncManager';
+import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 import storage from '../utils/storage';
 
 // ═══════════════════════════════════════════════════════════════
@@ -41,18 +41,18 @@ export const useSyncStore = create((set, get) => {
     toggleCloud: () => {
       const next = !get().isUsingCloud;
       set({ isUsingCloud: next });
-      syncManager.setSystemFlag('isUsingCloud', next);
+      syncOrchestrator.setSystemFlag('isUsingCloud', next);
     },
 
     toggleNotifications: () => {
       const next = !get().isNotificationsEnabled;
       set({ isNotificationsEnabled: next });
-      syncManager.setSystemFlag('isNotificationsEnabled', next);
+      syncOrchestrator.setSystemFlag('isNotificationsEnabled', next);
     },
 
     // Hydrate from storage on first use
     hydrate: async () => {
-      const savedNotifs = await syncManager.getSystemFlag('isNotificationsEnabled');
+      const savedNotifs = await syncOrchestrator.getSystemFlag('isNotificationsEnabled');
       if (savedNotifs !== null) set({ isNotificationsEnabled: savedNotifs });
     }
   };
@@ -130,7 +130,7 @@ export const usePlayersStore = create((set, get) => {
   // Subscribe to player entity updates from EventBus
   eventBus.subscribe('ENTITY_UPDATED', async (e) => {
     if (e.payload.entity === 'players') {
-      const freshData = await syncManager.getSystemFlag('players');
+      const freshData = await syncOrchestrator.getSystemFlag('players');
       if (freshData) set({ players: freshData });
     }
   });
@@ -141,7 +141,7 @@ export const usePlayersStore = create((set, get) => {
 
     // Hydrate from storage
     hydrate: async () => {
-      const saved = await syncManager.getSystemFlag('players');
+      const saved = await syncOrchestrator.getSystemFlag('players');
       if (saved) set({ players: saved });
     }
   };
@@ -153,7 +153,7 @@ export const usePlayersStore = create((set, get) => {
 export const useTournamentsStore = create((set) => {
   eventBus.subscribe('ENTITY_UPDATED', async (e) => {
     if (e.payload.entity === 'tournaments') {
-      const freshData = await syncManager.getSystemFlag('tournaments');
+      const freshData = await syncOrchestrator.getSystemFlag('tournaments');
       if (freshData) set({ tournaments: freshData });
     }
   });
@@ -163,7 +163,7 @@ export const useTournamentsStore = create((set) => {
     setTournaments: (tournaments) => set({ tournaments }),
 
     hydrate: async () => {
-      const saved = await syncManager.getSystemFlag('tournaments');
+      const saved = await syncOrchestrator.getSystemFlag('tournaments');
       if (saved) set({ tournaments: saved });
     }
   };
@@ -175,11 +175,11 @@ export const useTournamentsStore = create((set) => {
 export const useSupportStore = create((set) => {
   eventBus.subscribe('ENTITY_UPDATED', async (e) => {
     if (e.payload.entity === 'supportTickets') {
-      const freshData = await syncManager.getSystemFlag('supportTickets');
+      const freshData = await syncOrchestrator.getSystemFlag('supportTickets');
       if (freshData) set({ supportTickets: freshData });
     }
     if (e.payload.entity === 'chatbotMessages') {
-      const freshData = await syncManager.getSystemFlag('chatbotMessages');
+      const freshData = await syncOrchestrator.getSystemFlag('chatbotMessages');
       if (freshData) set({ chatbotMessages: freshData });
     }
   });
@@ -191,8 +191,8 @@ export const useSupportStore = create((set) => {
     setChatbotMessages: (msgs) => set({ chatbotMessages: msgs }),
 
     hydrate: async () => {
-      const tickets = await syncManager.getSystemFlag('supportTickets');
-      const chatbot = await syncManager.getSystemFlag('chatbotMessages');
+      const tickets = await syncOrchestrator.getSystemFlag('supportTickets');
+      const chatbot = await syncOrchestrator.getSystemFlag('chatbotMessages');
       if (tickets) set({ supportTickets: tickets });
       if (chatbot) set({ chatbotMessages: chatbot });
     }
@@ -205,7 +205,7 @@ export const useSupportStore = create((set) => {
 export const useMatchmakingStore = create((set) => {
   eventBus.subscribe('ENTITY_UPDATED', async (e) => {
     if (e.payload.entity === 'matchmaking') {
-      const freshData = await syncManager.getSystemFlag('matchmaking');
+      const freshData = await syncOrchestrator.getSystemFlag('matchmaking');
       if (freshData) set({ matchmaking: freshData });
     }
   });
@@ -215,7 +215,7 @@ export const useMatchmakingStore = create((set) => {
     setMatchmaking: (mm) => set({ matchmaking: mm }),
 
     hydrate: async () => {
-      const saved = await syncManager.getSystemFlag('matchmaking');
+      const saved = await syncOrchestrator.getSystemFlag('matchmaking');
       if (saved) set({ matchmaking: saved });
     }
   };
@@ -227,7 +227,7 @@ export const useMatchmakingStore = create((set) => {
 export const useEvaluationsStore = create((set) => {
   eventBus.subscribe('ENTITY_UPDATED', async (e) => {
     if (e.payload.entity === 'evaluations') {
-      const freshData = await syncManager.getSystemFlag('evaluations');
+      const freshData = await syncOrchestrator.getSystemFlag('evaluations');
       if (freshData) set({ evaluations: freshData });
     }
   });
@@ -237,7 +237,7 @@ export const useEvaluationsStore = create((set) => {
     setEvaluations: (evals) => set({ evaluations: evals }),
 
     hydrate: async () => {
-      const saved = await syncManager.getSystemFlag('evaluations');
+      const saved = await syncOrchestrator.getSystemFlag('evaluations');
       if (saved) set({ evaluations: saved });
     }
   };

@@ -1,11 +1,11 @@
 /**
  * 🛡️ DEEP TRIDECA-GUARD AUTHORITY REGRESSION
- * Verifies the 13 layers of architectural integrity in SyncManager.
+ * Verifies the 13 layers of architectural integrity in SyncOrchestrator.
  */
 
 import logger from '../utils/logger';
 import MatchService from '../services/MatchService';
-import { syncManager } from '../services/SyncManager';
+import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 
 // ──────────────────────────────────────────────
 // MOCK FOUNDATION
@@ -14,7 +14,7 @@ import { syncManager } from '../services/SyncManager';
 let store = new Map();
 let storageQueue = Promise.resolve();
 
-// Mock storage bridge (Matching the interface in SyncManager)
+// Mock storage bridge (Matching the interface in SyncOrchestrator)
 const mockStorage = {
   getItem: async (key) => store.get(key) || null,
   setItem: async (key, value) => {
@@ -36,7 +36,7 @@ const mockStorage = {
 
 // Injection: Override the internal storage reference for testing
 // Note: In a real environment we'd use jest.mock, here we rely on the singleton pattern.
-(syncManager as any).storage = mockStorage; // Direct injection
+(syncOrchestrator as any).storage = mockStorage; // Direct injection
 
 // ──────────────────────────────────────────────
 // TEST UTILITIES
@@ -75,7 +75,7 @@ async function runAuthorityTests() {
     ];
 
     // Fire them all at once (Throttling will collapse them, but Atomicity ensures final state is correct)
-    await Promise.all(updates.map(u => syncManager.handleMatchUpdate(u)));
+    await Promise.all(updates.map(u => syncOrchestrator.handleMatchUpdate(u)));
     
     // Wait for the throttle window (100ms) + storage queue
     await new Promise(r => setTimeout(r, 200));
@@ -96,13 +96,13 @@ async function runAuthorityTests() {
 
     // Scenario A: Stale Version (Older version should be ignored)
     const staleUpdate = { data: { updatedMatch: { ...match, version: 5, name: 'Stale' } } };
-    await syncManager.handleMatchUpdate(staleUpdate);
+    await syncOrchestrator.handleMatchUpdate(staleUpdate);
     await new Promise(r => setTimeout(r, 150));
     assert('Stale version ignored', store.get('matchmaking')[0].version === 10);
 
     // Scenario B: Stale Timestamp (Same version, older time should be ignored)
     const staleTime = { data: { updatedMatch: { ...match, version: 10, lastUpdated: '2026-04-01T00:00:00Z', name: 'OldTime' } } };
-    await syncManager.handleMatchUpdate(staleTime);
+    await syncOrchestrator.handleMatchUpdate(staleTime);
     await new Promise(r => setTimeout(r, 150));
     assert('Stale timestamp ignored', store.get('matchmaking')[0].lastUpdated === '2026-04-12T10:00:00Z');
   } catch (e) {
@@ -122,7 +122,7 @@ async function runAuthorityTests() {
 
     // Update ONLY nested metadata
     const nestedUpdate = { data: { updatedMatch: { id: 'm1', version: 2, metadata: { score: 20 } } } };
-    await syncManager.handleMatchUpdate(nestedUpdate);
+    await syncOrchestrator.handleMatchUpdate(nestedUpdate);
     await new Promise(r => setTimeout(r, 150));
 
     const result = store.get('matchmaking')[0];
@@ -138,7 +138,7 @@ async function runAuthorityTests() {
   try {
     const matchId = 'm_secure';
     const initAction = { data: { updatedMatch: { id: matchId, version: 1, name: 'Secure' } } };
-    await syncManager.handleMatchUpdate(initAction);
+    await syncOrchestrator.handleMatchUpdate(initAction);
     await new Promise(r => setTimeout(r, 150));
 
     // Verify history exists
@@ -151,13 +151,13 @@ async function runAuthorityTests() {
     history.actions[0].signature = 'invalid_sig';
     store.set(historyKey, history);
     
-    const replayed = await syncManager.replayMatch(matchId);
+    const replayed = await syncOrchestrator.replayMatch(matchId);
     assert('Tampered action rejected during replay', replayed === null || Object.keys(replayed).length === 0);
 
     // Scenario: Corruption detection (Modify checksum)
     history.checksum = 'corrupt';
     store.set(historyKey, history);
-    const corruptedReplay = await syncManager.replayMatch(matchId);
+    const corruptedReplay = await syncOrchestrator.replayMatch(matchId);
     assert('Corrupted checksum rejected during replay', corruptedReplay === null);
   } catch (e) {
     failed++;
@@ -166,16 +166,16 @@ async function runAuthorityTests() {
   // TEST 5: Idempotency (Guard 12)
   console.log('\n📦 Layer 12: Idempotency');
   try {
-    const startCount = syncManager.getMetrics().successfulUpdateCount;
+    const startCount = syncOrchestrator.getMetrics().successfulUpdateCount;
     const match = { id: 'm_idem', version: 1, name: 'Identical' };
     store.set('matchmaking', [match]);
 
     // Send the SAME update
     const idemUpdate = { data: { updatedMatch: { ...match } } };
-    await syncManager.handleMatchUpdate(idemUpdate);
+    await syncOrchestrator.handleMatchUpdate(idemUpdate);
     await new Promise(r => setTimeout(r, 150));
 
-    const endCount = syncManager.getMetrics().successfulUpdateCount;
+    const endCount = syncOrchestrator.getMetrics().successfulUpdateCount;
     assert('Identical update skipped (Deduplication)', endCount === startCount);
   } catch (e) {
     failed++;

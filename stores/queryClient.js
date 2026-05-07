@@ -1,18 +1,18 @@
 /**
  * 🏗️ PHASE 3: React Query Configuration & API Hooks
  * 
- * Declarative data-fetching layer that wraps the existing SyncManager
+ * Declarative data-fetching layer that wraps the existing SyncOrchestrator
  * cloud operations. This replaces the manual loadData/checkForUpdates
  * imperative fetch logic with React Query's caching, refetching, and
  * stale-while-revalidate patterns.
  * 
  * IMPORTANT: These hooks use the SAME API endpoints, headers, and
- * authentication as SyncManager to ensure zero behavioral change.
+ * authentication as SyncOrchestrator to ensure zero behavioral change.
  */
 import { QueryClient } from '@tanstack/react-query';
 import { Platform } from 'react-native';
 import config from '../config';
-import { syncManager } from '../services/SyncManager';
+import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 
 // ═══════════════════════════════════════════════════════════════
 // 📡 QUERY CLIENT CONFIGURATION
@@ -20,11 +20,11 @@ import { syncManager } from '../services/SyncManager';
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Stale after 30s — matches the existing SyncManager timeout
+      // Stale after 30s — matches the existing SyncOrchestrator timeout
       staleTime: 30 * 1000,
       // Cache for 5 minutes — prevents redundant fetches on tab switches
       gcTime: 5 * 60 * 1000,
-      // Retry with exponential backoff (matches SyncManager MAX_RETRIES=2)
+      // Retry with exponential backoff (matches SyncOrchestrator MAX_RETRIES=2)
       retry: 2,
       retryDelay: (attemptIndex) => Math.min(2000 * (attemptIndex + 1), 10000),
       // Refetch on reconnect (matches SyncContext's NETWORK_RECOVERY)
@@ -40,16 +40,16 @@ export const queryClient = new QueryClient({
 
 // ═══════════════════════════════════════════════════════════════
 // 🔧 API FETCH HELPER
-// Uses the same headers and auth as SyncManager.pushToApi
+// Uses the same headers and auth as SyncOrchestrator.pushToApi
 // ═══════════════════════════════════════════════════════════════
 export async function apiFetch(endpoint, options = {}) {
   const cloudUrl = config.API_BASE_URL;
-  const token = await syncManager.getSystemFlag('userToken');
+  const token = await syncOrchestrator.getSystemFlag('userToken');
   
   const headers = {
     'Content-Type': 'application/json',
     'x-ace-api-key': config.PUBLIC_APP_ID,
-    'x-user-id': syncManager.getUserId() || 'guest',
+    'x-user-id': syncOrchestrator.getUserId() || 'guest',
     ...options.headers
   };
 
@@ -110,13 +110,13 @@ export const queryKeys = {
  */
 export async function fetchAppData() {
   // Flush pending pushes before pulling (matches FLUSH_BEFORE_PULL guard)
-  await syncManager.flushPendingPush();
+  await syncOrchestrator.flushPendingPush();
   
   const data = await apiFetch(config.getEndpoint('DATA_SYNC'));
   
   if (data) {
-    // Sync to local storage via SyncManager (maintains parity with existing flow)
-    await syncManager.syncAndSaveData(data, false, true);
+    // Sync to local storage via SyncOrchestrator (maintains parity with existing flow)
+    await syncOrchestrator.syncAndSaveData(data, false, true);
   }
   
   return data;
@@ -132,10 +132,10 @@ export async function fetchStatus() {
 
 /**
  * Mutation function for saving data to the cloud.
- * Wraps SyncManager.syncAndSaveData() to maintain all existing
+ * Wraps SyncOrchestrator.syncAndSaveData() to maintain all existing
  * guards (thinning, identity sync, debouncing, conflict resolution).
  */
 export async function saveData({ updates, isAtomic = false }) {
-  await syncManager.syncAndSaveData(updates, isAtomic, false);
+  await syncOrchestrator.syncAndSaveData(updates, isAtomic, false);
   return { success: true };
 }

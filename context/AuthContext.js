@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Alert } from 'react-native';
-import { syncManager } from '../services/SyncManager';
+import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 import { eventBus } from '../services/EventBus';
 import PlayerService from '../services/PlayerService';
 import storage from '../utils/storage';
@@ -77,9 +77,9 @@ export const AuthProvider = ({ children }) => {
             setUserRole(rawUser.role);
             setViewingLanding(false);
             
-            // Re-initialize SyncManager immediately for background processes
-            syncManager.init(rawUser.id, rawUser.role);
-            if (token) syncManager.setUserToken(token);
+            // Re-initialize SyncOrchestrator immediately for background processes
+            syncOrchestrator.init(rawUser.id, rawUser.role);
+            if (token) syncOrchestrator.setUserToken(token);
           }
       } catch (e) {
         console.error("[AuthContext] Hydration failed:", e);
@@ -90,14 +90,14 @@ export const AuthProvider = ({ children }) => {
     hydrateSession();
   }, []);
 
-  // SyncManager Lifecycle
+  // SyncOrchestrator Lifecycle
   useEffect(() => {
     if (currentUser?.id) {
-      console.log(`[AuthContext] Initializing SyncManager for ${currentUser.id}`);
-      syncManager.init(currentUser.id, currentUser.role);
+      console.log(`[AuthContext] Initializing SyncOrchestrator for ${currentUser.id}`);
+      syncOrchestrator.init(currentUser.id, currentUser.role);
     }
     return () => {
-      syncManager.destroy();
+      syncOrchestrator.destroy();
     };
   }, [currentUser?.id]);
 
@@ -106,7 +106,7 @@ export const AuthProvider = ({ children }) => {
     const unsub = eventBus.subscribe('ENTITY_UPDATED', async (e) => {
       const { entity, source } = e.payload;
       if (entity === 'currentUser' && (source === 'socket' || source === 'api' || source === 'internal')) {
-        const freshData = await syncManager.getSystemFlag('currentUser');
+        const freshData = await syncOrchestrator.getSystemFlag('currentUser');
         if (freshData) {
           // 🛡️ [IDENTITY GUARD] (v2.6.118)
           // Critical session protection: Only update state if the ID matches the current user.
@@ -166,19 +166,19 @@ export const AuthProvider = ({ children }) => {
       // so that setupSocket can read the role for the WS handshake query params.
       // Previously, init() was called first which caused a race condition where
       // the role was read as 'user' instead of 'support'.
-      syncManager.setSystemFlag('currentUser', user);
+      syncOrchestrator.setSystemFlag('currentUser', user);
 
-      syncManager.init(user.id, user.role);
+      syncOrchestrator.init(user.id, user.role);
       
       // If we received a token, persist it (v2.6.190)
       if (user.token || token) {
         const activeToken = user.token || token;
-        syncManager.setUserToken(activeToken);
+        syncOrchestrator.setUserToken(activeToken);
         
         // 🛡️ [HTTP_ONLY_TRANSITION] (v2.6.258): 
         // On web, we rely on secure cookies and do NOT store the token in local storage.
         if (Platform.OS !== 'web') {
-          syncManager.setSystemFlag('userToken', activeToken);
+          syncOrchestrator.setSystemFlag('userToken', activeToken);
         }
       }
       syncAndSaveData({ currentUser: user });
@@ -220,10 +220,10 @@ export const AuthProvider = ({ children }) => {
     // Previously skipped clearing in dev mode (__DEV__), which masked production bugs.
     // E2E tests that need data persistence should use a dedicated mock backend instead.
     syncableKeys.forEach(key => {
-      syncManager.removeSystemFlag(key);
+      syncOrchestrator.removeSystemFlag(key);
     });
 
-    syncManager.setUserToken(null);
+    syncOrchestrator.setUserToken(null);
     
     // 🛡️ [COOKIE_CLEANUP] (v2.6.258): Notify backend to clear secure cookie on web logout
     if (Platform.OS === 'web') {

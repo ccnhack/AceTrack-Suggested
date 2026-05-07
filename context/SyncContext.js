@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useRef, useEffect, useCallb
 import { Alert, AppState, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { eventBus } from '../services/EventBus';
-import { syncManager } from '../services/SyncManager';
+import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 import { calculateServerOffset } from '../utils/tournamentUtils';
 import config from '../config';
 import logger from '../utils/logger';
@@ -33,16 +33,16 @@ export const SyncProvider = ({ children }) => {
   const [serverClockOffset, setServerClockOffset] = useState(0);
   const [isFullyConnected, setIsFullyConnected] = useState(true);
   const [isNotificationsEnabled, setIsNotificationsEnabled] = useState(true);
-  const [metrics, setMetrics] = useState(syncManager.getMetrics());
+  const [metrics, setMetrics] = useState(syncOrchestrator.getMetrics());
 
-  const socketRef = useRef(syncManager.getSocket());
-  const activeApiUrl = useMemo(() => syncManager.getActiveApiUrl(), []);
+  const socketRef = useRef(syncOrchestrator.getSocket());
+  const activeApiUrl = useMemo(() => syncOrchestrator.getActiveApiUrl(), []);
   const lastUpdateCheckRef = useRef(0);
   const isStartupCompleteRef = useRef(false);
 
   // Function to refresh metrics
   const refreshMetrics = useCallback(() => {
-    setMetrics(syncManager.getMetrics());
+    setMetrics(syncOrchestrator.getMetrics());
   }, []);
 
   // Connectivity and Sync listeners
@@ -55,11 +55,11 @@ export const SyncProvider = ({ children }) => {
       if (e.payload.isOnline !== undefined) setIsCloudOnline(e.payload.isOnline);
       if (e.payload.isSyncing !== undefined) setIsSyncing(e.payload.isSyncing);
       // 🛡️ Ensure socketRef stays fresh regardless of state bailout (fixes Admin Diag Pings)
-      socketRef.current = syncManager.getSocket();
+      socketRef.current = syncOrchestrator.getSocket();
     });
 
     // 🛡️ Set initial reference if already available
-    socketRef.current = syncManager.getSocket();
+    socketRef.current = syncOrchestrator.getSocket();
 
     return () => {
       unsubConn();
@@ -70,11 +70,11 @@ export const SyncProvider = ({ children }) => {
   // Hydrate local flags
   useEffect(() => {
     (async () => {
-      const savedNotifs = await syncManager.getSystemFlag('isNotificationsEnabled');
+      const savedNotifs = await syncOrchestrator.getSystemFlag('isNotificationsEnabled');
       if (savedNotifs !== null) setIsNotificationsEnabled(savedNotifs);
 
       // 🛡️ [DEV_SYNC] (v2.6.315) Restore API mode from storage
-      const savedUsingCloud = await syncManager.getSystemFlag('isUsingCloud');
+      const savedUsingCloud = await syncOrchestrator.getSystemFlag('isUsingCloud');
       if (savedUsingCloud !== null && __DEV__) {
         setIsUsingCloud(savedUsingCloud);
         config.API_BASE_URL = savedUsingCloud ? config.CLOUD_API_URL : config.LOCAL_API_URL;
@@ -87,7 +87,7 @@ export const SyncProvider = ({ children }) => {
   useEffect(() => {
     if (isFullyConnected) {
       console.log('[SyncContext] Connectivity restored. Triggering proactive cloud push...');
-      syncManager.performCloudPush();
+      syncOrchestrator.performCloudPush();
     }
   }, [isFullyConnected]);
 
@@ -96,7 +96,7 @@ export const SyncProvider = ({ children }) => {
    */
   const syncAndSaveData = useCallback(async (updates, isAtomic = false, isInternal = false) => {
     try {
-      await syncManager.syncAndSaveData(updates, isAtomic, isInternal);
+      await syncOrchestrator.syncAndSaveData(updates, isAtomic, isInternal);
       setLastSyncTime(new Date().toISOString());
       // 🛡️ [C-2 FIX] (v2.6.315): Removed false setIsCloudOnline(true) here.
       // Cloud status is only set true by loadData/checkForUpdates after actual network success.
@@ -121,7 +121,7 @@ export const SyncProvider = ({ children }) => {
         // Ensure any pending local changes (especially deletions) reach
         // the server BEFORE we pull fresh data. Otherwise the cloud still
         // has the old items and they get written right back.
-        await syncManager.flushPendingPush();
+        await syncOrchestrator.flushPendingPush();
 
         console.log('[SyncContext] loadData: Starting fetch...');
         
@@ -131,10 +131,10 @@ export const SyncProvider = ({ children }) => {
         
         console.log(`[SyncContext] loadData: Fetching from ${fullUrl}`);
         
-        const token = await syncManager.getSystemFlag('userToken');
+        const token = await syncOrchestrator.getSystemFlag('userToken');
         const headers = { 
           'x-ace-api-key': config.PUBLIC_APP_ID,
-          'x-user-id': syncManager.getUserId() || 'guest'
+          'x-user-id': syncOrchestrator.getUserId() || 'guest'
         };
         if (token && Platform.OS !== 'web') headers['Authorization'] = `Bearer ${token}`;
 
@@ -183,7 +183,7 @@ export const SyncProvider = ({ children }) => {
           }
           
           // Data from pull is 'Internal' by default to prevent echo-backs
-          await syncManager.syncAndSaveData(data, false, true);
+          await syncOrchestrator.syncAndSaveData(data, false, true);
           // Reset retry counter on success
           loadDataRetryCountRef.current = 0;
           return data;
@@ -198,7 +198,7 @@ export const SyncProvider = ({ children }) => {
             loadDataRetryCountRef.current++;
             console.log(`[SyncContext] Retry ${loadDataRetryCountRef.current}/${MAX_LOAD_RETRIES} after timeout...`);
             setTimeout(() => {
-              if (!syncManager.isSyncActive()) {
+              if (!syncOrchestrator.isSyncActive()) {
                 loadData(true, true);
               }
             }, 2000 * loadDataRetryCountRef.current); // Exponential backoff
@@ -216,7 +216,7 @@ export const SyncProvider = ({ children }) => {
     if (isSilent) {
       return operation();
     } else {
-      return syncManager.trackOperation('LOAD_DATA_PULL', operation);
+      return syncOrchestrator.trackOperation('LOAD_DATA_PULL', operation);
     }
   }, []);
 
@@ -227,7 +227,7 @@ export const SyncProvider = ({ children }) => {
    */
   const checkForUpdates = useCallback(async (isForce = false) => {
     try {
-      if (syncManager.isSyncActive()) return;
+      if (syncOrchestrator.isSyncActive()) return;
 
       const now = Date.now();
       const throttleWindow = 10000; // 10s minimum between checks
@@ -236,10 +236,10 @@ export const SyncProvider = ({ children }) => {
       }
       lastUpdateCheckRef.current = now;
 
-      const token = await syncManager.getSystemFlag('userToken');
+      const token = await syncOrchestrator.getSystemFlag('userToken');
       const headers = { 
         'x-ace-api-key': config.PUBLIC_APP_ID,
-        'x-user-id': syncManager.getUserId() || 'guest'
+        'x-user-id': syncOrchestrator.getUserId() || 'guest'
       };
       if (token && Platform.OS !== 'web') headers['Authorization'] = `Bearer ${token}`;
 
@@ -291,19 +291,19 @@ export const SyncProvider = ({ children }) => {
       }
 
       // Skip self-originated updates
-      const socket = syncManager.getSocket();
+      const socket = syncOrchestrator.getSocket();
       if (status.lastSocketId && socket?.id && status.lastSocketId === socket.id) {
         return;
       }
 
-      if (status.lastUpdated && status.lastUpdated !== syncManager.getLastServerUpdate()) {
+      if (status.lastUpdated && status.lastUpdated !== syncOrchestrator.getLastServerUpdate()) {
         console.log('[SyncContext] New cloud data detected via status poll. Auto-refreshing...');
         logger.logAction('CLOUD_UPDATE_DETECTED', { lastUpdated: status.lastUpdated });
         
-        const isStale = status.lastUpdated !== syncManager.getLastServerUpdate();
+        const isStale = status.lastUpdated !== syncOrchestrator.getLastServerUpdate();
         if (isStale || isForce) {
           // 🛡️ [GUEST GUARD] (v2.6.192)
-          if (!syncManager.getUserId() || syncManager.getUserId() === 'guest') {
+          if (!syncOrchestrator.getUserId() || syncOrchestrator.getUserId() === 'guest') {
             console.log('[SyncContext] checkForUpdates: No active user, skipping data load.');
             return;
           }
@@ -320,7 +320,7 @@ export const SyncProvider = ({ children }) => {
   // When app returns from background → foreground, pull fresh data
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextAppState => {
-      if (nextAppState === 'active' && !syncManager.isSyncActive()) {
+      if (nextAppState === 'active' && !syncOrchestrator.isSyncActive()) {
         if (!isStartupCompleteRef.current) {
           console.log('[SyncContext] Foreground: Startup incomplete, skipping loadData.');
           logger.logAction('FOREGROUND_SKIP_STARTUP_INCOMPLETE');
@@ -342,7 +342,7 @@ export const SyncProvider = ({ children }) => {
   // 🛡️ [PERIODIC VERSION CHECK] (v2.6.121) — 2 min background polling
   useEffect(() => {
     const interval = setInterval(() => {
-      if (!syncManager.isSyncActive() && isCloudOnline) {
+      if (!syncOrchestrator.isSyncActive() && isCloudOnline) {
         checkForUpdates(false);
       }
     }, 120000);
@@ -355,7 +355,7 @@ export const SyncProvider = ({ children }) => {
   useEffect(() => {
     const unsub = eventBus.subscribe('ENTITY_UPDATED', async (e) => {
       if (e.payload.entity === 'supportTickets') {
-        const tickets = await syncManager.getSystemFlag('supportTickets');
+        const tickets = await syncOrchestrator.getSystemFlag('supportTickets');
         setHasActiveTickets(Array.isArray(tickets) && tickets.length > 0);
       }
     });
@@ -366,7 +366,7 @@ export const SyncProvider = ({ children }) => {
     if (hasActiveTickets && isCloudOnline) {
       // 🛡️ [PERFORMANCE FIX] (v2.6.315): Reduced from 10s to 30s to lower battery drain
       const pollTimer = setInterval(() => {
-        if (!syncManager.isSyncActive()) {
+        if (!syncOrchestrator.isSyncActive()) {
           checkForUpdates(false);
         }
       }, 30000);
@@ -388,12 +388,12 @@ export const SyncProvider = ({ children }) => {
   const onToggleCloud = useCallback(() => {
     const nextValue = !isUsingCloud;
     setIsUsingCloud(nextValue);
-    syncManager.setSystemFlag('isUsingCloud', nextValue);
+    syncOrchestrator.setSystemFlag('isUsingCloud', nextValue);
     
     // 🛡️ [DEV_HOTSWAP] (v2.6.315) Dynamically update API base and reconnect socket
     if (__DEV__) {
       config.API_BASE_URL = nextValue ? config.CLOUD_API_URL : config.LOCAL_API_URL;
-      syncManager.reconnect();
+      syncOrchestrator.reconnect();
     }
     
     logger.logAction('CLOUD_MODE_TOGGLED', { nextValue, newUrl: config.API_BASE_URL });
@@ -402,7 +402,7 @@ export const SyncProvider = ({ children }) => {
   const onToggleNotifications = useCallback(() => {
     const nextValue = !isNotificationsEnabled;
     setIsNotificationsEnabled(nextValue);
-    syncManager.setSystemFlag('isNotificationsEnabled', nextValue);
+    syncOrchestrator.setSystemFlag('isNotificationsEnabled', nextValue);
     logger.logAction('NOTIFICATIONS_TOGGLED', { nextValue });
     Alert.alert("Notifications", nextValue ? "Notifications enabled" : "Notifications muted");
   }, [isNotificationsEnabled]);

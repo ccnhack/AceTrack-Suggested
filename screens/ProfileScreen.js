@@ -21,7 +21,7 @@ import DiagnosticsModal from '../components/DiagnosticsModal';
 import config from '../config';
 import logger from '../utils/logger';
 import storage from '../utils/storage';
-import { syncManager } from '../services/SyncManager';
+import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 import ProfileHeader, { AvatarPlaceholder, getInitials } from '../components/ProfileHeader';
 import ProfileMenuSection from '../components/ProfileMenuSection';
 import { OTPVerificationModal, CalendarWidget } from '../components/ProfileSubComponents';
@@ -273,7 +273,7 @@ const ProfileScreen = ({ navigation }) => {
   // Load persisted session avatar on mount
   useEffect(() => {
     const loadSessionAvatar = async () => {
-      const saved = await syncManager.getSystemFlag('sessionCustomAvatar');
+      const saved = await syncOrchestrator.getSystemFlag('sessionCustomAvatar');
       if (saved) {
         setSessionCustomAvatar(saved);
         logger.logAction('SESSION_AVATAR_HYDRATED', { url: saved });
@@ -286,7 +286,7 @@ const ProfileScreen = ({ navigation }) => {
   useEffect(() => {
     const saveSessionAvatar = async () => {
       if (sessionCustomAvatar) {
-        await syncManager.setSystemFlag('sessionCustomAvatar', sessionCustomAvatar);
+        await syncOrchestrator.setSystemFlag('sessionCustomAvatar', sessionCustomAvatar);
       }
     };
     saveSessionAvatar();

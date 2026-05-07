@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useCallback, useMemo } from 'react';
-import { syncManager } from '../services/SyncManager';
+import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 import { useSync } from './SyncContext';
 import { useEvaluationsStore } from '../stores';
 import { useEvaluationsQuery } from '../stores/hooks';

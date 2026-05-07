@@ -13,7 +13,8 @@ const BYPASS_PROD_SAFETY = process.env.BYPASS_PROD_SAFETY === 'true';
 
 const HEADERS = {
   'Content-Type': 'application/json',
-  'x-ace-api-key': API_KEY
+  'x-ace-api-key': API_KEY,
+  'x-user-id': 'admin'
 };
 
 const isProduction = BASE_URL.includes('render.com');

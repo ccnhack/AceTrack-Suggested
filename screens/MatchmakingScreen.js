@@ -15,7 +15,7 @@ import SafeAvatar from '../components/SafeAvatar';
 import { Calendar } from 'react-native-calendars';
 import { LinearGradient } from 'expo-linear-gradient';
 import venuesData from '../data/venues.json';
-import { syncManager } from '../services/SyncManager';
+import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 import { 
   TimeSlotItem, VenueItem, OpponentCard,
   SentRequestCard, ReceivedRequestCard, CounteredRequestCard,
@@ -609,7 +609,7 @@ export default function MatchmakingScreen({ route }) {
                 proposedTime: origTime,
                 time: `${origDate}, ${origTime}`
               });
-              syncManager.handleMatchUpdate(response);
+              syncOrchestrator.handleMatchUpdate(response);
               Alert.alert("Challenge Accepted!", `Match confirmed for ${origDate} at ${origTime} with ${oppName}.`);
             }
           }
@@ -624,7 +624,7 @@ export default function MatchmakingScreen({ route }) {
     const response = MatchService.respond(req, 'accept', user.id, user.name, {
       time: `${finalDate}, ${finalTime}`
     });
-    syncManager.handleMatchUpdate(response);
+    syncOrchestrator.handleMatchUpdate(response);
     Alert.alert("Challenge Accepted!", `Match confirmed for ${finalDate} at ${finalTime} with ${oppName}.`);
   };
 
@@ -635,7 +635,7 @@ export default function MatchmakingScreen({ route }) {
     // 🛡️ v2.6.90: Automatically mark as read when clicking to view details
     if (challenge.isNew) {
       // Small intentional logic skip: isNew is UI-only usually, but we keep the authority for logic
-      syncManager.handleMatchUpdate({ data: { updatedMatch: { ...challenge, isNew: false } } });
+      syncOrchestrator.handleMatchUpdate({ data: { updatedMatch: { ...challenge, isNew: false } } });
     }
   };
 
@@ -725,7 +725,7 @@ export default function MatchmakingScreen({ route }) {
           style: "destructive",
           onPress: () => {
             const response = MatchService.removeExpired(id);
-            syncManager.handleMatchUpdate(response);
+            syncOrchestrator.handleMatchUpdate(response);
           }
         }
       ]
@@ -744,7 +744,7 @@ export default function MatchmakingScreen({ route }) {
           style: "destructive",
           onPress: () => {
             const response = MatchService.removeAllExpired(expiredRequests.map(m => m.id));
-            syncManager.handleMatchUpdate(response);
+            syncOrchestrator.handleMatchUpdate(response);
             Alert.alert("Success", "All expired requests have been removed.");
           }
         }
@@ -755,7 +755,7 @@ export default function MatchmakingScreen({ route }) {
   const handleConfirmBooking = (req) => {
     const oppName = getOpponentName(req);
     const response = MatchService.confirmBooking(req, user.id, user.name);
-    syncManager.handleMatchUpdate(response);
+    syncOrchestrator.handleMatchUpdate(response);
     Alert.alert("Booking Confirmed", `You have finalized the booking with ${oppName}.`);
   };
 
@@ -899,7 +899,7 @@ export default function MatchmakingScreen({ route }) {
                 getOpponentName={getOpponentName}
                 onOpenDetails={(req) => {
                   if (isUnread) {
-                    syncManager.handleMatchUpdate({ 
+                    syncOrchestrator.handleMatchUpdate({ 
                       data: { updatedMatch: { ...req, isExpiredRead: true } } 
                     });
                   }

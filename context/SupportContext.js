@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useCallback, useMemo } from 'react';
 import TicketService from '../services/TicketService';
 import storage from '../utils/storage';
-import { syncManager } from '../services/SyncManager';
+import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 import { useSync } from './SyncContext';
 import { useAuth } from './AuthContext';
 import config from '../config';
@@ -33,7 +33,7 @@ export const SupportProvider = ({ children }) => {
   const logSupportActivity = useCallback(async (action, entityId, details) => {
     if (!currentUserRef.current || userRole !== 'support') return;
     try {
-      const currentLogs = await syncManager.getSystemFlag('auditLogs') || [];
+      const currentLogs = await syncOrchestrator.getSystemFlag('auditLogs') || [];
       const newLog = {
         id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         userId: currentUserRef.current.id,

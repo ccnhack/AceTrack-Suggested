@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Alert } from 'react-native';
 import storage from '../utils/storage';
-import { syncManager } from '../services/SyncManager';
+import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 import { useSync } from './SyncContext';
 import { eventBus } from '../services/EventBus';
 import { useApp } from './AppContext';
@@ -22,9 +22,9 @@ export const AdminProvider = ({ children }) => {
 
   useEffect(() => {
     const hydrate = async () => {
-      const ids = await syncManager.getSystemFlag('seenAdminActionIds');
-      const logs = await syncManager.getSystemFlag('auditLogs');
-      const tabs = await syncManager.getSystemFlag('visitedAdminSubTabs');
+      const ids = await syncOrchestrator.getSystemFlag('seenAdminActionIds');
+      const logs = await syncOrchestrator.getSystemFlag('auditLogs');
+      const tabs = await syncOrchestrator.getSystemFlag('visitedAdminSubTabs');
       if (ids) setSeenAdminActionIds(new Set(ids));
       if (logs) setAuditLogs(logs);
       if (tabs) setVisitedAdminSubTabs(new Set(tabs));
@@ -38,10 +38,10 @@ export const AdminProvider = ({ children }) => {
       const { entity, source } = e.payload;
       if (source === 'socket' || source === 'api') {
         if (entity === 'auditLogs') {
-          const logs = await syncManager.getSystemFlag('auditLogs');
+          const logs = await syncOrchestrator.getSystemFlag('auditLogs');
           if (logs) setAuditLogs(logs);
         } else if (entity === 'seenAdminActionIds') {
-          const ids = await syncManager.getSystemFlag('seenAdminActionIds');
+          const ids = await syncOrchestrator.getSystemFlag('seenAdminActionIds');
           if (ids) setSeenAdminActionIds(new Set(ids));
         }
       }
@@ -55,8 +55,8 @@ export const AdminProvider = ({ children }) => {
     if (seenAdminActionIds.size > 0 || visitedAdminSubTabs.size > 0) {
       const persist = async () => {
         // Use a small debounce or check if actually different from disk to avoid sync loops
-        const currentIds = await syncManager.getSystemFlag('seenAdminActionIds');
-        const currentTabs = await syncManager.getSystemFlag('visitedAdminSubTabs');
+        const currentIds = await syncOrchestrator.getSystemFlag('seenAdminActionIds');
+        const currentTabs = await syncOrchestrator.getSystemFlag('visitedAdminSubTabs');
         
         const idsArray = Array.from(seenAdminActionIds);
         const tabsArray = Array.from(visitedAdminSubTabs);
@@ -78,14 +78,14 @@ export const AdminProvider = ({ children }) => {
   // 🛡️ [MIGRATION FIX] (v2.6.121) Log failed OTP attempts to tournament
   const onLogFailedOtp = useCallback((tid, coachId, otp) => {
     const operation = async () => {
-      const tournaments = await syncManager.getSystemFlag('tournaments');
+      const tournaments = await syncOrchestrator.getSystemFlag('tournaments');
       if (!tournaments) return;
       const updated = tournaments.map(t => 
         t.id === tid 
           ? { ...t, failedOtps: [...(t.failedOtps || []), { coachId, otp, timestamp: new Date().toISOString() }] } 
           : t
       );
-      await syncManager.syncAndSaveData({ tournaments: updated });
+      await syncOrchestrator.syncAndSaveData({ tournaments: updated });
     };
     operation();
   }, []);
@@ -95,8 +95,8 @@ export const AdminProvider = ({ children }) => {
     setIsUploadingLogs(true);
     try {
       const logs = logger.getLogs();
-      const currentUser = await syncManager.getSystemFlag('currentUser');
-      const hardwareId = await syncManager.getSystemFlag('acetrack_device_id');
+      const currentUser = await syncOrchestrator.getSystemFlag('currentUser');
+      const hardwareId = await syncOrchestrator.getSystemFlag('acetrack_device_id');
       const token = await storage.getItem('userToken');
       const headers = {
         'Content-Type': 'application/json',

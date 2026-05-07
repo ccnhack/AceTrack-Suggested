@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
 import { Platform } from 'react-native';
-import SyncManager from '../services/SyncManager';
+import SyncOrchestrator from '../services/sync/SyncOrchestrator';
 import { eventBus } from '../services/EventBus';
 import Constants from 'expo-constants';
 import logger from '../utils/logger';
@@ -57,11 +57,11 @@ export const AppProvider = ({ children, initialVersion }) => {
         const cloudUrl = config.API_BASE_URL || 'https://acetrack-suggested.onrender.com';
         logger.checkAndUploadCrash(cloudUrl, config.PUBLIC_APP_ID);
         
-        const syncManager = SyncManager.getInstance();
-        let hardwareId = await syncManager.getSystemFlag('acetrack_device_id');
+        const syncOrchestrator = SyncOrchestrator.getInstance();
+        let hardwareId = await syncOrchestrator.getSystemFlag('acetrack_device_id');
         if (!hardwareId) {
           hardwareId = (Constants.deviceName || Platform.OS || 'device').replace(/[^a-zA-Z0-9]/g, '_') + '_' + Date.now() + '_' + Math.random().toString(16).slice(2, 6);
-          await syncManager.setSystemFlag('acetrack_device_id', hardwareId);
+          await syncOrchestrator.setSystemFlag('acetrack_device_id', hardwareId);
         }
         localDeviceIdRef.current = hardwareId;
 
@@ -132,8 +132,8 @@ export const AppProvider = ({ children, initialVersion }) => {
           console.log(`📡 [NOTIFY_DEBUG] Push token acquired: ${token.substring(0, 20)}...`);
           
           // Try to sync with backend if user is known
-          const syncManager = SyncManager.getInstance();
-          const currentUser = await syncManager.getSystemFlag('currentUser');
+          const syncOrchestrator = SyncOrchestrator.getInstance();
+          const currentUser = await syncOrchestrator.getSystemFlag('currentUser');
           if (currentUser?.id && sendTokenToBackend) {
             console.log(`📡 [NOTIFY_DEBUG] Syncing push token for ${currentUser.id}`);
             sendTokenToBackend(currentUser.id, token);
@@ -155,8 +155,8 @@ export const AppProvider = ({ children, initialVersion }) => {
   useEffect(() => {
     const unsub = eventBus.subscribe('ENTITY_UPDATED', async (e) => {
       if (e.payload.entity === 'currentUser') {
-        const syncManager = SyncManager.getInstance();
-        const user = await syncManager.getSystemFlag('currentUser');
+        const syncOrchestrator = SyncOrchestrator.getInstance();
+        const user = await syncOrchestrator.getSystemFlag('currentUser');
         if (user?.id && localDeviceIdRef.current) {
           const cloudUrl = config.API_BASE_URL || 'https://acetrack-suggested.onrender.com';
           logger.initAutoFlush(

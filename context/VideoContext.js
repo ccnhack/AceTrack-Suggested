@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useRef, useEffect, useCallb
 import { eventBus } from '../services/EventBus';
 import VideoService from '../services/VideoService';
 import storage from '../utils/storage';
-import { syncManager } from '../services/SyncManager';
+import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 import { useSync } from './SyncContext';
 import { useAuth } from './AuthContext';
 import { usePlayers } from './PlayerContext';
@@ -30,7 +30,7 @@ export const VideoProvider = ({ children }) => {
     const unsub = eventBus.subscribe('ENTITY_UPDATED', async (e) => {
       const { entity, source } = e.payload;
       if ((entity === 'matchVideos' || entity === 'matches') && (source === 'socket' || source === 'api')) {
-        const freshData = await syncManager.getSystemFlag(entity);
+        const freshData = await syncOrchestrator.getSystemFlag(entity);
         if (freshData) {
           if (entity === 'matchVideos') setMatchVideos(freshData);
           if (entity === 'matches') setMatches(freshData);
