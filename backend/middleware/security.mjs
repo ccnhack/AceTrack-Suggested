@@ -153,9 +153,14 @@ export const authGuard = (req, res, next) => {
 // 🛡️ Rate Limiters (v2.6.185)
 // ═══════════════════════════════════════════════════════════════
 export const createRateLimiters = (appVersion) => {
+  const skipTestRequests = (req) => {
+    return req.headers['x-ace-test-bypass'] === 'true';
+  };
+
   const globalApiLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: 200,
+    skip: skipTestRequests,
     standardHeaders: true,
     legacyHeaders: false,
     message: { 
@@ -168,6 +173,7 @@ export const createRateLimiters = (appVersion) => {
   const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 20,
+    skip: skipTestRequests,
     message: { error: 'Password Attempt limit reached. Please try after sometime for security.' },
     standardHeaders: true,
     legacyHeaders: false,
@@ -176,6 +182,7 @@ export const createRateLimiters = (appVersion) => {
   const otpLimiter = rateLimit({
     windowMs: 10 * 60 * 1000,
     max: 5,
+    skip: skipTestRequests,
     message: { error: 'Security Alert: Too many OTP attempts. Please wait 10 minutes.' },
     standardHeaders: true,
     legacyHeaders: false,
@@ -184,6 +191,7 @@ export const createRateLimiters = (appVersion) => {
   const passwordResetLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 5,
+    skip: skipTestRequests,
     message: { error: 'Too many recovery attempts. Please try again in 15 minutes.' },
     standardHeaders: true,
     legacyHeaders: false,

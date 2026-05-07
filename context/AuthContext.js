@@ -311,7 +311,7 @@ export const AuthProvider = ({ children }) => {
     onUpdateUser(updated);
   }, [onUpdateUser]);
 
-  // 🛡️ [AUDIT FIX] (v2.6.323): Memoize value to prevent unnecessary re-renders
+  // 🛡️ [AUDIT FIX] (v2.6.324): Memoize value to prevent unnecessary re-renders
   const value = useMemo(() => ({
     currentUser,
     userId: currentUser?.id,

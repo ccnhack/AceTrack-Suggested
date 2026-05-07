@@ -73,5 +73,5 @@ mockData.ts
 # Scratch/debug scripts in root
 scratch/
 
-# 🛡️ [SECURITY] (v2.6.323): Firebase credentials must never be committed
+# 🛡️ [SECURITY] (v2.6.324): Firebase credentials must never be committed
 backend/firebase-service-account.json

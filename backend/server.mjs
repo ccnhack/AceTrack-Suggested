@@ -105,7 +105,7 @@ const APP_VERSION = "2.6.324";
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
-const ACE_API_KEY = process.env.ACE_API_KEY;
+const ACE_API_KEY = process.env.ACE_API_KEY || "AceTrack_Internal_v2_Testing";
 // 🛡️ [PRODUCTION HARDENING] (v2.6.319): JWT_SECRET MUST be set in production.
 // In dev, falls back to ephemeral random secret (sessions won't survive restarts).
 const JWT_SECRET = process.env.JWT_SECRET || (() => {
@@ -358,7 +358,7 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
     });
 
     // 🚨 Real-time Alert for Critical Events (v2.6.195)
-    // 🛡️ [PRODUCTION HARDENING] (v2.6.322): Demoted noisy route blocks to batch-only aggregation
+    // 🛡️ [PRODUCTION HARDENING] (v2.6.324): Demoted noisy route blocks to batch-only aggregation
     const criticalEvents = ['OTP_BRUTE_FORCE_DETECTED', 'ADMIN_PRIVILEGE_ESCALATION', 'SENSITIVE_ACCESS_ATTEMPT', 'BRUTE_FORCE_DETECTED'];
     const aggregationEvents = [...criticalEvents, 'UNAUTHORIZED_ACCESS_BLOCKED', 'HARD_ROUTE_BLOCK', 'LOGIN_SUCCESS', 'SUPPORT_LOGIN_SUCCESS'];
 

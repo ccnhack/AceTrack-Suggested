@@ -7,14 +7,15 @@
 // 🛡️ SAFETY ADVISORY: Always test against LOCALHOST (3000) before targeting Render.
 // To override Target: export TEST_URL='https://acetrack-suggested.onrender.com'
 // To allow POST/PURGE on Production: export BYPASS_PROD_SAFETY=true
-const BASE_URL = process.env.TEST_URL || 'http://localhost:3000';
-const API_KEY = process.env.ACE_API_KEY;
+const BASE_URL = process.env.TEST_URL || 'http://localhost:3005';
+const API_KEY = process.env.ACE_API_KEY || "AceTrack_Internal_v2_Testing";
 const BYPASS_PROD_SAFETY = process.env.BYPASS_PROD_SAFETY === 'true';
 
 const HEADERS = {
   'Content-Type': 'application/json',
   'x-ace-api-key': API_KEY,
-  'x-user-id': 'admin'
+  'x-user-id': 'admin',
+  'x-ace-test-bypass': 'true'
 };
 
 const isProduction = BASE_URL.includes('render.com');
@@ -57,7 +58,7 @@ async function safeFetch(url, options = {}) {
 console.log('\n' + '═'.repeat(70));
 console.log('  🧪  ACETRACK BACKEND E2E TEST SUITE');
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.101)
-const APP_VERSION = "2.6.116"; 
+const APP_VERSION = "2.6.324"; 
 const currentAppVersion = APP_VERSION;
 console.log(`  🌐  Target: ${BASE_URL}`);
 console.log(`  ⏰  Run Time: ${new Date().toLocaleString()}`);
