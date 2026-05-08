@@ -41,7 +41,7 @@ class ErrorBoundary extends React.Component {
           <TouchableOpacity style={styles.retryButton} onPress={this.handleRetry}>
             <Text style={styles.retryText}>Try Again</Text>
           </TouchableOpacity>
-          {this.state.errorInfo && (
+          {__DEV__ && this.state.errorInfo && (
             <Text style={styles.debugInfo}>
               {this.state.errorInfo.componentStack?.substring(0, 300)}
             </Text>
