@@ -625,6 +625,37 @@ class SyncOrchestrator {
   }
 
   /**
+   * 🛡️ [SYNC_RECOVERY] (v2.6.330)
+   * Manually pull fresh state from the cloud and merge with local state.
+   * This is the definitive fallback when Socket.io fails.
+   */
+  public async forcePullData(): Promise<boolean> {
+    return this.trackOperation('CLOUD_FORCE_PULL', async () => {
+       console.log('[SyncOrchestrator] [FORCE_PULL] Starting manual sync fallback...');
+       
+       const result = await syncApi.pullFromApi(this.userId, this.userToken, this.isAuthMuted);
+       
+       if (!result.success || !result.data) {
+         console.error(`[SyncOrchestrator] [FORCE_PULL] Failed: status=${result.status}`);
+         return false;
+       }
+
+       console.log(`[SyncOrchestrator] [FORCE_PULL] Received cloud state. Version: ${result.data.version || 'unknown'}`);
+       
+       // Process version bump
+       if (typeof result.data.version === 'number' && result.data.version > this.syncVersion) {
+         this.syncVersion = result.data.version;
+       }
+
+       // Perform Merge & Save (isInternal=true to prevent push-back loop)
+       await this.syncAndSaveData(result.data, false, true);
+       
+       console.log('[SyncOrchestrator] [FORCE_PULL] Manual sync complete. UI updated.');
+       return true;
+    });
+  }
+
+  /**
    * 🛡️ DEEP TRIDECA-GUARD AUTHORITY (Guard 1-13)
    * The definitive pipeline for all matchmaking state changes.
    */

@@ -11,7 +11,7 @@ import { useSupportTicketsQuery } from '../stores/hooks';
 const SupportContext = createContext(null);
 
 export const useSupport = () => {
-  const { data: supportTickets } = useSupportTicketsQuery();
+  const supportTickets = useSupportStore(s => s.supportTickets);
   const chatbotMessages = useSupportStore(s => s.chatbotMessages);
   const context = useContext(SupportContext);
 
@@ -37,9 +37,9 @@ export const SupportProvider = ({ children }) => {
     const tickets = useSupportStore.getState().supportTickets;
     
     if (isAdminOrSupport && (!tickets || tickets.length === 0) && !syncAttempted.current && !isSyncing) {
-       console.log("[UI_DEBUG] Tickets empty on mount. Triggering proactive support sync...");
+       console.log("[UI_DEBUG] Tickets empty on mount. Triggering REST-Pull fallback...");
        syncAttempted.current = true;
-       syncAndSaveData({}, true); // Atomic sync to force immediate pull
+       syncOrchestrator.forcePullData(); 
     }
   }, [userRole, syncAndSaveData, isSyncing]);
 

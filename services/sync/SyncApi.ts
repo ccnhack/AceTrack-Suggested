@@ -90,6 +90,47 @@ class SyncApi {
     }
   }
 
+  public async pullFromApi(
+    userId: string | null,
+    userToken: string | null,
+    isAuthMuted: boolean
+  ): Promise<{ success: boolean, data?: any, status?: number }> {
+    const cloudUrl = config.API_BASE_URL;
+    telemetryService.trackMetric('pullAttemptCount');
+
+    if (isAuthMuted) return { success: false, status: 401 };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+    try {
+      const headers: Record<string, string> = {
+        'x-ace-api-key': config.ACE_API_KEY,
+        'x-user-id': userId || 'guest'
+      };
+      if (userToken && Platform.OS !== 'web') headers['Authorization'] = `Bearer ${userToken}`;
+
+      const response = await fetch(`${cloudUrl}${config.getEndpoint('DATA_SYNC')}?syncContext=full_hydrate`, {
+        headers,
+        credentials: 'include',
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        return { success: false, status: response.status };
+      }
+
+      const data = await response.json();
+      return { success: true, data, status: response.status };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      console.error('[SyncApi] API Pull failed:', error);
+      return { success: false };
+    }
+  }
+
   public async reportEmergencyStatus(userId: string, hardwareId: string | null, userToken: string | null, error: string) {
     try {
       const headers: Record<string, string> = {
