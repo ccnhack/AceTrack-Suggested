@@ -23,6 +23,8 @@ export default function createDataRoutes({
   const router = express.Router();
 
 router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
+  const syncStartTime = Date.now();
+  console.time(`[SYNC_TRACE] ${req.ip} TOTAL`);
   try {
     // 🛡️ SCALABILITY ARCHITECTURE (v2.6.316): Prevent OOM crashes on large scale users usage
     // Pre-filter heavy collections at the database level instead of loading the entire DB into Node.js memory.
@@ -60,6 +62,7 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       ]
     };
 
+    console.time(`[SYNC_TRACE] ${req.ip} QUERIES`);
     const [
       state,
       requesterDoc,
@@ -76,10 +79,11 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       // 🛡️ SCALABILITY FIX (v2.6.316): Fetch full profile only for the requester
       Player.findOne({ id: normalizedReqId }).lean(),
       // 🛡️ SCALABILITY FIX (v2.6.316): Fetch all other players with a thin discovery projection (PII-free)
-      // 🛡️ [PRODUCTION HARDENING] (v2.6.324): Support staff need full details (email/phone) to resolve tickets
-      (isAdmin || isSupport) ? Player.find({ id: { $ne: normalizedReqId } }).lean() : Player.find(
+      // 🛡️ [PRODUCTION HARDENING] (v2.6.325): Support staff now use thin projection by default to prevent OOM
+      // PII is only returned for the 'requesterDoc' or specifically requested tickets.
+      isAdmin ? Player.find({ id: { $ne: normalizedReqId } }).lean() : Player.find(
         { id: { $ne: normalizedReqId } }, 
-        { "data.id": 1, "data.name": 1, "data.username": 1, "data.avatar": 1, "data.role": 1, "data.skillLevel": 1, "data.rating": 1, "data.trueSkillRating": 1 }
+        { "data.id": 1, "data.name": 1, "data.username": 1, "data.avatar": 1, "data.role": 1, "data.skillLevel": 1, "data.rating": 1, "data.trueSkillRating": 1, "data.supportStatus": 1 }
       ).lean(),
       isAdmin ? Tournament.find().lean() : Tournament.find().sort({ lastUpdated: -1 }).limit(100).lean(),
       Match.find(matchQuery).lean(),
@@ -89,6 +93,7 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       Matchmaking.find(matchmakingQuery).lean(),
       ChatbotThread.find(chatQuery).lean()
     ]);
+    console.timeEnd(`[SYNC_TRACE] ${req.ip} QUERIES`);
 
     const baseData = (state && state.data) ? state.data : {};
     
@@ -135,12 +140,35 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
     // 🛡️ SECURITY HARDENING: Explicitly exclude 'currentUser' to prevent session shadowing
     delete composedData.currentUser;
 
+    console.timeEnd(`[SYNC_TRACE] ${req.ip} TOTAL`);
+    const duration = Date.now() - syncStartTime;
+    if (duration > 5000) {
+      console.warn(`⚠️ [PERFORMANCE_ALERT] /api/data slow for ${normalizedReqId}: ${duration}ms`);
+      logAudit(req, 'PERFORMANCE_ALERT_SLOW_SYNC', [], { duration, userId: normalizedReqId });
+    }
+
     res.json({ ...composedData, lastUpdated: state?.lastUpdated || new Date(), version: state?.version || 1 });
   } catch (error) {
     console.error('❌ Data Fetch Error:', error.stack);
     res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error during data synchronization.' : error.message });
   }
 });
+
+// GET /api/v1/player/:id (Admin/Support Only)
+router.get('/player/:id', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
+  if (req.userRole !== 'admin' && req.userRole !== 'support') {
+    return res.status(403).json({ error: 'Unauthorized: Administrative access required.' });
+  }
+  
+  const { id } = req.params;
+  const playerDoc = await Player.findOne({ id }).lean();
+  
+  if (!playerDoc) {
+    return res.status(404).json({ error: 'Player not found' });
+  }
+  
+  res.json({ success: true, player: playerDoc.data });
+}));
 
 // GET /api/v1/status
 router.get('/status', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {

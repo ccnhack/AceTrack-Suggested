@@ -8,7 +8,7 @@ import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import { AppState, AuditLog } from '../models/index.mjs';
+import { AppState, AuditLog, Player } from '../models/index.mjs';
 
 // ═══════════════════════════════════════════════════════════════
 // 🔑 Configuration (injected from server.mjs at boot)
@@ -61,8 +61,11 @@ export const apiKeyGuard = async (req, res, next) => {
       // 🛡️ [ROLE-BASED LOCKDOWN CHECK] (v2.6.214)
       // Force logout and concurrent session validation
       if (decoded.role === 'admin' || decoded.role === 'support') {
-         const state = await AppState.findOne().sort({ lastUpdated: -1 }).lean();
-         const targetUser = state?.data?.players?.find(p => p.id === decoded.id);
+         // 🛡️ [PERFORMANCE FIX] (v2.6.325): Bypass monolithic AppState lookup.
+         // Searching through the entire global state blob for every authenticated request was
+         // adding 5-15s of latency on large databases. Targeted Player.findOne is sub-ms.
+         const playerDoc = await Player.findOne({ id: decoded.id }).lean();
+         const targetUser = playerDoc?.data;
          
          if (targetUser) {
             // 1. Force Logout Verification
