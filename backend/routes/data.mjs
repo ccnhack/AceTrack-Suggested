@@ -5,7 +5,7 @@ import mongoose from 'mongoose';
 import { AppState, AuditLog, Player, Tournament, Match, MatchVideo, SupportTicket, Evaluation, Matchmaking, ChatbotThread } from '../models/index.mjs';
 import { asyncHandler, getISTTimestamp } from '../helpers/utils.mjs';
 import { processTournamentWaitlist } from '../promotion_logic.mjs';
-import { apiKeyGuard, sensitiveCacheGuard, validate, SaveDataSchema, DiagnosticsSchema, AutoFlushSchema, getSanitizedState } from '../middleware/security.mjs';
+import { apiKeyGuard, authGuard, sensitiveCacheGuard, validate, SaveDataSchema, DiagnosticsSchema, AutoFlushSchema, getSanitizedState } from '../middleware/security.mjs';
 
 export default function createDataRoutes({
   APP_VERSION,
