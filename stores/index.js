@@ -175,8 +175,12 @@ export const useTournamentsStore = create((set) => {
 export const useSupportStore = create((set) => {
   eventBus.subscribe('ENTITY_UPDATED', async (e) => {
     if (e.payload.entity === 'supportTickets') {
+      console.log(`[SupportStore] Received ENTITY_UPDATED for supportTickets. Source: ${e.payload.source}`);
       const freshData = await syncOrchestrator.getSystemFlag('supportTickets');
-      if (freshData) set({ supportTickets: freshData });
+      if (freshData) {
+        console.log(`[SupportStore] Updating store with ${freshData.length} tickets from storage.`);
+        set({ supportTickets: freshData });
+      }
     }
     if (e.payload.entity === 'chatbotMessages') {
       const freshData = await syncOrchestrator.getSystemFlag('chatbotMessages');

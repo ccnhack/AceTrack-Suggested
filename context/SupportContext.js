@@ -29,27 +29,28 @@ export const SupportProvider = ({ children }) => {
   const { syncAndSaveData, isSyncing } = useSync();
   const { currentUser, userRole, currentUserRef } = useAuth();
 
-  // 🛡️ [SUPPORT_REACTIVE_GUARD] (v2.6.328)
+  const supportTickets = useSupportStore(s => s.supportTickets);
+  const chatbotMessages = useSupportStore(s => s.chatbotMessages);
+
+  // 🛡️ [SUPPORT_REACTIVE_GUARD] (v2.6.332)
   const syncAttempted = React.useRef(false);
 
   React.useEffect(() => {
     const isAdminOrSupport = userRole === 'admin' || userRole === 'support';
-    const tickets = useSupportStore.getState().supportTickets;
     
-    if (isAdminOrSupport && (!tickets || tickets.length === 0) && !syncAttempted.current && !isSyncing) {
+    if (isAdminOrSupport && (!supportTickets || supportTickets.length === 0) && !syncAttempted.current && !isSyncing) {
         syncAttempted.current = true;
-        console.log('[SupportContext] [MOUNT] Triggering mandatory forcePullData for hydration...');
+        console.log('[SupportContext] [MOUNT] Tickets empty. Triggering mandatory forcePullData...');
         syncOrchestrator.forcePullData(); 
       }
-  }, [userRole, syncAndSaveData, isSyncing]);
+  }, [userRole, supportTickets?.length, isSyncing]);
 
   // Track data arrivals
   React.useEffect(() => {
-     const tickets = useSupportStore.getState().supportTickets;
-     if (tickets?.length > 0) {
-        console.log(`[UI_DEBUG] Tickets arrived in UI state: ${tickets.length} items`);
+     if (supportTickets?.length > 0) {
+        console.log(`[UI_DEBUG] Tickets arrived in UI state: ${supportTickets.length} items`);
      }
-  }, [useSupportStore.getState().supportTickets]);
+  }, [supportTickets]);
 
   // 🛡️ [SUPPORT TELEMETRY] (v2.6.273)
   const logSupportActivity = useCallback(async (action, entityId, details) => {
