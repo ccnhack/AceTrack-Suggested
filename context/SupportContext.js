@@ -30,18 +30,18 @@ export const SupportProvider = ({ children }) => {
   const { currentUser, userRole, currentUserRef } = useAuth();
 
   // 🛡️ [SUPPORT_REACTIVE_GUARD] (v2.6.328)
-  // Force a sync if the user is a support agent/admin and the ticket list is empty on mount.
+  const syncAttempted = React.useRef(false);
+
   React.useEffect(() => {
     const isAdminOrSupport = userRole === 'admin' || userRole === 'support';
     const tickets = useSupportStore.getState().supportTickets;
     
-    console.log(`[UI_DEBUG] Support Portal Mount: Role=${userRole}, TicketsCount=${tickets?.length || 0}`);
-    
-    if (isAdminOrSupport && (!tickets || tickets.length === 0)) {
+    if (isAdminOrSupport && (!tickets || tickets.length === 0) && !syncAttempted.current && !isSyncing) {
        console.log("[UI_DEBUG] Tickets empty on mount. Triggering proactive support sync...");
+       syncAttempted.current = true;
        syncAndSaveData({}, true); // Atomic sync to force immediate pull
     }
-  }, [userRole, syncAndSaveData]);
+  }, [userRole, syncAndSaveData, isSyncing]);
 
   // Track data arrivals
   React.useEffect(() => {

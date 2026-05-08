@@ -99,7 +99,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.328';
+const APP_VERSION = '2.6.329';
  
  // 🚀 FORCE REDEPLOY CACHE BUST v2.6.314 
 
@@ -647,7 +647,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "data:", "https://fonts.gstatic.com", "https://fonts.googleapis.com"],
       connectSrc: ["'self'", "https://acetrack-suggested.onrender.com", "https://*.cloudinary.com", "https://*.firebaseio.com", "https://*.googleapis.com"],
-      imgSrc: ["'self'", "data:", "https://*.cloudinary.com", "https://*.dicebear.com", "https://*.googleusercontent.com"],
+      imgSrc: ["'self'", "data:", "https://*.cloudinary.com", "https://*.dicebear.com", "https://*.googleusercontent.com", "https://*.unsplash.com"],
       frameAncestors: ["'none'"],
       upgradeInsecureRequests: [],
     },
@@ -757,7 +757,10 @@ const io = new Server(httpServer, {
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type', 'x-ace-api-key', 'x-socket-id', 'Authorization'],
     credentials: true
-  }
+  },
+  transports: ['websocket', 'polling'], // 🛡️ Stability: Allow fallback
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 // 🔐 SOCKET SECURITY: Auth Handshake (SEC Fix)
