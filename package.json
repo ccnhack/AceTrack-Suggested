@@ -1,6 +1,6 @@
 {
   "name": "acetrack-mobile",
-  "version": "2.6.324",
+  "version": "2.6.327",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",

@@ -105,7 +105,7 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       });
     }
 
-    // 🛡️ [PHASE 1 TRANSITION GUARD] (v2.6.324): Union Merge for all entities
+    // 🛡️ [PHASE 1 TRANSITION GUARD] (v2.6.327): Union Merge for all entities
     // This prevents data loss if some documents are still in the legacy AppState blob.
     const mergeEntities = (legacy = [], distinctDocs = []) => {
       const map = new Map();

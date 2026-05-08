@@ -106,7 +106,7 @@ export const VideoProvider = ({ children }) => {
       
       setMatchVideos(updatedMatchVideos);
       setCurrentUser(updatedUser);
-      // 🛡️ [AUDIT FIX F-3] (v2.6.324): Use Zustand getState() instead of functional updater
+      // 🛡️ [AUDIT FIX F-3] (v2.6.327): Use Zustand getState() instead of functional updater
       const currentPlayers = usePlayersStore.getState().players;
       setPlayers(currentPlayers.map(p => p.id === updatedUser.id ? updatedUser : p));
       
@@ -120,7 +120,7 @@ export const VideoProvider = ({ children }) => {
     if (result.success) {
       const updatedUser = result.currentUser;
       setCurrentUser(updatedUser);
-      // 🛡️ [AUDIT FIX F-3] (v2.6.324): Use Zustand getState() instead of functional updater
+      // 🛡️ [AUDIT FIX F-3] (v2.6.327): Use Zustand getState() instead of functional updater
       const currentPlayers = usePlayersStore.getState().players;
       setPlayers(currentPlayers.map(p => p.id === updatedUser.id ? updatedUser : p));
       syncAndSaveData({ currentUser: updatedUser });
@@ -146,7 +146,7 @@ export const VideoProvider = ({ children }) => {
     const updatedUser = { ...currentUserRef.current, favouritedVideos: updatedFavs };
     
     setCurrentUser(updatedUser);
-    // 🛡️ [AUDIT FIX F-3] (v2.6.324): Use Zustand getState() instead of functional updater
+    // 🛡️ [AUDIT FIX F-3] (v2.6.327): Use Zustand getState() instead of functional updater
     const currentPlayers = usePlayersStore.getState().players;
     setPlayers(currentPlayers.map(p => String(p.id).toLowerCase() === String(updatedUser.id).toLowerCase() ? updatedUser : p));
     syncAndSaveData({ currentUser: updatedUser });
@@ -159,7 +159,7 @@ export const VideoProvider = ({ children }) => {
     syncAndSaveData({ matchVideos: updated });
   }, [syncAndSaveData]);
 
-  // 🛡️ [AUDIT FIX] (v2.6.324): Memoize value to prevent unnecessary re-renders
+  // 🛡️ [AUDIT FIX] (v2.6.327): Memoize value to prevent unnecessary re-renders
   const value = useMemo(() => ({
     matchVideos,
     setMatchVideos,

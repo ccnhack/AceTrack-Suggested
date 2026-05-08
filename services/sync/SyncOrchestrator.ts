@@ -497,7 +497,7 @@ class SyncOrchestrator {
     
     console.log('[SyncOrchestrator] Starting Cloud Push sequence...');
 
-    // 🛡️ [AUDIT FIX S-2] (v2.6.324): Snapshot pending updates before clearing.
+    // 🛡️ [AUDIT FIX S-2] (v2.6.327): Snapshot pending updates before clearing.
     // If the push fails, we restore them so they aren't permanently lost.
     const updates = { ...queueService.getPendingUpdates() };
     const savedPendingSync = [...queueService.getPendingSync()];
@@ -569,7 +569,7 @@ class SyncOrchestrator {
 
       if (success === true) return;
       if (success === false) {
-        // 🛡️ [AUDIT FIX S-2] (v2.6.324): Restore pending updates so they can be retried
+        // 🛡️ [AUDIT FIX S-2] (v2.6.327): Restore pending updates so they can be retried
         await queueService.restorePending(savedPendingSync, updates);
         console.log(`[SyncOrchestrator] Push failed. Restored ${Object.keys(updates).length} pending updates for retry.`);
         return; // Terminal failure
