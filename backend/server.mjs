@@ -99,7 +99,8 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = "2.6.327"; 
+const APP_VERSION = '2.6.328';
+ 
  // 🚀 FORCE REDEPLOY CACHE BUST v2.6.314 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)

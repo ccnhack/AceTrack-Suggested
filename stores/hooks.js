@@ -83,8 +83,8 @@ export function useSupportTicketsQuery() {
       await hydrate();
       return useSupportStore.getState().supportTickets;
     },
-    initialData: supportTickets,
-    staleTime: 10 * 1000, // Tickets need high freshness
+    staleTime: 5 * 1000, // Reduced from 10s to 5s for even higher freshness
+    refetchOnWindowFocus: true
   });
 }
 

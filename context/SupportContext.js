@@ -26,8 +26,30 @@ export const SupportProvider = ({ children }) => {
   const setSupportTicketsStore = useSupportStore(s => s.setSupportTickets);
   const setChatbotMessagesStore = useSupportStore(s => s.setChatbotMessages);
   
-  const { syncAndSaveData } = useSync();
+  const { syncAndSaveData, isSyncing } = useSync();
   const { currentUser, userRole, currentUserRef } = useAuth();
+
+  // 🛡️ [SUPPORT_REACTIVE_GUARD] (v2.6.328)
+  // Force a sync if the user is a support agent/admin and the ticket list is empty on mount.
+  React.useEffect(() => {
+    const isAdminOrSupport = userRole === 'admin' || userRole === 'support';
+    const tickets = useSupportStore.getState().supportTickets;
+    
+    console.log(`[UI_DEBUG] Support Portal Mount: Role=${userRole}, TicketsCount=${tickets?.length || 0}`);
+    
+    if (isAdminOrSupport && (!tickets || tickets.length === 0)) {
+       console.log("[UI_DEBUG] Tickets empty on mount. Triggering proactive support sync...");
+       syncAndSaveData({}, true); // Atomic sync to force immediate pull
+    }
+  }, [userRole, syncAndSaveData]);
+
+  // Track data arrivals
+  React.useEffect(() => {
+     const tickets = useSupportStore.getState().supportTickets;
+     if (tickets?.length > 0) {
+        console.log(`[UI_DEBUG] Tickets arrived in UI state: ${tickets.length} items`);
+     }
+  }, [useSupportStore.getState().supportTickets]);
 
   // 🛡️ [SUPPORT TELEMETRY] (v2.6.273)
   const logSupportActivity = useCallback(async (action, entityId, details) => {

@@ -191,8 +191,10 @@ export const useSupportStore = create((set) => {
     setChatbotMessages: (msgs) => set({ chatbotMessages: msgs }),
 
     hydrate: async () => {
+      const startTime = Date.now();
       const tickets = await syncOrchestrator.getSystemFlag('supportTickets');
       const chatbot = await syncOrchestrator.getSystemFlag('chatbotMessages');
+      console.log(`[STORE_DEBUG] Support Store Hydrate: Loaded ${tickets?.length || 0} tickets in ${Date.now() - startTime}ms`);
       if (tickets) set({ supportTickets: tickets });
       if (chatbot) set({ chatbotMessages: chatbot });
     }

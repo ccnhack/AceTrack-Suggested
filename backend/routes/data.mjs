@@ -140,11 +140,18 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
     // 🛡️ SECURITY HARDENING: Explicitly exclude 'currentUser' to prevent session shadowing
     delete composedData.currentUser;
 
+    // 🛡️ [PERFORMANCE INSTRUMENTATION] (v2.6.325)
+    if (isSupport) {
+      console.log(`[SYNC_DEBUG] Support Data Projection: ${composedData.players?.length || 0} players, ${composedData.matches?.length || 0} matches processed.`);
+    }
+
     console.timeEnd(`[SYNC_TRACE] ${req.ip} TOTAL`);
     const duration = Date.now() - syncStartTime;
     if (duration > 5000) {
       console.warn(`⚠️ [PERFORMANCE_ALERT] /api/data slow for ${normalizedReqId}: ${duration}ms`);
       logAudit(req, 'PERFORMANCE_ALERT_SLOW_SYNC', [], { duration, userId: normalizedReqId });
+    } else {
+      console.log(`[SYNC_DEBUG] /api/data sync complete for ${normalizedReqId} in ${duration}ms`);
     }
 
     res.json({ ...composedData, lastUpdated: state?.lastUpdated || new Date(), version: state?.version || 1 });
