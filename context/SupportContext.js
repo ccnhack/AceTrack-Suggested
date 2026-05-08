@@ -37,10 +37,10 @@ export const SupportProvider = ({ children }) => {
     const tickets = useSupportStore.getState().supportTickets;
     
     if (isAdminOrSupport && (!tickets || tickets.length === 0) && !syncAttempted.current && !isSyncing) {
-       console.log("[UI_DEBUG] Tickets empty on mount. Triggering REST-Pull fallback...");
-       syncAttempted.current = true;
-       syncOrchestrator.forcePullData(); 
-    }
+        syncAttempted.current = true;
+        console.log('[SupportContext] [MOUNT] Triggering mandatory forcePullData for hydration...');
+        syncOrchestrator.forcePullData(); 
+      }
   }, [userRole, syncAndSaveData, isSyncing]);
 
   // Track data arrivals

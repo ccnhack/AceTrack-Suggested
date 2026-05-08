@@ -40,8 +40,13 @@ class SyncOrchestrator {
     version: 1
   };
   private currentSchemaVersion = 1;
+  private isCloudOnline: boolean = false;
 
-  private constructor() {}
+  private constructor() {
+    eventBus.subscribe('SYNC_STATUS_CHANGED', (data: any) => {
+      this.isCloudOnline = !!data.isOnline;
+    });
+  }
 
   /**
    * System Flags (Phase 0.1/0.11 Consolidation)
@@ -163,6 +168,19 @@ class SyncOrchestrator {
         }
 
         eventBus.emit('INITIALIZATION_COMPLETE', { userId });
+
+        // 🛡️ [POLLING_FALLBACK] (v2.6.331):
+        // If Socket.io fails (common on some corporate/proxy environments),
+        // we start a low-frequency REST poll to ensure the UI stays updated.
+        if (Platform.OS === 'web') {
+           setInterval(() => {
+             // Only poll if socket is NOT connected or if we have high conflict history
+             if (!this.isCloudOnline) {
+               console.log('[SyncOrchestrator] [POLLING] Socket disconnected. Performing REST poll...');
+               this.forcePullData();
+             }
+           }, 20000); // 20s poll is safe for Render free tier
+        }
       } catch (e: any) {
         console.error('[SyncOrchestrator] FATAL_INIT_CRASH:', e);
         logger.logAction('SYNC_ORCHESTRATOR_INIT_FATAL', { error: e.message, stack: e.stack });
@@ -190,6 +208,7 @@ class SyncOrchestrator {
     // We increase headroom to 90s for these specific labels to prevent false positives.
     const threshold = (labelBase.includes('BULK') || labelBase.includes('CLOUD_INIT')) ? 90000 : 35000;
 
+    console.log(`[SyncOrchestrator] [SYNC_START] Key: ${labelBase}, Internal: ${isInternal}`);
     return this.trackOperation(labelBase, async () => {
       // 🛡️ [BACKPRESSURE GUARD] (v2.6.125)
       const qLen = storage.getQueueLength();
@@ -468,7 +487,9 @@ class SyncOrchestrator {
         }
 
         // Merge using dataMerger
-        const { result } = dataMerger.mergeData(localData, serverData);
+        console.log(`[SyncOrchestrator] [SELF_HEAL] Merging ${Object.keys(serverData).length} keys from cloud...`);
+        const { result, changedKeys } = dataMerger.mergeData(localData, serverData);
+        console.log(`[SyncOrchestrator] [SELF_HEAL] Merge complete. Changed keys: ${changedKeys.join(', ') || 'none'}`);
 
         // Save merged result internally (isInternal=true suppresses push-back)
         await this.syncAndSaveData(result, false, true);
@@ -512,21 +533,17 @@ class SyncOrchestrator {
       return;
     }
 
-    console.log(`[SyncOrchestrator] [${new Date().toISOString()}] Starting Cloud Push sequence...`);
-
+    let workingUpdates = { ...updates };
     let retryCount = 0;
     const MAX_RETRIES = 2;
 
     while (retryCount <= MAX_RETRIES) {
-      // 🛡️ [GRANULAR TRACKING] (v2.6.158)
-      // Wrap each discrete attempt in a separate trackOperation so the watchdog
-      // resets its 30s timer for every network roundtrip.
       const label = `CLOUD_PUSH_ATTEMPT_${retryCount + 1}${isInternal ? '_INTERNAL' : ''}`;
       
-      const success = await this.trackOperation(label, async () => {
+      const status: any = await this.trackOperation(label, async () => {
         try {
           const result = await syncApi.pushToApi(
-            updates,
+            workingUpdates,
             this.syncVersion,
             this.userId,
             this.userToken,
@@ -537,53 +554,48 @@ class SyncOrchestrator {
           if (result.success === true) {
             await queueService.clearPending();
             telemetryService.trackMetric('lastSyncSuccess');
-            return true; 
+            return 'SUCCESS'; 
           }
 
-          if (result.success === 'RETRY_CONFLICT' && retryCount < MAX_RETRIES) {
-            console.log(`[SyncOrchestrator] [CONFLICT] Attempt ${retryCount + 1} failed. Self-healing...`);
-            if (result.newServerVersion) {
-               this.syncVersion = result.newServerVersion;
-            }
+          if (result.success === 'RETRY_CONFLICT') {
+            console.log('[SyncOrchestrator] ⚔️ Conflict detected. Healing...');
+            if (result.newServerVersion) this.syncVersion = result.newServerVersion;
             await this.selfHealConflict();
-            return 'RETRY_CONFLICT';
+            
+            // 🛡️ [SYNC_RECOVERY] (v2.6.331): After heal, we MUST pull fresh state for the next attempt.
+            const freshUpdates: Record<string, any> = {};
+            for (const key of Object.keys(workingUpdates)) {
+               if (key === 'version' || key === 'isInternal') continue;
+               freshUpdates[key] = await storage.getItem(key);
+            }
+            workingUpdates = freshUpdates;
+            return 'RETRY_CONTINUE';
           }
 
-          if (result.success === 'RETRY_RATE_LIMIT' && retryCount < MAX_RETRIES) {
-            return 'RETRY_RATE_LIMIT';
-          }
+          if (result.success === 'RETRY_RATE_LIMIT') return 'RETRY_WAIT';
 
-          if (result.status === 401) {
-             this.isAuthMuted = true;
-          }
+          if (result.status === 401) this.isAuthMuted = true;
 
           telemetryService.trackMetric('pushFailureCount');
-          telemetryService.trackIncident('reliability', `Push failed: Server rejected with ${result.status}`);
-          return false;
+          return 'FAILURE';
         } catch (error: any) {
           console.error('[SyncOrchestrator] performCloudPush error:', error);
-          telemetryService.trackIncident('reliability', `Push Exception: ${error?.message}`);
-          return false;
+          return 'FAILURE';
         }
       });
 
-      if (success === true) return;
-      if (success === false) {
-        // 🛡️ [AUDIT FIX S-2] (v2.6.327): Restore pending updates so they can be retried
+      if (status === 'SUCCESS') return;
+      if (status === 'FAILURE') {
         await queueService.restorePending(savedPendingSync, updates);
-        console.log(`[SyncOrchestrator] Push failed. Restored ${Object.keys(updates).length} pending updates for retry.`);
-        return; // Terminal failure
+        return; 
       }
 
-      // Handle Retries
       retryCount++;
-      if (success === 'RETRY_RATE_LIMIT') {
+      if (status === 'RETRY_WAIT') {
         const backoff = 2000 * retryCount;
-        console.log(`[SyncOrchestrator] [RETRY] Backing off ${backoff}ms...`);
-        // 🛡️ [IDLE EXCLUSION] Sleep happens OUTSIDE trackOperation to avoid watchdog triggers
         await new Promise(r => setTimeout(r, backoff));
       }
-      // For RETRY_CONFLICT, we continue immediately after self-healing
+      // 'RETRY_CONTINUE' (Conflict) proceeds immediately to the next loop iteration with workingUpdates updated.
     }
   }
 

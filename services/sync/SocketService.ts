@@ -54,26 +54,27 @@ class SocketService {
 
     try {
       this.socket.on('connect', () => {
-        console.log('[SocketService] Socket connected');
+        console.log(`[SocketService] Connected! ID: ${this.socket?.id}`);
         eventBus.emit('SYNC_STATUS_CHANGED', { isOnline: true, source: 'socket' });
       });
 
-      this.socket.on('disconnect', () => {
-        console.log('[SocketService] Socket disconnected');
+      this.socket.on('disconnect', (reason) => {
+        console.warn(`[SocketService] Disconnected. Reason: ${reason}`);
         eventBus.emit('SYNC_STATUS_CHANGED', { isOnline: false, source: 'socket' });
       });
 
       this.socket.on('connect_error', (err: any) => {
-        console.error(`[SocketService] Socket connection error: ${err.message}`);
+        console.error(`[SocketService] Connection Error: ${err.message}`);
+        console.log('[SocketService] Query Params:', this.socket?.io.opts.query);
       });
 
       this.socket.on('data_updated', async (data) => {
         try {
+          console.log(`[SocketService] [DATA_UPDATED] Received keys: ${Object.keys(data?.updates || {}).join(', ')}`);
           if (data?.lastSocketId && this.socket?.id && data.lastSocketId === this.socket.id) {
-            console.log('[SocketService] Skipping self-originated socket update.');
+            console.log('[SocketService] [DATA_UPDATED] Skipping self-originated update.');
             return;
           }
-          console.log('[SocketService] Received data_updated via socket');
           await onRemoteUpdate(data.updates);
         } catch (e: any) {
           console.error('[SocketService] socket:data_updated error:', e);

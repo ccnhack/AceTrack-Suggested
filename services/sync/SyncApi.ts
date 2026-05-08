@@ -110,20 +110,22 @@ class SyncApi {
       };
       if (userToken && Platform.OS !== 'web') headers['Authorization'] = `Bearer ${userToken}`;
 
+      console.log(`[SyncApi] [PULL] Initiating REST pull from ${cloudUrl}${config.getEndpoint('DATA_SYNC')}`);
       const response = await fetch(`${cloudUrl}${config.getEndpoint('DATA_SYNC')}?syncContext=full_hydrate`, {
         headers,
         credentials: 'include',
         signal: controller.signal
       });
 
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        return { success: false, status: response.status };
+      console.log(`[SyncApi] [PULL] Server responded with status ${response.status}`);
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`[SyncApi] [PULL] Data received successfully. Cloud Version: ${data.version || '0'}`);
+        return { success: true, data, status: response.status };
       }
 
-      const data = await response.json();
-      return { success: true, data, status: response.status };
+      clearTimeout(timeoutId);
+      return { success: false, status: response.status };
     } catch (error) {
       clearTimeout(timeoutId);
       console.error('[SyncApi] API Pull failed:', error);
