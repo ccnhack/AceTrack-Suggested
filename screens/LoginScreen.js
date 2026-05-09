@@ -302,13 +302,22 @@ const LoginScreen = ({ navigation }) => {
             Alert.alert("Success", "Mail Sent! Check your registered email inbox.");
           }
         } else {
-          Alert.alert("Error", data.message || data.error || "Failed to process request.");
+          const errMsg = data.message || data.error || "Failed to process request.";
+          if (Platform.OS === 'web') {
+            window.alert("Error: " + errMsg);
+          } else {
+            Alert.alert("Error", errMsg);
+          }
         }
       } catch (e) {
         const msg = e.name === 'AbortError' 
           ? "Request timed out. The email server may be busy — please try again in a moment."
           : "Please check your connection and try again.";
-        Alert.alert("Network Error", msg);
+        if (Platform.OS === 'web') {
+          window.alert("Network Error: " + msg);
+        } else {
+          Alert.alert("Network Error", msg);
+        }
       } finally {
         setIsForgotLoading(false);
       }
