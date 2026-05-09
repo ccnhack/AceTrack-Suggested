@@ -49,7 +49,8 @@ export function usePlayersQuery() {
       await hydrate();
       return usePlayersStore.getState().players;
     },
-    initialData: players,
+    // 🛡️ [BUG FIX]: Use placeholderData so it shows initial state but still runs queryFn to hydrate
+    placeholderData: players,
     staleTime: 60 * 1000, // Players change less frequently
   });
 }
@@ -66,7 +67,7 @@ export function useTournamentsQuery() {
       await hydrate();
       return useTournamentsStore.getState().tournaments;
     },
-    initialData: tournaments,
+    placeholderData: tournaments,
     staleTime: 30 * 1000,
   });
 }
@@ -83,6 +84,7 @@ export function useSupportTicketsQuery() {
       await hydrate();
       return useSupportStore.getState().supportTickets;
     },
+    placeholderData: supportTickets,
     staleTime: 5 * 1000, // Reduced from 10s to 5s for even higher freshness
     refetchOnWindowFocus: true
   });
@@ -100,7 +102,7 @@ export function useMatchmakingQuery() {
       await hydrate();
       return useMatchmakingStore.getState().matchmaking;
     },
-    initialData: matchmaking,
+    placeholderData: matchmaking,
     staleTime: 30 * 1000,
   });
 }
@@ -117,7 +119,7 @@ export function useEvaluationsQuery() {
       await hydrate();
       return useEvaluationsStore.getState().evaluations;
     },
-    initialData: evaluations,
+    placeholderData: evaluations,
     staleTime: 60 * 1000,
   });
 }

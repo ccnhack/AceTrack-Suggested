@@ -85,7 +85,7 @@ const AdminRecordingsDashboard = ({
       const q = searchQuery.toLowerCase();
       videos = videos.filter(v => 
         (v.matchId || '').toLowerCase().includes(q) || 
-        (v.playerIds || []).some(pid => (players || []).find(p => p.id === pid)?.name.toLowerCase().includes(q))
+        (v.playerIds || []).some(pid => (players || []).find(p => p.id === pid)?.name?.toLowerCase().includes(q))
       );
     }
     return videos;
