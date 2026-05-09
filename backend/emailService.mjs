@@ -11,7 +11,7 @@ dotenv.config();
 let transporter;
 function getTransporter() {
   if (!transporter) {
-    if (!process.env.GMAIL_USER || "acetrack.noreply@gmail.com" || !process.env.GMAIL_APP_PASSWORD) {
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
       console.warn("⚠️ GMAIL_USER or GMAIL_APP_PASSWORD is not set. Emails will fail.");
     }
     transporter = nodemailer.createTransport({

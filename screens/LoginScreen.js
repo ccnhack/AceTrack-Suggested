@@ -131,7 +131,8 @@ const LoginScreen = ({ navigation }) => {
           return;
         } else if (!supportRes.ok && username.toLowerCase().trim() !== 'admin') {
           // 🛡️ [SECURITY HARDENING] (v2.6.238)
-          if (supportRes.status === 403) {
+          // Stop fallback if the user is explicitly denied or if they simply typed the wrong password for a valid support account.
+          if (supportRes.status === 403 || (supportRes.status === 401 && supportData.error === 'Invalid password for support account.')) {
             setError(supportData.error || supportData.message || 'Login denied by server.');
             setIsLoading(false);
             return;

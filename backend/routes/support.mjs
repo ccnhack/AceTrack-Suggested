@@ -980,7 +980,7 @@ router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
         console.log(`[RE-ONBOARD] Generated new credentials for ${user.email}`);
         
         // 📧 Send Welcome Back email with new access key
-        sendReOnboardingEmail(user.email, user.name, newPassword);
+        await sendReOnboardingEmail(user.email, user.name, newPassword);
       }
     }
     if (level) {
@@ -990,18 +990,18 @@ router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
 
       // 📧 Trigger Promotion/Demotion Email if level changed (v2.6.148)
       if (oldLevel !== level) {
-         const LEVEL_RANKS = { 'Trainee': 1, 'Specialist': 2, 'Senior': 3 };
+         const LEVEL_RANKS = { 'Intern': 1, 'Grade-3': 2, 'Grade-5': 3, 'Grade-7': 4, 'Team Lead': 5, 'Manager': 6 };
          const oldRank = LEVEL_RANKS[oldLevel] || 0;
          const newRank = LEVEL_RANKS[level] || 0;
 
          if (newRank < oldRank) {
             // Demotion: Use the supportive, growth-focused template
             console.log(`[LEVEL] Demoting ${user.email} from ${oldLevel} to ${level}`);
-            sendDemotionEmail(user.email, user.name, level);
+            await sendDemotionEmail(user.email, user.name, level);
          } else {
             // Promotion: Use the celebratory template
             console.log(`[LEVEL] Promoting ${user.email} from ${oldLevel} to ${level}`);
-            sendPromotionEmail(user.email, user.name, level);
+            await sendPromotionEmail(user.email, user.name, level);
          }
       }
     }
@@ -1022,7 +1022,7 @@ router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
 
        if (status === 'terminated') {
          // 📧 Trigger Termination Email
-         sendTerminationEmail(user.email, user.name);
+         await sendTerminationEmail(user.email, user.name);
        }
     }
 
