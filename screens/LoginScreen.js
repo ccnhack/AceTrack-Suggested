@@ -137,6 +137,34 @@ const LoginScreen = ({ navigation }) => {
             return;
           }
         }
+
+        // 3. User Login (Regular Users)
+        if (username.toLowerCase().trim() !== 'admin') {
+          const userUrl = `${config.API_BASE_URL}${config.getEndpoint('USER_LOGIN')}`;
+          const userRes = await fetch(userUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-ace-api-key': config.PUBLIC_APP_ID,
+            },
+            credentials: 'include',
+            body: JSON.stringify({ identifier: username, password }),
+          });
+          
+          if (userRes.ok) {
+            const userData = await userRes.json();
+            if (userData.success && userData.user) {
+              onLoginSuccess(userData.user.role || 'user', { ...userData.user, token: userData.token });
+              return;
+            }
+          } else if (userRes.status === 401 || userRes.status === 403) {
+            // Only block fallback if it's a definitive credential rejection
+            const userData = await userRes.json();
+            setError(userData.error || 'Invalid credentials.');
+            setIsLoading(false);
+            return;
+          }
+        }
       } catch (serverErr) {
         console.warn('Network issue, falling back to local auth if available:', serverErr.message);
       }

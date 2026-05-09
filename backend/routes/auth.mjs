@@ -255,6 +255,83 @@ export default function createAuthRoutes({
   });
 
   // ═══════════════════════════════════════════════════════════════
+  // 🧑‍💻 REGULAR USER LOGIN
+  // ═══════════════════════════════════════════════════════════════
+  router.post('/user/login', loginLimiter, asyncHandler(async (req, res) => {
+    const { identifier, password } = req.body;
+    if (!identifier || !password) {
+      return res.status(400).json({ error: 'Username/Email and Password are required.' });
+    }
+
+    const search = String(identifier).toLowerCase().trim();
+    if (search === 'admin') {
+      return res.status(403).json({ error: 'Access Denied. Use the administrator login.' });
+    }
+
+    const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const searchReg = new RegExp(`^${escapedSearch}$`, 'i');
+    
+    // Search for regular users, excluding admin and support
+    const userDoc = await Player.findOne({
+      $or: [
+        { "data.email": searchReg },
+        { id: searchReg },
+        { "data.username": searchReg }
+      ]
+    }).lean();
+    
+    const user = userDoc?.data;
+
+    if (!user) {
+      return res.status(401).json({ error: 'User not found.' });
+    }
+    
+    if (user.role === 'admin' || user.role === 'support') {
+      return res.status(403).json({ error: 'Staff must use their dedicated login portals.' });
+    }
+
+    const userPassword = user.password;
+    if (!userPassword) {
+      return res.status(401).json({ error: 'Account not fully set up. Please reset your password.' });
+    }
+    
+    let isMatch = false;
+    try {
+      if (userPassword.startsWith('$2a$') || userPassword.startsWith('$2b$')) {
+        isMatch = bcrypt.compareSync(password, userPassword);
+      } else {
+        isMatch = userPassword === password;
+        if (isMatch) {
+          console.warn(`🛡️ [SECURITY] Auto-hashing plaintext password for user ${user.id}.`);
+          const hashed = bcrypt.hashSync(password, 10);
+          Player.updateOne({ id: user.id }, { $set: { 'data.password': hashed, lastUpdated: new Date() } }).catch(e => console.error(e));
+        }
+      }
+    } catch (e) {
+      console.error('[AUTH] Password comparison error:', e.message);
+      isMatch = false;
+    }
+
+    if (!isMatch) {
+      await trackLoginAttempt(req, search, password, false);
+      return res.status(401).json({ error: 'Invalid password.' });
+    }
+
+    await trackLoginAttempt(req, search, password, true);
+
+    const { password: _pw, pushTokens, devices, ...safeUser } = user;
+    
+    // Issue JWT with Basic scope
+    const token = signToken({ 
+      id: user.id, 
+      role: user.role || 'user', 
+      scopes: ['read:basic'] 
+    });
+
+    res.json({ success: true, token, user: safeUser });
+  }));
+
+  // ═══════════════════════════════════════════════════════════════
   // 🔐 SUPPORT STAFF LOGIN (v2.6.170)
   // ═══════════════════════════════════════════════════════════════
 

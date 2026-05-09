@@ -33,7 +33,7 @@ const ACE_API_KEY = (Constants.expoConfig?.extra?.aceApiKey)
   || null;
 
 export default {
-  APP_VERSION: '2.6.332',
+  APP_VERSION: '2.6.333',
   get API_BASE_URL() { return _API_BASE_URL; },
   set API_BASE_URL(val) { _API_BASE_URL = val; },
   CLOUD_API_URL,
@@ -52,6 +52,7 @@ export default {
       'ADMIN_LOGIN': '/api/v1/admin/login',
       'ADMIN_VERIFY': '/api/v1/admin/verify-pin',
       'SUPPORT_LOGIN': '/api/v1/support/login',
+      'USER_LOGIN': '/api/v1/user/login',
       'SUPPORT_RESET': '/api/v1/support/password-reset/request',
       'DIAGNOSTICS': '/api/diagnostics',
       'DATA_SYNC': '/api/data',
