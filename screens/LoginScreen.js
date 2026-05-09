@@ -277,6 +277,10 @@ const LoginScreen = ({ navigation }) => {
 
       setIsForgotLoading(true);
       try {
+        // 🛡️ [PRODUCTION HARDENING]: 25s timeout to prevent UI hanging if SMTP is slow
+        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const timeoutId = controller ? setTimeout(() => controller.abort(), 25000) : null;
+        
         const res = await fetch(`${config.API_BASE_URL}${config.getEndpoint('SUPPORT_RESET')}`, {
           method: 'POST',
           headers: { 
@@ -284,8 +288,10 @@ const LoginScreen = ({ navigation }) => {
             'x-ace-api-key': config.PUBLIC_APP_ID
           },
           credentials: 'include',
-          body: JSON.stringify({ identifier: nUser })
+          body: JSON.stringify({ identifier: nUser }),
+          ...(controller ? { signal: controller.signal } : {})
         });
+        if (timeoutId) clearTimeout(timeoutId);
         
         const data = await res.json();
         if (res.ok) {
@@ -299,7 +305,10 @@ const LoginScreen = ({ navigation }) => {
           Alert.alert("Error", data.message || data.error || "Failed to process request.");
         }
       } catch (e) {
-        Alert.alert("Network Error", "Please check your connection and try again.");
+        const msg = e.name === 'AbortError' 
+          ? "Request timed out. The email server may be busy — please try again in a moment."
+          : "Please check your connection and try again.";
+        Alert.alert("Network Error", msg);
       } finally {
         setIsForgotLoading(false);
       }
