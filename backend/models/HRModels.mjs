@@ -42,8 +42,8 @@ const PayslipSchema = new mongoose.Schema({
     uploadedAt: { type: Date, default: Date.now }
 });
 
-export const LeaveRequest = mongoose.model('LeaveRequest', LeaveRequestSchema);
-export const Document = mongoose.model('Document', DocumentSchema);
-export const PerformanceReview = mongoose.model('PerformanceReview', PerformanceReviewSchema);
-export const Attendance = mongoose.model('Attendance', AttendanceSchema);
-export const Payslip = mongoose.model('Payslip', PayslipSchema);
+export const LeaveRequest = mongoose.models.LeaveRequest || mongoose.model('LeaveRequest', LeaveRequestSchema);
+export const Document = mongoose.models.Document || mongoose.model('Document', DocumentSchema);
+export const PerformanceReview = mongoose.models.PerformanceReview || mongoose.model('PerformanceReview', PerformanceReviewSchema);
+export const Attendance = mongoose.models.Attendance || mongoose.model('Attendance', AttendanceSchema);
+export const Payslip = mongoose.models.Payslip || mongoose.model('Payslip', PayslipSchema);

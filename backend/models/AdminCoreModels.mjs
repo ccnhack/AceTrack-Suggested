@@ -16,5 +16,5 @@ const OrgSettingSchema = new mongoose.Schema({
     updatedAt: { type: Date, default: Date.now }
 });
 
-export const AuditLog = mongoose.model('AuditLog', AuditLogSchema);
-export const OrgSetting = mongoose.model('OrgSetting', OrgSettingSchema);
+export const AuditLog = mongoose.models.AuditLog || mongoose.model('AuditLog', AuditLogSchema);
+export const OrgSetting = mongoose.models.OrgSetting || mongoose.model('OrgSetting', OrgSettingSchema);

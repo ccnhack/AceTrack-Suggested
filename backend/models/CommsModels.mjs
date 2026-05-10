@@ -14,5 +14,5 @@ const AnnouncementSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
-export const OrgMessage = mongoose.model('OrgMessage', OrgMessageSchema);
-export const Announcement = mongoose.model('Announcement', AnnouncementSchema);
+export const OrgMessage = mongoose.models.OrgMessage || mongoose.model('OrgMessage', OrgMessageSchema);
+export const Announcement = mongoose.models.Announcement || mongoose.model('Announcement', AnnouncementSchema);
