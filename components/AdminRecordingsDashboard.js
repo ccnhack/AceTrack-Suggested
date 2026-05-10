@@ -49,11 +49,8 @@ const AdminRecordingsDashboard = ({
   const [showTrashOnly, setShowTrashOnly] = useState(false);
   const [selectedTrashIds, setSelectedTrashIds] = useState([]);
 
-  useEffect(() => {
-    if (pendingDeletions === 0 && showDeletionPopup) {
-      setShowDeletionPopup(false);
-    }
-  }, [pendingDeletions, showDeletionPopup]);
+
+
 
   const academies = useMemo(() => (players || []).filter(p => p && (p.role === 'academy' || p.id?.includes('academy'))), [players]);
 
@@ -69,6 +66,13 @@ const AdminRecordingsDashboard = ({
   const pendingDeletions = (matchVideos || []).filter(v => v && v.adminStatus === 'Deletion Requested').length;
   const trashVideosCount = (trashVideos || []).length;
   const totalRevenue = (activeVideos || []).reduce((sum, v) => sum + (v.revenue || 0), 0);
+
+  // 🛡️ Auto-close deletion popup when no pending deletions remain
+  useEffect(() => {
+    if (pendingDeletions === 0 && showDeletionPopup) {
+      setShowDeletionPopup(false);
+    }
+  }, [pendingDeletions, showDeletionPopup]);
 
   const filteredVideos = useMemo(() => {
     let videos = showTrashOnly ? trashVideos : activeVideos;
