@@ -117,6 +117,21 @@ const OrgChatScreen = ({ navigation }) => {
     return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
 
+  const getStatusText = (contact) => {
+    if (!contact) return '';
+    const theirMessages = (messages || []).filter(m => String(m.senderId) === String(contact.id));
+    if (theirMessages.length > 0) {
+      const lastMsg = theirMessages[theirMessages.length - 1];
+      const diffMs = new Date() - new Date(lastMsg.timestamp);
+      const diffMins = Math.floor(diffMs / 60000);
+      if (diffMins < 5) return 'Online';
+      if (diffMins < 60) return `Active ${diffMins} mins ago`;
+      if (diffMins < 1440) return `Active ${Math.floor(diffMins/60)} hours ago`;
+      return `Active yesterday`;
+    }
+    return 'Online'; // Fallback for team members with no messages
+  };
+
   // ─── Contact List Panel ───────────────────────
   const renderContactList = () => (
     <View style={[styles.contactPanel, isMobileWeb && selectedContact && { display: 'none' }]}>
@@ -179,8 +194,11 @@ const OrgChatScreen = ({ navigation }) => {
                   onPress={() => setSelectedContact(contact)}
                   activeOpacity={0.7}
                 >
-                  <View style={[styles.avatar, hasUnread ? styles.avatarActive : (isActive && { backgroundColor: '#475569' })]}>
-                    <Text style={[styles.avatarText, (isActive || hasUnread) && { color: '#FFF' }]}>{getInitials(contact.name)}</Text>
+                  <View style={styles.avatarContainer}>
+                    <View style={[styles.avatar, hasUnread ? styles.avatarActive : (isActive && { backgroundColor: '#475569' })]}>
+                      <Text style={[styles.avatarText, (isActive || hasUnread) && { color: '#FFF' }]}>{getInitials(contact.name)}</Text>
+                    </View>
+                    {getStatusText(contact) === 'Online' && <View style={styles.avatarOnlineDot} />}
                   </View>
                   <View style={styles.contactInfo}>
                     <View style={styles.contactNameRow}>
@@ -241,8 +259,14 @@ const OrgChatScreen = ({ navigation }) => {
             <Text style={styles.chatHeaderAvatarText}>{getInitials(selectedContact.name)}</Text>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.chatHeaderName}>{selectedContact.name || 'Unknown'}</Text>
-            <Text style={styles.chatHeaderRole}>{(selectedContact.role || '').charAt(0).toUpperCase() + (selectedContact.role || '').slice(1)}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.chatHeaderName}>{selectedContact.name || 'Unknown'}</Text>
+              <View style={[styles.statusIndicator, { backgroundColor: getStatusText(selectedContact) === 'Online' ? '#10B981' : '#94A3B8' }]} />
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.chatHeaderRole}>{(selectedContact.role || '').charAt(0).toUpperCase() + (selectedContact.role || '').slice(1)}</Text>
+              <Text style={styles.statusText}> • {getStatusText(selectedContact)}</Text>
+            </View>
           </View>
         </View>
 
@@ -379,7 +403,13 @@ const styles = StyleSheet.create({
     borderBottomColor: '#1E293B',
   },
   contactItemActive: { backgroundColor: '#1E293B' },
-  contactItemUnread: { backgroundColor: 'rgba(99, 102, 241, 0.2)' },
+  contactItemUnread: {
+    backgroundColor: 'rgba(99, 102, 241, 0.2)'
+  },
+  avatarContainer: {
+    marginRight: 14,
+    position: 'relative'
+  },
   avatar: {
     width: 44,
     height: 44,
@@ -387,7 +417,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#334155',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+  },
+  avatarOnlineDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10B981',
+    borderWidth: 2,
+    borderColor: '#0F172A'
   },
   avatarActive: { backgroundColor: '#6366F1' },
   avatarText: { fontSize: 15, fontWeight: '800', color: '#94A3B8' },
@@ -422,7 +462,22 @@ const styles = StyleSheet.create({
     marginRight: 14,
   },
   chatHeaderAvatarText: { color: '#FFF', fontSize: 14, fontWeight: '800' },
-  chatHeaderName: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
+  chatHeaderName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginRight: 6
+  },
+  statusIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '500'
+  },
   chatHeaderRole: { fontSize: 12, color: '#64748B', textTransform: 'capitalize' },
 
   // ─── Empty Chat ───────────────

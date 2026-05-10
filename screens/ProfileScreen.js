@@ -534,7 +534,7 @@ const ProfileScreen = ({ navigation }) => {
 
               <TouchableOpacity 
                 style={styles.featureTile} 
-                onPress={() => setActiveSupportModal('org_chat')}
+                onPress={() => navigation.navigate('OrgChat')}
               >
                 <View style={[styles.featureIcon, { backgroundColor: '#F0FDF4' }]}>
                   <Ionicons name="chatbubbles-outline" size={24} color="#16A34A" />
