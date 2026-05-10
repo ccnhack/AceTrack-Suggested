@@ -508,7 +508,7 @@ const ProfileScreen = ({ navigation }) => {
 
               <TouchableOpacity 
                 style={styles.featureTile} 
-                onPress={() => setActiveSupportModal('support_tickets')}
+                onPress={() => setShowSupport(true)}
               >
                 <View style={[styles.featureIcon, { backgroundColor: '#FDF2F8' }]}>
                   <Ionicons name="ticket-outline" size={24} color="#DB2777" />

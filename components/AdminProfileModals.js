@@ -6,14 +6,11 @@ import { useAdminCoreStore } from '../stores/useAdminCoreStore';
 import { useHrStore } from '../stores/useHrStore';
 import { useCommsStore } from '../stores/useCommsStore';
 import { socketService } from '../services/sync/SocketService';
-import { SupportTicketSystem } from './SupportTicketSystem';
-import { useSupport } from '../context/SupportContext';
 
 export default function AdminProfileModals({ visibleModal, onClose, user }) {
   const { auditLogs, orgSettings, teamDirectory, isLoading: isAdminLoading, fetchAuditLogs, fetchOrgSettings, fetchTeamDirectory, saveOrgSetting } = useAdminCoreStore();
   const { leaveRequests, policies, reviews, attendance, payslips, documents, isLoading: isHrLoading, fetchLeaveRequests, fetchPolicies, fetchReviews, fetchAttendance, checkIn, checkOut, fetchPayslips, fetchDocuments, submitLeaveRequest } = useHrStore();
   const { messages, announcements, isLoading: isCommsLoading, fetchMessages, sendMessage, appendMessage, fetchAnnouncements } = useCommsStore();
-  const { supportTickets, onSaveTicket, onReplyTicket, onUpdateTicketStatus, onMarkSeen, onRetryMessage } = useSupport();
 
   useEffect(() => {
     if (visibleModal === 'audit_logs') fetchAuditLogs();
@@ -53,7 +50,6 @@ export default function AdminProfileModals({ visibleModal, onClose, user }) {
                visibleModal === 'holidays' ? 'Holidays' :
                visibleModal === 'documents' ? 'Documents' :
                visibleModal === 'org_chat' ? 'Org Chat' : 
-               visibleModal === 'support_tickets' ? 'Support Tickets' :
                visibleModal === 'announcements' ? 'Announcements' : 'Feature'}
             </Text>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -79,21 +75,6 @@ export default function AdminProfileModals({ visibleModal, onClose, user }) {
               {visibleModal === 'documents' && <DocumentsView documents={documents} />}
               {visibleModal === 'org_chat' && <OrgChatView messages={messages} onSend={sendMessage} user={user} teamDirectory={teamDirectory} />}
               {visibleModal === 'announcements' && <AnnouncementsView announcements={announcements} />}
-              {visibleModal === 'support_tickets' && (
-                <View style={styles.list}>
-                  <SupportTicketSystem 
-                    tickets={supportTickets || []}
-                    userId={user?.id || 'unknown'}
-                    userName={user?.name || 'Admin'}
-                    onCreateTicket={onSaveTicket}
-                    onSendMessage={onReplyTicket}
-                    onReply={onReplyTicket}
-                    onUpdateStatus={onUpdateTicketStatus}
-                    onRetryMessage={onRetryMessage}
-                    onMarkSeen={onMarkSeen}
-                  />
-                </View>
-              )}
               
               {visibleModal === 'holidays' && (
                 <View style={styles.list}>

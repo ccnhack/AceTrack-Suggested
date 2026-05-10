@@ -123,22 +123,7 @@ const ProfileMenuSection = memo(({
         </TouchableOpacity>
       )}
 
-      {/* --- Admin: Security & Access --- */}
-      {user.role === 'admin' && (
-        <TouchableOpacity 
-          onPress={() => {
-            logger.logAction('MODAL_OPEN', { modal: 'SecurityAccess' });
-            Alert.alert('Security & Access', 'View and manage:\n\n• Active user sessions\n• Connected devices\n• Login attempt history\n• Access control settings\n• Security alerts\n\nThis feature is coming soon.', [{ text: 'OK' }]);
-          }}
-          style={styles.menuItem}
-        >
-          <View style={[styles.menuIcon, { backgroundColor: '#FEF2F2' }]}>
-            <Ionicons name="finger-print-outline" size={20} color="#DC2626" />
-          </View>
-          <Text style={styles.menuLabel}>Security & Access</Text>
-          <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
-        </TouchableOpacity>
-      )}
+
 
       {/* --- Support: Report Issue (auto-assigns to admin) --- */}
       {user.role === 'support' && (
