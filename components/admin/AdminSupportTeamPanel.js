@@ -980,6 +980,93 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
               const dateProgress = Math.min((totalMsForDate / (8 * 3600000)) * 100, 100);
               const maxWeeklyMs = Math.max(...(agentAttendance.weeklyDays || []).map(d => d.totalMs), 1);
 
+              // --- LEAVE CALCULATION LOGIC ---
+              let totalEarnedLeaves = 0;
+              let totalSickLeaves = 0;
+              let totalAbsentDays = 0;
+
+              const agentDesig = agentAttendance.designation || selectedAgent?.designation || 'Intern';
+              let earliestSessionDate = Date.now();
+              if (agentAttendance.allSessions && agentAttendance.allSessions.length > 0) {
+                earliestSessionDate = new Date(agentAttendance.allSessions[agentAttendance.allSessions.length - 1].startTime).getTime();
+              }
+              if (agentAttendance.allSessions) {
+                agentAttendance.allSessions.forEach(s => {
+                  const t = new Date(s.startTime).getTime();
+                  if (t < earliestSessionDate) earliestSessionDate = t;
+                });
+              }
+              
+              const joinDate = selectedAgent?.createdAt ? new Date(selectedAgent.createdAt).getTime() : earliestSessionDate;
+              const msSinceJoin = Date.now() - joinDate;
+              let monthsElapsed = Math.floor(msSinceJoin / (1000 * 60 * 60 * 24 * 30));
+              if (monthsElapsed < 1) monthsElapsed = 1;
+
+              let earnedRatePerMonth = 0;
+              if (agentDesig === 'Intern') earnedRatePerMonth = 1;
+              else if (agentDesig === 'Grade-5' || agentDesig === 'Grade-7') earnedRatePerMonth = 22 / 12;
+              else if (agentDesig === 'Team Lead') earnedRatePerMonth = 24 / 12;
+              else if (agentDesig === 'Manager') earnedRatePerMonth = 26 / 12;
+              else earnedRatePerMonth = 1;
+
+              totalEarnedLeaves = Math.floor(earnedRatePerMonth * monthsElapsed);
+              totalSickLeaves = 1 * monthsElapsed;
+
+              const todayDateObj = new Date();
+              todayDateObj.setHours(0, 0, 0, 0);
+
+              const sessionDaysSet = new Set();
+              (agentAttendance.allSessions || []).forEach(s => {
+                 sessionDaysSet.add(new Date(s.startTime).toISOString().split('T')[0]);
+              });
+
+              // Calculate historical absences
+              let iterDate = new Date(joinDate);
+              iterDate.setHours(0,0,0,0);
+              while (iterDate < todayDateObj) {
+                const dayOfWeek = iterDate.getDay();
+                if (dayOfWeek !== 0 && dayOfWeek !== 6) { 
+                  const ds = iterDate.toISOString().split('T')[0];
+                  if (!sessionDaysSet.has(ds)) totalAbsentDays++;
+                }
+                iterDate.setDate(iterDate.getDate() + 1);
+              }
+
+              let remainingEarned = totalEarnedLeaves - totalAbsentDays;
+              let remainingSick = totalSickLeaves;
+              if (remainingEarned < 0) {
+                remainingSick += remainingEarned; // deduct overflow from sick
+                remainingEarned = 0;
+              }
+
+              // Calendar Month Stats
+              const markedDates = {};
+              let monthWorkingDays = 0;
+              let monthPresent = 0;
+              let monthAbsent = 0;
+
+              const [cYear, cMonth] = calendarMonth.split('-');
+              const firstDayOfMonth = new Date(parseInt(cYear), parseInt(cMonth) - 1, 1);
+              const lastDayOfMonth = new Date(parseInt(cYear), parseInt(cMonth), 0);
+
+              for (let d = new Date(firstDayOfMonth); d <= lastDayOfMonth; d.setDate(d.getDate() + 1)) {
+                const dateStr = d.toISOString().split('T')[0];
+                const dayOfWeek = d.getDay();
+                const isWeekday = dayOfWeek !== 0 && dayOfWeek !== 6;
+                
+                if (isWeekday && d <= todayDateObj) {
+                  monthWorkingDays++;
+                }
+
+                if (sessionDaysSet.has(dateStr)) {
+                  markedDates[dateStr] = { selected: true, selectedColor: '#10B981' }; 
+                  if (d.getMonth() + 1 === parseInt(cMonth)) monthPresent++;
+                } else if (isWeekday && d <= todayDateObj) {
+                  markedDates[dateStr] = { selected: true, selectedColor: '#EF4444' }; 
+                  if (d.getMonth() + 1 === parseInt(cMonth)) monthAbsent++;
+                }
+              }
+
               return (
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
                   
@@ -1005,99 +1092,9 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                     </View>
                   )}
 
-                  // --- LEAVE CALCULATION LOGIC ---
-                  let totalEarnedLeaves = 0;
-                  let totalSickLeaves = 0;
-                  let totalAbsentDays = 0;
-
-                  const agentDesig = agentAttendance.designation || selectedAgent?.designation || 'Intern';
-                  let earliestSessionDate = Date.now();
-                  if (agentAttendance.allSessions && agentAttendance.allSessions.length > 0) {
-                    earliestSessionDate = new Date(agentAttendance.allSessions[agentAttendance.allSessions.length - 1].startTime).getTime();
-                  }
-                  if (agentAttendance.allSessions) {
-                    agentAttendance.allSessions.forEach(s => {
-                      const t = new Date(s.startTime).getTime();
-                      if (t < earliestSessionDate) earliestSessionDate = t;
-                    });
-                  }
-                  
-                  const joinDate = selectedAgent?.createdAt ? new Date(selectedAgent.createdAt).getTime() : earliestSessionDate;
-                  const msSinceJoin = Date.now() - joinDate;
-                  let monthsElapsed = Math.floor(msSinceJoin / (1000 * 60 * 60 * 24 * 30));
-                  if (monthsElapsed < 1) monthsElapsed = 1;
-
-                  let earnedRatePerMonth = 0;
-                  if (agentDesig === 'Intern') earnedRatePerMonth = 1;
-                  else if (agentDesig === 'Grade-5' || agentDesig === 'Grade-7') earnedRatePerMonth = 22 / 12;
-                  else if (agentDesig === 'Team Lead') earnedRatePerMonth = 24 / 12;
-                  else if (agentDesig === 'Manager') earnedRatePerMonth = 26 / 12;
-                  else earnedRatePerMonth = 1;
-
-                  totalEarnedLeaves = Math.floor(earnedRatePerMonth * monthsElapsed);
-                  totalSickLeaves = 1 * monthsElapsed;
-
-                  const todayDateObj = new Date();
-                  todayDateObj.setHours(0, 0, 0, 0);
-
-                  const sessionDaysSet = new Set();
-                  (agentAttendance.allSessions || []).forEach(s => {
-                     sessionDaysSet.add(new Date(s.startTime).toISOString().split('T')[0]);
-                  });
-
-                  // Calculate historical absences
-                  let iterDate = new Date(joinDate);
-                  iterDate.setHours(0,0,0,0);
-                  while (iterDate < todayDateObj) {
-                    const dayOfWeek = iterDate.getDay();
-                    if (dayOfWeek !== 0 && dayOfWeek !== 6) { 
-                      const ds = iterDate.toISOString().split('T')[0];
-                      if (!sessionDaysSet.has(ds)) totalAbsentDays++;
-                    }
-                    iterDate.setDate(iterDate.getDate() + 1);
-                  }
-
-                  let remainingEarned = totalEarnedLeaves - totalAbsentDays;
-                  let remainingSick = totalSickLeaves;
-                  if (remainingEarned < 0) {
-                    remainingSick += remainingEarned; // deduct overflow from sick
-                    remainingEarned = 0;
-                  }
-
-                  // Calendar Month Stats
-                  const markedDates = {};
-                  let monthWorkingDays = 0;
-                  let monthPresent = 0;
-                  let monthAbsent = 0;
-
-                  const [cYear, cMonth] = calendarMonth.split('-');
-                  const firstDayOfMonth = new Date(parseInt(cYear), parseInt(cMonth) - 1, 1);
-                  const lastDayOfMonth = new Date(parseInt(cYear), parseInt(cMonth), 0);
-
-                  for (let d = new Date(firstDayOfMonth); d <= lastDayOfMonth; d.setDate(d.getDate() + 1)) {
-                    const dateStr = d.toISOString().split('T')[0];
-                    const dayOfWeek = d.getDay();
-                    const isWeekday = dayOfWeek !== 0 && dayOfWeek !== 6;
-                    
-                    if (isWeekday && d <= todayDateObj) {
-                      monthWorkingDays++;
-                    }
-
-                    if (sessionDaysSet.has(dateStr)) {
-                      markedDates[dateStr] = { selected: true, selectedColor: '#10B981' }; 
-                      if (d.getMonth() + 1 === parseInt(cMonth)) monthPresent++;
-                    } else if (isWeekday && d <= todayDateObj) {
-                      markedDates[dateStr] = { selected: true, selectedColor: '#EF4444' }; 
-                      if (d.getMonth() + 1 === parseInt(cMonth)) monthAbsent++;
-                    }
-                  }
-
-                  return (
-                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-                      
-                      {/* Current Live Status (Only show if viewing Today) */}
-                      {isTodayFilter && !attendanceCalendarMode && (
-                        <View style={[styles.attendanceStatusCard, { borderLeftColor: agentAttendance.isCurrentlyOnline ? '#10B981' : '#94A3B8' }]}>
+                  {/* Current Live Status (Only show if viewing Today) */}
+                  {isTodayFilter && !attendanceCalendarMode && (
+                    <View style={[styles.attendanceStatusCard, { borderLeftColor: agentAttendance.isCurrentlyOnline ? '#10B981' : '#94A3B8' }]}>
                           <View style={[styles.attendanceLiveDot, { backgroundColor: agentAttendance.isCurrentlyOnline ? '#10B981' : '#CBD5E1' }]} />
                           <View style={{ flex: 1 }}>
                             <Text style={[styles.attendanceStatusText, { color: agentAttendance.isCurrentlyOnline ? '#059669' : '#64748B' }]}>
