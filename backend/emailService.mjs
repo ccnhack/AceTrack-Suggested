@@ -2,66 +2,47 @@
 // 📧 AceTrack Email Service (v2.6.169)
 // Uses Nodemailer + Gmail SMTP (free, 500 emails/day)
 // ═══════════════════════════════════════════════════════════════
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Gmail SMTP Transporter
-// Requires: GMAIL_USER and GMAIL_APP_PASSWORD env vars on Render
-let transporter;
-function getTransporter() {
-  if (!transporter) {
-    const gmailUser = process.env.GMAIL_USER;
-    const gmailPass = process.env.GMAIL_APP_PASSWORD;
-    console.log(`📧 [SMTP_INIT] Creating transporter: user=${gmailUser ? gmailUser.substring(0,5) + '...' : 'NOT_SET'}, pass=${gmailPass ? '***(' + gmailPass.length + ' chars)' : 'NOT_SET'}`);
+let resendClient;
+function getResend() {
+  if (!resendClient) {
+    const apiKey = process.env.RESEND_API_KEY;
+    console.log(`📧 [EMAIL_INIT] Initializing Resend API: ${apiKey ? 'KEY_SET' : 'MISSING_KEY'}`);
     
-    if (!gmailUser || !gmailPass) {
-      console.warn("⚠️ GMAIL_USER or GMAIL_APP_PASSWORD is not set. Emails will fail.");
+    if (!apiKey) {
+      console.warn("⚠️ RESEND_API_KEY is not set. Emails will fail.");
     }
-    transporter = nodemailer.createTransport({
-      service: 'gmail',
-      pool: false, // 🛡️ Don't pool connections — prevents stale socket reuse on Render
-      auth: {
-        user: gmailUser || "acetrack.noreply@gmail.com",
-        pass: gmailPass
-      },
-      connectionTimeout: 10000, // 10s to establish SMTP connection
-      greetingTimeout: 10000,   // 10s to receive SMTP greeting
-      socketTimeout: 15000,     // 15s inactivity timeout on the socket
-    });
-    
-    // 🛡️ Non-blocking SMTP verification on first init
-    transporter.verify()
-      .then(() => console.log('✅ [SMTP_INIT] Gmail SMTP connection verified'))
-      .catch(err => console.error('❌ [SMTP_INIT] Gmail SMTP verification FAILED:', err.message, err.code || ''));
+    resendClient = new Resend(apiKey);
   }
-  return transporter;
+  return resendClient;
 }
 
-// 🛡️ [PRODUCTION HARDENING]: Invalidate cached transporter on fatal SMTP errors
-function resetTransporter() {
-  if (transporter) {
-    try { transporter.close(); } catch (_) {}
-    transporter = null;
-  }
-}
-
-// 🛡️ [PRODUCTION HARDENING]: Wrap sendMail with timeout + automatic retry on failure
+// 🛡️ [PRODUCTION HARDENING]: Wrapper to maintain compatibility with fire-and-forget pattern
 async function sendMailWithTimeout(mailOptions, timeoutMs = 30000) {
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const result = await Promise.race([
-        getTransporter().sendMail(mailOptions),
-        new Promise((_, reject) => setTimeout(() => {
-          reject(new Error('SMTP_TIMEOUT: Email send exceeded ' + timeoutMs + 'ms'));
-        }, timeoutMs))
-      ]);
-      return result; // Success — return immediately
+      // Resend uses from, to, subject, html, text. 
+      // mailOptions from Nodemailer map exactly to this for simple use-cases.
+      const payload = {
+        from: mailOptions.from || 'onboarding@resend.dev', // Fallback for testing
+        to: mailOptions.to,
+        subject: mailOptions.subject,
+        html: mailOptions.html,
+        text: mailOptions.text
+      };
+      
+      const { data, error } = await getResend().emails.send(payload);
+      
+      if (error) {
+        throw new Error(`Resend API Error: ${error.message}`);
+      }
+      return { success: true, messageId: data.id };
     } catch (err) {
-      console.error(`📧 [SMTP] Attempt ${attempt}/2 failed: ${err.message}`);
-      resetTransporter(); // Force fresh connection for retry
+      console.error(`📧 [EMAIL] Attempt ${attempt}/2 failed: ${err.message}`);
       if (attempt === 2) throw err; // Final attempt — propagate error
-      // Brief pause before retry
       await new Promise(r => setTimeout(r, 1000));
     }
   }
