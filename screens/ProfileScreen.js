@@ -458,7 +458,7 @@ const ProfileScreen = ({ navigation }) => {
 
               <TouchableOpacity 
                 style={styles.featureTile} 
-                onPress={() => Alert.alert('Announcements', 'Broadcast messages and announcements to all employees. This feature is coming soon.', [{ text: 'OK' }])}
+                onPress={() => setActiveSupportModal('announcements')}
               >
                 <View style={[styles.featureIcon, { backgroundColor: '#F5F3FF' }]}>
                   <Ionicons name="megaphone-outline" size={24} color="#7C3AED" />
@@ -494,6 +494,26 @@ const ProfileScreen = ({ navigation }) => {
                   <Ionicons name="cog-outline" size={24} color="#0D9488" />
                 </View>
                 <Text style={styles.featureLabel}>Org Settings</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.featureTile} 
+                onPress={() => setActiveSupportModal('security')}
+              >
+                <View style={[styles.featureIcon, { backgroundColor: '#FEF2F2' }]}>
+                  <Ionicons name="lock-closed-outline" size={24} color="#EF4444" />
+                </View>
+                <Text style={styles.featureLabel}>Security & Access</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.featureTile} 
+                onPress={() => setActiveSupportModal('support_tickets')}
+              >
+                <View style={[styles.featureIcon, { backgroundColor: '#FDF2F8' }]}>
+                  <Ionicons name="ticket-outline" size={24} color="#DB2777" />
+                </View>
+                <Text style={styles.featureLabel}>Support Tickets</Text>
               </TouchableOpacity>
             </View>
           </View>

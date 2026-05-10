@@ -6,11 +6,14 @@ import { useAdminCoreStore } from '../stores/useAdminCoreStore';
 import { useHrStore } from '../stores/useHrStore';
 import { useCommsStore } from '../stores/useCommsStore';
 import { socketService } from '../services/sync/SocketService';
+import { SupportTicketSystem } from './SupportTicketSystem';
+import { useSupport } from '../context/SupportContext';
 
 export default function AdminProfileModals({ visibleModal, onClose, user }) {
   const { auditLogs, orgSettings, teamDirectory, isLoading: isAdminLoading, fetchAuditLogs, fetchOrgSettings, fetchTeamDirectory, saveOrgSetting } = useAdminCoreStore();
   const { leaveRequests, policies, reviews, attendance, payslips, documents, isLoading: isHrLoading, fetchLeaveRequests, fetchPolicies, fetchReviews, fetchAttendance, checkIn, checkOut, fetchPayslips, fetchDocuments, submitLeaveRequest } = useHrStore();
   const { messages, announcements, isLoading: isCommsLoading, fetchMessages, sendMessage, appendMessage, fetchAnnouncements } = useCommsStore();
+  const { supportTickets, onSaveTicket, onReplyTicket, onUpdateTicketStatus, onMarkSeen, onRetryMessage } = useSupport();
 
   useEffect(() => {
     if (visibleModal === 'audit_logs') fetchAuditLogs();
@@ -50,6 +53,7 @@ export default function AdminProfileModals({ visibleModal, onClose, user }) {
                visibleModal === 'holidays' ? 'Holidays' :
                visibleModal === 'documents' ? 'Documents' :
                visibleModal === 'org_chat' ? 'Org Chat' : 
+               visibleModal === 'support_tickets' ? 'Support Tickets' :
                visibleModal === 'announcements' ? 'Announcements' : 'Feature'}
             </Text>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -75,6 +79,21 @@ export default function AdminProfileModals({ visibleModal, onClose, user }) {
               {visibleModal === 'documents' && <DocumentsView documents={documents} />}
               {visibleModal === 'org_chat' && <OrgChatView messages={messages} onSend={sendMessage} user={user} teamDirectory={teamDirectory} />}
               {visibleModal === 'announcements' && <AnnouncementsView announcements={announcements} />}
+              {visibleModal === 'support_tickets' && (
+                <View style={styles.list}>
+                  <SupportTicketSystem 
+                    tickets={supportTickets || []}
+                    userId={user?.id || 'unknown'}
+                    userName={user?.name || 'Admin'}
+                    onCreateTicket={onSaveTicket}
+                    onSendMessage={onReplyTicket}
+                    onReply={onReplyTicket}
+                    onUpdateStatus={onUpdateTicketStatus}
+                    onRetryMessage={onRetryMessage}
+                    onMarkSeen={onMarkSeen}
+                  />
+                </View>
+              )}
               
               {visibleModal === 'holidays' && (
                 <View style={styles.list}>
@@ -91,35 +110,67 @@ export default function AdminProfileModals({ visibleModal, onClose, user }) {
   );
 }
 
-const AuditLogsView = ({ logs }) => (
-  <View style={styles.list}>
-    {logs.map((log, i) => (
-      <View key={i} style={styles.card}>
-        <View style={styles.logHeader}>
-          <Text style={styles.logAction}>{log.action.replace('_', ' ').toUpperCase()}</Text>
-          <Text style={styles.logTime}>{new Date(log.timestamp).toLocaleString()}</Text>
+const AuditLogsView = ({ logs }) => {
+  const [search, setSearch] = useState('');
+  const filteredLogs = logs.filter(l => 
+    (l.action || '').toLowerCase().includes(search.toLowerCase()) || 
+    (l.userEmail || '').toLowerCase().includes(search.toLowerCase()) || 
+    JSON.stringify(l.details || {}).toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <View style={styles.list}>
+      <TextInput 
+        style={[styles.input, { marginBottom: 12 }]} 
+        placeholder="Search audit logs (action, email, details)..." 
+        value={search} 
+        onChangeText={setSearch} 
+      />
+      {filteredLogs.map((log, i) => (
+        <View key={i} style={styles.card}>
+          <View style={styles.logHeader}>
+            <Text style={styles.logAction}>{log.action.replace('_', ' ').toUpperCase()}</Text>
+            <Text style={styles.logTime}>{new Date(log.timestamp).toLocaleString()}</Text>
+          </View>
+          <Text style={styles.logUser}>{log.userEmail}</Text>
+          <Text style={styles.logDetails}>{JSON.stringify(log.details)}</Text>
         </View>
-        <Text style={styles.logUser}>{log.userEmail}</Text>
-        <Text style={styles.logDetails}>{JSON.stringify(log.details)}</Text>
-      </View>
-    ))}
-    {logs.length === 0 && <Text style={styles.empty}>No audit logs found.</Text>}
-  </View>
-);
+      ))}
+      {filteredLogs.length === 0 && <Text style={styles.empty}>No audit logs found.</Text>}
+    </View>
+  );
+};
 
 const OrgSettingsView = ({ settings, onSave }) => {
-  const [localSettings, setLocalSettings] = useState(
-    settings.reduce((acc, s) => ({ ...acc, [s.key]: s.value }), {
-      companyName: 'AceTrack Technologies',
-      supportEmail: 'support@acetrack.com',
-      maxLeaveDays: '21'
-    })
-  );
+  const defaultSettings = settings.reduce((acc, s) => ({ ...acc, [s.key]: s.value }), {});
+  
+  const [localSettings, setLocalSettings] = useState({
+      companyName: defaultSettings.companyName || 'AceTrack Technologies',
+      supportEmail: defaultSettings.supportEmail || 'support@acetrack.com',
+  });
+  
+  const [selectedDesignation, setSelectedDesignation] = useState('employee');
+  const designations = ['employee', 'manager', 'support', 'contractor'];
+  
+  // Parse existing leave days from settings if any, otherwise default to 21
+  const existingLeaveDays = defaultSettings.maxLeaveDays ? 
+    (typeof defaultSettings.maxLeaveDays === 'string' && defaultSettings.maxLeaveDays.includes('{') 
+      ? JSON.parse(defaultSettings.maxLeaveDays) 
+      : { employee: '21', manager: '21', support: '21', contractor: '10' }) 
+    : { employee: '21', manager: '21', support: '21', contractor: '10' };
+    
+  const [leaveDays, setLeaveDays] = useState(existingLeaveDays);
 
   const handleSave = async (key) => {
     const success = await onSave(key, localSettings[key]);
     if (success) Alert.alert('Saved', 'Setting updated successfully.');
     else Alert.alert('Error', 'Failed to save setting.');
+  };
+
+  const handleSaveLeaveDays = async () => {
+    const success = await onSave('maxLeaveDays', JSON.stringify(leaveDays));
+    if (success) Alert.alert('Saved', 'Leave days updated successfully.');
+    else Alert.alert('Error', 'Failed to save leave days.');
   };
 
   return (
@@ -139,21 +190,64 @@ const OrgSettingsView = ({ settings, onSave }) => {
           </View>
         </View>
       ))}
+      
+      <View style={[styles.inputGroup, { marginTop: 20 }]}>
+        <Text style={styles.label}>Max Leave Days per Designation</Text>
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+          {designations.map(desg => (
+             <TouchableOpacity 
+               key={desg} 
+               style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: selectedDesignation === desg ? '#3B82F6' : '#E2E8F0' }}
+               onPress={() => setSelectedDesignation(desg)}
+             >
+               <Text style={{ color: selectedDesignation === desg ? '#FFF' : '#475569', fontSize: 12, fontWeight: 'bold', textTransform: 'capitalize' }}>{desg}</Text>
+             </TouchableOpacity>
+          ))}
+        </View>
+        <View style={styles.inputRow}>
+          <TextInput
+            style={styles.input}
+            keyboardType="numeric"
+            value={String(leaveDays[selectedDesignation] || '')}
+            onChangeText={(txt) => setLeaveDays(prev => ({ ...prev, [selectedDesignation]: txt }))}
+            placeholder={`Leave days for ${selectedDesignation}`}
+          />
+          <TouchableOpacity style={styles.saveBtn} onPress={handleSaveLeaveDays}>
+            <Text style={styles.saveBtnText}>Save</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     </View>
   );
 };
 
-const TeamDirectoryView = ({ team }) => (
-  <View style={styles.list}>
-    {team.map((member, i) => (
-      <View key={i} style={styles.card}>
-        <Text style={styles.memberName}>{member.name || 'Unnamed User'}</Text>
-        <Text style={styles.memberRole}>{member.designation || member.role}</Text>
-        <Text style={styles.memberContact}>{member.email}</Text>
-      </View>
-    ))}
-  </View>
-);
+const TeamDirectoryView = ({ team }) => {
+  const [search, setSearch] = useState('');
+  const filteredTeam = team.filter(member => 
+    (member.name || '').toLowerCase().includes(search.toLowerCase()) || 
+    (member.email || '').toLowerCase().includes(search.toLowerCase()) ||
+    (member.designation || member.role || '').toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <View style={styles.list}>
+      <TextInput 
+        style={[styles.input, { marginBottom: 12 }]} 
+        placeholder="Search team by name, email, or role..." 
+        value={search} 
+        onChangeText={setSearch} 
+      />
+      {filteredTeam.map((member, i) => (
+        <View key={i} style={styles.card}>
+          <Text style={styles.memberName}>{member.name || 'Unnamed User'}</Text>
+          <Text style={styles.memberRole}>{member.designation || member.role}</Text>
+          <Text style={styles.memberContact}>{member.email}</Text>
+        </View>
+      ))}
+      {filteredTeam.length === 0 && <Text style={styles.empty}>No team members found.</Text>}
+    </View>
+  );
+};
 
 const SecurityView = ({ user }) => (
   <View style={styles.list}>
