@@ -3,7 +3,7 @@ services:
     name: acetrack-suggested
     env: node
     rootDir: backend
-    buildCommand: npm install && npm run build
+    buildCommand: npm install
     startCommand: node server.mjs
     healthCheckPath: /health
     envVars:
