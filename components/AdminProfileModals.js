@@ -13,7 +13,15 @@ export default function AdminProfileModals({ visibleModal, onClose, user }) {
   const { messages, announcements, isLoading: isCommsLoading, fetchMessages, sendMessage, appendMessage, fetchAnnouncements } = useCommsStore();
 
   useEffect(() => {
-    if (visibleModal === 'audit_logs') fetchAuditLogs();
+    if (visibleModal === 'audit_logs') {
+        const end = new Date();
+        const start = new Date();
+        start.setDate(end.getDate() - 3);
+        fetchAuditLogs({ 
+            startDate: start.toISOString(), 
+            endDate: end.toISOString() 
+        });
+    }
     if (visibleModal === 'org_settings') fetchOrgSettings();
     if (visibleModal === 'team_directory') fetchTeamDirectory();
     if (visibleModal === 'leave_request') fetchLeaveRequests();
@@ -63,7 +71,7 @@ export default function AdminProfileModals({ visibleModal, onClose, user }) {
             </View>
           ) : (
             <ScrollView style={styles.body}>
-              {visibleModal === 'audit_logs' && <AuditLogsView logs={auditLogs} />}
+              {visibleModal === 'audit_logs' && <AuditLogsView logs={auditLogs} onFetch={fetchAuditLogs} />}
               {visibleModal === 'org_settings' && <OrgSettingsView settings={orgSettings} onSave={saveOrgSetting} />}
               {visibleModal === 'team_directory' && <TeamDirectoryView team={teamDirectory} />}
               {visibleModal === 'security' && <SecurityView user={user} />}
@@ -91,33 +99,114 @@ export default function AdminProfileModals({ visibleModal, onClose, user }) {
   );
 }
 
-const AuditLogsView = ({ logs }) => {
+const AuditLogsView = ({ logs, onFetch }) => {
   const [search, setSearch] = useState('');
-  const filteredLogs = logs.filter(l => 
-    (l.action || '').toLowerCase().includes(search.toLowerCase()) || 
-    (l.userEmail || '').toLowerCase().includes(search.toLowerCase()) || 
-    JSON.stringify(l.details || {}).toLowerCase().includes(search.toLowerCase())
-  );
+  const [startDate, setStartDate] = useState(new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showDatePicker, setShowDatePicker] = useState(null); // 'start' or 'end'
+
+  const filteredLogs = logs.filter(l => {
+    const s = search.toLowerCase();
+    const action = (l.action || '').replace(/_/g, ' ').toLowerCase();
+    const email = (l.userEmail || '').toLowerCase();
+    const details = JSON.stringify(l.details || {}).toLowerCase();
+    const ip = (l.ipAddress || '').toLowerCase();
+    
+    return action.includes(s) || email.includes(s) || details.includes(s) || ip.includes(s);
+  });
+
+  const handleFetch = async () => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+    
+    const diffDays = (end - start) / (1000 * 60 * 60 * 24);
+    
+    if (diffDays > 3 && !search.trim()) {
+      Alert.alert('Range Restricted', 'Date range cannot exceed 3 days unless you provide a specific search filter (Action, Email, or IP) to prevent data overload.');
+      return;
+    }
+
+    const result = await onFetch({
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+      search: search.trim()
+    });
+
+    if (result && !result.success) {
+      Alert.alert('Fetch Error', result.message || 'Failed to load logs');
+    }
+  };
 
   return (
     <View style={styles.list}>
-      <TextInput 
-        style={[styles.input, { marginBottom: 12 }]} 
-        placeholder="Search audit logs (action, email, details)..." 
-        value={search} 
-        onChangeText={setSearch} 
-      />
+      {/* Search and Filter UI */}
+      <View style={styles.filterSection}>
+        <View style={styles.dateRow}>
+          <TouchableOpacity style={styles.datePickerBtn} onPress={() => setShowDatePicker('start')}>
+            <Ionicons name="calendar-outline" size={16} color="#4F46E5" />
+            <Text style={styles.dateBtnText}>From: {startDate}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.datePickerBtn} onPress={() => setShowDatePicker('end')}>
+            <Ionicons name="calendar-outline" size={16} color="#4F46E5" />
+            <Text style={styles.dateBtnText}>To: {endDate}</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.searchRow}>
+          <TextInput 
+            style={[styles.input, { flex: 1, marginBottom: 0 }]} 
+            placeholder="Action, Email, or IP..." 
+            value={search} 
+            onChangeText={setSearch} 
+          />
+          <TouchableOpacity style={styles.fetchBtn} onPress={handleFetch}>
+            <Ionicons name="sync" size={20} color="#FFF" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {filteredLogs.map((log, i) => (
         <View key={i} style={styles.card}>
           <View style={styles.logHeader}>
-            <Text style={styles.logAction}>{log.action.replace('_', ' ').toUpperCase()}</Text>
+            <Text style={styles.logAction}>{log.action.replace(/_/g, ' ').toUpperCase()}</Text>
             <Text style={styles.logTime}>{new Date(log.timestamp).toLocaleString()}</Text>
           </View>
           <Text style={styles.logUser}>{log.userEmail}</Text>
+          <View style={styles.logMetaRow}>
+             <Text style={styles.logIp}>IP: {log.ipAddress || 'Unknown'}</Text>
+          </View>
           <Text style={styles.logDetails}>{JSON.stringify(log.details)}</Text>
         </View>
       ))}
-      {filteredLogs.length === 0 && <Text style={styles.empty}>No audit logs found.</Text>}
+      {filteredLogs.length === 0 && <Text style={styles.empty}>No audit logs found for this criteria.</Text>}
+
+      {/* Date Picker Modal */}
+      {showDatePicker && (
+        <Modal visible={true} transparent={true} animationType="fade">
+          <View style={styles.pickerOverlay}>
+            <View style={styles.pickerContent}>
+              <View style={styles.pickerHeader}>
+                <Text style={styles.pickerTitle}>Select {showDatePicker === 'start' ? 'Start' : 'End'} Date</Text>
+                <TouchableOpacity onPress={() => setShowDatePicker(null)}>
+                  <Ionicons name="close" size={24} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+              <Calendar
+                current={showDatePicker === 'start' ? startDate : endDate}
+                onDayPress={(day) => {
+                  if (showDatePicker === 'start') setStartDate(day.dateString);
+                  else setEndDate(day.dateString);
+                  setShowDatePicker(null);
+                }}
+                markedDates={{
+                  [showDatePicker === 'start' ? startDate : endDate]: { selected: true, selectedColor: '#4F46E5' }
+                }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 };
@@ -679,5 +768,17 @@ const styles = StyleSheet.create({
   memberRole: { fontSize: 14, color: '#3B82F6', marginBottom: 4 },
   memberContact: { fontSize: 14, color: '#64748B' },
   cardTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 8 },
-  cardText: { color: '#475569', marginBottom: 4 }
+  cardText: { color: '#475569', marginBottom: 4 },
+  filterSection: { paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  dateRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  datePickerBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, padding: 10, gap: 8 },
+  dateBtnText: { fontSize: 13, color: '#475569', fontWeight: '500' },
+  searchRow: { flexDirection: 'row', gap: 8 },
+  fetchBtn: { backgroundColor: '#4F46E5', width: 44, height: 44, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  logMetaRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+  logIp: { fontSize: 11, color: '#94A3B8', fontWeight: '500' },
+  pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  pickerContent: { backgroundColor: '#FFF', borderRadius: 16, width: '90%', maxWidth: 350, padding: 20 },
+  pickerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  pickerTitle: { fontSize: 16, fontWeight: 'bold', color: '#0F172A' },
 });

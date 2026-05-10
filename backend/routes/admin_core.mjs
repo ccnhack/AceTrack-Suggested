@@ -20,7 +20,39 @@ export default function createAdminCoreRoutes() {
 // GET /api/v1/admin-core/audit-logs
 router.get('/audit-logs', requireAdmin, async (req, res) => {
     try {
-        const logs = await AuditLog.find().sort({ timestamp: -1 }).limit(100);
+        const { startDate, endDate, search } = req.query;
+        let query = {};
+
+        if (startDate || endDate) {
+            query.timestamp = {};
+            if (startDate) query.timestamp.$gte = new Date(startDate);
+            if (endDate) query.timestamp.$lte = new Date(endDate);
+            
+            // Enforce 3-day limit if no search criteria is provided
+            const start = new Date(startDate);
+            const end = endDate ? new Date(endDate) : new Date();
+            const diffDays = (end - start) / (1000 * 60 * 60 * 24);
+            
+            if (diffDays > 3 && !search) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'Date range cannot exceed 3 days without specific search filters (Action, Email, or IP).' 
+                });
+            }
+        }
+
+        if (search) {
+            const searchRegex = new RegExp(search, 'i');
+            query.$or = [
+                { action: searchRegex },
+                { userEmail: searchRegex },
+                { ipAddress: searchRegex },
+                { "details.key": searchRegex },
+                { "details.value": searchRegex }
+            ];
+        }
+
+        const logs = await AuditLog.find(query).sort({ timestamp: -1 }).limit(200);
         res.json({ success: true, logs });
     } catch (error) {
         console.error("Error fetching audit logs:", error);

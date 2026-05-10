@@ -22,16 +22,19 @@ export const useAdminCoreStore = create((set, get) => ({
         }
     },
 
-    fetchAuditLogs: async () => {
+    fetchAuditLogs: async (params = {}) => {
         try {
             set({ isLoading: true });
-            const response = await fetch(`${config.API_BASE_URL}/api/v1/admin-core/audit-logs`, {
+            const queryParams = new URLSearchParams(params).toString();
+            const response = await fetch(`${config.API_BASE_URL}/api/v1/admin-core/audit-logs${queryParams ? '?' + queryParams : ''}`, {
                 headers: { 'Authorization': `Bearer ${window.localStorage?.getItem('acetrack_auth_token') || ''}` }
             });
             const data = await response.json();
             if (data.success) set({ auditLogs: data.logs });
+            return data;
         } catch (error) {
             console.error("Failed to fetch audit logs:", error);
+            return { success: false, message: error.message };
         } finally {
             set({ isLoading: false });
         }
