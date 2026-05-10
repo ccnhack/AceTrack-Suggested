@@ -1055,13 +1055,19 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
               const [cYear, cMonth] = calendarMonth.split('-');
               const firstDayOfMonth = new Date(parseInt(cYear), parseInt(cMonth) - 1, 1);
               const lastDayOfMonth = new Date(parseInt(cYear), parseInt(cMonth), 0);
+              const joinDateObj = new Date(joinDate);
+              joinDateObj.setHours(0, 0, 0, 0);
 
               for (let d = new Date(firstDayOfMonth); d <= lastDayOfMonth; d.setDate(d.getDate() + 1)) {
                 const dateStr = d.toISOString().split('T')[0];
                 const dayOfWeek = d.getDay();
                 const isWeekday = dayOfWeek !== 0 && dayOfWeek !== 6;
+                const isBeforeJoinDate = d.getTime() < joinDateObj.getTime();
                 
-                if (!isWeekday) {
+                if (isBeforeJoinDate) {
+                  // Prior to onboarding
+                  markedDates[dateStr] = { disabled: true, disableTouchEvent: false, selected: true, selectedColor: '#E2E8F0', selectedTextColor: '#94A3B8' };
+                } else if (!isWeekday) {
                   // Grey out weekends
                   markedDates[dateStr] = { disabled: true, disableTouchEvent: true, selected: true, selectedColor: '#F1F5F9', selectedTextColor: '#94A3B8' };
                 } else {
@@ -1179,7 +1185,12 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                               }}
                               onDayPress={(day) => {
                                 const ds = day.dateString;
-                                if (historicalAbsences[ds]) {
+                                const dsObj = new Date(parseInt(ds.split('-')[0]), parseInt(ds.split('-')[1]) - 1, parseInt(ds.split('-')[2]));
+                                const isBeforeJoinDate = dsObj.getTime() < joinDateObj.getTime();
+                                
+                                if (isBeforeJoinDate) {
+                                  setSelectedLeaveDate({ date: ds, type: 'pre_join' });
+                                } else if (historicalAbsences[ds]) {
                                   setSelectedLeaveDate({ date: ds, type: historicalAbsences[ds] });
                                 } else if (sessionDaysSet.has(ds)) {
                                   setSelectedLeaveDate({ date: ds, type: 'present' });
@@ -1204,6 +1215,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                                 </Text>
                                 <Text style={{ color: '#1E3A8A', marginTop: 4 }}>
                                   Status: {
+                                    selectedLeaveDate.type === 'pre_join' ? '⚪ Not Employed (Pre-Onboarding)' :
                                     selectedLeaveDate.type === 'present' ? '✅ Present (Session Logged)' :
                                     selectedLeaveDate.type === 'earned' ? '🔵 Earned Leave (Deducted)' :
                                     selectedLeaveDate.type === 'sick' ? '🟣 Sick Leave (Deducted)' :
