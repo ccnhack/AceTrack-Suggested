@@ -393,13 +393,13 @@ const ProfileScreen = ({ navigation }) => {
         contentContainerStyle={styles.scrollContent} 
         showsVerticalScrollIndicator={false}
       >
-        {isWeb && (user?.role === 'admin' || user?.role === 'support') && (
+        {(user?.role === 'admin' || user?.role === 'support') && (
           <TouchableOpacity 
             onPress={() => navigation.navigate(user?.role === 'admin' ? 'Admin' : 'Support')} 
-            style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, alignSelf: 'flex-start' }}
+            style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20, padding: 12, backgroundColor: '#EFF6FF', borderRadius: 12, alignSelf: 'flex-start', borderWidth: 1, borderColor: '#BFDBFE' }}
           >
-            <Ionicons name="arrow-back" size={20} color="#64748B" />
-            <Text style={{ color: '#64748B', fontWeight: 'bold', fontSize: 14, marginLeft: 8 }}>
+            <Ionicons name="arrow-back" size={24} color="#2563EB" />
+            <Text style={{ color: '#2563EB', fontWeight: '900', fontSize: 16, marginLeft: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Back to {user?.role === 'admin' ? 'Admin Hub' : 'Support Dashboard'}
             </Text>
           </TouchableOpacity>
@@ -688,11 +688,13 @@ const ProfileScreen = ({ navigation }) => {
 
       </ScrollView>
 
-      <AdminProfileModals 
-        visibleModal={activeSupportModal}
-        onClose={() => setActiveSupportModal(null)}
-        user={user}
-      />
+      {activeSupportModal && (
+        <AdminProfileModals 
+          visibleModal={activeSupportModal}
+          onClose={() => setActiveSupportModal(null)}
+          user={user}
+        />
+      )}
 
       {showDiagnostics && (
         <DiagnosticsModal 
@@ -1240,17 +1242,19 @@ const ProfileScreen = ({ navigation }) => {
   const fullContent = (
     <View style={{ flex: 1 }}>
       {content}
-      <OTPVerificationModal
-        showVerifyModal={showVerifyModal}
-        setShowVerifyModal={setShowVerifyModal}
-        verificationCode={verificationCode}
-        setVerificationCode={setVerificationCode}
-        isVerifying={isVerifying}
-        setIsVerifying={setIsVerifying}
-        onVerifyAccount={onVerifyAccount}
-        onUpdateUser={onUpdateUser}
-        user={user}
-      />
+      {showVerifyModal && (
+        <OTPVerificationModal
+          showVerifyModal={showVerifyModal}
+          setShowVerifyModal={setShowVerifyModal}
+          verificationCode={verificationCode}
+          setVerificationCode={setVerificationCode}
+          isVerifying={isVerifying}
+          setIsVerifying={setIsVerifying}
+          onVerifyAccount={onVerifyAccount}
+          onUpdateUser={onUpdateUser}
+          user={user}
+        />
+      )}
     </View>
   );
 
