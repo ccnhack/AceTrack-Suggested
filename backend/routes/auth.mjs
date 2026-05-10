@@ -531,24 +531,17 @@ export default function createAuthRoutes({
     
     const resetLink = `https://acetrack-suggested.onrender.com/reset-password/${token}`;
     
-    // 🛡️ [RENDER SMTP FIX]: Fire-and-forget email dispatch.
-    // Render's SMTP can be slow/flaky — don't block the HTTP response on it.
-    // The reset token is already persisted in the DB, so the user can retry if the email fails.
     console.log(`📧 [RESET] Dispatching reset email to ${user.email} (link: .../${token.substring(0,8)}...)`);
-    sendPasswordResetEmail(user.email, resetLink, expiresAt.toISOString(), user.firstName || user.name || '')
-      .then(emailStatus => {
-        if (emailStatus.success) {
-          console.log(`✅ [RESET] Email sent to ${user.email}: ${emailStatus.messageId}`);
-          logAudit(req, 'SUPPORT_PASSWORD_RESET_EMAIL_SENT', [], { email: user.email });
-        } else {
-          console.error(`❌ [RESET] Email FAILED to ${user.email}: ${emailStatus.error}`);
-          logAudit(req, 'SUPPORT_PASSWORD_RESET_EMAIL_FAILED', [], { email: user.email, error: emailStatus.error });
-        }
-      })
-      .catch(err => {
-        console.error(`❌ [RESET] Email CRASHED for ${user.email}:`, err.message, err.code || '');
-      });
+    const emailStatus = await sendPasswordResetEmail(user.email, resetLink, expiresAt.toISOString(), user.firstName || user.name || '');
 
+    if (!emailStatus.success) {
+      console.error(`❌ [RESET] Email FAILED to ${user.email}: ${emailStatus.error}`);
+      await logAudit(req, 'SUPPORT_PASSWORD_RESET_EMAIL_FAILED', [], { email: user.email, error: emailStatus.error });
+      return res.status(500).json({ error: 'Failed to send recovery email. Please try again later.' });
+    }
+
+    console.log(`✅ [RESET] Email sent to ${user.email}: ${emailStatus.messageId || 'Success'}`);
+    await logAudit(req, 'SUPPORT_PASSWORD_RESET_EMAIL_SENT', [], { email: user.email });
     res.json({ success: true, message: 'Recovery link sent to your registered email.' });
   }));
 
