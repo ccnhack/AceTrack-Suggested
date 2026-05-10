@@ -223,6 +223,19 @@ const AdminHubScreen = ({ navigation, route }) => {
             })}
           </ScrollView>
         </View>
+        <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+          <TouchableOpacity onPress={() => { navigation.navigate('OrgChat'); if (isMobileWeb) setIsWebSidebarOpen(false); }} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(99, 102, 241, 0.1)', borderWidth: 1, borderColor: '#334155' }}>
+            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#6366F1', justifyContent: 'center', alignItems: 'center' }}>
+              <Ionicons name="chatbubble-ellipses" size={18} color="#FFF" />
+            </View>
+            <View style={{ marginLeft: 12, flex: 1 }}>
+              <Text style={{ color: '#F8FAFC', fontSize: 14, fontWeight: 'bold' }}>Chat/Collaborate</Text>
+              <Text style={{ color: '#94A3B8', fontSize: 11 }}>Team Messages</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#475569" />
+          </TouchableOpacity>
+        </View>
+
         <View style={{ paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: '#1E293B', paddingTop: 24, marginTop: 16 }}>
            <TouchableOpacity onPress={() => { navigation.navigate('Profile'); if (isMobileWeb) setIsWebSidebarOpen(false); }} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 }}>
              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#334155', justifyContent: 'center', alignItems: 'center' }}>

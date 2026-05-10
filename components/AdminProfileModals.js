@@ -22,7 +22,6 @@ export default function AdminProfileModals({ visibleModal, onClose, user }) {
     if (visibleModal === 'my_attendance') fetchAttendance();
     if (visibleModal === 'payslips') fetchPayslips();
     if (visibleModal === 'documents') fetchDocuments();
-    if (visibleModal === 'documents') fetchDocuments();
     if (visibleModal === 'org_chat') {
         fetchMessages();
         fetchTeamDirectory();
@@ -307,6 +306,7 @@ const LeaveRequestView = ({ leaves, onSubmit }) => {
                         </View>
                         <Calendar
                             current={today}
+                            minDate={today}
                             onDayPress={(day) => {
                                 if (showCalendarFor === 'start') {
                                     setStartDate(day.dateString);

@@ -21,7 +21,7 @@ export const useCommsStore = create((set, get) => ({
         }
     },
 
-    sendMessage: async (content) => {
+    sendMessage: async (content, receiverId) => {
         try {
             const response = await fetch(`${config.API_BASE_URL}/api/v1/comms/chat`, {
                 method: 'POST',
@@ -29,7 +29,7 @@ export const useCommsStore = create((set, get) => ({
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${window.localStorage?.getItem('acetrack_auth_token') || ''}` 
                 },
-                body: JSON.stringify({ content })
+                body: JSON.stringify({ content, receiverId })
             });
             const data = await response.json();
             if (data.success) {

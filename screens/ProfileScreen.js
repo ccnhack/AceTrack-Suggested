@@ -618,7 +618,12 @@ const ProfileScreen = ({ navigation }) => {
           onReferral={() => setShowReferralModal(true)}
           onSupport={(signal) => {
              if (signal === 'admin_hub') {
-               navigation.navigate('Admin', { subTab: 'grievances' });
+               // Support users go to their own dashboard; admin users go to admin hub
+               if (user?.role === 'support') {
+                 navigation.navigate('Support');
+               } else {
+                 navigation.navigate('Admin', { subTab: 'grievances' });
+               }
              } else {
                setShowSupport(true);
              }
