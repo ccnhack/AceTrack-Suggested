@@ -37,15 +37,25 @@ function resetTransporter() {
   }
 }
 
-// 🛡️ [PRODUCTION HARDENING]: Wrap sendMail with a hard 20s timeout to prevent hanging HTTP requests
-async function sendMailWithTimeout(mailOptions, timeoutMs = 20000) {
-  return Promise.race([
-    getTransporter().sendMail(mailOptions),
-    new Promise((_, reject) => setTimeout(() => {
-      resetTransporter(); // Force fresh connection on next attempt
-      reject(new Error('SMTP_TIMEOUT: Email send exceeded ' + timeoutMs + 'ms'));
-    }, timeoutMs))
-  ]);
+// 🛡️ [PRODUCTION HARDENING]: Wrap sendMail with timeout + automatic retry on failure
+async function sendMailWithTimeout(mailOptions, timeoutMs = 30000) {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const result = await Promise.race([
+        getTransporter().sendMail(mailOptions),
+        new Promise((_, reject) => setTimeout(() => {
+          reject(new Error('SMTP_TIMEOUT: Email send exceeded ' + timeoutMs + 'ms'));
+        }, timeoutMs))
+      ]);
+      return result; // Success — return immediately
+    } catch (err) {
+      console.error(`📧 [SMTP] Attempt ${attempt}/2 failed: ${err.message}`);
+      resetTransporter(); // Force fresh connection for retry
+      if (attempt === 2) throw err; // Final attempt — propagate error
+      // Brief pause before retry
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
 }
 
 
