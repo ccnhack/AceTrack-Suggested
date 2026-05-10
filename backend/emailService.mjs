@@ -1,66 +1,52 @@
 // ═══════════════════════════════════════════════════════════════
-// 📧 AceTrack Email Service (v2.6.169)
-// Uses Nodemailer + Gmail SMTP (free, 500 emails/day)
+// 📧 AceTrack Email Service (v2.6.170)
+// Uses Google Apps Script HTTPS Relay to bypass Render's SMTP block
 // ═══════════════════════════════════════════════════════════════
-import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Gmail SMTP Transporter
-// Requires: GMAIL_USER and GMAIL_APP_PASSWORD env vars on Render
-let transporter;
-function getTransporter() {
-  if (!transporter) {
-    const gmailUser = process.env.GMAIL_USER;
-    const gmailPass = process.env.GMAIL_APP_PASSWORD;
-    console.log(`📧 [SMTP_INIT] Creating transporter: user=${gmailUser ? gmailUser.substring(0,5) + '...' : 'NOT_SET'}, pass=${gmailPass ? '***(' + gmailPass.length + ' chars)' : 'NOT_SET'}`);
-    
-    if (!gmailUser || !gmailPass) {
-      console.warn("⚠️ GMAIL_USER or GMAIL_APP_PASSWORD is not set. Emails will fail.");
-    }
-    transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: gmailUser || "acetrack.noreply@gmail.com",
-        pass: gmailPass
-      }
+/**
+ * Dispatches an email payload via the Google Apps Script Web App.
+ * This runs over port 443 (HTTPS), completely bypassing Render's port 465 SMTP firewall.
+ */
+async function dispatchViaGasRelay(mailOptions) {
+  const gasUrl = process.env.GAS_EMAIL_URL;
+  if (!gasUrl) {
+    console.warn("⚠️ GAS_EMAIL_URL is not set. Emails will fail.");
+    throw new Error('GAS_EMAIL_URL environment variable is missing.');
+  }
+
+  const payload = {
+    to: mailOptions.to,
+    subject: mailOptions.subject,
+    html: mailOptions.html,
+    text: mailOptions.text
+  };
+
+  try {
+    const response = await fetch(gasUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
     });
-    
-    // 🛡️ Non-blocking SMTP verification on first init
-    transporter.verify()
-      .then(() => console.log('✅ [SMTP_INIT] Gmail SMTP connection verified'))
-      .catch(err => console.error('❌ [SMTP_INIT] Gmail SMTP verification FAILED:', err.message, err.code || ''));
-  }
-  return transporter;
-}
 
-// 🛡️ [PRODUCTION HARDENING]: Invalidate cached transporter on fatal SMTP errors
-function resetTransporter() {
-  if (transporter) {
-    try { transporter.close(); } catch (_) {}
-    transporter = null;
-  }
-}
-
-// 🛡️ [PRODUCTION HARDENING]: Wrap sendMail with timeout + automatic retry on failure
-async function sendMailWithTimeout(mailOptions, timeoutMs = 30000) {
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const result = await Promise.race([
-        getTransporter().sendMail(mailOptions),
-        new Promise((_, reject) => setTimeout(() => {
-          reject(new Error('SMTP_TIMEOUT: Email send exceeded ' + timeoutMs + 'ms'));
-        }, timeoutMs))
-      ]);
-      return result; // Success — return immediately
-    } catch (err) {
-      console.error(`📧 [SMTP] Attempt ${attempt}/2 failed: ${err.message}`);
-      resetTransporter(); // Force fresh connection for retry
-      if (attempt === 2) throw err; // Final attempt — propagate error
-      // Brief pause before retry
-      await new Promise(r => setTimeout(r, 1000));
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Unknown error from GAS Relay');
     }
+    
+    return { success: true, messageId: `gas-${Date.now()}` };
+  } catch (error) {
+    console.error('❌ [EMAIL_RELAY] Dispatch failed:', error.message);
+    throw error;
   }
+}
+
+// 🛡️ [PRODUCTION HARDENING]: Wrap sendMail to use GAS HTTP Relay
+async function sendMailWithTimeout(mailOptions, timeoutMs = 30000) {
+  return dispatchViaGasRelay(mailOptions);
 }
 
 
@@ -411,8 +397,7 @@ export async function sendPasswordResetEmail(toEmail, resetLink, expiresAt, firs
     text: `Reset your AceTrack password: ${resetLink}\n\nThis link expires on ${expiryFormatted} IST.`
   };
 
-  return getTransporter().sendMail(mailOptions)
-    .then(info => ({ success: true, messageId: info.messageId }))
+  return dispatchViaGasRelay(mailOptions)
     .catch(error => {
       console.error('Failed to send reset email:', error);
       return { success: false, error: error.message };
