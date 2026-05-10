@@ -21,6 +21,63 @@ export default function createInfrastructureRoutes({ APP_VERSION, syncMutex }) {
     res.json({ status: 'ok', uptime: process.uptime(), version: APP_VERSION });
   });
 
+  // 🛡️ [SMTP DIAGNOSTICS] — Temporary endpoint to debug Render email issues
+  router.get('/smtp-diag', async (req, res) => {
+    const nodemailer = await import('nodemailer');
+    const gmailUser = process.env.GMAIL_USER;
+    const gmailPass = process.env.GMAIL_APP_PASSWORD;
+    
+    const result = {
+      envVars: {
+        GMAIL_USER: gmailUser ? gmailUser.substring(0, 5) + '...' + gmailUser.slice(-10) : 'NOT_SET',
+        GMAIL_APP_PASSWORD: gmailPass ? `***SET (${gmailPass.length} chars)` : 'NOT_SET',
+      },
+      smtpVerify: null,
+      smtpError: null,
+      testEmailSent: null,
+    };
+    
+    if (!gmailUser || !gmailPass) {
+      result.smtpError = 'Missing credentials';
+      return res.json(result);
+    }
+    
+    const transport = nodemailer.default.createTransport({
+      service: 'gmail',
+      pool: false,
+      auth: { user: gmailUser, pass: gmailPass },
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 20000,
+    });
+    
+    try {
+      await transport.verify();
+      result.smtpVerify = 'SUCCESS';
+    } catch (err) {
+      result.smtpVerify = 'FAILED';
+      result.smtpError = `${err.message} (code: ${err.code || 'none'})`;
+      transport.close();
+      return res.json(result);
+    }
+    
+    // If verify passed, try sending a test email
+    try {
+      const info = await transport.sendMail({
+        from: `"AceTrack SMTP Test" <${gmailUser}>`,
+        to: gmailUser,
+        subject: `SMTP Diag Test — ${new Date().toISOString()}`,
+        text: 'This email was sent from the Render SMTP diagnostic endpoint.'
+      });
+      result.testEmailSent = `SUCCESS: ${info.messageId}`;
+    } catch (err) {
+      result.testEmailSent = `FAILED: ${err.message}`;
+    }
+    
+    transport.close();
+    res.json(result);
+  });
+
   // 🛡️ [SLACK INTERACTION ENDPOINT] (v2.6.212)
   // Handles "Approve" and "Block" buttons from Slack security alerts
   router.post('/slack/interact', async (req, res) => {
