@@ -43,7 +43,10 @@ export default function createInfrastructureRoutes({ APP_VERSION, syncMutex }) {
     }
     
     const transport = nodemailer.default.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      family: 4,
       pool: false,
       auth: { user: gmailUser, pass: gmailPass },
       connectionTimeout: 15000,

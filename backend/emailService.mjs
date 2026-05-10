@@ -19,7 +19,10 @@ function getTransporter() {
       console.warn("⚠️ GMAIL_USER or GMAIL_APP_PASSWORD is not set. Emails will fail.");
     }
     transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      family: 4, // 🛡️ [IPv6 FIX]: Force IPv4. Render throws ENETUNREACH for Gmail SMTP over IPv6
       pool: false, // 🛡️ Don't pool connections — prevents stale socket reuse on Render
       auth: {
         user: gmailUser || "acetrack.noreply@gmail.com",
