@@ -12,6 +12,7 @@ import { usePlayers } from '../context/PlayerContext';
 import { useSupport } from '../context/SupportContext';
 import { useSync } from '../context/SyncContext';
 import { useAuth } from '../context/AuthContext';
+import { useCommsStore } from '../stores/useCommsStore';
 
 const SupportDashboardScreen = ({ navigation, route }) => {
   const { players } = usePlayers();
