@@ -58,12 +58,17 @@ const ProfileHeader = memo(({
           </View>
         )}
 
-        {user?.role === 'support' ? (
+        {user?.role === 'admin' ? (
+          <View style={styles.adminBadge}>
+            <Ionicons name="shield" size={12} color="#FFFFFF" />
+            <Text style={styles.adminBadgeText}>SYSTEM ADMIN</Text>
+          </View>
+        ) : user?.role === 'support' ? (
           <View style={styles.designationBadge}>
             <Ionicons name="briefcase" size={12} color="#4F46E5" />
             <Text style={styles.designationText}>{user?.designation || 'Support Staff'}</Text>
           </View>
-        ) : user?.role !== 'admin' && user?.role !== 'academy' && user?.role !== 'coach' && (
+        ) : user?.role !== 'academy' && user?.role !== 'coach' && (
           <TouchableOpacity onPress={onWalletPress} style={styles.walletTrigger}>
             <Ionicons name="wallet" size={12} color="#16A34A" />
             <Text style={styles.walletTriggerText}>Wallet: ₹{user?.credits || 0}</Text>
@@ -232,6 +237,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#4338CA',
     letterSpacing: 0.2,
+  },
+  adminBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 6,
+    backgroundColor: '#0F172A',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  adminBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   syncBadge: {
     flexDirection: 'row',

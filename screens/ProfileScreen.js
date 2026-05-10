@@ -416,8 +416,74 @@ const ProfileScreen = ({ navigation }) => {
 
         {(user?.role === 'admin' || user?.role === 'academy' || user?.role === 'coach') && renderUpdateCard()}
 
-        {/* --- Support Employee: Quick Actions Hub --- */}
-        {user?.role === 'support' ? (
+        {/* --- Admin: Control Center --- */}
+        {user?.role === 'admin' ? (
+          <View style={styles.section}>
+            {renderUpdateCard()}
+            <Text style={styles.sectionTitle}>Admin Control Center</Text>
+            <View style={styles.featureGrid}>
+              <TouchableOpacity 
+                style={styles.featureTile} 
+                onPress={() => navigation.navigate('Admin')}
+              >
+                <View style={[styles.featureIcon, { backgroundColor: '#F1F5F9' }]}>
+                  <Ionicons name="settings-outline" size={24} color="#0F172A" />
+                </View>
+                <Text style={styles.featureLabel}>Admin Hub</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.featureTile} 
+                onPress={() => Alert.alert('Team Directory', 'A standalone employee directory with contact details, roles, and department information is coming soon.', [{ text: 'OK' }])}
+              >
+                <View style={[styles.featureIcon, { backgroundColor: '#EFF6FF' }]}>
+                  <Ionicons name="people-outline" size={24} color="#3B82F6" />
+                </View>
+                <Text style={styles.featureLabel}>Team Directory</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.featureTile} 
+                onPress={() => Alert.alert('Announcements', 'Broadcast messages and announcements to all employees. This feature is coming soon.', [{ text: 'OK' }])}
+              >
+                <View style={[styles.featureIcon, { backgroundColor: '#F5F3FF' }]}>
+                  <Ionicons name="megaphone-outline" size={24} color="#7C3AED" />
+                </View>
+                <Text style={styles.featureLabel}>Announcements</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.featureTile} 
+                onPress={() => navigation.navigate('Insights')}
+              >
+                <View style={[styles.featureIcon, { backgroundColor: '#EEF2FF' }]}>
+                  <Ionicons name="bar-chart-outline" size={24} color="#4F46E5" />
+                </View>
+                <Text style={styles.featureLabel}>Analytics</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.featureTile} 
+                onPress={() => Alert.alert('Audit Logs', 'View all system events including:\n\n• User login/logout activity\n• Password changes\n• Role modifications\n• Data access logs\n• Security alerts\n\nThis feature is coming soon.', [{ text: 'OK' }])}
+              >
+                <View style={[styles.featureIcon, { backgroundColor: '#FFFBEB' }]}>
+                  <Ionicons name="shield-outline" size={24} color="#D97706" />
+                </View>
+                <Text style={styles.featureLabel}>Audit Logs</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.featureTile} 
+                onPress={() => Alert.alert('Org Settings', 'Organisation configuration including company profile, working hours, leave policies, and department management. Coming soon.', [{ text: 'OK' }])}
+              >
+                <View style={[styles.featureIcon, { backgroundColor: '#F0FDFA' }]}>
+                  <Ionicons name="cog-outline" size={24} color="#0D9488" />
+                </View>
+                <Text style={styles.featureLabel}>Org Settings</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : user?.role === 'support' ? (
           <View style={styles.section}>
             {renderUpdateCard()}
             <Text style={styles.sectionTitle}>Quick Actions</Text>
@@ -484,23 +550,23 @@ const ProfileScreen = ({ navigation }) => {
             </View>
           </View>
         ) : (
-          /* --- Original Expert Panel Features (Players/Admin/Coach/Academy) --- */
+          /* --- Original Expert Panel Features (Players/Coach/Academy) --- */
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Expert Panel Features</Text>
             <View style={styles.featureGrid}>
                 <TouchableOpacity 
                     style={styles.featureTile} 
-                    onPress={() => navigation.navigate(user?.role === 'admin' ? 'Insights' : 'Matchmaking')}
+                    onPress={() => navigation.navigate('Matchmaking')}
                 >
-                    <View style={[styles.featureIcon, { backgroundColor: user?.role === 'admin' ? '#EEF2FF' : '#EEF2FF' }]}>
-                        <Ionicons name={user?.role === 'admin' ? 'analytics' : 'people'} size={24} color="#4F46E5" />
+                    <View style={[styles.featureIcon, { backgroundColor: '#EEF2FF' }]}>
+                        <Ionicons name={user?.role === 'coach' ? 'calendar' : 'people'} size={24} color="#4F46E5" />
                     </View>
                     <Text style={styles.featureLabel}>
-                        {user?.role === 'admin' ? 'Insights' : user?.role === 'coach' ? 'Bookings' : 'Matchmaking'}
+                        {user?.role === 'coach' ? 'Bookings' : 'Matchmaking'}
                     </Text>
                 </TouchableOpacity>
 
-                {user?.role !== 'coach' && user?.role !== 'admin' && (
+                {user?.role !== 'coach' && (
                   <TouchableOpacity style={styles.featureTile} onPress={() => navigation.navigate('CoachDirectory')}>
                       <View style={[styles.featureIcon, { backgroundColor: '#FFF7ED' }]}>
                           <Ionicons name="school" size={24} color="#EA580C" />

@@ -124,24 +124,66 @@ const ProfileMenuSection = memo(({
         </TouchableOpacity>
       )}
 
-      <TouchableOpacity 
-        onPress={() => {
-          if (user?.role === 'admin') {
-            logger.logAction('NAVIGATE_ADMIN_GRIEVANCES');
-            onSupport('admin_hub'); // Special signal to ProfileScreen
-          } else {
+      {/* --- Admin: Security & Access --- */}
+      {user.role === 'admin' && (
+        <TouchableOpacity 
+          onPress={() => {
+            logger.logAction('MODAL_OPEN', { modal: 'SecurityAccess' });
+            Alert.alert('Security & Access', 'View and manage:\n\n• Active user sessions\n• Connected devices\n• Login attempt history\n• Access control settings\n• Security alerts\n\nThis feature is coming soon.', [{ text: 'OK' }]);
+          }}
+          style={styles.menuItem}
+        >
+          <View style={[styles.menuIcon, { backgroundColor: '#FEF2F2' }]}>
+            <Ionicons name="finger-print-outline" size={20} color="#DC2626" />
+          </View>
+          <Text style={styles.menuLabel}>Security & Access</Text>
+          <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+        </TouchableOpacity>
+      )}
+
+      {/* --- Support: Report Issue (auto-assigns to admin) --- */}
+      {user.role === 'support' && (
+        <TouchableOpacity 
+          onPress={() => {
+            logger.logAction('MODAL_OPEN', { modal: 'ReportIssue' });
+            Alert.alert(
+              'Report Issue', 
+              'Use this to report bugs, raise concerns, or submit feedback directly to the System Admin.\n\nYour report will be automatically assigned to the Admin for review.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Report Now', onPress: () => {
+                  // Trigger the support modal — issues auto-assign to admin
+                  onSupport('report_issue');
+                }}
+              ]
+            );
+          }}
+          style={styles.menuItem}
+        >
+          <View style={[styles.menuIcon, { backgroundColor: '#FFF7ED' }]}>
+            <Ionicons name="alert-circle-outline" size={20} color="#EA580C" />
+          </View>
+          <Text style={styles.menuLabel}>Report Issue</Text>
+          <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+        </TouchableOpacity>
+      )}
+
+      {/* --- Regular Users (Player/Coach/Academy): Help & Support --- */}
+      {user.role !== 'admin' && user.role !== 'support' && (
+        <TouchableOpacity 
+          onPress={() => {
             logger.logAction('MODAL_OPEN', { modal: 'Support' });
             onSupport();
-          }
-        }}
-        style={styles.menuItem}
-      >
-        <View style={[styles.menuIcon, { backgroundColor: '#EFF6FF' }]}>
-          <Ionicons name="help-buoy" size={20} color="#3B82F6" />
-        </View>
-        <Text style={styles.menuLabel}>{user?.role === 'admin' ? 'Support Center' : 'Help & Support'}</Text>
-        <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
-      </TouchableOpacity>
+          }}
+          style={styles.menuItem}
+        >
+          <View style={[styles.menuIcon, { backgroundColor: '#EFF6FF' }]}>
+            <Ionicons name="help-buoy" size={20} color="#3B82F6" />
+          </View>
+          <Text style={styles.menuLabel}>Help & Support</Text>
+          <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+        </TouchableOpacity>
+      )}
 
 
 
