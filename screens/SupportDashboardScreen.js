@@ -81,54 +81,57 @@ const SupportDashboardScreen = ({ navigation, route }) => {
             <Text style={{ color: '#FFF', fontSize: 20, fontWeight: '900', letterSpacing: 1 }}>ACETRACK</Text>
           </View>
 
-          <View style={{ paddingHorizontal: 16 }}>
-            <Text style={{ color: '#475569', fontSize: 11, fontWeight: '800', marginBottom: 12, paddingHorizontal: 12, letterSpacing: 1.5 }}>SUPPORT CENTER</Text>
-            
-            {/* Tickets - always active */}
-            <TouchableOpacity 
-              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, backgroundColor: '#6366F1', marginBottom: 4 }}
-              onPress={() => { if (isMobileWeb) setIsWebSidebarOpen(false); }}
-            >
-              <Ionicons name="chatbubbles-outline" size={20} color="#FFF" />
-              <Text style={{ marginLeft: 16, fontSize: 14, fontWeight: '700', color: '#FFF', flex: 1 }}>Support Tickets</Text>
-              {(ticketStats.open + ticketStats.awaiting) > 0 && (
-                <View style={{ backgroundColor: '#EF4444', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2 }}>
-                  <Text style={{ color: '#FFF', fontSize: 10, fontWeight: 'bold' }}>{ticketStats.open + ticketStats.awaiting}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-
-            {/* Quick stats in sidebar */}
-            <View style={{ marginTop: 24, paddingHorizontal: 12 }}>
-              <Text style={{ color: '#475569', fontSize: 11, fontWeight: '800', marginBottom: 16, letterSpacing: 1.5 }}>QUICK STATS</Text>
-              {[
-                { label: 'Open', value: ticketStats.open, color: '#3B82F6' },
-                { label: 'In Progress', value: ticketStats.inProgress, color: '#F59E0B' },
-                { label: 'Awaiting', value: ticketStats.awaiting, color: '#A855F7' },
-                { label: 'Resolved', value: ticketStats.resolved, color: '#10B981' },
-              ].map(stat => (
-                <View key={stat.label} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: stat.color, marginRight: 10 }} />
-                    <Text style={{ color: '#94A3B8', fontSize: 13, fontWeight: '500' }}>{stat.label}</Text>
+          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+            <View style={{ paddingHorizontal: 16 }}>
+              <Text style={{ color: '#475569', fontSize: 11, fontWeight: '800', marginBottom: 12, paddingHorizontal: 12, letterSpacing: 1.5 }}>SUPPORT CENTER</Text>
+              
+              {/* Tickets - always active */}
+              <TouchableOpacity 
+                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, backgroundColor: '#6366F1', marginBottom: 4 }}
+                onPress={() => { if (isMobileWeb) setIsWebSidebarOpen(false); }}
+              >
+                <Ionicons name="chatbubbles-outline" size={20} color="#FFF" />
+                <Text style={{ marginLeft: 16, fontSize: 14, fontWeight: '700', color: '#FFF', flex: 1 }}>Support Tickets</Text>
+                {(ticketStats.open + ticketStats.awaiting) > 0 && (
+                  <View style={{ backgroundColor: '#EF4444', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2 }}>
+                    <Text style={{ color: '#FFF', fontSize: 10, fontWeight: 'bold' }}>{ticketStats.open + ticketStats.awaiting}</Text>
                   </View>
-                  <Text style={{ color: '#E2E8F0', fontSize: 16, fontWeight: '800' }}>{stat.value}</Text>
-                </View>
-              ))}
+                )}
+              </TouchableOpacity>
+
+              {/* Quick stats in sidebar */}
+              <View style={{ marginTop: 24, paddingHorizontal: 12 }}>
+                <Text style={{ color: '#475569', fontSize: 11, fontWeight: '800', marginBottom: 16, letterSpacing: 1.5 }}>QUICK STATS</Text>
+                {[
+                  { label: 'Open', value: ticketStats.open, color: '#3B82F6' },
+                  { label: 'In Progress', value: ticketStats.inProgress, color: '#F59E0B' },
+                  { label: 'Awaiting', value: ticketStats.awaiting, color: '#A855F7' },
+                  { label: 'Resolved', value: ticketStats.resolved, color: '#10B981' },
+                ].map(stat => (
+                  <View key={stat.label} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: stat.color, marginRight: 10 }} />
+                      <Text style={{ color: '#94A3B8', fontSize: 13, fontWeight: '500' }}>{stat.label}</Text>
+                    </View>
+                    <Text style={{ color: '#E2E8F0', fontSize: 16, fontWeight: '800' }}>{stat.value}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
-          </View>
+          </ScrollView>
         </View>
 
-        {/* Bottom profile link */}
-        <View style={{ paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: '#1E293B', paddingTop: 24, marginTop: 16 }}>
-          <TouchableOpacity onPress={() => { navigation.navigate('Profile'); if (isMobileWeb) setIsWebSidebarOpen(false); }} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 }}>
+        {/* Bottom profile link - always pinned at bottom */}
+        <View style={{ paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: '#1E293B', paddingTop: 16, paddingBottom: 8 }}>
+          <TouchableOpacity onPress={() => { navigation.navigate('Profile'); if (isMobileWeb) setIsWebSidebarOpen(false); }} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: '#1E293B' }}>
             <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#334155', justifyContent: 'center', alignItems: 'center' }}>
               <Ionicons name="person" size={18} color="#FFF" />
             </View>
-            <View style={{ marginLeft: 12 }}>
+            <View style={{ marginLeft: 12, flex: 1 }}>
               <Text style={{ color: '#F8FAFC', fontSize: 14, fontWeight: 'bold' }}>{currentUser?.name || 'Support Agent'}</Text>
               <Text style={{ color: '#94A3B8', fontSize: 11 }}>{currentUser?.email || 'Settings & Profile'}</Text>
             </View>
+            <Ionicons name="chevron-forward" size={16} color="#475569" />
           </TouchableOpacity>
         </View>
       </View>
