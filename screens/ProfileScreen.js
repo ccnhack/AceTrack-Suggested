@@ -26,7 +26,6 @@ import ProfileHeader, { AvatarPlaceholder, getInitials } from '../components/Pro
 import ProfileMenuSection from '../components/ProfileMenuSection';
 import { OTPVerificationModal, CalendarWidget } from '../components/ProfileSubComponents';
 import AdminProfileModals from '../components/AdminProfileModals';
-import AdminProfileModals from '../components/AdminProfileModals';
 
 const calculateAcademyTier = (uid, tournaments = []) => {
   const hostedCount = (tournaments || []).filter(t => t.creatorId === uid).length;
