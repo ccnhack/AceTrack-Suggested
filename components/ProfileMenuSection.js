@@ -46,19 +46,21 @@ const ProfileMenuSection = memo(({
         <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
       </TouchableOpacity>
 
-      <TouchableOpacity 
-        onPress={() => {
-          logger.logAction('MODAL_OPEN', { modal: 'Diagnostics' });
-          onDiagnostics();
-        }}
-        style={styles.menuItem}
-      >
-        <View style={[styles.menuIcon, { backgroundColor: '#F8FAFC' }]}>
-          <Ionicons name="bug-outline" size={20} color="#334155" />
-        </View>
-        <Text style={styles.menuLabel}>System Diagnostics</Text>
-        <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
-      </TouchableOpacity>
+      {user.role !== 'support' && (
+        <TouchableOpacity 
+          onPress={() => {
+            logger.logAction('MODAL_OPEN', { modal: 'Diagnostics' });
+            onDiagnostics();
+          }}
+          style={styles.menuItem}
+        >
+          <View style={[styles.menuIcon, { backgroundColor: '#F8FAFC' }]}>
+            <Ionicons name="bug-outline" size={20} color="#334155" />
+          </View>
+          <Text style={styles.menuLabel}>System Diagnostics</Text>
+          <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+        </TouchableOpacity>
+      )}
 
       <TouchableOpacity 
         onPress={() => {
@@ -74,6 +76,38 @@ const ProfileMenuSection = memo(({
         <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
       </TouchableOpacity>
       
+      {user.role === 'support' && (
+        <>
+          <TouchableOpacity 
+            onPress={() => {
+              logger.logAction('MODAL_OPEN', { modal: 'PerformanceReviews' });
+              Alert.alert('Performance Reviews', 'Your performance reviews will appear here once your manager completes the evaluation cycle.', [{ text: 'OK' }]);
+            }}
+            style={styles.menuItem}
+          >
+            <View style={[styles.menuIcon, { backgroundColor: '#FFFBEB' }]}>
+              <Ionicons name="star-outline" size={20} color="#D97706" />
+            </View>
+            <Text style={styles.menuLabel}>Performance Reviews</Text>
+            <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            onPress={() => {
+              logger.logAction('MODAL_OPEN', { modal: 'OrgPolicies' });
+              Alert.alert('Organisation Policies', 'Company policies including Leave Policy, Work From Home, Code of Conduct, and more will be available here soon.', [{ text: 'OK' }]);
+            }}
+            style={styles.menuItem}
+          >
+            <View style={[styles.menuIcon, { backgroundColor: '#EEF2FF' }]}>
+              <Ionicons name="shield-checkmark-outline" size={20} color="#4F46E5" />
+            </View>
+            <Text style={styles.menuLabel}>Organisation Policies</Text>
+            <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+          </TouchableOpacity>
+        </>
+      )}
+
       {user.role === 'user' && (
         <TouchableOpacity 
           onPress={() => {

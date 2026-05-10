@@ -58,7 +58,12 @@ const ProfileHeader = memo(({
           </View>
         )}
 
-        {user?.role !== 'admin' && user?.role !== 'academy' && user?.role !== 'coach' && (
+        {user?.role === 'support' ? (
+          <View style={styles.designationBadge}>
+            <Ionicons name="briefcase" size={12} color="#4F46E5" />
+            <Text style={styles.designationText}>{user?.designation || 'Support Staff'}</Text>
+          </View>
+        ) : user?.role !== 'admin' && user?.role !== 'academy' && user?.role !== 'coach' && (
           <TouchableOpacity onPress={onWalletPress} style={styles.walletTrigger}>
             <Ionicons name="wallet" size={12} color="#16A34A" />
             <Text style={styles.walletTriggerText}>Wallet: ₹{user?.credits || 0}</Text>
@@ -207,6 +212,25 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#15803D',
+    letterSpacing: 0.2,
+  },
+  designationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 6,
+    backgroundColor: '#EEF2FF',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+    alignSelf: 'flex-start',
+  },
+  designationText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#4338CA',
     letterSpacing: 0.2,
   },
   syncBadge: {

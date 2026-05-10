@@ -405,10 +405,8 @@ const ProfileScreen = ({ navigation }) => {
           logger={logger}
         />
 
-        {/* Skill Dashboard (Optional, based on user roles etc) */}
-
-
-        {user?.role !== 'admin' && user?.role !== 'academy' && user?.role !== 'coach' && (
+        {/* Skill Dashboard — Hidden for support role */}
+        {user?.role !== 'admin' && user?.role !== 'academy' && user?.role !== 'coach' && user?.role !== 'support' && (
           <View style={styles.section}>
               <Text style={styles.sectionTitle}>Skills</Text>
               {renderUpdateCard()}
@@ -418,8 +416,76 @@ const ProfileScreen = ({ navigation }) => {
 
         {(user?.role === 'admin' || user?.role === 'academy' || user?.role === 'coach') && renderUpdateCard()}
 
-        {/* --- NEW: Expert Panel Feature Hub --- */}
-        <View style={styles.section}>
+        {/* --- Support Employee: Quick Actions Hub --- */}
+        {user?.role === 'support' ? (
+          <View style={styles.section}>
+            {renderUpdateCard()}
+            <Text style={styles.sectionTitle}>Quick Actions</Text>
+            <View style={styles.featureGrid}>
+              <TouchableOpacity 
+                style={styles.featureTile} 
+                onPress={() => Alert.alert('Leave Request', `Your current leave balances:\n\n• Earned Leaves: Based on your designation\n• Sick Leaves: 1 per month\n\nLeave application feature coming soon. For now, please contact your Team Lead to request leaves.`, [{ text: 'OK' }])}
+              >
+                <View style={[styles.featureIcon, { backgroundColor: '#EFF6FF' }]}>
+                  <Ionicons name="calendar-outline" size={24} color="#3B82F6" />
+                </View>
+                <Text style={styles.featureLabel}>Leave Request</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.featureTile} 
+                onPress={() => Alert.alert('Organisation Chat', 'Team chat and internal communication channel will be available here soon.', [{ text: 'OK' }])}
+              >
+                <View style={[styles.featureIcon, { backgroundColor: '#F0FDF4' }]}>
+                  <Ionicons name="chatbubbles-outline" size={24} color="#16A34A" />
+                </View>
+                <Text style={styles.featureLabel}>Org Chat</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.featureTile} 
+                onPress={() => Alert.alert('My Attendance', 'Your personal attendance calendar with check-in/check-out logs is coming soon. For now, your admin can view your attendance from the Admin Hub.', [{ text: 'OK' }])}
+              >
+                <View style={[styles.featureIcon, { backgroundColor: '#F5F3FF' }]}>
+                  <Ionicons name="time-outline" size={24} color="#7C3AED" />
+                </View>
+                <Text style={styles.featureLabel}>My Attendance</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.featureTile} 
+                onPress={() => Alert.alert('Payslips', 'Your monthly salary slips will be available for download here once the payroll system is integrated.', [{ text: 'OK' }])}
+              >
+                <View style={[styles.featureIcon, { backgroundColor: '#FFF7ED' }]}>
+                  <Ionicons name="document-text-outline" size={24} color="#EA580C" />
+                </View>
+                <Text style={styles.featureLabel}>Payslips</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.featureTile} 
+                onPress={() => Alert.alert('Company Holidays 2026', '• 26 Jan — Republic Day\n• 14 Mar — Holi\n• 18 Apr — Good Friday\n• 01 May — May Day\n• 15 Aug — Independence Day\n• 02 Oct — Gandhi Jayanti\n• 20 Oct — Diwali\n• 05 Nov — Diwali Holiday\n• 25 Dec — Christmas\n\nAdditional company-specific holidays may apply.', [{ text: 'OK' }])}
+              >
+                <View style={[styles.featureIcon, { backgroundColor: '#FEF2F2' }]}>
+                  <Ionicons name="sunny-outline" size={24} color="#DC2626" />
+                </View>
+                <Text style={styles.featureLabel}>Holidays</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.featureTile} 
+                onPress={() => Alert.alert('Documents', 'Upload and manage your personal documents (Aadhaar, PAN, Offer Letter, etc.) here. This feature is coming soon.', [{ text: 'OK' }])}
+              >
+                <View style={[styles.featureIcon, { backgroundColor: '#F0FDFA' }]}>
+                  <Ionicons name="folder-open-outline" size={24} color="#0D9488" />
+                </View>
+                <Text style={styles.featureLabel}>Documents</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          /* --- Original Expert Panel Features (Players/Admin/Coach/Academy) --- */
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>Expert Panel Features</Text>
             <View style={styles.featureGrid}>
                 <TouchableOpacity 
@@ -459,7 +525,8 @@ const ProfileScreen = ({ navigation }) => {
                   </TouchableOpacity>
                 )}
             </View>
-        </View>
+          </View>
+        )}
 
         <ProfileMenuSection
           user={user}
