@@ -80,8 +80,7 @@ const ProfileMenuSection = memo(({
         <>
           <TouchableOpacity 
             onPress={() => {
-              logger.logAction('MODAL_OPEN', { modal: 'PerformanceReviews' });
-              Alert.alert('Performance Reviews', 'Your performance reviews will appear here once your manager completes the evaluation cycle.', [{ text: 'OK' }]);
+              if (onOpenModal) onOpenModal('performance_reviews');
             }}
             style={styles.menuItem}
           >
@@ -94,8 +93,7 @@ const ProfileMenuSection = memo(({
 
           <TouchableOpacity 
             onPress={() => {
-              logger.logAction('MODAL_OPEN', { modal: 'OrgPolicies' });
-              Alert.alert('Organisation Policies', 'Company policies including Leave Policy, Work From Home, Code of Conduct, and more will be available here soon.', [{ text: 'OK' }]);
+              if (onOpenModal) onOpenModal('org_policies');
             }}
             style={styles.menuItem}
           >

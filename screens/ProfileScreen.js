@@ -25,6 +25,8 @@ import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 import ProfileHeader, { AvatarPlaceholder, getInitials } from '../components/ProfileHeader';
 import ProfileMenuSection from '../components/ProfileMenuSection';
 import { OTPVerificationModal, CalendarWidget } from '../components/ProfileSubComponents';
+import AdminProfileModals from '../components/AdminProfileModals';
+import AdminProfileModals from '../components/AdminProfileModals';
 
 const calculateAcademyTier = (uid, tournaments = []) => {
   const hostedCount = (tournaments || []).filter(t => t.creatorId === uid).length;
@@ -69,6 +71,7 @@ const ProfileScreen = ({ navigation }) => {
     }
   }, [isFocused]);
   const [showCoachOnboarding, setShowCoachOnboarding] = useState(false);
+  const [activeSupportModal, setActiveSupportModal] = useState(null);
   const [showSupport, setShowSupport] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
@@ -391,6 +394,18 @@ const ProfileScreen = ({ navigation }) => {
         contentContainerStyle={styles.scrollContent} 
         showsVerticalScrollIndicator={false}
       >
+        {isWeb && (user?.role === 'admin' || user?.role === 'support') && (
+          <TouchableOpacity 
+            onPress={() => navigation.navigate(user?.role === 'admin' ? 'Admin' : 'Support')} 
+            style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, alignSelf: 'flex-start' }}
+          >
+            <Ionicons name="arrow-back" size={20} color="#64748B" />
+            <Text style={{ color: '#64748B', fontWeight: 'bold', fontSize: 14, marginLeft: 8 }}>
+              Back to {user?.role === 'admin' ? 'Admin Hub' : 'Support Dashboard'}
+            </Text>
+          </TouchableOpacity>
+        )}
+
         <ProfileHeader
           user={user}
           academyTier={academyTier}
@@ -434,7 +449,7 @@ const ProfileScreen = ({ navigation }) => {
 
               <TouchableOpacity 
                 style={styles.featureTile} 
-                onPress={() => Alert.alert('Team Directory', 'A standalone employee directory with contact details, roles, and department information is coming soon.', [{ text: 'OK' }])}
+                onPress={() => setActiveSupportModal('team_directory')}
               >
                 <View style={[styles.featureIcon, { backgroundColor: '#EFF6FF' }]}>
                   <Ionicons name="people-outline" size={24} color="#3B82F6" />
@@ -464,7 +479,7 @@ const ProfileScreen = ({ navigation }) => {
 
               <TouchableOpacity 
                 style={styles.featureTile} 
-                onPress={() => Alert.alert('Audit Logs', 'View all system events including:\n\n• User login/logout activity\n• Password changes\n• Role modifications\n• Data access logs\n• Security alerts\n\nThis feature is coming soon.', [{ text: 'OK' }])}
+                onPress={() => setActiveSupportModal('audit_logs')}
               >
                 <View style={[styles.featureIcon, { backgroundColor: '#FFFBEB' }]}>
                   <Ionicons name="shield-outline" size={24} color="#D97706" />
@@ -474,7 +489,7 @@ const ProfileScreen = ({ navigation }) => {
 
               <TouchableOpacity 
                 style={styles.featureTile} 
-                onPress={() => Alert.alert('Org Settings', 'Organisation configuration including company profile, working hours, leave policies, and department management. Coming soon.', [{ text: 'OK' }])}
+                onPress={() => setActiveSupportModal('org_settings')}
               >
                 <View style={[styles.featureIcon, { backgroundColor: '#F0FDFA' }]}>
                   <Ionicons name="cog-outline" size={24} color="#0D9488" />
@@ -490,7 +505,7 @@ const ProfileScreen = ({ navigation }) => {
             <View style={styles.featureGrid}>
               <TouchableOpacity 
                 style={styles.featureTile} 
-                onPress={() => Alert.alert('Leave Request', `Your current leave balances:\n\n• Earned Leaves: Based on your designation\n• Sick Leaves: 1 per month\n\nLeave application feature coming soon. For now, please contact your Team Lead to request leaves.`, [{ text: 'OK' }])}
+                onPress={() => setActiveSupportModal('leave_request')}
               >
                 <View style={[styles.featureIcon, { backgroundColor: '#EFF6FF' }]}>
                   <Ionicons name="calendar-outline" size={24} color="#3B82F6" />
@@ -500,7 +515,7 @@ const ProfileScreen = ({ navigation }) => {
 
               <TouchableOpacity 
                 style={styles.featureTile} 
-                onPress={() => Alert.alert('Organisation Chat', 'Team chat and internal communication channel will be available here soon.', [{ text: 'OK' }])}
+                onPress={() => setActiveSupportModal('org_chat')}
               >
                 <View style={[styles.featureIcon, { backgroundColor: '#F0FDF4' }]}>
                   <Ionicons name="chatbubbles-outline" size={24} color="#16A34A" />
@@ -510,7 +525,7 @@ const ProfileScreen = ({ navigation }) => {
 
               <TouchableOpacity 
                 style={styles.featureTile} 
-                onPress={() => Alert.alert('My Attendance', 'Your personal attendance calendar with check-in/check-out logs is coming soon. For now, your admin can view your attendance from the Admin Hub.', [{ text: 'OK' }])}
+                onPress={() => setActiveSupportModal('my_attendance')}
               >
                 <View style={[styles.featureIcon, { backgroundColor: '#F5F3FF' }]}>
                   <Ionicons name="time-outline" size={24} color="#7C3AED" />
@@ -520,7 +535,7 @@ const ProfileScreen = ({ navigation }) => {
 
               <TouchableOpacity 
                 style={styles.featureTile} 
-                onPress={() => Alert.alert('Payslips', 'Your monthly salary slips will be available for download here once the payroll system is integrated.', [{ text: 'OK' }])}
+                onPress={() => setActiveSupportModal('payslips')}
               >
                 <View style={[styles.featureIcon, { backgroundColor: '#FFF7ED' }]}>
                   <Ionicons name="document-text-outline" size={24} color="#EA580C" />
@@ -530,7 +545,7 @@ const ProfileScreen = ({ navigation }) => {
 
               <TouchableOpacity 
                 style={styles.featureTile} 
-                onPress={() => Alert.alert('Company Holidays 2026', '• 26 Jan — Republic Day\n• 14 Mar — Holi\n• 18 Apr — Good Friday\n• 01 May — May Day\n• 15 Aug — Independence Day\n• 02 Oct — Gandhi Jayanti\n• 20 Oct — Diwali\n• 05 Nov — Diwali Holiday\n• 25 Dec — Christmas\n\nAdditional company-specific holidays may apply.', [{ text: 'OK' }])}
+                onPress={() => setActiveSupportModal('holidays')}
               >
                 <View style={[styles.featureIcon, { backgroundColor: '#FEF2F2' }]}>
                   <Ionicons name="sunny-outline" size={24} color="#DC2626" />
@@ -540,7 +555,7 @@ const ProfileScreen = ({ navigation }) => {
 
               <TouchableOpacity 
                 style={styles.featureTile} 
-                onPress={() => Alert.alert('Documents', 'Upload and manage your personal documents (Aadhaar, PAN, Offer Letter, etc.) here. This feature is coming soon.', [{ text: 'OK' }])}
+                onPress={() => setActiveSupportModal('documents')}
               >
                 <View style={[styles.featureIcon, { backgroundColor: '#F0FDFA' }]}>
                   <Ionicons name="folder-open-outline" size={24} color="#0D9488" />
@@ -611,6 +626,7 @@ const ProfileScreen = ({ navigation }) => {
           }}
           onCoachOnboarding={() => setShowCoachOnboarding(true)}
           onLogout={onLogout}
+          onOpenModal={(modalId) => setActiveSupportModal(modalId)}
         />
 
         <View style={styles.footer}>
@@ -672,6 +688,12 @@ const ProfileScreen = ({ navigation }) => {
         </View>
 
       </ScrollView>
+
+      <AdminProfileModals 
+        visibleModal={activeSupportModal}
+        onClose={() => setActiveSupportModal(null)}
+        user={user}
+      />
 
       {showDiagnostics && (
         <DiagnosticsModal 

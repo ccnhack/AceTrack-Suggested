@@ -48,6 +48,8 @@ import {
 import createAuthRoutes from './routes/auth.mjs';
 import createDataRoutes from './routes/data.mjs';
 import createSupportRoutes from './routes/support.mjs';
+import createAdminCoreRoutes from './routes/admin_core.mjs';
+import createHrRoutes from './routes/hr.mjs';
 import createWebRoutes from './routes/web.mjs';
 import registerWebSocketHandlers from './services/websocket.mjs';
 import initScheduler from './services/scheduler.mjs';
@@ -1017,6 +1019,12 @@ const supportRoutes = createSupportRoutes({
 
 app.use('/api', supportRoutes);
 app.use('/api/v1', supportRoutes);
+
+const adminCoreRoutes = createAdminCoreRoutes();
+app.use('/api/v1/admin-core', adminCoreRoutes);
+
+const hrRoutes = createHrRoutes();
+app.use('/api/v1/hr', hrRoutes);
 
 const infrastructureRoutes = createInfrastructureRoutes({ APP_VERSION, syncMutex });
 app.use('/', infrastructureRoutes);
