@@ -411,13 +411,12 @@ export async function sendPasswordResetEmail(toEmail, resetLink, expiresAt, firs
     text: `Reset your AceTrack password: ${resetLink}\n\nThis link expires on ${expiryFormatted} IST.`
   };
 
-  try {
-    return getTransporter().sendMail(mailOptions)
-      .then(info => ({ success: true, messageId: info.messageId }))
-      .catch(error => {
-        console.error('Failed to send reset email:', error);
-        return { success: false, error: error.message };
-      });
+  return getTransporter().sendMail(mailOptions)
+    .then(info => ({ success: true, messageId: info.messageId }))
+    .catch(error => {
+      console.error('Failed to send reset email:', error);
+      return { success: false, error: error.message };
+    });
 }
 
 /**
