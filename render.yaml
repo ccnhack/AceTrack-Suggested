@@ -13,3 +13,9 @@ services:
         value: 3000
       - key: MONGODB_URI
         sync: false # User must set this in Render UI
+      - key: GMAIL_USER
+        sync: false # Required for email dispatch — set in Render UI
+      - key: GMAIL_APP_PASSWORD
+        sync: false # Required for email dispatch — set in Render UI
+      - key: JWT_SECRET
+        sync: false # Required for auth sessions — set in Render UI
