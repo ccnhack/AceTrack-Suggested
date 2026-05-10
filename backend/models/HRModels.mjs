@@ -27,6 +27,23 @@ const PerformanceReviewSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
+const AttendanceSchema = new mongoose.Schema({
+    userId: { type: String, required: true },
+    date: { type: String, required: true }, // 'YYYY-MM-DD'
+    checkIn: { type: Date },
+    checkOut: { type: Date },
+    status: { type: String, default: 'Present' } // 'Present', 'Half-Day', 'Absent'
+});
+
+const PayslipSchema = new mongoose.Schema({
+    userId: { type: String, required: true },
+    month: { type: String, required: true }, // 'March 2026'
+    url: { type: String, required: true }, // Cloudinary PDF url
+    uploadedAt: { type: Date, default: Date.now }
+});
+
 export const LeaveRequest = mongoose.model('LeaveRequest', LeaveRequestSchema);
 export const Document = mongoose.model('Document', DocumentSchema);
 export const PerformanceReview = mongoose.model('PerformanceReview', PerformanceReviewSchema);
+export const Attendance = mongoose.model('Attendance', AttendanceSchema);
+export const Payslip = mongoose.model('Payslip', PayslipSchema);
