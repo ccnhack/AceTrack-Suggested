@@ -45,7 +45,12 @@ export const useCommsStore = create((set, get) => ({
                 body: JSON.stringify({ content, receiverId })
             });
             const data = await response.json();
-            if (data.success) {
+            if (data.success && data.message) {
+                // 🛡️ [OPTIMISTIC_UPDATE] (v2.6.344): Immediately add to local state
+                const msgs = get().messages;
+                if (!msgs.find(m => m._id === data.message._id)) {
+                    set({ messages: [...msgs, data.message] });
+                }
                 return true;
             }
             return false;

@@ -83,8 +83,20 @@ const OrgChatScreen = ({ navigation }) => {
     if (!msgText.trim() || !selectedContact) return;
     const text = msgText.trim();
     setMsgText('');
-    await sendMessage(text, selectedContact.id);
-    fetchMessages(); // Re-fetch to get the optimistic message with ID
+    const success = await sendMessage(text, selectedContact.id);
+    if (success) {
+      // Also re-fetch from server to ensure consistency
+      await fetchMessages();
+    }
+  };
+
+  // 🛡️ [WEB_UX] (v2.6.344): Enter to send, Shift+Enter for newline
+  const handleKeyPress = (e) => {
+    if (Platform.OS !== 'web') return;
+    if (e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
   };
 
   const getInitials = (name) => {
@@ -292,6 +304,8 @@ const OrgChatScreen = ({ navigation }) => {
             value={msgText}
             onChangeText={setMsgText}
             onSubmitEditing={handleSend}
+            onKeyPress={handleKeyPress}
+            blurOnSubmit={false}
             multiline
           />
           <TouchableOpacity 
