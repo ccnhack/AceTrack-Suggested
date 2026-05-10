@@ -11,20 +11,29 @@ dotenv.config();
 let transporter;
 function getTransporter() {
   if (!transporter) {
-    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+    const gmailUser = process.env.GMAIL_USER;
+    const gmailPass = process.env.GMAIL_APP_PASSWORD;
+    console.log(`📧 [SMTP_INIT] Creating transporter: user=${gmailUser ? gmailUser.substring(0,5) + '...' : 'NOT_SET'}, pass=${gmailPass ? '***(' + gmailPass.length + ' chars)' : 'NOT_SET'}`);
+    
+    if (!gmailUser || !gmailPass) {
       console.warn("⚠️ GMAIL_USER or GMAIL_APP_PASSWORD is not set. Emails will fail.");
     }
     transporter = nodemailer.createTransport({
       service: 'gmail',
       pool: false, // 🛡️ Don't pool connections — prevents stale socket reuse on Render
       auth: {
-        user: process.env.GMAIL_USER || "acetrack.noreply@gmail.com",
-        pass: process.env.GMAIL_APP_PASSWORD
+        user: gmailUser || "acetrack.noreply@gmail.com",
+        pass: gmailPass
       },
       connectionTimeout: 10000, // 10s to establish SMTP connection
       greetingTimeout: 10000,   // 10s to receive SMTP greeting
       socketTimeout: 15000,     // 15s inactivity timeout on the socket
     });
+    
+    // 🛡️ Non-blocking SMTP verification on first init
+    transporter.verify()
+      .then(() => console.log('✅ [SMTP_INIT] Gmail SMTP connection verified'))
+      .catch(err => console.error('❌ [SMTP_INIT] Gmail SMTP verification FAILED:', err.message, err.code || ''));
   }
   return transporter;
 }
