@@ -19,11 +19,25 @@ This document tracks critical rules and workflows to ensure stability across mob
 3.  **Command Template**: `grep -Irl "OLD_VERSION" backend/public dist | xargs sed -i '' 's/OLD_VERSION/NEW_VERSION/g'`
 4.  **Validation**: Run `grep -r "OLD_VERSION" .` after the sync.
 
+## 🌐 Web Build Rebuild Rule
+**CRITICAL**: The production web deployment serves **pre-built static bundles** from `backend/public/`. Changing source files (`.js`, `.jsx`) does **NOT** update the live web app. Every git push that modifies **any** frontend source file **MUST** include a fresh web export.
+
+1.  **Rebuild**: `npx expo export -p web`
+2.  **Deploy**: `rm -rf backend/public && cp -R dist backend/public`
+3.  **Purge Old Versions**: `grep -Irl "OLD_VERSION" backend/public dist | xargs sed -i '' 's/OLD_VERSION/NEW_VERSION/g'`
+4.  **Validate**: `grep -r "OLD_VERSION" backend/public dist | wc -l` → must be **0**
+
+**Failure to rebuild will cause the live web app to serve stale JavaScript, making ALL frontend fixes invisible to users. This has caused production incidents.**
+
 ## 🚀 Deployment Checklist
 - [ ] Update `app.json` version.
 - [ ] Update `App.js` `APP_VERSION`.
+- [ ] Update `config.js` `APP_VERSION`.
 - [ ] Update `backend/server.mjs` `APP_VERSION`.
+- [ ] **Rebuild Web**: `npx expo export -p web`
+- [ ] **Deploy Web**: `rm -rf backend/public && cp -R dist backend/public`
 - [ ] **Run Global Asset Purge**: `grep -Irl "OLD" backend/public dist | xargs sed -i '' 's/OLD/NEW/g'`
+- [ ] **Validate**: Confirm zero references to old version in `backend/public/` and `dist/`.
 - [ ] Commit changes with the version tag in the message.
 - [ ] Push to GitHub (triggers Render backend/web deploy).
 - [ ] Run `eas update` for all relevant branches (`production`, `preview`, `main`).
@@ -33,8 +47,8 @@ This document tracks critical rules and workflows to ensure stability across mob
 - **Focus**: Always investigate `ReferenceError`, `TransformError`, and `HYDRATION` events in logs.
 
 ## 📜 Last 5 Major Objectives Summary
-1.  **v2.6.327 Deployment**: **Support Portal Latency & Asset Sync**. Reduced Support Portal load time from 30s to <2s by refactoring security middleware to indexed Player lookups and implementing thin projections for support roles. Established the "Pre-Built Asset Synchronization Rule" to prevent "Obsolete Version" loops in minified bundles.
-2.  **v2.6.259 Deployment**: **Web-Only Admin Portal Hardening**. Strictly isolated Admin and Support login flows to the Web platform. This prevents regular mobile users from encountering security "Access Denied" errors and ensures that staff-only protocols are confined to the management suite.
-3.  **v2.6.258 Deployment**: **Diag_Http-Only_After**. Finalized the Zero-Trust web authentication transition by implementing HttpOnly cookies and removing LocalStorage tokens. Restored "Active Devices" diagnostic visibility by hardening the WebSocket handshake with `ACE_API_KEY` fallbacks and whitelisting telemetry uploads for unauthenticated/obsolete clients.
-4.  **v2.6.257 Deployment**: **Zero-Trust Data Lockdown & Web Asset Propagation**. Fixed a critical vulnerability where `/api/data` was exposing the entire app state to unauthenticated users. Hardened `getSanitizedState` to strictly isolate chatbot messages and PII. Resolved the "rectangle box" icon issue by fixing `.gitignore` to track bundled fonts and applying high-compatibility asset headers.
-5.  **v2.6.62 Deployment**: **Landing Page & Security Hardening**. Split iOS/Android landing pages, fixed iPhone layout overlap, and implemented the "Ultimate Admin Guard" to restrict admin privileges to the System Admin ID only.
+1.  **v2.6.344 Deployment**: **Support Operations Stabilization**. Fixed stale web build deployment, resolved missing `id` field in team directory endpoint (broke chat/messaging entirely), fixed mobile sidebar clipping, login redirect for support staff, and Report Issue routing.
+2.  **v2.6.327 Deployment**: **Support Portal Latency & Asset Sync**. Reduced Support Portal load time from 30s to <2s by refactoring security middleware to indexed Player lookups and implementing thin projections for support roles. Established the "Pre-Built Asset Synchronization Rule" to prevent "Obsolete Version" loops in minified bundles.
+3.  **v2.6.259 Deployment**: **Web-Only Admin Portal Hardening**. Strictly isolated Admin and Support login flows to the Web platform. This prevents regular mobile users from encountering security "Access Denied" errors and ensures that staff-only protocols are confined to the management suite.
+4.  **v2.6.258 Deployment**: **Diag_Http-Only_After**. Finalized the Zero-Trust web authentication transition by implementing HttpOnly cookies and removing LocalStorage tokens. Restored "Active Devices" diagnostic visibility by hardening the WebSocket handshake with `ACE_API_KEY` fallbacks and whitelisting telemetry uploads for unauthenticated/obsolete clients.
+5.  **v2.6.257 Deployment**: **Zero-Trust Data Lockdown & Web Asset Propagation**. Fixed a critical vulnerability where `/api/data` was exposing the entire app state to unauthenticated users. Hardened `getSanitizedState` to strictly isolate chatbot messages and PII. Resolved the "rectangle box" icon issue by fixing `.gitignore` to track bundled fonts and applying high-compatibility asset headers.
