@@ -9,8 +9,16 @@ export const useCommsStore = create((set, get) => ({
     fetchMessages: async () => {
         try {
             set({ isLoading: true });
+            
+            // 🛡️ [WEB_AUTH_SAFETY] (v2.6.258)
+            let token = '';
+            try { token = window.localStorage?.getItem('acetrack_auth_token') || ''; } catch (e) {}
+            
             const response = await fetch(`${config.API_BASE_URL}/api/v1/comms/chat`, {
-                headers: { 'Authorization': `Bearer ${window.localStorage?.getItem('acetrack_auth_token') || ''}` }
+                headers: { 
+                    'Authorization': token ? `Bearer ${token}` : '',
+                    'x-ace-api-key': config.PUBLIC_APP_ID 
+                }
             });
             const data = await response.json();
             if (data.success) set({ messages: data.messages });
@@ -23,18 +31,21 @@ export const useCommsStore = create((set, get) => ({
 
     sendMessage: async (content, receiverId) => {
         try {
+            // 🛡️ [WEB_AUTH_SAFETY] (v2.6.258)
+            let token = '';
+            try { token = window.localStorage?.getItem('acetrack_auth_token') || ''; } catch (e) {}
+
             const response = await fetch(`${config.API_BASE_URL}/api/v1/comms/chat`, {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${window.localStorage?.getItem('acetrack_auth_token') || ''}` 
+                    'Authorization': token ? `Bearer ${token}` : '',
+                    'x-ace-api-key': config.PUBLIC_APP_ID
                 },
                 body: JSON.stringify({ content, receiverId })
             });
             const data = await response.json();
             if (data.success) {
-                // Socket.io will handle the state update usually, but we can do optimistic update
-                // set({ messages: [...get().messages, data.message] });
                 return true;
             }
             return false;
@@ -54,8 +65,15 @@ export const useCommsStore = create((set, get) => ({
     fetchAnnouncements: async () => {
         try {
             set({ isLoading: true });
+            // 🛡️ [WEB_AUTH_SAFETY] (v2.6.258)
+            let token = '';
+            try { token = window.localStorage?.getItem('acetrack_auth_token') || ''; } catch (e) {}
+
             const response = await fetch(`${config.API_BASE_URL}/api/v1/comms/announcements`, {
-                headers: { 'Authorization': `Bearer ${window.localStorage?.getItem('acetrack_auth_token') || ''}` }
+                headers: { 
+                    'Authorization': token ? `Bearer ${token}` : '',
+                    'x-ace-api-key': config.PUBLIC_APP_ID
+                }
             });
             const data = await response.json();
             if (data.success) set({ announcements: data.announcements });
@@ -67,11 +85,16 @@ export const useCommsStore = create((set, get) => ({
     },
     markAsSeen: async (senderId) => {
         try {
+            // 🛡️ [WEB_AUTH_SAFETY] (v2.6.258)
+            let token = '';
+            try { token = window.localStorage?.getItem('acetrack_auth_token') || ''; } catch (e) {}
+
             const response = await fetch(`${config.API_BASE_URL}/api/v1/comms/chat/seen`, {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${window.localStorage?.getItem('acetrack_auth_token') || ''}` 
+                    'Authorization': token ? `Bearer ${token}` : '',
+                    'x-ace-api-key': config.PUBLIC_APP_ID
                 },
                 body: JSON.stringify({ senderId })
             });

@@ -171,18 +171,19 @@ const AdminHubScreen = ({ navigation, route }) => {
       <View style={{ 
         width: 280, 
         backgroundColor: '#0F172A', 
-        height: '100vh', 
+        height: Platform.OS === 'web' ? '100dvh' : '100%', 
         paddingTop: 32, 
-        paddingBottom: 24, 
         justifyContent: 'space-between',
         position: isMobileWeb ? 'absolute' : 'relative',
+        top: 0,
+        bottom: 0,
         left: isMobileWeb ? (isWebSidebarOpen ? 0 : -280) : 0,
         zIndex: 101,
         // @ts-ignore
         transition: 'left 0.3s ease-in-out'
       }}>
         <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, marginBottom: 40 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, marginBottom: 24 }}>
             {isMobileWeb ? (
               <TouchableOpacity onPress={() => setIsWebSidebarOpen(false)}>
                 <Ionicons name="close" size={28} color="#FFF" style={{ marginRight: 16 }} />
@@ -236,8 +237,8 @@ const AdminHubScreen = ({ navigation, route }) => {
         </View>
         <View style={{ 
           paddingHorizontal: 16, 
-          paddingTop: 12, 
-          paddingBottom: 20, 
+          paddingTop: 8, 
+          paddingBottom: 16, 
           borderTopWidth: 1, 
           borderTopColor: '#1E293B',
           backgroundColor: '#0F172A' 

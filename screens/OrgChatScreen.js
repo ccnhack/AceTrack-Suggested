@@ -50,7 +50,6 @@ const OrgChatScreen = ({ navigation }) => {
   }, [messages, selectedContact]);
 
   const contacts = (teamDirectory || []).filter(c => {
-    if (c.id === currentUser?.id) return false;
     const role = (c.role || '').toLowerCase();
     if (role !== 'support' && role !== 'admin') return false;
     if (!searchQuery) return true;
@@ -142,6 +141,7 @@ const OrgChatScreen = ({ navigation }) => {
         ) : (
           contacts
             .sort((a, b) => {
+              // 🛡️ [SORTING_LOGIC] (v2.6.258): Unread first, then recency
               const unreadA = getUnreadCount(a.id);
               const unreadB = getUnreadCount(b.id);
               if (unreadA !== unreadB) return unreadB - unreadA;
@@ -173,14 +173,14 @@ const OrgChatScreen = ({ navigation }) => {
                   <View style={styles.contactInfo}>
                     <View style={styles.contactNameRow}>
                       <Text style={[styles.contactName, hasUnread && styles.contactNameActive]} numberOfLines={1}>
-                        {contact.name || 'Unknown'}
+                        {contact.name || 'Unknown'}{contact.id === currentUser?.id ? ' (You)' : ''}
                       </Text>
                       {lastMsg && (
                         <Text style={[styles.contactTime, hasUnread && { color: '#6366F1', fontWeight: 'bold' }]}>{formatTime(lastMsg.timestamp)}</Text>
                       )}
                     </View>
                     <View style={styles.contactPreviewRow}>
-                      <Text style={[styles.contactPreview, hasUnread && { color: '#E2E8F0', fontWeight: '600' }]} numberOfLines={1}>
+                      <Text style={[styles.contactPreview, hasUnread && { color: '#E2E8F0', fontWeight: '700' }]} numberOfLines={1}>
                         {lastMsg ? (lastMsg.senderId === currentUser?.id ? `You: ${lastMsg.content}` : lastMsg.content) : contact.role}
                       </Text>
                       {unread > 0 && (
