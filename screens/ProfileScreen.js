@@ -396,10 +396,10 @@ const ProfileScreen = ({ navigation }) => {
         {(user?.role === 'admin' || user?.role === 'support') && (
           <TouchableOpacity 
             onPress={() => navigation.navigate(user?.role === 'admin' ? 'Admin' : 'Support')} 
-            style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20, padding: 12, backgroundColor: '#EFF6FF', borderRadius: 12, alignSelf: 'flex-start', borderWidth: 1, borderColor: '#BFDBFE' }}
+            style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24, alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 14, backgroundColor: '#F8FAFC', borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}
           >
-            <Ionicons name="arrow-back" size={24} color="#2563EB" />
-            <Text style={{ color: '#2563EB', fontWeight: '900', fontSize: 16, marginLeft: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            <Ionicons name="arrow-back" size={16} color="#475569" />
+            <Text style={{ color: '#475569', fontWeight: '600', fontSize: 13, marginLeft: 6, letterSpacing: 0.3 }}>
               Back to {user?.role === 'admin' ? 'Admin Hub' : 'Support Dashboard'}
             </Text>
           </TouchableOpacity>
