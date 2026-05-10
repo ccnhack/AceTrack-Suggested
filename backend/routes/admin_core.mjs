@@ -1,6 +1,6 @@
 import express from 'express';
 import { AuditLog, OrgSetting } from '../models/AdminCoreModels.mjs';
-import User from '../models/User.mjs';
+import { Player as User } from '../models/index.mjs';
 import { apiKeyGuard, authGuard } from '../middleware/security.mjs';
 
 export default function createAdminCoreRoutes() {
@@ -72,11 +72,21 @@ router.get('/team-directory', async (req, res) => {
             return res.status(403).json({ success: false, message: 'Access denied' });
         }
         // Fetch users who are either admin or support
-        const team = await User.find({ role: { $in: ['admin', 'support'] } })
-            .select('name email role designation avatar phone')
+        const team = await User.find({ "data.role": { $in: ['admin', 'support'] } })
+            .select('data.name data.email data.role data.designation data.avatar data.phone')
             .lean();
             
-        res.json({ success: true, team });
+        // Map data back to flat structure for the frontend
+        const mappedTeam = team.map(u => ({
+            name: u.data?.name || 'Unknown',
+            email: u.data?.email || '',
+            role: u.data?.role || 'user',
+            designation: u.data?.designation || '',
+            avatar: u.data?.avatar || '',
+            phone: u.data?.phone || ''
+        }));
+            
+        res.json({ success: true, team: mappedTeam });
     } catch (error) {
         console.error("Error fetching team directory:", error);
         res.status(500).json({ success: false, message: 'Server error' });
