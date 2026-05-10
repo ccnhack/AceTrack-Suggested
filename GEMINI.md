@@ -7,7 +7,8 @@ This document tracks critical rules and workflows to ensure stability across mob
 
 1.  **`app.json`**: Updated for binary versioning and EAS metadata.
 2.  **`App.js`**: Updated `APP_VERSION` constant for the frontend "About" and update checks.
-3.  **`backend/server.mjs`**: Updated `APP_VERSION` constant. This is used by the `/api/status` endpoint to tell clients what the "latest" version is.
+3.  **`config.js`**: Updated `APP_VERSION` constant for initial state hydration.
+4.  **`backend/server.mjs`**: Updated `APP_VERSION` constant. This is used by the `/api/status` endpoint to tell clients what the "latest" version is.
 
 **Failure to sync `backend/server.mjs` will cause existing apps to report they are "Up to Date" even when an update is available.**
 
