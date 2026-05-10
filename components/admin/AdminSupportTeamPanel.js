@@ -79,6 +79,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
+  const [selectedLeaveDate, setSelectedLeaveDate] = useState(null);
   const [attendanceEndDateFilter, setAttendanceEndDateFilter] = useState(() => new Date().toISOString().split('T')[0]);
   const [selectedSessionForActivity, setSelectedSessionForActivity] = useState(null);
   const [showActionsModal, setShowActionsModal] = useState(false);
@@ -981,10 +982,6 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
               const maxWeeklyMs = Math.max(...(agentAttendance.weeklyDays || []).map(d => d.totalMs), 1);
 
               // --- LEAVE CALCULATION LOGIC ---
-              let totalEarnedLeaves = 0;
-              let totalSickLeaves = 0;
-              let totalAbsentDays = 0;
-
               const agentDesig = agentAttendance.designation || selectedAgent?.designation || 'Intern';
               let earliestSessionDate = Date.now();
               if (agentAttendance.allSessions && agentAttendance.allSessions.length > 0) {
@@ -1009,8 +1006,9 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
               else if (agentDesig === 'Manager') earnedRatePerMonth = 26 / 12;
               else earnedRatePerMonth = 1;
 
-              totalEarnedLeaves = Math.floor(earnedRatePerMonth * monthsElapsed);
-              totalSickLeaves = 1 * monthsElapsed;
+              let currentEarnedLeaves = Math.floor(earnedRatePerMonth * monthsElapsed);
+              let currentSickLeaves = 1 * monthsElapsed;
+              let unpaidLeavesTotal = 0;
 
               const todayDateObj = new Date();
               todayDateObj.setHours(0, 0, 0, 0);
@@ -1020,24 +1018,33 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                  sessionDaysSet.add(new Date(s.startTime).toISOString().split('T')[0]);
               });
 
-              // Calculate historical absences
+              const historicalAbsences = {};
+
+              // Calculate historical absences day by day
               let iterDate = new Date(joinDate);
               iterDate.setHours(0,0,0,0);
               while (iterDate < todayDateObj) {
                 const dayOfWeek = iterDate.getDay();
                 if (dayOfWeek !== 0 && dayOfWeek !== 6) { 
                   const ds = iterDate.toISOString().split('T')[0];
-                  if (!sessionDaysSet.has(ds)) totalAbsentDays++;
+                  if (!sessionDaysSet.has(ds)) {
+                    if (currentEarnedLeaves > 0) {
+                      currentEarnedLeaves--;
+                      historicalAbsences[ds] = 'earned';
+                    } else if (currentSickLeaves > 0) {
+                      currentSickLeaves--;
+                      historicalAbsences[ds] = 'sick';
+                    } else {
+                      historicalAbsences[ds] = 'unpaid';
+                      unpaidLeavesTotal++;
+                    }
+                  }
                 }
                 iterDate.setDate(iterDate.getDate() + 1);
               }
 
-              let remainingEarned = totalEarnedLeaves - totalAbsentDays;
-              let remainingSick = totalSickLeaves;
-              if (remainingEarned < 0) {
-                remainingSick += remainingEarned; // deduct overflow from sick
-                remainingEarned = 0;
-              }
+              let remainingEarned = currentEarnedLeaves;
+              let remainingSick = currentSickLeaves;
 
               // Calendar Month Stats
               const markedDates = {};
@@ -1054,16 +1061,32 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                 const dayOfWeek = d.getDay();
                 const isWeekday = dayOfWeek !== 0 && dayOfWeek !== 6;
                 
-                if (isWeekday && d <= todayDateObj) {
-                  monthWorkingDays++;
-                }
+                if (!isWeekday) {
+                  // Grey out weekends
+                  markedDates[dateStr] = { disabled: true, disableTouchEvent: true, selected: true, selectedColor: '#F1F5F9', selectedTextColor: '#94A3B8' };
+                } else {
+                  if (d <= todayDateObj) {
+                    monthWorkingDays++;
+                  }
 
-                if (sessionDaysSet.has(dateStr)) {
-                  markedDates[dateStr] = { selected: true, selectedColor: '#10B981' }; 
-                  if (d.getMonth() + 1 === parseInt(cMonth)) monthPresent++;
-                } else if (isWeekday && d <= todayDateObj) {
-                  markedDates[dateStr] = { selected: true, selectedColor: '#EF4444' }; 
-                  if (d.getMonth() + 1 === parseInt(cMonth)) monthAbsent++;
+                  if (sessionDaysSet.has(dateStr)) {
+                    markedDates[dateStr] = { selected: true, selectedColor: '#10B981' }; 
+                    if (d.getMonth() + 1 === parseInt(cMonth)) monthPresent++;
+                  } else if (d < todayDateObj) {
+                    // Past absences
+                    const leaveType = historicalAbsences[dateStr];
+                    if (leaveType === 'earned') {
+                      markedDates[dateStr] = { selected: true, selectedColor: '#3B82F6' }; // Blue
+                    } else if (leaveType === 'sick') {
+                      markedDates[dateStr] = { selected: true, selectedColor: '#8B5CF6' }; // Purple
+                    } else {
+                      markedDates[dateStr] = { selected: true, selectedColor: '#EF4444' }; // Red (Unpaid)
+                    }
+                    if (d.getMonth() + 1 === parseInt(cMonth)) monthAbsent++;
+                  } else if (d.getTime() === todayDateObj.getTime()) {
+                    // Today, not logged in yet
+                    markedDates[dateStr] = { selected: true, selectedColor: '#FCA5A5' };
+                  }
                 }
               }
 
@@ -1152,6 +1175,17 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                               current={calendarMonth + '-01'}
                               onMonthChange={(month) => {
                                 setCalendarMonth(month.dateString.slice(0, 7));
+                                setSelectedLeaveDate(null);
+                              }}
+                              onDayPress={(day) => {
+                                const ds = day.dateString;
+                                if (historicalAbsences[ds]) {
+                                  setSelectedLeaveDate({ date: ds, type: historicalAbsences[ds] });
+                                } else if (sessionDaysSet.has(ds)) {
+                                  setSelectedLeaveDate({ date: ds, type: 'present' });
+                                } else {
+                                  setSelectedLeaveDate(null);
+                                }
                               }}
                               markedDates={markedDates}
                               theme={{
@@ -1162,6 +1196,30 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                                 textMonthFontWeight: 'bold',
                               }}
                             />
+                            
+                            {selectedLeaveDate && (
+                              <View style={{ backgroundColor: '#EFF6FF', padding: 12, borderRadius: 8, marginTop: 12 }}>
+                                <Text style={{ fontWeight: 'bold', color: '#1E3A8A' }}>
+                                  Date: {selectedLeaveDate.date}
+                                </Text>
+                                <Text style={{ color: '#1E3A8A', marginTop: 4 }}>
+                                  Status: {
+                                    selectedLeaveDate.type === 'present' ? '✅ Present (Session Logged)' :
+                                    selectedLeaveDate.type === 'earned' ? '🔵 Earned Leave (Deducted)' :
+                                    selectedLeaveDate.type === 'sick' ? '🟣 Sick Leave (Deducted)' :
+                                    '🔴 Unpaid Absence'
+                                  }
+                                </Text>
+                              </View>
+                            )}
+                            
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16, justifyContent: 'center' }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center' }}><View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#10B981', marginRight: 4 }} /><Text style={{ fontSize: 10, color: '#64748B' }}>Present</Text></View>
+                              <View style={{ flexDirection: 'row', alignItems: 'center' }}><View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#3B82F6', marginRight: 4 }} /><Text style={{ fontSize: 10, color: '#64748B' }}>Earned L.</Text></View>
+                              <View style={{ flexDirection: 'row', alignItems: 'center' }}><View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#8B5CF6', marginRight: 4 }} /><Text style={{ fontSize: 10, color: '#64748B' }}>Sick L.</Text></View>
+                              <View style={{ flexDirection: 'row', alignItems: 'center' }}><View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#EF4444', marginRight: 4 }} /><Text style={{ fontSize: 10, color: '#64748B' }}>Unpaid</Text></View>
+                              <View style={{ flexDirection: 'row', alignItems: 'center' }}><View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#CBD5E1', marginRight: 4 }} /><Text style={{ fontSize: 10, color: '#64748B' }}>Weekend</Text></View>
+                            </View>
                           </View>
                           
                           <View style={{ backgroundColor: '#F8FAFC', padding: 16, borderRadius: 12, marginBottom: 16 }}>
