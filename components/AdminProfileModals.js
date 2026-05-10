@@ -22,7 +22,11 @@ export default function AdminProfileModals({ visibleModal, onClose, user }) {
     if (visibleModal === 'my_attendance') fetchAttendance();
     if (visibleModal === 'payslips') fetchPayslips();
     if (visibleModal === 'documents') fetchDocuments();
-    if (visibleModal === 'org_chat') fetchMessages();
+    if (visibleModal === 'documents') fetchDocuments();
+    if (visibleModal === 'org_chat') {
+        fetchMessages();
+        fetchTeamDirectory();
+    }
     if (visibleModal === 'announcements') fetchAnnouncements();
   }, [visibleModal]);
 
@@ -70,7 +74,7 @@ export default function AdminProfileModals({ visibleModal, onClose, user }) {
               {visibleModal === 'my_attendance' && <AttendanceView attendance={attendance} onCheckIn={checkIn} onCheckOut={checkOut} />}
               {visibleModal === 'payslips' && <PayslipsView payslips={payslips} />}
               {visibleModal === 'documents' && <DocumentsView documents={documents} />}
-              {visibleModal === 'org_chat' && <OrgChatView messages={messages} onSend={sendMessage} user={user} />}
+              {visibleModal === 'org_chat' && <OrgChatView messages={messages} onSend={sendMessage} user={user} teamDirectory={teamDirectory} />}
               {visibleModal === 'announcements' && <AnnouncementsView announcements={announcements} />}
               
               {visibleModal === 'holidays' && (
@@ -439,7 +443,9 @@ const DocumentsView = ({ documents }) => (
     </View>
 );
 
-const OrgChatView = ({ messages, onSend, user }) => {
+const OrgChatView = ({ messages, onSend, user, teamDirectory }) => {
+    const [activeChatUser, setActiveChatUser] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
     const [msg, setMsg] = useState('');
     const { appendMessage } = useCommsStore();
 
@@ -458,31 +464,97 @@ const OrgChatView = ({ messages, onSend, user }) => {
     }, []);
 
     const handleSend = () => {
-        if (!msg.trim()) return;
-        onSend(msg);
+        if (!msg.trim() || !activeChatUser) return;
+        onSend(msg, activeChatUser.id);
         setMsg('');
     };
 
+    if (!activeChatUser) {
+        const filteredContacts = (teamDirectory || []).filter(c => 
+            c.id !== user.id && 
+            (c.role === 'support' || c.role === 'admin') &&
+            (c.name || '').toLowerCase().includes(searchQuery.toLowerCase())
+        );
+
+        return (
+            <View style={[styles.list, { height: '100%', flex: 1 }]}>
+                <View style={{ marginBottom: 16 }}>
+                    <View style={[styles.input, { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 }]}>
+                        <Ionicons name="search" size={20} color="#94A3B8" style={{ marginRight: 8 }} />
+                        <TextInput 
+                            style={{ flex: 1, fontSize: 16, color: '#0F172A', outlineStyle: 'none' }} 
+                            placeholder="Search support employees..." 
+                            placeholderTextColor="#94A3B8"
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                        />
+                    </View>
+                </View>
+                <ScrollView style={{ flex: 1 }}>
+                    {filteredContacts.length === 0 ? (
+                        <Text style={styles.empty}>No contacts found.</Text>
+                    ) : (
+                        filteredContacts.map((contact, i) => (
+                            <TouchableOpacity 
+                                key={i} 
+                                style={[styles.card, { flexDirection: 'row', alignItems: 'center', padding: 16 }]}
+                                onPress={() => setActiveChatUser(contact)}
+                            >
+                                <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginRight: 16 }}>
+                                    <Text style={{ color: '#2563EB', fontWeight: 'bold', fontSize: 18 }}>{(contact.name || '?').charAt(0).toUpperCase()}</Text>
+                                </View>
+                                <View>
+                                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#0F172A' }}>{contact.name || 'Unknown User'}</Text>
+                                    <Text style={{ fontSize: 14, color: '#64748B', textTransform: 'capitalize' }}>{contact.role}</Text>
+                                </View>
+                                <Ionicons name="chevron-forward" size={20} color="#CBD5E1" style={{ marginLeft: 'auto' }} />
+                            </TouchableOpacity>
+                        ))
+                    )}
+                </ScrollView>
+            </View>
+        );
+    }
+
+    const filteredMessages = messages.filter(m => 
+        (m.senderId === user.id && m.receiverId === activeChatUser.id) || 
+        (m.senderId === activeChatUser.id && m.receiverId === user.id) ||
+        (!m.receiverId) // Include global broadcast messages if any exist
+    );
+
     return (
         <View style={[styles.list, { height: '100%', flex: 1 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                <TouchableOpacity onPress={() => setActiveChatUser(null)} style={{ marginRight: 16 }}>
+                    <Ionicons name="arrow-back" size={24} color="#0F172A" />
+                </TouchableOpacity>
+                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                    <Text style={{ color: '#2563EB', fontWeight: 'bold', fontSize: 16 }}>{(activeChatUser.name || '?').charAt(0).toUpperCase()}</Text>
+                </View>
+                <View>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#0F172A' }}>{activeChatUser.name || 'Unknown User'}</Text>
+                    <Text style={{ fontSize: 12, color: '#10B981' }}>Online</Text>
+                </View>
+            </View>
+
             <ScrollView style={{ flex: 1, marginBottom: 16 }}>
-                {messages.length === 0 ? <Text style={styles.empty}>No messages yet. Start the conversation!</Text> : messages.map((m, i) => (
+                {filteredMessages.length === 0 ? <Text style={styles.empty}>Start a conversation with {activeChatUser.name || 'this user'}!</Text> : filteredMessages.map((m, i) => (
                     <View key={i} style={[styles.card, m.senderId === user.id ? { backgroundColor: '#EFF6FF', alignSelf: 'flex-end', maxWidth: '80%' } : { alignSelf: 'flex-start', maxWidth: '80%' }]}>
-                        <Text style={[styles.cardTitle, { fontSize: 12, color: '#64748B' }]}>{m.senderName}</Text>
+                        <Text style={[styles.cardTitle, { fontSize: 12, color: '#64748B' }]}>{m.senderId === user.id ? 'You' : m.senderName}</Text>
                         <Text style={[styles.cardText, { marginTop: 4, color: '#0F172A' }]}>{m.content}</Text>
-                        <Text style={[styles.logTime, { alignSelf: 'flex-end', marginTop: 4, fontSize: 10 }]}>{new Date(m.timestamp).toLocaleTimeString()}</Text>
+                        <Text style={[styles.logTime, { alignSelf: 'flex-end', marginTop: 4, fontSize: 10 }]}>{new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
                     </View>
                 ))}
             </ScrollView>
             <View style={{ flexDirection: 'row', gap: 8, paddingBottom: 24 }}>
                 <TextInput 
-                    style={[styles.input, { flex: 1, marginBottom: 0 }]} 
-                    placeholder="Type a message..." 
+                    style={[styles.input, { flex: 1, marginBottom: 0, paddingVertical: 12 }]} 
+                    placeholder={`Message ${activeChatUser.name || 'user'}...`}
                     value={msg} 
-                    onChangeText={setMsg} 
+                    onChangeText={setMsg}
                     onSubmitEditing={handleSend}
                 />
-                <TouchableOpacity style={[styles.saveBtn, { paddingHorizontal: 20 }]} onPress={handleSend}>
+                <TouchableOpacity style={[styles.saveBtn, { width: 50, height: 50, justifyContent: 'center', alignItems: 'center', borderRadius: 25 }]} onPress={handleSend}>
                     <Ionicons name="send" size={20} color="#FFF" />
                 </TouchableOpacity>
             </View>
