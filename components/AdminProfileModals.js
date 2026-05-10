@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Calendar } from 'react-native-calendars';
 import { useAdminCoreStore } from '../stores/useAdminCoreStore';
 import { useHrStore } from '../stores/useHrStore';
 import { useCommsStore } from '../stores/useCommsStore';
@@ -170,9 +171,20 @@ const LeaveRequestView = ({ leaves, onSubmit }) => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
+  const [showCalendarFor, setShowCalendarFor] = useState(null); // 'start' | 'end' | null
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  // Mock balances for now
+  const leaveBalances = {
+    Earned: 12,
+    Sick: 8,
+    Casual: 4
+  };
 
   const handleSubmit = async () => {
     if (!startDate || !endDate) return Alert.alert('Error', 'Dates are required');
+    if (!reason) return Alert.alert('Error', 'Please provide a reason');
+    
     const success = await onSubmit({ type, startDate, endDate, reason });
     if (success) {
         Alert.alert('Success', 'Leave requested applied');
@@ -180,29 +192,144 @@ const LeaveRequestView = ({ leaves, onSubmit }) => {
     }
   };
 
+  const today = new Date().toISOString().split('T')[0];
+
   return (
     <View style={styles.list}>
+        {/* Balances Section */}
+        <View style={[styles.card, { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 20, backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
+            <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 24, fontWeight: '900', color: '#2563EB' }}>{leaveBalances.Earned}</Text>
+                <Text style={{ fontSize: 12, color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase', marginTop: 4 }}>Earned Leaves</Text>
+            </View>
+            <View style={{ width: 1, backgroundColor: '#BFDBFE' }} />
+            <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 24, fontWeight: '900', color: '#EF4444' }}>{leaveBalances.Sick}</Text>
+                <Text style={{ fontSize: 12, color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase', marginTop: 4 }}>Sick Leaves</Text>
+            </View>
+        </View>
+
         <View style={styles.card}>
             <Text style={styles.cardTitle}>Apply for Leave</Text>
             <View style={styles.inputGroup}>
-                <TextInput style={styles.input} placeholder="Start Date (YYYY-MM-DD)" value={startDate} onChangeText={setStartDate} />
-                <TextInput style={styles.input} placeholder="End Date (YYYY-MM-DD)" value={endDate} onChangeText={setEndDate} />
-                <TextInput style={styles.input} placeholder="Reason" value={reason} onChangeText={setReason} />
-                <TouchableOpacity style={[styles.saveBtn, { paddingVertical: 12 }]} onPress={handleSubmit}>
-                    <Text style={[styles.saveBtnText, { textAlign: 'center' }]}>Submit Leave Request</Text>
+                
+                {/* Leave Type Dropdown */}
+                <View style={{ zIndex: 10 }}>
+                  <Text style={styles.label}>Leave Type</Text>
+                  <TouchableOpacity 
+                    style={[styles.input, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]} 
+                    onPress={() => setShowDropdown(!showDropdown)}
+                  >
+                    <Text style={{ color: '#0F172A', fontSize: 14 }}>{type} Leave</Text>
+                    <Ionicons name={showDropdown ? "chevron-up" : "chevron-down"} size={20} color="#64748B" />
+                  </TouchableOpacity>
+                  
+                  {showDropdown && (
+                    <View style={{ backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, marginTop: 4, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8 }}>
+                      {Object.keys(leaveBalances).map((leaveType) => (
+                        <TouchableOpacity 
+                          key={leaveType}
+                          style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}
+                          onPress={() => { setType(leaveType); setShowDropdown(false); }}
+                        >
+                          <Text style={{ color: type === leaveType ? '#2563EB' : '#334155', fontWeight: type === leaveType ? 'bold' : 'normal' }}>
+                            {leaveType} Leave ({leaveBalances[leaveType]} remaining)
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+
+                {/* Dates */}
+                <View style={{ flexDirection: 'row', gap: 12, zIndex: 1, marginTop: 8 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.label}>Start Date</Text>
+                    <TouchableOpacity style={[styles.input, { flexDirection: 'row', alignItems: 'center', gap: 8 }]} onPress={() => setShowCalendarFor('start')}>
+                      <Ionicons name="calendar-outline" size={18} color="#64748B" />
+                      <Text style={{ color: startDate ? '#0F172A' : '#94A3B8' }}>{startDate || 'Select Date'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.label}>End Date</Text>
+                    <TouchableOpacity style={[styles.input, { flexDirection: 'row', alignItems: 'center', gap: 8 }]} onPress={() => setShowCalendarFor('end')}>
+                      <Ionicons name="calendar-outline" size={18} color="#64748B" />
+                      <Text style={{ color: endDate ? '#0F172A' : '#94A3B8' }}>{endDate || 'Select Date'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={{ zIndex: 1, marginTop: 8 }}>
+                  <Text style={styles.label}>Reason</Text>
+                  <TextInput 
+                    style={[styles.input, { minHeight: 80, textAlignVertical: 'top' }]} 
+                    placeholder="Briefly explain why you need leave..." 
+                    value={reason} 
+                    onChangeText={setReason} 
+                    multiline={true}
+                  />
+                </View>
+
+                <TouchableOpacity style={[styles.saveBtn, { paddingVertical: 14, marginTop: 16 }]} onPress={handleSubmit}>
+                    <Text style={[styles.saveBtnText, { textAlign: 'center', fontSize: 16 }]}>Submit Request</Text>
                 </TouchableOpacity>
             </View>
         </View>
+
         <Text style={[styles.cardTitle, { marginTop: 20 }]}>Past Requests</Text>
         {leaves.map((l, i) => (
             <View key={i} style={styles.card}>
                 <View style={styles.logHeader}>
                     <Text style={styles.logAction}>{l.type} Leave</Text>
-                    <Text style={{ color: l.status === 'Approved' ? '#10B981' : l.status === 'Rejected' ? '#EF4444' : '#F59E0B' }}>{l.status}</Text>
+                    <Text style={{ color: l.status === 'Approved' ? '#10B981' : l.status === 'Rejected' ? '#EF4444' : '#F59E0B', fontWeight: 'bold' }}>{l.status}</Text>
                 </View>
                 <Text style={styles.logDetails}>{l.startDate} to {l.endDate}</Text>
+                {l.reason && <Text style={{ fontSize: 12, color: '#475569', marginTop: 8 }}>"{l.reason}"</Text>}
             </View>
         ))}
+
+        {/* Calendar Picker Modal */}
+        {showCalendarFor && (
+            <Modal visible={true} transparent={true} animationType="fade">
+                <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+                    <View style={{ backgroundColor: '#FFF', borderRadius: 20, width: '100%', maxWidth: 400, overflow: 'hidden' }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0F172A' }}>
+                                Select {showCalendarFor === 'start' ? 'Start' : 'End'} Date
+                            </Text>
+                            <TouchableOpacity onPress={() => setShowCalendarFor(null)}>
+                                <Ionicons name="close" size={24} color="#64748B" />
+                            </TouchableOpacity>
+                        </View>
+                        <Calendar
+                            current={today}
+                            onDayPress={(day) => {
+                                if (showCalendarFor === 'start') {
+                                    setStartDate(day.dateString);
+                                    if (!endDate || day.dateString > endDate) {
+                                        setEndDate(day.dateString);
+                                    }
+                                } else {
+                                    setEndDate(day.dateString);
+                                    if (startDate && day.dateString < startDate) {
+                                        setStartDate(day.dateString);
+                                    }
+                                }
+                                setShowCalendarFor(null);
+                            }}
+                            markedDates={{
+                                [showCalendarFor === 'start' ? startDate : endDate]: { selected: true, selectedColor: '#2563EB' }
+                            }}
+                            theme={{
+                                todayTextColor: '#2563EB',
+                                selectedDayBackgroundColor: '#2563EB',
+                                arrowColor: '#2563EB',
+                            }}
+                        />
+                    </View>
+                </View>
+            </Modal>
+        )}
     </View>
   );
 };
