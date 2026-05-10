@@ -60,22 +60,22 @@ const OrgChatScreen = ({ navigation }) => {
   const getConversation = () => {
     if (!selectedContact || !currentUser) return [];
     return (messages || []).filter(m =>
-      (m.senderId === currentUser.id && m.receiverId === selectedContact.id) ||
-      (m.senderId === selectedContact.id && m.receiverId === currentUser.id)
+      (String(m.senderId) === String(currentUser.id) && String(m.receiverId) === String(selectedContact.id)) ||
+      (String(m.senderId) === String(selectedContact.id) && String(m.receiverId) === String(currentUser.id))
     );
   };
 
   const getLastMessage = (contactId) => {
     const conv = (messages || []).filter(m =>
-      (m.senderId === currentUser?.id && m.receiverId === contactId) ||
-      (m.senderId === contactId && m.receiverId === currentUser?.id)
+      (String(m.senderId) === String(currentUser?.id) && String(m.receiverId) === String(contactId)) ||
+      (String(m.senderId) === String(contactId) && String(m.receiverId) === String(currentUser?.id))
     );
     return conv.length > 0 ? conv[conv.length - 1] : null;
   };
 
   const getUnreadCount = (contactId) => {
     return (messages || []).filter(m =>
-      m.senderId === contactId && m.receiverId === currentUser?.id && m.status !== 'seen'
+      String(m.senderId) === String(contactId) && String(m.receiverId) === String(currentUser?.id) && m.status !== 'seen'
     ).length;
   };
 
@@ -185,7 +185,7 @@ const OrgChatScreen = ({ navigation }) => {
                   <View style={styles.contactInfo}>
                     <View style={styles.contactNameRow}>
                       <Text style={[styles.contactName, hasUnread && styles.contactNameActive]} numberOfLines={1}>
-                        {contact.name || 'Unknown'}{contact.id === currentUser?.id ? ' (You)' : ''}
+                        {contact.name || 'Unknown'}{String(contact.id) === String(currentUser?.id) ? ' (You)' : ''}
                       </Text>
                       {lastMsg && (
                         <Text style={[styles.contactTime, hasUnread && { color: '#6366F1', fontWeight: 'bold' }]}>{formatTime(lastMsg.timestamp)}</Text>
@@ -193,7 +193,7 @@ const OrgChatScreen = ({ navigation }) => {
                     </View>
                     <View style={styles.contactPreviewRow}>
                       <Text style={[styles.contactPreview, hasUnread && { color: '#E2E8F0', fontWeight: '700' }]} numberOfLines={1}>
-                        {lastMsg ? (lastMsg.senderId === currentUser?.id ? `You: ${lastMsg.content}` : lastMsg.content) : contact.role}
+                        {lastMsg ? (String(lastMsg.senderId) === String(currentUser?.id) ? `You: ${lastMsg.content}` : lastMsg.content) : contact.role}
                       </Text>
                       {unread > 0 && (
                         <View style={styles.unreadBadge}>
@@ -261,7 +261,7 @@ const OrgChatScreen = ({ navigation }) => {
             </View>
           ) : (
             conversation.map((msg, idx) => {
-              const isMe = msg.senderId === currentUser?.id;
+              const isMe = String(msg.senderId) === String(currentUser?.id);
               const showDate = idx === 0 || new Date(msg.timestamp).toDateString() !== new Date(conversation[idx - 1].timestamp).toDateString();
               
               return (

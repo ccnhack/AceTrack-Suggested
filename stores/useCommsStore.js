@@ -106,7 +106,7 @@ export const useCommsStore = create((set, get) => ({
             const data = await response.json();
             if (data.success) {
                 const updatedMessages = get().messages.map(m => 
-                    (m.senderId === senderId && m.status !== 'seen') ? { ...m, status: 'seen' } : m
+                    (String(m.senderId) === String(senderId) && m.status !== 'seen') ? { ...m, status: 'seen' } : m
                 );
                 set({ messages: updatedMessages });
             }
