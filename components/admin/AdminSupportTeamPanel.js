@@ -8,6 +8,7 @@ import { usePlayers } from '../../context/PlayerContext';
 import { useAdmin } from '../../context/AdminContext';
 import SafeAvatar from '../SafeAvatar';
 import PureJSDateTimePicker from '../PureJSDateTimePicker';
+import { Calendar } from 'react-native-calendars';
 
 // 🕐 Time Filter Presets
 const TIME_FILTERS = [
@@ -73,6 +74,11 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [attendanceRangeMode, setAttendanceRangeMode] = useState(false);
+  const [attendanceCalendarMode, setAttendanceCalendarMode] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
   const [attendanceEndDateFilter, setAttendanceEndDateFilter] = useState(() => new Date().toISOString().split('T')[0]);
   const [selectedSessionForActivity, setSelectedSessionForActivity] = useState(null);
   const [showActionsModal, setShowActionsModal] = useState(false);
@@ -999,173 +1005,353 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                     </View>
                   )}
 
-                  {/* Mode Toggle & Date Filter Controls */}
-                  <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 16 }}>
-                    <TouchableOpacity 
-                      onPress={() => setAttendanceRangeMode(!attendanceRangeMode)}
-                      style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}
-                    >
-                      <Ionicons name={attendanceRangeMode ? "calendar" : "calendar-outline"} size={14} color="#6366F1" />
-                      <Text style={{ marginLeft: 6, fontSize: 12, fontWeight: 'bold', color: '#475569' }}>
-                        {attendanceRangeMode ? "Range Mode ON" : "Single Date Mode"}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
+                  // --- LEAVE CALCULATION LOGIC ---
+                  let totalEarnedLeaves = 0;
+                  let totalSickLeaves = 0;
+                  let totalAbsentDays = 0;
 
-                  <View style={styles.dateFilterContainer}>
-                    {!attendanceRangeMode && (
-                      <TouchableOpacity 
-                        onPress={() => {
-                          const d = new Date(attendanceDateFilter);
-                          d.setDate(d.getDate() - 1);
-                          setAttendanceDateFilter(d.toISOString().split('T')[0]);
-                        }}
-                        style={styles.dateNavBtn}
-                      >
-                        <Ionicons name="chevron-back" size={20} color="#6366F1" />
-                      </TouchableOpacity>
-                    )}
+                  const agentDesig = agentAttendance.designation || selectedAgent?.designation || 'Intern';
+                  let earliestSessionDate = Date.now();
+                  if (agentAttendance.allSessions && agentAttendance.allSessions.length > 0) {
+                    earliestSessionDate = new Date(agentAttendance.allSessions[agentAttendance.allSessions.length - 1].startTime).getTime();
+                  }
+                  if (agentAttendance.allSessions) {
+                    agentAttendance.allSessions.forEach(s => {
+                      const t = new Date(s.startTime).getTime();
+                      if (t < earliestSessionDate) earliestSessionDate = t;
+                    });
+                  }
+                  
+                  const joinDate = selectedAgent?.createdAt ? new Date(selectedAgent.createdAt).getTime() : earliestSessionDate;
+                  const msSinceJoin = Date.now() - joinDate;
+                  let monthsElapsed = Math.floor(msSinceJoin / (1000 * 60 * 60 * 24 * 30));
+                  if (monthsElapsed < 1) monthsElapsed = 1;
+
+                  let earnedRatePerMonth = 0;
+                  if (agentDesig === 'Intern') earnedRatePerMonth = 1;
+                  else if (agentDesig === 'Grade-5' || agentDesig === 'Grade-7') earnedRatePerMonth = 22 / 12;
+                  else if (agentDesig === 'Team Lead') earnedRatePerMonth = 24 / 12;
+                  else if (agentDesig === 'Manager') earnedRatePerMonth = 26 / 12;
+                  else earnedRatePerMonth = 1;
+
+                  totalEarnedLeaves = Math.floor(earnedRatePerMonth * monthsElapsed);
+                  totalSickLeaves = 1 * monthsElapsed;
+
+                  const todayDateObj = new Date();
+                  todayDateObj.setHours(0, 0, 0, 0);
+
+                  const sessionDaysSet = new Set();
+                  (agentAttendance.allSessions || []).forEach(s => {
+                     sessionDaysSet.add(new Date(s.startTime).toISOString().split('T')[0]);
+                  });
+
+                  // Calculate historical absences
+                  let iterDate = new Date(joinDate);
+                  iterDate.setHours(0,0,0,0);
+                  while (iterDate < todayDateObj) {
+                    const dayOfWeek = iterDate.getDay();
+                    if (dayOfWeek !== 0 && dayOfWeek !== 6) { 
+                      const ds = iterDate.toISOString().split('T')[0];
+                      if (!sessionDaysSet.has(ds)) totalAbsentDays++;
+                    }
+                    iterDate.setDate(iterDate.getDate() + 1);
+                  }
+
+                  let remainingEarned = totalEarnedLeaves - totalAbsentDays;
+                  let remainingSick = totalSickLeaves;
+                  if (remainingEarned < 0) {
+                    remainingSick += remainingEarned; // deduct overflow from sick
+                    remainingEarned = 0;
+                  }
+
+                  // Calendar Month Stats
+                  const markedDates = {};
+                  let monthWorkingDays = 0;
+                  let monthPresent = 0;
+                  let monthAbsent = 0;
+
+                  const [cYear, cMonth] = calendarMonth.split('-');
+                  const firstDayOfMonth = new Date(parseInt(cYear), parseInt(cMonth) - 1, 1);
+                  const lastDayOfMonth = new Date(parseInt(cYear), parseInt(cMonth), 0);
+
+                  for (let d = new Date(firstDayOfMonth); d <= lastDayOfMonth; d.setDate(d.getDate() + 1)) {
+                    const dateStr = d.toISOString().split('T')[0];
+                    const dayOfWeek = d.getDay();
+                    const isWeekday = dayOfWeek !== 0 && dayOfWeek !== 6;
                     
-                    <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'center', gap: 10 }}>
-                      <TouchableOpacity 
-                        style={[styles.dateDisplayBox, attendanceRangeMode && { flex: 1 }]}
-                        onPress={() => setShowDatePicker(true)}
-                      >
-                        <Ionicons name="calendar-outline" size={16} color="#64748B" />
-                        <Text style={styles.dateDisplayText}>
-                          {new Date(attendanceDateFilter).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
-                        </Text>
-                      </TouchableOpacity>
+                    if (isWeekday && d <= todayDateObj) {
+                      monthWorkingDays++;
+                    }
 
-                      {attendanceRangeMode && (
-                        <>
-                          <Text style={{ alignSelf: 'center', color: '#94A3B8', fontWeight: 'bold' }}>→</Text>
-                          <TouchableOpacity 
-                            style={[styles.dateDisplayBox, { flex: 1 }]}
-                            onPress={() => setShowEndDatePicker(true)}
-                          >
-                            <Ionicons name="calendar-outline" size={16} color="#64748B" />
-                            <Text style={styles.dateDisplayText}>
-                              {new Date(attendanceEndDateFilter).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                    if (sessionDaysSet.has(dateStr)) {
+                      markedDates[dateStr] = { selected: true, selectedColor: '#10B981' }; 
+                      if (d.getMonth() + 1 === parseInt(cMonth)) monthPresent++;
+                    } else if (isWeekday && d <= todayDateObj) {
+                      markedDates[dateStr] = { selected: true, selectedColor: '#EF4444' }; 
+                      if (d.getMonth() + 1 === parseInt(cMonth)) monthAbsent++;
+                    }
+                  }
+
+                  return (
+                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+                      
+                      {/* Current Live Status (Only show if viewing Today) */}
+                      {isTodayFilter && !attendanceCalendarMode && (
+                        <View style={[styles.attendanceStatusCard, { borderLeftColor: agentAttendance.isCurrentlyOnline ? '#10B981' : '#94A3B8' }]}>
+                          <View style={[styles.attendanceLiveDot, { backgroundColor: agentAttendance.isCurrentlyOnline ? '#10B981' : '#CBD5E1' }]} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.attendanceStatusText, { color: agentAttendance.isCurrentlyOnline ? '#059669' : '#64748B' }]}>
+                              {agentAttendance.isCurrentlyOnline ? 'Currently Online' : 'Offline'}
                             </Text>
-                          </TouchableOpacity>
+                            {!agentAttendance.isCurrentlyOnline && agentAttendance.lastSeen && agentAttendance.lastSeen !== 'Now' && (
+                              <Text style={styles.attendanceLastSeen}>
+                                Last seen {new Date(agentAttendance.lastSeen).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                              </Text>
+                            )}
+                            {agentAttendance.isCurrentlyOnline && agentAttendance.activeSessions?.length > 0 && (
+                              <Text style={styles.attendanceLastSeen}>
+                                Session started {new Date(agentAttendance.activeSessions[0].startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+                      )}
+
+                      {/* Mode Toggle & Date Filter Controls */}
+                      <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+                        <TouchableOpacity 
+                          onPress={() => { setAttendanceRangeMode(false); setAttendanceCalendarMode(false); }}
+                          style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: (!attendanceRangeMode && !attendanceCalendarMode) ? '#E0E7FF' : '#F1F5F9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}
+                        >
+                          <Ionicons name="today-outline" size={14} color={(!attendanceRangeMode && !attendanceCalendarMode) ? "#4F46E5" : "#64748B"} />
+                          <Text style={{ marginLeft: 6, fontSize: 12, fontWeight: 'bold', color: (!attendanceRangeMode && !attendanceCalendarMode) ? "#4F46E5" : "#64748B" }}>
+                            Single Date
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                          onPress={() => { setAttendanceRangeMode(true); setAttendanceCalendarMode(false); }}
+                          style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: (attendanceRangeMode && !attendanceCalendarMode) ? '#E0E7FF' : '#F1F5F9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}
+                        >
+                          <Ionicons name="options-outline" size={14} color={(attendanceRangeMode && !attendanceCalendarMode) ? "#4F46E5" : "#64748B"} />
+                          <Text style={{ marginLeft: 6, fontSize: 12, fontWeight: 'bold', color: (attendanceRangeMode && !attendanceCalendarMode) ? "#4F46E5" : "#64748B" }}>
+                            Range
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                          onPress={() => { setAttendanceCalendarMode(true); setAttendanceRangeMode(false); }}
+                          style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: attendanceCalendarMode ? '#E0E7FF' : '#F1F5F9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}
+                        >
+                          <Ionicons name="calendar" size={14} color={attendanceCalendarMode ? "#4F46E5" : "#64748B"} />
+                          <Text style={{ marginLeft: 6, fontSize: 12, fontWeight: 'bold', color: attendanceCalendarMode ? "#4F46E5" : "#64748B" }}>
+                            Calendar
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {attendanceCalendarMode ? (
+                        <>
+                          <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 10, marginBottom: 16, ...shadows.sm }}>
+                            <Calendar
+                              current={calendarMonth + '-01'}
+                              onMonthChange={(month) => {
+                                setCalendarMonth(month.dateString.slice(0, 7));
+                              }}
+                              markedDates={markedDates}
+                              theme={{
+                                arrowColor: '#4F46E5',
+                                todayTextColor: '#4F46E5',
+                                selectedDayBackgroundColor: '#4F46E5',
+                                textDayFontWeight: '500',
+                                textMonthFontWeight: 'bold',
+                              }}
+                            />
+                          </View>
+                          
+                          <View style={{ backgroundColor: '#F8FAFC', padding: 16, borderRadius: 12, marginBottom: 16 }}>
+                            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1E293B', marginBottom: 12 }}>Monthly Stats ({calendarMonth})</Text>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                              <Text style={{ color: '#64748B' }}>Working Days (till date):</Text>
+                              <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>{monthWorkingDays}</Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                              <Text style={{ color: '#64748B' }}>Present:</Text>
+                              <Text style={{ fontWeight: 'bold', color: '#10B981' }}>{monthPresent}</Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
+                              <Text style={{ color: '#64748B' }}>Absent:</Text>
+                              <Text style={{ fontWeight: 'bold', color: '#EF4444' }}>{monthAbsent}</Text>
+                            </View>
+
+                            <View style={{ height: 1, backgroundColor: '#E2E8F0', marginBottom: 12 }} />
+
+                            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1E293B', marginBottom: 12 }}>Overall Leave Balances</Text>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                              <Text style={{ color: '#64748B' }}>Earned Leaves Remaining:</Text>
+                              <Text style={{ fontWeight: 'bold', color: '#3B82F6' }}>{remainingEarned}</Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                              <Text style={{ color: '#64748B' }}>Sick Leaves Remaining:</Text>
+                              <Text style={{ fontWeight: 'bold', color: '#8B5CF6' }}>{remainingSick}</Text>
+                            </View>
+                          </View>
+                        </>
+                      ) : (
+                        <>
+                          <View style={styles.dateFilterContainer}>
+                            {!attendanceRangeMode && (
+                              <TouchableOpacity 
+                                onPress={() => {
+                                  const d = new Date(attendanceDateFilter);
+                                  d.setDate(d.getDate() - 1);
+                                  setAttendanceDateFilter(d.toISOString().split('T')[0]);
+                                }}
+                                style={styles.dateNavBtn}
+                              >
+                                <Ionicons name="chevron-back" size={20} color="#6366F1" />
+                              </TouchableOpacity>
+                            )}
+                            
+                            <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'center', gap: 10 }}>
+                              <TouchableOpacity 
+                                style={[styles.dateDisplayBox, attendanceRangeMode && { flex: 1 }]}
+                                onPress={() => setShowDatePicker(true)}
+                              >
+                                <Ionicons name="calendar-outline" size={16} color="#64748B" />
+                                <Text style={styles.dateDisplayText}>
+                                  {new Date(attendanceDateFilter).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                                </Text>
+                              </TouchableOpacity>
+
+                              {attendanceRangeMode && (
+                                <>
+                                  <Text style={{ alignSelf: 'center', color: '#94A3B8', fontWeight: 'bold' }}>→</Text>
+                                  <TouchableOpacity 
+                                    style={[styles.dateDisplayBox, { flex: 1 }]}
+                                    onPress={() => setShowEndDatePicker(true)}
+                                  >
+                                    <Ionicons name="calendar-outline" size={16} color="#64748B" />
+                                    <Text style={styles.dateDisplayText}>
+                                      {new Date(attendanceEndDateFilter).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                                    </Text>
+                                  </TouchableOpacity>
+                                </>
+                              )}
+                            </View>
+
+                            {!attendanceRangeMode && (
+                              <TouchableOpacity 
+                                disabled={isTodayFilter}
+                                onPress={() => {
+                                  const d = new Date(attendanceDateFilter);
+                                  d.setDate(d.getDate() + 1);
+                                  setAttendanceDateFilter(d.toISOString().split('T')[0]);
+                                }}
+                                style={[styles.dateNavBtn, isTodayFilter && { opacity: 0.3 }]}
+                              >
+                                <Ionicons name="chevron-forward" size={20} color="#6366F1" />
+                              </TouchableOpacity>
+                            )}
+                          </View>
+
+                          {/* Hours Chart for Selected Date */}
+                          <View style={styles.todayHoursCard}>
+                            <View style={styles.todayHoursTop}>
+                              <Text style={styles.todayHoursLabel}>
+                                {attendanceRangeMode ? 'Total Active Time (Range)' : `Active Time (${isTodayFilter ? 'Today' : 'Selected Date'})`}
+                              </Text>
+                              <Text style={styles.todayHoursValue}>
+                                {dateHours > 0 ? `${dateHours}h ` : ''}{dateMins}m
+                              </Text>
+                            </View>
+                            <View style={styles.todayProgressBg}>
+                              <View style={[
+                                styles.todayProgressBar, 
+                                { width: `${dateProgress}%`, backgroundColor: dateProgress >= 80 ? '#10B981' : dateProgress >= 50 ? '#F59E0B' : '#3B82F6' }
+                              ]} />
+                            </View>
+                            <Text style={styles.todayProgressLabel}>
+                              {attendanceRangeMode 
+                                ? `${(totalMsForDate / 3600000).toFixed(1)}h over selected period` 
+                                : `${Math.round(dateProgress)}% of 8h target`}
+                            </Text>
+                          </View>
+
+                          {/* Sessions for Selected Date */}
+                          <View style={styles.sessionLogCard}>
+                            <Text style={styles.sessionLogTitle}>Session Log ({displaySessions.length} total)</Text>
+                            {displaySessions.length > 0 ? displaySessions.map((sess, i) => {
+                              const startDate = new Date(sess.startTime);
+                              const endDate = sess.isLive ? new Date() : new Date(sess.endTime);
+                              const durHrs = Math.floor(sess.durationMs / 3600000);
+                              const durMins = Math.floor((sess.durationMs % 3600000) / 60000);
+                              return (
+                                <TouchableOpacity 
+                                  key={i} 
+                                  style={[styles.sessionLogRow, { borderLeftWidth: 3, borderLeftColor: sess.isLive ? '#10B981' : '#6366F1' }]}
+                                  onPress={() => setSelectedSessionForActivity({ ...sess, agentId: selectedAgentId })}
+                                >
+                                  <View style={{ flex: 1 }}>
+                                    <Text style={styles.sessionLogTime}>
+                                      {startDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} → {sess.isLive ? 'ACTIVE NOW' : endDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                    </Text>
+                                    {(() => {
+                                      const count = auditLogs.filter(log => {
+                                        if (log.userId !== selectedAgentId) return false;
+                                        if (log.category !== 'support_activity') return false;
+                                        const logTime = new Date(log.timestamp).getTime();
+                                        const sessStart = new Date(sess.startTime).getTime();
+                                        const sessEnd = sess.isLive ? Date.now() : new Date(sess.endTime).getTime();
+                                        return logTime >= sessStart && logTime <= sessEnd;
+                                      }).length;
+                                      return (
+                                        <Text style={{ fontSize: 11, color: count > 0 ? '#6366F1' : '#94A3B8', marginTop: 2, fontWeight: count > 0 ? '700' : '400' }}>
+                                          Tap to view activities {count > 0 ? `(${count} activities)` : '(Idle)'}
+                                        </Text>
+                                      );
+                                    })()}
+                                  </View>
+                                  <Text style={[styles.sessionLogDuration, sess.isLive && { color: '#10B981' }]}>
+                                    {durHrs > 0 ? `${durHrs}h ` : ''}{durMins}m
+                                  </Text>
+                                  <Ionicons name="chevron-forward" size={16} color="#CBD5E1" style={{ marginLeft: 8 }} />
+                                </TouchableOpacity>
+                              );
+                            }) : (
+                              <View style={{ padding: 20, alignItems: 'center' }}>
+                                <Text style={{ color: '#94A3B8', fontWeight: '600' }}>No sessions on this date.</Text>
+                              </View>
+                            )}
+                          </View>
+
+                          {/* Weekly Summary */}
+                          <View style={[styles.weeklyCard, { marginTop: 20 }]}>
+                            <Text style={styles.weeklyTitle}>Current Week Summary</Text>
+                            <View style={styles.weeklyBarsRow}>
+                              {(agentAttendance.weeklyDays || []).map((day, i) => {
+                                const barHeight = Math.max((day.totalMs / maxWeeklyMs) * 60, 3);
+                                const hrs = Math.floor(day.totalMs / 3600000);
+                                const mins = Math.floor((day.totalMs % 3600000) / 60000);
+                                const isToday = day.date === new Date().toISOString().split('T')[0];
+                                return (
+                                  <View key={i} style={styles.weeklyBarCol}>
+                                    <Text style={styles.weeklyBarValue}>
+                                      {day.totalMs > 0 ? (hrs > 0 ? `${hrs}h` : `${mins}m`) : ''}
+                                    </Text>
+                                    <View style={[
+                                      styles.weeklyBar, 
+                                      { height: barHeight, backgroundColor: isToday ? '#6366F1' : (day.totalMs > 0 ? '#A5B4FC' : '#E2E8F0') }
+                                    ]} />
+                                    <Text style={[styles.weeklyBarLabel, isToday && { color: '#6366F1', fontWeight: '900' }]}>
+                                      {day.dayName}
+                                    </Text>
+                                  </View>
+                                );
+                              })}
+                            </View>
+                          </View>
                         </>
                       )}
-                    </View>
-
-                    {!attendanceRangeMode && (
-                      <TouchableOpacity 
-                        disabled={isTodayFilter}
-                        onPress={() => {
-                          const d = new Date(attendanceDateFilter);
-                          d.setDate(d.getDate() + 1);
-                          setAttendanceDateFilter(d.toISOString().split('T')[0]);
-                        }}
-                        style={[styles.dateNavBtn, isTodayFilter && { opacity: 0.3 }]}
-                      >
-                        <Ionicons name="chevron-forward" size={20} color="#6366F1" />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-
-                  {/* Hours Chart for Selected Date */}
-                  <View style={styles.todayHoursCard}>
-                    <View style={styles.todayHoursTop}>
-                      <Text style={styles.todayHoursLabel}>
-                        {attendanceRangeMode ? 'Total Active Time (Range)' : `Active Time (${isTodayFilter ? 'Today' : 'Selected Date'})`}
-                      </Text>
-                      <Text style={styles.todayHoursValue}>
-                        {dateHours > 0 ? `${dateHours}h ` : ''}{dateMins}m
-                      </Text>
-                    </View>
-                    <View style={styles.todayProgressBg}>
-                      <View style={[
-                        styles.todayProgressBar, 
-                        { width: `${dateProgress}%`, backgroundColor: dateProgress >= 80 ? '#10B981' : dateProgress >= 50 ? '#F59E0B' : '#3B82F6' }
-                      ]} />
-                    </View>
-                    <Text style={styles.todayProgressLabel}>
-                      {attendanceRangeMode 
-                        ? `${(totalMsForDate / 3600000).toFixed(1)}h over selected period` 
-                        : `${Math.round(dateProgress)}% of 8h target`}
-                    </Text>
-                  </View>
-
-                  {/* Sessions for Selected Date */}
-                  <View style={styles.sessionLogCard}>
-                    <Text style={styles.sessionLogTitle}>Session Log ({displaySessions.length} total)</Text>
-                    {displaySessions.length > 0 ? displaySessions.map((sess, i) => {
-                      const startDate = new Date(sess.startTime);
-                      const endDate = sess.isLive ? new Date() : new Date(sess.endTime);
-                      const durHrs = Math.floor(sess.durationMs / 3600000);
-                      const durMins = Math.floor((sess.durationMs % 3600000) / 60000);
-                      return (
-                        <TouchableOpacity 
-                          key={i} 
-                          style={[styles.sessionLogRow, { borderLeftWidth: 3, borderLeftColor: sess.isLive ? '#10B981' : '#6366F1' }]}
-                          onPress={() => setSelectedSessionForActivity({ ...sess, agentId: selectedAgentId })}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.sessionLogTime}>
-                              {startDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} → {sess.isLive ? 'ACTIVE NOW' : endDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                            </Text>
-                            {(() => {
-                              const count = auditLogs.filter(log => {
-                                if (log.userId !== selectedAgentId) return false;
-                                if (log.category !== 'support_activity') return false;
-                                const logTime = new Date(log.timestamp).getTime();
-                                const sessStart = new Date(sess.startTime).getTime();
-                                const sessEnd = sess.isLive ? Date.now() : new Date(sess.endTime).getTime();
-                                return logTime >= sessStart && logTime <= sessEnd;
-                              }).length;
-                              return (
-                                <Text style={{ fontSize: 11, color: count > 0 ? '#6366F1' : '#94A3B8', marginTop: 2, fontWeight: count > 0 ? '700' : '400' }}>
-                                  Tap to view activities {count > 0 ? `(${count} activities)` : '(Idle)'}
-                                </Text>
-                              );
-                            })()}
-                          </View>
-                          <Text style={[styles.sessionLogDuration, sess.isLive && { color: '#10B981' }]}>
-                            {durHrs > 0 ? `${durHrs}h ` : ''}{durMins}m
-                          </Text>
-                          <Ionicons name="chevron-forward" size={16} color="#CBD5E1" style={{ marginLeft: 8 }} />
-                        </TouchableOpacity>
-                      );
-                    }) : (
-                      <View style={{ padding: 20, alignItems: 'center' }}>
-                        <Text style={{ color: '#94A3B8', fontWeight: '600' }}>No sessions on this date.</Text>
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Weekly Summary */}
-                  <View style={[styles.weeklyCard, { marginTop: 20 }]}>
-                    <Text style={styles.weeklyTitle}>Current Week Summary</Text>
-                    <View style={styles.weeklyBarsRow}>
-                      {(agentAttendance.weeklyDays || []).map((day, i) => {
-                        const barHeight = Math.max((day.totalMs / maxWeeklyMs) * 60, 3);
-                        const hrs = Math.floor(day.totalMs / 3600000);
-                        const mins = Math.floor((day.totalMs % 3600000) / 60000);
-                        const isToday = day.date === new Date().toISOString().split('T')[0];
-                        return (
-                          <View key={i} style={styles.weeklyBarCol}>
-                            <Text style={styles.weeklyBarValue}>
-                              {day.totalMs > 0 ? (hrs > 0 ? `${hrs}h` : `${mins}m`) : ''}
-                            </Text>
-                            <View style={[
-                              styles.weeklyBar, 
-                              { height: barHeight, backgroundColor: isToday ? '#6366F1' : (day.totalMs > 0 ? '#A5B4FC' : '#E2E8F0') }
-                            ]} />
-                            <Text style={[styles.weeklyBarLabel, isToday && { color: '#6366F1', fontWeight: '900' }]}>
-                              {day.dayName}
-                            </Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </View>
-
-                </ScrollView>
+                    </ScrollView>
               );
             })()}
           </View>
