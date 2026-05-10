@@ -19,18 +19,11 @@ function getTransporter() {
       console.warn("⚠️ GMAIL_USER or GMAIL_APP_PASSWORD is not set. Emails will fail.");
     }
     transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      family: 4, // 🛡️ [IPv6 FIX]: Force IPv4. Render throws ENETUNREACH for Gmail SMTP over IPv6
-      pool: false, // 🛡️ Don't pool connections — prevents stale socket reuse on Render
+      service: 'gmail',
       auth: {
         user: gmailUser || "acetrack.noreply@gmail.com",
         pass: gmailPass
-      },
-      connectionTimeout: 10000, // 10s to establish SMTP connection
-      greetingTimeout: 10000,   // 10s to receive SMTP greeting
-      socketTimeout: 15000,     // 15s inactivity timeout on the socket
+      }
     });
     
     // 🛡️ Non-blocking SMTP verification on first init
@@ -419,12 +412,12 @@ export async function sendPasswordResetEmail(toEmail, resetLink, expiresAt, firs
   };
 
   try {
-    const info = await sendMailWithTimeout(mailOptions);
-    return { success: true, messageId: info.messageId };
-  } catch (err) {
-    console.error(`Failed to send reset email to ${toEmail}:`, err.message);
-    return { success: false, error: err.message };
-  }
+    return getTransporter().sendMail(mailOptions)
+      .then(info => ({ success: true, messageId: info.messageId }))
+      .catch(error => {
+        console.error('Failed to send reset email:', error);
+        return { success: false, error: error.message };
+      });
 }
 
 /**
