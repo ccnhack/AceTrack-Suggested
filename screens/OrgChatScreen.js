@@ -167,16 +167,16 @@ const OrgChatScreen = ({ navigation }) => {
                   onPress={() => setSelectedContact(contact)}
                   activeOpacity={0.7}
                 >
-                  <View style={[styles.avatar, (isActive || hasUnread) && styles.avatarActive]}>
+                  <View style={[styles.avatar, hasUnread ? styles.avatarActive : (isActive && { backgroundColor: '#475569' })]}>
                     <Text style={[styles.avatarText, (isActive || hasUnread) && { color: '#FFF' }]}>{getInitials(contact.name)}</Text>
                   </View>
                   <View style={styles.contactInfo}>
                     <View style={styles.contactNameRow}>
-                      <Text style={[styles.contactName, (isActive || hasUnread) && styles.contactNameActive]} numberOfLines={1}>
+                      <Text style={[styles.contactName, hasUnread && styles.contactNameActive]} numberOfLines={1}>
                         {contact.name || 'Unknown'}
                       </Text>
                       {lastMsg && (
-                        <Text style={[styles.contactTime, hasUnread && { color: '#E2E8F0' }]}>{formatTime(lastMsg.timestamp)}</Text>
+                        <Text style={[styles.contactTime, hasUnread && { color: '#6366F1', fontWeight: 'bold' }]}>{formatTime(lastMsg.timestamp)}</Text>
                       )}
                     </View>
                     <View style={styles.contactPreviewRow}>

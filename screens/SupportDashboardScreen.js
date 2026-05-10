@@ -49,9 +49,12 @@ const SupportDashboardScreen = ({ navigation, route }) => {
 
   const { messages } = useCommsStore();
   const totalUnreadChat = useMemo(() => {
-    return (messages || []).filter(m => 
-      m.receiverId === currentUser?.id && m.status !== 'seen'
-    ).length;
+    const unreadSenders = new Set(
+      (messages || [])
+        .filter(m => m.receiverId === currentUser?.id && m.status !== 'seen')
+        .map(m => m.senderId)
+    );
+    return unreadSenders.size;
   }, [messages, currentUser]);
 
   const renderWebSidebar = () => (
