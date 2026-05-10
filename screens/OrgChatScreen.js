@@ -13,7 +13,7 @@ import { socketService } from '../services/sync/SocketService';
 const OrgChatScreen = ({ navigation }) => {
   const { currentUser } = useAuth();
   const { teamDirectory, fetchTeamDirectory } = useAdminCoreStore();
-  const { messages, fetchMessages, sendMessage, appendMessage } = useCommsStore();
+  const { messages, fetchMessages, sendMessage, appendMessage, markAsSeen } = useCommsStore();
   
   const [selectedContact, setSelectedContact] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -27,6 +27,12 @@ const OrgChatScreen = ({ navigation }) => {
     fetchTeamDirectory();
     fetchMessages();
   }, []);
+
+  useEffect(() => {
+    if (selectedContact) {
+      markAsSeen(selectedContact.id);
+    }
+  }, [selectedContact, messages]); // Re-run when new messages arrive if conversation is open
 
   useEffect(() => {
     const socket = socketService.getSocket();
@@ -134,44 +140,59 @@ const OrgChatScreen = ({ navigation }) => {
             <Text style={styles.emptyText}>No contacts found</Text>
           </View>
         ) : (
-          contacts.map(contact => {
-            const lastMsg = getLastMessage(contact.id);
-            const unread = getUnreadCount(contact.id);
-            const isActive = selectedContact?.id === contact.id;
+          contacts
+            .sort((a, b) => {
+              const unreadA = getUnreadCount(a.id);
+              const unreadB = getUnreadCount(b.id);
+              if (unreadA !== unreadB) return unreadB - unreadA;
+              
+              const lastA = getLastMessage(a.id)?.timestamp || 0;
+              const lastB = getLastMessage(b.id)?.timestamp || 0;
+              return new Date(lastB) - new Date(lastA);
+            })
+            .map(contact => {
+              const lastMsg = getLastMessage(contact.id);
+              const unread = getUnreadCount(contact.id);
+              const isActive = selectedContact?.id === contact.id;
+              const hasUnread = unread > 0;
 
-            return (
-              <TouchableOpacity
-                key={contact.id}
-                style={[styles.contactItem, isActive && styles.contactItemActive]}
-                onPress={() => setSelectedContact(contact)}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.avatar, isActive && styles.avatarActive]}>
-                  <Text style={[styles.avatarText, isActive && { color: '#FFF' }]}>{getInitials(contact.name)}</Text>
-                </View>
-                <View style={styles.contactInfo}>
-                  <View style={styles.contactNameRow}>
-                    <Text style={[styles.contactName, isActive && styles.contactNameActive]} numberOfLines={1}>
-                      {contact.name || 'Unknown'}
-                    </Text>
-                    {lastMsg && (
-                      <Text style={styles.contactTime}>{formatTime(lastMsg.timestamp)}</Text>
-                    )}
+              return (
+                <TouchableOpacity
+                  key={contact.id}
+                  style={[
+                    styles.contactItem, 
+                    isActive && styles.contactItemActive,
+                    hasUnread && styles.contactItemUnread
+                  ]}
+                  onPress={() => setSelectedContact(contact)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.avatar, (isActive || hasUnread) && styles.avatarActive]}>
+                    <Text style={[styles.avatarText, (isActive || hasUnread) && { color: '#FFF' }]}>{getInitials(contact.name)}</Text>
                   </View>
-                  <View style={styles.contactPreviewRow}>
-                    <Text style={styles.contactPreview} numberOfLines={1}>
-                      {lastMsg ? (lastMsg.senderId === currentUser?.id ? `You: ${lastMsg.content}` : lastMsg.content) : contact.role}
-                    </Text>
-                    {unread > 0 && (
-                      <View style={styles.unreadBadge}>
-                        <Text style={styles.unreadText}>{unread}</Text>
-                      </View>
-                    )}
+                  <View style={styles.contactInfo}>
+                    <View style={styles.contactNameRow}>
+                      <Text style={[styles.contactName, (isActive || hasUnread) && styles.contactNameActive]} numberOfLines={1}>
+                        {contact.name || 'Unknown'}
+                      </Text>
+                      {lastMsg && (
+                        <Text style={[styles.contactTime, hasUnread && { color: '#E2E8F0' }]}>{formatTime(lastMsg.timestamp)}</Text>
+                      )}
+                    </View>
+                    <View style={styles.contactPreviewRow}>
+                      <Text style={[styles.contactPreview, hasUnread && { color: '#E2E8F0', fontWeight: '600' }]} numberOfLines={1}>
+                        {lastMsg ? (lastMsg.senderId === currentUser?.id ? `You: ${lastMsg.content}` : lastMsg.content) : contact.role}
+                      </Text>
+                      {unread > 0 && (
+                        <View style={styles.unreadBadge}>
+                          <Text style={styles.unreadText}>{unread}</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
-                </View>
-              </TouchableOpacity>
-            );
-          })
+                </TouchableOpacity>
+              );
+            })
         )}
       </ScrollView>
     </View>
@@ -302,9 +323,9 @@ const styles = StyleSheet.create({
   // ─── Contact Panel ───────────────
   contactPanel: {
     width: 340,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0F172A', // Dark sidebar theme
     borderRightWidth: 1,
-    borderRightColor: '#E2E8F0',
+    borderRightColor: '#1E293B',
     ...Platform.select({ web: { maxWidth: 340, minWidth: 280 } }),
   },
   contactHeader: {
@@ -315,21 +336,21 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 12,
   },
-  contactHeaderTitle: { fontSize: 22, fontWeight: '900', color: '#0F172A', letterSpacing: -0.3 },
+  contactHeaderTitle: { fontSize: 22, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.3 },
   contactCloseBtn: { padding: 4 },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#1E293B',
     marginHorizontal: 16,
     marginBottom: 8,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#334155',
   },
-  searchInput: { flex: 1, marginLeft: 10, fontSize: 14, color: '#0F172A', ...Platform.select({ web: { outlineStyle: 'none' } }) },
+  searchInput: { flex: 1, marginLeft: 10, fontSize: 14, color: '#FFFFFF', ...Platform.select({ web: { outlineStyle: 'none' } }) },
   contactList: { flex: 1 },
   emptyContacts: { alignItems: 'center', marginTop: 60 },
   emptyText: { color: '#94A3B8', marginTop: 12, fontSize: 14 },
@@ -341,27 +362,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
+    borderBottomColor: '#1E293B',
   },
-  contactItemActive: { backgroundColor: '#EEF2FF' },
+  contactItemActive: { backgroundColor: '#1E293B' },
+  contactItemUnread: { backgroundColor: 'rgba(99, 102, 241, 0.2)' },
   avatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#334155',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
   },
   avatarActive: { backgroundColor: '#6366F1' },
-  avatarText: { fontSize: 15, fontWeight: '800', color: '#3B82F6' },
+  avatarText: { fontSize: 15, fontWeight: '800', color: '#94A3B8' },
   contactInfo: { flex: 1 },
   contactNameRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  contactName: { fontSize: 14, fontWeight: '700', color: '#0F172A', flex: 1, marginRight: 8 },
-  contactNameActive: { color: '#4338CA' },
-  contactTime: { fontSize: 11, color: '#94A3B8', fontWeight: '500' },
+  contactName: { fontSize: 14, fontWeight: '700', color: '#FFFFFF', flex: 1, marginRight: 8 },
+  contactNameActive: { color: '#6366F1' },
+  contactTime: { fontSize: 11, color: '#64748B', fontWeight: '500' },
   contactPreviewRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  contactPreview: { fontSize: 12, color: '#64748B', flex: 1, marginRight: 8 },
+  contactPreview: { fontSize: 12, color: '#94A3B8', flex: 1, marginRight: 8 },
   unreadBadge: { backgroundColor: '#6366F1', borderRadius: 10, minWidth: 20, height: 20, paddingHorizontal: 6, justifyContent: 'center', alignItems: 'center' },
   unreadText: { color: '#FFF', fontSize: 10, fontWeight: '800' },
 

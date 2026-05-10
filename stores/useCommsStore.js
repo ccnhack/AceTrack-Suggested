@@ -64,5 +64,26 @@ export const useCommsStore = create((set, get) => ({
         } finally {
             set({ isLoading: false });
         }
+    },
+    markAsSeen: async (senderId) => {
+        try {
+            const response = await fetch(`${config.API_BASE_URL}/api/v1/comms/chat/seen`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${window.localStorage?.getItem('acetrack_auth_token') || ''}` 
+                },
+                body: JSON.stringify({ senderId })
+            });
+            const data = await response.json();
+            if (data.success) {
+                const updatedMessages = get().messages.map(m => 
+                    (m.senderId === senderId && m.status !== 'seen') ? { ...m, status: 'seen' } : m
+                );
+                set({ messages: updatedMessages });
+            }
+        } catch (error) {
+            console.error("Failed to mark as seen:", error);
+        }
     }
 }));

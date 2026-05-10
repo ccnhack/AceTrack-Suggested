@@ -3,7 +3,9 @@ import mongoose from 'mongoose';
 const OrgMessageSchema = new mongoose.Schema({
     senderId: { type: String, required: true },
     senderName: { type: String, required: true },
+    receiverId: { type: String }, // Optional for broadcasts
     content: { type: String, required: true },
+    status: { type: String, default: 'sent' }, // sent, seen
     timestamp: { type: Date, default: Date.now }
 });
 

@@ -148,6 +148,13 @@ const AdminHubScreen = ({ navigation, route }) => {
     }
   }, [route.params]);
 
+  const { messages } = useCommsStore();
+  const totalUnreadChat = useMemo(() => {
+    return (messages || []).filter(m => 
+      m.receiverId === currentUser?.id && m.status !== 'seen'
+    ).length;
+  }, [messages, currentUser]);
+
   const renderWebSidebar = () => (
     <>
       {(isMobileWeb && isWebSidebarOpen) && (
@@ -223,29 +230,65 @@ const AdminHubScreen = ({ navigation, route }) => {
             })}
           </ScrollView>
         </View>
-        <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
-          <TouchableOpacity onPress={() => { navigation.navigate('OrgChat'); if (isMobileWeb) setIsWebSidebarOpen(false); }} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(99, 102, 241, 0.1)', borderWidth: 1, borderColor: '#334155' }}>
+        <View style={{ 
+          paddingHorizontal: 16, 
+          paddingTop: 12, 
+          paddingBottom: 20, 
+          borderTopWidth: 1, 
+          borderTopColor: '#1E293B',
+          backgroundColor: '#0F172A' 
+        }}>
+          <TouchableOpacity 
+            onPress={() => { navigation.navigate('OrgChat'); if (isMobileWeb) setIsWebSidebarOpen(false); }} 
+            style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              paddingHorizontal: 12, 
+              paddingVertical: 12, 
+              borderRadius: 12, 
+              backgroundColor: 'rgba(99, 102, 241, 0.15)', 
+              borderWidth: 1, 
+              borderColor: 'rgba(99, 102, 241, 0.3)',
+              marginBottom: 8 
+            }}
+          >
             <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#6366F1', justifyContent: 'center', alignItems: 'center' }}>
               <Ionicons name="chatbubble-ellipses" size={18} color="#FFF" />
+              {totalUnreadChat > 0 && (
+                <View style={{ 
+                  position: 'absolute', 
+                  top: -5, 
+                  right: -5, 
+                  backgroundColor: '#EF4444', 
+                  borderRadius: 10, 
+                  minWidth: 18, 
+                  height: 18, 
+                  justifyContent: 'center', 
+                  alignItems: 'center',
+                  borderWidth: 2,
+                  borderColor: '#0F172A'
+                }}>
+                  <Text style={{ color: '#FFF', fontSize: 9, fontWeight: '900' }}>{totalUnreadChat}</Text>
+                </View>
+              )}
             </View>
             <View style={{ marginLeft: 12, flex: 1 }}>
-              <Text style={{ color: '#F8FAFC', fontSize: 14, fontWeight: 'bold' }}>Chat/Collaborate</Text>
-              <Text style={{ color: '#94A3B8', fontSize: 11 }}>Team Messages</Text>
+              <Text style={{ color: '#F8FAFC', fontSize: 13, fontWeight: '700' }}>Chat/Collaborate</Text>
+              <Text style={{ color: '#94A3B8', fontSize: 10 }}>Team Messages</Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color="#475569" />
+            <Ionicons name="chevron-forward" size={14} color="#475569" />
           </TouchableOpacity>
-        </View>
 
-        <View style={{ paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: '#1E293B', paddingTop: 24, marginTop: 16 }}>
-           <TouchableOpacity onPress={() => { navigation.navigate('Profile'); if (isMobileWeb) setIsWebSidebarOpen(false); }} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 }}>
-             <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#334155', justifyContent: 'center', alignItems: 'center' }}>
-               <Ionicons name="person" size={18} color="#FFF" />
+          <TouchableOpacity onPress={() => { navigation.navigate('Profile'); if (isMobileWeb) setIsWebSidebarOpen(false); }} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: '#1E293B' }}>
+             <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#334155', justifyContent: 'center', alignItems: 'center' }}>
+               <Ionicons name="person" size={16} color="#FFF" />
              </View>
-             <View style={{ marginLeft: 12 }}>
-               <Text style={{ color: '#F8FAFC', fontSize: 14, fontWeight: 'bold' }}>Admin Profile</Text>
-               <Text style={{ color: '#94A3B8', fontSize: 11 }}>Settings & Support</Text>
+             <View style={{ marginLeft: 10, flex: 1 }}>
+               <Text style={{ color: '#F8FAFC', fontSize: 13, fontWeight: 'bold' }} numberOfLines={1}>Admin Profile</Text>
+               <Text style={{ color: '#94A3B8', fontSize: 10 }} numberOfLines={1}>Settings & Support</Text>
              </View>
-           </TouchableOpacity>
+             <Ionicons name="chevron-forward" size={14} color="#475569" />
+          </TouchableOpacity>
         </View>
       </View>
     </>

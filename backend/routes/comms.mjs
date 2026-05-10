@@ -28,11 +28,12 @@ export default function createCommsRoutes({ io }) {
             if (req.userRole !== 'admin' && req.userRole !== 'support') {
                 return res.status(403).json({ success: false, message: 'Access denied' });
             }
-            const { content } = req.body;
+            const { content, receiverId } = req.body;
             const msg = await OrgMessage.create({
                 senderId: req.user.id,
                 senderName: req.user.name || req.user.email,
-                content
+                content,
+                receiverId
             });
             
             // Broadcast via Socket.io if available
@@ -43,6 +44,24 @@ export default function createCommsRoutes({ io }) {
             res.json({ success: true, message: msg });
         } catch (error) {
             console.error("Error sending chat:", error);
+            res.status(500).json({ success: false, message: 'Server error' });
+        }
+    });
+    
+    // Mark as Seen
+    router.post('/chat/seen', async (req, res) => {
+        try {
+            const { senderId } = req.body;
+            if (!senderId) return res.status(400).json({ success: false, message: 'senderId required' });
+            
+            await OrgMessage.updateMany(
+                { senderId, receiverId: req.user.id, status: { $ne: 'seen' } },
+                { $set: { status: 'seen' } }
+            );
+            
+            res.json({ success: true });
+        } catch (error) {
+            console.error("Error marking as seen:", error);
             res.status(500).json({ success: false, message: 'Server error' });
         }
     });
