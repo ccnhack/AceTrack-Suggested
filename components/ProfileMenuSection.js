@@ -15,6 +15,7 @@ const ProfileMenuSection = memo(({
   onSupport,
   onCoachOnboarding,
   onLogout,
+  onOpenModal,
 }) => {
   return (
     <View style={styles.menuSection}>
@@ -144,22 +145,12 @@ const ProfileMenuSection = memo(({
         <TouchableOpacity 
           onPress={() => {
             logger.logAction('MODAL_OPEN', { modal: 'ReportIssue' });
-            Alert.alert(
-              'Report Issue', 
-              'Use this to report bugs, raise concerns, or submit feedback directly to the System Admin.\n\nYour report will be automatically assigned to the Admin for review.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Report Now', onPress: () => {
-                  // Trigger the support modal — issues auto-assign to admin
-                  onSupport('report_issue');
-                }}
-              ]
-            );
+            if (onSupport) onSupport('admin_hub');
           }}
           style={styles.menuItem}
         >
-          <View style={[styles.menuIcon, { backgroundColor: '#FFF7ED' }]}>
-            <Ionicons name="alert-circle-outline" size={20} color="#EA580C" />
+          <View style={[styles.menuIcon, { backgroundColor: '#FEF2F2' }]}>
+            <Ionicons name="warning-outline" size={20} color="#DC2626" />
           </View>
           <Text style={styles.menuLabel}>Report Issue</Text>
           <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
