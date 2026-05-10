@@ -73,17 +73,19 @@ router.get('/team-directory', async (req, res) => {
         }
         // Fetch users who are either admin or support
         const team = await User.find({ "data.role": { $in: ['admin', 'support'] } })
-            .select('data.name data.email data.role data.designation data.avatar data.phone')
+            .select('data.id data.name data.email data.role data.designation data.avatar data.phone data.username')
             .lean();
             
         // Map data back to flat structure for the frontend
         const mappedTeam = team.map(u => ({
+            id: u.data?.id || u._id?.toString() || '',
             name: u.data?.name || 'Unknown',
             email: u.data?.email || '',
             role: u.data?.role || 'user',
             designation: u.data?.designation || '',
             avatar: u.data?.avatar || '',
-            phone: u.data?.phone || ''
+            phone: u.data?.phone || '',
+            username: u.data?.username || ''
         }));
             
         res.json({ success: true, team: mappedTeam });
