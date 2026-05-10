@@ -995,8 +995,12 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
               }
               
               const joinDate = selectedAgent?.createdAt ? new Date(selectedAgent.createdAt).getTime() : earliestSessionDate;
-              const msSinceJoin = Date.now() - joinDate;
-              let monthsElapsed = Math.floor(msSinceJoin / (1000 * 60 * 60 * 24 * 30));
+              
+              const joinDateObjCalc = new Date(joinDate);
+              const todayObjCalc = new Date();
+              let monthDiff = (todayObjCalc.getFullYear() - joinDateObjCalc.getFullYear()) * 12 + (todayObjCalc.getMonth() - joinDateObjCalc.getMonth());
+              
+              let monthsElapsed = 1 + monthDiff;
               if (monthsElapsed < 1) monthsElapsed = 1;
 
               let earnedRatePerMonth = 0;
@@ -1099,28 +1103,6 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
               return (
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
                   
-                  {/* Current Live Status (Only show if viewing Today) */}
-                  {isTodayFilter && (
-                    <View style={[styles.attendanceStatusCard, { borderLeftColor: agentAttendance.isCurrentlyOnline ? '#10B981' : '#94A3B8' }]}>
-                      <View style={[styles.attendanceLiveDot, { backgroundColor: agentAttendance.isCurrentlyOnline ? '#10B981' : '#CBD5E1' }]} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.attendanceStatusText, { color: agentAttendance.isCurrentlyOnline ? '#059669' : '#64748B' }]}>
-                          {agentAttendance.isCurrentlyOnline ? 'Currently Online' : 'Offline'}
-                        </Text>
-                        {!agentAttendance.isCurrentlyOnline && agentAttendance.lastSeen && agentAttendance.lastSeen !== 'Now' && (
-                          <Text style={styles.attendanceLastSeen}>
-                            Last seen {new Date(agentAttendance.lastSeen).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                          </Text>
-                        )}
-                        {agentAttendance.isCurrentlyOnline && agentAttendance.activeSessions?.length > 0 && (
-                          <Text style={styles.attendanceLastSeen}>
-                            Session started {new Date(agentAttendance.activeSessions[0].startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  )}
-
                   {/* Current Live Status (Only show if viewing Today) */}
                   {isTodayFilter && !attendanceCalendarMode && (
                     <View style={[styles.attendanceStatusCard, { borderLeftColor: agentAttendance.isCurrentlyOnline ? '#10B981' : '#94A3B8' }]}>
