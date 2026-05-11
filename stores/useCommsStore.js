@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { Platform } from 'react-native';
 import config from '../config';
 
 export const useCommsStore = create((set, get) => ({
@@ -14,7 +15,8 @@ export const useCommsStore = create((set, get) => ({
             let token = '';
             try { token = window.localStorage?.getItem('acetrack_auth_token') || ''; } catch (e) {}
             
-            const response = await fetch(`${config.API_BASE_URL}/api/v1/comms/chat`, {
+            const url = Platform.OS === 'web' ? '/api/comms/chat' : `${config.API_BASE_URL}/api/v1/comms/chat`;
+            const response = await fetch(url, {
                 headers: { 
                     'Authorization': token ? `Bearer ${token}` : '',
                     'x-ace-api-key': config.PUBLIC_APP_ID 
@@ -35,7 +37,8 @@ export const useCommsStore = create((set, get) => ({
             let token = '';
             try { token = window.localStorage?.getItem('acetrack_auth_token') || ''; } catch (e) {}
 
-            const response = await fetch(`${config.API_BASE_URL}/api/v1/comms/chat`, {
+            const url = Platform.OS === 'web' ? '/api/comms/chat' : `${config.API_BASE_URL}/api/v1/comms/chat`;
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
@@ -74,7 +77,8 @@ export const useCommsStore = create((set, get) => ({
             let token = '';
             try { token = window.localStorage?.getItem('acetrack_auth_token') || ''; } catch (e) {}
 
-            const response = await fetch(`${config.API_BASE_URL}/api/v1/comms/announcements`, {
+            const url = Platform.OS === 'web' ? '/api/comms/announcements' : `${config.API_BASE_URL}/api/v1/comms/announcements`;
+            const response = await fetch(url, {
                 headers: { 
                     'Authorization': token ? `Bearer ${token}` : '',
                     'x-ace-api-key': config.PUBLIC_APP_ID
