@@ -156,6 +156,31 @@ export const useCommsStore = create((set, get) => ({
         set({ messages: get().messages.filter(m => m._id !== messageId) });
     },
 
+    markAsSeen: async (senderId) => {
+        try {
+            let token = '';
+            try { token = window.localStorage?.getItem('acetrack_auth_token') || ''; } catch (e) {}
+
+            const url = Platform.OS === 'web' ? '/api/comms/chat/seen' : `${config.API_BASE_URL}/api/v1/comms/chat/seen`;
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : '',
+                    'x-ace-api-key': config.PUBLIC_APP_ID
+                },
+                body: JSON.stringify({ senderId })
+            });
+            const data = await response.json();
+            if (data.success) {
+                const updated = get().messages.map(m => 
+                    m.senderId === senderId ? { ...m, status: 'seen' } : m
+                );
+                set({ messages: updated });
+            }
+        } catch (e) {}
+    },
+
     fetchAnnouncements: async () => {
         try {
             set({ isLoading: true });
