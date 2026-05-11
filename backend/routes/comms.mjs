@@ -25,7 +25,7 @@ export default function createCommsRoutes({ io, logAudit }) {
     // Send Message
     router.post(['/chat', '/'], async (req, res) => {
         try {
-            // 🛡️ [CHAT_DIAGNOSTIC] (v2.6.382)
+            // 🛡️ [CHAT_DIAGNOSTIC] (v2.6.383)
             await logAudit(req, 'CHAT_MESSAGE_ATTEMPT', [], { 
               target: req.body.receiverId, 
               role: req.userRole,
@@ -36,7 +36,7 @@ export default function createCommsRoutes({ io, logAudit }) {
                 console.warn(`🛑 [CHAT_BLOCK] Unauthorized attempt from ${req.user.id} (${req.userRole})`);
                 return res.status(403).json({ success: false, message: 'Access denied' });
             }
-            // 🛡️ [CHAT_TRACE] (v2.6.382)
+            // 🛡️ [CHAT_TRACE] (v2.6.383)
             console.log(`💬 [CHAT] Msg from ${req.user.id} to ${receiverId || 'GLOBAL'}`);
 
             const msg = await OrgMessage.create({

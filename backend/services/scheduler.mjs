@@ -127,7 +127,7 @@ export async function generateSecuritySummaryBlocks(timeframeHours = 24) {
   };
 }
 
-// 🛡️ [DETAILED LOGS - JSON FORMAT] (v2.6.382)
+// 🛡️ [DETAILED LOGS - JSON FORMAT] (v2.6.383)
 export async function generateDetailedSecurityBlocks(timeframeHours = 24) {
   const since = new Date(Date.now() - timeframeHours * 60 * 60 * 1000);
   const summaries = await SecuritySummary.find({ lastEventAt: { $gt: since } }).lean();
@@ -178,10 +178,11 @@ export async function generateDetailedSecurityBlocks(timeframeHours = 24) {
           { type: "mrkdwn", text: "💡 _Full raw logs are preserved in the `AuditLog` collection for forensics._" }
         ]
       }
+    ]
   };
 }
 
-// 📧 [CHAT REMINDER SERVICE] (v2.6.382)
+// 📧 [CHAT REMINDER SERVICE] (v2.6.383)
 export async function processUnseenMessageReminders() {
   try {
     const { OrgMessage, Player } = await import('../models/index.mjs');
@@ -258,7 +259,7 @@ export async function processUnseenMessageReminders() {
 }
 
 export default function initScheduler(loginAttempts, sendSecurityAlert) {
-  // 🕒 [CHAT_WATCHDOG] (v2.6.382): Run hourly
+  // 🕒 [CHAT_WATCHDOG] (v2.6.383): Run hourly
   setInterval(async () => {
     try { await processUnseenMessageReminders(); } catch (e) {}
   }, 60 * 60 * 1000);
@@ -284,5 +285,5 @@ export default function initScheduler(loginAttempts, sendSecurityAlert) {
     } catch (err) {}
   }, 24 * 60 * 60 * 1000);
 
-  console.log('🕒 Scheduler initialized (v2.6.382)');
+  console.log('🕒 Scheduler initialized (v2.6.383)');
 }

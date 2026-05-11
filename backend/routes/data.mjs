@@ -129,7 +129,7 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       chatbotMessages
     };
 
-    // 🛡️ [PRESENCE INJECTOR] (v2.6.382)
+    // 🛡️ [PRESENCE INJECTOR] (v2.6.383)
     // Cross-reference DB players with live WebSocket sessions
     if (composedData.players && Array.isArray(composedData.players)) {
       const activeUserIds = new Set();
@@ -156,7 +156,7 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
         return p;
       });
 
-      // 🛡️ [SYNC_DIAGNOSTIC] (v2.6.382)
+      // 🛡️ [SYNC_DIAGNOSTIC] (v2.6.383)
       if (req.originalUrl.includes('data')) {
           await logAudit(req, 'DATA_SYNC_PRESENCE', [], { 
             activeCount: activeUserIds.size, 
