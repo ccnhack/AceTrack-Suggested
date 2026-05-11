@@ -127,7 +127,7 @@ export async function generateSecuritySummaryBlocks(timeframeHours = 24) {
   };
 }
 
-// 🛡️ [DETAILED LOGS - JSON FORMAT] (v2.6.367)
+// 🛡️ [DETAILED LOGS - JSON FORMAT] (v2.6.368)
 export async function generateDetailedSecurityBlocks(timeframeHours = 24) {
   const since = new Date(Date.now() - timeframeHours * 60 * 60 * 1000);
   const summaries = await SecuritySummary.find({ lastEventAt: { $gt: since } }).lean();
@@ -201,5 +201,5 @@ export default function initScheduler(loginAttempts, sendSecurityAlert) {
     } catch (err) {}
   }, 24 * 60 * 60 * 1000);
 
-  console.log('🕒 Scheduler initialized (v2.6.367)');
+  console.log('🕒 Scheduler initialized (v2.6.368)');
 }
