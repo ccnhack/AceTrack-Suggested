@@ -129,41 +129,5 @@ export default function createInfrastructureRoutes({
     } catch (err) { res.status(500).send("Command failed"); }
   });
 
-  // 🛡️ [SLACK SIMULATOR] (v2.6.358)
-  router.get('/slack/simulate', async (req, res) => {
-    try {
-      const https = await import('https');
-      const testPayload = {
-        payload: JSON.stringify({
-          user: { name: 'Simulator_Admin' },
-          actions: [{ action_id: 'view_security_details', value: JSON.stringify({ timeframe: 24 }) }],
-          trigger_id: 'test_trigger'
-        })
-      };
-
-      const postData = new URLSearchParams(testPayload).toString();
-      const options = {
-        hostname: 'acetrack-suggested.onrender.com',
-        port: 443,
-        path: '/slack/interact',
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': postData.length }
-      };
-
-      const request = https.request(options, (response) => {
-        let data = '';
-        response.on('data', (chunk) => { data += chunk; });
-        response.on('end', () => {
-          try { res.json({ success: true, status: response.statusCode, serverResponse: JSON.parse(data) }); }
-          catch (e) { res.json({ success: true, status: response.statusCode, rawResponse: data }); }
-        });
-      });
-
-      request.on('error', (e) => { res.status(500).json({ success: false, error: e.message }); });
-      request.write(postData);
-      request.end();
-    } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-  });
-
   return router;
 }

@@ -694,13 +694,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // 🛡️ DIAGNOSTICS: Global Request Logger (v2.6.175)
 app.use(async (req, res, next) => {
-  if (req.path.includes('login') || req.path.includes('recovery') || req.path.includes('slack')) {
-    await logAudit(req, 'DEBUG_NETWORK_SNIFFER', [], { 
-      url: req.originalUrl || req.path, 
-      method: req.method,
-      hasPayload: !!req.body?.payload,
-      userAgent: req.headers['user-agent']
-    });
+  if (req.path.includes('login') || req.path.includes('recovery')) {
+    await logAudit(req, 'DEBUG_INCOMING_AUTH_REQ', [], { url: req.originalUrl || req.path, method: req.method });
   }
   next();
 });
