@@ -86,17 +86,18 @@ export default function createCommsRoutes({ io, logAudit, cloudinary, upload }) 
         }
     });
 
-    // Send Message (with optional attachments)
+    // Send Message (v2.6.405: Added replyTo support)
     router.post(['/chat', '/'], async (req, res) => {
         try {
-            const { content, receiverId, attachments } = req.body;
+            const { content, receiverId, attachments, replyTo } = req.body;
             
             // 🛡️ [CHAT_DIAGNOSTIC] (v2.6.392)
             await logAudit(req, 'CHAT_MESSAGE_ATTEMPT', [], { 
               target: receiverId, 
               role: req.userRole,
               hasIo: !!io,
-              hasAttachments: !!(attachments && attachments.length)
+              hasAttachments: !!(attachments && attachments.length),
+              isReply: !!replyTo
             });
 
             if (req.userRole !== 'admin' && req.userRole !== 'support') {
@@ -109,13 +110,12 @@ export default function createCommsRoutes({ io, logAudit, cloudinary, upload }) 
                 return res.status(400).json({ success: false, message: 'Message must have content or attachments' });
             }
 
-            console.log(`💬 [CHAT] Msg from ${req.user.id} to ${receiverId || 'GLOBAL'} | attachments: ${attachments?.length || 0}`);
-
             const msgData = {
                 senderId: req.user.id,
                 senderName: req.user.name || req.user.email || req.user.id || 'System',
                 content: content || '',
-                receiverId: receiverId || null
+                receiverId: receiverId || null,
+                replyTo: replyTo || null
             };
 
             // Add attachments if provided
@@ -134,28 +134,17 @@ export default function createCommsRoutes({ io, logAudit, cloudinary, upload }) 
             
             // Broadcast via Socket.io if available
             if (io) {
+                const eventName = 'org_chat_message';
                 if (receiverId) {
-                    const room = `user:${receiverId}`;
-                    const senderRoom = `user:${req.user.id}`;
-                    
-                    const participants = io.sockets.adapter.rooms.get(room);
-                    if (!participants || participants.size === 0) {
-                        console.warn(`⚠️ [CHAT_RELAY] Target room ${room} is EMPTY.`);
-                    }
-
-                    io.to(room).to(senderRoom).emit('org_chat_message', msg);
-                    console.log(`📡 [CHAT_RELAY] Targeted broadcast to ${room} and ${senderRoom}. Participants: ${participants?.size || 0}`);
+                    io.to(`user:${receiverId}`).to(`user:${req.user.id}`).emit(eventName, msg);
                 } else {
-                    io.emit('org_chat_message', msg);
-                    console.log(`📡 [CHAT_RELAY] Global broadcast for public message`);
+                    io.emit(eventName, msg);
                 }
-            } else {
-                console.warn(`⚠️ [CHAT_WARN] Socket.io (io) not initialized in comms routes!`);
             }
 
             res.json({ success: true, message: msg });
         } catch (error) {
-            console.error("❌ [CHAT_CREATE_FAIL]", error.message, error.errors ? JSON.stringify(Object.keys(error.errors)) : '');
+            console.error("❌ [CHAT_CREATE_FAIL]", error.message);
             res.status(500).json({ success: false, message: error.message || 'Server error' });
         }
     });
@@ -173,8 +162,72 @@ export default function createCommsRoutes({ io, logAudit, cloudinary, upload }) 
             
             res.json({ success: true });
         } catch (error) {
-            console.error("Error marking as seen:", error);
             res.status(500).json({ success: false, message: 'Server error' });
+        }
+    });
+
+    // 😄 [REACTIONS] (v2.6.405): Toggle emoji reactions
+    router.post('/chat/react', async (req, res) => {
+        try {
+            const { messageId, emoji } = req.body;
+            const msg = await OrgMessage.findById(messageId);
+            if (!msg) return res.status(404).json({ success: false, message: 'Message not found' });
+
+            const reactions = msg.reactions || new Map();
+            let users = reactions.get(emoji) || [];
+
+            if (users.includes(req.user.id)) {
+                users = users.filter(id => id !== req.user.id);
+            } else {
+                users.push(req.user.id);
+            }
+
+            if (users.length === 0) reactions.delete(emoji);
+            else reactions.set(emoji, users);
+
+            msg.reactions = reactions;
+            msg.markModified('reactions');
+            await msg.save();
+
+            if (io) {
+                const payload = { messageId, reactions: Object.fromEntries(reactions) };
+                if (msg.receiverId) {
+                    io.to(`user:${msg.receiverId}`).to(`user:${msg.senderId}`).emit('org_chat_reaction', payload);
+                } else {
+                    io.emit('org_chat_reaction', payload);
+                }
+            }
+
+            res.json({ success: true, reactions: Object.fromEntries(reactions) });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    });
+
+    // 🗑️ [DELETE] (v2.6.405): Delete message
+    router.delete('/chat/:id', async (req, res) => {
+        try {
+            const msg = await OrgMessage.findById(req.params.id);
+            if (!msg) return res.status(404).json({ success: false });
+
+            if (msg.senderId !== req.user.id && req.userRole !== 'admin') {
+                return res.status(403).json({ success: false });
+            }
+
+            await OrgMessage.findByIdAndDelete(req.params.id);
+
+            if (io) {
+                const payload = { messageId: req.params.id };
+                if (msg.receiverId) {
+                    io.to(`user:${msg.receiverId}`).to(`user:${msg.senderId}`).emit('org_chat_delete', payload);
+                } else {
+                    io.emit('org_chat_delete', payload);
+                }
+            }
+
+            res.json({ success: true });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
         }
     });
 
@@ -184,8 +237,7 @@ export default function createCommsRoutes({ io, logAudit, cloudinary, upload }) 
             const announcements = await Announcement.find().sort({ createdAt: -1 });
             res.json({ success: true, announcements });
         } catch (error) {
-            console.error("Error fetching announcements:", error);
-            res.status(500).json({ success: false, message: 'Server error' });
+            res.status(500).json({ success: false });
         }
     });
 

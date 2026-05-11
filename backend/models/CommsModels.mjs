@@ -13,6 +13,16 @@ const OrgMessageSchema = new mongoose.Schema({
         size: { type: Number, default: 0 },
         expiresAt: { type: Date, required: true }
     }],
+    reactions: {
+        type: Map,
+        of: [String], // Array of userIds who reacted with this emoji
+        default: {}
+    },
+    replyTo: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'OrgMessage',
+        default: null
+    },
     status: { type: String, default: 'sent' }, // sent, seen
     timestamp: { type: Date, default: Date.now },
     reminderSentAt: { type: Date, default: null } // 📧 [CHAT_REMINDER] (v2.6.383)

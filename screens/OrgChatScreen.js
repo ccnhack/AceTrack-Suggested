@@ -13,12 +13,14 @@ import { socketService } from '../services/sync/SocketService';
 const OrgChatScreen = ({ navigation }) => {
   const { currentUser } = useAuth();
   const { teamDirectory, fetchTeamDirectory } = useAdminCoreStore();
-  const { messages, fetchMessages, sendMessage, appendMessage, markAsSeen, uploadAttachment, uploadingFile } = useCommsStore();
+  const { messages, fetchMessages, sendMessage, appendMessage, markAsSeen, uploadAttachment, uploadingFile, replyTo, setReplyTo, toggleReaction, deleteMessage } = useCommsStore();
   
   const [selectedContact, setSelectedContact] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [msgText, setMsgText] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState([]);
+  const [hoveredMessageId, setHoveredMessageId] = useState(null); // 🖱️ [HOVER_STATE]
+  const [activeMenuId, setActiveMenuId] = useState(null); // ⋯ [DROPDOWN_STATE]
   const fileInputRef = useRef(null);
   const chatScrollRef = useRef(null);
   const { width: windowWidth } = useWindowDimensions();
@@ -40,8 +42,20 @@ const OrgChatScreen = ({ navigation }) => {
     const socket = socketService.getSocket();
     if (!socket) return;
     const handleNewMessage = (newMsg) => appendMessage(newMsg);
+    
+    // 📡 [SOCKET_HANDLERS] (v2.6.405)
+    const handleReaction = (payload) => useCommsStore.getState().updateReactions(payload.messageId, payload.reactions);
+    const handleDelete = (payload) => useCommsStore.getState().removeMessage(payload.messageId);
+
     socket.on('org_chat_message', handleNewMessage);
-    return () => socket.off('org_chat_message', handleNewMessage);
+    socket.on('org_chat_reaction', handleReaction);
+    socket.on('org_chat_delete', handleDelete);
+
+    return () => {
+      socket.off('org_chat_message', handleNewMessage);
+      socket.off('org_chat_reaction', handleReaction);
+      socket.off('org_chat_delete', handleDelete);
+    };
   }, []);
 
   // Auto-scroll on new messages
@@ -73,6 +87,16 @@ const OrgChatScreen = ({ navigation }) => {
       (String(m.senderId) === String(contactId) && String(m.receiverId) === String(currentUser?.id))
     );
     return conv.length > 0 ? conv[conv.length - 1] : null;
+  };
+
+  const renderLastMessagePreview = (msg) => {
+    if (!msg) return '';
+    const prefix = String(msg.senderId) === String(currentUser?.id) ? 'You: ' : '';
+    if (msg.attachments && msg.attachments.length > 0) {
+      const isImage = msg.attachments[0].mimeType?.startsWith('image/');
+      return `${prefix}[${isImage ? 'Image' : 'File'}] ${msg.content || ''}`;
+    }
+    return `${prefix}${msg.content}`;
   };
 
   const getUnreadCount = (contactId) => {
@@ -107,9 +131,11 @@ const OrgChatScreen = ({ navigation }) => {
     
     const text = msgText.trim();
     const attachments = [...pendingAttachments];
+    const rTo = replyTo?._id || null;
     
     setMsgText('');
     setPendingAttachments([]);
+    setReplyTo(null); // Clear reply state
     
     const success = await sendMessage(text, selectedContact.id, attachments);
     if (success) {
@@ -246,7 +272,7 @@ const OrgChatScreen = ({ navigation }) => {
                     </View>
                     <View style={styles.contactPreviewRow}>
                       <Text style={[styles.contactPreview, hasUnread && { color: '#E2E8F0', fontWeight: '700' }]} numberOfLines={1}>
-                        {lastMsg ? (String(lastMsg.senderId) === String(currentUser?.id) ? `You: ${lastMsg.content}` : lastMsg.content) : contact.role}
+                        {lastMsg ? renderLastMessagePreview(lastMsg) : contact.role}
                       </Text>
                       {unread > 0 && (
                         <View style={styles.unreadBadge}>
@@ -341,7 +367,20 @@ const OrgChatScreen = ({ navigation }) => {
                         <Text style={styles.msgAvatarSmallText}>{getInitials(selectedContact.name)}</Text>
                       </View>
                     )}
-                    <View style={[styles.msgBubble, isMe ? styles.msgBubbleMe : styles.msgBubbleOther]}>
+                    <View 
+                        style={[styles.msgBubble, isMe ? styles.msgBubbleMe : styles.msgBubbleOther, { position: 'relative' }]}
+                        onMouseEnter={() => isWeb && setHoveredMessageId(msg._id)}
+                        onMouseLeave={() => isWeb && setHoveredMessageId(null)}
+                    >
+                      {/* 🛡️ [REPLY_TO_UI] (v2.6.405): Show quoted message */}
+                      {msg.replyTo && (
+                        <View style={[styles.replyQuote, isMe ? styles.replyQuoteMe : styles.replyQuoteOther]}>
+                          <Text style={styles.replyQuoteText} numberOfLines={1}>
+                            {messages.find(m => m._id === msg.replyTo)?.content || (messages.find(m => m._id === msg.replyTo)?.attachments?.length ? '[Attachment]' : 'Original message deleted')}
+                          </Text>
+                        </View>
+                      )}
+
                       {msg.content && msg.content !== '(empty)' && (
                         <Text style={[styles.msgContent, isMe && { color: '#FFF' }]}>{msg.content}</Text>
                       )}
@@ -398,9 +437,57 @@ const OrgChatScreen = ({ navigation }) => {
                         </View>
                       )}
 
+                      {/* 😄 [REACTION_CHIPS] (v2.6.405) */}
+                      {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+                        <View style={styles.reactionRow}>
+                          {Object.entries(msg.reactions).map(([emoji, users]) => (
+                            <TouchableOpacity 
+                              key={emoji} 
+                              style={styles.reactionChip}
+                              onPress={() => toggleReaction(msg._id, emoji)}
+                            >
+                              <Text style={{ fontSize: 12 }}>{emoji}</Text>
+                              <Text style={styles.reactionCount}>{users.length}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      )}
+
                       <Text style={[styles.msgTimestamp, isMe && { color: 'rgba(255,255,255,0.6)' }]}>
                         {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </Text>
+
+                      {/* 🛠️ [MESSAGE_TOOLBAR] (v2.6.405) */}
+                      {(hoveredMessageId === msg._id || activeMenuId === msg._id) && (
+                        <View style={[styles.msgToolbar, isMe ? styles.msgToolbarMe : styles.msgToolbarOther]}>
+                          <View style={styles.emojiStrip}>
+                            {['👍', '❤️', '😂', '😮'].map(e => (
+                              <TouchableOpacity key={e} onPress={() => toggleReaction(msg._id, e)} style={styles.emojiBtn}>
+                                <Text style={styles.emojiBtnText}>{e}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                          <TouchableOpacity 
+                            style={styles.moreBtn} 
+                            onPress={() => setActiveMenuId(activeMenuId === msg._id ? null : msg._id)}
+                          >
+                            <Ionicons name="ellipsis-horizontal" size={16} color="#64748B" />
+                          </TouchableOpacity>
+                          
+                          {activeMenuId === msg._id && (
+                            <View style={[styles.actionsDropdown, isMe ? styles.actionsDropdownMe : styles.actionsDropdownOther]}>
+                              <TouchableOpacity style={styles.actionItem} onPress={() => { setReplyTo(msg); setActiveMenuId(null); }}>
+                                <Ionicons name="return-up-back" size={16} color="#475569" />
+                                <Text style={styles.actionItemText}>Reply with quote</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity style={[styles.actionItem, { borderBottomWidth: 0 }]} onPress={() => { deleteMessage(msg._id); setActiveMenuId(null); }}>
+                                <Ionicons name="trash" size={16} color="#EF4444" />
+                                <Text style={[styles.actionItemText, { color: '#EF4444' }]}>Delete</Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                        </View>
+                      )}
                     </View>
                   </View>
                 </View>
@@ -408,6 +495,22 @@ const OrgChatScreen = ({ navigation }) => {
             })
           )}
         </ScrollView>
+
+        {/* 💬 [REPLY_PREVIEW] (v2.6.405) */}
+        {replyTo && (
+          <View style={styles.replyPreviewBar}>
+            <View style={styles.replyPreviewIndicator} />
+            <View style={styles.replyPreviewContent}>
+              <Text style={styles.replyPreviewName}>Replying to {replyTo.senderName}</Text>
+              <Text style={styles.replyPreviewText} numberOfLines={1}>
+                {replyTo.content || (replyTo.attachments?.length ? '[Attachment]' : '')}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setReplyTo(null)} style={styles.replyPreviewClose}>
+              <Ionicons name="close-circle" size={20} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* 📎 [ATTACHMENT_PREVIEW] (v2.6.395) */}
         {pendingAttachments.length > 0 && (
@@ -452,7 +555,7 @@ const OrgChatScreen = ({ navigation }) => {
               <Ionicons name="attach" size={24} color="#64748B" />
             )}
           </TouchableOpacity>
-
+          
           <TextInput
             style={styles.chatInput}
             placeholder={`Message ${selectedContact.name}...`}
@@ -691,7 +794,7 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: { backgroundColor: '#CBD5E1' },
   
-  // ─── Attachments Styles (v2.6.395) ───────────
+  // ─── Attachments Styles ───────────
   attachBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   pendingAttachmentsBar: {
     backgroundColor: '#F1F5F9',
@@ -736,6 +839,33 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   expiredText: { fontSize: 12, color: '#94A3B8', marginLeft: 8, fontWeight: '500' },
+
+  // ─── Interaction Styles (v2.6.405) ───────────
+  reactionRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6, gap: 4 },
+  reactionChip: { backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center' },
+  reactionCount: { fontSize: 10, color: '#64748B', marginLeft: 4, fontWeight: '700' },
+  msgToolbar: { position: 'absolute', top: -40, flexDirection: 'row', backgroundColor: '#FFF', padding: 4, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, zIndex: 100 },
+  msgToolbarMe: { right: 0 },
+  msgToolbarOther: { left: 0 },
+  emojiStrip: { flexDirection: 'row', borderRightWidth: 1, borderRightColor: '#F1F5F9', paddingRight: 4 },
+  emojiBtn: { paddingHorizontal: 8, paddingVertical: 4 },
+  emojiBtnText: { fontSize: 16 },
+  moreBtn: { paddingHorizontal: 10, justifyContent: 'center' },
+  actionsDropdown: { position: 'absolute', top: 44, right: 0, backgroundColor: '#FFF', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', width: 160, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, zIndex: 1000, overflow: 'hidden' },
+  actionsDropdownMe: { right: 0 },
+  actionsDropdownOther: { left: 0 },
+  actionItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  actionItemText: { fontSize: 13, marginLeft: 10, color: '#475569', fontWeight: '500' },
+  replyQuote: { padding: 8, borderRadius: 8, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: '#6366F1', backgroundColor: 'rgba(0,0,0,0.03)' },
+  replyQuoteMe: { backgroundColor: 'rgba(255,255,255,0.15)', borderLeftColor: '#FFF' },
+  replyQuoteOther: { backgroundColor: 'rgba(0,0,0,0.03)' },
+  replyQuoteText: { fontSize: 12, fontStyle: 'italic', color: '#64748B' },
+  replyPreviewBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', padding: 12, borderTopWidth: 1, borderTopColor: '#E2E8F0' },
+  replyPreviewIndicator: { width: 4, height: '100%', backgroundColor: '#6366F1', borderRadius: 2 },
+  replyPreviewContent: { flex: 1, marginLeft: 12 },
+  replyPreviewName: { fontSize: 12, fontWeight: '700', color: '#6366F1' },
+  replyPreviewText: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  replyPreviewClose: { padding: 4 },
 });
 
 export default OrgChatScreen;

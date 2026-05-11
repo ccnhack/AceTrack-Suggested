@@ -5,12 +5,26 @@ import config from '../../config';
 import { eventBus } from '../EventBus';
 import logger from '../../utils/logger';
 import storage from '../../utils/storage';
+import { useCommsStore } from '../../stores/useCommsStore'; // 🛡️ [PATH_FIXED] (v2.6.405)
 
 class SocketService {
   private socket: Socket | null = null;
 
   public getSocket(): Socket | null {
     return this.socket;
+  }
+
+  // 📡 [LISTENER_DELEGATION] (v2.6.405)
+  public on(event: string, callback: (...args: any[]) => void) {
+    if (this.socket) {
+      this.socket.on(event, callback);
+    }
+  }
+
+  public off(event: string, callback: (...args: any[]) => void) {
+    if (this.socket) {
+      this.socket.off(event, callback);
+    }
   }
 
   public setupSocket(
@@ -53,9 +67,22 @@ class SocketService {
     });
 
     try {
+      this.socket.on('org_chat_message', (msg) => {
+        useCommsStore.getState().appendMessage(msg);
+      });
+
+      // 😄 [REACTION_SYNC] (v2.6.405)
+      this.socket.on('org_chat_reaction', ({ messageId, reactions }) => {
+        useCommsStore.getState().updateReactions(messageId, reactions);
+      });
+
+      // 🗑️ [DELETE_SYNC] (v2.6.405)
+      this.socket.on('org_chat_delete', ({ messageId }) => {
+        useCommsStore.getState().removeMessage(messageId);
+      });
+
       this.socket.on('connect', () => {
         console.log(`[SocketService] Connected! ID: ${this.socket?.id}`);
-        // 🛡️ [ROOM_JOIN] (v2.6.392): Ensure the client joins their private identity room
         if (userId && this.socket) {
           this.socket.emit('join', String(userId).toLowerCase());
         }
@@ -69,78 +96,16 @@ class SocketService {
 
       this.socket.on('connect_error', (err: any) => {
         console.error(`[SocketService] Connection Error: ${err.message}`);
-        console.log('[SocketService] Query Params:', this.socket?.io.opts.query);
       });
 
       this.socket.on('data_updated', async (data) => {
         try {
-          console.log(`[SocketService] [DATA_UPDATED] Received keys: ${Object.keys(data?.updates || {}).join(', ')}`);
           if (data?.lastSocketId && this.socket?.id && data.lastSocketId === this.socket.id) {
-            console.log('[SocketService] [DATA_UPDATED] Skipping self-originated update.');
             return;
           }
           await onRemoteUpdate(data.updates);
         } catch (e: any) {
           console.error('[SocketService] socket:data_updated error:', e);
-        }
-      });
-
-      this.socket.on('admin_ping_device_relay', async (data: any) => {
-        try {
-          if (data.targetUserId === userId && this.socket) {
-            console.log('[SocketService] Received Admin Ping — Replying with Pong');
-            const deviceId = hardwareId || await storage.getItem('acetrack_device_id') || Constants.sessionId || 'mobile_client';
-            this.socket.emit('device_pong', {
-              targetUserId: userId,
-              deviceId,
-              deviceName: Constants.deviceName || Platform.OS,
-              appVersion: Constants.expoConfig?.version || config.APP_VERSION || '2.6.258',
-              timestamp: Date.now()
-            });
-          }
-        } catch (e: any) {
-          console.error('[SocketService] socket:admin_ping error:', e);
-        }
-      });
-
-      this.socket.on('force_upload_diagnostics', async (data: any) => {
-        try {
-          if (data.targetUserId === userId) {
-             console.log('[SocketService] Received Force Upload Request');
-             logger.logAction('ADMIN_DIAGNOSTICS_PULL_RECEIVED', {
-               adminId: data.adminId,
-               targetUserId: data.targetUserId,
-               myId: userId,
-               targetDeviceId: data.targetDeviceId,
-               myDeviceId: hardwareId
-             });
-             
-             const user = await storage.getItem('currentUser');
-             const label = userId || user?.name || 'Guest';
-             const deviceId = hardwareId || await storage.getItem('acetrack_device_id') || 'unknown';
-             const allLogs = logger.getLogs();
-             const headers: Record<string, string> = {
-               'Content-Type': 'application/json',
-               'x-ace-api-key': config.ACE_API_KEY
-             };
-             if (userToken && Platform.OS !== 'web') headers['Authorization'] = `Bearer ${userToken}`;
-
-             await fetch(`${config.API_BASE_URL}${config.getEndpoint('DIAGNOSTICS')}`, {
-               method: 'POST',
-               headers,
-               credentials: 'include',
-               body: JSON.stringify({
-                 username: label,
-                 logs: allLogs,
-                 prefix: 'admin_requested',
-                 deviceId
-               })
-             });
-             logger.logAction('ADMIN_DIAGNOSTICS_PULL_SUCCESS', { count: allLogs.length });
-          }
-        } catch (e: any) {
-          console.error('[SocketService] Remote diagnostic upload failed:', e);
-          logger.logAction('ADMIN_DIAGNOSTICS_PULL_FAILED', { error: e.message });
         }
       });
     } catch (e: any) {
