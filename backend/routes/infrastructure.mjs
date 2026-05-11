@@ -1,7 +1,7 @@
 import express from 'express';
 import { AppState, Player } from '../models/index.mjs';
 
-export default function createInfrastructureRoutes({ APP_VERSION, syncMutex }) {
+export default function createInfrastructureRoutes({ APP_VERSION, syncMutex, loginAttempts, sendSecurityAlert }) {
   const router = express.Router();
 
   // Root catch-all for legacy health monitors (JSON fallback)
@@ -82,7 +82,7 @@ export default function createInfrastructureRoutes({ APP_VERSION, syncMutex }) {
   });
 
   // 🛡️ [SLACK INTERACTION ENDPOINT] (v2.6.212)
-  // Handles "Approve" and "Block" buttons from Slack security alerts
+  // Handles "Approve", "Block", and "View Details" buttons from Slack
   router.post('/slack/interact', async (req, res) => {
     try {
       // Slack sends payload as a string-encoded JSON in 'payload' field
@@ -92,9 +92,9 @@ export default function createInfrastructureRoutes({ APP_VERSION, syncMutex }) {
 
       const payload = JSON.parse(req.body.payload);
       const actionData = JSON.parse(payload.actions[0].value);
-      const { action, target, ip } = actionData;
+      const { action, target, ip, timeframe } = actionData;
 
-      console.log(`📡 [SLACK_ACTION] Received ${action} for ${target} from IP ${ip}`);
+      console.log(`📡 [SLACK_ACTION] Received ${action} for ${target || 'system'} from IP ${ip || 'internal'}`);
 
       if (action === 'block') {
         const release = await syncMutex.acquire();
@@ -140,6 +140,17 @@ export default function createInfrastructureRoutes({ APP_VERSION, syncMutex }) {
             replace_original: false,
             text: `✅ *APPROVED*: Login session authorized by ${payload.user.name}.`
          });
+      } else if (action === 'view_security_details') {
+         const { generateDetailedSecurityBlocks } = await import('../services/scheduler.mjs');
+         const details = await generateDetailedSecurityBlocks(timeframe || 24);
+         
+         // Use the response_url for detailed reporting if needed, 
+         // but returning it directly works for interactive replacements.
+         return res.json({
+            replace_original: false, // Don't replace the summary, post details as a new ephemeral message
+            response_type: "ephemeral",
+            ...details
+         });
       }
 
       res.status(200).send();
@@ -148,6 +159,36 @@ export default function createInfrastructureRoutes({ APP_VERSION, syncMutex }) {
       res.status(500).send("Internal Server Error");
     }
   });
+
+  // 🛡️ [SLACK COMMAND ENDPOINT] (v2.6.349)
+  // Handles /acetrack security
+  router.post('/slack/command', async (req, res) => {
+    try {
+      // Slack slash commands use application/x-www-form-urlencoded
+      const { command, text, user_name } = req.body;
+      
+      console.log(`📡 [SLACK_COMMAND] Received ${command} with text "${text}" from ${user_name}`);
+
+      if (command === '/acetrack' && String(text).trim().toLowerCase() === 'security') {
+        const { generateSecuritySummaryBlocks } = await import('../services/scheduler.mjs');
+        const summary = await generateSecuritySummaryBlocks(24); // Default to 24h as requested
+
+        return res.json({
+          response_type: "ephemeral",
+          ...summary
+        });
+      }
+
+      res.json({
+        response_type: "ephemeral",
+        text: "Available commands:\n`/acetrack security` - Pull latest security aggregator summaries for the last 24 hours."
+      });
+    } catch (err) {
+      console.error("❌ Slack command failed:", err.message);
+      res.status(500).send("Internal Server Error");
+    }
+  });
+
 
   return router;
 }

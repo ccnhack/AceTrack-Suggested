@@ -102,7 +102,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.348'; // Critical for Update prompts 
+const APP_VERSION = '2.6.350'; // Critical for Update prompts 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -432,7 +432,7 @@ const logAudit = async (req, action, changedCollections = [], details = {}) => {
                  ip === '::ffff:127.0.0.1';
         };
         
-        if (isLocal(ip) && process.env.TEST_ALERTS_LOCALLY !== 'true') {
+        if (isLocal(ip) && process.env.NODE_ENV !== 'production' && process.env.TEST_ALERTS_LOCALLY !== 'true') {
           console.log(`[AUTH] Local critical event detected (${action}) from ${ip}. Alert suppressed.`);
         } else {
           const osint = await getIPReputation(ip);
@@ -1030,7 +1030,7 @@ app.use('/api/v1/hr', hrRoutes);
 const commsRoutes = createCommsRoutes({ io });
 app.use('/api/v1/comms', commsRoutes);
 
-const infrastructureRoutes = createInfrastructureRoutes({ APP_VERSION, syncMutex });
+const infrastructureRoutes = createInfrastructureRoutes({ APP_VERSION, syncMutex, loginAttempts, sendSecurityAlert });
 app.use('/', infrastructureRoutes);
 app.use('/api', infrastructureRoutes);
 app.use('/api/v1', infrastructureRoutes); // 🛡️ COMPATIBILITY FIX (v2.6.174): Support versioned API calls from web/mobile clients
