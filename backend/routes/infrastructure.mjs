@@ -16,7 +16,7 @@ export default function createInfrastructureRoutes({
     res.json({ success: true, service: 'infrastructure', status: 'healthy', version: APP_VERSION, timestamp: new Date().toISOString() });
   });
 
-  // 🛡️ [SECURITY EXPORT ENDPOINT] (v2.6.356)
+  // 🛡️ [SECURITY EXPORT ENDPOINT] (v2.6.357)
   router.get('/security/export', async (req, res) => {
     try {
       const timeframeHours = parseInt(req.query.hours) || 24;
@@ -42,14 +42,14 @@ export default function createInfrastructureRoutes({
     } catch (err) { res.status(500).send("Export failed: " + err.message); }
   });
 
-  // 🛡️ [SLACK INTERACTION ENDPOINT] (v2.6.356)
+  // 🛡️ [SLACK INTERACTION ENDPOINT] (v2.6.357)
   // Hardened to log raw payloads to AuditLog for deep diagnostics
   router.post('/slack/interact', async (req, res) => {
     try {
       if (!req.body.payload) return res.status(400).send("Missing payload");
       const payload = JSON.parse(req.body.payload);
       
-      // 🛡️ [DIAGNOSTIC LOGGING] (v2.6.356)
+      // 🛡️ [DIAGNOSTIC LOGGING] (v2.6.357)
       const actionObj = payload.actions?.[0] || {};
       const actionId = actionObj.action_id || actionObj.name;
       
@@ -123,6 +123,31 @@ export default function createInfrastructureRoutes({
       }
       res.status(200).send();
     } catch (err) { res.status(500).send("Command failed"); }
+  });
+
+  // 🛡️ [SLACK SIMULATOR] (v2.6.357)
+  // visit /api/infrastructure/slack/simulate to test the interact route manually
+  router.get('/slack/simulate', async (req, res) => {
+    const { fetch } = await import('node-fetch');
+    const testPayload = {
+      payload: JSON.stringify({
+        user: { name: 'Simulator_Admin' },
+        actions: [{ action_id: 'view_security_details', value: JSON.stringify({ timeframe: 24 }) }],
+        trigger_id: 'test_trigger'
+      })
+    };
+    
+    try {
+      const response = await fetch(`https://acetrack-suggested.onrender.com/slack/interact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(testPayload).toString()
+      });
+      const result = await response.json();
+      res.json({ success: true, serverResponse: result });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message });
+    }
   });
 
   return router;
