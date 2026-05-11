@@ -55,7 +55,17 @@ export async function runAISecurityAggregator() {
       };
       const SECURITY_WEBHOOK_URL = process.env.SECURITY_WEBHOOK_URL;
       if (SECURITY_WEBHOOK_URL) {
-        await fetch(SECURITY_WEBHOOK_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const https = await import('https');
+        const url = new URL(SECURITY_WEBHOOK_URL);
+        const options = {
+          hostname: url.hostname,
+          path: url.pathname + url.search,
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        };
+        const req = https.request(options);
+        req.write(JSON.stringify(payload));
+        req.end();
       }
       summary.lastAlertedAt = new Date();
       if (isIdle) summary.isSummarized = true;
@@ -117,7 +127,7 @@ export async function generateSecuritySummaryBlocks(timeframeHours = 24) {
   };
 }
 
-// 🛡️ [DETAILED LOGS - JSON FORMAT] (v2.6.366)
+// 🛡️ [DETAILED LOGS - JSON FORMAT] (v2.6.367)
 export async function generateDetailedSecurityBlocks(timeframeHours = 24) {
   const since = new Date(Date.now() - timeframeHours * 60 * 60 * 1000);
   const summaries = await SecuritySummary.find({ lastEventAt: { $gt: since } }).lean();
@@ -191,5 +201,5 @@ export default function initScheduler(loginAttempts, sendSecurityAlert) {
     } catch (err) {}
   }, 24 * 60 * 60 * 1000);
 
-  console.log('🕒 Scheduler initialized (v2.6.366)');
+  console.log('🕒 Scheduler initialized (v2.6.367)');
 }
