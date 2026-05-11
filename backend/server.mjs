@@ -102,7 +102,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.358'; // Critical for Update prompts 
+const APP_VERSION = '2.6.359'; // Critical for Update prompts 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -1035,7 +1035,12 @@ app.use('/api/v1/hr', hrRoutes);
 const commsRoutes = createCommsRoutes({ io });
 app.use('/api/v1/comms', commsRoutes);
 
-const infrastructureRoutes = createInfrastructureRoutes({ APP_VERSION, syncMutex, loginAttempts, sendSecurityAlert });
+const infrastructureRoutes = createInfrastructureRoutes({ 
+  APP_VERSION, 
+  syncMutex, 
+  logAudit, 
+  sendSecurityAlert 
+});
 app.use('/', infrastructureRoutes);
 app.use('/api', infrastructureRoutes);
 app.use('/api/v1', infrastructureRoutes); // 🛡️ COMPATIBILITY FIX (v2.6.174): Support versioned API calls from web/mobile clients

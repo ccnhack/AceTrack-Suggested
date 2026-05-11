@@ -16,7 +16,7 @@ export default function createInfrastructureRoutes({
     res.json({ success: true, service: 'infrastructure', status: 'healthy', version: APP_VERSION, timestamp: new Date().toISOString() });
   });
 
-  // 🛡️ [SECURITY EXPORT ENDPOINT] (v2.6.358)
+  // 🛡️ [SECURITY EXPORT ENDPOINT] (v2.6.359)
   router.get('/security/export', async (req, res) => {
     try {
       const timeframeHours = parseInt(req.query.hours) || 24;
@@ -42,14 +42,14 @@ export default function createInfrastructureRoutes({
     } catch (err) { res.status(500).send("Export failed: " + err.message); }
   });
 
-  // 🛡️ [SLACK INTERACTION ENDPOINT] (v2.6.358)
+  // 🛡️ [SLACK INTERACTION ENDPOINT] (v2.6.359)
   // Hardened to log raw payloads to AuditLog for deep diagnostics
   router.post('/slack/interact', async (req, res) => {
     try {
       if (!req.body.payload) return res.status(400).send("Missing payload");
       const payload = JSON.parse(req.body.payload);
       
-      // 🛡️ [DIAGNOSTIC LOGGING] (v2.6.358)
+      // 🛡️ [DIAGNOSTIC LOGGING] (v2.6.359)
       const actionObj = payload.actions?.[0] || {};
       const actionId = actionObj.action_id || actionObj.name;
       
@@ -125,7 +125,7 @@ export default function createInfrastructureRoutes({
     } catch (err) { res.status(500).send("Command failed"); }
   });
 
-  // 🛡️ [SLACK SIMULATOR] (v2.6.358)
+  // 🛡️ [SLACK SIMULATOR] (v2.6.359)
   // visit /api/infrastructure/slack/simulate to test the interact route manually
   router.get('/slack/simulate', async (req, res) => {
     try {
