@@ -1,11 +1,7 @@
 import { SecuritySummary } from '../models/index.mjs';
 
-/**
- * Initializes background cron jobs and background intervals
- */
-export default function initScheduler(loginAttempts, sendSecurityAlert) {
 // 🛡️ [CUMULATIVE SECURITY SUMMARY] (v2.6.208)
-// Runs every 5 minutes to report ongoing high-volume attacks
+// Runs to report ongoing high-volume attacks
 export async function runBruteForceSummary(loginAttempts, sendSecurityAlert) {
   const now = Date.now();
   for (const [key, state] of loginAttempts.entries()) {
@@ -257,11 +253,19 @@ export default function initScheduler(loginAttempts, sendSecurityAlert) {
   // 🛡️ SECURITY: Switched to Pull-based Alerts via Slack Command (v2.6.349)
   // Auto-summary reduced to 24h as a background safety net.
   setInterval(async () => {
-    await runBruteForceSummary(loginAttempts, sendSecurityAlert);
+    try {
+      await runBruteForceSummary(loginAttempts, sendSecurityAlert);
+    } catch (e) {
+      console.error("Scheduler: runBruteForceSummary failed:", e.message);
+    }
   }, 24 * 60 * 60 * 1000);
 
   setInterval(async () => {
-    await runAISecurityAggregator();
+    try {
+      await runAISecurityAggregator();
+    } catch (e) {
+      console.error("Scheduler: runAISecurityAggregator failed:", e.message);
+    }
   }, 24 * 60 * 60 * 1000);
  
 
