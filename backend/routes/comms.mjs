@@ -44,8 +44,8 @@ export default function createCommsRoutes({ io, logAudit }) {
 
             const msg = await OrgMessage.create({
                 senderId: req.user.id,
-                senderName: req.user.name || req.user.email,
-                content: content || '',
+                senderName: req.user.name || req.user.email || req.user.id || 'System',
+                content: content || '(empty)',
                 receiverId: receiverId || null
             });
             
@@ -75,8 +75,8 @@ export default function createCommsRoutes({ io, logAudit }) {
 
             res.json({ success: true, message: msg });
         } catch (error) {
-            console.error("Error sending chat:", error);
-            res.status(500).json({ success: false, message: 'Server error' });
+            console.error("❌ [CHAT_CREATE_FAIL]", error.message, error.errors ? JSON.stringify(Object.keys(error.errors)) : '');
+            res.status(500).json({ success: false, message: error.message || 'Server error' });
         }
     });
     
