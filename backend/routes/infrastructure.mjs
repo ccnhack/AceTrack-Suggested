@@ -48,7 +48,7 @@ export default function createInfrastructureRoutes({
     res.json(result);
   });
 
-  // 🛡️ [SECURITY EXPORT ENDPOINT] (v2.6.353)
+  // 🛡️ [SECURITY EXPORT ENDPOINT] (v2.6.354)
   // Generates and downloads a raw JSON file of security events
   router.get('/security/export', async (req, res) => {
     try {
@@ -63,7 +63,7 @@ export default function createInfrastructureRoutes({
         events: summaries
       };
 
-      // 🕒 [DYNAMIC FILENAME] (v2.6.353): security_audit_DDMMYYYY_HH-mm.json
+      // 🕒 [DYNAMIC FILENAME] (v2.6.354): security_audit_DDMMYYYY_HH-mm.json
       const now = new Date();
       const istOffset = 5.5 * 60 * 60 * 1000;
       const istDate = new Date(now.getTime() + istOffset);
@@ -123,7 +123,7 @@ export default function createInfrastructureRoutes({
       } else if (action === 'approve') {
          return res.json({ replace_original: false, text: `✅ *APPROVED*: Login session authorized by ${payload.user.name}.` });
       } else if (action === 'view_security_details') {
-         const downloadUrl = `https://acetrack-suggested.onrender.com/api/infrastructure/security/export?hours=${timeframe || 24}`;
+         const downloadUrl = `https://acetrack-suggested.onrender.com/security/export?hours=${timeframe || 24}`;
          return res.json({
             replace_original: false,
             response_type: "ephemeral",
