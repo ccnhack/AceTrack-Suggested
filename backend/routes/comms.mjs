@@ -17,7 +17,7 @@ export default function createCommsRoutes({ io, logAudit, cloudinary, upload }) 
             if (req.userRole !== 'admin' && req.userRole !== 'support') {
                 return res.status(403).json({ success: false, message: 'Access denied' });
             }
-            const messages = await OrgMessage.find().sort({ timestamp: -1 }).limit(100);
+            const messages = await OrgMessage.find().populate('replyTo').sort({ timestamp: -1 }).limit(100);
             
             // 🛡️ [EXPIRY_FILTER] (v2.6.395): Mark expired attachments
             const now = new Date();
@@ -131,6 +131,7 @@ export default function createCommsRoutes({ io, logAudit, cloudinary, upload }) 
             }
 
             const msg = await OrgMessage.create(msgData);
+            if (msg.replyTo) await msg.populate('replyTo');
             
             // Broadcast via Socket.io if available
             if (io) {

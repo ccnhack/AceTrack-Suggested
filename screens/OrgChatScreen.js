@@ -372,11 +372,19 @@ const OrgChatScreen = ({ navigation }) => {
                         onMouseEnter={() => isWeb && setHoveredMessageId(msg._id)}
                         onMouseLeave={() => isWeb && setHoveredMessageId(null)}
                     >
-                      {/* 🛡️ [REPLY_TO_UI] (v2.6.405): Show quoted message */}
+                      {/* 🛡️ [REPLY_TO_UI] (v2.6.407): Show populated quoted message */}
                       {msg.replyTo && (
                         <View style={[styles.replyQuote, isMe ? styles.replyQuoteMe : styles.replyQuoteOther]}>
+                          {typeof msg.replyTo === 'object' && (
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: isMe ? 'rgba(255,255,255,0.9)' : '#6366F1', marginBottom: 2 }}>
+                              {msg.replyTo.senderName}
+                            </Text>
+                          )}
                           <Text style={styles.replyQuoteText} numberOfLines={1}>
-                            {messages.find(m => m._id === msg.replyTo)?.content || (messages.find(m => m._id === msg.replyTo)?.attachments?.length ? '[Attachment]' : 'Original message deleted')}
+                            {typeof msg.replyTo === 'object' ? 
+                              (msg.replyTo.content || (msg.replyTo.attachments?.length ? '[Attachment]' : 'Original message deleted'))
+                              : 'Original message deleted'
+                            }
                           </Text>
                         </View>
                       )}
