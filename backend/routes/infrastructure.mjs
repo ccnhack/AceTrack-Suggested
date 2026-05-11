@@ -42,7 +42,7 @@ export default function createInfrastructureRoutes({
     } catch (err) { res.status(500).send("Export failed: " + err.message); }
   });
 
-  // 🛡️ [SLACK INTERACTION ENDPOINT] (v2.6.361)
+  // 🛡️ [SLACK INTERACTION ENDPOINT] (v2.6.362)
   // Hardened to log raw payloads to AuditLog for deep diagnostics
   router.post('/slack/interact', async (req, res) => {
     try {
@@ -104,11 +104,11 @@ export default function createInfrastructureRoutes({
          }
       }
 
-      // 🛡️ [CATCH-ALL RESPONDER] (v2.6.361)
+      // 🛡️ [CATCH-ALL RESPONDER] (v2.6.362)
       return res.json({
         replace_original: false,
         response_type: "ephemeral",
-        text: `📡 *Handshake Successful*\nI received your click for action: \`${actionId}\`. If you don't see the download link, please run \`/acetrack security\` to get a fresh report.`
+        text: `📡 *Handshake Successful* (v${APP_VERSION})\nI received your click for action: \`${actionId}\`. If you don't see the download link, please run \`/acetrack security\` to get a fresh report.`
       });
     } catch (err) {
       console.error("❌ Slack interaction failed:", err.message);
