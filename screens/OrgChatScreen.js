@@ -119,22 +119,24 @@ const OrgChatScreen = ({ navigation }) => {
 
   const getStatusText = (contact) => {
     if (!contact) return '';
-    // 🛡️ [PRESENCE_UI] (v2.6.392): Use the real-time injected isLive flag
+    // 🛡️ [PRESENCE_UI] (v2.6.393): Use real-time injected isLive flag
     if (contact.isLive || contact.status === 'active' || contact.supportStatus === 'active') {
       return 'Online';
     }
     
-    // Fallback to recency only if not live
-    const theirMessages = (messages || []).filter(m => String(m.senderId) === String(contact.id));
-    if (theirMessages.length > 0) {
-      const lastMsg = theirMessages[theirMessages.length - 1];
-      const diffMs = new Date() - new Date(lastMsg.timestamp);
+    // 🛡️ [HISTORY_UI] (v2.6.393): Use enriched lastActive timestamp
+    const lastActiveTs = contact.lastActive || 0;
+    if (lastActiveTs > 0) {
+      const diffMs = Date.now() - new Date(lastActiveTs).getTime();
       const diffMins = Math.floor(diffMs / 60000);
+      
       if (diffMins < 5) return 'Online';
-      if (diffMins < 60) return `Active ${diffMins} mins ago`;
-      if (diffMins < 1440) return `Active ${Math.floor(diffMins/60)} hours ago`;
-      return `Active yesterday`;
+      if (diffMins < 60) return `Active ${diffMins}m ago`;
+      if (diffMins < 1440) return `Active ${Math.floor(diffMins/60)}h ago`;
+      if (diffMins < 2880) return 'Active yesterday';
+      return `Active ${new Date(lastActiveTs).toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
     }
+    
     return 'Offline';
   };
 

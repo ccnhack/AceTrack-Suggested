@@ -113,7 +113,7 @@ router.get('/team-directory', async (req, res) => {
 
         // Fetch users who are either admin or support
         const team = await User.find({ "data.role": { $in: ['admin', 'support'] } })
-            .select('id data.name data.email data.role data.designation data.avatar data.phone data.username')
+            .select('id data.name data.email data.role data.designation data.avatar data.phone data.username data.devices')
             .lean();
             
         // Map data back to flat structure for the frontend
@@ -121,6 +121,12 @@ router.get('/team-directory', async (req, res) => {
             const userId = u.id || u._id?.toString() || '';
             const normalizedId = userId.toLowerCase();
             const isLive = activeUserIds.has(normalizedId);
+
+            // 🛡️ [PRESENCE_ENRICHMENT] (v2.6.393): Find most recent device activity
+            let lastActive = 0;
+            if (u.data?.devices && Array.isArray(u.data.devices)) {
+                lastActive = Math.max(...u.data.devices.map(d => d.lastActive || 0), 0);
+            }
 
             return {
                 id: userId,
@@ -132,6 +138,7 @@ router.get('/team-directory', async (req, res) => {
                 phone: u.data?.phone || '',
                 username: u.data?.username || '',
                 isLive: isLive,
+                lastActive: lastActive || u.lastUpdated || 0,
                 status: isLive ? 'active' : 'offline',
                 supportStatus: isLive ? 'active' : 'offline'
             };

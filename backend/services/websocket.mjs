@@ -36,7 +36,7 @@ io.on('connection', async (socket) => {
   if (connRole === 'admin') socket.join('role:admin');
   if (connRole === 'support') socket.join('role:support');
   
-  if (connUserId && connUserId !== 'guest' && connUserId !== 'admin') {
+  if (connUserId && connUserId !== 'guest') {
     console.log(`[DEBUG] WS Connection from user: ${connUserId}, provided role: ${connRole || 'none'}, device: ${connDeviceName}`);
     
     // 🛡️ [DEDUP] (v2.6.274): Evict stale sessions for the same userId to prevent duplicates
