@@ -48,7 +48,7 @@ export default function createInfrastructureRoutes({
     res.json(result);
   });
 
-  // 🛡️ [SECURITY EXPORT ENDPOINT] (v2.6.352)
+  // 🛡️ [SECURITY EXPORT ENDPOINT] (v2.6.353)
   // Generates and downloads a raw JSON file of security events
   router.get('/security/export', async (req, res) => {
     try {
@@ -63,8 +63,19 @@ export default function createInfrastructureRoutes({
         events: summaries
       };
 
+      // 🕒 [DYNAMIC FILENAME] (v2.6.353): security_audit_DDMMYYYY_HH-mm.json
+      const now = new Date();
+      const istOffset = 5.5 * 60 * 60 * 1000;
+      const istDate = new Date(now.getTime() + istOffset);
+      const day = String(istDate.getUTCDate()).padStart(2, '0');
+      const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+      const year = istDate.getUTCFullYear();
+      const hours = String(istDate.getUTCHours()).padStart(2, '0');
+      const mins = String(istDate.getUTCMinutes()).padStart(2, '0');
+      const filename = `security_audit_${day}${month}${year}_${hours}-${mins}.json`;
+
       res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Content-Disposition', `attachment; filename=security_audit_${timeframeHours}h.json`);
+      res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
       return res.send(JSON.stringify(rawData, null, 2));
     } catch (err) {
       res.status(500).send("Export failed: " + err.message);
