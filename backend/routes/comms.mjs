@@ -28,7 +28,9 @@ export default function createCommsRoutes({ io }) {
             if (req.userRole !== 'admin' && req.userRole !== 'support') {
                 return res.status(403).json({ success: false, message: 'Access denied' });
             }
-            const { content, receiverId } = req.body;
+            // 🛡️ [CHAT_TRACE] (v2.6.376)
+            console.log(`💬 [CHAT] Msg from ${req.user.id} to ${receiverId || 'GLOBAL'}`);
+
             const msg = await OrgMessage.create({
                 senderId: req.user.id,
                 senderName: req.user.name || req.user.email,
@@ -38,7 +40,17 @@ export default function createCommsRoutes({ io }) {
             
             // Broadcast via Socket.io if available
             if (io) {
-                io.emit('org_chat_message', msg);
+                if (receiverId) {
+                    // 🏗️ PHASE 4: Targeted delivery to recipient and sender (for multi-device sync)
+                    io.to(`user:${receiverId}`).to(`user:${req.user.id}`).emit('org_chat_message', msg);
+                    console.log(`📡 [CHAT_RELAY] Targeted broadcast to user:${receiverId} and user:${req.user.id}`);
+                } else {
+                    // Public/Org-wide chat
+                    io.emit('org_chat_message', msg);
+                    console.log(`📡 [CHAT_RELAY] Global broadcast for public message`);
+                }
+            } else {
+                console.warn(`⚠️ [CHAT_WARN] Socket.io (io) not initialized in comms routes!`);
             }
 
             res.json({ success: true, message: msg });

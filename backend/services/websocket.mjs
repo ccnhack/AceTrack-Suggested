@@ -12,15 +12,18 @@ io.on('connection', async (socket) => {
   const connRole = socket.handshake?.query?.role;
   const connDeviceName = socket.handshake?.query?.deviceName || 'Browser';
 
+  console.log(`📡 [WS_HANDSHAKE] socket=${socket.id} | userId=${connUserId} | role=${connRole} | device=${connDeviceName}`);
+
   // 🏗️ PHASE 4: Join user-specific room for targeted emissions
   if (connUserId && connUserId !== 'guest') {
     socket.join(`user:${connUserId}`);
     console.log(`🎯 [ROOM] ${connUserId} joined room user:${connUserId}`);
-  }
-  // All authenticated users join a global 'authenticated' room
-  if (connUserId && connUserId !== 'guest') {
+    // All authenticated users join a global 'authenticated' room
     socket.join('authenticated');
+  } else {
+    console.warn(`⚠️ [WS_WARN] socket=${socket.id} connected without userId! Messaging will FAIL.`);
   }
+
   // Role-based rooms
   if (connRole === 'admin') socket.join('role:admin');
   if (connRole === 'support') socket.join('role:support');

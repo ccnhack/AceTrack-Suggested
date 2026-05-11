@@ -18,7 +18,8 @@ export default function createDataRoutes({
   upload,
   SupportMetricsService,
   sendPushNotification,
-  addInAppNotification
+  addInAppNotification,
+  activeSupportSessions
 }) {
   const router = express.Router();
 
@@ -128,13 +129,32 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       chatbotMessages
     };
 
+    // 🛡️ [PRESENCE INJECTOR] (v2.6.376)
+    // Cross-reference DB players with live WebSocket sessions
     if (composedData.players && Array.isArray(composedData.players)) {
+      // Create a Set of active user IDs for O(1) lookup
+      const activeUserIds = new Set();
+      if (activeSupportSessions) {
+        for (const session of activeSupportSessions.values()) {
+           if (session.userId) activeUserIds.add(String(session.userId).toLowerCase());
+        }
+      }
+
       composedData.players = composedData.players.map(p => {
-        if (p && p.role === 'admin' && String(p.id).toLowerCase() !== 'admin') {
+        if (!p) return p;
+        const normalizedId = String(p.id).toLowerCase();
+        
+        // Inject Live status
+        p.isLive = activeUserIds.has(normalizedId);
+        
+        // 🛡️ [SECURITY]: Role sanitation for non-admins
+        if (p.role === 'admin' && normalizedId !== 'admin') {
           return { ...p, role: 'user' };
         }
         return p;
       });
+
+      console.log(`📡 [PRESENCE] Sync: ${activeUserIds.size} users are currently LIVE.`);
     }
 
     // 🛡️ SECURITY HARDENING: Explicitly exclude 'currentUser' to prevent session shadowing
