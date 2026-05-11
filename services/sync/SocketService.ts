@@ -53,6 +53,20 @@ class SocketService {
     });
 
     try {
+      this.socket.on('org_chat_message', (msg) => {
+        useCommsStore.getState().appendMessage(msg);
+      });
+
+      // 😄 [REACTION_SYNC] (v2.6.400)
+      this.socket.on('org_chat_reaction', ({ messageId, reactions }) => {
+        useCommsStore.getState().updateReactions(messageId, reactions);
+      });
+
+      // 🗑️ [DELETE_SYNC] (v2.6.400)
+      this.socket.on('org_chat_delete', ({ messageId }) => {
+        useCommsStore.getState().removeMessage(messageId);
+      });
+
       this.socket.on('connect', () => {
         console.log(`[SocketService] Connected! ID: ${this.socket?.id}`);
         // 🛡️ [ROOM_JOIN] (v2.6.392): Ensure the client joins their private identity room
