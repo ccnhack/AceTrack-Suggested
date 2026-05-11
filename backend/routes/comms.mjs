@@ -131,19 +131,23 @@ export default function createCommsRoutes({ io, logAudit, cloudinary, upload }) 
             }
 
             const msg = await OrgMessage.create(msgData);
-            if (msg.replyTo) await msg.populate('replyTo');
+            let populatedMsg = msg.toObject();
+            if (msg.replyTo) {
+                const original = await OrgMessage.findById(msg.replyTo).lean();
+                populatedMsg.replyTo = original;
+            }
             
             // Broadcast via Socket.io if available
             if (io) {
                 const eventName = 'org_chat_message';
                 if (receiverId) {
-                    io.to(`user:${receiverId}`).to(`user:${req.user.id}`).emit(eventName, msg);
+                    io.to(`user:${receiverId}`).to(`user:${req.user.id}`).emit(eventName, populatedMsg);
                 } else {
-                    io.emit(eventName, msg);
+                    io.emit(eventName, populatedMsg);
                 }
             }
 
-            res.json({ success: true, message: msg });
+            res.json({ success: true, message: populatedMsg });
         } catch (error) {
             console.error("❌ [CHAT_CREATE_FAIL]", error.message);
             res.status(500).json({ success: false, message: error.message || 'Server error' });
