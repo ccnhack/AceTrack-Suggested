@@ -141,20 +141,28 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
 
       composedData.players = composedData.players.map(p => {
         if (!p) return p;
-        const normalizedId = String(p.id).toLowerCase();
+        const pClone = { ...p }; // 🛡️ [ISOLATION FIX] (v2.6.388)
+        const normalizedId = String(pClone.id || pClone.userId || '').toLowerCase();
         const isLive = activeUserIds.has(normalizedId);
         
         // Inject Live status into ALL potential fields the UI might use
-        p.isLive = isLive;
-        p.status = isLive ? 'active' : 'offline';
-        p.supportStatus = isLive ? 'active' : 'offline';
+        pClone.isLive = isLive;
+        pClone.status = isLive ? 'active' : 'offline';
+        pClone.supportStatus = isLive ? 'active' : 'offline';
         
         // 🛡️ [SECURITY]: Role sanitation for non-admins
-        if (p.role === 'admin' && normalizedId !== 'admin') {
-          return { ...p, role: 'user' };
+        if (pClone.role === 'admin' && normalizedId !== 'admin') {
+          pClone.role = 'user';
         }
-        return p;
+        return pClone;
       });
+
+      // 📡 [PAYLOAD SNIFFER] (v2.6.388)
+      if (req.query.syncContext === 'full_hydrate') {
+        const sample = composedData.players.slice(0, 10).map(p => ({ id: p.id, isLive: p.isLive, status: p.status }));
+        console.log(`📡 [SYNC_PAYLOAD_SAMPLE] Requester: ${normalizedReqId} | Samples:`, JSON.stringify(sample));
+      }
+    }
 
       // 🛡️ [SYNC_DIAGNOSTIC] (v2.6.383)
       if (req.originalUrl.includes('data')) {
@@ -663,19 +671,17 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
                 }
                 // 🛡️ PASSWORD GUARD (v2.6.145): Preserve server-side password for support users
                 const preservedPassword = (existing.role === 'support') ? existing.password : (p.password || existing.password);
-                const preservedStatus = (existing.role === 'support' && existing.supportStatus) 
-                  ? existing.supportStatus : (p.supportStatus || existing.supportStatus);
+                // 🛡️ [PRESENCE_PURGE] (v2.6.388): Force status fields to 'offline' during DB persistence.
+                const preservedStatus = 'offline';
                 
-                // 🛡️ [DEFINED-ONLY MERGE] (v2.6.313): Only overwrite fields that are explicitly
-                // present in the incoming data. Thinned players have many fields set to undefined;
-                // spreading them would silently delete wallet, history, notifications, etc.
                 const definedFields = {};
                 for (const [fieldKey, fieldVal] of Object.entries(p)) {
-                  if (fieldVal !== undefined && fieldKey !== 'devices' && fieldKey !== 'password' && fieldKey !== 'supportStatus') {
+                  const protectedFields = ['isLive', 'status', 'supportStatus', 'devices', 'password'];
+                  if (fieldVal !== undefined && !protectedFields.includes(fieldKey)) {
                     definedFields[fieldKey] = fieldVal;
                   }
                 }
-                const merged = { ...existing, ...definedFields, devices: mergedDevices, password: preservedPassword, supportStatus: preservedStatus };
+                const merged = { ...existing, ...definedFields, devices: mergedDevices, password: preservedPassword, supportStatus: 'offline', status: 'offline', isLive: false };
                 entityMap.set(id, merged);
                 modifiedEntities[key].set(id, merged);
               } else {
