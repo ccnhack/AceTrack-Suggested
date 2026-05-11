@@ -25,9 +25,11 @@ export default function createCommsRoutes({ io, logAudit }) {
     // Send Message
     router.post(['/chat', '/'], async (req, res) => {
         try {
-            // 🛡️ [CHAT_DIAGNOSTIC] (v2.6.383)
+            const { content, receiverId } = req.body;
+            
+            // 🛡️ [CHAT_DIAGNOSTIC] (v2.6.392)
             await logAudit(req, 'CHAT_MESSAGE_ATTEMPT', [], { 
-              target: req.body.receiverId, 
+              target: receiverId, 
               role: req.userRole,
               hasIo: !!io
             });
@@ -36,22 +38,32 @@ export default function createCommsRoutes({ io, logAudit }) {
                 console.warn(`🛑 [CHAT_BLOCK] Unauthorized attempt from ${req.user.id} (${req.userRole})`);
                 return res.status(403).json({ success: false, message: 'Access denied' });
             }
-            // 🛡️ [CHAT_TRACE] (v2.6.383)
+
+            // 🛡️ [CHAT_TRACE] (v2.6.392)
             console.log(`💬 [CHAT] Msg from ${req.user.id} to ${receiverId || 'GLOBAL'}`);
 
             const msg = await OrgMessage.create({
                 senderId: req.user.id,
                 senderName: req.user.name || req.user.email,
-                content,
-                receiverId
+                content: content || '',
+                receiverId: receiverId || null
             });
             
             // Broadcast via Socket.io if available
             if (io) {
                 if (receiverId) {
+                    const room = `user:${receiverId}`;
+                    const senderRoom = `user:${req.user.id}`;
+                    
+                    // 📡 [PARTICIPANT_AUDIT] (v2.6.392): Check if target is actually in the room
+                    const participants = io.sockets.adapter.rooms.get(room);
+                    if (!participants || participants.size === 0) {
+                        console.warn(`⚠️ [CHAT_RELAY] Target room ${room} is EMPTY. Message will not be delivered in real-time.`);
+                    }
+
                     // 🏗️ PHASE 4: Targeted delivery to recipient and sender (for multi-device sync)
-                    io.to(`user:${receiverId}`).to(`user:${req.user.id}`).emit('org_chat_message', msg);
-                    console.log(`📡 [CHAT_RELAY] Targeted broadcast to user:${receiverId} and user:${req.user.id}`);
+                    io.to(room).to(senderRoom).emit('org_chat_message', msg);
+                    console.log(`📡 [CHAT_RELAY] Targeted broadcast to ${room} and ${senderRoom}. Participants: ${participants?.size || 0}`);
                 } else {
                     // Public/Org-wide chat
                     io.emit('org_chat_message', msg);

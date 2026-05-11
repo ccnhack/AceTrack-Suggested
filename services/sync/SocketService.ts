@@ -55,6 +55,10 @@ class SocketService {
     try {
       this.socket.on('connect', () => {
         console.log(`[SocketService] Connected! ID: ${this.socket?.id}`);
+        // 🛡️ [ROOM_JOIN] (v2.6.392): Ensure the client joins their private identity room
+        if (userId && this.socket) {
+          this.socket.emit('join', String(userId).toLowerCase());
+        }
         eventBus.emit('SYNC_STATUS_CHANGED', { isOnline: true, source: 'socket' });
       });
 

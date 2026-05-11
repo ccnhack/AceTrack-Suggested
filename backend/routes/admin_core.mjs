@@ -3,7 +3,7 @@ import { AuditLog, OrgSetting } from '../models/AdminCoreModels.mjs';
 import { Player as User } from '../models/index.mjs';
 import { apiKeyGuard, authGuard } from '../middleware/security.mjs';
 
-export default function createAdminCoreRoutes() {
+export default function createAdminCoreRoutes({ activeSupportSessions } = {}) {
     const router = express.Router();
     
     // Apply global guards for this router
@@ -103,22 +103,39 @@ router.get('/team-directory', async (req, res) => {
         if (req.userRole !== 'admin' && req.userRole !== 'support') {
             return res.status(403).json({ success: false, message: 'Access denied' });
         }
+
+        const activeUserIds = new Set();
+        if (activeSupportSessions) {
+            for (const session of activeSupportSessions.values()) {
+                if (session.userId) activeUserIds.add(String(session.userId).toLowerCase());
+            }
+        }
+
         // Fetch users who are either admin or support
         const team = await User.find({ "data.role": { $in: ['admin', 'support'] } })
             .select('id data.name data.email data.role data.designation data.avatar data.phone data.username')
             .lean();
             
         // Map data back to flat structure for the frontend
-        const mappedTeam = team.map(u => ({
-            id: u.id || u._id?.toString() || '',
-            name: u.data?.name || 'Unknown',
-            email: u.data?.email || '',
-            role: u.data?.role || 'user',
-            designation: u.data?.designation || '',
-            avatar: u.data?.avatar || '',
-            phone: u.data?.phone || '',
-            username: u.data?.username || ''
-        }));
+        const mappedTeam = team.map(u => {
+            const userId = u.id || u._id?.toString() || '';
+            const normalizedId = userId.toLowerCase();
+            const isLive = activeUserIds.has(normalizedId);
+
+            return {
+                id: userId,
+                name: u.data?.name || 'Unknown',
+                email: u.data?.email || '',
+                role: u.data?.role || 'user',
+                designation: u.data?.designation || '',
+                avatar: u.data?.avatar || '',
+                phone: u.data?.phone || '',
+                username: u.data?.username || '',
+                isLive: isLive,
+                status: isLive ? 'active' : 'offline',
+                supportStatus: isLive ? 'active' : 'offline'
+            };
+        });
             
         res.json({ success: true, team: mappedTeam });
     } catch (error) {

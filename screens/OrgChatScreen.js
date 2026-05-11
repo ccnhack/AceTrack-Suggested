@@ -119,6 +119,12 @@ const OrgChatScreen = ({ navigation }) => {
 
   const getStatusText = (contact) => {
     if (!contact) return '';
+    // 🛡️ [PRESENCE_UI] (v2.6.392): Use the real-time injected isLive flag
+    if (contact.isLive || contact.status === 'active' || contact.supportStatus === 'active') {
+      return 'Online';
+    }
+    
+    // Fallback to recency only if not live
     const theirMessages = (messages || []).filter(m => String(m.senderId) === String(contact.id));
     if (theirMessages.length > 0) {
       const lastMsg = theirMessages[theirMessages.length - 1];
@@ -129,7 +135,7 @@ const OrgChatScreen = ({ navigation }) => {
       if (diffMins < 1440) return `Active ${Math.floor(diffMins/60)} hours ago`;
       return `Active yesterday`;
     }
-    return 'Online'; // Fallback for team members with no messages
+    return 'Offline';
   };
 
   // ─── Contact List Panel ───────────────────────

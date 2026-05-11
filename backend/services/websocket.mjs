@@ -17,12 +17,20 @@ io.on('connection', async (socket) => {
   // 🏗️ PHASE 4: Join user-specific room for targeted emissions
   if (connUserId && connUserId !== 'guest') {
     socket.join(`user:${connUserId}`);
-    console.log(`🎯 [ROOM] ${connUserId} joined room user:${connUserId}`);
-    // All authenticated users join a global 'authenticated' room
+    console.log(`🎯 [ROOM_INIT] ${connUserId} joined room user:${connUserId}`);
     socket.join('authenticated');
   } else {
-    console.warn(`⚠️ [WS_WARN] socket=${socket.id} connected without userId! Messaging will FAIL.`);
+    console.warn(`⚠️ [WS_WARN] socket=${socket.id} connected without userId! Waiting for manual join...`);
   }
+
+  // 🛡️ [FAIL-SAFE JOIN] (v2.6.392): Allow client to manually identify if handshake was thinned
+  socket.on('join', (userId) => {
+    if (!userId) return;
+    const room = `user:${userId.toLowerCase()}`;
+    socket.join(room);
+    socket.join('authenticated');
+    console.log(`🎯 [ROOM_MANUAL] ${userId} joined room ${room} via explicit join event.`);
+  });
 
   // Role-based rooms
   if (connRole === 'admin') socket.join('role:admin');
