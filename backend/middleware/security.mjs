@@ -157,12 +157,15 @@ export const authGuard = (req, res, next) => {
 // ═══════════════════════════════════════════════════════════════
 export const createRateLimiters = (appVersion) => {
   const skipTestRequests = (req) => {
-    return req.headers['x-ace-test-bypass'] === 'true';
+    const ua = req.headers['user-agent'] || '';
+    return req.headers['x-ace-test-bypass'] === 'true' || 
+           ua.includes('Slackbot') || 
+           ua.includes('Slack-ImgProxy');
   };
 
   const globalApiLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
-    max: 200,
+    max: 400,
     skip: skipTestRequests,
     standardHeaders: true,
     legacyHeaders: false,
