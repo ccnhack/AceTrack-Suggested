@@ -129,10 +129,9 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       chatbotMessages
     };
 
-    // 🛡️ [PRESENCE INJECTOR] (v2.6.380)
+    // 🛡️ [PRESENCE INJECTOR] (v2.6.382)
     // Cross-reference DB players with live WebSocket sessions
     if (composedData.players && Array.isArray(composedData.players)) {
-      // Create a Set of active user IDs for O(1) lookup
       const activeUserIds = new Set();
       if (activeSupportSessions) {
         for (const session of activeSupportSessions.values()) {
@@ -143,9 +142,12 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       composedData.players = composedData.players.map(p => {
         if (!p) return p;
         const normalizedId = String(p.id).toLowerCase();
+        const isLive = activeUserIds.has(normalizedId);
         
-        // Inject Live status
-        p.isLive = activeUserIds.has(normalizedId);
+        // Inject Live status into ALL potential fields the UI might use
+        p.isLive = isLive;
+        p.status = isLive ? 'active' : 'offline';
+        p.supportStatus = isLive ? 'active' : 'offline';
         
         // 🛡️ [SECURITY]: Role sanitation for non-admins
         if (p.role === 'admin' && normalizedId !== 'admin') {
@@ -154,7 +156,13 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
         return p;
       });
 
-      console.log(`📡 [PRESENCE] Sync: ${activeUserIds.size} users are currently LIVE.`);
+      // 🛡️ [SYNC_DIAGNOSTIC] (v2.6.382)
+      if (req.originalUrl.includes('data')) {
+          await logAudit(req, 'DATA_SYNC_PRESENCE', [], { 
+            activeCount: activeUserIds.size, 
+            totalPlayers: composedData.players.length 
+          });
+      }
     }
 
     // 🛡️ SECURITY HARDENING: Explicitly exclude 'currentUser' to prevent session shadowing

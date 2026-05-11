@@ -2,7 +2,7 @@ import express from 'express';
 import { OrgMessage, Announcement } from '../models/CommsModels.mjs';
 import { apiKeyGuard, authGuard } from '../middleware/security.mjs';
 
-export default function createCommsRoutes({ io }) {
+export default function createCommsRoutes({ io, logAudit }) {
     const router = express.Router();
     
     router.use(apiKeyGuard);
@@ -23,12 +23,20 @@ export default function createCommsRoutes({ io }) {
     });
 
     // Send Message
-    router.post('/chat', async (req, res) => {
+    router.post(['/chat', '/'], async (req, res) => {
         try {
+            // 🛡️ [CHAT_DIAGNOSTIC] (v2.6.382)
+            await logAudit(req, 'CHAT_MESSAGE_ATTEMPT', [], { 
+              target: req.body.receiverId, 
+              role: req.userRole,
+              hasIo: !!io
+            });
+
             if (req.userRole !== 'admin' && req.userRole !== 'support') {
+                console.warn(`🛑 [CHAT_BLOCK] Unauthorized attempt from ${req.user.id} (${req.userRole})`);
                 return res.status(403).json({ success: false, message: 'Access denied' });
             }
-            // 🛡️ [CHAT_TRACE] (v2.6.380)
+            // 🛡️ [CHAT_TRACE] (v2.6.382)
             console.log(`💬 [CHAT] Msg from ${req.user.id} to ${receiverId || 'GLOBAL'}`);
 
             const msg = await OrgMessage.create({
