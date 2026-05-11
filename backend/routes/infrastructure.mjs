@@ -16,7 +16,7 @@ export default function createInfrastructureRoutes({
     res.json({ success: true, service: 'infrastructure', status: 'healthy', version: APP_VERSION, timestamp: new Date().toISOString() });
   });
 
-  // 🛡️ [SECURITY EXPORT ENDPOINT] (v2.6.359)
+  // 🛡️ [SECURITY EXPORT ENDPOINT] (v2.6.354)
   router.get('/security/export', async (req, res) => {
     try {
       const timeframeHours = parseInt(req.query.hours) || 24;
@@ -42,14 +42,13 @@ export default function createInfrastructureRoutes({
     } catch (err) { res.status(500).send("Export failed: " + err.message); }
   });
 
-  // 🛡️ [SLACK INTERACTION ENDPOINT] (v2.6.359)
+  // 🛡️ [SLACK INTERACTION ENDPOINT] (v2.6.360)
   // Hardened to log raw payloads to AuditLog for deep diagnostics
   router.post('/slack/interact', async (req, res) => {
     try {
       if (!req.body.payload) return res.status(400).send("Missing payload");
       const payload = JSON.parse(req.body.payload);
       
-      // 🛡️ [DIAGNOSTIC LOGGING] (v2.6.359)
       const actionObj = payload.actions?.[0] || {};
       const actionId = actionObj.action_id || actionObj.name;
       
@@ -105,7 +104,12 @@ export default function createInfrastructureRoutes({
          }
       }
 
-      res.status(200).send();
+      // 🛡️ [CATCH-ALL RESPONDER] (v2.6.360)
+      return res.json({
+        replace_original: false,
+        response_type: "ephemeral",
+        text: `📡 *Handshake Successful*\nI received your click for action: \`${actionId}\`. If you don't see the download link, please run \`/acetrack security\` to get a fresh report.`
+      });
     } catch (err) {
       console.error("❌ Slack interaction failed:", err.message);
       res.status(500).send("Internal Server Error");
@@ -125,8 +129,7 @@ export default function createInfrastructureRoutes({
     } catch (err) { res.status(500).send("Command failed"); }
   });
 
-  // 🛡️ [SLACK SIMULATOR] (v2.6.359)
-  // visit /api/infrastructure/slack/simulate to test the interact route manually
+  // 🛡️ [SLACK SIMULATOR] (v2.6.358)
   router.get('/slack/simulate', async (req, res) => {
     try {
       const https = await import('https');
@@ -144,30 +147,22 @@ export default function createInfrastructureRoutes({
         port: 443,
         path: '/slack/interact',
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Content-Length': postData.length
-        }
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': postData.length }
       };
 
       const request = https.request(options, (response) => {
         let data = '';
         response.on('data', (chunk) => { data += chunk; });
         response.on('end', () => {
-          try {
-            res.json({ success: true, status: response.statusCode, serverResponse: JSON.parse(data) });
-          } catch (e) {
-            res.json({ success: true, status: response.statusCode, rawResponse: data });
-          }
+          try { res.json({ success: true, status: response.statusCode, serverResponse: JSON.parse(data) }); }
+          catch (e) { res.json({ success: true, status: response.statusCode, rawResponse: data }); }
         });
       });
 
       request.on('error', (e) => { res.status(500).json({ success: false, error: e.message }); });
       request.write(postData);
       request.end();
-    } catch (e) {
-      res.status(500).json({ success: false, error: e.message });
-    }
+    } catch (e) { res.status(500).json({ success: false, error: e.message }); }
   });
 
   return router;
