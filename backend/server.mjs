@@ -102,7 +102,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.362'; // Critical for Update prompts 
+const APP_VERSION = '2.6.363'; // Critical for Update prompts 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -692,10 +692,15 @@ app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 🛡️ DIAGNOSTICS: Global Request Logger (v2.6.175)
+// 🛡️ DIAGNOSTICS: Global Request Logger (v2.6.363)
 app.use(async (req, res, next) => {
-  if (req.path.includes('login') || req.path.includes('recovery')) {
-    await logAudit(req, 'DEBUG_INCOMING_AUTH_REQ', [], { url: req.originalUrl || req.path, method: req.method });
+  if (req.path.includes('login') || req.path.includes('recovery') || req.path.includes('slack')) {
+    await logAudit(req, 'DEBUG_NETWORK_SNIFFER', [], { 
+      url: req.originalUrl || req.path, 
+      method: req.method,
+      hasPayload: !!req.body?.payload,
+      headers: req.headers
+    });
   }
   next();
 });
