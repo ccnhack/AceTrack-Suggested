@@ -6,7 +6,8 @@ const OrgMessageSchema = new mongoose.Schema({
     receiverId: { type: String }, // Optional for broadcasts
     content: { type: String, required: true },
     status: { type: String, default: 'sent' }, // sent, seen
-    timestamp: { type: Date, default: Date.now }
+    timestamp: { type: Date, default: Date.now },
+    reminderSentAt: { type: Date, default: null } // 📧 [CHAT_REMINDER] (v2.6.380)
 });
 
 const AnnouncementSchema = new mongoose.Schema({

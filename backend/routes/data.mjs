@@ -129,7 +129,7 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       chatbotMessages
     };
 
-    // 🛡️ [PRESENCE INJECTOR] (v2.6.376)
+    // 🛡️ [PRESENCE INJECTOR] (v2.6.380)
     // Cross-reference DB players with live WebSocket sessions
     if (composedData.players && Array.isArray(composedData.players)) {
       // Create a Set of active user IDs for O(1) lookup

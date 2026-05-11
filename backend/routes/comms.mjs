@@ -28,7 +28,7 @@ export default function createCommsRoutes({ io }) {
             if (req.userRole !== 'admin' && req.userRole !== 'support') {
                 return res.status(403).json({ success: false, message: 'Access denied' });
             }
-            // 🛡️ [CHAT_TRACE] (v2.6.376)
+            // 🛡️ [CHAT_TRACE] (v2.6.380)
             console.log(`💬 [CHAT] Msg from ${req.user.id} to ${receiverId || 'GLOBAL'}`);
 
             const msg = await OrgMessage.create({

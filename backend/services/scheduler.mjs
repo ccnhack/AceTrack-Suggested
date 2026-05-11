@@ -127,7 +127,7 @@ export async function generateSecuritySummaryBlocks(timeframeHours = 24) {
   };
 }
 
-// 🛡️ [DETAILED LOGS - JSON FORMAT] (v2.6.376)
+// 🛡️ [DETAILED LOGS - JSON FORMAT] (v2.6.380)
 export async function generateDetailedSecurityBlocks(timeframeHours = 24) {
   const since = new Date(Date.now() - timeframeHours * 60 * 60 * 1000);
   const summaries = await SecuritySummary.find({ lastEventAt: { $gt: since } }).lean();
@@ -178,19 +178,102 @@ export async function generateDetailedSecurityBlocks(timeframeHours = 24) {
           { type: "mrkdwn", text: "💡 _Full raw logs are preserved in the `AuditLog` collection for forensics._" }
         ]
       }
-    ]
   };
 }
 
+// 📧 [CHAT REMINDER SERVICE] (v2.6.380)
+export async function processUnseenMessageReminders() {
+  try {
+    const { OrgMessage, Player } = await import('../models/index.mjs');
+    const nodemailer = await import('nodemailer');
+
+    // 1. Find unseen messages older than 24 hours that haven't had a reminder sent
+    const staleThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const unseenMessages = await OrgMessage.find({
+      status: 'sent',
+      reminderSentAt: null,
+      timestamp: { $lt: staleThreshold }
+    }).lean();
+
+    if (!unseenMessages || unseenMessages.length === 0) return;
+
+    // 2. Group by Receiver
+    const groups = {};
+    unseenMessages.forEach(msg => {
+      if (!groups[msg.receiverId]) groups[msg.receiverId] = [];
+      groups[msg.receiverId].push(msg);
+    });
+
+    // 3. Process each group
+    for (const [receiverId, messages] of Object.entries(groups)) {
+      const playerDoc = await Player.findOne({ id: String(receiverId) }).lean();
+      const recipientEmail = playerDoc?.data?.email;
+      
+      if (!recipientEmail) continue;
+
+      const uniqueSenders = [...new Set(messages.map(m => m.senderName))].join(', ');
+      const portalUrl = 'https://acetrack-suggested.onrender.com';
+
+      const transporter = nodemailer.default.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.EMAIL_USER || 'notifications@acetrack.com',
+          pass: process.env.EMAIL_PASS
+        }
+      });
+
+      const mailOptions = {
+        from: `"AceTrack Chat" <${process.env.EMAIL_USER || 'notifications@acetrack.com'}>`,
+        to: recipientEmail,
+        subject: `📫 You have new messages from ${uniqueSenders}`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+            <h2 style="color: #2D3FE0;">AceTrack Messenger</h2>
+            <p>Hi <b>${playerDoc.data.name || receiverId}</b>,</p>
+            <p>You have unread messages in the AceTrack portal that have been waiting for over 24 hours.</p>
+            <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+              <p style="margin: 0;"><b>New messages from:</b> ${uniqueSenders}</p>
+            </div>
+            <p>Stay connected with your team and respond to your colleagues by logging into the portal below:</p>
+            <a href="${portalUrl}" style="display: inline-block; padding: 12px 25px; background-color: #2D3FE0; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; margin-top: 10px;">Login to AceTrack</a>
+            <p style="font-size: 12px; color: #888; margin-top: 30px;">
+              This is an automated reminder from the AceTrack security and communication suite.
+            </p>
+          </div>
+        `
+      };
+
+      try {
+        await transporter.sendMail(mailOptions);
+        console.log(`📧 [REMINDER_SENT] to ${recipientEmail} for messages from ${uniqueSenders}`);
+        
+        // Mark these messages as reminded
+        const msgIds = messages.map(m => m._id);
+        await OrgMessage.updateMany({ _id: { $in: msgIds } }, { $set: { reminderSentAt: new Date() } });
+      } catch (err) {
+        console.error(`❌ [MAIL_ERROR] Failed to send reminder to ${recipientEmail}:`, err.message);
+      }
+    }
+  } catch (err) { console.error("Chat Reminder Service Error:", err.message); }
+}
+
 export default function initScheduler(loginAttempts, sendSecurityAlert) {
+  // 🕒 [CHAT_WATCHDOG] (v2.6.380): Run hourly
+  setInterval(async () => {
+    try { await processUnseenMessageReminders(); } catch (e) {}
+  }, 60 * 60 * 1000);
+
+  // 🛡️ [SECURITY_DAILY]
   setInterval(async () => {
     try { await runBruteForceSummary(loginAttempts, sendSecurityAlert); } catch (e) {}
   }, 24 * 60 * 60 * 1000);
 
+  // 🤖 [AI_AGGREGATOR]
   setInterval(async () => {
     try { await runAISecurityAggregator(); } catch (e) {}
   }, 24 * 60 * 60 * 1000);
 
+  // 🧹 [DATA_PURGE]
   setInterval(async () => {
     try {
       const { Matchmaking, ChatbotThread } = await import('../models/index.mjs');
@@ -201,5 +284,5 @@ export default function initScheduler(loginAttempts, sendSecurityAlert) {
     } catch (err) {}
   }, 24 * 60 * 60 * 1000);
 
-  console.log('🕒 Scheduler initialized (v2.6.376)');
+  console.log('🕒 Scheduler initialized (v2.6.380)');
 }
