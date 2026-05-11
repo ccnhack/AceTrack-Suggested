@@ -13,11 +13,13 @@ import { socketService } from '../services/sync/SocketService';
 const OrgChatScreen = ({ navigation }) => {
   const { currentUser } = useAuth();
   const { teamDirectory, fetchTeamDirectory } = useAdminCoreStore();
-  const { messages, fetchMessages, sendMessage, appendMessage, markAsSeen } = useCommsStore();
+  const { messages, fetchMessages, sendMessage, appendMessage, markAsSeen, uploadAttachment, uploadingFile } = useCommsStore();
   
   const [selectedContact, setSelectedContact] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [msgText, setMsgText] = useState('');
+  const [pendingAttachments, setPendingAttachments] = useState([]);
+  const fileInputRef = useRef(null);
   const chatScrollRef = useRef(null);
   const { width: windowWidth } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
@@ -79,13 +81,38 @@ const OrgChatScreen = ({ navigation }) => {
     ).length;
   };
 
+  const handleFileSelect = async (event) => {
+    if (Platform.OS === 'web') {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const attachment = await uploadAttachment(file);
+      if (attachment) {
+        setPendingAttachments(prev => [...prev, attachment]);
+      }
+      // Reset input
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    } else {
+      // Mobile implementation would use expo-document-picker or expo-image-picker
+      alert('File selection is currently optimized for Web.');
+    }
+  };
+
+  const removeAttachment = (publicId) => {
+    setPendingAttachments(prev => prev.filter(a => a.publicId !== publicId));
+  };
+
   const handleSend = async () => {
-    if (!msgText.trim() || !selectedContact) return;
+    if ((!msgText.trim() && pendingAttachments.length === 0) || !selectedContact) return;
+    
     const text = msgText.trim();
+    const attachments = [...pendingAttachments];
+    
     setMsgText('');
-    const success = await sendMessage(text, selectedContact.id);
+    setPendingAttachments([]);
+    
+    const success = await sendMessage(text, selectedContact.id, attachments);
     if (success) {
-      // Also re-fetch from server to ensure consistency
       await fetchMessages();
     }
   };
@@ -315,7 +342,62 @@ const OrgChatScreen = ({ navigation }) => {
                       </View>
                     )}
                     <View style={[styles.msgBubble, isMe ? styles.msgBubbleMe : styles.msgBubbleOther]}>
-                      <Text style={[styles.msgContent, isMe && { color: '#FFF' }]}>{msg.content}</Text>
+                      {msg.content && msg.content !== '(empty)' && (
+                        <Text style={[styles.msgContent, isMe && { color: '#FFF' }]}>{msg.content}</Text>
+                      )}
+                      
+                      {msg.attachments && msg.attachments.length > 0 && (
+                        <View style={styles.attachmentContainer}>
+                          {msg.attachments.map((att, attIdx) => {
+                            const isImage = att.mimeType?.startsWith('image/');
+                            const isExpired = att.expired;
+                            
+                            if (isExpired) {
+                              return (
+                                <View key={attIdx} style={styles.expiredAttachment}>
+                                  <Ionicons name="lock-closed" size={16} color="#94A3B8" />
+                                  <Text style={styles.expiredText}>File Expired (7d Policy)</Text>
+                                </View>
+                              );
+                            }
+
+                            if (isImage) {
+                              return (
+                                <TouchableOpacity 
+                                  key={attIdx} 
+                                  onPress={() => window.open(att.url, '_blank')}
+                                  style={styles.imageAttachmentContainer}
+                                >
+                                  <View style={styles.imagePlaceholder}>
+                                    {/* Web image rendering */}
+                                    {isWeb ? (
+                                      <img src={att.url} style={{ width: '100%', borderRadius: 8, maxHeight: 200, objectFit: 'cover' }} alt={att.filename} />
+                                    ) : (
+                                      <Ionicons name="image" size={24} color="#94A3B8" />
+                                    )}
+                                  </View>
+                                </TouchableOpacity>
+                              );
+                            }
+
+                            return (
+                              <TouchableOpacity 
+                                key={attIdx} 
+                                onPress={() => window.open(att.url, '_blank')}
+                                style={styles.fileAttachmentChip}
+                              >
+                                <Ionicons name="document-attach" size={20} color={isMe ? "#FFF" : "#6366F1"} />
+                                <View style={{ marginLeft: 8, flex: 1 }}>
+                                  <Text style={[styles.fileName, isMe && { color: '#FFF' }]} numberOfLines={1}>{att.filename}</Text>
+                                  <Text style={[styles.fileSize, isMe && { color: 'rgba(255,255,255,0.7)' }]}>{(att.size / 1024).toFixed(1)} KB</Text>
+                                </View>
+                                <Ionicons name="download-outline" size={16} color={isMe ? "rgba(255,255,255,0.7)" : "#94A3B8"} />
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      )}
+
                       <Text style={[styles.msgTimestamp, isMe && { color: 'rgba(255,255,255,0.6)' }]}>
                         {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </Text>
@@ -327,8 +409,50 @@ const OrgChatScreen = ({ navigation }) => {
           )}
         </ScrollView>
 
+        {/* 📎 [ATTACHMENT_PREVIEW] (v2.6.395) */}
+        {pendingAttachments.length > 0 && (
+          <View style={styles.pendingAttachmentsBar}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {pendingAttachments.map((att, idx) => (
+                <View key={idx} style={styles.pendingAttachmentChip}>
+                  <Ionicons 
+                    name={att.mimeType?.startsWith('image/') ? "image" : "document"} 
+                    size={16} 
+                    color="#6366F1" 
+                  />
+                  <Text style={styles.pendingAttachmentText} numberOfLines={1}>{att.filename}</Text>
+                  <TouchableOpacity onPress={() => removeAttachment(att.publicId)}>
+                    <Ionicons name="close-circle" size={18} color="#EF4444" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         {/* Input Area */}
         <View style={styles.inputArea}>
+          {isWeb && (
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              style={{ display: 'none' }} 
+              onChange={handleFileSelect}
+            />
+          )}
+          
+          <TouchableOpacity 
+            style={styles.attachBtn} 
+            onPress={() => isWeb ? fileInputRef.current?.click() : handleFileSelect()}
+            disabled={uploadingFile}
+          >
+            {uploadingFile ? (
+              <ActivityIndicator size="small" color="#6366F1" />
+            ) : (
+              <Ionicons name="attach" size={24} color="#64748B" />
+            )}
+          </TouchableOpacity>
+
           <TextInput
             style={styles.chatInput}
             placeholder={`Message ${selectedContact.name}...`}
@@ -341,9 +465,9 @@ const OrgChatScreen = ({ navigation }) => {
             multiline
           />
           <TouchableOpacity 
-            style={[styles.sendBtn, !msgText.trim() && styles.sendBtnDisabled]} 
+            style={[styles.sendBtn, (!msgText.trim() && pendingAttachments.length === 0) && styles.sendBtnDisabled]} 
             onPress={handleSend}
-            disabled={!msgText.trim()}
+            disabled={!msgText.trim() && pendingAttachments.length === 0}
           >
             <Ionicons name="send" size={18} color="#FFF" />
           </TouchableOpacity>
@@ -566,6 +690,52 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sendBtnDisabled: { backgroundColor: '#CBD5E1' },
+  
+  // ─── Attachments Styles (v2.6.395) ───────────
+  attachBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  pendingAttachmentsBar: {
+    backgroundColor: '#F1F5F9',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    padding: 10,
+  },
+  pendingAttachmentChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  pendingAttachmentText: { fontSize: 12, color: '#334155', marginHorizontal: 6, maxWidth: 120 },
+  attachmentContainer: { marginTop: 8, gap: 6 },
+  imageAttachmentContainer: { width: '100%', marginBottom: 4 },
+  imagePlaceholder: { width: '100%', backgroundColor: '#F1F5F9', borderRadius: 8, overflow: 'hidden' },
+  fileAttachmentChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(99, 102, 241, 0.08)',
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.2)',
+  },
+  fileName: { fontSize: 13, fontWeight: '700', color: '#1E293B' },
+  fileSize: { fontSize: 11, color: '#64748B', marginTop: 2 },
+  expiredAttachment: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    opacity: 0.8,
+  },
+  expiredText: { fontSize: 12, color: '#94A3B8', marginLeft: 8, fontWeight: '500' },
 });
 
 export default OrgChatScreen;

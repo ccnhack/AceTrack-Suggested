@@ -285,5 +285,44 @@ export default function initScheduler(loginAttempts, sendSecurityAlert) {
     } catch (err) {}
   }, 24 * 60 * 60 * 1000);
 
-  console.log('🕒 Scheduler initialized (v2.6.383)');
+  // 📎 [ATTACHMENT_CLEANUP] (v2.6.395): Daily purge of expired chat attachments
+  setInterval(async () => {
+    try {
+      const { v2: cloudinary } = await import('cloudinary');
+      const { OrgMessage } = await import('../models/CommsModels.mjs');
+      const now = new Date();
+
+      // Find messages with expired attachments
+      const expiredMsgs = await OrgMessage.find({
+        'attachments.expiresAt': { $lt: now },
+        'attachments.0': { $exists: true }
+      });
+
+      let deletedCount = 0;
+      for (const msg of expiredMsgs) {
+        const expired = msg.attachments.filter(a => new Date(a.expiresAt) < now);
+        for (const att of expired) {
+          try {
+            const isImage = att.mimeType?.startsWith('image/');
+            await cloudinary.uploader.destroy(att.publicId, { resource_type: isImage ? 'image' : 'raw' });
+            deletedCount++;
+          } catch (e) {
+            console.warn(`⚠️ [CLEANUP] Failed to delete ${att.publicId}:`, e.message);
+          }
+        }
+        // Remove expired attachments from the message
+        msg.attachments = msg.attachments.filter(a => new Date(a.expiresAt) >= now);
+        msg.markModified('attachments');
+        await msg.save();
+      }
+
+      if (deletedCount > 0) {
+        console.log(`📎 [CLEANUP] Purged ${deletedCount} expired chat attachments from ${expiredMsgs.length} messages`);
+      }
+    } catch (err) {
+      console.error('❌ [CLEANUP] Attachment purge failed:', err.message);
+    }
+  }, 24 * 60 * 60 * 1000);
+
+  console.log('🕒 Scheduler initialized (v2.6.395)');
 }

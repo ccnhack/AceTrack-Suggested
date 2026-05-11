@@ -6,6 +6,7 @@ export const useCommsStore = create((set, get) => ({
     messages: [],
     announcements: [],
     isLoading: false,
+    uploadingFile: false,
 
     fetchMessages: async () => {
         try {
@@ -31,7 +32,7 @@ export const useCommsStore = create((set, get) => ({
         }
     },
 
-    sendMessage: async (content, receiverId) => {
+    sendMessage: async (content, receiverId, attachments = []) => {
         try {
             // 🛡️ [WEB_AUTH_SAFETY] (v2.6.258)
             let token = '';
@@ -45,7 +46,7 @@ export const useCommsStore = create((set, get) => ({
                     'Authorization': token ? `Bearer ${token}` : '',
                     'x-ace-api-key': config.PUBLIC_APP_ID
                 },
-                body: JSON.stringify({ content, receiverId })
+                body: JSON.stringify({ content, receiverId, attachments })
             });
             const data = await response.json();
             if (data.success && data.message) {
@@ -60,6 +61,40 @@ export const useCommsStore = create((set, get) => ({
         } catch (error) {
             console.error("Failed to send message:", error);
             return false;
+        }
+    },
+
+    // 📎 [ATTACHMENT_UPLOAD] (v2.6.395): Upload file to Cloudinary via backend
+    uploadAttachment: async (file) => {
+        try {
+            set({ uploadingFile: true });
+            
+            let token = '';
+            try { token = window.localStorage?.getItem('acetrack_auth_token') || ''; } catch (e) {}
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const url = Platform.OS === 'web' ? '/api/comms/chat/upload' : `${config.API_BASE_URL}/api/v1/comms/chat/upload`;
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 
+                    'Authorization': token ? `Bearer ${token}` : '',
+                    'x-ace-api-key': config.PUBLIC_APP_ID
+                },
+                body: formData
+            });
+            const data = await response.json();
+            if (data.success) {
+                return data.attachment;
+            }
+            console.error("Upload failed:", data.message);
+            return null;
+        } catch (error) {
+            console.error("Failed to upload attachment:", error);
+            return null;
+        } finally {
+            set({ uploadingFile: false });
         }
     },
 
@@ -98,7 +133,8 @@ export const useCommsStore = create((set, get) => ({
             let token = '';
             try { token = window.localStorage?.getItem('acetrack_auth_token') || ''; } catch (e) {}
 
-            const response = await fetch(`${config.API_BASE_URL}/api/v1/comms/chat/seen`, {
+            const url = Platform.OS === 'web' ? '/api/comms/chat/seen' : `${config.API_BASE_URL}/api/v1/comms/chat/seen`;
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
