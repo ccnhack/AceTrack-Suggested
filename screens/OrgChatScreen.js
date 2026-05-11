@@ -480,6 +480,10 @@ const OrgChatScreen = ({ navigation }) => {
                                 <Ionicons name="return-up-back" size={16} color="#475569" />
                                 <Text style={styles.actionItemText}>Reply with quote</Text>
                               </TouchableOpacity>
+                              <TouchableOpacity style={styles.actionItem} onPress={() => { alert('Forwarding feature coming soon'); setActiveMenuId(null); }}>
+                                <Ionicons name="arrow-redo" size={16} color="#475569" />
+                                <Text style={styles.actionItemText}>Forward</Text>
+                              </TouchableOpacity>
                               <TouchableOpacity style={[styles.actionItem, { borderBottomWidth: 0 }]} onPress={() => { deleteMessage(msg._id); setActiveMenuId(null); }}>
                                 <Ionicons name="trash" size={16} color="#EF4444" />
                                 <Text style={[styles.actionItemText, { color: '#EF4444' }]}>Delete</Text>
