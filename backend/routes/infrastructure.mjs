@@ -1,95 +1,80 @@
 import express from 'express';
-import { AppState, Player } from '../models/index.mjs';
+import { AppState, Player, AuditLog } from '../models/index.mjs';
+import { asyncHandler } from '../helpers/utils.mjs';
+import { apiKeyGuard, authGuard } from '../middleware/security.mjs';
+import nodemailer from 'nodemailer';
 
-export default function createInfrastructureRoutes({ APP_VERSION, syncMutex, loginAttempts, sendSecurityAlert }) {
+export default function createInfrastructureRoutes({ 
+  syncMutex, 
+  logAudit,
+  APP_VERSION
+}) {
   const router = express.Router();
 
-  // Root catch-all for legacy health monitors (JSON fallback)
-  router.get('/', (req, res, next) => {
-    if (req.headers.accept?.includes('application/json')) {
-      return res.json({ status: 'ok', version: APP_VERSION });
-    }
-    next();
-  });
-
-  // Public Health Check (Requires Health Token for Production Monitoring)
-  router.get('/health', (req, res) => {
-    const healthToken = req.headers['x-health-token'];
-    if (process.env.NODE_ENV === 'production' && (!healthToken || healthToken !== process.env.HEALTH_TOKEN)) {
-      return res.status(403).json({ error: 'Access Denied' });
-    }
-    res.json({ status: 'ok', uptime: process.uptime(), version: APP_VERSION });
-  });
-
-  // 🛡️ [SMTP DIAGNOSTICS] — Temporary endpoint to debug Render email issues
-  router.get('/smtp-diag', async (req, res) => {
-    const nodemailer = await import('nodemailer');
-    const gmailUser = process.env.GMAIL_USER;
-    const gmailPass = process.env.GMAIL_APP_PASSWORD;
-    
-    const result = {
-      envVars: {
-        GMAIL_USER: gmailUser ? gmailUser.substring(0, 5) + '...' + gmailUser.slice(-10) : 'NOT_SET',
-        GMAIL_APP_PASSWORD: gmailPass ? `***SET (${gmailPass.length} chars)` : 'NOT_SET',
-      },
-      smtpVerify: null,
-      smtpError: null,
-      testEmailSent: null,
-    };
-    
-    if (!gmailUser || !gmailPass) {
-      result.smtpError = 'Missing credentials';
-      return res.json(result);
-    }
-    
-    const transport = nodemailer.default.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      family: 4,
-      pool: false,
-      auth: { user: gmailUser, pass: gmailPass },
-      connectionTimeout: 15000,
-      greetingTimeout: 15000,
-      socketTimeout: 20000,
+  // GET /api/infrastructure/status
+  router.get('/status', (req, res) => {
+    res.json({
+      success: true,
+      service: 'infrastructure',
+      status: 'healthy',
+      version: APP_VERSION,
+      timestamp: new Date().toISOString()
     });
+  });
+
+  // POST /api/infrastructure/mail/test
+  router.post('/mail/test', apiKeyGuard, authGuard, async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     
-    try {
-      await transport.verify();
-      result.smtpVerify = 'SUCCESS';
-    } catch (err) {
-      result.smtpVerify = 'FAILED';
-      result.smtpError = `${err.message} (code: ${err.code || 'none'})`;
-      transport.close();
-      return res.json(result);
-    }
-    
-    // If verify passed, try sending a test email
-    try {
-      const info = await transport.sendMail({
-        from: `"AceTrack SMTP Test" <${gmailUser}>`,
-        to: gmailUser,
-        subject: `SMTP Diag Test — ${new Date().toISOString()}`,
-        text: 'This email was sent from the Render SMTP diagnostic endpoint.'
-      });
-      result.testEmailSent = `SUCCESS: ${info.messageId}`;
-    } catch (err) {
-      result.testEmailSent = `FAILED: ${err.message}`;
-    }
+    const { to } = req.body;
+    const transport = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT,
+      secure: false,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+      }
+    });
+
+    const result = await transport.sendMail({
+      from: process.env.SMTP_FROM,
+      to,
+      subject: 'AceTrack Infrastructure Test',
+      text: 'Test email from AceTrack infrastructure service.'
+    });
     
     transport.close();
     res.json(result);
   });
 
+  // 🛡️ [SECURITY EXPORT ENDPOINT] (v2.6.352)
+  // Generates and downloads a raw JSON file of security events
+  router.get('/security/export', async (req, res) => {
+    try {
+      const timeframeHours = parseInt(req.query.hours) || 24;
+      const since = new Date(Date.now() - timeframeHours * 60 * 60 * 1000);
+      const { SecuritySummary } = await import('../models/index.mjs');
+      const summaries = await SecuritySummary.find({ lastEventAt: { $gt: since } }).lean();
+
+      const rawData = {
+        generatedAt: new Date().toISOString(),
+        timeframe: `${timeframeHours}h`,
+        events: summaries
+      };
+
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename=security_audit_${timeframeHours}h.json`);
+      return res.send(JSON.stringify(rawData, null, 2));
+    } catch (err) {
+      res.status(500).send("Export failed: " + err.message);
+    }
+  });
+
   // 🛡️ [SLACK INTERACTION ENDPOINT] (v2.6.212)
-  // Handles "Approve", "Block", and "View Details" buttons from Slack
   router.post('/slack/interact', async (req, res) => {
     try {
-      // Slack sends payload as a string-encoded JSON in 'payload' field
-      if (!req.body.payload) {
-        return res.status(400).send("Missing payload");
-      }
-
+      if (!req.body.payload) return res.status(400).send("Missing payload");
       const payload = JSON.parse(req.body.payload);
       const actionData = JSON.parse(payload.actions[0].value);
       const { action, target, ip, timeframe } = actionData;
@@ -111,45 +96,27 @@ export default function createInfrastructureRoutes({ APP_VERSION, syncMutex, log
             if (userIdx !== -1) {
               const now = Date.now();
               const lockedUser = players[userIdx];
-              players[userIdx].loginBlockedUntil = now + (5 * 60 * 1000); // 5 min cooldown
-              players[userIdx].lastForceLogoutAt = now; // Invalidate current JWTs
+              players[userIdx].loginBlockedUntil = now + (5 * 60 * 1000);
+              players[userIdx].lastForceLogoutAt = now;
               
-              await AppState.findOneAndUpdate(
-                {},
-                { $set: { 'data.players': players, version: appState.version + 1, lastUpdated: now } }
-              );
-              await Player.updateOne(
-                { id: lockedUser.id },
-                { $set: { "data.loginBlockedUntil": lockedUser.loginBlockedUntil, "data.lastForceLogoutAt": lockedUser.lastForceLogoutAt, lastUpdated: new Date() } }
-              );
-              
-              console.warn(`🛡️ [LOCKDOWN] Account ${lockedUser.id} (${lockedUser.role}) LOCKED for 5 mins via Slack Action [Triggered by ${payload.user.name}]`);
+              await AppState.findOneAndUpdate({}, { $set: { 'data.players': players, version: appState.version + 1, lastUpdated: now } });
+              await Player.updateOne({ id: lockedUser.id }, { $set: { "data.loginBlockedUntil": lockedUser.loginBlockedUntil, "data.lastForceLogoutAt": lockedUser.lastForceLogoutAt, lastUpdated: new Date() } });
               
               return res.json({
                 replace_original: false,
-                text: `🛑 *LOCKDOWN SUCCESSFUL*: Account *${lockedUser.id}* blocked for 5 minutes. All active sessions invalidated. (Action by: ${payload.user.name})`
+                text: `🛑 *LOCKDOWN SUCCESSFUL*: Account *${lockedUser.id}* blocked for 5 minutes. (Action by: ${payload.user.name})`
               });
             }
           }
-        } finally {
-          release();
-        }
+        } finally { release(); }
       } else if (action === 'approve') {
-         console.log(`✅ [SLACK_ACTION] Admin login approved by ${payload.user.name}`);
+         return res.json({ replace_original: false, text: `✅ *APPROVED*: Login session authorized by ${payload.user.name}.` });
+      } else if (action === 'view_security_details') {
+         const downloadUrl = `https://acetrack-suggested.onrender.com/api/infrastructure/security/export?hours=${timeframe || 24}`;
          return res.json({
             replace_original: false,
-            text: `✅ *APPROVED*: Login session authorized by ${payload.user.name}.`
-         });
-      } else if (action === 'view_security_details') {
-         const { generateDetailedSecurityBlocks } = await import('../services/scheduler.mjs');
-         const details = await generateDetailedSecurityBlocks(timeframe || 24);
-         
-         // Use the response_url for detailed reporting if needed, 
-         // but returning it directly works for interactive replacements.
-         return res.json({
-            replace_original: false, // Don't replace the summary, post details as a new ephemeral message
             response_type: "ephemeral",
-            ...details
+            text: `📂 *Security Audit Ready for Download*\nClick the link below to download the full raw JSON report for the last ${timeframe || 24} hours:\n\n🔗 <${downloadUrl}|Download security_audit.json>`
          });
       }
 
@@ -161,34 +128,19 @@ export default function createInfrastructureRoutes({ APP_VERSION, syncMutex, log
   });
 
   // 🛡️ [SLACK COMMAND ENDPOINT] (v2.6.349)
-  // Handles /acetrack security
   router.post('/slack/command', async (req, res) => {
     try {
-      // Slack slash commands use application/x-www-form-urlencoded
       const { command, text, user_name } = req.body;
-      
-      console.log(`📡 [SLACK_COMMAND] Received ${command} with text "${text}" from ${user_name}`);
-
       if (command === '/acetrack' && String(text).trim().toLowerCase() === 'security') {
         const { generateSecuritySummaryBlocks } = await import('../services/scheduler.mjs');
-        const summary = await generateSecuritySummaryBlocks(24); // Default to 24h as requested
-
-        return res.json({
-          response_type: "ephemeral",
-          ...summary
-        });
+        const summary = await generateSecuritySummaryBlocks(24);
+        return res.json({ response_type: "ephemeral", ...summary });
       }
-
-      res.json({
-        response_type: "ephemeral",
-        text: "Available commands:\n`/acetrack security` - Pull latest security aggregator summaries for the last 24 hours."
-      });
+      res.status(200).send();
     } catch (err) {
-      console.error("❌ Slack command failed:", err.message);
-      res.status(500).send("Internal Server Error");
+      res.status(500).send("Command failed");
     }
   });
-
 
   return router;
 }
