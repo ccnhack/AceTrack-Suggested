@@ -42,9 +42,12 @@ export default function createInfrastructureRoutes({
     } catch (err) { res.status(500).send("Export failed: " + err.message); }
   });
 
-  // 🛡️ [SLACK INTERACTION ENDPOINT] (v2.6.363)
+  // 🛡️ [SLACK INTERACTION ENDPOINT] (v2.6.364)
   // Hardened to log raw payloads to AuditLog for deep diagnostics
-  router.post('/slack/interact', async (req, res) => {
+  router.post('/slack/interact', handleInteract);
+  router.post('/infrastructure/slack/interact', handleInteract);
+
+  async function handleInteract(req, res) {
     try {
       if (!req.body.payload) return res.status(400).send("Missing payload");
       const payload = JSON.parse(req.body.payload);
@@ -104,7 +107,7 @@ export default function createInfrastructureRoutes({
          }
       }
 
-      // 🛡️ [CATCH-ALL RESPONDER] (v2.6.363)
+      // 🛡️ [CATCH-ALL RESPONDER] (v2.6.364)
       return res.json({
         replace_original: false,
         response_type: "ephemeral",
