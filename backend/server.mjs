@@ -102,7 +102,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.400'; // Critical for Update prompts 
+const APP_VERSION = '2.6.401'; // Critical for Update prompts 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -692,7 +692,7 @@ app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 🛡️ DIAGNOSTICS: Global Request Logger (v2.6.400)
+// 🛡️ DIAGNOSTICS: Global Request Logger (v2.6.401)
 app.use(async (req, res, next) => {
   if (req.path.includes('login') || req.path.includes('recovery') || req.path.includes('slack')) {
     await logAudit(req, 'DEBUG_NETWORK_SNIFFER', [], { 
@@ -1035,7 +1035,7 @@ app.use('/api/v1/hr', hrRoutes);
 
 const commsRoutes = createCommsRoutes({ io, logAudit, cloudinary, upload });
 app.use('/api/v1/comms', commsRoutes);
-app.use('/api/comms', commsRoutes); // 🛡️ Legacy/Compatibility Alias (v2.6.400)
+app.use('/api/comms', commsRoutes); // 🛡️ Legacy/Compatibility Alias (v2.6.401)
 
 const infrastructureRoutes = createInfrastructureRoutes({ 
   APP_VERSION, 

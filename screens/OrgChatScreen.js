@@ -45,7 +45,7 @@ const OrgChatScreen = ({ navigation }) => {
 
     socketService.on('org_chat_message', onNewMessage);
     return () => {
-        // Socket cleanups are usually handled by SocketService, but we can add specific ones if needed
+        socketService.off('org_chat_message', onNewMessage);
     };
   }, [selectedContact]);
 

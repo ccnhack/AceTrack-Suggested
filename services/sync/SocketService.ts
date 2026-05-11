@@ -5,12 +5,27 @@ import config from '../../config';
 import { eventBus } from '../EventBus';
 import logger from '../../utils/logger';
 import storage from '../../utils/storage';
+import { useCommsStore } from '../../stores/useCommsStore'; // 🛡️ [PATH_FIX] (v2.6.401)
 
 class SocketService {
   private socket: Socket | null = null;
 
   public getSocket(): Socket | null {
     return this.socket;
+  }
+
+  // 📡 [LISTENER_DELEGATION] (v2.6.401)
+  public on(event: string, callback: (...args: any[]) => void) {
+    if (this.socket) {
+      this.socket.on(event, callback);
+    }
+  }
+
+  // 🛡️ [LISTENER_CLEANUP] (v2.6.401)
+  public off(event: string, callback: (...args: any[]) => void) {
+    if (this.socket) {
+      this.socket.off(event, callback);
+    }
   }
 
   public setupSocket(
