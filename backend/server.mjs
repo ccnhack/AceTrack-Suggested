@@ -102,7 +102,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.372'; // Critical for Update prompts 
+const APP_VERSION = '2.6.375'; // Critical for Update prompts 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -566,19 +566,6 @@ app.use(cookieParser());
 
 // [Consolidated with primary /health guard at /api/v1/health]
 
-// 🛡️ [ULTRA-PRIORITY DIAGNOSTICS] (v2.6.372)
-app.use(async (req, res, next) => {
-  if (req.path.includes('slack')) {
-    await logAudit(req, 'DEBUG_NETWORK_SNIFFER', [], { 
-      url: req.originalUrl || req.path, 
-      method: req.method,
-      hasPayload: !!req.body?.payload,
-      headers: req.headers
-    });
-  }
-  next();
-});
-
 // 🛡️ SECURITY: Global Hardening (v2.6.192)
 app.disable('x-powered-by'); 
 app.use((req, res, next) => {
@@ -705,7 +692,7 @@ app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 🛡️ DIAGNOSTICS: Global Request Logger (v2.6.372)
+// 🛡️ DIAGNOSTICS: Global Request Logger (v2.6.375)
 app.use(async (req, res, next) => {
   if (req.path.includes('login') || req.path.includes('recovery') || req.path.includes('slack')) {
     await logAudit(req, 'DEBUG_NETWORK_SNIFFER', [], { 
