@@ -162,7 +162,6 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
         const sample = composedData.players.slice(0, 10).map(p => ({ id: p.id, isLive: p.isLive, status: p.status }));
         console.log(`📡 [SYNC_PAYLOAD_SAMPLE] Requester: ${normalizedReqId} | Samples:`, JSON.stringify(sample));
       }
-    }
 
       // 🛡️ [SYNC_DIAGNOSTIC] (v2.6.383)
       if (req.originalUrl.includes('data')) {
