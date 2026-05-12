@@ -11,6 +11,8 @@ io.on('connection', async (socket) => {
   const connUserId = socket.handshake?.query?.userId;
   const connRole = socket.handshake?.query?.role;
   const connDeviceName = socket.handshake?.query?.deviceName || 'Browser';
+  // 🛡️ [USER-AGENT CAPTURE] (v2.6.424): Differentiate multiple browser sessions
+  const connUserAgent = socket.handshake?.headers?.['user-agent'] || 'Unknown';
 
   console.log(`📡 [WS_HANDSHAKE] socket=${socket.id} | userId=${connUserId} | role=${connRole} | device=${connDeviceName}`);
 
@@ -39,23 +41,19 @@ io.on('connection', async (socket) => {
   if (connUserId && connUserId !== 'guest') {
     console.log(`[DEBUG] WS Connection from user: ${connUserId}, provided role: ${connRole || 'none'}, device: ${connDeviceName}`);
     
-    // 🛡️ [DEDUP] (v2.6.274): Evict stale sessions for the same userId to prevent duplicates
-    // This handles the case where setUserToken triggers a socket reconnect before the old one disconnects
-    for (const [existingSocketId, existingSess] of activeSupportSessions) {
-      if (existingSess.userId === connUserId && existingSocketId !== socket.id) {
-        console.log(`🕐 [SESSION] Evicting stale session for ${connUserId} (old socket: ${existingSocketId}, new: ${socket.id})`);
-        activeSupportSessions.delete(existingSocketId);
-      }
-    }
+    // 🛡️ [MULTI-SESSION SUPPORT] (v2.6.424): Removed dedup eviction.
+    // Multiple browser tabs/sessions from the same user are now tracked individually.
+    // Each socket.id is unique, so concurrent sessions are distinguished by their socket ID + user-agent.
 
     // Use the explicitly provided role from the client if available
     if (connRole === 'support') {
       activeSupportSessions.set(socket.id, {
         userId: connUserId,
         startTime: Date.now(),
-        deviceName: connDeviceName
+        deviceName: connDeviceName,
+        userAgent: connUserAgent
       });
-      console.log(`🕐 [SESSION] Support employee ${connUserId} session started via client role (socket: ${socket.id}, device: ${connDeviceName})`);
+      console.log(`🕐 [SESSION] Support employee ${connUserId} session started via client role (socket: ${socket.id}, device: ${connDeviceName}, UA: ${connUserAgent.substring(0, 60)}...)`);
     } else {
       // Fallback: check database if client didn't provide role
       try {
@@ -67,9 +65,10 @@ io.on('connection', async (socket) => {
           activeSupportSessions.set(socket.id, {
             userId: connUserId,
             startTime: Date.now(),
-            deviceName: connDeviceName
+            deviceName: connDeviceName,
+            userAgent: connUserAgent
           });
-          console.log(`🕐 [SESSION] Support employee ${connUserId} session started via DB lookup (socket: ${socket.id}, device: ${connDeviceName})`);
+          console.log(`🕐 [SESSION] Support employee ${connUserId} session started via DB lookup (socket: ${socket.id}, device: ${connDeviceName}, UA: ${connUserAgent.substring(0, 60)}...)`);
         }
       } catch (e) {
         console.warn('[SESSION] Failed to check user role on connect:', e.message);
@@ -188,7 +187,8 @@ io.on('connection', async (socket) => {
               startTime: new Date(session.startTime).toISOString(),
               endTime: new Date().toISOString(),
               durationMs,
-              device: session.deviceName || 'Browser'
+              device: session.deviceName || 'Browser',
+              userAgent: session.userAgent || 'Unknown'
             });
             // ⚠️ [TECH DEBT] (v2.6.319): Embedding sessionHistory in Player data inflates the document.
             // Next phase: Move this to a separate Collection or time-series DB.

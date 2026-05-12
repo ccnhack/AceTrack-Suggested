@@ -135,7 +135,10 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
     
     try {
       const token = await storage.getItem('userToken');
-      const headers = {};
+      const headers = { 
+        'x-ace-api-key': config.ACE_API_KEY,
+        'x-user-id': 'admin'
+      };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const res = await fetch(`${activeApiUrl}/api/diagnostics`, { 
@@ -190,7 +193,10 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
     try {
       // Add cache-buster and ensure strict User ID passing
       const token = await storage.getItem('userToken');
-      const headers = {};
+      const headers = { 
+        'x-ace-api-key': config.ACE_API_KEY,
+        'x-user-id': 'admin'
+      };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const res = await fetch(`${activeApiUrl}/api/diagnostics?userId=${p.id}&_t=${Date.now()}`, { 
@@ -244,13 +250,14 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
               // Inject REST-discovered sessions into onlineDevices state
               const restSessions = {};
               sessionData.sessions.forEach((s, idx) => {
-                const key = `rest_${p.id}_${idx}`;
+                const key = `rest_${p.id}_${s.socketId || idx}`;
                 restSessions[key] = {
                   online: true,
                   version: config.APP_VERSION,
                   timestamp: Date.now(),
                   deviceId: `browser_${s.socketId || idx}`,
-                  deviceName: s.deviceName || 'Browser',
+                  deviceName: s.browserName || s.deviceName || 'Browser',
+                  userAgent: s.userAgent || '',
                   targetUserId: p.id
                 };
               });
@@ -301,7 +308,10 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
       try {
         const safeId = selectedDiagUser.id.toLowerCase();
         const token = await storage.getItem('userToken');
-        const headers = {};
+        const headers = { 
+          'x-ace-api-key': config.ACE_API_KEY,
+          'x-user-id': 'admin'
+        };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
         const res = await fetch(`${activeApiUrl}/api/diagnostics?userId=${selectedDiagUser.id}&_t=${Date.now()}`, { 
@@ -726,8 +736,13 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
                   <View key={session.deviceId} style={[styles.deviceItem, styles.liveDeviceItem]}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.deviceName}>
-                        {isSupportUser ? ("🌐 " + (session.deviceName || 'Chrome')) : (session.deviceName || 'New Simulator/Device')}
+                        {isSupportUser ? ("🌐 " + (session.deviceName || 'Browser')) : (session.deviceName || 'New Simulator/Device')}
                       </Text>
+                      {session.userAgent ? (
+                        <Text style={{ fontSize: 9, color: '#94A3B8', marginTop: 2 }} numberOfLines={1}>
+                          {session.userAgent.length > 70 ? session.userAgent.substring(0, 70) + '...' : session.userAgent}
+                        </Text>
+                      ) : null}
                       <View style={styles.deviceMeta}>
                         <View style={[styles.statusDot, { backgroundColor: '#10B981' }]} />
                         <Text style={[styles.statusText, { color: '#10B981' }]}>LIVE NOW</Text>

@@ -583,11 +583,23 @@ router.get('/support/session-status/:userId', apiKeyGuard, (req, res) => {
   const sessions = [];
   for (const [socketId, sess] of activeSupportSessions) {
     if (String(sess.userId) === String(userId)) {
+      // 🛡️ [USER-AGENT PARSING] (v2.6.424): Extract browser name from raw UA string
+      const ua = sess.userAgent || 'Unknown';
+      let browserName = 'Browser';
+      if (ua.includes('Edg/')) browserName = 'Microsoft Edge';
+      else if (ua.includes('OPR/') || ua.includes('Opera')) browserName = 'Opera';
+      else if (ua.includes('Chrome/') && !ua.includes('Edg/')) browserName = 'Google Chrome';
+      else if (ua.includes('Firefox/')) browserName = 'Firefox';
+      else if (ua.includes('Safari/') && !ua.includes('Chrome/')) browserName = 'Safari';
+      else if (ua.includes('MSIE') || ua.includes('Trident/')) browserName = 'Internet Explorer';
+
       sessions.push({
         socketId,
         startTime: new Date(sess.startTime).toISOString(),
         durationMs: Date.now() - sess.startTime,
         deviceName: sess.deviceName || 'Browser',
+        browserName,
+        userAgent: ua,
         isLive: true
       });
     }
