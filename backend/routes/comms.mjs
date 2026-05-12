@@ -22,7 +22,7 @@ export default function createCommsRoutes({ io, logAudit, cloudinary, upload }) 
             // 🛡️ [EXPIRY_FILTER] (v2.6.395): Mark expired attachments
             const now = new Date();
             const processed = messages.reverse().map(m => {
-                const msg = m.toObject();
+                const msg = m.toObject({ flattenMaps: true }); // 🛡️ [MAP_SERIALIZATION_FIX] (v2.6.413)
                 if (msg.attachments && msg.attachments.length > 0) {
                     msg.attachments = msg.attachments.map(att => ({
                         ...att,
@@ -138,7 +138,7 @@ export default function createCommsRoutes({ io, logAudit, cloudinary, upload }) 
             }
 
             const msg = await OrgMessage.create(msgData);
-            let populatedMsg = msg.toObject();
+            let populatedMsg = msg.toObject({ flattenMaps: true }); // 🛡️ [MAP_SERIALIZATION_FIX] (v2.6.413)
             if (msg.replyTo) {
                 const original = await OrgMessage.findById(msg.replyTo).lean();
                 populatedMsg.replyTo = original;
