@@ -882,6 +882,71 @@ export async function sendReOnboardingEmail(toEmail, name, newPassword) {
   }
 }
 
+
+/**
+ * Builds the Suspension email.
+ */
+export function buildSuspensionHtml(name) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Account Access Suspended</title>
+</head>
+<body style="margin:0;padding:0;background-color:#FFF7ED;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#FFF7ED;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="550" cellspacing="0" cellpadding="0" style="max-width:550px;width:100%;">
+          <tr>
+            <td style="background-color:#FFFFFF;padding:40px;border-radius:24px;border:2px solid #F97316;">
+              <div style="background-color:#FFEDD5;width:60px;height:60px;border-radius:30px;margin:0 auto 20px;display:flex;align-items:center;justify-content:center;">
+                 <span style="font-size:30px;">🔒</span>
+              </div>
+              <h2 style="margin:0 0 16px;font-size:22px;font-weight:900;color:#9A3412;text-align:center;">Account Access Suspended</h2>
+              
+              <p style="font-size:16px;color:#475569;line-height:1.6;margin-bottom:24px;text-align:center;">
+                Hi <strong>${name}</strong>,<br><br>
+                Please be informed that your AceTrack access has been temporarily <strong>suspended</strong> by the System Administrator.
+              </p>
+
+              <div style="background-color:#F8FAFC;border:1px solid #E2E8F0;border-radius:16px;padding:24px;margin-bottom:24px;">
+                <p style="margin:0;font-size:14px;color:#475569;line-height:1.6;">
+                  During this period, you will not be able to log in to the management portal or process any player support tickets. All your active sessions have been invalidated for security.
+                </p>
+              </div>
+
+              <p style="font-size:14px;color:#64748B;line-height:1.6;text-align:center;">
+                Please contact your immediate supervisor or the IT department for further clarification regarding this suspension.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+export async function sendSuspensionEmail(toEmail, name) {
+  const mailOptions = {
+    from: `"AceTrack Security" <${process.env.GMAIL_USER || "acetrack.noreply@gmail.com"}>`,
+    to: toEmail,
+    subject: `🔒 SECURITY NOTICE: Your AceTrack account has been suspended`,
+    html: buildSuspensionHtml(name),
+    text: `Your AceTrack account access has been suspended by the administrator. All active sessions have been terminated. Please contact your supervisor for details.`
+  };
+  try {
+    await sendMailWithTimeout(mailOptions);
+    return { success: true };
+  } catch (err) {
+    console.error("Suspension email failed:", err.message);
+    return { success: false };
+  }
+}
+
 export default { 
   sendOnboardingEmail, 
   sendPasswordResetEmail, 
@@ -893,6 +958,7 @@ export default {
   sendDemotionEmail,
   sendTerminationEmail,
   sendReOnboardingEmail,
+  sendSuspensionEmail,
   sendSecurityAlertEmail
 };
 

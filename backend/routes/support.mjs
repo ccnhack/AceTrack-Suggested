@@ -14,7 +14,8 @@ import {
   sendPromotionEmail,
   sendDemotionEmail,
   sendTerminationEmail,
-  sendReOnboardingEmail
+  sendReOnboardingEmail,
+  sendSuspensionEmail
 } from '../emailService.mjs';
 
 // 🏗️ PHASE 1 (DATABASE) MIGRATION HELPER
@@ -948,10 +949,14 @@ router.get('/support/export', apiKeyGuard, authGuard, async (req, res) => {
   }
 });
 
-router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
+router.post('/support/manage-user', apiKeyGuard, authGuard, async (req, res) => {
   const { targetUserId, status, level } = req.body;
   console.log(`[API] POST /support/manage-user: target=${targetUserId}, status=${status}, level=${level}`);
-  if (req.headers['x-user-id'] !== 'admin') return res.status(403).json({ error: 'System Administrator privileges required' });
+  
+  // 🛡️ SECURITY HARDENING (v2.6.419): Enforce verified admin role from token
+  if (req.userRole !== 'admin') {
+    return res.status(403).json({ error: 'System Administrator privileges required' });
+  }
 
   try {
     // 🛡️ SCALABILITY FIX (v2.6.316): Read/write from distinct collections
@@ -968,6 +973,9 @@ router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
         // 🔒 SUSPEND: Freeze account without full termination
         user.suspendedAt = new Date().toISOString();
         console.log(`[SUSPEND] ${user.email} suspended by admin`);
+        
+        // 📧 Trigger Suspension Email (v2.6.419)
+        await sendSuspensionEmail(user.email, user.name);
       } else if (status === 'active') {
         // Re-onboarding or unsuspend: clear metadata
         delete user.terminatedAt;
@@ -990,7 +998,7 @@ router.post('/support/manage-user', apiKeyGuard, async (req, res) => {
 
       // 📧 Trigger Promotion/Demotion Email if level changed (v2.6.148)
       if (oldLevel !== level) {
-         const LEVEL_RANKS = { 'Intern': 1, 'Grade-3': 2, 'Grade-5': 3, 'Grade-7': 4, 'Team Lead': 5, 'Manager': 6 };
+         const LEVEL_RANKS = { 'Intern': 1, 'Junior': 2, 'Grade-3': 3, 'Grade-5': 4, 'Grade-7': 5, 'Senior': 6, 'Team Lead': 7, 'Manager': 8 };
          const oldRank = LEVEL_RANKS[oldLevel] || 0;
          const newRank = LEVEL_RANKS[level] || 0;
 
@@ -1389,9 +1397,11 @@ router.post('/support/claim-ticket', apiKeyGuard, async (req, res) => {
   }
 });
 
-router.post('/support/force-reset', apiKeyGuard, async (req, res) => {
+router.post('/support/force-reset', apiKeyGuard, authGuard, async (req, res) => {
   console.log(`[API] POST /support/force-reset requested for ${req.body.targetUserId}`);
-  if (req.headers['x-user-id'] !== 'admin') {
+  
+  // 🛡️ SECURITY HARDENING (v2.6.419): Enforce verified admin role
+  if (req.userRole !== 'admin') {
     return res.status(403).json({ error: 'System Administrator privileges required' });
   }
 
@@ -1432,8 +1442,8 @@ router.post('/support/force-reset', apiKeyGuard, async (req, res) => {
 
     // Send Notification Email
     console.log(`[FORCE-RESET] Sending reset email to ${user.email}...`);
-    sendAdminResetPasswordEmail(user.email, user.name, newPassword);
-    console.log(`[FORCE-RESET] Email dispatch triggered for ${user.email}`);
+    await sendAdminResetPasswordEmail(user.email, user.name, newPassword);
+    console.log(`[FORCE-RESET] Email dispatch triggered and confirmed for ${user.email}`);
     res.json({ 
       success: true, 
       message: `Password reset successfully for ${user.name}. Credentials sent to ${user.email}.`

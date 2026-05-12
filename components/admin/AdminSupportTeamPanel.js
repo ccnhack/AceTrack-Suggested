@@ -86,7 +86,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const [showRoleConfirmModal, setShowRoleConfirmModal] = useState(false);
   const [pendingRoleChange, setPendingRoleChange] = useState(null);
   const [roleChangeComment, setRoleChangeComment] = useState('');
-  const SUPPORT_HIERARCHY = ['Manager', 'Team Lead', 'Grade-7', 'Grade-5', 'Grade-3', 'Intern'];
+  const SUPPORT_HIERARCHY = ['Manager', 'Team Lead', 'Senior', 'Grade-7', 'Grade-5', 'Grade-3', 'Junior', 'Intern'];
 
   const sessionActivities = useMemo(() => {
     if (!selectedSessionForActivity || !auditLogs) return [];
@@ -129,7 +129,10 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
        }
 
        const token = await storage.getItem('userToken');
-       const headers = { 'x-user-id': 'admin' };
+       const headers = { 
+         'x-user-id': 'admin',
+         'x-ace-api-key': config.ACE_API_KEY
+       };
        if (token) headers['Authorization'] = `Bearer ${token}`;
 
        const res = await fetch(`${config.API_BASE_URL}/api/support/analytics${queryParams}`, {
@@ -156,7 +159,10 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
     setIsLoadingAttendance(true);
     try {
       const token = await storage.getItem('userToken');
-      const headers = { 'x-user-id': 'admin' };
+      const headers = { 
+        'x-user-id': 'admin',
+        'x-ace-api-key': config.ACE_API_KEY
+      };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const res = await fetch(`${config.API_BASE_URL}/api/support/attendance`, {
@@ -214,7 +220,11 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
     setIsManaging(userId);
     try {
       const token = await storage.getItem('userToken');
-      const headers = { 'Content-Type': 'application/json', 'x-user-id': 'admin' };
+      const headers = { 
+        'Content-Type': 'application/json', 
+        'x-user-id': 'admin',
+        'x-ace-api-key': config.ACE_API_KEY
+      };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const res = await fetch(`${config.API_BASE_URL}/api/support/manage-user`, {
@@ -249,7 +259,11 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
           setIsManaging(userId);
           try {
             const token = await storage.getItem('userToken');
-            const headers = { 'Content-Type': 'application/json', 'x-user-id': 'admin' };
+            const headers = { 
+              'Content-Type': 'application/json', 
+              'x-user-id': 'admin',
+              'x-ace-api-key': config.ACE_API_KEY
+            };
             if (token) headers['Authorization'] = `Bearer ${token}`;
 
             const res = await fetch(`${config.API_BASE_URL}/api/support/force-reset`, {
@@ -287,7 +301,11 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
         setIsManaging(fromId);
         try {
           const token = await storage.getItem('userToken');
-          const headers = { 'Content-Type': 'application/json', 'x-user-id': 'admin' };
+          const headers = { 
+            'Content-Type': 'application/json', 
+            'x-user-id': 'admin',
+            'x-ace-api-key': config.ACE_API_KEY
+          };
           if (token) headers['Authorization'] = `Bearer ${token}`;
 
           const res = await fetch(`${config.API_BASE_URL}/api/support/transfer-tickets`, {
@@ -321,7 +339,10 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const fetchServerRoster = useCallback(async () => {
     try {
       const token = await storage.getItem('userToken');
-      const headers = { 'x-user-id': 'admin' };
+      const headers = { 
+        'x-user-id': 'admin',
+        'x-ace-api-key': config.ACE_API_KEY
+      };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const res = await fetch(`${config.API_BASE_URL}/api/data`, {
@@ -350,19 +371,29 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   }, [serverAgents, players]);
 
   const activeAgents = useMemo(() => {
-    return allSupportAgents.filter(a => 
-      a.supportStatus !== 'terminated' && 
-      a.supportStatus !== 'inactive' && 
-      a.supportLevel !== 'EX-EMPLOYEE'
-    );
+    return allSupportAgents.filter(a => {
+      const status = (a.supportStatus || a.status || 'active').toLowerCase();
+      const level = (a.supportLevel || a.level || '').toUpperCase();
+      return (
+        status !== 'terminated' && 
+        status !== 'inactive' && 
+        status !== 'left' &&
+        level !== 'EX-EMPLOYEE'
+      );
+    });
   }, [allSupportAgents]);
 
   const exEmployees = useMemo(() => {
-    return allSupportAgents.filter(a => 
-      a.supportStatus === 'terminated' || 
-      a.supportStatus === 'inactive' || 
-      a.supportLevel === 'EX-EMPLOYEE'
-    );
+    return allSupportAgents.filter(a => {
+      const status = (a.supportStatus || a.status || '').toLowerCase();
+      const level = (a.supportLevel || a.level || '').toUpperCase();
+      return (
+        status === 'terminated' || 
+        status === 'inactive' || 
+        status === 'left' ||
+        level === 'EX-EMPLOYEE'
+      );
+    });
   }, [allSupportAgents]);
 
   const displayedAgents = activeTab === 'employees' ? activeAgents : exEmployees;
@@ -1487,7 +1518,11 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                           const currentLevel = selectedAgent.supportLevel || 'Intern';
                           const currentIdx = SUPPORT_HIERARCHY.indexOf(currentLevel);
                           const newIdx = SUPPORT_HIERARCHY.indexOf(level);
-                          const changeType = newIdx < currentIdx ? 'Promotion' : 'Demotion';
+                          
+                          // 🛡️ [LOGIC FIX] (v2.6.419): In our hierarchy array, Manager is at 0 (highest).
+                          // So if newIdx < currentIdx, it's a Promotion.
+                          // If currentIdx is -1 (unknown), we assume Promotion for any recognized level.
+                          const changeType = (currentIdx === -1 || newIdx < currentIdx) ? 'Promotion' : 'Demotion';
                           setPendingRoleChange({ agentId: selectedAgent.id, agentName: selectedAgent.name, currentLevel, newLevel: level, changeType });
                           setRoleChangeComment('');
                           setShowActionsModal(false);
