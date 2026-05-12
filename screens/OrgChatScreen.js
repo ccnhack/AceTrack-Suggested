@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, Text, TouchableOpacity, TextInput, ScrollView, 
-  StyleSheet, Platform, useWindowDimensions, SafeAreaView, ActivityIndicator
+  StyleSheet, Platform, useWindowDimensions, SafeAreaView, ActivityIndicator,
+  Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -24,6 +25,9 @@ const OrgChatScreen = ({ navigation }) => {
   const fileInputRef = useRef(null);
   const chatScrollRef = useRef(null);
   const chatInputRef = useRef(null);
+  const messageRefs = useRef(new Map()); // 🔗 [SCROLL-TO-REPLY] (v2.6.424)
+  const [highlightedMessageId, setHighlightedMessageId] = useState(null);
+  const blinkAnim = useRef(new Animated.Value(0)).current;
   const { width: windowWidth } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
   const isMobileWeb = isWeb && windowWidth < 768;
@@ -200,6 +204,61 @@ const OrgChatScreen = ({ navigation }) => {
     return 'Offline';
   };
 
+  // 🔗 [SCROLL-TO-REPLY] (v2.6.424): Scroll to the original message and blink-highlight it
+  const scrollToMessage = (targetMsgId) => {
+    if (!targetMsgId || !chatScrollRef.current) return;
+    
+    const targetRef = messageRefs.current.get(targetMsgId);
+    if (!targetRef) return;
+
+    // Trigger the blink highlight animation (~2 seconds, 3 pulses)
+    const triggerBlink = () => {
+      setHighlightedMessageId(targetMsgId);
+      blinkAnim.setValue(0);
+      Animated.sequence([
+        Animated.timing(blinkAnim, { toValue: 1, duration: 300, useNativeDriver: false }),
+        Animated.timing(blinkAnim, { toValue: 0.2, duration: 300, useNativeDriver: false }),
+        Animated.timing(blinkAnim, { toValue: 1, duration: 300, useNativeDriver: false }),
+        Animated.timing(blinkAnim, { toValue: 0.2, duration: 300, useNativeDriver: false }),
+        Animated.timing(blinkAnim, { toValue: 1, duration: 300, useNativeDriver: false }),
+        Animated.timing(blinkAnim, { toValue: 0, duration: 400, useNativeDriver: false }),
+      ]).start(() => setHighlightedMessageId(null));
+    };
+    
+    if (Platform.OS === 'web') {
+      // 🌐 [WEB_SCROLL] (v2.6.424): Use native DOM scrollIntoView for reliable web scrolling
+      try {
+        // React Native Web exposes the underlying DOM node
+        const domNode = targetRef._nativeTag || targetRef;
+        if (domNode && typeof domNode.scrollIntoView === 'function') {
+          domNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else if (domNode && domNode.parentNode) {
+          // Fallback: try finding the DOM element
+          domNode.parentNode.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+        }
+      } catch (e) {
+        // Silent fallback — just highlight without scroll
+        console.warn('[ScrollToReply] Web scroll failed:', e.message);
+      }
+      setTimeout(triggerBlink, 400); // Wait for scroll animation to settle
+    } else {
+      // 📱 [NATIVE_SCROLL]: Use measureLayout for mobile
+      try {
+        const scrollViewNode = chatScrollRef.current.getScrollableNode?.() || chatScrollRef.current.getInnerViewNode?.() || chatScrollRef.current;
+        targetRef.measureLayout(
+          scrollViewNode,
+          (x, y) => {
+            chatScrollRef.current.scrollTo({ y: Math.max(0, y - 80), animated: true });
+            setTimeout(triggerBlink, 400);
+          },
+          () => triggerBlink() // Fallback: just blink without scrolling
+        );
+      } catch (e) {
+        triggerBlink();
+      }
+    }
+  };
+
   // ─── Contact List Panel ───────────────────────
   const renderContactList = () => (
     <View style={[styles.contactPanel, isMobileWeb && selectedContact && { display: 'none' }]}>
@@ -357,7 +416,14 @@ const OrgChatScreen = ({ navigation }) => {
               const showDate = idx === 0 || new Date(msg.timestamp).toDateString() !== new Date(conversation[idx - 1].timestamp).toDateString();
               
               return (
-                <View key={msg._id || msg.timestamp || idx}>
+                <View 
+                  key={msg._id || msg.timestamp || idx}
+                  ref={(ref) => {
+                    if (ref && (msg._id || msg.id)) {
+                      messageRefs.current.set(msg._id || msg.id, ref);
+                    }
+                  }}
+                >
                   {showDate && (
                     <View style={styles.dateDivider}>
                       <View style={styles.dateLine} />
@@ -381,7 +447,15 @@ const OrgChatScreen = ({ navigation }) => {
                     >
                       {/* 🛡️ [REPLY_TO_UI] (v2.6.407): Show populated quoted message */}
                       {msg.replyTo && (
-                        <View style={[styles.replyQuote, isMe ? styles.replyQuoteMe : styles.replyQuoteOther]}>
+                        <TouchableOpacity 
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            // 🔗 [SCROLL-TO-REPLY] (v2.6.424): Navigate to the original message
+                            const targetId = typeof msg.replyTo === 'object' ? (msg.replyTo._id || msg.replyTo.id) : null;
+                            if (targetId) scrollToMessage(targetId);
+                          }}
+                          style={[styles.replyQuote, isMe ? styles.replyQuoteMe : styles.replyQuoteOther]}
+                        >
                           {typeof msg.replyTo === 'object' && (
                             <Text style={{ fontSize: 10, fontWeight: '700', color: isMe ? 'rgba(255,255,255,0.9)' : '#6366F1', marginBottom: 2 }}>
                               {msg.replyTo.senderName}
@@ -393,7 +467,18 @@ const OrgChatScreen = ({ navigation }) => {
                               : 'Original message deleted'
                             }
                           </Text>
-                        </View>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* 🔗 [HIGHLIGHT_OVERLAY] (v2.6.424): Blue blink when scrolled-to */}
+                      {highlightedMessageId === (msg._id || msg.id) && (
+                        <Animated.View
+                          pointerEvents="none"
+                          style={[
+                            styles.highlightOverlay,
+                            { opacity: blinkAnim }
+                          ]}
+                        />
                       )}
 
                       {msg.content && msg.content !== '(empty)' && (
@@ -898,6 +983,19 @@ const styles = StyleSheet.create({
   replyPreviewName: { fontSize: 12, fontWeight: '700', color: '#6366F1' },
   replyPreviewText: { fontSize: 12, color: '#64748B', marginTop: 2 },
   replyPreviewClose: { padding: 4 },
+
+  // 🔗 [SCROLL-TO-REPLY] (v2.6.424): Highlight overlay for blink effect
+  highlightOverlay: {
+    position: 'absolute',
+    top: -4,
+    left: -4,
+    right: -4,
+    bottom: -4,
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(99, 102, 241, 0.5)',
+  },
 });
 
 export default OrgChatScreen;
