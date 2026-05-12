@@ -303,7 +303,8 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
     });
 
     if (otherAgents.length === 0) {
-      Alert.alert('No Targets Available', 'There are no other active, non-suspended agents to receive these tickets.');
+      const msg = 'There are no other active, non-suspended agents to receive these tickets.';
+      Platform.OS === 'web' ? window.alert(`No Targets Available: ${msg}`) : Alert.alert('No Targets Available', msg);
       return;
     }
 
@@ -319,7 +320,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       if (!choice) return; // Cancelled
       const idx = parseInt(choice, 10) - 1;
       if (isNaN(idx) || idx < 0 || idx >= otherAgents.length) {
-        Alert.alert('Invalid Selection', 'Please enter a valid agent number.');
+        window.alert('Invalid Selection: Please enter a valid agent number.');
         return;
       }
       targetAgent = otherAgents[idx];
@@ -360,13 +361,15 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       const data = await res.json();
       if (res.ok) {
         setShowActionsModal(false);
-        Alert.alert('✅ Success', data.message || `${data.transferred} ticket(s) transferred to ${targetAgent.name} successfully.`);
+        const msg = data.message || `${data.transferred} ticket(s) transferred to ${targetAgent.name} successfully.`;
+        Platform.OS === 'web' ? window.alert(`✅ Success: ${msg}`) : Alert.alert('✅ Success', msg);
         fetchTeamAnalytics();
       } else {
-        Alert.alert('❌ Transfer Failed', data.error || 'Failed to transfer tickets');
+        const msg = data.error || 'Failed to transfer tickets';
+        Platform.OS === 'web' ? window.alert(`❌ Transfer Failed: ${msg}`) : Alert.alert('❌ Transfer Failed', msg);
       }
     } catch (e) {
-      Alert.alert('❌ Network Error', e.message);
+      Platform.OS === 'web' ? window.alert(`❌ Network Error: ${e.message}`) : Alert.alert('❌ Network Error', e.message);
     } finally {
       setIsManaging(null);
     }
