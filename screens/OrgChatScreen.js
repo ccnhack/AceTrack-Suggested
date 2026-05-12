@@ -472,24 +472,24 @@ const OrgChatScreen = ({ navigation }) => {
                         {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </Text>
 
-                      {/* 🛠️ [MESSAGE_TOOLBAR] (v2.6.405) */}
-                      {(hoveredMessageId === msg._id || activeMenuId === msg._id) && (
+                      {/* 🛠️ [MESSAGE_TOOLBAR] (v2.6.411) */}
+                      {(hoveredMessageId === (msg._id || msg.id) || activeMenuId === (msg._id || msg.id)) && (
                         <View style={[styles.msgToolbar, isMe ? styles.msgToolbarMe : styles.msgToolbarOther]}>
                           <View style={styles.emojiStrip}>
                             {['👍', '❤️', '😂', '😮'].map(e => (
-                              <TouchableOpacity key={e} onPress={() => toggleReaction(msg._id, e)} style={styles.emojiBtn}>
+                              <TouchableOpacity key={e} onPress={() => toggleReaction(msg._id || msg.id, e)} style={styles.emojiBtn}>
                                 <Text style={styles.emojiBtnText}>{e}</Text>
                               </TouchableOpacity>
                             ))}
                           </View>
                           <TouchableOpacity 
                             style={styles.moreBtn} 
-                            onPress={() => setActiveMenuId(activeMenuId === msg._id ? null : msg._id)}
+                            onPress={() => setActiveMenuId(activeMenuId === (msg._id || msg.id) ? null : (msg._id || msg.id))}
                           >
                             <Ionicons name="ellipsis-horizontal" size={16} color="#64748B" />
                           </TouchableOpacity>
                           
-                          {activeMenuId === msg._id && (
+                          {activeMenuId === (msg._id || msg.id) && (
                             <View style={[styles.actionsDropdown, isMe ? styles.actionsDropdownMe : styles.actionsDropdownOther]}>
                               <TouchableOpacity style={styles.actionItem} onPress={() => { setReplyTo(msg); setActiveMenuId(null); }}>
                                 <Ionicons name="return-up-back" size={16} color="#475569" />
@@ -499,7 +499,7 @@ const OrgChatScreen = ({ navigation }) => {
                                 <Ionicons name="arrow-redo" size={16} color="#475569" />
                                 <Text style={styles.actionItemText}>Forward</Text>
                               </TouchableOpacity>
-                              <TouchableOpacity style={[styles.actionItem, { borderBottomWidth: 0 }]} onPress={() => { deleteMessage(msg._id); setActiveMenuId(null); }}>
+                              <TouchableOpacity style={[styles.actionItem, { borderBottomWidth: 0 }]} onPress={() => { deleteMessage(msg._id || msg.id); setActiveMenuId(null); }}>
                                 <Ionicons name="trash" size={16} color="#EF4444" />
                                 <Text style={[styles.actionItemText, { color: '#EF4444' }]}>Delete</Text>
                               </TouchableOpacity>

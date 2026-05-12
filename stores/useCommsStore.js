@@ -36,11 +36,13 @@ export const useCommsStore = create((set, get) => ({
             let token = '';
             try { token = window.localStorage?.getItem('acetrack_auth_token') || ''; } catch (e) {}
 
-            const replyTo = get().replyTo?._id || null;
+            const replyToMsg = get().replyTo;
+            const replyTo = replyToMsg?._id || replyToMsg?.id || null;
 
             const url = Platform.OS === 'web' ? '/api/comms/chat' : `${config.API_BASE_URL}/api/v1/comms/chat`;
             const response = await fetch(url, {
                 method: 'POST',
+                credentials: 'include',
                 headers: { 
                     'Content-Type': 'application/json',
                     'Authorization': token ? `Bearer ${token}` : '',
@@ -103,6 +105,7 @@ export const useCommsStore = create((set, get) => ({
             const url = Platform.OS === 'web' ? '/api/comms/chat/react' : `${config.API_BASE_URL}/api/v1/comms/chat/react`;
             const response = await fetch(url, {
                 method: 'POST',
+                credentials: 'include',
                 headers: { 
                     'Content-Type': 'application/json',
                     'Authorization': token ? `Bearer ${token}` : '',
