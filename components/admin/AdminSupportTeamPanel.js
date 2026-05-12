@@ -238,13 +238,15 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
         fetchServerRoster();
         setSelectedAgentId(null);
         setShowActionsModal(false);
-        Alert.alert("✅ Success", `Employee ${status === 'active' ? 'reactivated' : (status || 'updated')} successfully. Email notification sent.`);
+        const msg = `Employee ${status === 'active' ? 'reactivated' : (status || 'updated')} successfully. Email notification sent.`;
+        Platform.OS === 'web' ? window.alert(`✅ Success: ${msg}`) : Alert.alert("✅ Success", msg);
       } else {
         const data = await res.json();
-        Alert.alert("❌ Error", data.error || "Failed to update user");
+        const msg = data.error || "Failed to update user";
+        Platform.OS === 'web' ? window.alert(`❌ Error: ${msg}`) : Alert.alert("❌ Error", msg);
       }
     } catch (e) {
-      Alert.alert("Network Error", e.message);
+      Platform.OS === 'web' ? window.alert(`Network Error: ${e.message}`) : Alert.alert("Network Error", e.message);
     } finally {
       setIsManaging(null);
     }
@@ -281,13 +283,15 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       });
       if (res.ok) {
         setShowActionsModal(false);
-        Alert.alert("✅ Success", "Password reset successfully. New credentials have been emailed to the employee.");
+        const msg = "Password reset successfully. New credentials have been emailed to the employee.";
+        Platform.OS === 'web' ? window.alert(`✅ Success: ${msg}`) : Alert.alert("✅ Success", msg);
       } else {
         const data = await res.json();
-        Alert.alert("❌ Error", data.error || "Failed to reset password");
+        const msg = data.error || "Failed to reset password";
+        Platform.OS === 'web' ? window.alert(`❌ Error: ${msg}`) : Alert.alert("❌ Error", msg);
       }
     } catch (e) {
-      Alert.alert("❌ Error", e.message);
+      Platform.OS === 'web' ? window.alert(`❌ Error: ${e.message}`) : Alert.alert("❌ Error", e.message);
     } finally {
       setIsManaging(null);
     }

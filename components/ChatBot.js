@@ -444,6 +444,12 @@ Keep answers concise, premium, and friendly. Use ### for headers and **bold** fo
                   placeholder="Ask about tournaments, report issues..."
                   placeholderTextColor="#94A3B8"
                   multiline
+                  onKeyPress={(e) => {
+                    if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
                 />
                 <TouchableOpacity 
                   onPress={handleSend}
