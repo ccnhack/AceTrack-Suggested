@@ -130,9 +130,9 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
 
        const token = await storage.getItem('userToken');
        const headers = { 
-         'x-user-id': 'admin',
-         'x-ace-api-key': config.ACE_API_KEY
-       };
+        'x-user-id': 'admin',
+        'x-ace-api-key': config.ACE_API_KEY || config.PUBLIC_APP_ID
+      };
        if (token) headers['Authorization'] = `Bearer ${token}`;
 
        const res = await fetch(`${config.API_BASE_URL}/api/support/analytics${queryParams}`, {
@@ -161,7 +161,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       const token = await storage.getItem('userToken');
       const headers = { 
         'x-user-id': 'admin',
-        'x-ace-api-key': config.ACE_API_KEY
+        'x-ace-api-key': config.ACE_API_KEY || config.PUBLIC_APP_ID
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -223,7 +223,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       const headers = { 
         'Content-Type': 'application/json', 
         'x-user-id': 'admin',
-        'x-ace-api-key': config.ACE_API_KEY
+        'x-ace-api-key': config.ACE_API_KEY || config.PUBLIC_APP_ID
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -237,10 +237,11 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
         fetchTeamAnalytics();
         fetchServerRoster();
         setSelectedAgentId(null);
-        Alert.alert("Success", "Employee profile updated successfully.");
+        setShowActionsModal(false);
+        Alert.alert("✅ Success", `Employee ${status === 'active' ? 'reactivated' : (status || 'updated')} successfully. Email notification sent.`);
       } else {
         const data = await res.json();
-        Alert.alert("Error", data.error || "Failed to update user");
+        Alert.alert("❌ Error", data.error || "Failed to update user");
       }
     } catch (e) {
       Alert.alert("Network Error", e.message);
@@ -250,42 +251,46 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   };
 
   const handleForceReset = async (userId) => {
-    Alert.alert(
-      "Force Password Reset",
-      "This will generate a random secure password and email it to the employee. All current sessions will be terminated. Proceed?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Reset Password", style: "destructive", onPress: async () => {
-          setIsManaging(userId);
-          try {
-            const token = await storage.getItem('userToken');
-            const headers = { 
-              'Content-Type': 'application/json', 
-              'x-user-id': 'admin',
-              'x-ace-api-key': config.ACE_API_KEY
-            };
-            if (token) headers['Authorization'] = `Bearer ${token}`;
+    // 🌐 [WEB_COMPAT] (v2.6.424): Use window.confirm on web since Alert.alert
+    // with button arrays doesn't reliably fire async callbacks in web browsers.
+    const confirmMsg = "This will generate a random secure password and email it to the employee. All current sessions will be terminated. Proceed?";
+    const confirmed = Platform.OS === 'web' ? window.confirm(confirmMsg) : await new Promise(resolve => {
+      Alert.alert("Force Password Reset", confirmMsg, [
+        { text: "Cancel", onPress: () => resolve(false), style: "cancel" },
+        { text: "Reset Password", style: "destructive", onPress: () => resolve(true) }
+      ]);
+    });
+    
+    if (!confirmed) return;
+    
+    setIsManaging(userId);
+    try {
+      const token = await storage.getItem('userToken');
+      const headers = { 
+        'Content-Type': 'application/json', 
+        'x-user-id': 'admin',
+        'x-ace-api-key': config.ACE_API_KEY || config.PUBLIC_APP_ID
+      };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
 
-            const res = await fetch(`${config.API_BASE_URL}/api/support/force-reset`, {
-              method: 'POST',
-              headers,
-              credentials: 'include',
-              body: JSON.stringify({ targetUserId: userId })
-            });
-            if (res.ok) {
-              Alert.alert("Success", "Password reset successfully. Credentials sent to employee.");
-            } else {
-              const data = await res.json();
-              Alert.alert("Error", data.error || "Failed to reset password");
-            }
-          } catch (e) {
-            Alert.alert("Error", e.message);
-          } finally {
-            setIsManaging(null);
-          }
-         }}
-      ]
-    );
+      const res = await fetch(`${config.API_BASE_URL}/api/support/force-reset`, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({ targetUserId: userId })
+      });
+      if (res.ok) {
+        setShowActionsModal(false);
+        Alert.alert("✅ Success", "Password reset successfully. New credentials have been emailed to the employee.");
+      } else {
+        const data = await res.json();
+        Alert.alert("❌ Error", data.error || "Failed to reset password");
+      }
+    } catch (e) {
+      Alert.alert("❌ Error", e.message);
+    } finally {
+      setIsManaging(null);
+    }
   };
 
   // 🔄 Transfer Tickets Handler
@@ -301,41 +306,70 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       Alert.alert('No Targets Available', 'There are no other active, non-suspended agents to receive these tickets.');
       return;
     }
-    const buttons = otherAgents.map(a => ({
-      text: a.name || `${a.firstName} ${a.lastName}`,
-      onPress: async () => {
-        setIsManaging(fromId);
-        try {
-          const token = await storage.getItem('userToken');
-          const headers = { 
-            'Content-Type': 'application/json', 
-            'x-user-id': 'admin',
-            'x-ace-api-key': config.ACE_API_KEY
-          };
-          if (token) headers['Authorization'] = `Bearer ${token}`;
 
-          const res = await fetch(`${config.API_BASE_URL}/api/support/transfer-tickets`, {
-            method: 'POST',
-            headers,
-            credentials: 'include',
-            body: JSON.stringify({ fromAgentId: fromId, toAgentId: a.id })
-          });
-          const data = await res.json();
-          if (res.ok) {
-            Alert.alert('Success', data.message || `${data.transferred} ticket(s) transferred successfully.`);
-            fetchTeamAnalytics();
-          } else {
-            Alert.alert('Transfer Failed', data.error || 'Failed to transfer tickets');
-          }
-        } catch (e) {
-          Alert.alert('Network Error', e.message);
-        } finally {
-          setIsManaging(null);
-        }
+    // 🌐 [WEB_COMPAT] (v2.6.424): Alert.alert with N buttons doesn't work on web.
+    // Use window.prompt to let admin pick an agent by number.
+    let targetAgent = null;
+    if (Platform.OS === 'web') {
+      const agentList = otherAgents.map((a, i) => `${i + 1}. ${a.name || a.email || a.id}`).join('\n');
+      const choice = window.prompt(
+        `Transfer all open tickets from ${selectedAgent?.name} to:\n\n${agentList}\n\nEnter the number of the target agent:`,
+        '1'
+      );
+      if (!choice) return; // Cancelled
+      const idx = parseInt(choice, 10) - 1;
+      if (isNaN(idx) || idx < 0 || idx >= otherAgents.length) {
+        Alert.alert('Invalid Selection', 'Please enter a valid agent number.');
+        return;
       }
-    }));
-    buttons.push({ text: 'Cancel', style: 'cancel' }); // Use push instead of unshift for cleaner look
-    Alert.alert('Transfer Tickets To', `Select the target agent to receive all open tickets from ${selectedAgent?.name}:`, buttons);
+      targetAgent = otherAgents[idx];
+    } else {
+      // Mobile: Use Alert.alert with button array (works on native)
+      return new Promise(resolve => {
+        const buttons = otherAgents.map(a => ({
+          text: a.name || `${a.firstName} ${a.lastName}`,
+          onPress: () => resolve(a)
+        }));
+        buttons.push({ text: 'Cancel', style: 'cancel', onPress: () => resolve(null) });
+        Alert.alert('Transfer Tickets To', `Select the target agent:`, buttons);
+      }).then(agent => {
+        if (agent) executeTransfer(fromId, agent);
+      });
+    }
+    
+    if (targetAgent) await executeTransfer(fromId, targetAgent);
+  };
+
+  const executeTransfer = async (fromId, targetAgent) => {
+    setIsManaging(fromId);
+    try {
+      const token = await storage.getItem('userToken');
+      const headers = { 
+        'Content-Type': 'application/json', 
+        'x-user-id': 'admin',
+        'x-ace-api-key': config.ACE_API_KEY || config.PUBLIC_APP_ID
+      };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${config.API_BASE_URL}/api/support/transfer-tickets`, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({ fromAgentId: fromId, toAgentId: targetAgent.id })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setShowActionsModal(false);
+        Alert.alert('✅ Success', data.message || `${data.transferred} ticket(s) transferred to ${targetAgent.name} successfully.`);
+        fetchTeamAnalytics();
+      } else {
+        Alert.alert('❌ Transfer Failed', data.error || 'Failed to transfer tickets');
+      }
+    } catch (e) {
+      Alert.alert('❌ Network Error', e.message);
+    } finally {
+      setIsManaging(null);
+    }
   };
 
   // 🛡️ SERVER-TRUTH ROSTER (v2.6.145): Fetch support agents directly from server
@@ -347,7 +381,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       const token = await storage.getItem('userToken');
       const headers = { 
         'x-user-id': 'admin',
-        'x-ace-api-key': config.ACE_API_KEY
+        'x-ace-api-key': config.ACE_API_KEY || config.PUBLIC_APP_ID
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -1558,7 +1592,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                   {/* 🛡️ [DYNAMIC ACCOUNT ACTIONS] (v2.6.424) */}
                   <TouchableOpacity 
                     style={styles.actionBtn}
-                    onPress={() => {
+                    onPress={async () => {
                       const status = (selectedAgent.supportStatus || '').toLowerCase();
                       const isTerminated = status === 'terminated' || status === 'inactive' || selectedAgent.supportLevel === 'EX-EMPLOYEE';
                       const isSuspended = status === 'suspended';
@@ -1569,21 +1603,19 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                         ? "This will restore the employee's access and generate a fresh onboarding password. Proceed?"
                         : (isSuspended ? "Allow this employee to log in and receive tickets again?" : "This will immediately block dashboard access and unassign all open tickets. Proceed?");
 
-                      Alert.alert(
-                        `${actionLabel} Employee`,
-                        confirmMsg,
-                        [
-                          { text: "Cancel", style: "cancel" },
-                          { 
-                            text: actionLabel, 
-                            style: isSuspended || isTerminated ? 'default' : 'destructive',
-                            onPress: () => {
-                              updateUserStatus(selectedAgent.id, nextStatus);
-                              setShowActionsModal(false);
-                            } 
-                          }
-                        ]
-                      );
+                      // 🌐 [WEB_COMPAT] (v2.6.424): Direct confirm on web
+                      const confirmed = Platform.OS === 'web' 
+                        ? window.confirm(confirmMsg)
+                        : await new Promise(resolve => {
+                            Alert.alert(`${actionLabel} Employee`, confirmMsg, [
+                              { text: "Cancel", onPress: () => resolve(false), style: "cancel" },
+                              { text: actionLabel, style: isSuspended || isTerminated ? 'default' : 'destructive', onPress: () => resolve(true) }
+                            ]);
+                          });
+
+                      if (confirmed) {
+                        await updateUserStatus(selectedAgent.id, nextStatus);
+                      }
                     }}
                   >
                     <Ionicons 
@@ -1602,10 +1634,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
 
                   <TouchableOpacity 
                     style={styles.actionBtn}
-                    onPress={() => {
-                      handleForceReset(selectedAgent.id);
-                      setShowActionsModal(false);
-                    }}
+                    onPress={() => handleForceReset(selectedAgent.id)}
                   >
                     <Ionicons name="key-outline" size={20} color="#F59E0B" />
                     <Text style={styles.actionBtnText}>Reset Password</Text>
@@ -1615,10 +1644,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                 <View style={styles.actionRow}>
                   <TouchableOpacity 
                     style={styles.actionBtn}
-                    onPress={() => {
-                      handleTransferTickets(selectedAgent.id);
-                      setShowActionsModal(false);
-                    }}
+                    onPress={() => handleTransferTickets(selectedAgent.id)}
                   >
                     <Ionicons name="swap-horizontal" size={20} color="#10B981" />
                     <Text style={styles.actionBtnText}>Transfer Tickets</Text>
@@ -1626,14 +1652,19 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
 
                   <TouchableOpacity 
                     style={[styles.actionBtn, { borderColor: '#FEE2E2' }]}
-                    onPress={() => {
-                      Alert.alert("Confirm Termination", "This will unassign all tickets instantly and revoke dashboard access. Proceed?", [
-                        { text: "Cancel" },
-                        { text: "Terminate", style: 'destructive', onPress: () => {
-                          updateUserStatus(selectedAgent.id, 'terminated');
-                          setShowActionsModal(false);
-                        }}
-                      ]);
+                    onPress={async () => {
+                      const confirmMsg = "This will unassign all tickets instantly and revoke dashboard access. Proceed?";
+                      const confirmed = Platform.OS === 'web'
+                        ? window.confirm(confirmMsg)
+                        : await new Promise(resolve => {
+                            Alert.alert("Confirm Termination", confirmMsg, [
+                              { text: "Cancel", onPress: () => resolve(false) },
+                              { text: "Terminate", style: 'destructive', onPress: () => resolve(true) }
+                            ]);
+                          });
+                      if (confirmed) {
+                        await updateUserStatus(selectedAgent.id, 'terminated');
+                      }
                     }}
                   >
                     <Ionicons name="trash-outline" size={20} color="#EF4444" />
