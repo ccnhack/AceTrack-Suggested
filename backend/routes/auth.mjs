@@ -48,6 +48,66 @@ export default function createAuthRoutes({
     res.json({ success: true, user: sanitizedUser });
   }));
 
+  // 🛡️ [SECURITY] Change Password for Authenticated Users (v2.6.425)
+  router.post('/auth/change-password', apiKeyGuard, asyncHandler(async (req, res) => {
+    const { oldPassword, newPassword } = req.body;
+    
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ success: false, error: 'No active session.' });
+    }
+
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ success: false, error: 'Current password and new password are required.' });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ success: false, error: 'New password must be at least 8 characters long.' });
+    }
+
+    // Read fresh user from DB
+    const playerDoc = await Player.findOne({ id: req.user.id }).lean();
+    const user = playerDoc?.data;
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found.' });
+    }
+
+    const currentHash = user.password;
+    if (!currentHash) {
+      return res.status(400).json({ success: false, error: 'Account not fully set up. Cannot change password.' });
+    }
+
+    // Verify current password
+    let isMatch = false;
+    try {
+      if (currentHash.startsWith('$2a$') || currentHash.startsWith('$2b$')) {
+        isMatch = bcrypt.compareSync(oldPassword, currentHash);
+      } else {
+        isMatch = currentHash === oldPassword;
+      }
+    } catch (e) {
+      console.error('[AUTH] Password comparison error in change-password:', e.message);
+    }
+
+    if (!isMatch) {
+      return res.status(401).json({ success: false, error: 'Current password is incorrect.' });
+    }
+
+    // Hash new password and save
+    const hashedNewPassword = bcrypt.hashSync(newPassword, 10);
+    await Player.updateOne(
+      { id: user.id },
+      { $set: { "data.password": hashedNewPassword, lastUpdated: new Date() } }
+    );
+
+    // Optional: Log the event
+    if (typeof logServerEvent === 'function') {
+      logServerEvent('PASSWORD_CHANGED', { userId: user.id, ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
+    }
+
+    res.json({ success: true, message: 'Password updated successfully.' });
+  }));
+
   // 🛡️ [EMERGENCY RECOVERY] (v2.6.312)
   router.post('/admin/restore-last-state', apiKeyGuard, asyncHandler(async (req, res) => {
     const { confirm } = req.body;

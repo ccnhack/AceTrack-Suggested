@@ -1206,7 +1206,7 @@ const ProfileScreen = ({ navigation }) => {
                   </View>
 
                   <TouchableOpacity 
-                     onPress={() => {
+                     onPress={async () => {
                        if (!oldPassword || !newPassword || !confirmPassword) {
                          Alert.alert("Error", "Please fill all fields");
                          return;
@@ -1215,24 +1215,41 @@ const ProfileScreen = ({ navigation }) => {
                          Alert.alert("Error", "New passwords do not match");
                          return;
                        }
-                       
-                       // VERIFY OLD PASSWORD
-                       if (user && oldPassword !== user.password) {
-                         Alert.alert("Error", "Current password is incorrect");
+                       if (newPassword.length < 8) {
+                         Alert.alert("Error", "New password must be at least 8 characters");
                          return;
                        }
                        
-                       // SYNC TO CLOUD
-                       if (handlers?.onResetPassword) {
-                         handlers.onResetPassword(user.id, newPassword);
+                       try {
+                         const token = await storage.getItem('userToken');
+                         const headers = { 
+                           'Content-Type': 'application/json',
+                           'x-ace-api-key': config.PUBLIC_APP_ID
+                         };
+                         if (token) headers['Authorization'] = `Bearer ${token}`;
+
+                         const response = await fetch(`${activeApiUrl}/api/v1/auth/change-password`, {
+                           method: 'POST',
+                           headers,
+                           credentials: 'include',
+                           body: JSON.stringify({ oldPassword, newPassword })
+                         });
+
+                         const data = await response.json();
+
+                         if (response.ok && data.success) {
+                           logger.logAction('PASSWORD_CHANGE_SUCCESS');
+                           Alert.alert("Success", "Password changed successfully!");
+                           setShowChangePassword(false);
+                           setOldPassword('');
+                           setNewPassword('');
+                           setConfirmPassword('');
+                         } else {
+                           Alert.alert("Error", data.error || "Failed to change password");
+                         }
+                       } catch (e) {
+                         Alert.alert("Network Error", e.message);
                        }
-                       
-                       logger.logAction('PASSWORD_CHANGE_SUCCESS');
-                       Alert.alert("Success", "Password changed successfully!");
-                       setShowChangePassword(false);
-                       setOldPassword('');
-                       setNewPassword('');
-                       setConfirmPassword('');
                      }}
                      style={styles.saveBtn}
                   >
