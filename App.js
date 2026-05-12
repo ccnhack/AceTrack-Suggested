@@ -83,7 +83,8 @@ const linking = {
           Support: 'support',
           Profile: 'profile'
         }
-      }
+      },
+      OrgChat: 'OrgChat'
     }
   }
 };
