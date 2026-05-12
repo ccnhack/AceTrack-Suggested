@@ -184,7 +184,22 @@ export const useSupportStore = create((set) => {
     }
     if (e.payload.entity === 'chatbotMessages') {
       const freshData = await syncOrchestrator.getSystemFlag('chatbotMessages');
-      if (freshData) set({ chatbotMessages: freshData });
+      if (freshData) {
+        // 🛡️ [CHATBOT_MERGE_GUARD] (v2.6.418): Merge instead of overwrite.
+        // Local chatbot messages are always authoritative (written locally first).
+        // Server data may be stale due to OCC conflicts, so we keep the version
+        // with MORE messages per user to prevent the vanishing message bug.
+        const currentMessages = get().chatbotMessages || {};
+        const merged = { ...freshData };
+        for (const userId in currentMessages) {
+          const localMsgs = currentMessages[userId] || [];
+          const serverMsgs = merged[userId] || [];
+          if (localMsgs.length > serverMsgs.length) {
+            merged[userId] = localMsgs; // Local has newer messages, keep them
+          }
+        }
+        set({ chatbotMessages: merged });
+      }
     }
   });
 
