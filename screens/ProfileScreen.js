@@ -1207,16 +1207,18 @@ const ProfileScreen = ({ navigation }) => {
 
                   <TouchableOpacity 
                      onPress={async () => {
+                       const safeAlert = (title, msg) => Platform.OS === 'web' ? window.alert(`${title}: ${msg}`) : Alert.alert(title, msg);
+
                        if (!oldPassword || !newPassword || !confirmPassword) {
-                         Alert.alert("Error", "Please fill all fields");
+                         safeAlert("Error", "Please fill all fields");
                          return;
                        }
                        if (newPassword !== confirmPassword) {
-                         Alert.alert("Error", "New passwords do not match");
+                         safeAlert("Error", "New passwords do not match");
                          return;
                        }
                        if (newPassword.length < 8) {
-                         Alert.alert("Error", "New password must be at least 8 characters");
+                         safeAlert("Error", "New password must be at least 8 characters");
                          return;
                        }
                        
@@ -1239,16 +1241,16 @@ const ProfileScreen = ({ navigation }) => {
 
                          if (response.ok && data.success) {
                            logger.logAction('PASSWORD_CHANGE_SUCCESS');
-                           Alert.alert("Success", "Password changed successfully!");
+                           safeAlert("Success", "Password changed successfully!");
                            setShowChangePassword(false);
                            setOldPassword('');
                            setNewPassword('');
                            setConfirmPassword('');
                          } else {
-                           Alert.alert("Error", data.error || "Failed to change password");
+                           safeAlert("Error", data.error || "Failed to change password");
                          }
                        } catch (e) {
-                         Alert.alert("Network Error", e.message);
+                         safeAlert("Network Error", e.message);
                        }
                      }}
                      style={styles.saveBtn}
