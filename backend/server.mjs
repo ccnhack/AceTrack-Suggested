@@ -775,7 +775,7 @@ io.use((socket, next) => {
   
   // 🛡️ [SYNC_RECOVERY] (v2.6.258)
   if (apiKey === ACE_API_KEY || apiKey === PUBLIC_APP_ID || socket.handshake.auth.apiKey === PUBLIC_APP_ID) {
-    // 🛡️ [HTTP_ONLY_AUTH] (v2.6.413): If connecting from Web with PUBLIC_APP_ID, try to read the JWT from cookies!
+    // 🛡️ [HTTP_ONLY_AUTH] (v2.6.415): If connecting from Web with PUBLIC_APP_ID, try to read the JWT from cookies!
     const cookieHeader = socket.handshake.headers.cookie;
     if (cookieHeader) {
       const cookies = Object.fromEntries(cookieHeader.split('; ').map(c => c.split('=')));

@@ -58,12 +58,18 @@ const OrgChatScreen = ({ navigation }) => {
     };
   }, []);
 
-  // Auto-scroll on new messages
+  // 🛡️ [SCROLL_GLITCH_FIX] (v2.6.415): Only auto-scroll when a brand new message arrives, not when reacting.
+  const conversationLength = (messages || []).filter(m =>
+    selectedContact && currentUser &&
+    ((String(m.senderId) === String(currentUser.id) && String(m.receiverId) === String(selectedContact.id)) ||
+    (String(m.senderId) === String(selectedContact.id) && String(m.receiverId) === String(currentUser.id)))
+  ).length;
+
   useEffect(() => {
     if (selectedContact) {
-      setTimeout(() => chatScrollRef.current?.scrollToEnd?.({ animated: true }), 100);
+      setTimeout(() => chatScrollRef.current?.scrollToEnd?.({ animated: Platform.OS !== 'web' }), 100);
     }
-  }, [messages, selectedContact]);
+  }, [conversationLength, selectedContact]);
 
   const contacts = (teamDirectory || []).filter(c => {
     const role = (c.role || '').toLowerCase();
@@ -455,8 +461,8 @@ const OrgChatScreen = ({ navigation }) => {
                               onPress={() => toggleReaction(msg._id, emoji)}
                               onLongPress={() => {
                                 const reactorNames = users.map(uid => {
-                                    if (uid === user.id) return 'You';
-                                    return contacts.find(c => c.id === uid)?.name || 'Unknown User';
+                                    if (uid === currentUser?.id) return 'You';
+                                    return contacts.find(c => String(c.id) === String(uid))?.name || 'Unknown User';
                                 }).join(', ');
                                 alert(`${emoji} reacted by:\n${reactorNames}`);
                               }}
