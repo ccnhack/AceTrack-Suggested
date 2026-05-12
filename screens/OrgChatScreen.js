@@ -23,6 +23,7 @@ const OrgChatScreen = ({ navigation }) => {
   const [activeMenuId, setActiveMenuId] = useState(null); // ⋯ [DROPDOWN_STATE]
   const fileInputRef = useRef(null);
   const chatScrollRef = useRef(null);
+  const chatInputRef = useRef(null);
   const { width: windowWidth } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
   const isMobileWeb = isWeb && windowWidth < 768;
@@ -137,14 +138,14 @@ const OrgChatScreen = ({ navigation }) => {
     
     const text = msgText.trim();
     const attachments = [...pendingAttachments];
-    const rTo = replyTo?._id || null;
     
     setMsgText('');
     setPendingAttachments([]);
-    setReplyTo(null); // Clear reply state
     
+    // Send message using the current replyTo state BEFORE clearing it!
     const success = await sendMessage(text, selectedContact.id, attachments);
     if (success) {
+      setReplyTo(null); // Clear reply state ONLY after successful transmission
       await fetchMessages();
     }
   };
@@ -497,7 +498,12 @@ const OrgChatScreen = ({ navigation }) => {
                           
                           {activeMenuId === (msg._id || msg.id) && (
                             <View style={[styles.actionsDropdown, isMe ? styles.actionsDropdownMe : styles.actionsDropdownOther]}>
-                              <TouchableOpacity style={styles.actionItem} onPress={() => { setReplyTo(msg); setActiveMenuId(null); }}>
+                              <TouchableOpacity style={styles.actionItem} onPress={() => { 
+                      setReplyTo(msg); 
+                      setActiveMenuId(null); 
+                      // 🛡️ Auto-focus the input field when replying
+                      setTimeout(() => chatInputRef.current?.focus(), 50);
+                    }}>
                                 <Ionicons name="return-up-back" size={16} color="#475569" />
                                 <Text style={styles.actionItemText}>Reply with quote</Text>
                               </TouchableOpacity>
@@ -582,6 +588,7 @@ const OrgChatScreen = ({ navigation }) => {
           </TouchableOpacity>
           
           <TextInput
+            ref={chatInputRef}
             style={styles.chatInput}
             placeholder={`Message ${selectedContact.name}...`}
             placeholderTextColor="#94A3B8"
