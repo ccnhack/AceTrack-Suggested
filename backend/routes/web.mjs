@@ -786,7 +786,18 @@ if (fs.existsSync(publicPath)) {
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
     res.setHeader('Surrogate-Control', 'no-store');
-    res.sendFile(path.join(publicPath, 'index.html'));
+    
+    // 🛡️ [SECURITY INJECTION] (v2.6.423): Inject per-request CSP nonce into static bundle
+    const indexPath = path.join(publicPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      let html = fs.readFileSync(indexPath, 'utf8');
+      const nonce = res.locals.nonce;
+      // Inject nonce into the script tag
+      html = html.replace('<script ', `<script nonce="${nonce}" `);
+      res.send(html);
+    } else {
+      res.status(404).send('Web bundle not found. Please run web-build.');
+    }
   });
 
   // 🛡️ [HIGH COMPATIBILITY ASSETS]: Explicitly handle Font MIME types and CORS (v2.6.257)
