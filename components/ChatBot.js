@@ -147,12 +147,16 @@ const ChatBot = ({
   // 🖐️ DRAGGABLE LOGIC (v2.6.25)
   const pan = useRef(new Animated.ValueXY()).current;
 
+  const isDraggingRef = useRef(false);
+
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gestureState) => {
         // Only take control if there's actual movement (avoids stealing taps)
-        return Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5;
+        const isDragging = Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5;
+        if (isDragging) isDraggingRef.current = true;
+        return isDragging;
       },
       onPanResponderGrant: () => {
         pan.setOffset({
@@ -167,6 +171,8 @@ const ChatBot = ({
       ),
       onPanResponderRelease: () => {
         pan.flattenOffset();
+        // Delay resetting the drag flag to prevent the tap from firing
+        setTimeout(() => { isDraggingRef.current = false; }, 100);
       }
     })
   ).current;
@@ -337,7 +343,10 @@ Keep answers concise, premium, and friendly. Use ### for headers and **bold** fo
         >
           <TouchableOpacity 
             activeOpacity={0.8}
-            onPress={() => setIsOpen(true)}
+            onPress={() => {
+              if (isDraggingRef.current) return;
+              setIsOpen(true);
+            }}
             style={styles.fabInner}
           >
             <Ionicons name="chatbubble-ellipses" size={24} color="#FFFFFF" />
