@@ -84,7 +84,7 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       // PII is only returned for the 'requesterDoc' or specifically requested tickets.
       isAdmin ? Player.find({ id: { $ne: normalizedReqId } }).lean() : Player.find(
         { id: { $ne: normalizedReqId } }, 
-        { "data.id": 1, "data.name": 1, "data.username": 1, "data.avatar": 1, "data.role": 1, "data.skillLevel": 1, "data.rating": 1, "data.trueSkillRating": 1, "data.supportStatus": 1 }
+        { "data.id": 1, "data.name": 1, "data.username": 1, "data.avatar": 1, "data.role": 1, "data.skillLevel": 1, "data.rating": 1, "data.trueSkillRating": 1, "data.supportStatus": 1, "data.supportLevel": 1, "data.terminatedAt": 1, "data.reOnboardedAt": 1 }
       ).lean(),
       isAdmin ? Tournament.find().lean() : Tournament.find().sort({ lastUpdated: -1 }).limit(100).lean(),
       Match.find(matchQuery).lean(),

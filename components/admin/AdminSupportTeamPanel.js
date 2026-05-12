@@ -290,9 +290,15 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
 
   // 🔄 Transfer Tickets Handler
   const handleTransferTickets = async (fromId) => {
-    const otherAgents = activeAgents.filter(a => a.id !== fromId);
+    // 🛡️ [FILTER FIX] (v2.6.424): Target must be ACTIVE and NOT SUSPENDED/TERMINATED
+    const otherAgents = allSupportAgents.filter(a => {
+      if (a.id === fromId) return false;
+      const status = (a.supportStatus || a.status || 'active').toLowerCase();
+      return status === 'active';
+    });
+
     if (otherAgents.length === 0) {
-      Alert.alert('No Agents Available', 'There are no other active agents to transfer tickets to.');
+      Alert.alert('No Targets Available', 'There are no other active, non-suspended agents to receive these tickets.');
       return;
     }
     const buttons = otherAgents.map(a => ({
@@ -316,10 +322,10 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
           });
           const data = await res.json();
           if (res.ok) {
-            Alert.alert('Tickets Transferred', data.message || `${data.transferred} ticket(s) transferred.`);
+            Alert.alert('Success', data.message || `${data.transferred} ticket(s) transferred successfully.`);
             fetchTeamAnalytics();
           } else {
-            Alert.alert('Error', data.error || 'Failed to transfer tickets');
+            Alert.alert('Transfer Failed', data.error || 'Failed to transfer tickets');
           }
         } catch (e) {
           Alert.alert('Network Error', e.message);
@@ -328,7 +334,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
         }
       }
     }));
-    buttons.unshift({ text: 'Cancel', style: 'cancel' });
+    buttons.push({ text: 'Cancel', style: 'cancel' }); // Use push instead of unshift for cleaner look
     Alert.alert('Transfer Tickets To', `Select the target agent to receive all open tickets from ${selectedAgent?.name}:`, buttons);
   };
 
@@ -1549,16 +1555,49 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
 
                 <Text style={styles.actionSectionTitle}>ACCOUNT CONTROLS</Text>
                 <View style={styles.actionRow}>
+                  {/* 🛡️ [DYNAMIC ACCOUNT ACTIONS] (v2.6.424) */}
                   <TouchableOpacity 
                     style={styles.actionBtn}
                     onPress={() => {
-                      const newStatus = selectedAgent.supportStatus === 'suspended' ? 'active' : 'suspended';
-                      updateUserStatus(selectedAgent.id, newStatus);
-                      setShowActionsModal(false);
+                      const status = (selectedAgent.supportStatus || '').toLowerCase();
+                      const isTerminated = status === 'terminated' || status === 'inactive' || selectedAgent.supportLevel === 'EX-EMPLOYEE';
+                      const isSuspended = status === 'suspended';
+                      
+                      const actionLabel = isTerminated ? "Re-onboard" : (isSuspended ? "Unsuspend" : "Suspend");
+                      const nextStatus = (isTerminated || isSuspended) ? 'active' : 'suspended';
+                      const confirmMsg = isTerminated 
+                        ? "This will restore the employee's access and generate a fresh onboarding password. Proceed?"
+                        : (isSuspended ? "Allow this employee to log in and receive tickets again?" : "This will immediately block dashboard access and unassign all open tickets. Proceed?");
+
+                      Alert.alert(
+                        `${actionLabel} Employee`,
+                        confirmMsg,
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          { 
+                            text: actionLabel, 
+                            style: isSuspended || isTerminated ? 'default' : 'destructive',
+                            onPress: () => {
+                              updateUserStatus(selectedAgent.id, nextStatus);
+                              setShowActionsModal(false);
+                            } 
+                          }
+                        ]
+                      );
                     }}
                   >
-                    <Ionicons name={selectedAgent.supportStatus === 'suspended' ? "play-circle" : "pause-circle"} size={20} color="#6366F1" />
-                    <Text style={styles.actionBtnText}>{selectedAgent.supportStatus === 'suspended' ? "Unsuspend" : "Suspend"}</Text>
+                    <Ionicons 
+                      name={
+                        (selectedAgent.supportStatus === 'terminated' || selectedAgent.supportStatus === 'inactive') ? "person-add-outline" : 
+                        (selectedAgent.supportStatus === 'suspended' ? "play-circle" : "pause-circle")
+                      } 
+                      size={20} 
+                      color="#6366F1" 
+                    />
+                    <Text style={styles.actionBtnText}>
+                      {(selectedAgent.supportStatus === 'terminated' || selectedAgent.supportStatus === 'inactive') ? "Re-onboard" : 
+                       (selectedAgent.supportStatus === 'suspended' ? "Unsuspend" : "Suspend")}
+                    </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity 
