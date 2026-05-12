@@ -374,12 +374,18 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
     return allSupportAgents.filter(a => {
       const status = (a.supportStatus || a.status || 'active').toLowerCase();
       const level = (a.supportLevel || a.level || '').toUpperCase();
-      return (
-        status !== 'terminated' && 
-        status !== 'inactive' && 
-        status !== 'left' &&
-        level !== 'EX-EMPLOYEE'
-      );
+      
+      // 🛡️ Lifecycle Guard: Terminated unless re-onboarded later
+      const hasActiveTermination = !!a.terminatedAt && (!a.reOnboardedAt || new Date(a.terminatedAt) > new Date(a.reOnboardedAt));
+      
+      const isExplicitlyEx = 
+        status === 'terminated' || 
+        status === 'inactive' || 
+        status === 'left' ||
+        level === 'EX-EMPLOYEE' ||
+        hasActiveTermination;
+
+      return !isExplicitlyEx;
     });
   }, [allSupportAgents]);
 
@@ -387,11 +393,16 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
     return allSupportAgents.filter(a => {
       const status = (a.supportStatus || a.status || '').toLowerCase();
       const level = (a.supportLevel || a.level || '').toUpperCase();
+
+      // 🛡️ Lifecycle Guard: Terminated unless re-onboarded later
+      const hasActiveTermination = !!a.terminatedAt && (!a.reOnboardedAt || new Date(a.terminatedAt) > new Date(a.reOnboardedAt));
+
       return (
         status === 'terminated' || 
         status === 'inactive' || 
         status === 'left' ||
-        level === 'EX-EMPLOYEE'
+        level === 'EX-EMPLOYEE' ||
+        hasActiveTermination
       );
     });
   }, [allSupportAgents]);
