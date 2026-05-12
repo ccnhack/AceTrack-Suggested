@@ -172,7 +172,7 @@ export const useTournamentsStore = create((set) => {
 // ═══════════════════════════════════════════════════════════════
 // 🎫 SUPPORT STORE — Replaces SupportContext state
 // ═══════════════════════════════════════════════════════════════
-export const useSupportStore = create((set) => {
+export const useSupportStore = create((set, get) => {
   eventBus.subscribe('ENTITY_UPDATED', async (e) => {
     if (e.payload.entity === 'supportTickets') {
       console.log(`[SupportStore] Received ENTITY_UPDATED for supportTickets. Source: ${e.payload.source}`);
