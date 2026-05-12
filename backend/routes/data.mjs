@@ -148,7 +148,15 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
         // Inject Live status into ALL potential fields the UI might use
         pClone.isLive = isLive;
         pClone.status = isLive ? 'active' : 'offline';
-        pClone.supportStatus = isLive ? 'active' : 'offline';
+        
+        // 🛡️ [LIFECYCLE PRESERVATION] (v2.6.424): Do NOT overwrite administrative statuses
+        // Terminated, suspended, and inactive are set by admins via /manage-user.
+        // Only apply presence logic to employees whose DB status is 'active' or unset.
+        const dbSupportStatus = (pClone.supportStatus || '').toLowerCase();
+        const isAdminControlledStatus = ['terminated', 'suspended', 'inactive', 'left'].includes(dbSupportStatus);
+        if (!isAdminControlledStatus) {
+          pClone.supportStatus = isLive ? 'active' : 'offline';
+        }
         
         // 🛡️ [SECURITY]: Role sanitation for non-admins
         if (pClone.role === 'admin' && normalizedId !== 'admin') {
@@ -670,8 +678,11 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
                 }
                 // 🛡️ PASSWORD GUARD (v2.6.145): Preserve server-side password for support users
                 const preservedPassword = (existing.role === 'support') ? existing.password : (p.password || existing.password);
-                // 🛡️ [PRESENCE_PURGE] (v2.6.388): Force status fields to 'offline' during DB persistence.
-                const preservedStatus = 'offline';
+                // 🛡️ [PRESENCE_PURGE] (v2.6.424): Force transient status fields to 'offline' during DB persistence.
+                // But PRESERVE admin-controlled lifecycle statuses (terminated, suspended, inactive).
+                const adminControlledStatuses = ['terminated', 'suspended', 'inactive', 'left'];
+                const existingDbStatus = (existing.supportStatus || '').toLowerCase();
+                const preservedSupportStatus = adminControlledStatuses.includes(existingDbStatus) ? existing.supportStatus : 'offline';
                 
                 const definedFields = {};
                 for (const [fieldKey, fieldVal] of Object.entries(p)) {
@@ -680,7 +691,7 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
                     definedFields[fieldKey] = fieldVal;
                   }
                 }
-                const merged = { ...existing, ...definedFields, devices: mergedDevices, password: preservedPassword, supportStatus: 'offline', status: 'offline', isLive: false };
+                const merged = { ...existing, ...definedFields, devices: mergedDevices, password: preservedPassword, supportStatus: preservedSupportStatus, status: 'offline', isLive: false };
                 entityMap.set(id, merged);
                 modifiedEntities[key].set(id, merged);
               } else {
