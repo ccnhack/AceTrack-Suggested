@@ -60,11 +60,45 @@ export const useCommsStore = create((set, get) => ({
         }
     },
 
-    // 😄 [REACTION_LOGIC] (v2.6.405)
+    // 😄 [REACTION_LOGIC] (v2.6.410): Optimistic updates
     toggleReaction: async (messageId, emoji) => {
         try {
             let token = '';
             try { token = window.localStorage?.getItem('acetrack_auth_token') || ''; } catch (e) {}
+
+            // Optimistic Update
+            const currentMsgs = get().messages;
+            const targetMsg = currentMsgs.find(m => m._id === messageId);
+            if (targetMsg) {
+                const newReactions = { ...(targetMsg.reactions || {}) };
+                const users = newReactions[emoji] ? [...newReactions[emoji]] : [];
+                
+                // We need the user's own ID to do a perfect optimistic update. 
+                // We'll decode the token to get the user ID, or fallback to the server response.
+                let myId = null;
+                try {
+                    const base64Url = token.split('.')[1];
+                    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                    }).join(''));
+                    myId = JSON.parse(jsonPayload).id;
+                } catch(e) {}
+
+                if (myId) {
+                    if (users.includes(myId)) {
+                        newReactions[emoji] = users.filter(id => id !== myId);
+                        if (newReactions[emoji].length === 0) delete newReactions[emoji];
+                    } else {
+                        users.push(myId);
+                        newReactions[emoji] = users;
+                    }
+                    const updated = currentMsgs.map(m => 
+                        m._id === messageId ? { ...m, reactions: newReactions } : m
+                    );
+                    set({ messages: updated });
+                }
+            }
 
             const url = Platform.OS === 'web' ? '/api/comms/chat/react' : `${config.API_BASE_URL}/api/v1/comms/chat/react`;
             const response = await fetch(url, {

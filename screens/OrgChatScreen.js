@@ -445,7 +445,7 @@ const OrgChatScreen = ({ navigation }) => {
                         </View>
                       )}
 
-                      {/* 😄 [REACTION_CHIPS] (v2.6.405) */}
+                      {/* 😄 [REACTION_CHIPS] (v2.6.410): Added Long-Press Tooltips */}
                       {msg.reactions && Object.keys(msg.reactions).length > 0 && (
                         <View style={styles.reactionRow}>
                           {Object.entries(msg.reactions).map(([emoji, users]) => (
@@ -453,6 +453,13 @@ const OrgChatScreen = ({ navigation }) => {
                               key={emoji} 
                               style={styles.reactionChip}
                               onPress={() => toggleReaction(msg._id, emoji)}
+                              onLongPress={() => {
+                                const reactorNames = users.map(uid => {
+                                    if (uid === user.id) return 'You';
+                                    return contacts.find(c => c.id === uid)?.name || 'Unknown User';
+                                }).join(', ');
+                                alert(`${emoji} reacted by:\n${reactorNames}`);
+                              }}
                             >
                               <Text style={{ fontSize: 12 }}>{emoji}</Text>
                               <Text style={styles.reactionCount}>{users.length}</Text>
