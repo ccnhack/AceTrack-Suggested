@@ -15,7 +15,8 @@
     "test:e2e:ios:release": "detox test --configuration ios.sim.release",
     "test:e2e:android:release": "detox test --configuration android.emu.release",
     "build:e2e:ios:release": "detox build --configuration ios.sim.release",
-    "build:e2e:android:release": "detox build --configuration android.emu.release"
+    "build:e2e:android:release": "detox build --configuration android.emu.release",
+    "build:web": "expo export -p web && rm -rf backend/public && cp -R dist backend/public"
   },
   "dependencies": {
     "@expo/metro-runtime": "~3.1.3",

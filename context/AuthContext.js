@@ -41,6 +41,13 @@ export const AuthProvider = ({ children }) => {
           let rawUser = await storage.getItem('currentUser');
           let token = await storage.getItem('userToken');
 
+          // 🛡️ [HTTP_ONLY_TRANSITION_CLEANUP] (v2.6.430)
+          if (Platform.OS === 'web' && token) {
+             console.log(`[AuthContext] Sweeping legacy localStorage token to enforce cookies...`);
+             await storage.removeItem('userToken');
+             token = null; // Strictly force cookie fallback
+          }
+
           // 🛡️ [WEB_SESSION_RESTORE] (v2.6.258)
           // If on web and no local credentials (or unreadable encrypted state), 
           // attempt to verify HTTP-Only cookie session via backend.
