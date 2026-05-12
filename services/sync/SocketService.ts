@@ -50,7 +50,7 @@ class SocketService {
     };
 
     this.socket = io(config.API_BASE_URL, {
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'], // 🛡️ Stability: Prioritize HTTP polling handshake to bypass firewalls, then upgrade
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,

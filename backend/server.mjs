@@ -774,10 +774,24 @@ io.use((socket, next) => {
   const apiKey = socket.handshake.headers['x-ace-api-key'] || socket.handshake.auth.apiKey || socket.handshake.auth.token;
   
   // 🛡️ [SYNC_RECOVERY] (v2.6.258)
-  // Allow both the Master ACE_API_KEY and the PUBLIC_APP_ID to pass handshake.
-  // This ensures that devices can connect and respond to pings even before login.
   if (apiKey === ACE_API_KEY || apiKey === PUBLIC_APP_ID || socket.handshake.auth.apiKey === PUBLIC_APP_ID) {
-    return next();
+    // 🛡️ [HTTP_ONLY_AUTH] (v2.6.412): If connecting from Web with PUBLIC_APP_ID, try to read the JWT from cookies!
+    const cookieHeader = socket.handshake.headers.cookie;
+    if (cookieHeader) {
+      const cookies = Object.fromEntries(cookieHeader.split('; ').map(c => c.split('=')));
+      const token = cookies['acetrack_auth_token'];
+      if (token) {
+        try {
+          const decoded = jwt.verify(token, JWT_SECRET);
+          socket.user = decoded;
+          console.log(`✅ [WS_AUTH] Authenticated Web socket ${socket.id} via HttpOnly Cookie (User: ${decoded.id})`);
+          return next();
+        } catch (err) {
+          console.warn(`🛑 [WS_AUTH] Invalid Cookie JWT for socket ${socket.id}`);
+        }
+      }
+    }
+    return next(); // Pass through as guest/public if no cookie
   }
   
   console.warn(`🛑 WS_UNAUTHORIZED: Attempt from ${socket.handshake.address} with key: ${apiKey}`);

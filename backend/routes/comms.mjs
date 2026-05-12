@@ -110,12 +110,19 @@ export default function createCommsRoutes({ io, logAudit, cloudinary, upload }) 
                 return res.status(400).json({ success: false, message: 'Message must have content or attachments' });
             }
 
+            // 🛡️ [BRUTE_FORCE_EXTRACTION] (v2.6.412): Handle object payloads
+            let parsedReplyTo = null;
+            if (replyTo) {
+                if (typeof replyTo === 'object') parsedReplyTo = replyTo._id || replyTo.id;
+                else parsedReplyTo = replyTo;
+            }
+
             const msgData = {
                 senderId: req.user.id,
                 senderName: req.user.name || req.user.email || req.user.id || 'System',
                 content: content || '',
                 receiverId: receiverId || null,
-                replyTo: replyTo || null
+                replyTo: parsedReplyTo
             };
 
             // Add attachments if provided

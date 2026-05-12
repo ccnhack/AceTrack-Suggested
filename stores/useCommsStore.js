@@ -37,7 +37,8 @@ export const useCommsStore = create((set, get) => ({
             try { token = window.localStorage?.getItem('acetrack_auth_token') || ''; } catch (e) {}
 
             const replyToMsg = get().replyTo;
-            const replyTo = replyToMsg?._id || replyToMsg?.id || null;
+            // Send the explicit ID if we can read it, otherwise send the entire object to let the backend parse it out.
+            const replyTo = replyToMsg?._id || replyToMsg?.id || replyToMsg || null;
 
             const url = Platform.OS === 'web' ? '/api/comms/chat' : `${config.API_BASE_URL}/api/v1/comms/chat`;
             const response = await fetch(url, {
