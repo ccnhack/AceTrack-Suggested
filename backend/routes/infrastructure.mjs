@@ -76,6 +76,72 @@ export default function createInfrastructureRoutes({
         const { generateSecuritySummaryBlocks } = await import('../services/scheduler.mjs');
         const summary = await generateSecuritySummaryBlocks(24);
         await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", ...summary });
+      } else if (command === '/acetrack' && String(text).trim().toLowerCase() === 'queue') {
+        const { SupportTicket } = await import('../models/index.mjs');
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+
+        // Fetch all currently open tickets, OR any tickets that were updated today
+        const tickets = await SupportTicket.find({
+           $or: [
+              { "data.status": { $nin: ['resolved', 'closed'] } },
+              { lastUpdated: { $gte: startOfDay } }
+           ]
+        }).lean();
+        
+        let totalOpen = 0;
+        let totalClosed = 0;
+        let totalUnassigned = 0;
+        const employeeStats = {};
+        
+        tickets.forEach(doc => {
+           const t = doc.data || {};
+           const status = String(t.status || 'open').toLowerCase();
+           const isOpen = status !== 'resolved' && status !== 'closed';
+           
+           if (isOpen) totalOpen++;
+           else totalClosed++;
+           
+           if (!t.assignedTo) {
+             if (isOpen) totalUnassigned++;
+           } else {
+             const agent = t.assignedTo;
+             if (!employeeStats[agent]) employeeStats[agent] = { assigned: 0, open: 0, closed: 0 };
+             employeeStats[agent].assigned++;
+             if (isOpen) employeeStats[agent].open++;
+             else employeeStats[agent].closed++;
+           }
+        });
+
+        const blocks = [
+          {
+            type: "header",
+            text: { type: "plain_text", text: "📊 AceTrack Support Queue Status" }
+          },
+          {
+            type: "section",
+            text: { type: "mrkdwn", text: `*Today's Overview*\n• *Currently Open:* ${totalOpen}\n• *Unassigned (Waiting):* ${totalUnassigned}\n• *Closed/Resolved Today:* ${totalClosed}` }
+          },
+          { type: "divider" }
+        ];
+        
+        if (Object.keys(employeeStats).length > 0) {
+           let agentText = "*Agent Workloads*\n";
+           for (const [agentId, stats] of Object.entries(employeeStats)) {
+              agentText += `• *${agentId}*: ${stats.open} Open / ${stats.closed} Closed (Total: ${stats.assigned})\n`;
+           }
+           blocks.push({
+             type: "section",
+             text: { type: "mrkdwn", text: agentText }
+           });
+        } else {
+           blocks.push({
+             type: "section",
+             text: { type: "mrkdwn", text: "_No agents currently assigned to any active tickets._" }
+           });
+        }
+        
+        await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", blocks });
       }
     } catch (err) {
       console.error("❌ Unified Gateway Error:", err.message);
