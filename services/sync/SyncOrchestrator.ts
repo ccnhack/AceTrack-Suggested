@@ -654,7 +654,7 @@ class SyncOrchestrator {
        const useDelta = !!this.lastSuccessfulPullTimestamp;
        console.log(`[SyncOrchestrator] [FORCE_PULL] Starting ${useDelta ? 'DELTA' : 'FULL'} sync fallback...`);
        
-       const result = await syncApi.pullFromApi(
+       let result = await syncApi.pullFromApi(
          this.userId, 
          this.userToken, 
          this.isAuthMuted,
@@ -663,11 +663,17 @@ class SyncOrchestrator {
        
        if (!result.success || !result.data) {
          console.error(`[SyncOrchestrator] [FORCE_PULL] Failed: status=${result.status}`);
-         // 📡 [DELTA FALLBACK] (v2.6.431): If a delta pull fails, reset timestamp to force full pull next time
-         if (useDelta) {
-           console.log('[SyncOrchestrator] [FORCE_PULL] Delta failed. Resetting to full pull mode.');
+         // 📡 [DELTA FALLBACK] (v2.6.433): If a delta pull fails, reset timestamp to force full pull next time
+         // AND retry immediately to avoid leaving the client with stale data for the polling interval.
+         if (useDelta && result.status !== 401 && result.status !== 403) {
+           console.log('[SyncOrchestrator] [FORCE_PULL] Delta failed. Retrying immediately in FULL pull mode...');
            this.lastSuccessfulPullTimestamp = null;
+           result = await syncApi.pullFromApi(this.userId, this.userToken, this.isAuthMuted, null);
          }
+       }
+
+       // Check again in case the retry also failed, or if it was a full pull failure
+       if (!result.success || !result.data) {
          // 🛡️ [AUTH_FAILURE] (v2.6.432): Emit auth failure for 401 responses
          if (result.status === 401) {
            eventBus.emit('AUTH_FAILURE', { status: 401, endpoint: '/api/data' });

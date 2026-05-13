@@ -102,7 +102,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.432'; // Critical for Update prompts 
+const APP_VERSION = '2.6.433'; // Critical for Update prompts 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -482,9 +482,9 @@ const trackLoginAttempt = async (req, identifier, password, success) => {
   
   // 🛡️ [ADVANCED BRUTE-FORCE MONITOR] (v2.6.208)
   
-  // 🛡️ [ROLE-BASED THRESHOLD] (v2.6.213 / v2.6.432 PERF FIX)
+  // 🛡️ [ROLE-BASED THRESHOLD] (v2.6.213 / v2.6.433 PERF FIX)
   // Admin: 5 attempts | Support: 10 attempts | Others: 10 attempts
-  // v2.6.432: Use Player.findOne instead of loading entire AppState blob
+  // v2.6.433: Use Player.findOne instead of loading entire AppState blob
   const search = String(identifier).toLowerCase().trim();
   let role = (identifier === 'admin_mfa' ? 'admin' : 'user');
   try {
@@ -527,7 +527,7 @@ const trackLoginAttempt = async (req, identifier, password, success) => {
 // Cumulative Security Summary moved to services/scheduler.mjs
 initScheduler(loginAttempts, sendSecurityAlert);
 
-// 🛡️ [MEMORY LEAK FIX] (v2.6.432): Purge stale loginAttempts entries every 10 minutes
+// 🛡️ [MEMORY LEAK FIX] (v2.6.433): Purge stale loginAttempts entries every 10 minutes
 setInterval(() => {
   const now = Date.now();
   for (const [key, state] of loginAttempts) {
@@ -535,6 +535,17 @@ setInterval(() => {
     if (state.attempts.length === 0) loginAttempts.delete(key);
   }
 }, 600000);
+
+// 🛡️ [MEMORY LEAK FIX] (v2.6.433): Purge disconnected activeSupportSessions every 5 minutes
+setInterval(() => {
+  if (io && io.sockets && io.sockets.sockets) {
+    for (const [socketId, session] of activeSupportSessions) {
+      if (!io.sockets.sockets.has(socketId)) {
+        activeSupportSessions.delete(socketId);
+      }
+    }
+  }
+}, 300000);
 
 
 // getISTDate: MOVED to ./helpers/utils.mjs (Phase 1 Modularization)
@@ -703,7 +714,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // 🛡️ DIAGNOSTICS: Global Request Logger (v2.6.395)
 app.use(async (req, res, next) => {
   if (req.path.includes('login') || req.path.includes('recovery') || req.path.includes('slack')) {
-    // 🛡️ [SECURITY FIX] (v2.6.432): Removed raw headers from audit to prevent JWT leaking to DB
+    // 🛡️ [SECURITY FIX] (v2.6.433): Removed raw headers from audit to prevent JWT leaking to DB
     await logAudit(req, 'DEBUG_NETWORK_SNIFFER', [], { 
       url: req.originalUrl || req.path, 
       method: req.method,
@@ -842,7 +853,7 @@ const startServices = async () => {
 
   console.log('📡 Connecting to MongoDB Atlas...');
   mongoose.connect(MONGODB_URI, {
-    maxPoolSize: 50,
+    maxPoolSize: 100, // 🛡️ [SCALABILITY FIX] (v2.6.433) Doubled to handle spikes
     serverSelectionTimeoutMS: 10000,
     socketTimeoutMS: 45000,
   }).then(() => {
@@ -954,12 +965,17 @@ const upload = multer({
 
 // 🛡️ SYNC MUTEX: Prevent race conditions during concurrent /save requests
 class AsyncMutex {
-  constructor() {
+  constructor(maxQueueSize = 100) {
     this.queue = [];
     this.isLocked = false;
+    this.maxQueueSize = maxQueueSize;
   }
   acquire() {
-    return new Promise(resolve => {
+    return new Promise((resolve, reject) => {
+      // 🛡️ [QUEUE BOUNDS] (v2.6.433): Drop requests if queue is saturated
+      if (this.queue.length >= this.maxQueueSize) {
+        return reject(new Error('MUTEX_QUEUE_FULL'));
+      }
       const release = () => {
         if (this.queue.length > 0) {
           const next = this.queue.shift();
@@ -977,7 +993,7 @@ class AsyncMutex {
     });
   }
 }
-const syncMutex = new AsyncMutex();
+const syncMutex = new AsyncMutex(100);
 
 // ═══════════════════════════════════════════════════════════════
 // 🌐 API v1 Routes (SE Fix: API versioning)

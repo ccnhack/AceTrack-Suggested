@@ -157,10 +157,9 @@ export const authGuard = (req, res, next) => {
 // ═══════════════════════════════════════════════════════════════
 export const createRateLimiters = (appVersion) => {
   const skipTestRequests = (req) => {
-    const ua = req.headers['user-agent'] || '';
-    return req.headers['x-ace-test-bypass'] === 'true' || 
-           ua.includes('Slackbot') || 
-           ua.includes('Slack-ImgProxy');
+    // 🛡️ [SECURITY FIX] (v2.6.433): Removed fragile User-Agent based bypass for Slackbot.
+    // Relies strictly on the internal test-bypass header which is not exposed to the public internet.
+    return req.headers['x-ace-test-bypass'] === 'true';
   };
 
   const globalApiLimiter = rateLimit({

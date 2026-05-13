@@ -450,7 +450,16 @@ router.post('/register-push-token', apiKeyGuard, async (req, res) => {
 // POST /api/v1/save
 router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema), async (req, res) => {
   const waitStart = Date.now();
-  const release = await syncMutex.acquire();
+  let release;
+  try {
+    release = await syncMutex.acquire();
+  } catch (error) {
+    if (error.message === 'MUTEX_QUEUE_FULL') {
+      console.warn(`🛑 [SaveGuard] Sync Mutex Queue Saturated. Rejecting request from ${req.ip}`);
+      return res.status(429).json({ success: false, error: 'Too many concurrent sync requests. Please try again later.' });
+    }
+    throw error;
+  }
   const waitTime = Date.now() - waitStart;
   if (waitTime > 2000) console.warn(`⚠️ Save Mutex Wait: ${waitTime}ms from ${req.ip}`);
 
