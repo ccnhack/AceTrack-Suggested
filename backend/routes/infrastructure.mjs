@@ -86,13 +86,32 @@ export default function createInfrastructureRoutes({
             },
             {
                "type": "section",
-               "text": { "type": "mrkdwn", "text": "Please select a date to generate the Analytics & Workload Report:" },
-               "accessory": {
-                  "type": "datepicker",
-                  "initial_date": today,
-                  "placeholder": { "type": "plain_text", "text": "Select a date", "emoji": true },
-                  "action_id": "queue_date_select"
-               }
+               "text": { "type": "mrkdwn", "text": "Please select a date range and click *Generate Report* to view the Analytics & Workload:" }
+            },
+            {
+               "type": "actions",
+               "block_id": "queue_date_range_block",
+               "elements": [
+                  {
+                     "type": "datepicker",
+                     "initial_date": today,
+                     "placeholder": { "type": "plain_text", "text": "Start Date", "emoji": true },
+                     "action_id": "queue_start_date"
+                  },
+                  {
+                     "type": "datepicker",
+                     "initial_date": today,
+                     "placeholder": { "type": "plain_text", "text": "End Date", "emoji": true },
+                     "action_id": "queue_end_date"
+                  },
+                  {
+                     "type": "button",
+                     "text": { "type": "plain_text", "text": "Generate Report 🚀", "emoji": true },
+                     "style": "primary",
+                     "value": "submit",
+                     "action_id": "queue_range_submit"
+                  }
+               ]
             }
          ];
          
@@ -136,32 +155,43 @@ export default function createInfrastructureRoutes({
 
       console.log(`📡 [SLACK_ACTION] User: ${payload.user?.name} | Action: ${actionId}`);
 
-      // 📊 Handle Queue Date Selection (v2.6.435)
-      if (actionId === 'queue_date_select') {
-         const selectedDateStr = actionObj.selected_date;
-         const startOfDate = new Date(selectedDateStr);
+      // Ignore intermediate datepicker changes before submit
+      if (actionId === 'queue_start_date' || actionId === 'queue_end_date') {
+         return; 
+      }
+
+      // 📊 Handle Queue Date Range Submit (v2.6.435)
+      if (actionId === 'queue_range_submit') {
+         const stateValues = payload.state?.values?.queue_date_range_block || {};
+         const startDateStr = stateValues.queue_start_date?.selected_date;
+         const endDateStr = stateValues.queue_end_date?.selected_date;
+         
+         if (!startDateStr || !endDateStr) {
+             return await sendDelayedSlackResponse(responseUrl, {
+                 replace_original: false,
+                 response_type: "ephemeral",
+                 text: "⚠️ Please select both a Start Date and an End Date before generating the report."
+             });
+         }
+         
+         const startOfDate = new Date(startDateStr);
          startOfDate.setHours(0, 0, 0, 0);
-         const endOfDate = new Date(selectedDateStr);
+         const endOfDate = new Date(endDateStr);
          endOfDate.setHours(23, 59, 59, 999);
          
-         const isToday = startOfDate.toDateString() === new Date().toDateString();
-         const { SupportTicket } = await import('../models/index.mjs');
+         const { SupportTicket, Player } = await import('../models/index.mjs');
          
-         let query;
+         const query = {
+             $or: [
+                 { "data.createdAt": { $gte: startOfDate.toISOString(), $lte: endOfDate.toISOString() } },
+                 { lastUpdated: { $gte: startOfDate, $lte: endOfDate } }
+             ]
+         };
+         
+         // If end date includes today, also include currently open tickets
+         const isToday = endOfDate.toDateString() === new Date().toDateString();
          if (isToday) {
-            query = {
-               $or: [
-                  { "data.status": { $nin: ['resolved', 'closed'] } },
-                  { lastUpdated: { $gte: startOfDate, $lte: endOfDate } }
-               ]
-            };
-         } else {
-            query = {
-               $or: [
-                  { "data.createdAt": { $gte: startOfDate.toISOString() } }, // Soft match for string dates
-                  { lastUpdated: { $gte: startOfDate, $lte: endOfDate } }
-               ]
-            };
+            query.$or.push({ "data.status": { $nin: ['resolved', 'closed'] } });
          }
          
          const tickets = await SupportTicket.find(query).lean();
@@ -171,8 +201,6 @@ export default function createInfrastructureRoutes({
          
          tickets.forEach(doc => {
             const t = doc.data || {};
-            // For historical days, if it was closed ON that day, we count it as touched/closed that day.
-            // If we are viewing today, we count currently open.
             const status = String(t.status || 'open').toLowerCase();
             const isOpen = status !== 'resolved' && status !== 'closed';
             
@@ -190,6 +218,16 @@ export default function createInfrastructureRoutes({
             }
          });
 
+         // 👤 Resolve Agent IDs to Names
+         const agentIds = Object.keys(employeeStats);
+         const agentProfiles = await Player.find({ id: { $in: agentIds } }).lean();
+         const agentMap = {};
+         agentProfiles.forEach(p => {
+             const pd = p.data || {};
+             const name = pd.firstName && pd.lastName ? `${pd.firstName} ${pd.lastName}` : '';
+             agentMap[p.id] = name ? `${name} (${pd.email || p.id})` : (pd.email || p.id);
+         });
+
          const blocks = [
             {
                "type": "header",
@@ -198,7 +236,7 @@ export default function createInfrastructureRoutes({
             {
                "type": "context",
                "elements": [
-                  { "type": "mrkdwn", "text": `🗓️ *Report Date:* ${selectedDateStr}  |  🤖 *Generated By:* AceTrack System` }
+                  { "type": "mrkdwn", "text": `🗓️ *Report Range:* ${startDateStr} to ${endDateStr}  |  🤖 *Generated By:* AceTrack System` }
                ]
             },
             { "type": "divider" },
@@ -218,10 +256,11 @@ export default function createInfrastructureRoutes({
             }
          ];
          
-         if (Object.keys(employeeStats).length > 0) {
+         if (agentIds.length > 0) {
             let agentText = "";
             for (const [agentId, stats] of Object.entries(employeeStats)) {
-               agentText += `• *${agentId}*\n> \`${stats.open}\` Open  |  \`${stats.closed}\` Closed  |  *${stats.assigned}* Total\n\n`;
+               const resolvedName = agentMap[agentId] || agentId;
+               agentText += `• *${resolvedName}*\n> \`${stats.open}\` Open  |  \`${stats.closed}\` Closed  |  *${stats.assigned}* Total\n\n`;
             }
             blocks.push({
                "type": "section",
@@ -230,7 +269,7 @@ export default function createInfrastructureRoutes({
          } else {
             blocks.push({
                "type": "section",
-               "text": { "type": "mrkdwn", "text": "_No agent activity recorded for this specific date._" }
+               "text": { "type": "mrkdwn", "text": "_No agent activity recorded for this specific date range._" }
             });
          }
          
