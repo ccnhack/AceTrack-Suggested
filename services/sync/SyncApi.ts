@@ -93,8 +93,9 @@ class SyncApi {
   public async pullFromApi(
     userId: string | null,
     userToken: string | null,
-    isAuthMuted: boolean
-  ): Promise<{ success: boolean, data?: any, status?: number }> {
+    isAuthMuted: boolean,
+    since?: string | null
+  ): Promise<{ success: boolean, data?: any, status?: number, serverTimestamp?: string }> {
     const cloudUrl = config.API_BASE_URL;
     telemetryService.trackMetric('pullAttemptCount');
 
@@ -110,8 +111,13 @@ class SyncApi {
       };
       if (userToken && Platform.OS !== 'web') headers['Authorization'] = `Bearer ${userToken}`;
 
-      console.log(`[SyncApi] [PULL] Initiating REST pull from ${cloudUrl}${config.getEndpoint('DATA_SYNC')}`);
-      const response = await fetch(`${cloudUrl}${config.getEndpoint('DATA_SYNC')}?syncContext=full_hydrate`, {
+      // 📡 [DELTA SYNC] (v2.6.431): Append since param for incremental pulls
+      const syncContext = since ? 'delta_refresh' : 'full_hydrate';
+      const sinceQuery = since ? `&since=${encodeURIComponent(since)}` : '';
+      const pullUrl = `${cloudUrl}${config.getEndpoint('DATA_SYNC')}?syncContext=${syncContext}${sinceQuery}`;
+
+      console.log(`[SyncApi] [PULL] Initiating ${since ? 'DELTA' : 'FULL'} pull from ${pullUrl}`);
+      const response = await fetch(pullUrl, {
         headers,
         credentials: 'include',
         signal: controller.signal
@@ -120,8 +126,8 @@ class SyncApi {
       console.log(`[SyncApi] [PULL] Server responded with status ${response.status}`);
       if (response.ok) {
         const data = await response.json();
-        console.log(`[SyncApi] [PULL] Data received successfully. Cloud Version: ${data.version || '0'}`);
-        return { success: true, data, status: response.status };
+        console.log(`[SyncApi] [PULL] Data received. isDelta: ${data.isDelta || false}, Cloud Version: ${data.version || '0'}`);
+        return { success: true, data, status: response.status, serverTimestamp: data.serverTimestamp };
       }
 
       clearTimeout(timeoutId);

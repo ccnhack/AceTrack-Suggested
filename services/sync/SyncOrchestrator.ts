@@ -31,6 +31,7 @@ class SyncOrchestrator {
   private syncVersion: number = 0;
   private lastServerUpdate: number = 0;
   private lastDeviceStamp: number = 0;  // Throttle device heartbeats (1 per 20min)
+  private lastSuccessfulPullTimestamp: string | null = null; // 📡 [DELTA SYNC] (v2.6.431)
   
   private actionSequences: Map<string, any[]> = new Map();
   private throttleTimeouts: Map<string, any> = new Map();
@@ -493,6 +494,12 @@ class SyncOrchestrator {
 
         // Save merged result internally (isInternal=true suppresses push-back)
         await this.syncAndSaveData(result, false, true);
+        
+        // 📡 [DELTA SYNC] (v2.6.431): After successful full heal, record the server time
+        // so subsequent forcePullData calls can use incremental delta mode.
+        if (serverData.serverTimestamp) {
+          this.lastSuccessfulPullTimestamp = serverData.serverTimestamp;
+        }
         console.log('[SyncOrchestrator] [SELF_HEAL] State merged. Ready for retry.');
       } catch (err: any) {
         clearTimeout(timeoutId);
@@ -643,20 +650,37 @@ class SyncOrchestrator {
    */
   public async forcePullData(): Promise<boolean> {
     return this.trackOperation('CLOUD_FORCE_PULL', async () => {
-       console.log('[SyncOrchestrator] [FORCE_PULL] Starting manual sync fallback...');
+       // 📡 [DELTA SYNC] (v2.6.431): Use incremental sync if we have a previous timestamp
+       const useDelta = !!this.lastSuccessfulPullTimestamp;
+       console.log(`[SyncOrchestrator] [FORCE_PULL] Starting ${useDelta ? 'DELTA' : 'FULL'} sync fallback...`);
        
-       const result = await syncApi.pullFromApi(this.userId, this.userToken, this.isAuthMuted);
+       const result = await syncApi.pullFromApi(
+         this.userId, 
+         this.userToken, 
+         this.isAuthMuted,
+         this.lastSuccessfulPullTimestamp  // null on first pull → full hydration
+       );
        
        if (!result.success || !result.data) {
          console.error(`[SyncOrchestrator] [FORCE_PULL] Failed: status=${result.status}`);
+         // 📡 [DELTA FALLBACK] (v2.6.431): If a delta pull fails, reset timestamp to force full pull next time
+         if (useDelta) {
+           console.log('[SyncOrchestrator] [FORCE_PULL] Delta failed. Resetting to full pull mode.');
+           this.lastSuccessfulPullTimestamp = null;
+         }
          return false;
        }
 
-       console.log(`[SyncOrchestrator] [FORCE_PULL] Received cloud state. Version: ${result.data.version || 'unknown'}`);
+       console.log(`[SyncOrchestrator] [FORCE_PULL] Received cloud state. isDelta: ${result.data.isDelta || false}, Version: ${result.data.version || 'unknown'}`);
        
        // Process version bump
        if (typeof result.data.version === 'number' && result.data.version > this.syncVersion) {
          this.syncVersion = result.data.version;
+       }
+
+       // 📡 [DELTA SYNC] (v2.6.431): Track the server timestamp for next incremental pull
+       if (result.serverTimestamp) {
+         this.lastSuccessfulPullTimestamp = result.serverTimestamp;
        }
 
        // Perform Merge & Save (isInternal=true to prevent push-back loop)

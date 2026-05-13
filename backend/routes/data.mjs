@@ -63,6 +63,22 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       ]
     };
 
+    // 📡 [DELTA SYNC] (v2.6.431): Incremental sync support
+    // If ?since=ISO_TIMESTAMP is provided, only return documents modified after that time.
+    // This dramatically reduces payload size for background refreshes & polling.
+    // Initial hydration and selfHealConflict calls omit this param → full pull is preserved.
+    const sinceParam = req.query.since;
+    let sinceFilter = {};
+    let isDelta = false;
+    if (sinceParam) {
+      const sinceDate = new Date(sinceParam);
+      if (!isNaN(sinceDate.getTime())) {
+        sinceFilter = { lastUpdated: { $gte: sinceDate } };
+        isDelta = true;
+        console.log(`[DELTA_SYNC] Incremental sync requested since: ${sinceDate.toISOString()}`);
+      }
+    }
+
     console.time(`[SYNC_TRACE] ${req.ip} QUERIES`);
     const [
       state,
@@ -82,17 +98,17 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       // 🛡️ SCALABILITY FIX (v2.6.316): Fetch all other players with a thin discovery projection (PII-free)
       // 🛡️ [PRODUCTION HARDENING] (v2.6.325): Support staff now use thin projection by default to prevent OOM
       // PII is only returned for the 'requesterDoc' or specifically requested tickets.
-      isAdmin ? Player.find({ id: { $ne: normalizedReqId } }).lean() : Player.find(
-        { id: { $ne: normalizedReqId } }, 
+      isAdmin ? Player.find({ id: { $ne: normalizedReqId }, ...sinceFilter }).lean() : Player.find(
+        { id: { $ne: normalizedReqId }, ...sinceFilter }, 
         { "data.id": 1, "data.name": 1, "data.username": 1, "data.avatar": 1, "data.role": 1, "data.skillLevel": 1, "data.rating": 1, "data.trueSkillRating": 1, "data.supportStatus": 1, "data.supportLevel": 1, "data.terminatedAt": 1, "data.reOnboardedAt": 1 }
       ).lean(),
-      isAdmin ? Tournament.find().lean() : Tournament.find().sort({ lastUpdated: -1 }).limit(100).lean(),
-      Match.find(matchQuery).lean(),
-      isAdmin ? MatchVideo.find().lean() : MatchVideo.find().sort({ lastUpdated: -1 }).limit(50).lean(),
-      SupportTicket.find(ticketQuery).lean(),
-      Evaluation.find(evalQuery).lean(),
-      Matchmaking.find(matchmakingQuery).lean(),
-      ChatbotThread.find(chatQuery).lean()
+      isAdmin ? Tournament.find(sinceFilter).lean() : Tournament.find(sinceFilter).sort({ lastUpdated: -1 }).limit(100).lean(),
+      Match.find({ ...matchQuery, ...sinceFilter }).lean(),
+      isAdmin ? MatchVideo.find(sinceFilter).lean() : MatchVideo.find(sinceFilter).sort({ lastUpdated: -1 }).limit(50).lean(),
+      SupportTicket.find({ ...ticketQuery, ...sinceFilter }).lean(),
+      Evaluation.find({ ...evalQuery, ...sinceFilter }).lean(),
+      Matchmaking.find({ ...matchmakingQuery, ...sinceFilter }).lean(),
+      ChatbotThread.find({ ...chatQuery, ...sinceFilter }).lean()
     ]);
     console.timeEnd(`[SYNC_TRACE] ${req.ip} QUERIES`);
 
@@ -197,7 +213,7 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       console.log(`[SYNC_DEBUG] /api/data sync complete for ${normalizedReqId} in ${duration}ms`);
     }
 
-    res.json({ ...composedData, lastUpdated: state?.lastUpdated || new Date(), version: state?.version || 1 });
+    res.json({ ...composedData, lastUpdated: state?.lastUpdated || new Date(), version: state?.version || 1, isDelta, serverTimestamp: new Date().toISOString() });
   } catch (error) {
     console.error('❌ Data Fetch Error:', error.stack);
     res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error during data synchronization.' : error.message });
