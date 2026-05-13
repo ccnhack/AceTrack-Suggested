@@ -77,71 +77,26 @@ export default function createInfrastructureRoutes({
         const summary = await generateSecuritySummaryBlocks(24);
         await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", ...summary });
       } else if (command === '/acetrack' && String(text).trim().toLowerCase() === 'queue') {
-        const { SupportTicket } = await import('../models/index.mjs');
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
-
-        // Fetch all currently open tickets, OR any tickets that were updated today
-        const tickets = await SupportTicket.find({
-           $or: [
-              { "data.status": { $nin: ['resolved', 'closed'] } },
-              { lastUpdated: { $gte: startOfDay } }
-           ]
-        }).lean();
-        
-        let totalOpen = 0;
-        let totalClosed = 0;
-        let totalUnassigned = 0;
-        const employeeStats = {};
-        
-        tickets.forEach(doc => {
-           const t = doc.data || {};
-           const status = String(t.status || 'open').toLowerCase();
-           const isOpen = status !== 'resolved' && status !== 'closed';
-           
-           if (isOpen) totalOpen++;
-           else totalClosed++;
-           
-           if (!t.assignedTo) {
-             if (isOpen) totalUnassigned++;
-           } else {
-             const agent = t.assignedTo;
-             if (!employeeStats[agent]) employeeStats[agent] = { assigned: 0, open: 0, closed: 0 };
-             employeeStats[agent].assigned++;
-             if (isOpen) employeeStats[agent].open++;
-             else employeeStats[agent].closed++;
-           }
-        });
-
-        const blocks = [
-          {
-            type: "header",
-            text: { type: "plain_text", text: "📊 AceTrack Support Queue Status" }
-          },
-          {
-            type: "section",
-            text: { type: "mrkdwn", text: `*Today's Overview*\n• *Currently Open:* ${totalOpen}\n• *Unassigned (Waiting):* ${totalUnassigned}\n• *Closed/Resolved Today:* ${totalClosed}` }
-          },
-          { type: "divider" }
-        ];
-        
-        if (Object.keys(employeeStats).length > 0) {
-           let agentText = "*Agent Workloads*\n";
-           for (const [agentId, stats] of Object.entries(employeeStats)) {
-              agentText += `• *${agentId}*: ${stats.open} Open / ${stats.closed} Closed (Total: ${stats.assigned})\n`;
-           }
-           blocks.push({
-             type: "section",
-             text: { type: "mrkdwn", text: agentText }
-           });
-        } else {
-           blocks.push({
-             type: "section",
-             text: { type: "mrkdwn", text: "_No agents currently assigned to any active tickets._" }
-           });
-        }
-        
-        await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", blocks });
+         const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+         
+         const blocks = [
+            {
+               "type": "header",
+               "text": { "type": "plain_text", "text": "🎯 Support Dashboard Initialization", "emoji": true }
+            },
+            {
+               "type": "section",
+               "text": { "type": "mrkdwn", "text": "Please select a date to generate the Analytics & Workload Report:" },
+               "accessory": {
+                  "type": "datepicker",
+                  "initial_date": today,
+                  "placeholder": { "type": "plain_text", "text": "Select a date", "emoji": true },
+                  "action_id": "queue_date_select"
+               }
+            }
+         ];
+         
+         await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", blocks });
       }
     } catch (err) {
       console.error("❌ Unified Gateway Error:", err.message);
@@ -180,6 +135,109 @@ export default function createInfrastructureRoutes({
       });
 
       console.log(`📡 [SLACK_ACTION] User: ${payload.user?.name} | Action: ${actionId}`);
+
+      // 📊 Handle Queue Date Selection (v2.6.435)
+      if (actionId === 'queue_date_select') {
+         const selectedDateStr = actionObj.selected_date;
+         const startOfDate = new Date(selectedDateStr);
+         startOfDate.setHours(0, 0, 0, 0);
+         const endOfDate = new Date(selectedDateStr);
+         endOfDate.setHours(23, 59, 59, 999);
+         
+         const isToday = startOfDate.toDateString() === new Date().toDateString();
+         const { SupportTicket } = await import('../models/index.mjs');
+         
+         let query;
+         if (isToday) {
+            query = {
+               $or: [
+                  { "data.status": { $nin: ['resolved', 'closed'] } },
+                  { lastUpdated: { $gte: startOfDate, $lte: endOfDate } }
+               ]
+            };
+         } else {
+            query = {
+               $or: [
+                  { "data.createdAt": { $gte: startOfDate.toISOString() } }, // Soft match for string dates
+                  { lastUpdated: { $gte: startOfDate, $lte: endOfDate } }
+               ]
+            };
+         }
+         
+         const tickets = await SupportTicket.find(query).lean();
+         
+         let totalOpen = 0, totalClosed = 0, totalUnassigned = 0;
+         const employeeStats = {};
+         
+         tickets.forEach(doc => {
+            const t = doc.data || {};
+            // For historical days, if it was closed ON that day, we count it as touched/closed that day.
+            // If we are viewing today, we count currently open.
+            const status = String(t.status || 'open').toLowerCase();
+            const isOpen = status !== 'resolved' && status !== 'closed';
+            
+            if (isOpen) totalOpen++;
+            else totalClosed++;
+            
+            if (!t.assignedTo) {
+               if (isOpen) totalUnassigned++;
+            } else {
+               const agent = t.assignedTo;
+               if (!employeeStats[agent]) employeeStats[agent] = { assigned: 0, open: 0, closed: 0 };
+               employeeStats[agent].assigned++;
+               if (isOpen) employeeStats[agent].open++;
+               else employeeStats[agent].closed++;
+            }
+         });
+
+         const blocks = [
+            {
+               "type": "header",
+               "text": { "type": "plain_text", "text": "🎯 Support Queue Analytics", "emoji": true }
+            },
+            {
+               "type": "context",
+               "elements": [
+                  { "type": "mrkdwn", "text": `🗓️ *Report Date:* ${selectedDateStr}  |  🤖 *Generated By:* AceTrack System` }
+               ]
+            },
+            { "type": "divider" },
+            {
+               "type": "section",
+               "fields": [
+                  { "type": "mrkdwn", "text": `*🔥 Active / Open:*\n\`${totalOpen}\` tickets` },
+                  { "type": "mrkdwn", "text": `*⏳ Unassigned:*\n\`${totalUnassigned}\` tickets` },
+                  { "type": "mrkdwn", "text": `*✅ Closed / Resolved:*\n\`${totalClosed}\` tickets` },
+                  { "type": "mrkdwn", "text": `*📈 Total Volume:*\n\`${totalOpen + totalClosed}\` tickets` }
+               ]
+            },
+            { "type": "divider" },
+            {
+               "type": "section",
+               "text": { "type": "mrkdwn", "text": "👤 *Agent Performance Breakdown*" }
+            }
+         ];
+         
+         if (Object.keys(employeeStats).length > 0) {
+            let agentText = "";
+            for (const [agentId, stats] of Object.entries(employeeStats)) {
+               agentText += `• *${agentId}*\n> \`${stats.open}\` Open  |  \`${stats.closed}\` Closed  |  *${stats.assigned}* Total\n\n`;
+            }
+            blocks.push({
+               "type": "section",
+               "text": { "type": "mrkdwn", "text": agentText }
+            });
+         } else {
+            blocks.push({
+               "type": "section",
+               "text": { "type": "mrkdwn", "text": "_No agent activity recorded for this specific date._" }
+            });
+         }
+         
+         const reply = { replace_original: true, response_type: "ephemeral", blocks };
+         if (isDelayed) return await sendDelayedSlackResponse(responseUrl, reply);
+         return res.json(reply);
+      }
 
       // Handle the Security Summary Drill-down
       if (actionId === 'view_security_details') {
