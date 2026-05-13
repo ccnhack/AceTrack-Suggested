@@ -60,6 +60,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
 
   // Phase 5: Drill-Down Modal Config
   const [drillDownConfig, setDrillDownConfig] = useState(null);
+  const [showActivityModal, setShowActivityModal] = useState(false);
 
   // 🕐 Time Filter State
   const [timeFilter, setTimeFilter] = useState('all');
@@ -830,33 +831,26 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                )}
             </View>
 
-            {/* 🕰️ Activity Timeline (v2.6.148 Target) */}
+            {/* 🕰️ Activity Timeline Button */}
             {selectedAgentStats?.activityTimeline && selectedAgentStats.activityTimeline.length > 0 && (
-              <View style={styles.timelineSection}>
+              <View style={[styles.timelineSection, { paddingBottom: 16 }]}>
                 <Text style={styles.timelineTitle}>Recent Activity</Text>
-                {selectedAgentStats.activityTimeline.map((act, idx) => {
-                  let icon, color, text;
-                  if (act.type === 'assignment') { icon = 'person-add'; color = '#3B82F6'; text = `Assigned ticket #${act.ticketId.slice(-4)}`; }
-                  else if (act.type === 'reply') { icon = 'chatbubble-ellipses'; color = '#8B5CF6'; text = `Replied to #${act.ticketId.slice(-4)}`; }
-                  else if (act.type === 'closure') { icon = 'checkmark-circle'; color = '#10B981'; text = `Closed #${act.ticketId.slice(-4)}`; }
-                  else if (act.type === 'resolved') { icon = 'shield-checkmark'; color = '#10B981'; text = `Resolved #${act.ticketId.slice(-4)}`; }
-                  else if (act.type === 'csat_received') { icon = 'star'; color = '#F59E0B'; text = `Rated ${act.rating}★ on #${act.ticketId.slice(-4)}`; }
-                  
-                  return (
-                    <View key={idx} style={styles.timelineRow}>
-                      <View style={styles.timelineLine} />
-                      <View style={[styles.timelineIconNode, { backgroundColor: color + '1A' }]}>
-                        <Ionicons name={icon} size={12} color={color} />
-                      </View>
-                      <View style={styles.timelineContent}>
-                        <Text style={styles.timelineText}>{text}</Text>
-                        <Text style={styles.timelineTime}>
-                           {new Date(act.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                        </Text>
-                      </View>
-                    </View>
-                  );
-                })}
+                <TouchableOpacity 
+                  style={{
+                    backgroundColor: '#F1F5F9',
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    borderRadius: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginTop: 8
+                  }} 
+                  onPress={() => setShowActivityModal(true)}
+                >
+                  <Ionicons name="time-outline" size={20} color="#475569" style={{ marginRight: 8 }} />
+                  <Text style={{ color: '#475569', fontWeight: '700', fontSize: 14 }}>View Recent Activity Log</Text>
+                </TouchableOpacity>
               </View>
             )}
 
@@ -1752,6 +1746,46 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                 </View>
               </View>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* 🕰️ Recent Activity Modal */}
+      <Modal visible={showActivityModal} transparent animationType="fade" onRequestClose={() => setShowActivityModal(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: '#FFF', borderRadius: 24, padding: 24, width: '100%', maxWidth: 500, maxHeight: '80%' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={{ fontSize: 20, fontWeight: '900', color: '#0F172A' }}>Recent Activity</Text>
+              <TouchableOpacity onPress={() => setShowActivityModal(false)} style={{ padding: 8, backgroundColor: '#F1F5F9', borderRadius: 12 }}>
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {selectedAgentStats?.activityTimeline?.map((act, idx) => {
+                let icon, color, text;
+                if (act.type === 'assignment') { icon = 'person-add'; color = '#3B82F6'; text = `Assigned ticket #${act.ticketId.slice(-4)}`; }
+                else if (act.type === 'reply') { icon = 'chatbubble-ellipses'; color = '#8B5CF6'; text = `Replied to #${act.ticketId.slice(-4)}`; }
+                else if (act.type === 'closure') { icon = 'checkmark-circle'; color = '#10B981'; text = `Closed #${act.ticketId.slice(-4)}`; }
+                else if (act.type === 'resolved') { icon = 'shield-checkmark'; color = '#10B981'; text = `Resolved #${act.ticketId.slice(-4)}`; }
+                else if (act.type === 'csat_received') { icon = 'star'; color = '#F59E0B'; text = `Rated ${act.rating}★ on #${act.ticketId.slice(-4)}`; }
+                
+                return (
+                  <View key={idx} style={[styles.timelineRow, { marginBottom: 16 }]}>
+                    {idx < selectedAgentStats.activityTimeline.length - 1 && <View style={styles.timelineLine} />}
+                    <View style={[styles.timelineIconNode, { backgroundColor: color + '1A', width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' }]}>
+                      <Ionicons name={icon} size={16} color={color} />
+                    </View>
+                    <View style={[styles.timelineContent, { marginLeft: 16 }]}>
+                      <Text style={[styles.timelineText, { fontSize: 15, fontWeight: '700', color: '#1E293B' }]}>{text}</Text>
+                      <Text style={[styles.timelineTime, { fontSize: 13, color: '#64748B', marginTop: 4 }]}>
+                         {new Date(act.time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {new Date(act.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
           </View>
         </View>
       </Modal>

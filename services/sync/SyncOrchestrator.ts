@@ -705,11 +705,21 @@ class SyncOrchestrator {
          data.players = data.players.filter((p: any) => p && p.id);
        }
 
-       // Perform Merge & Save (isInternal=true to prevent push-back loop)
-       await this.syncAndSaveData(data, false, true);
+       // 🛡️ [DELTA SYNC MERGE] (v2.6.434): Merge incoming data with existing local state
+       // Failure to do this causes delta syncs with empty arrays to blindly overwrite local collections!
+       const localData: Record<string, any> = {};
+       for (const key in data) {
+         if (key !== 'isDelta' && key !== 'serverTimestamp' && key !== 'version' && key !== 'lastUpdated') {
+           localData[key] = await storage.getItem(key);
+         }
+       }
+       const { result: mergedData } = dataMerger.mergeData(localData, data);
+
+       // Perform Save (isInternal=true to prevent push-back loop)
+       await this.syncAndSaveData(mergedData, false, true);
        
        console.log('[SyncOrchestrator] [FORCE_PULL] Manual sync complete. UI updated.');
-       return data;
+       return mergedData;
     });
   }
 
