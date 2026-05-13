@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator, Modal, Platform, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, shadows } from '../../theme/designSystem';
@@ -9,6 +9,7 @@ import { useAdmin } from '../../context/AdminContext';
 import SafeAvatar from '../SafeAvatar';
 import PureJSDateTimePicker from '../PureJSDateTimePicker';
 import { Calendar } from 'react-native-calendars';
+import AceDialog from '../AceDialog';
 
 // 🕐 Time Filter Presets
 const TIME_FILTERS = [
@@ -86,6 +87,20 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const [showRoleConfirmModal, setShowRoleConfirmModal] = useState(false);
   const [pendingRoleChange, setPendingRoleChange] = useState(null);
   const [roleChangeComment, setRoleChangeComment] = useState('');
+
+  // 🎨 [ACE_DIALOG] (v2.6.431): State-driven dialog system — replaces window.alert/confirm/prompt
+  const [dialog, setDialog] = useState({ visible: false, title: '', message: '', type: 'info', confirmText: 'OK', cancelText: 'Cancel', pickerOptions: [] });
+  const dialogResolveRef = useRef(null);
+
+  const showDialog = (opts) => new Promise(resolve => {
+    dialogResolveRef.current = resolve;
+    setDialog({ visible: true, confirmText: 'OK', cancelText: 'Cancel', pickerOptions: [], ...opts });
+  });
+  const dismissDialog = (value) => {
+    setDialog(prev => ({ ...prev, visible: false }));
+    dialogResolveRef.current?.(value);
+    dialogResolveRef.current = null;
+  };
   const SUPPORT_HIERARCHY = ['Manager', 'Team Lead', 'Senior', 'Grade-7', 'Grade-5', 'Grade-3', 'Junior', 'Intern'];
 
   const sessionActivities = useMemo(() => {
@@ -105,14 +120,8 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const handleExportCSV = async () => {
     const token = await storage.getItem('userToken');
     const url = `${config.API_BASE_URL}/api/support/export?token=${token}&userId=admin`;
-    Alert.alert(
-      "Export Data",
-      "This will download a CSV containing all ticket data and metrics.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Download", onPress: () => Linking.openURL(url) }
-      ]
-    );
+    const confirmed = await showDialog({ title: 'Export Data', message: 'This will download a CSV containing all ticket data and metrics.', type: 'warning', confirmText: 'Download', cancelText: 'Cancel' });
+    if (confirmed) Linking.openURL(url);
   };
 
   const fetchTeamAnalytics = useCallback(async (filterOverride) => {
@@ -239,14 +248,14 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
         setSelectedAgentId(null);
         setShowActionsModal(false);
         const msg = `Employee ${status === 'active' ? 'reactivated' : (status || 'updated')} successfully. Email notification sent.`;
-        Platform.OS === 'web' ? window.alert(`✅ Success: ${msg}`) : Alert.alert("✅ Success", msg);
+        showDialog({ title: '✅ Success', message: msg, type: 'info' });
       } else {
         const data = await res.json();
         const msg = data.error || "Failed to update user";
-        Platform.OS === 'web' ? window.alert(`❌ Error: ${msg}`) : Alert.alert("❌ Error", msg);
+        showDialog({ title: '❌ Error', message: msg, type: 'info' });
       }
     } catch (e) {
-      Platform.OS === 'web' ? window.alert(`Network Error: ${e.message}`) : Alert.alert("Network Error", e.message);
+      showDialog({ title: 'Network Error', message: e.message, type: 'info' });
     } finally {
       setIsManaging(null);
     }
@@ -256,12 +265,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
     // 🌐 [WEB_COMPAT] (v2.6.424): Use window.confirm on web since Alert.alert
     // with button arrays doesn't reliably fire async callbacks in web browsers.
     const confirmMsg = "This will generate a random secure password and email it to the employee. All current sessions will be terminated. Proceed?";
-    const confirmed = Platform.OS === 'web' ? window.confirm(confirmMsg) : await new Promise(resolve => {
-      Alert.alert("Force Password Reset", confirmMsg, [
-        { text: "Cancel", onPress: () => resolve(false), style: "cancel" },
-        { text: "Reset Password", style: "destructive", onPress: () => resolve(true) }
-      ]);
-    });
+    const confirmed = await showDialog({ title: 'Force Password Reset', message: confirmMsg, type: 'danger', confirmText: 'Reset Password', cancelText: 'Cancel' });
     
     if (!confirmed) return;
     
@@ -284,14 +288,14 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       if (res.ok) {
         setShowActionsModal(false);
         const msg = "Password reset successfully. New credentials have been emailed to the employee.";
-        Platform.OS === 'web' ? window.alert(`✅ Success: ${msg}`) : Alert.alert("✅ Success", msg);
+        showDialog({ title: '✅ Success', message: msg, type: 'info' });
       } else {
         const data = await res.json();
         const msg = data.error || "Failed to reset password";
-        Platform.OS === 'web' ? window.alert(`❌ Error: ${msg}`) : Alert.alert("❌ Error", msg);
+        showDialog({ title: '❌ Error', message: msg, type: 'info' });
       }
     } catch (e) {
-      Platform.OS === 'web' ? window.alert(`❌ Error: ${e.message}`) : Alert.alert("❌ Error", e.message);
+      showDialog({ title: '❌ Error', message: e.message, type: 'info' });
     } finally {
       setIsManaging(null);
     }
@@ -308,39 +312,20 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
 
     if (otherAgents.length === 0) {
       const msg = 'There are no other active, non-suspended agents to receive these tickets.';
-      Platform.OS === 'web' ? window.alert(`No Targets Available: ${msg}`) : Alert.alert('No Targets Available', msg);
+      showDialog({ title: 'No Targets Available', message: msg, type: 'info' });
       return;
     }
 
-    // 🌐 [WEB_COMPAT] (v2.6.424): Alert.alert with N buttons doesn't work on web.
-    // Use window.prompt to let admin pick an agent by number.
-    let targetAgent = null;
-    if (Platform.OS === 'web') {
-      const agentList = otherAgents.map((a, i) => `${i + 1}. ${a.name || a.email || a.id}`).join('\n');
-      const choice = window.prompt(
-        `Transfer all open tickets from ${selectedAgent?.name} to:\n\n${agentList}\n\nEnter the number of the target agent:`,
-        '1'
-      );
-      if (!choice) return; // Cancelled
-      const idx = parseInt(choice, 10) - 1;
-      if (isNaN(idx) || idx < 0 || idx >= otherAgents.length) {
-        window.alert('Invalid Selection: Please enter a valid agent number.');
-        return;
-      }
-      targetAgent = otherAgents[idx];
-    } else {
-      // Mobile: Use Alert.alert with button array (works on native)
-      return new Promise(resolve => {
-        const buttons = otherAgents.map(a => ({
-          text: a.name || `${a.firstName} ${a.lastName}`,
-          onPress: () => resolve(a)
-        }));
-        buttons.push({ text: 'Cancel', style: 'cancel', onPress: () => resolve(null) });
-        Alert.alert('Transfer Tickets To', `Select the target agent:`, buttons);
-      }).then(agent => {
-        if (agent) executeTransfer(fromId, agent);
-      });
-    }
+    // 🎨 [ACE_DIALOG] (v2.6.431): Premium picker replaces window.prompt
+    const pickerOptions = otherAgents.map(a => ({ label: a.name || a.email || a.id, value: a }));
+    const targetAgent = await showDialog({
+      title: 'Transfer Tickets',
+      message: `Select the target agent to receive all open tickets from ${selectedAgent?.name}:`,
+      type: 'picker',
+      confirmText: 'Transfer',
+      cancelText: 'Cancel',
+      pickerOptions
+    });
     
     if (targetAgent) await executeTransfer(fromId, targetAgent);
   };
@@ -366,14 +351,14 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       if (res.ok) {
         setShowActionsModal(false);
         const msg = data.message || `${data.transferred} ticket(s) transferred to ${targetAgent.name} successfully.`;
-        Platform.OS === 'web' ? window.alert(`✅ Success: ${msg}`) : Alert.alert('✅ Success', msg);
+        showDialog({ title: '✅ Success', message: msg, type: 'info' });
         fetchTeamAnalytics();
       } else {
         const msg = data.error || 'Failed to transfer tickets';
-        Platform.OS === 'web' ? window.alert(`❌ Transfer Failed: ${msg}`) : Alert.alert('❌ Transfer Failed', msg);
+        showDialog({ title: '❌ Transfer Failed', message: msg, type: 'info' });
       }
     } catch (e) {
-      Platform.OS === 'web' ? window.alert(`❌ Network Error: ${e.message}`) : Alert.alert('❌ Network Error', e.message);
+      showDialog({ title: '❌ Network Error', message: e.message, type: 'info' });
     } finally {
       setIsManaging(null);
     }
@@ -1610,15 +1595,9 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                         ? "This will restore the employee's access and generate a fresh onboarding password. Proceed?"
                         : (isSuspended ? "Allow this employee to log in and receive tickets again?" : "This will immediately block dashboard access and unassign all open tickets. Proceed?");
 
-                      // 🌐 [WEB_COMPAT] (v2.6.424): Direct confirm on web
-                      const confirmed = Platform.OS === 'web' 
-                        ? window.confirm(confirmMsg)
-                        : await new Promise(resolve => {
-                            Alert.alert(`${actionLabel} Employee`, confirmMsg, [
-                              { text: "Cancel", onPress: () => resolve(false), style: "cancel" },
-                              { text: actionLabel, style: isSuspended || isTerminated ? 'default' : 'destructive', onPress: () => resolve(true) }
-                            ]);
-                          });
+                      // 🎨 [ACE_DIALOG] (v2.6.431): Premium confirmation
+                      const dialogType = (isSuspended || isTerminated) ? 'warning' : 'danger';
+                      const confirmed = await showDialog({ title: `${actionLabel} Employee`, message: confirmMsg, type: dialogType, confirmText: actionLabel, cancelText: 'Cancel' });
 
                       if (confirmed) {
                         await updateUserStatus(selectedAgent.id, nextStatus);
@@ -1661,14 +1640,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                     style={[styles.actionBtn, { borderColor: '#FEE2E2' }]}
                     onPress={async () => {
                       const confirmMsg = "This will unassign all tickets instantly and revoke dashboard access. Proceed?";
-                      const confirmed = Platform.OS === 'web'
-                        ? window.confirm(confirmMsg)
-                        : await new Promise(resolve => {
-                            Alert.alert("Confirm Termination", confirmMsg, [
-                              { text: "Cancel", onPress: () => resolve(false) },
-                              { text: "Terminate", style: 'destructive', onPress: () => resolve(true) }
-                            ]);
-                          });
+                      const confirmed = await showDialog({ title: 'Confirm Termination', message: confirmMsg, type: 'danger', confirmText: 'Terminate', cancelText: 'Cancel' });
                       if (confirmed) {
                         await updateUserStatus(selectedAgent.id, 'terminated');
                       }
@@ -1873,6 +1845,20 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
           </View>
         </Modal>
       )}
+
+      {/* 🎨 [ACE_DIALOG] (v2.6.431): Global dialog mount point */}
+      <AceDialog
+        visible={dialog.visible}
+        title={dialog.title}
+        message={dialog.message}
+        type={dialog.type}
+        confirmText={dialog.confirmText}
+        cancelText={dialog.cancelText}
+        pickerOptions={dialog.pickerOptions}
+        onConfirm={() => dismissDialog(true)}
+        onCancel={() => dismissDialog(false)}
+        onPickerSelect={(val) => dismissDialog(val)}
+      />
     </View>
   );
 };

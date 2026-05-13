@@ -282,7 +282,25 @@ const ChatBot = ({
            console.log(`🤖 [ChatBot] Admin Mode Context: ${openTournaments.length} matches.`);
         }
 
-      const tournamentContext = openTournaments.slice(0, 10).map(t =>
+        // 🧠 [LIGHTWEIGHT RAG] (v2.6.431): Filter context based on user prompt keywords
+        // Prevents the AI from being blind to tournaments outside the top 10 slice.
+        const searchTokens = userMsg.toLowerCase().split(' ').filter(w => w.length > 3);
+        let relevantTournaments = openTournaments;
+        
+        if (searchTokens.length > 0) {
+          const scored = openTournaments.map(t => {
+            const blob = `${t.title} ${t.location} ${t.sport} ${t.description}`.toLowerCase();
+            const score = searchTokens.reduce((acc, token) => acc + (blob.includes(token) ? 1 : 0), 0);
+            return { t, score };
+          });
+          // If any matched, sort by score, otherwise just take recent
+          const hasMatches = scored.some(s => s.score > 0);
+          if (hasMatches) {
+            relevantTournaments = scored.sort((a, b) => b.score - a.score).map(s => s.t);
+          }
+        }
+
+      const tournamentContext = relevantTournaments.slice(0, 10).map(t =>
         `- ID: ${t.id}, Title: ${t.title}, Sport: ${t.sport}, Date: ${t.date}, Location: ${t.location}, Entry Fee: ₹${t.entryFee}`
       ).join('\n');
 
