@@ -2,6 +2,18 @@ import { create } from 'zustand';
 import { Platform } from 'react-native';
 import config from '../config';
 
+// 🛡️ [AUTH FIX] (v2.6.432): Replaced dead localStorage token reads with credentials:'include' + x-ace-api-key.
+// The HttpOnly cookie (acetrack_session) is sent automatically via credentials:'include'.
+// No explicit Authorization header needed — the apiKeyGuard + authGuard middleware handles it.
+const getCommsHeaders = () => ({
+    'x-ace-api-key': config.PUBLIC_APP_ID
+});
+
+const getCommsJsonHeaders = () => ({
+    'Content-Type': 'application/json',
+    'x-ace-api-key': config.PUBLIC_APP_ID
+});
+
 export const useCommsStore = create((set, get) => ({
     messages: [],
     announcements: [],
@@ -12,15 +24,11 @@ export const useCommsStore = create((set, get) => ({
     fetchMessages: async () => {
         try {
             set({ isLoading: true });
-            let token = '';
-            try { token = window.localStorage?.getItem('acetrack_auth_token') || ''; } catch (e) {}
             
             const url = Platform.OS === 'web' ? '/api/comms/chat' : `${config.API_BASE_URL}/api/v1/comms/chat`;
             const response = await fetch(url, {
-                headers: { 
-                    'Authorization': token ? `Bearer ${token}` : '',
-                    'x-ace-api-key': config.PUBLIC_APP_ID 
-                }
+                credentials: 'include',
+                headers: getCommsHeaders()
             });
             const data = await response.json();
             if (data.success) set({ messages: data.messages });
@@ -33,9 +41,6 @@ export const useCommsStore = create((set, get) => ({
 
     sendMessage: async (content, receiverId, attachments = []) => {
         try {
-            let token = '';
-            try { token = window.localStorage?.getItem('acetrack_auth_token') || ''; } catch (e) {}
-
             const replyToMsg = get().replyTo;
             // Send the explicit ID if we can read it, otherwise send the entire object to let the backend parse it out.
             const replyTo = replyToMsg?._id || replyToMsg?.id || replyToMsg || null;
@@ -44,11 +49,7 @@ export const useCommsStore = create((set, get) => ({
             const response = await fetch(url, {
                 method: 'POST',
                 credentials: 'include',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': token ? `Bearer ${token}` : '',
-                    'x-ace-api-key': config.PUBLIC_APP_ID
-                },
+                headers: getCommsJsonHeaders(),
                 body: JSON.stringify({ content, receiverId, attachments, replyTo })
             });
             const data = await response.json();
@@ -66,52 +67,13 @@ export const useCommsStore = create((set, get) => ({
     // 😄 [REACTION_LOGIC] (v2.6.410): Optimistic updates
     toggleReaction: async (messageId, emoji) => {
         try {
-            let token = '';
-            try { token = window.localStorage?.getItem('acetrack_auth_token') || ''; } catch (e) {}
-
-            // Optimistic Update
-            const currentMsgs = get().messages;
-            const targetMsg = currentMsgs.find(m => m._id === messageId);
-            if (targetMsg) {
-                const newReactions = { ...(targetMsg.reactions || {}) };
-                const users = newReactions[emoji] ? [...newReactions[emoji]] : [];
-                
-                // We need the user's own ID to do a perfect optimistic update. 
-                // We'll decode the token to get the user ID, or fallback to the server response.
-                let myId = null;
-                try {
-                    const base64Url = token.split('.')[1];
-                    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-                    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-                        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-                    }).join(''));
-                    myId = JSON.parse(jsonPayload).id;
-                } catch(e) {}
-
-                if (myId) {
-                    if (users.includes(myId)) {
-                        newReactions[emoji] = users.filter(id => id !== myId);
-                        if (newReactions[emoji].length === 0) delete newReactions[emoji];
-                    } else {
-                        users.push(myId);
-                        newReactions[emoji] = users;
-                    }
-                    const updated = currentMsgs.map(m => 
-                        m._id === messageId ? { ...m, reactions: newReactions } : m
-                    );
-                    set({ messages: updated });
-                }
-            }
-
+            // Optimistic Update — we can't decode JWT from HttpOnly cookie,
+            // so we rely on server response for final state.
             const url = Platform.OS === 'web' ? '/api/comms/chat/react' : `${config.API_BASE_URL}/api/v1/comms/chat/react`;
             const response = await fetch(url, {
                 method: 'POST',
                 credentials: 'include',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': token ? `Bearer ${token}` : '',
-                    'x-ace-api-key': config.PUBLIC_APP_ID
-                },
+                headers: getCommsJsonHeaders(),
                 body: JSON.stringify({ messageId, emoji })
             });
             const data = await response.json();
@@ -127,16 +89,11 @@ export const useCommsStore = create((set, get) => ({
     // 🗑️ [DELETE_LOGIC] (v2.6.405)
     deleteMessage: async (id) => {
         try {
-            let token = '';
-            try { token = window.localStorage?.getItem('acetrack_auth_token') || ''; } catch (e) {}
-
             const url = Platform.OS === 'web' ? `/api/comms/chat/${id}` : `${config.API_BASE_URL}/api/v1/comms/chat/${id}`;
             const response = await fetch(url, {
                 method: 'DELETE',
-                headers: { 
-                    'Authorization': token ? `Bearer ${token}` : '',
-                    'x-ace-api-key': config.PUBLIC_APP_ID
-                }
+                credentials: 'include',
+                headers: getCommsHeaders()
             });
             const data = await response.json();
             if (data.success) {
@@ -150,8 +107,6 @@ export const useCommsStore = create((set, get) => ({
     uploadAttachment: async (file) => {
         try {
             set({ uploadingFile: true });
-            let token = '';
-            try { token = window.localStorage?.getItem('acetrack_auth_token') || ''; } catch (e) {}
 
             const formData = new FormData();
             formData.append('file', file);
@@ -159,10 +114,8 @@ export const useCommsStore = create((set, get) => ({
             const url = Platform.OS === 'web' ? '/api/comms/chat/upload' : `${config.API_BASE_URL}/api/v1/comms/chat/upload`;
             const response = await fetch(url, {
                 method: 'POST',
-                headers: { 
-                    'Authorization': token ? `Bearer ${token}` : '',
-                    'x-ace-api-key': config.PUBLIC_APP_ID
-                },
+                credentials: 'include',
+                headers: { 'x-ace-api-key': config.PUBLIC_APP_ID },
                 body: formData
             });
             const data = await response.json();
@@ -196,17 +149,11 @@ export const useCommsStore = create((set, get) => ({
 
     markAsSeen: async (senderId) => {
         try {
-            let token = '';
-            try { token = window.localStorage?.getItem('acetrack_auth_token') || ''; } catch (e) {}
-
             const url = Platform.OS === 'web' ? '/api/comms/chat/seen' : `${config.API_BASE_URL}/api/v1/comms/chat/seen`;
             const response = await fetch(url, {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': token ? `Bearer ${token}` : '',
-                    'x-ace-api-key': config.PUBLIC_APP_ID
-                },
+                credentials: 'include',
+                headers: getCommsJsonHeaders(),
                 body: JSON.stringify({ senderId })
             });
             const data = await response.json();
@@ -222,15 +169,11 @@ export const useCommsStore = create((set, get) => ({
     fetchAnnouncements: async () => {
         try {
             set({ isLoading: true });
-            let token = '';
-            try { token = window.localStorage?.getItem('acetrack_auth_token') || ''; } catch (e) {}
 
             const url = Platform.OS === 'web' ? '/api/comms/announcements' : `${config.API_BASE_URL}/api/v1/comms/announcements`;
             const response = await fetch(url, {
-                headers: { 
-                    'Authorization': token ? `Bearer ${token}` : '',
-                    'x-ace-api-key': config.PUBLIC_APP_ID
-                }
+                credentials: 'include',
+                headers: getCommsHeaders()
             });
             const data = await response.json();
             if (data.success) set({ announcements: data.announcements });

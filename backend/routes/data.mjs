@@ -590,7 +590,6 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
         }
 
         if (['players', 'matchmaking', 'tournaments', 'matches', 'auditLogs', 'matchVideos', 'supportTickets', 'evaluations'].includes(key) && Array.isArray(incoming)) {
-          const atomicKeys = req.body.atomicKeys || [];
 
           // 🛡️ [PRODUCTION SAFETY] (v2.6.313): NEVER allow atomic overwrites for 'players'
           // Players contain auth credentials, wallet data, and identity. Atomic overwrites 

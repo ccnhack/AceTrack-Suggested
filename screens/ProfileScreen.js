@@ -1207,7 +1207,7 @@ const ProfileScreen = ({ navigation }) => {
 
                   <TouchableOpacity 
                      onPress={async () => {
-                       const safeAlert = (title, msg) => Platform.OS === 'web' ? window.alert(`${title}: ${msg}`) : Alert.alert(title, msg);
+                       const safeAlert = (title, msg) => Alert.alert(title, msg);
 
                        if (!oldPassword || !newPassword || !confirmPassword) {
                          safeAlert("Error", "Please fill all fields");

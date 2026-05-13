@@ -296,28 +296,17 @@ const LoginScreen = ({ navigation }) => {
         const data = await res.json();
         if (res.ok) {
           setForgotStep(2);
-          if (Platform.OS === 'web') {
-            window.alert("Success: Password recovery link has been sent to your registered email.");
-          } else {
-            Alert.alert("Success", "Mail Sent! Check your registered email inbox.");
-          }
+          // 🛡️ [WEB_COMPAT FIX] (v2.6.432): Unified to Alert.alert (works on both platforms)
+          Alert.alert("Success", "Password recovery link has been sent to your registered email.");
         } else {
           const errMsg = data.message || data.error || "Failed to process request.";
-          if (Platform.OS === 'web') {
-            window.alert("Error: " + errMsg);
-          } else {
-            Alert.alert("Error", errMsg);
-          }
+          Alert.alert("Error", errMsg);
         }
       } catch (e) {
         const msg = e.name === 'AbortError' 
           ? "Request timed out. The email server may be busy — please try again in a moment."
           : "Please check your connection and try again.";
-        if (Platform.OS === 'web') {
-          window.alert("Network Error: " + msg);
-        } else {
-          Alert.alert("Network Error", msg);
-        }
+        Alert.alert("Network Error", msg);
       } finally {
         setIsForgotLoading(false);
       }

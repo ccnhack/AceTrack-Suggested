@@ -262,8 +262,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   };
 
   const handleForceReset = async (userId) => {
-    // 🌐 [WEB_COMPAT] (v2.6.424): Use window.confirm on web since Alert.alert
-    // with button arrays doesn't reliably fire async callbacks in web browsers.
+    // 🎨 [ACE_DIALOG] (v2.6.432): Uses state-driven AceDialog for cross-platform confirmation
     const confirmMsg = "This will generate a random secure password and email it to the employee. All current sessions will be terminated. Proceed?";
     const confirmed = await showDialog({ title: 'Force Password Reset', message: confirmMsg, type: 'danger', confirmText: 'Reset Password', cancelText: 'Cancel' });
     

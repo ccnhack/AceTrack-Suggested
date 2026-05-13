@@ -489,8 +489,8 @@ class SyncOrchestrator {
 
         // Merge using dataMerger
         console.log(`[SyncOrchestrator] [SELF_HEAL] Merging ${Object.keys(serverData).length} keys from cloud...`);
-        const { result, changedKeys } = dataMerger.mergeData(localData, serverData);
-        console.log(`[SyncOrchestrator] [SELF_HEAL] Merge complete. Changed keys: ${changedKeys.join(', ') || 'none'}`);
+        const { result, meta } = dataMerger.mergeData(localData, serverData);
+        console.log(`[SyncOrchestrator] [SELF_HEAL] Merge complete. Changed keys: ${(meta?.fieldsChanged || []).join(', ') || 'none'}`);
 
         // Save merged result internally (isInternal=true suppresses push-back)
         await this.syncAndSaveData(result, false, true);
@@ -648,7 +648,7 @@ class SyncOrchestrator {
    * Manually pull fresh state from the cloud and merge with local state.
    * This is the definitive fallback when Socket.io fails.
    */
-  public async forcePullData(): Promise<boolean> {
+  public async forcePullData(): Promise<any> {
     return this.trackOperation('CLOUD_FORCE_PULL', async () => {
        // 📡 [DELTA SYNC] (v2.6.431): Use incremental sync if we have a previous timestamp
        const useDelta = !!this.lastSuccessfulPullTimestamp;
@@ -668,7 +668,11 @@ class SyncOrchestrator {
            console.log('[SyncOrchestrator] [FORCE_PULL] Delta failed. Resetting to full pull mode.');
            this.lastSuccessfulPullTimestamp = null;
          }
-         return false;
+         // 🛡️ [AUTH_FAILURE] (v2.6.432): Emit auth failure for 401 responses
+         if (result.status === 401) {
+           eventBus.emit('AUTH_FAILURE', { status: 401, endpoint: '/api/data' });
+         }
+         return null;
        }
 
        console.log(`[SyncOrchestrator] [FORCE_PULL] Received cloud state. isDelta: ${result.data.isDelta || false}, Version: ${result.data.version || 'unknown'}`);
@@ -683,11 +687,23 @@ class SyncOrchestrator {
          this.lastSuccessfulPullTimestamp = result.serverTimestamp;
        }
 
+       // 🛡️ [DATA VALIDATION] (v2.6.432): Sanitize pulled data before storing.
+       const data = result.data;
+       if (Array.isArray(data.tournaments)) {
+         const before = data.tournaments.length;
+         data.tournaments = data.tournaments.filter((t: any) => t && t.id && t.title);
+         const removed = before - data.tournaments.length;
+         if (removed > 0) console.warn(`[SyncOrchestrator] Stripped ${removed} corrupted tournament(s) missing id/title.`);
+       }
+       if (Array.isArray(data.players)) {
+         data.players = data.players.filter((p: any) => p && p.id);
+       }
+
        // Perform Merge & Save (isInternal=true to prevent push-back loop)
-       await this.syncAndSaveData(result.data, false, true);
+       await this.syncAndSaveData(data, false, true);
        
        console.log('[SyncOrchestrator] [FORCE_PULL] Manual sync complete. UI updated.');
-       return true;
+       return data;
     });
   }
 

@@ -1,6 +1,16 @@
 import { create } from 'zustand';
 import config from '../config';
 
+// 🛡️ [AUTH FIX] (v2.6.432): Uses credentials:'include' + x-ace-api-key instead of dead localStorage token
+const getHeaders = () => ({
+    'x-ace-api-key': config.PUBLIC_APP_ID
+});
+
+const getJsonHeaders = () => ({
+    'Content-Type': 'application/json',
+    'x-ace-api-key': config.PUBLIC_APP_ID
+});
+
 export const useHrStore = create((set, get) => ({
     leaveRequests: [],
     policies: [],
@@ -14,7 +24,8 @@ export const useHrStore = create((set, get) => ({
         try {
             set({ isLoading: true });
             const response = await fetch(`${config.API_BASE_URL}/api/v1/hr/leaves`, {
-                headers: { 'Authorization': `Bearer ${window.localStorage?.getItem('acetrack_auth_token') || ''}` }
+                credentials: 'include',
+                headers: getHeaders()
             });
             const data = await response.json();
             if (data.success) set({ leaveRequests: data.leaves });
@@ -29,10 +40,8 @@ export const useHrStore = create((set, get) => ({
         try {
             const response = await fetch(`${config.API_BASE_URL}/api/v1/hr/leaves`, {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${window.localStorage?.getItem('acetrack_auth_token') || ''}` 
-                },
+                credentials: 'include',
+                headers: getJsonHeaders(),
                 body: JSON.stringify(leaveData)
             });
             const data = await response.json();
@@ -51,7 +60,8 @@ export const useHrStore = create((set, get) => ({
         try {
             set({ isLoading: true });
             const response = await fetch(`${config.API_BASE_URL}/api/v1/hr/policies`, {
-                headers: { 'Authorization': `Bearer ${window.localStorage?.getItem('acetrack_auth_token') || ''}` }
+                credentials: 'include',
+                headers: getHeaders()
             });
             const data = await response.json();
             if (data.success) set({ policies: data.policies });
@@ -66,7 +76,8 @@ export const useHrStore = create((set, get) => ({
         try {
             set({ isLoading: true });
             const response = await fetch(`${config.API_BASE_URL}/api/v1/hr/reviews`, {
-                headers: { 'Authorization': `Bearer ${window.localStorage?.getItem('acetrack_auth_token') || ''}` }
+                credentials: 'include',
+                headers: getHeaders()
             });
             const data = await response.json();
             if (data.success) set({ reviews: data.reviews });
@@ -81,7 +92,8 @@ export const useHrStore = create((set, get) => ({
         try {
             set({ isLoading: true });
             const response = await fetch(`${config.API_BASE_URL}/api/v1/hr/attendance`, {
-                headers: { 'Authorization': `Bearer ${window.localStorage?.getItem('acetrack_auth_token') || ''}` }
+                credentials: 'include',
+                headers: getHeaders()
             });
             const data = await response.json();
             if (data.success) set({ attendance: data.attendance });
@@ -96,7 +108,8 @@ export const useHrStore = create((set, get) => ({
         try {
             const response = await fetch(`${config.API_BASE_URL}/api/v1/hr/attendance/check-in`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${window.localStorage?.getItem('acetrack_auth_token') || ''}` }
+                credentials: 'include',
+                headers: getHeaders()
             });
             const data = await response.json();
             if (data.success) {
@@ -113,7 +126,8 @@ export const useHrStore = create((set, get) => ({
         try {
             const response = await fetch(`${config.API_BASE_URL}/api/v1/hr/attendance/check-out`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${window.localStorage?.getItem('acetrack_auth_token') || ''}` }
+                credentials: 'include',
+                headers: getHeaders()
             });
             const data = await response.json();
             if (data.success) {
@@ -129,7 +143,8 @@ export const useHrStore = create((set, get) => ({
         try {
             set({ isLoading: true });
             const response = await fetch(`${config.API_BASE_URL}/api/v1/hr/payslips`, {
-                headers: { 'Authorization': `Bearer ${window.localStorage?.getItem('acetrack_auth_token') || ''}` }
+                credentials: 'include',
+                headers: getHeaders()
             });
             const data = await response.json();
             if (data.success) set({ payslips: data.payslips });
@@ -144,7 +159,8 @@ export const useHrStore = create((set, get) => ({
         try {
             set({ isLoading: true });
             const response = await fetch(`${config.API_BASE_URL}/api/v1/hr/documents`, {
-                headers: { 'Authorization': `Bearer ${window.localStorage?.getItem('acetrack_auth_token') || ''}` }
+                credentials: 'include',
+                headers: getHeaders()
             });
             const data = await response.json();
             if (data.success) set({ documents: data.documents });

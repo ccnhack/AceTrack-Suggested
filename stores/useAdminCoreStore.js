@@ -1,6 +1,16 @@
 import { create } from 'zustand';
 import config from '../config';
 
+// 🛡️ [AUTH FIX] (v2.6.432): Uses credentials:'include' + x-ace-api-key instead of dead localStorage token
+const getHeaders = () => ({
+    'x-ace-api-key': config.PUBLIC_APP_ID
+});
+
+const getJsonHeaders = () => ({
+    'Content-Type': 'application/json',
+    'x-ace-api-key': config.PUBLIC_APP_ID
+});
+
 export const useAdminCoreStore = create((set, get) => ({
     auditLogs: [],
     orgSettings: [],
@@ -11,7 +21,8 @@ export const useAdminCoreStore = create((set, get) => ({
         try {
             set({ isLoading: true });
             const response = await fetch(`${config.API_BASE_URL}/api/v1/admin-core/team-directory`, {
-                headers: { 'Authorization': `Bearer ${window.localStorage?.getItem('acetrack_auth_token') || ''}` }
+                credentials: 'include',
+                headers: getHeaders()
             });
             const data = await response.json();
             if (data.success) set({ teamDirectory: data.team });
@@ -27,7 +38,8 @@ export const useAdminCoreStore = create((set, get) => ({
             set({ isLoading: true });
             const queryParams = new URLSearchParams(params).toString();
             const response = await fetch(`${config.API_BASE_URL}/api/v1/admin-core/audit-logs${queryParams ? '?' + queryParams : ''}`, {
-                headers: { 'Authorization': `Bearer ${window.localStorage?.getItem('acetrack_auth_token') || ''}` }
+                credentials: 'include',
+                headers: getHeaders()
             });
             const data = await response.json();
             if (data.success) set({ auditLogs: data.logs });
@@ -44,7 +56,8 @@ export const useAdminCoreStore = create((set, get) => ({
         try {
             set({ isLoading: true });
             const response = await fetch(`${config.API_BASE_URL}/api/v1/admin-core/settings`, {
-                headers: { 'Authorization': `Bearer ${window.localStorage?.getItem('acetrack_auth_token') || ''}` }
+                credentials: 'include',
+                headers: getHeaders()
             });
             const data = await response.json();
             if (data.success) set({ orgSettings: data.settings });
@@ -59,10 +72,8 @@ export const useAdminCoreStore = create((set, get) => ({
         try {
             const response = await fetch(`${config.API_BASE_URL}/api/v1/admin-core/settings`, {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${window.localStorage?.getItem('acetrack_auth_token') || ''}` 
-                },
+                credentials: 'include',
+                headers: getJsonHeaders(),
                 body: JSON.stringify({ key, value })
             });
             const data = await response.json();

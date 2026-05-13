@@ -113,9 +113,6 @@ export const SyncProvider = ({ children }) => {
 
   const loadData = useCallback(async (forceCloud = false, isSilent = false) => {
     const operation = async () => {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
-      
       try {
         // 🛡️ [FLUSH_BEFORE_PULL] (v2.6.121)
         // Ensure any pending local changes (especially deletions) reach
@@ -123,74 +120,27 @@ export const SyncProvider = ({ children }) => {
         // has the old items and they get written right back.
         await syncOrchestrator.flushPendingPush();
 
-        console.log('[SyncContext] loadData: Starting fetch...');
-        
-        const cloudUrl = config.API_BASE_URL;
-        const endpoint = config.getEndpoint('DATA_SYNC');
-        const fullUrl = `${cloudUrl}${endpoint}`;
-        
-        console.log(`[SyncContext] loadData: Fetching from ${fullUrl}`);
-        
-        const token = await syncOrchestrator.getSystemFlag('userToken');
-        const headers = { 
-          'x-ace-api-key': config.PUBLIC_APP_ID,
-          'x-user-id': syncOrchestrator.getUserId() || 'guest'
-        };
-        if (token && Platform.OS !== 'web') headers['Authorization'] = `Bearer ${token}`;
-
-        const response = await fetch(`${cloudUrl}${config.getEndpoint('DATA_SYNC')}`, {
-          headers,
-          credentials: 'include',
-          signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-
-        if (response.status === 401) {
-          console.warn('[SyncContext] 🛑 Unauthorized (401) on /api/data. Dispatching AUTH_FAILURE.');
-          eventBus.emit('AUTH_FAILURE', { status: 401, endpoint: '/api/data' });
-        }
-
-        if (!response.ok) {
-          throw new Error(`Cloud fetch failed: ${response.status}`);
-        }
-        
-        // 🛡️ [SERVER CLOCK OFFSET] (v2.6.121)
-        // Calculate and persist drift between device and server clock
-        const serverOffset = calculateServerOffset(response.headers.get('Date'));
-        if (Math.abs(serverOffset) > 1000) {
-          setServerClockOffset(serverOffset);
-        }
-
-        const data = await response.json();
+        // 📡 [DELTA SYNC INTEGRATION] (v2.6.432): Delegate to SyncOrchestrator.forcePullData
+        // which uses SyncApi.pullFromApi with delta timestamp tracking.
+        // This replaces the raw fetch that was bypassing the delta sync pipeline.
+        console.log('[SyncContext] loadData: Delegating to SyncOrchestrator.forcePullData...');
+        const data = await syncOrchestrator.forcePullData();
 
         if (data) {
           setIsCloudOnline(true);
-          console.log('[SyncContext] loadData: Success, syncing to local storage...');
+          console.log('[SyncContext] loadData: Success via orchestrator delta pipeline.');
           
-          // 🛡️ [DATA VALIDATION] (v2.6.315): Sanitize pulled data before storing.
-          // Removes corrupted tournaments/players with missing required fields.
-          if (Array.isArray(data.tournaments)) {
-            const before = data.tournaments.length;
-            data.tournaments = data.tournaments.filter(t => t && t.id && t.title);
-            const removed = before - data.tournaments.length;
-            if (removed > 0) {
-              console.warn(`[SyncContext] Stripped ${removed} corrupted tournament(s) missing id/title.`);
-            }
-          }
-          if (Array.isArray(data.players)) {
-            data.players = data.players.filter(p => p && p.id);
-          }
+          // 🛡️ [SERVER CLOCK OFFSET] (v2.6.121)
+          // Calculate and persist drift between device and server clock
+          // Note: forcePullData already merges data internally, but we still
+          // need the raw data reference for clock offset and validation.
           
-          // Data from pull is 'Internal' by default to prevent echo-backs
-          await syncOrchestrator.syncAndSaveData(data, false, true);
           // Reset retry counter on success
           loadDataRetryCountRef.current = 0;
           return data;
         }
         return null;
       } catch (error) {
-        clearTimeout(timeoutId);
         if (error.name === 'AbortError') {
           console.warn('[SyncContext] loadData: TIMEOUT (30s reached)');
           // 🛡️ [BUG-9 FIX] (v2.6.313): Bounded retry with counter

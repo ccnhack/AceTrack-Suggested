@@ -102,7 +102,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.424'; // Critical for Update prompts 
+const APP_VERSION = '2.6.432'; // Critical for Update prompts 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -482,17 +482,16 @@ const trackLoginAttempt = async (req, identifier, password, success) => {
   
   // 🛡️ [ADVANCED BRUTE-FORCE MONITOR] (v2.6.208)
   
-  // 🛡️ [ROLE-BASED THRESHOLD] (v2.6.213)
+  // 🛡️ [ROLE-BASED THRESHOLD] (v2.6.213 / v2.6.432 PERF FIX)
   // Admin: 5 attempts | Support: 10 attempts | Others: 10 attempts
-  const appState = await AppState.findOne().sort({ lastUpdated: -1 }).lean();
-  const players = appState?.data?.players || [];
+  // v2.6.432: Use Player.findOne instead of loading entire AppState blob
   const search = String(identifier).toLowerCase().trim();
-  const targetUser = players.find(p => 
-    String(p.id).toLowerCase() === search || 
-    String(p.email).toLowerCase() === search || 
-    String(p.username).toLowerCase() === search
-  );
-  const role = targetUser?.role || (identifier === 'admin_mfa' ? 'admin' : 'user');
+  let role = (identifier === 'admin_mfa' ? 'admin' : 'user');
+  try {
+    const { Player } = await import('./models/index.mjs');
+    const playerDoc = await Player.findOne({ $or: [{ id: search }, { 'data.email': search }, { 'data.username': search }] }).lean();
+    if (playerDoc?.data?.role) role = playerDoc.data.role;
+  } catch (e) { /* fallback to default role */ }
   const threshold = role === 'admin' ? 5 : 10;
 
   // 1. IMMEDIATE ALERT: Success after significant failure (Critical Breach Potential)
@@ -527,6 +526,15 @@ const trackLoginAttempt = async (req, identifier, password, success) => {
 
 // Cumulative Security Summary moved to services/scheduler.mjs
 initScheduler(loginAttempts, sendSecurityAlert);
+
+// 🛡️ [MEMORY LEAK FIX] (v2.6.432): Purge stale loginAttempts entries every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, state] of loginAttempts) {
+    state.attempts = state.attempts.filter(a => now - a.timestamp < 300000);
+    if (state.attempts.length === 0) loginAttempts.delete(key);
+  }
+}, 600000);
 
 
 // getISTDate: MOVED to ./helpers/utils.mjs (Phase 1 Modularization)
@@ -610,10 +618,10 @@ app.use((req, res, next) => {
               <title>Access Denied | AceTrack</title>
               <style>
                 body { background: #0F172A; color: #94A3B8; font-family: -apple-system, system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-                .card { background: #1E293B; padding: 40px; borderRadius: 24px; text-align: center; max-width: 400px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); border: 1px solid #334155; }
+                .card { background: #1E293B; padding: 40px; border-radius: 24px; text-align: center; max-width: 400px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); border: 1px solid #334155; }
                 h1 { color: #F8FAFC; margin: 0 0 12px 0; font-size: 24px; }
                 p { line-height: 1.6; margin-bottom: 24px; }
-                .btn { background: #6366F1; color: white; padding: 12px 24px; borderRadius: 12px; text-decoration: none; font-weight: bold; display: inline-block; transition: background 0.2s; }
+                .btn { background: #6366F1; color: white; padding: 12px 24px; border-radius: 12px; text-decoration: none; font-weight: bold; display: inline-block; transition: background 0.2s; }
                 .btn:hover { background: #4F46E5; }
               </style>
             </head>
@@ -695,11 +703,11 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // 🛡️ DIAGNOSTICS: Global Request Logger (v2.6.395)
 app.use(async (req, res, next) => {
   if (req.path.includes('login') || req.path.includes('recovery') || req.path.includes('slack')) {
+    // 🛡️ [SECURITY FIX] (v2.6.432): Removed raw headers from audit to prevent JWT leaking to DB
     await logAudit(req, 'DEBUG_NETWORK_SNIFFER', [], { 
       url: req.originalUrl || req.path, 
       method: req.method,
-      hasPayload: !!req.body?.payload,
-      headers: req.headers
+      hasPayload: !!req.body?.payload
     });
   }
   next();
@@ -779,7 +787,7 @@ io.use((socket, next) => {
     const cookieHeader = socket.handshake.headers.cookie;
     if (cookieHeader) {
       const cookies = Object.fromEntries(cookieHeader.split('; ').map(c => c.split('=')));
-      const token = cookies['acetrack_auth_token'];
+      const token = cookies['acetrack_session'];
       if (token) {
         try {
           const decoded = jwt.verify(token, JWT_SECRET);
@@ -1106,7 +1114,7 @@ app.use((err, req, res, next) => {
 
 // 🚀 Start: 'Immortal' Listener (v2.6.81 — Standard Port)
 // ═══════════════════════════════════════════════════════════════
-const server = httpServer.listen(PORT, () => {
+const server = httpServer.listen(PORT, '0.0.0.0', () => {
   const addr = server.address();
   const actualPort = typeof addr === 'string' ? addr : addr.port;
   console.log(`🚀 AceTrack PORT 3000 SHIFT v${APP_VERSION} listening on ${actualPort}`);
