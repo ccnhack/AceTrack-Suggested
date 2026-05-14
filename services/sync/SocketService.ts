@@ -98,6 +98,68 @@ class SocketService {
         console.error(`[SocketService] Connection Error: ${err.message}`);
       });
 
+      // 🛡️ [DIAGNOSTICS] ADMIN PING RESPONDER (v2.6.435)
+      this.socket.on('admin_ping_device_relay', async (data: any) => {
+        try {
+          if (data.targetUserId === String(userId).toLowerCase() && this.socket) {
+            console.log('[SocketService] Received Admin Ping — Replying with Pong');
+            this.socket.emit('device_pong', {
+              targetUserId: String(userId).toLowerCase(),
+              deviceId: hardwareId || Constants.sessionId || 'mobile_client',
+              deviceName: Constants.deviceName || getDeviceName(),
+              appVersion: Constants.expoConfig?.version || config.APP_VERSION || '2.6.435',
+              timestamp: Date.now()
+            });
+          }
+        } catch (e: any) {
+          console.error('[SocketService] socket:admin_ping error:', e);
+        }
+      });
+
+      // 🛡️ [DIAGNOSTICS] FORCE UPLOAD RESPONDER
+      this.socket.on('force_upload_diagnostics', async (data: any) => {
+        try {
+          // If a specific device is targeted, verify it matches
+          if (data.targetDeviceId && hardwareId && data.targetDeviceId !== hardwareId) {
+             return;
+          }
+          if (data.targetUserId === String(userId).toLowerCase()) {
+             console.log('[SocketService] Received Force Upload Request');
+             logger.logAction('ADMIN_DIAGNOSTICS_PULL_RECEIVED', {
+               adminId: data.adminId,
+               targetUserId: data.targetUserId,
+               myId: userId,
+               targetDeviceId: data.targetDeviceId,
+               myDeviceId: hardwareId
+             });
+             
+             const userStr = await storage.getItem('currentUser');
+             let user = null;
+             try { user = typeof userStr === 'string' ? JSON.parse(userStr) : userStr; } catch (e) {}
+             const label = user?.name || 'Guest';
+             const deviceId = hardwareId || await storage.getItem('acetrack_device_id') || 'unknown';
+             const allLogs = logger.getLogs();
+             await fetch(`${config.API_BASE_URL}${config.getEndpoint('DIAGNOSTICS')}`, {
+               method: 'POST',
+               headers: {
+                 'Content-Type': 'application/json',
+                 'x-ace-api-key': config.ACE_API_KEY
+               },
+               body: JSON.stringify({
+                 username: label,
+                 logs: allLogs,
+                 prefix: 'admin_requested',
+                 deviceId
+               })
+             });
+             logger.logAction('ADMIN_DIAGNOSTICS_PULL_SUCCESS', { count: allLogs.length });
+          }
+        } catch (e: any) {
+          console.error('[SocketService] Remote diagnostic upload failed:', e);
+          logger.logAction('ADMIN_DIAGNOSTICS_PULL_FAILED', { error: e.message });
+        }
+      });
+
       this.socket.on('data_updated', async (data) => {
         try {
           if (data?.lastSocketId && this.socket?.id && data.lastSocketId === this.socket.id) {
