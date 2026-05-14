@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import * as Device from 'expo-device';
 import storage from './storage';
 import config from '../config';
 
@@ -357,7 +358,7 @@ const logger = {
       originalError("Failed to hydrate persistent logs:", e.message);
       try { await storage.removeItem('persistent_logs'); } catch (_) {}
     }
-    addLog('system', 'init', `Diagnostics Logger v6 Ready [Platform: ${Platform.OS}] [MaxStore: ${MAX_STORAGE_ENTRIES}]`);
+    addLog('system', 'init', `Diagnostics Logger v6 Ready [Platform: ${Platform.OS} ${Device.osVersion || ''}] [MaxStore: ${MAX_STORAGE_ENTRIES}]`);
   }
 };
 

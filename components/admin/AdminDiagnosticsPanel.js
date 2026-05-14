@@ -826,35 +826,81 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
                   )}
 
                   {/* Registered History Devices */}
-                  <Text style={styles.diagSectionLabel}>Registered History Devices ({offlineDevices.length})</Text>
-                  {offlineDevices.length > 0 ? (
-                    offlineDevices.map(d => (
-                      <View key={d.id} style={styles.deviceItem}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.deviceName}>{d.name || 'Unknown Device'}</Text>
-                          <View style={styles.deviceMeta}>
-                            <View style={[styles.statusDot, { backgroundColor: '#EF4444' }]} />
-                            <Text style={[styles.statusText, { color: '#EF4444' }]}>OFFLINE</Text>
-                            <Text style={styles.deviceAppVersion}>
-                              v{(onlineDevices[d.id]?.version || d.appVersion || '???')}
-                            </Text>
+                  {(() => {
+                    const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000;
+                    const now = Date.now();
+                    const recentOfflineDevices = [];
+                    const archivedDevices = [];
+
+                    offlineDevices.forEach(d => {
+                      if (d.timestamp && now - d.timestamp > TEN_DAYS_MS) {
+                        archivedDevices.push(d);
+                      } else {
+                        recentOfflineDevices.push(d);
+                      }
+                    });
+
+                    return (
+                      <>
+                        <Text style={styles.diagSectionLabel}>Registered History Devices ({recentOfflineDevices.length})</Text>
+                        {recentOfflineDevices.length > 0 ? (
+                          recentOfflineDevices.map(d => (
+                            <View key={d.id} style={styles.deviceItem}>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.deviceName}>{d.name || 'Unknown Device'}</Text>
+                                <View style={styles.deviceMeta}>
+                                  <View style={[styles.statusDot, { backgroundColor: '#EF4444' }]} />
+                                  <Text style={[styles.statusText, { color: '#EF4444' }]}>OFFLINE</Text>
+                                  <Text style={styles.deviceAppVersion}>
+                                    v{(onlineDevices[d.id]?.version || d.appVersion || '???')}
+                                  </Text>
+                                </View>
+                              </View>
+                              <TouchableOpacity 
+                                disabled={true}
+                                onPress={() => handlePullLogs(d.id)}
+                                style={[styles.pullBtn, styles.pullBtnDisabled]}
+                              >
+                                <Ionicons name="cloud-download-outline" size={14} color="#FFF" />
+                                <Text style={styles.pullBtnText}>PULL LOGS</Text>
+                              </TouchableOpacity>
+                            </View>
+                          ))
+                        ) : (
+                          <View style={styles.noDevicesBox}>
+                            <Text style={styles.noDevicesText}>All active devices are online.</Text>
                           </View>
-                        </View>
-                        <TouchableOpacity 
-                          disabled={true}
-                          onPress={() => handlePullLogs(d.id)}
-                          style={[styles.pullBtn, styles.pullBtnDisabled]}
-                        >
-                          <Ionicons name="cloud-download-outline" size={14} color="#FFF" />
-                          <Text style={styles.pullBtnText}>PULL LOGS</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ))
-                  ) : (
-                    <View style={styles.noDevicesBox}>
-                      <Text style={styles.noDevicesText}>All devices are currently active.</Text>
-                    </View>
-                  )}
+                        )}
+
+                        {archivedDevices.length > 0 && (
+                          <View style={{ marginTop: 16 }}>
+                            <Text style={[styles.diagSectionLabel, { color: '#64748B' }]}>Archived Devices ({archivedDevices.length})</Text>
+                            {archivedDevices.map(d => (
+                              <View key={d.id} style={[styles.deviceItem, { opacity: 0.6 }]}>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.deviceName}>{d.name || 'Unknown Device'}</Text>
+                                  <View style={styles.deviceMeta}>
+                                    <View style={[styles.statusDot, { backgroundColor: '#94A3B8' }]} />
+                                    <Text style={[styles.statusText, { color: '#64748B' }]}>INACTIVE &gt; 10 DAYS</Text>
+                                    <Text style={styles.deviceAppVersion}>
+                                      v{(onlineDevices[d.id]?.version || d.appVersion || '???')}
+                                    </Text>
+                                  </View>
+                                </View>
+                                <TouchableOpacity 
+                                  disabled={true}
+                                  style={[styles.pullBtn, styles.pullBtnDisabled]}
+                                >
+                                  <Ionicons name="cloud-download-outline" size={14} color="#FFF" />
+                                  <Text style={styles.pullBtnText}>PULL LOGS</Text>
+                                </TouchableOpacity>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+                      </>
+                    );
+                  })()}
                 </>
               );
             })()}
