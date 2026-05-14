@@ -163,7 +163,7 @@ export default function createInfrastructureRoutes({
                }
                
                const prompt = `You are a Customer Support AI Assistant. Summarize the support ticket below. 
-You MUST format your response EXACTLY like this (use standard bullet points, do not include any extra text or pleasantries):
+You MUST format your response EXACTLY like this (use standard bullet points, and ensure EVERY bullet point is on a NEW LINE, do not include any extra text or pleasantries):
 
 • [Bullet point 1 summarizing the core issue]
 • [Bullet point 2 summarizing the conversation history]
@@ -188,7 +188,10 @@ ${chatHistory.substring(0, 3000)}`;
                
                if (aiReq.ok) {
                   const aiJson = await aiReq.json();
-                  summary = aiJson.choices?.[0]?.message?.content || "AI returned empty response.";
+                  let rawContent = aiJson.choices?.[0]?.message?.content || "AI returned empty response.";
+                  
+                  // Force a newline before every bullet point if the AI missed it
+                  summary = rawContent.replace(/(?<!\n)(•|-)/g, '\n$1').trim();
                } else {
                   summary = `_AI Error: ${aiReq.statusText}_`;
                }
