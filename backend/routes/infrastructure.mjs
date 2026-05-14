@@ -162,7 +162,18 @@ export default function createInfrastructureRoutes({
                    chatHistory = ticket.messages.map(m => `[${m.senderId || m.sender || 'User'}]: ${m.text || m.content || m.message || ''}`).join('\n');
                }
                
-               const prompt = `You are a Customer Support AI Assistant. Summarize the following support ticket in 2-3 short bullet points, and then provide 1 clear "Next Step" for the support agent. Keep it very concise.\nTicket Description: ${issueDesc}\nChat History:\n${chatHistory.substring(0, 3000)}`;
+               const prompt = `You are a Customer Support AI Assistant. Summarize the support ticket below. 
+You MUST format your response EXACTLY like this (use standard bullet points, do not include any extra text or pleasantries):
+
+• [Bullet point 1 summarizing the core issue]
+• [Bullet point 2 summarizing the conversation history]
+• [Bullet point 3 summarizing the current state]
+
+*Next Step:* [1 clear, highly actionable next step for the support agent]
+
+Ticket Description: ${issueDesc}
+Chat History:
+${chatHistory.substring(0, 3000)}`;
 
                const aiReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
                  method: 'POST',
