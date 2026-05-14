@@ -1141,11 +1141,21 @@ router.post('/support/ai-summary', apiKeyGuard, async (req, res) => {
 /** 🔄 [NEW v2.6.162] Reassign a Specific Ticket to Another Agent */
 router.post('/support/reassign-ticket', apiKeyGuard, async (req, res) => {
   const { ticketId, targetAgentId } = req.body;
-  console.log(`[API] POST /support/reassign-ticket: ticket=${ticketId}, to=${targetAgentId}`);
-  if (req.headers['x-user-id'] !== 'admin') return res.status(403).json({ error: 'System Administrator privileges required' });
+  const requesterId = req.headers['x-user-id'];
+  console.log(`[API] POST /support/reassign-ticket: ticket=${ticketId}, to=${targetAgentId}, requester=${requesterId}`);
+  
   if (!ticketId || !targetAgentId) return res.status(400).json({ error: 'Both ticketId and targetAgentId are required' });
 
   try {
+    // 🛡️ [AUTH HARDENING] (v2.6.438): Allow Admin, Team Lead, and Manager to reassign
+    const requesterDoc = await Player.findOne({ id: requesterId }).lean();
+    const requester = requesterDoc ? requesterDoc.data : null;
+    const requesterLevel = requester ? (requester.supportLevel || '') : '';
+    const requesterRole = requester ? (requester.role || '').toLowerCase() : '';
+    
+    const isAuthorizedRequester = requesterId === 'admin' || requesterRole === 'admin' || ['Team Lead', 'Manager'].includes(requesterLevel);
+    if (!isAuthorizedRequester) return res.status(403).json({ error: 'System Administrator or Support Management privileges required' });
+
     // 🛡️ SCALABILITY FIX (v2.6.316): Read/write from distinct collections scoped efficiently
     const [targetAgentDoc, ticketDoc] = await Promise.all([
       Player.findOne({ id: targetAgentId }).lean(),
@@ -1235,6 +1245,21 @@ router.post('/support/reassign-ticket', apiKeyGuard, async (req, res) => {
     ticketDoc.lastUpdated = new Date();
     ticketDoc.markModified('data');
     await ticketDoc.save();
+
+    // 🛡️ [DUAL-PERSISTENCE SYNC] (v2.6.438)
+    // Update the monolithic AppState blob to ensure immediate visibility for all clients
+    const latestState = await AppState.findOne().sort({ version: -1 });
+    if (latestState && latestState.data && latestState.data.supportTickets) {
+      const tickets = latestState.data.supportTickets;
+      const idx = tickets.findIndex(t => t.id === ticketId);
+      if (idx !== -1) {
+        tickets[idx] = ticket;
+        latestState.markModified('data');
+        latestState.version += 1;
+        await latestState.save();
+        console.log(`[SYNC] Ticket ${ticketId} synced to AppState v${latestState.version} (Reassign)`);
+      }
+    }
 
     logServerEvent('SUPPORT_TICKET_REASSIGNED', { ticketId, fromAgentId: oldAgentId, toAgentId: targetAgentId });
     res.json({ 
@@ -1399,6 +1424,21 @@ router.post('/support/claim-ticket', apiKeyGuard, async (req, res) => {
     ticketDoc.lastUpdated = new Date();
     ticketDoc.markModified('data');
     await ticketDoc.save();
+
+    // 🛡️ [DUAL-PERSISTENCE SYNC] (v2.6.438)
+    // Update the monolithic AppState blob to ensure immediate visibility for all clients
+    const latestState = await AppState.findOne().sort({ version: -1 });
+    if (latestState && latestState.data && latestState.data.supportTickets) {
+      const tickets = latestState.data.supportTickets;
+      const idx = tickets.findIndex(t => t.id === ticketId);
+      if (idx !== -1) {
+        tickets[idx] = ticket;
+        latestState.markModified('data');
+        latestState.version += 1;
+        await latestState.save();
+        console.log(`[SYNC] Ticket ${ticketId} synced to AppState v${latestState.version} (Claim)`);
+      }
+    }
 
     logAudit(req, 'TICKET_CLAIMED', ['supportTickets'], { ticketId, agentId });
 
