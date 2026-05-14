@@ -43,16 +43,17 @@ export function useAppDataQuery(options = {}) {
 export function usePlayersQuery() {
   const { players, hydrate } = usePlayersStore();
   
-  return useQuery({
+  const query = useQuery({
     queryKey: queryKeys.players,
     queryFn: async () => {
       await hydrate();
       return usePlayersStore.getState().players;
     },
-    // 🛡️ [BUG FIX]: Use placeholderData so it shows initial state but still runs queryFn to hydrate
     placeholderData: players,
     staleTime: 60 * 1000, // Players change less frequently
   });
+  
+  return { ...query, data: players?.length > 0 ? players : query.data };
 }
 
 /**
@@ -61,7 +62,7 @@ export function usePlayersQuery() {
 export function useTournamentsQuery() {
   const { tournaments, hydrate } = useTournamentsStore();
   
-  return useQuery({
+  const query = useQuery({
     queryKey: queryKeys.tournaments,
     queryFn: async () => {
       await hydrate();
@@ -70,6 +71,8 @@ export function useTournamentsQuery() {
     placeholderData: tournaments,
     staleTime: 30 * 1000,
   });
+  
+  return { ...query, data: tournaments?.length > 0 ? tournaments : query.data };
 }
 
 /**
@@ -78,7 +81,7 @@ export function useTournamentsQuery() {
 export function useSupportTicketsQuery() {
   const { supportTickets, hydrate } = useSupportStore();
   
-  return useQuery({
+  const query = useQuery({
     queryKey: queryKeys.supportTickets,
     queryFn: async () => {
       await hydrate();
@@ -88,6 +91,8 @@ export function useSupportTicketsQuery() {
     staleTime: 5 * 1000, // Reduced from 10s to 5s for even higher freshness
     refetchOnWindowFocus: true
   });
+  
+  return { ...query, data: supportTickets?.length > 0 ? supportTickets : query.data };
 }
 
 /**
@@ -96,7 +101,7 @@ export function useSupportTicketsQuery() {
 export function useMatchmakingQuery() {
   const { matchmaking, hydrate } = useMatchmakingStore();
   
-  return useQuery({
+  const query = useQuery({
     queryKey: queryKeys.matchmaking,
     queryFn: async () => {
       await hydrate();
@@ -105,6 +110,8 @@ export function useMatchmakingQuery() {
     placeholderData: matchmaking,
     staleTime: 30 * 1000,
   });
+  
+  return { ...query, data: matchmaking?.length > 0 ? matchmaking : query.data };
 }
 
 /**
@@ -113,7 +120,7 @@ export function useMatchmakingQuery() {
 export function useEvaluationsQuery() {
   const { evaluations, hydrate } = useEvaluationsStore();
   
-  return useQuery({
+  const query = useQuery({
     queryKey: queryKeys.evaluations,
     queryFn: async () => {
       await hydrate();
@@ -122,6 +129,8 @@ export function useEvaluationsQuery() {
     placeholderData: evaluations,
     staleTime: 60 * 1000,
   });
+  
+  return { ...query, data: evaluations?.length > 0 ? evaluations : query.data };
 }
 
 // ═══════════════════════════════════════════════════════════════
