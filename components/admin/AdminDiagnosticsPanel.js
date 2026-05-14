@@ -889,7 +889,45 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
             </TouchableOpacity>
           </View>
           <ScrollView style={styles.viewerContent}>
-            <Text style={styles.viewerText}>{diagContent}</Text>
+            {(() => {
+              try {
+                const parsed = JSON.parse(diagContent);
+                const userName = selectedDiagUser ? `${selectedDiagUser.name || 'Unknown'} (${parsed.username})` : parsed.username;
+                
+                let deviceName = parsed.deviceId;
+                let deviceVersion = 'Unknown';
+                if (selectedDiagUser) {
+                  const match = (selectedDiagUser.devices || []).find(d => 
+                     parsed.deviceId.includes((d.name || '').replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()) ||
+                     parsed.deviceId.includes((d.deviceId || d.id || '').replace(/[^a-zA-Z0-9]/g, '_').toLowerCase())
+                  );
+                  if (match) {
+                     deviceName = match.name || match.deviceName || parsed.deviceId;
+                     deviceVersion = onlineDevices[match.id]?.version || match.appVersion || 'Unknown';
+                  } else {
+                     const parts = parsed.deviceId.split('_');
+                     if (parts.length >= 2 && isNaN(parts[0])) {
+                         deviceName = `${parts[0]} ${parts[1]}`;
+                     }
+                  }
+                }
+
+                const logLines = Array.isArray(parsed.logs) ? parsed.logs.length : 0;
+                const estSize = (diagContent.length / 1024).toFixed(2);
+                let requestedAt = 'Unknown';
+                try {
+                  requestedAt = parsed.uploadedAt ? new Date(parsed.uploadedAt).toLocaleString() : 'Unknown';
+                } catch(e) {}
+
+                return (
+                  <Text style={styles.viewerText}>
+                    {`User:- ${userName}\nDevice:- ${deviceName}\nAndroid/IoS Version:- ${deviceVersion}\nRequested At:- ${requestedAt}\nLog Lines :- ${logLines}\nEst. Size: ${estSize} KB\n\n-----------------------------------------------------------\n\n${JSON.stringify(parsed.logs, null, 2)}`}
+                  </Text>
+                );
+              } catch (e) {
+                return <Text style={styles.viewerText}>{diagContent}</Text>;
+              }
+            })()}
           </ScrollView>
         </View>
       )}
