@@ -131,7 +131,8 @@ export default function createInfrastructureRoutes({
          
          const tData = ticket.data || {};
          const userId = tData.userId || 'Unknown';
-         const status = tData.status || 'open';
+         const statusRaw = String(tData.status || 'open');
+         const status = statusRaw.toLowerCase();
          const createdAt = tData.createdAt || tData.timestamp || ticket.lastUpdated;
          const issueDesc = tData.description || tData.issue || tData.message || 'No description provided';
          const assignedTo = tData.assignedTo;
@@ -202,6 +203,18 @@ ${chatHistory.substring(0, 3000)}`;
             summary = "_AI Summary unavailable: GROQ_API_KEY is not set on the backend._";
          }
          
+         const ticketFields = [
+            { "type": "mrkdwn", "text": `*Raised By:*\n${userName}` },
+            { "type": "mrkdwn", "text": `*Assigned To:*\n${agentName}` },
+            { "type": "mrkdwn", "text": `*Status:*\n\`${statusRaw.toUpperCase()}\`` },
+            { "type": "mrkdwn", "text": `*Opened On:*\n${new Date(createdAt).toLocaleString()}` }
+         ];
+
+         if (status === 'closed' || status === 'resolved') {
+            const closedAt = tData.closedAt || tData.resolvedAt || ticket.lastUpdated;
+            ticketFields.push({ "type": "mrkdwn", "text": `*Closed On:*\n${new Date(closedAt).toLocaleString()}` });
+         }
+         
          const blocks = [
             {
                "type": "header",
@@ -209,12 +222,7 @@ ${chatHistory.substring(0, 3000)}`;
             },
             {
                "type": "section",
-               "fields": [
-                  { "type": "mrkdwn", "text": `*Raised By:*\n${userName}` },
-                  { "type": "mrkdwn", "text": `*Assigned To:*\n${agentName}` },
-                  { "type": "mrkdwn", "text": `*Status:*\n\`${status.toUpperCase()}\`` },
-                  { "type": "mrkdwn", "text": `*Opened On:*\n${new Date(createdAt).toLocaleString()}` }
-               ]
+               "fields": ticketFields
             },
             { "type": "divider" },
             {
