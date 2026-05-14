@@ -209,19 +209,23 @@ export default function createInfrastructureRoutes({
             
             if (!t.assignedTo) {
                if (isOpen) totalUnassigned++;
-            } else {
-               const agent = t.assignedTo;
-               if (!employeeStats[agent]) employeeStats[agent] = { assigned: 0, open: 0, closed: 0 };
-               employeeStats[agent].assigned++;
-               if (isOpen) employeeStats[agent].open++;
-               else employeeStats[agent].closed++;
             }
+            
+            // Track ALL tickets in employee breakdown (including unassigned/closed)
+            const agent = t.assignedTo ? t.assignedTo : 'system_unassigned';
+            if (!employeeStats[agent]) employeeStats[agent] = { assigned: 0, open: 0, closed: 0 };
+            employeeStats[agent].assigned++;
+            if (isOpen) employeeStats[agent].open++;
+            else employeeStats[agent].closed++;
          });
 
          // 👤 Resolve Agent IDs to Names
-         const agentIds = Object.keys(employeeStats);
+         const agentIds = Object.keys(employeeStats).filter(id => id !== 'system_unassigned');
          const agentProfiles = await Player.find({ id: { $in: agentIds } }).lean();
-         const agentMap = {};
+         const agentMap = {
+             'system_unassigned': '🤖 System / Auto-Resolved (Unassigned)'
+         };
+         
          agentProfiles.forEach(p => {
              const pd = p.data || {};
              const name = pd.firstName && pd.lastName ? `${pd.firstName} ${pd.lastName}` : '';
