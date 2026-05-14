@@ -960,10 +960,11 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
 
                 const logLines = Array.isArray(parsed.logs) ? parsed.logs.length : 0;
                 
-                // Extract Android/iOS version from the init log if possible
+                // Extract Android/iOS version from the most recent init log if possible
                 let osVersion = 'Unknown';
                 if (Array.isArray(parsed.logs)) {
-                   const initLog = parsed.logs.find(l => l.type === 'init' && l.message && l.message.includes('[Platform:'));
+                   // Search backwards to get the latest init log (avoids old session init logs)
+                   const initLog = [...parsed.logs].reverse().find(l => l.type === 'init' && l.message && l.message.includes('[Platform:'));
                    if (initLog) {
                       const match = initLog.message.match(/\[Platform:\s*([^\]]+)\]/i);
                       if (match) osVersion = match[1];
