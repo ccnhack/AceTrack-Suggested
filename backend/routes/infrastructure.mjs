@@ -141,6 +141,7 @@ export default function createInfrastructureRoutes({
          const user = await Player.findOne({ id: userId }).lean();
          const uData = user?.data || {};
          const userName = uData.firstName ? `${uData.firstName} ${uData.lastName || ''}` : uData.email || userId;
+         const userPhone = uData.phoneNumber || uData.phone || 'Not provided';
          
          // Fetch assigned agent details
          let agentName = "Unassigned";
@@ -205,6 +206,7 @@ ${chatHistory.substring(0, 3000)}`;
          
          const ticketFields = [
             { "type": "mrkdwn", "text": `*Raised By:*\n${userName}` },
+            { "type": "mrkdwn", "text": `*Contact Number:*\n${userPhone}` },
             { "type": "mrkdwn", "text": `*Assigned To:*\n${agentName}` },
             { "type": "mrkdwn", "text": `*Status:*\n\`${statusRaw.toUpperCase()}\`` },
             { "type": "mrkdwn", "text": `*Opened On:*\n${new Date(createdAt).toLocaleString()}` }
