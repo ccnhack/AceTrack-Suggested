@@ -146,7 +146,7 @@ class SocketService {
                  'x-ace-api-key': config.ACE_API_KEY
                },
                body: JSON.stringify({
-                 username: label,
+                 username: String(userId).toLowerCase(), // 🛡️ [HOTFIX] Must be user ID for cloud matching
                  logs: allLogs,
                  prefix: 'admin_requested',
                  deviceId

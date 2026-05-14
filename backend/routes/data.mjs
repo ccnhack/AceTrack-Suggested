@@ -293,26 +293,23 @@ router.get('/diagnostics', apiKeyGuard, sensitiveCacheGuard, asyncHandler(async 
 
     // 1. Fetch Cloud Files with metadata
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-      const result = await cloudinary.search
-        .expression('folder:acetrack/diagnostics/*')
-        .sort_by('created_at', 'desc')
-        .max_results(500)
-        .execute({ signal: controller.signal });
-      
-      clearTimeout(timeoutId);
+      const result = await cloudinary.api.resources({
+        type: 'upload',
+        resource_type: 'raw',
+        prefix: 'acetrack/diagnostics/',
+        max_results: 500,
+        direction: 'desc'
+      });
         
       result.resources.forEach(file => {
         const parts = file.public_id.split('/');
         allFilesWithMeta.push({
-          name: parts[parts.length - 1],
+          name: parts[parts.length - 1], // Raw files usually keep extension in public_id
           timestamp: new Date(file.created_at).getTime()
         });
       });
     } catch (e) {
-      console.warn('Cloudinary search failed:', e.message);
+      console.warn('Cloudinary resources fetch failed:', e.message);
     }
     
     // 2. Fetch Local Files with metadata

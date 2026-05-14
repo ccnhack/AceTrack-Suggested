@@ -913,6 +913,17 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
                 }
 
                 const logLines = Array.isArray(parsed.logs) ? parsed.logs.length : 0;
+                
+                // Extract Android/iOS version from the init log if possible
+                let osVersion = 'Unknown';
+                if (Array.isArray(parsed.logs)) {
+                   const initLog = parsed.logs.find(l => l.type === 'init' && l.message && l.message.includes('[Platform:'));
+                   if (initLog) {
+                      const match = initLog.message.match(/\[Platform:\s*([^\]]+)\]/i);
+                      if (match) osVersion = match[1];
+                   }
+                }
+
                 const estSize = (diagContent.length / 1024).toFixed(2);
                 let requestedAt = 'Unknown';
                 try {
@@ -921,7 +932,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
 
                 return (
                   <Text style={styles.viewerText}>
-                    {`User:- ${userName}\nDevice:- ${deviceName}\nAndroid/IoS Version:- ${deviceVersion}\nRequested At:- ${requestedAt}\nLog Lines :- ${logLines}\nEst. Size: ${estSize} KB\n\n-----------------------------------------------------------\n\n${JSON.stringify(parsed.logs, null, 2)}`}
+                    {`User:- ${userName}\nDevice:- ${deviceName}\nAndroid/IoS Version:- ${osVersion}\nAPP version:- ${deviceVersion}\nRequested At:- ${requestedAt}\nLog Lines :- ${logLines}\nEst. Size: ${estSize} KB\n\n-----------------------------------------------------------\n\n${JSON.stringify(parsed.logs, null, 2)}`}
                   </Text>
                 );
               } catch (e) {
