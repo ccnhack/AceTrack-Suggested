@@ -834,6 +834,65 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
       });
     }
 
+    // 🛡️ [SUPPORT BUSINESS LOGIC ENGINE] (v2.6.438)
+    // Perform auto-assignment, termination cleanup, and response tracking BEFORE saving to database.
+    if (changedKeys.includes('supportTickets')) {
+       const existingTickets = currentData.supportTickets || [];
+       (newMasterData.supportTickets || []).forEach(ticket => {
+         const existing = existingTickets.find(et => et.id === ticket.id);
+         const isNew = !existing;
+         const isUnassigned = !ticket.assignedTo || ticket.assignedTo === 'Unassigned' || ticket.assignedTo === '';
+         
+         // 1. 🤖 [AUTO-ASSIGNMENT]
+         if (isNew && isUnassigned && ticket.status === 'Open') {
+           const bestAgent = SupportMetricsService.findBestAgent(newMasterData.players, newMasterData.supportTickets || []);
+           if (bestAgent) {
+             console.log(`🤖 [ASSIGN] Pre-save auto-assigning ticket ${ticket.id} to agent ${bestAgent.id}`);
+             ticket.assignedTo = bestAgent.id;
+             ticket.assignedAt = new Date().toISOString();
+             ticket.assignmentSource = 'auto';
+             modifiedEntities.supportTickets.set(ticket.id, ticket);
+
+             // Increment agent's lifetime handles
+             const agentIndex = newMasterData.players.findIndex(p => p.id === bestAgent.id);
+             if (agentIndex !== -1) {
+               const agent = newMasterData.players[agentIndex];
+               if (!agent.metrics) agent.metrics = { totalHandled: 0, closedTickets: 0, manualPicks: 0, avgRating: 0 };
+               agent.metrics.totalHandled += 1;
+               modifiedEntities.players.set(agent.id.toLowerCase(), agent);
+             }
+
+             logAudit(req, 'TICKET_AUTO_ASSIGNED', ['supportTickets', 'players'], { 
+               ticketId: ticket.id, 
+               agentId: bestAgent.id,
+               agentName: `${bestAgent.firstName || ''} ${bestAgent.lastName || ''}`.trim()
+             }).catch(() => {});
+           }
+         }
+
+         // 2. 🛡️ [TERMINATION CLEANUP]
+         if (ticket.assignedTo) {
+           const agent = newMasterData.players.find(p => p.id === ticket.assignedTo);
+           const status = (agent?.supportStatus || '').toLowerCase();
+           if (agent && ['terminated', 'left', 'ex-employee'].includes(status)) {
+             console.log(`🛡️ [CLEANUP] Pre-save unassigning ticket ${ticket.id} due to agent termination.`);
+             ticket.assignedTo = null;
+             ticket.assignedAt = null;
+             modifiedEntities.supportTickets.set(ticket.id, ticket);
+           }
+         }
+
+         // 3. 🛡️ [RESPONSE TRACKING]
+         const newMessages = (ticket.messages || []).slice(existing ? existing.messages.length : 0);
+         for (const msg of newMessages) {
+           if (String(msg.senderId) !== String(ticket.userId) && !ticket.firstResponseAt && msg.senderId !== 'system') {
+             ticket.firstResponseAt = new Date().toISOString();
+             modifiedEntities.supportTickets.set(ticket.id, ticket);
+           }
+         }
+       });
+    }
+
     const nextVersion = currentVersion + 1;
 
     // 🛡️ [16MB BOMB DEFUSAL] (v2.6.316): Strip distinct collections before saving monolithic AppState
@@ -1018,47 +1077,7 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
           if (isNew) {
              logAudit(req, 'TICKET_CREATED', ['supportTickets'], { ticketId: ticket.id, type: ticket.type, title: ticket.title });
           }
-          // 🤖 [AUTO-ASSIGN] (v2.6.132) 
-          // If ticket is Open and unassigned, try to find a best agent
-          if (ticket.status === 'Open' && !ticket.assignedTo) {
-            const bestAgent = SupportMetricsService.findBestAgent(newMasterData.players, newMasterData.supportTickets || []);
-            if (bestAgent) {
-              console.log(`🤖 [ASSIGN] Auto-assigning ticket ${ticket.id} to agent ${bestAgent.id} (${bestAgent.firstName})`);
-              ticket.assignedTo = bestAgent.id;
-              ticket.assignedAt = new Date().toISOString();
-              ticket.assignmentSource = 'auto';
-              
-              logAudit(req, 'TICKET_AUTO_ASSIGNED', ['supportTickets', 'players'], { 
-                ticketId: ticket.id, 
-                agentId: bestAgent.id,
-                agentName: `${bestAgent.firstName} ${bestAgent.lastName}`
-              });
-
-              // Increment agent's lifetime handles
-              const agentIndex = newMasterData.players.findIndex(p => p.id === bestAgent.id);
-              if (agentIndex !== -1) {
-                if (!newMasterData.players[agentIndex].metrics) newMasterData.players[agentIndex].metrics = { totalHandled: 0, closedTickets: 0, manualPicks: 0, avgRating: 0 };
-                newMasterData.players[agentIndex].metrics.totalHandled += 1;
-              }
-            }
-          }
-
-          // 🛡️ [TERMINATION CLEANUP] (v2.6.132)
-          // If the assigned agent is now terminated, unassign the ticket
-          if (ticket.assignedTo) {
-            const agent = newMasterData.players.find(p => p.id === ticket.assignedTo);
-            if (agent && agent.supportStatus === 'terminated') {
-              console.log(`🛡️ [CLEANUP] Unassigning ticket ${ticket.id} due to agent termination.`);
-              ticket.assignedTo = null;
-              ticket.assignedAt = null;
-            }
-          }
-
-          for (const msg of newMessages) {
-            // Track Initial Acknowledgment (v2.6.132)
-            if (String(msg.senderId) !== String(ticket.userId) && !ticket.firstResponseAt && msg.senderId !== 'system') {
-                ticket.firstResponseAt = new Date().toISOString();
-            }
+          // 🛡️ [SUPPORT LOGIC] (v2.6.438): Auto-assignment, cleanup, and tracking moved to pre-save section (L838) for DB integrity.
 
             // 🛡️ [NOTIFY] v2.6.96: Harden identity comparison 
             if (String(msg.senderId) !== String(ticket.userId)) {

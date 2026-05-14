@@ -1188,10 +1188,9 @@ router.post('/support/reassign-ticket', apiKeyGuard, async (req, res) => {
 
     // 🛡️ [AUTO-INTRO MESSAGE] Generate personalized greeting on reassign
     const ticketUserId = ticket.userId;
-    const userIdx = players.findIndex(p => p.id === ticketUserId);
-    const userName = (userIdx !== -1 && players[userIdx].name) ? players[userIdx].name : 'User';
-
-    tickets[ticketIdx] = ticket;
+    const userDoc = await Player.findOne({ id: ticketUserId }).lean();
+    const userData = userDoc ? userDoc.data : null;
+    const userName = (userData && userData.name) ? userData.name : 'User';
 
     // 🛡️ [AUTO-INTRO MESSAGE] Generate personalized greeting on reassign
     const ticketTitle = ticket.title || '';
@@ -1384,7 +1383,7 @@ router.post('/support/claim-ticket', apiKeyGuard, async (req, res) => {
     ticket.updatedAt = new Date().toISOString();
 
     // Increment agent's pool bonus metrics
-    if (agentIdx !== -1) {
+    if (agentId) {
       const playerDoc = await Player.findOne({ id: agentId });
       if (playerDoc && playerDoc.data) {
         if (!playerDoc.data.metrics) playerDoc.data.metrics = { totalHandled: 0, closedTickets: 0, manualPicks: 0, avgRating: 0 };

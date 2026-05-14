@@ -373,6 +373,7 @@ export const AdminGrievancesPanel = ({
 
 
   const getUserName = (userId) => {
+    if (userId === 'admin') return 'System Admin';
     const p = (players || []).find(pl => pl.id === userId);
     if (!p) return userId;
     return p.username ? `${p.name} (${p.username})` : p.name;
@@ -490,8 +491,8 @@ export const AdminGrievancesPanel = ({
   };
 
   const renderDateHeader = (dateStr) => {
-    // 🚀 ACE TRACK STABILITY VERSION (v2.6.46)
-    const APP_VERSION = "2.6.46"; 
+    // 🚀 ACE TRACK STABILITY VERSION (v2.6.436)
+    const APP_VERSION = "2.6.436"; 
     const currentAppVersion = APP_VERSION;
     const date = new Date(dateStr);
     const today = new Date();
@@ -636,7 +637,11 @@ export const AdminGrievancesPanel = ({
             <View style={[styles.statusBadge, { backgroundColor: st.bg, borderColor: st.border }]}>
               <Text style={[styles.statusBadgeText, { color: st.text }]}>{status}</Text>
             </View>
-            <Text style={{ fontSize: 8, color: ticket.assignedTo ? '#64748B' : '#EF4444', fontWeight: 'bold', marginTop: 4 }}>
+            <Text 
+              style={{ fontSize: 9, color: ticket.assignedTo ? '#64748B' : '#EF4444', fontWeight: 'bold', marginTop: 4 }}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {ticket.assignedTo ? getUserName(ticket.assignedTo) : 'Unassigned'}
             </Text>
           </View>
@@ -817,7 +822,11 @@ export const AdminGrievancesPanel = ({
                                }}
                              >
                                <Ionicons name="person-outline" size={16} color="#FFF" />
-                               <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '700', marginLeft: 8 }}>
+                               <Text 
+                                 style={{ color: '#FFF', fontSize: 13, fontWeight: '700', marginLeft: 8, flexShrink: 1 }}
+                                 numberOfLines={1}
+                                 ellipsizeMode="tail"
+                               >
                                  {selectedTicket.assignedTo ? `Assigned: ${getUserName(selectedTicket.assignedTo)}` : 'Assign Agent'}
                                </Text>
                                <Ionicons name="chevron-down" size={14} color="#FFF" style={{ marginLeft: 8, opacity: 0.8 }} />
@@ -1671,13 +1680,13 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   detailHeaderScrollWrapper: {
-    maxHeight: Platform.OS === 'web' ? 160 : 180,
+    maxHeight: Platform.OS === 'web' ? 160 : 250, // Expanded for mobile readability
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
     overflow: Platform.OS === 'web' ? 'auto' : undefined,
   },
   detailHeaderList: {
-    flexGrow: 0,
+    flexGrow: 1, // Allow content to expand within the wrapper
   },
   messageBubble: {
     padding: 12,

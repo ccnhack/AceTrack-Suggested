@@ -25,12 +25,25 @@ class SupportMetricsService {
    * 3. Lowest lifetime volume (tie-breaker for fairness)
    */
   static findBestAgent(agents, tickets) {
-    const activeAgents = agents.filter(a => a.role === 'support' && a.supportStatus === 'active');
-    if (activeAgents.length === 0) return null;
+    // 🛡️ [SAFETY] (v2.6.438): Filter only for active support agents. 
+    // Explicitly exclude 'admin' and users with non-support roles to prevent "Admin Default" bug.
+    const activeAgents = agents.filter(a => 
+      a && 
+      a.role === 'support' && 
+      a.supportStatus === 'active' && 
+      a.id !== 'admin' && 
+      !['terminated', 'inactive', 'left'].includes((a.supportStatus || '').toLowerCase())
+    );
+    
+    if (activeAgents.length === 0) {
+      console.warn('⚠️ [SupportMetrics] No active support agents found for auto-assignment.');
+      return null;
+    }
 
     // Calculate current load for each active agent
     const agentsWithLoad = activeAgents.map(agent => {
-      const currentLoad = tickets.filter(t => 
+      const currentLoad = (tickets || []).filter(t => 
+        t && 
         t.assignedTo === agent.id && 
         ['Open', 'In Progress', 'Awaiting Response'].includes(t.status)
       ).length;
@@ -46,7 +59,9 @@ class SupportMetricsService {
       return a.lifetimeTickets - b.lifetimeTickets;
     });
 
-    return agentsWithLoad[0].agent;
+    const best = agentsWithLoad[0].agent;
+    console.log(`✅ [SupportMetrics] Best agent found: ${best.id} (Load: ${agentsWithLoad[0].currentLoad})`);
+    return best;
   }
 
   /**
