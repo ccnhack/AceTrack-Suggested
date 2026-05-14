@@ -133,7 +133,12 @@ const LoginScreen = ({ navigation }) => {
           // 🛡️ [SECURITY HARDENING] (v2.6.238)
           // Stop fallback if the user is explicitly denied or if they simply typed the wrong password for a valid support account.
           if (supportRes.status === 403 || (supportRes.status === 401 && supportData.error === 'Invalid password for support account.')) {
-            setError(supportData.error || supportData.message || 'Login denied by server.');
+            let errorMsg = supportData.error || supportData.message || 'Login denied by server.';
+            // Mask the error on mobile to prevent account enumeration
+            if (Platform.OS !== 'web' && errorMsg === 'Invalid password for support account.') {
+              errorMsg = 'Invalid User';
+            }
+            setError(errorMsg);
             setIsLoading(false);
             return;
           }
@@ -215,7 +220,12 @@ const LoginScreen = ({ navigation }) => {
           }
           onLoginSuccess(foundUser.role || 'user', foundUser);
         } else {
-          setError('Invalid password.');
+          // Mask error for support users on mobile
+          if (Platform.OS !== 'web' && foundUser.role === 'support') {
+            setError('Invalid User');
+          } else {
+            setError('Invalid password.');
+          }
         }
       } else {
         setError('User not found.');

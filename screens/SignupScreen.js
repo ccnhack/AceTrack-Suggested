@@ -94,25 +94,43 @@ const SignupScreen = ({ navigation }) => {
     setFormData({ ...formData, referralCode: val });
   };
 
-  const checkUsername = () => {
+  const checkUsername = async () => {
     if (!formData.username) {
       setUsernameStatus('idle');
       return;
     }
     setUsernameStatus('checking');
-    setTimeout(() => {
-      const isTaken = players.some(p => p && p.id && String(p.id).toLowerCase() === String(formData.username || '').toLowerCase());
-      if (isTaken) {
+    try {
+      const response = await fetch(`${config.API_BASE_URL}${config.getEndpoint('CHECK_USERNAME', '/api/v1/check-username')}`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-ace-api-key': config.PUBLIC_APP_ID
+        },
+        body: JSON.stringify({ username: formData.username })
+      });
+      
+      const data = await response.json();
+      if (response.ok && data.available) {
+        setUsernameStatus('available');
+      } else {
         setUsernameStatus('taken');
         setUsernameSuggestions([
           `${formData.username}123`,
           `${formData.username}_1`,
           `${formData.username}play`
         ]);
+      }
+    } catch (err) {
+      console.error('Username Check Error:', err.message);
+      // Fallback to local check if network fails
+      const isTaken = players.some(p => p && p.id && String(p.id).toLowerCase() === String(formData.username || '').toLowerCase());
+      if (isTaken) {
+        setUsernameStatus('taken');
       } else {
         setUsernameStatus('available');
       }
-    }, 400);
+    }
   };
 
   const handlePickDocument = async (field) => {

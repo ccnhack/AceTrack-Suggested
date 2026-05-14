@@ -681,6 +681,16 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
                 return;
               }
 
+              // 🛡️ SUPPORT GUARD (v2.6.437): Block modification to support staff accounts
+              if (existing && existing.role === 'support' && key === 'players') {
+                const reqUserId = String(req.headers['x-user-id'] || req.user?.id || req.userId || '').toLowerCase();
+                if (reqUserId !== id && req.userRole !== 'admin') {
+                  console.warn(`🛑 Blocked unauthorized attempt to modify support profile ${id} by ${reqUserId}`);
+                  entityMap.set(id, existing);
+                  return;
+                }
+              }
+
               // 🛡️ ADMIN GUARD: Only allow the 'admin' account to have the 'admin' role (v2.6.51)
               if (p.role === 'admin' && id !== 'admin') {
                 console.warn(`🛑 Unauthorized Admin Escalation Attempt: userId=${id}`);

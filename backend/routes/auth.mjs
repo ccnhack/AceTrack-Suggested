@@ -343,11 +343,12 @@ export default function createAuthRoutes({
     const user = userDoc?.data;
 
     if (!user) {
-      return res.status(401).json({ error: 'User not found.' });
+      return res.status(401).json({ error: 'Invalid User' });
     }
     
     if (user.role === 'admin' || user.role === 'support') {
-      return res.status(403).json({ error: 'Staff must use their dedicated login portals.' });
+      // 🛡️ SECURITY: Obfuscate staff accounts by returning generic 'Invalid User'
+      return res.status(401).json({ error: 'Invalid User' });
     }
 
     const userPassword = user.password;
@@ -632,6 +633,29 @@ export default function createAuthRoutes({
 
     res.json({ success: true, message: 'Password updated successfully. You can now login.' });
 
+  }));
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🛡️ USERNAME AVAILABILITY CHECK (v2.6.436)
+  // ═══════════════════════════════════════════════════════════════
+  router.post('/check-username', apiKeyGuard, asyncHandler(async (req, res) => {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ error: 'Username required' });
+    
+    const search = String(username).toLowerCase().trim();
+    if (search === 'admin') return res.json({ available: false });
+    
+    const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const searchReg = new RegExp(`^${escapedSearch}$`, 'i');
+    
+    const existing = await Player.findOne({
+      $or: [
+        { id: searchReg },
+        { "data.username": searchReg }
+      ]
+    }).lean();
+    
+    res.json({ available: !existing });
   }));
 
   return router;

@@ -786,8 +786,8 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
 
             {/* Only show registered devices section for non-support users */}
             {!isSupportUser && (() => {
-              const activeDevices = registeredDevices.filter(d => onlineDevices[d.id]);
-              const offlineDevices = registeredDevices.filter(d => !onlineDevices[d.id]);
+              const activeDevices = registeredDevices.filter(d => onlineDevices[d.id] && onlineDevices[d.id].targetUserId === selectedDiagUser.id);
+              const offlineDevices = registeredDevices.filter(d => !onlineDevices[d.id] || onlineDevices[d.id].targetUserId !== selectedDiagUser.id);
 
               return (
                 <>
@@ -934,7 +934,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
               <Text style={styles.downloadBtnText}>Export</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView style={styles.viewerContent}>
+          <ScrollView style={styles.viewerContent} nestedScrollEnabled={true}>
             {(() => {
               try {
                 const parsed = JSON.parse(diagContent);
