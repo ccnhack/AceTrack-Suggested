@@ -106,7 +106,12 @@ export default function MatchmakingScreen({ route }) {
   const handleTabChange = (newTab) => {
     if (newTab === activeTab) return;
     if (Platform.OS !== 'web') {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        LayoutAnimation.configureNext({
+          duration: 200,
+          update: { type: LayoutAnimation.Types.easeOut, property: LayoutAnimation.Properties.opacity },
+          create: { type: LayoutAnimation.Types.easeOut, property: LayoutAnimation.Properties.opacity },
+          delete: { type: LayoutAnimation.Types.easeOut, property: LayoutAnimation.Properties.opacity },
+        });
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     setActiveTab(newTab);
@@ -1766,7 +1771,8 @@ const styles = StyleSheet.create({
   responseTag: { backgroundColor: '#F0F9FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#BAE6FD' },
   responseTagText: { fontSize: 9, fontWeight: '900', color: '#0369A1' },
   sectionTitle: { fontSize: 18, fontWeight: '800', color: '#1a1a1a' },
-  requestCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 15, borderRadius: 12, marginBottom: 10, borderLeftWidth: 4, borderLeftColor: colors.primary.base },
+  section: { backgroundColor: 'transparent' },
+  requestCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 15, borderRadius: 12, marginBottom: 10, borderLeftWidth: 4, borderLeftColor: colors.primary.base, shadowColor: '#94A3B8', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 1 },
   actionRow: { flexDirection: 'row', gap: 10 },
   smallBtn: { backgroundColor: '#f0f0f0', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 },
   smallBtnText: { fontSize: 12, fontWeight: '700', color: '#333' },
