@@ -95,6 +95,19 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
     };
   }, [socketRef?.current, isCloudOnline]);
 
+  // Real-time Cloud Logs refresh when a user manually sends diagnostics
+  useEffect(() => {
+    const socket = socketRef?.current;
+    if (!socket) return;
+    const handleDiagUpload = (data) => {
+      if (selectedDiagUser && data.targetUserId === selectedDiagUser.id.toLowerCase()) {
+         handleSelectDiagPlayer(selectedDiagUser);
+      }
+    };
+    socket.on('diagnostics_uploaded', handleDiagUpload);
+    return () => socket.off('diagnostics_uploaded', handleDiagUpload);
+  }, [socketRef?.current, selectedDiagUser]);
+
   // Deep-Link Auto-Selection
   useEffect(() => {
     if (autoSelectUser && players && players.length > 0) {
@@ -754,7 +767,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
                        style={styles.pullBtn}
                     >
                       <Ionicons name="flash-outline" size={14} color="#FFF" />
-                      <Text style={styles.pullBtnText}>PULL LIVE</Text>
+                      <Text style={styles.pullBtnText}>PULL LOGS</Text>
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -805,7 +818,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
                             style={[styles.pullBtn, pullingDeviceIds[d.id] && styles.pullBtnDisabled]}
                           >
                             {pullingDeviceIds[d.id] ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="cloud-download-outline" size={14} color="#FFF" />}
-                            <Text style={styles.pullBtnText}>{pullingDeviceIds[d.id] ? 'PULLING...' : 'PULL'}</Text>
+                            <Text style={styles.pullBtnText}>{pullingDeviceIds[d.id] ? 'PULLING LOGS...' : 'PULL LOGS'}</Text>
                           </TouchableOpacity>
                         </View>
                       ))}
@@ -833,7 +846,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
                           style={[styles.pullBtn, styles.pullBtnDisabled]}
                         >
                           <Ionicons name="cloud-download-outline" size={14} color="#FFF" />
-                          <Text style={styles.pullBtnText}>PULL</Text>
+                          <Text style={styles.pullBtnText}>PULL LOGS</Text>
                         </TouchableOpacity>
                       </View>
                     ))

@@ -1313,7 +1313,9 @@ router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), asyncHandl
       });
       await logAudit(req, 'DIAG_UPLOAD_CLOUDINARY_FAILED', [], { error: err.message, filename });
     }
-
+    if (io) {
+      io.emit('diagnostics_uploaded', { targetUserId: username.toLowerCase() });
+    }
     res.json({ success: true, filename });
 }));
 
