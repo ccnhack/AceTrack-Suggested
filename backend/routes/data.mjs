@@ -1077,8 +1077,7 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
           if (isNew) {
              logAudit(req, 'TICKET_CREATED', ['supportTickets'], { ticketId: ticket.id, type: ticket.type, title: ticket.title });
           }
-          // 🛡️ [SUPPORT LOGIC] (v2.6.438): Auto-assignment, cleanup, and tracking moved to pre-save section (L838) for DB integrity.
-
+          for (const msg of newMessages) {
             // 🛡️ [NOTIFY] v2.6.96: Harden identity comparison 
             if (String(msg.senderId) !== String(ticket.userId)) {
               const user = newMasterData.players.find(p => String(p.id) === String(ticket.userId));
