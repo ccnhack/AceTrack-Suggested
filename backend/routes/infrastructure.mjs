@@ -116,6 +116,105 @@ export default function createInfrastructureRoutes({
          ];
          
          await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", blocks });
+      } else if (command === '/acetrack' && String(text).trim().toLowerCase().startsWith('ticket ')) {
+         const ticketId = String(text).trim().split(' ')[1];
+         if (!ticketId) {
+            return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: "Please provide a valid ticket ID. Usage: `/acetrack ticket 123456`" });
+         }
+         
+         const { SupportTicket, Player } = await import('../models/index.mjs');
+         const ticket = await SupportTicket.findOne({ id: String(ticketId) }).lean();
+         
+         if (!ticket) {
+            return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: `⚠️ Support Ticket *${ticketId}* not found in the database.` });
+         }
+         
+         const tData = ticket.data || {};
+         const userId = tData.userId || 'Unknown';
+         const status = tData.status || 'open';
+         const createdAt = tData.createdAt || tData.timestamp || ticket.lastUpdated;
+         const issueDesc = tData.description || tData.issue || tData.message || 'No description provided';
+         const assignedTo = tData.assignedTo;
+         
+         // Fetch user details
+         const user = await Player.findOne({ id: userId }).lean();
+         const uData = user?.data || {};
+         const userName = uData.firstName ? `${uData.firstName} ${uData.lastName || ''}` : uData.email || userId;
+         
+         // Fetch assigned agent details
+         let agentName = "Unassigned";
+         if (assignedTo) {
+             const agent = await Player.findOne({ id: assignedTo }).lean();
+             const aData = agent?.data || {};
+             agentName = aData.firstName ? `${aData.firstName} ${aData.lastName || ''} (${aData.email})` : (aData.email || assignedTo);
+         }
+         
+         // AI Summary Generation
+         let summary = "Generating AI summary...";
+         const apiKey = process.env.GROQ_API_KEY;
+         
+         if (apiKey) {
+            try {
+               let chatHistory = "No conversation history found.";
+               if (tData.messages && Array.isArray(tData.messages)) {
+                   chatHistory = tData.messages.map(m => `[${m.senderId || m.sender || 'User'}]: ${m.text || m.content || m.message || ''}`).join('\n');
+               } else if (ticket.messages && Array.isArray(ticket.messages)) {
+                   chatHistory = ticket.messages.map(m => `[${m.senderId || m.sender || 'User'}]: ${m.text || m.content || m.message || ''}`).join('\n');
+               }
+               
+               const prompt = `You are a Customer Support AI Assistant. Summarize the following support ticket in 2-3 short bullet points, and then provide 1 clear "Next Step" for the support agent. Keep it very concise.\nTicket Description: ${issueDesc}\nChat History:\n${chatHistory.substring(0, 3000)}`;
+
+               const aiReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                 method: 'POST',
+                 headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+                 body: JSON.stringify({
+                   model: "llama-3.3-70b-versatile",
+                   messages: [{ role: 'user', content: prompt }],
+                   temperature: 0.3,
+                   max_tokens: 300
+                 })
+               });
+               
+               if (aiReq.ok) {
+                  const aiJson = await aiReq.json();
+                  summary = aiJson.choices?.[0]?.message?.content || "AI returned empty response.";
+               } else {
+                  summary = `_AI Error: ${aiReq.statusText}_`;
+               }
+            } catch (e) {
+               summary = `_AI Generation Failed: ${e.message}_`;
+            }
+         } else {
+            summary = "_AI Summary unavailable: GROQ_API_KEY is not set on the backend._";
+         }
+         
+         const blocks = [
+            {
+               "type": "header",
+               "text": { "type": "plain_text", "text": `🎫 Ticket #${ticketId}`, "emoji": true }
+            },
+            {
+               "type": "section",
+               "fields": [
+                  { "type": "mrkdwn", "text": `*Raised By:*\n${userName}` },
+                  { "type": "mrkdwn", "text": `*Assigned To:*\n${agentName}` },
+                  { "type": "mrkdwn", "text": `*Status:*\n\`${status.toUpperCase()}\`` },
+                  { "type": "mrkdwn", "text": `*Opened On:*\n${new Date(createdAt).toLocaleString()}` }
+               ]
+            },
+            { "type": "divider" },
+            {
+               "type": "section",
+               "text": { "type": "mrkdwn", "text": `*Issue Description:*\n> ${issueDesc}` }
+            },
+            { "type": "divider" },
+            {
+               "type": "section",
+               "text": { "type": "mrkdwn", "text": `*🤖 AI Conversation Summary & Next Steps:*\n${summary}` }
+            }
+         ];
+         
+         await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", blocks });
       }
     } catch (err) {
       console.error("❌ Unified Gateway Error:", err.message);
