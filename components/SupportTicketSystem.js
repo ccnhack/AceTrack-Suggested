@@ -53,6 +53,8 @@ export const SupportTicketSystem = ({
   const [activeMatchIndex, setActiveMatchIndex] = useState(0);
   const [listSearchQuery, setListSearchQuery] = useState('');
   const [assignmentScope, setAssignmentScope] = useState(userRole === 'support' || userRole === 'admin' ? 'me' : 'all');
+  const [filterAgentId, setFilterAgentId] = useState(null); // null = All Agents in scope
+  const [showAgentPicker, setShowAgentPicker] = useState(false);
 
   // CSAT Rating State
   const [csatRating, setCsatRating] = useState(0);
@@ -73,13 +75,31 @@ export const SupportTicketSystem = ({
 
   const isAgent = userRole === 'support' || userRole === 'admin';
   
-  // 🛡️ DYNAMIC SCOPING (v2.6.450):
-  // Based on assignmentScope ('me' | 'all') and userRole
+  // 👥 [AGENT_EXTRACTION] (v2.6.451): Get unique agents for the filter dropdown
+  const availableAgents = useMemo(() => {
+    const agentsMap = new Map();
+    (tickets || []).forEach(t => {
+      if (t.assignedTo && t.assignedAgentName) {
+        agentsMap.set(t.assignedTo, t.assignedAgentName);
+      }
+    });
+    return Array.from(agentsMap.entries()).map(([id, name]) => ({ id, name }));
+  }, [tickets]);
+
+  // 🛡️ DYNAMIC SCOPING (v2.6.451):
+  // Updated to handle specific agent filtering
   const scopedTickets = useMemo(() => {
     if (!isAgent) return (tickets || []).filter(t => t.userId === userId);
+    
+    // Scope 1: Only My Tickets
     if (assignmentScope === 'me') return (tickets || []).filter(t => t.assignedTo === userId);
+    
+    // Scope 2: Specific Agent in Full View
+    if (filterAgentId) return (tickets || []).filter(t => t.assignedTo === filterAgentId);
+    
+    // Scope 3: Full Team View (All)
     return tickets || [];
-  }, [tickets, assignmentScope, isAgent, userId]);
+  }, [tickets, assignmentScope, filterAgentId, isAgent, userId]);
 
   // 🔍 UNIFIED FILTER ENGINE (v2.6.450):
   // Syncs Status Tab + Search Query + Assignment Scope
@@ -491,20 +511,36 @@ export const SupportTicketSystem = ({
 
         {isAgent && (
           <View style={styles.scopeToggleContainer}>
-            <TouchableOpacity 
-              onPress={() => setAssignmentScope('me')}
-              style={[styles.scopeBtn, assignmentScope === 'me' && styles.scopeBtnActive]}
-            >
-              <Ionicons name="person" size={14} color={assignmentScope === 'me' ? '#FFF' : '#64748B'} />
-              <Text style={[styles.scopeBtnText, assignmentScope === 'me' && styles.scopeBtnTextActive]}>My Caseload</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              onPress={() => setAssignmentScope('all')}
-              style={[styles.scopeBtn, assignmentScope === 'all' && styles.scopeBtnActive]}
-            >
-              <Ionicons name="people" size={14} color={assignmentScope === 'all' ? '#FFF' : '#64748B'} />
-              <Text style={[styles.scopeBtnText, assignmentScope === 'all' && styles.scopeBtnTextActive]}>Full Team View</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 12, flex: 1 }}>
+              <TouchableOpacity 
+                onPress={() => { setAssignmentScope('me'); setFilterAgentId(null); }}
+                style={[styles.scopeBtn, assignmentScope === 'me' && styles.scopeBtnActive]}
+              >
+                <Ionicons name="person" size={14} color={assignmentScope === 'me' ? '#FFF' : '#64748B'} />
+                <Text style={[styles.scopeBtnText, assignmentScope === 'me' && styles.scopeBtnTextActive]}>My Tickets</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={() => setAssignmentScope('all')}
+                style={[styles.scopeBtn, assignmentScope === 'all' && styles.scopeBtnActive]}
+              >
+                <Ionicons name="people" size={14} color={assignmentScope === 'all' ? '#FFF' : '#64748B'} />
+                <Text style={[styles.scopeBtnText, assignmentScope === 'all' && styles.scopeBtnTextActive]}>Full Team</Text>
+              </TouchableOpacity>
+            </View>
+
+            {assignmentScope === 'all' && availableAgents.length > 0 && (
+              <TouchableOpacity 
+                style={styles.agentFilterDropdown}
+                onPress={() => setShowAgentPicker(true)}
+              >
+                <Text style={styles.agentFilterText}>
+                  {filterAgentId 
+                    ? `Agent: ${availableAgents.find(a => a.id === filterAgentId)?.name?.split(' ')[0]}` 
+                    : 'All Agents'}
+                </Text>
+                <Ionicons name="chevron-down" size={12} color="#64748B" />
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -731,6 +767,49 @@ export const SupportTicketSystem = ({
                     </ScrollView>
                 </View>
             </View>
+        </Modal>
+
+        {/* 👤 [AGENT_PICKER_MODAL] (v2.6.451) */}
+        <Modal transparent visible={showAgentPicker} animationType="fade">
+            <TouchableOpacity 
+              style={styles.modalOverlay} 
+              activeOpacity={1} 
+              onPress={() => setShowAgentPicker(false)}
+            >
+                <View style={styles.pickerSheet}>
+                    <View style={styles.pickerHeader}>
+                        <Text style={styles.pickerTitle}>Filter by Agent</Text>
+                        <TouchableOpacity onPress={() => setShowAgentPicker(false)}>
+                            <Ionicons name="close" size={24} color="#0F172A" />
+                        </TouchableOpacity>
+                    </View>
+                    <ScrollView style={styles.pickerList}>
+                        <TouchableOpacity 
+                            onPress={() => {
+                                setFilterAgentId(null);
+                                setShowAgentPicker(false);
+                            }}
+                            style={styles.pickerItem}
+                        >
+                            <Text style={[styles.pickerItemText, !filterAgentId && styles.pickerItemTextActive]}>All Team Members</Text>
+                            {!filterAgentId && <Ionicons name="checkmark" size={20} color="#3B82F6" />}
+                        </TouchableOpacity>
+                        {availableAgents.map((agent) => (
+                            <TouchableOpacity 
+                                key={agent.id} 
+                                onPress={() => {
+                                    setFilterAgentId(agent.id);
+                                    setShowAgentPicker(false);
+                                }}
+                                style={styles.pickerItem}
+                            >
+                                <Text style={[styles.pickerItemText, filterAgentId === agent.id && styles.pickerItemTextActive]}>{agent.name}</Text>
+                                {filterAgentId === agent.id && <Ionicons name="checkmark" size={20} color="#3B82F6" />}
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+            </TouchableOpacity>
         </Modal>
       </View>
     );
@@ -2115,5 +2194,21 @@ const styles = StyleSheet.create({
     color: '#16A34A',
     fontWeight: '800',
     fontSize: 13,
-  }
+  },
+  agentFilterDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  agentFilterText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
 });
