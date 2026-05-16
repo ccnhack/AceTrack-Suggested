@@ -25,20 +25,16 @@ const SupportDashboardScreen = ({ navigation, route }) => {
   const isMobileWeb = isWeb && windowWidth < 1024;
   const [isWebSidebarOpen, setIsWebSidebarOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [urlTicketId, setUrlTicketId] = useState(null);
-
-  // 🛡️ [URL_PERSISTENCE] (v2.6.458): Detect ticketId from URL on mount
-  React.useEffect(() => {
+  const [urlTicketId, setUrlTicketId] = useState(() => {
     if (Platform.OS === 'web') {
-      const params = new URLSearchParams(window.location.search);
-      const tid = params.get('ticketId');
-      if (tid) {
-        console.log(`[SupportDashboard] Detected ticketId in URL: ${tid}`);
-        setUrlTicketId(tid);
-      }
+      const tid = new URLSearchParams(window.location.search).get('ticketId');
+      if (tid) console.log(`[SupportDashboard] [INIT] Found ticketId in URL: ${tid}`);
+      return tid;
     }
-  }, []);
+    return null;
+  });
 
+  // Keep URL in sync with manual selection (v2.6.460)
   const handleTicketSelect = (id) => {
     if (Platform.OS === 'web') {
       const currentUrl = new URL(window.location.href);

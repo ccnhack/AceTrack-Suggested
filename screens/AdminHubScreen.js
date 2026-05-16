@@ -48,36 +48,35 @@ const AdminHubScreen = ({ navigation, route }) => {
   const { seenAdminActionIds = new Set(), setSeenAdminActionIds, auditLogs, hasSeen, hasVisited, setVisitedAdminSubTabs, visitedAdminSubTabs = new Set() } = useAdmin();
   const { isCloudOnline, isUsingCloud, lastSyncTime, onManualSync } = useSync();
 
-  const [subTab, setSubTab] = useState('individuals');
+  // 🛡️ [URL_PERSISTENCE] (v2.6.460): Lazy initialize from URL to prevent race conditions
+  const [subTab, setSubTab] = useState(() => {
+    if (Platform.OS === 'web') {
+      const tab = new URLSearchParams(window.location.search).get('subTab');
+      if (tab) console.log(`[AdminHub] [INIT] Restoring tab from URL: ${tab}`);
+      return tab || 'individuals';
+    }
+    return 'individuals';
+  });
+
+  const [autoSelectTicketId, setAutoSelectTicketId] = useState(() => {
+    if (Platform.OS === 'web') {
+      const tid = new URLSearchParams(window.location.search).get('ticketId');
+      if (tid) console.log(`[AdminHub] [INIT] Restoring ticketId from URL: ${tid}`);
+      return tid;
+    }
+    return null;
+  });
+
   const [search, setSearch] = useState('');
   const [autoSelectUser, setAutoSelectUser] = useState(null);
-  const [autoSelectTicketId, setAutoSelectTicketId] = useState(null);
   const [highlightActionTimestamp, setHighlightActionTimestamp] = useState(null);
   const { width: windowWidth } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
   const isMobileWeb = isWeb && windowWidth < 1024;
   const [isWebSidebarOpen, setIsWebSidebarOpen] = useState(false);
   const today = new Date().toISOString().split('T')[0];
-
-  // 🛡️ [URL_PERSISTENCE] (v2.6.458): Detect subTab and ticketId from URL on mount
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      const params = new URLSearchParams(window.location.search);
-      const tab = params.get('subTab');
-      const tid = params.get('ticketId');
-      
-      if (tab) {
-        console.log(`[AdminHub] Restoring tab from URL: ${tab}`);
-        setSubTab(tab);
-      }
-      if (tid) {
-        console.log(`[AdminHub] Restoring ticketId from URL: ${tid}`);
-        setAutoSelectTicketId(tid);
-      }
-    }
-  }, []);
-
-  // Sync URL when state changes
+  
+  // Keep URL in sync with manual changes
   useEffect(() => {
     if (Platform.OS === 'web') {
       const currentUrl = new URL(window.location.href);
