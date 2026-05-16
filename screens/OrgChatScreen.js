@@ -41,7 +41,32 @@ const OrgChatScreen = ({ navigation }) => {
     if (selectedContact) {
       markAsSeen(selectedContact.id);
     }
-  }, [selectedContact, messages]); // Re-run when new messages arrive if conversation is open
+    // 🛡️ [URL_PERSISTENCE] (v2.6.458): Update URL when contact changes
+    if (Platform.OS === 'web') {
+      const currentUrl = new URL(window.location.href);
+      if (selectedContact) {
+        currentUrl.searchParams.set('contactId', selectedContact.id);
+      } else {
+        currentUrl.searchParams.delete('contactId');
+      }
+      window.history.pushState({}, '', currentUrl.toString());
+    }
+  }, [selectedContact?.id, messages?.length]);
+
+  // 🛡️ [URL_PERSISTENCE] (v2.6.458): Hydrate selectedContact from URL on mount
+  useEffect(() => {
+    if (Platform.OS === 'web' && teamDirectory?.length > 0) {
+      const params = new URLSearchParams(window.location.search);
+      const cid = params.get('contactId');
+      if (cid && !selectedContact) {
+        const contact = teamDirectory.find(c => String(c.id) === String(cid));
+        if (contact) {
+          console.log(`[OrgChat] Restoring contact from URL: ${contact.name}`);
+          setSelectedContact(contact);
+        }
+      }
+    }
+  }, [teamDirectory?.length]);
 
   useEffect(() => {
     const socket = socketService.getSocket();

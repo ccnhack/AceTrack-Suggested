@@ -158,6 +158,27 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
+  // 🛡️ [URL_PERSISTENCE] (v2.6.458): Sync view state with URL
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const currentUrl = new URL(window.location.href);
+      if (showSupport) currentUrl.searchParams.set('view', 'support');
+      else if (showEditProfile) currentUrl.searchParams.set('view', 'edit_profile');
+      else currentUrl.searchParams.delete('view');
+      window.history.pushState({}, '', currentUrl.toString());
+    }
+  }, [showSupport, showEditProfile]);
+
+  // Hydrate from URL on mount
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const params = new URLSearchParams(window.location.search);
+      const view = params.get('view');
+      if (view === 'support') setShowSupport(true);
+      if (view === 'edit_profile') setShowEditProfile(true);
+    }
+  }, []);
+
   const renderUpdateCard = () => {
     if (!updateAvailable) return null;
     return (

@@ -94,18 +94,37 @@ const ExploreScreen = ({ navigation, route }) => {
   const isFocused = useIsFocused();
 
 
-  // Handle Deep Linking from ChatBot
+  // Handle Deep Linking from ChatBot & URL Persistence
   useEffect(() => {
-    if (route?.params?.selectedTournamentId) {
-      const tid = route.params.selectedTournamentId;
-      const t = tournaments.find(it => String(it.id) === String(tid));
+    let tid = route?.params?.selectedTournamentId;
+    
+    // 🛡️ [URL_PERSISTENCE] (v2.6.458): Detect from URL if no route param
+    if (!tid && Platform.OS === 'web') {
+      tid = new URLSearchParams(window.location.search).get('tournamentId');
+    }
+
+    if (tid) {
+      const t = (tournaments || []).find(it => String(it.id) === String(tid));
       if (t) {
         setSelectedTournament(t);
         // Clear param to avoid re-opening on every render
-        navigation.setParams({ selectedTournamentId: null });
+        if (route?.params?.selectedTournamentId) navigation.setParams({ selectedTournamentId: null });
       }
     }
-  }, [route?.params?.selectedTournamentId, tournaments]);
+  }, [route?.params?.selectedTournamentId, tournaments?.length]);
+
+  // Sync URL when tournament selection changes
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const currentUrl = new URL(window.location.href);
+      if (selectedTournament) {
+        currentUrl.searchParams.set('tournamentId', selectedTournament.id);
+      } else {
+        currentUrl.searchParams.delete('tournamentId');
+      }
+      window.history.pushState({}, '', currentUrl.toString());
+    }
+  }, [selectedTournament?.id]);
   
   // Keep selectedTournament in sync with incoming prop updates (real-time reactivity)
   useEffect(() => {
