@@ -592,7 +592,11 @@ export const AdminGrievancesPanel = ({
     const senderId = msg?.senderId || legacySender;
     const myId = currentUser?.id || 'admin';
     const isMe = String(senderId) === String(myId) || (senderId === 'admin' && currentUser?.role === 'admin');
+    const senderRole = (senderId === 'admin') ? 'admin' : getUserRole(senderId);
+    const isSupport = senderRole === 'support' || senderRole === 'admin';
+    const alignRight = isSupport; // All team messages go to the right
     const senderName = isMe ? (currentUser?.name || 'You') : getUserName(senderId);
+    const showName = alignRight && !isMe; // Show name only if it's a colleague on the right side
 
     if (msg.type === 'event' || senderId === 'system' || msg.type === 'internal') {
       const isInternal = msg.type === 'internal';
@@ -635,8 +639,8 @@ export const AdminGrievancesPanel = ({
         <Swipeable
           ref={ref => { swipeableRefs.current[msg.id || msg.timestamp] = ref; }}
           enabled={!isClosed}
-          renderRightActions={!isClosed && isMe ? renderRightActions : undefined}
-          renderLeftActions={!isClosed && !isMe ? renderRightActions : undefined}
+          renderRightActions={!isClosed && alignRight ? renderRightActions : undefined}
+          renderLeftActions={!isClosed && !alignRight ? renderRightActions : undefined}
           onSwipeableOpen={() => {
             if (isClosed) return;
             setReplyToMsg(msg);
@@ -647,25 +651,25 @@ export const AdminGrievancesPanel = ({
             }, 100);
           }}
         >
-          <View style={[styles.messageRow, isMe ? styles.messageMe : styles.messageOther]}>
+          <View style={[styles.messageRow, alignRight ? styles.messageMe : styles.messageOther]}>
             <View style={[
               styles.bubble, 
-              isMe ? styles.bubbleMe : styles.bubbleOther,
+              alignRight ? styles.bubbleMe : styles.bubbleOther,
               (tempHighlightedId === (msg.id || msg.timestamp)) && styles.highlightedMessage,
               (blinkHighlightedId === (msg.id || msg.timestamp) && isBlinkVisible) && styles.blinkingHighlight
             ]}>
               {renderMessageReply(msg.replyTo)}
-              {!isMe && <Text style={[styles.msgSender, { color: '#64748B' }]}>{senderName}</Text>}
+              {showName && <Text style={[styles.msgSender, { color: 'rgba(255,255,255,0.8)', marginBottom: 2 }]}>{senderName}</Text>}
               {msg.image && (
                 <Image source={{ uri: config.sanitizeUrl(msg.image) }} style={styles.msgImage} resizeMode="contain" />
               )}
-              <Text style={[styles.msgText, { color: isMe ? '#FFF' : '#334155' }]}>
+              <Text style={[styles.msgText, { color: alignRight ? '#FFF' : '#334155' }]}>
                 {text?.startsWith('CLOSURE_REQUEST_EVENT:') 
                   ? `User requested closure: ${text.replace('CLOSURE_REQUEST_EVENT:', '').trim()}` 
                   : text}
               </Text>
               <View style={styles.msgFooter}>
-                <Text style={[styles.msgTime, { color: isMe ? 'rgba(255,255,255,0.7)' : '#94A3B8' }]}>
+                <Text style={[styles.msgTime, { color: alignRight ? 'rgba(255,255,255,0.7)' : '#94A3B8' }]}>
                   {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </Text>
                 {isMe && (
