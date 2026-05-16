@@ -9,7 +9,8 @@ import { socketService } from '../services/sync/SocketService';
 
 export default function AdminProfileModals({ visibleModal, onClose, user }) {
   const { auditLogs, orgSettings, teamDirectory, isLoading: isAdminLoading, fetchAuditLogs, fetchOrgSettings, fetchTeamDirectory, saveOrgSetting } = useAdminCoreStore();
-  const { leaveRequests, policies, reviews, attendance, payslips, documents, isLoading: isHrLoading, fetchLeaveRequests, fetchPolicies, fetchReviews, fetchAttendance, checkIn, checkOut, fetchPayslips, fetchDocuments, submitLeaveRequest } = useHrStore();
+  const { leaveRequests, policies, reviews, attendance, payslips, documents, isLoading: isHrLoading, fetchLeaveRequests, fetchPolicies, fetchReviews, fetchAttendance, checkIn, checkOut, fetchPayslips, fetchDocuments, submitLeaveRequest, approveLeave, rejectLeave } = useHrStore();
+  const { messages, announcements, isLoading: isCommsLoading, fetchMessages, sendMessage, appendMessage, fetchAnnouncements } = useCommsStore();
   const { messages, announcements, isLoading: isCommsLoading, fetchMessages, sendMessage, appendMessage, fetchAnnouncements } = useCommsStore();
 
   useEffect(() => {
@@ -75,7 +76,7 @@ export default function AdminProfileModals({ visibleModal, onClose, user }) {
               {visibleModal === 'org_settings' && <OrgSettingsView settings={orgSettings} onSave={saveOrgSetting} />}
               {visibleModal === 'team_directory' && <TeamDirectoryView team={teamDirectory} />}
               {visibleModal === 'security' && <SecurityView user={user} />}
-              {visibleModal === 'leave_request' && <LeaveRequestView leaves={leaveRequests} onSubmit={submitLeaveRequest} />}
+              {visibleModal === 'leave_request' && <LeaveRequestView leaves={leaveRequests} onSubmit={submitLeaveRequest} user={user} onApprove={approveLeave} onReject={rejectLeave} />}
               {visibleModal === 'org_policies' && <OrgPoliciesView policies={policies} />}
               {visibleModal === 'performance_reviews' && <ReviewsView reviews={reviews} />}
               {visibleModal === 'my_attendance' && <AttendanceView attendance={attendance} onCheckIn={checkIn} onCheckOut={checkOut} />}
@@ -333,7 +334,7 @@ const SecurityView = ({ user }) => (
   </View>
 );
 
-const LeaveRequestView = ({ leaves, onSubmit }) => {
+const LeaveRequestView = ({ leaves, onSubmit, user, onApprove, onReject }) => {
   const [type, setType] = useState('Earned');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -444,16 +445,39 @@ const LeaveRequestView = ({ leaves, onSubmit }) => {
         </View>
 
         <Text style={[styles.cardTitle, { marginTop: 20 }]}>Past Requests</Text>
-        {leaves.map((l, i) => (
-            <View key={i} style={styles.card}>
-                <View style={styles.logHeader}>
-                    <Text style={styles.logAction}>{l.type} Leave</Text>
-                    <Text style={{ color: l.status === 'Approved' ? '#10B981' : l.status === 'Rejected' ? '#EF4444' : '#F59E0B', fontWeight: 'bold' }}>{l.status}</Text>
-                </View>
-                <Text style={styles.logDetails}>{l.startDate} to {l.endDate}</Text>
-                {l.reason && <Text style={{ fontSize: 12, color: '#475569', marginTop: 8 }}>"{l.reason}"</Text>}
-            </View>
-        ))}
+        {leaves.map((l, i) => {
+            const isManager = user?.role === 'admin' || user?.supportLevel === 'Manager';
+            const isPending = l.status === 'Pending';
+            const isOthers = String(l.userId) !== String(user?.id);
+            
+            return (
+              <View key={i} style={styles.card}>
+                  <View style={styles.logHeader}>
+                      <Text style={styles.logAction}>{l.type} Leave</Text>
+                      <Text style={{ color: l.status === 'Approved' ? '#10B981' : l.status === 'Rejected' ? '#EF4444' : '#F59E0B', fontWeight: 'bold' }}>{l.status}</Text>
+                  </View>
+                  <Text style={styles.logDetails}>{l.startDate} to {l.endDate}</Text>
+                  {l.reason && <Text style={{ fontSize: 12, color: '#475569', marginTop: 8 }}>"{l.reason}"</Text>}
+                  
+                  {isManager && isOthers && isPending && (
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                          <TouchableOpacity 
+                            style={[styles.saveBtn, { flex: 1, paddingVertical: 8, backgroundColor: '#10B981' }]} 
+                            onPress={() => onApprove(l._id || l.id)}
+                          >
+                              <Text style={[styles.saveBtnText, { textAlign: 'center' }]}>Approve</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={[styles.saveBtn, { flex: 1, paddingVertical: 8, backgroundColor: '#EF4444' }]} 
+                            onPress={() => onReject(l._id || l.id)}
+                          >
+                              <Text style={[styles.saveBtnText, { textAlign: 'center' }]}>Reject</Text>
+                          </TouchableOpacity>
+                      </View>
+                  )}
+              </View>
+            );
+        })}
 
         {/* Calendar Picker Modal */}
         {showCalendarFor && (

@@ -56,6 +56,48 @@ export const useHrStore = create((set, get) => ({
         }
     },
 
+    approveLeave: async (id, managerComment = '') => {
+        try {
+            const response = await fetch(`${config.API_BASE_URL}/api/v1/hr/leaves/${id}/approve`, {
+                method: 'PUT',
+                credentials: 'include',
+                headers: getJsonHeaders(),
+                body: JSON.stringify({ managerComment })
+            });
+            const data = await response.json();
+            if (data.success) {
+                const updatedLeaves = get().leaveRequests.map(l => l._id === id || l.id === id ? data.leave : l);
+                set({ leaveRequests: updatedLeaves });
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error("Failed to approve leave:", error);
+            return false;
+        }
+    },
+
+    rejectLeave: async (id, managerComment = '') => {
+        try {
+            const response = await fetch(`${config.API_BASE_URL}/api/v1/hr/leaves/${id}/reject`, {
+                method: 'PUT',
+                credentials: 'include',
+                headers: getJsonHeaders(),
+                body: JSON.stringify({ managerComment })
+            });
+            const data = await response.json();
+            if (data.success) {
+                const updatedLeaves = get().leaveRequests.map(l => l._id === id || l.id === id ? data.leave : l);
+                set({ leaveRequests: updatedLeaves });
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error("Failed to reject leave:", error);
+            return false;
+        }
+    },
+
     fetchPolicies: async () => {
         try {
             set({ isLoading: true });

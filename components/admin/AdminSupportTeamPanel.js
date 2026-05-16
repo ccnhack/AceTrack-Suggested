@@ -57,6 +57,10 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isManaging, setIsManaging] = useState(null);
   const [activeTab, setActiveTab] = useState('employees'); // 'employees' | 'ex-employees'
+  
+  // 🛡️ Hierarchy Management (v2.6.440)
+  const [showManagerSelect, setShowManagerSelect] = useState(false);
+  const [isAssigningManager, setIsAssigningManager] = useState(false);
 
   // Phase 5: Drill-Down Modal Config
   const [drillDownConfig, setDrillDownConfig] = useState(null);
@@ -301,6 +305,38 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
     }
   };
 
+  const handleAssignManager = async (agentId, managerId) => {
+    setIsAssigningManager(true);
+    try {
+      const token = await storage.getItem('userToken');
+      const headers = { 
+        'Content-Type': 'application/json',
+        'x-user-id': 'admin',
+        'x-ace-api-key': config.ACE_API_KEY || config.PUBLIC_APP_ID
+      };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${config.API_BASE_URL}/api/v1/admin-core/team-directory/${agentId}/manager`, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({ managerId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showDialog({ title: '✅ Success', message: 'Reporting manager updated successfully', type: 'info' });
+        setShowManagerSelect(false);
+        fetchTeamAnalytics(); // Refresh
+      } else {
+        showDialog({ title: '❌ Error', message: data.message || 'Failed to update reporting manager', type: 'info' });
+      }
+    } catch (e) {
+      showDialog({ title: '❌ Error', message: 'Network error', type: 'info' });
+    } finally {
+      setIsAssigningManager(false);
+    }
+  };
+
   // 🔄 Transfer Tickets Handler
   const handleTransferTickets = async (fromId) => {
     // 🛡️ [FILTER FIX] (v2.6.424): Target must be ACTIVE and NOT SUSPENDED/TERMINATED
@@ -400,6 +436,18 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const allSupportAgents = useMemo(() => {
     if (serverAgents) return serverAgents;
     return (players || []).filter(p => p.role === 'support');
+  }, [serverAgents, players]);
+
+  const availableManagers = useMemo(() => {
+    const list = serverAgents || players || [];
+    return list.filter(p => {
+      if (!p) return false;
+      const role = (p.role || '').toLowerCase();
+      const lvl = (p.supportLevel || '').toLowerCase();
+      const status = (p.supportStatus || p.status || 'active').toLowerCase();
+      if (status === 'terminated' || status === 'left') return false;
+      return role === 'admin' || lvl === 'manager';
+    });
   }, [serverAgents, players]);
 
   const activeAgents = useMemo(() => {
@@ -1572,6 +1620,32 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                   })}
                 </View>
 
+                <Text style={styles.actionSectionTitle}>REPORTING MANAGER</Text>
+                <View style={styles.managerListContainer}>
+                  {availableManagers.length === 0 ? (
+                    <Text style={{ fontSize: 12, color: '#94A3B8', padding: 8 }}>No active managers or admins available.</Text>
+                  ) : (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingBottom: 8, paddingHorizontal: 16 }}>
+                      {availableManagers.map(mgr => {
+                        const isAssigned = String(selectedAgent.managerId) === String(mgr.id);
+                        return (
+                          <TouchableOpacity 
+                            key={mgr.id} 
+                            style={[styles.managerBtn, isAssigned && styles.managerBtnActive]}
+                            onPress={() => handleAssignManager(selectedAgent.id, mgr.id)}
+                            disabled={isAssigningManager}
+                          >
+                            <SafeAvatar uri={mgr.avatar} name={mgr.name} role={mgr.role} size={28} borderRadius={14} />
+                            <Text style={[styles.managerBtnText, isAssigned && styles.managerBtnTextActive]}>
+                              {mgr.name.split(' ')[0]}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  )}
+                </View>
+
                 <Text style={styles.actionSectionTitle}>ACCOUNT CONTROLS</Text>
                 <View style={styles.actionRow}>
                   {/* 🛡️ [DYNAMIC ACCOUNT ACTIONS] (v2.6.424) */}
@@ -2129,6 +2203,12 @@ const styles = StyleSheet.create({
   hierarchyBtnActive: { backgroundColor: '#EEF2FF', borderColor: '#6366F1' },
   hierarchyBtnText: { fontSize: 12, fontWeight: '700', color: '#64748B' },
   hierarchyBtnTextActive: { color: '#6366F1' },
+
+  managerListContainer: { marginBottom: 20 },
+  managerBtn: { flexDirection: 'row', alignItems: 'center', padding: 8, paddingRight: 14, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#FFF', marginRight: 10 },
+  managerBtnActive: { backgroundColor: '#EEF2FF', borderColor: '#6366F1', borderWidth: 1.5 },
+  managerBtnText: { fontSize: 12, fontWeight: '700', color: '#64748B', marginLeft: 8 },
+  managerBtnTextActive: { color: '#6366F1' },
   actionRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
   actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#F1F5F9', gap: 10 },
   actionBtnText: { fontSize: 13, fontWeight: '700', color: '#1E293B' }
