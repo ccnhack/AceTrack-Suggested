@@ -131,7 +131,8 @@ export const useCommsStore = create((set, get) => ({
 
     appendMessage: (msg) => {
         const msgs = get().messages;
-        if (!msgs.find(m => m._id === msg._id)) {
+        const incomingId = msg._id || msg.id;
+        if (!msgs.find(m => (m._id || m.id) === incomingId)) {
             set({ messages: [...msgs, msg] });
         }
     },

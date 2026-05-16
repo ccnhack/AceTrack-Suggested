@@ -461,7 +461,7 @@ const OrgChatScreen = ({ navigation }) => {
               
               return (
                 <View 
-                  key={msg._id || msg.timestamp || idx}
+                  key={msg._id || msg.id || msg.timestamp || idx}
                   ref={(ref) => {
                     if (ref && (msg._id || msg.id)) {
                       messageRefs.current.set(msg._id || msg.id, ref);
