@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, Text, TouchableOpacity, TextInput, ScrollView, 
   StyleSheet, Platform, useWindowDimensions, SafeAreaView, ActivityIndicator,
-  Animated
+  Animated, Image, Linking
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,6 +12,14 @@ import { useAuth } from '../context/AuthContext';
 import { socketService } from '../services/sync/SocketService';
 
 const OrgChatScreen = ({ navigation }) => {
+  const handleOpenURL = (url) => {
+    if (Platform.OS === 'web') {
+      window.open(url, '_blank');
+    } else {
+      Linking.openURL(url).catch(err => console.error("Couldn't load page", err));
+    }
+  };
+
   const { currentUser } = useAuth();
   const { teamDirectory, fetchTeamDirectory } = useAdminCoreStore();
   const { messages, fetchMessages, sendMessage, appendMessage, markAsSeen, uploadAttachment, uploadingFile, replyTo, setReplyTo, toggleReaction, deleteMessage } = useCommsStore();
@@ -538,15 +546,19 @@ const OrgChatScreen = ({ navigation }) => {
                               return (
                                 <TouchableOpacity 
                                   key={attIdx} 
-                                  onPress={() => window.open(att.url, '_blank')}
+                                  onPress={() => handleOpenURL(att.url)}
                                   style={styles.imageAttachmentContainer}
                                 >
                                   <View style={styles.imagePlaceholder}>
-                                    {/* Web image rendering */}
+                                    {/* Cross-platform image rendering (v2.6.465) */}
                                     {isWeb ? (
                                       <img src={att.url} style={{ width: '100%', borderRadius: 8, maxHeight: 200, objectFit: 'cover' }} alt={att.filename} />
                                     ) : (
-                                      <Ionicons name="image" size={24} color="#94A3B8" />
+                                      <Image 
+                                        source={{ uri: att.url }} 
+                                        style={{ width: '100%', height: 200, borderRadius: 8 }} 
+                                        resizeMode="cover"
+                                      />
                                     )}
                                   </View>
                                 </TouchableOpacity>
@@ -556,7 +568,7 @@ const OrgChatScreen = ({ navigation }) => {
                             return (
                               <TouchableOpacity 
                                 key={attIdx} 
-                                onPress={() => window.open(att.url, '_blank')}
+                                onPress={() => handleOpenURL(att.url)}
                                 style={styles.fileAttachmentChip}
                               >
                                 <Ionicons name="document-attach" size={20} color={isMe ? "#FFF" : "#6366F1"} />
