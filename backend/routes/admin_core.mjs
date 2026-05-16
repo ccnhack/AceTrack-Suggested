@@ -113,7 +113,7 @@ router.get('/team-directory', async (req, res) => {
 
         // Fetch users who are either admin or support
         const team = await User.find({ "data.role": { $in: ['admin', 'support'] } })
-            .select('id data.name data.email data.role data.designation data.avatar data.phone data.username data.devices lastUpdated')
+            .select('id data.name data.email data.role data.designation data.avatar data.phone data.username data.devices data.supportStatus data.supportLevel lastUpdated')
             .lean();
             
         // Map data back to flat structure for the frontend
@@ -128,21 +128,27 @@ router.get('/team-directory', async (req, res) => {
                 lastActive = Math.max(...u.data.devices.map(d => d.lastActive || 0), 0);
             }
 
+            const dbStatus = (u.data?.supportStatus || '').toLowerCase();
+            const dbLevel = (u.data?.supportLevel || '').toUpperCase();
+            const isExEmployee = dbStatus === 'terminated' || dbStatus === 'left' || dbLevel === 'EX-EMPLOYEE';
+
             return {
                 id: userId,
                 name: u.data?.name || 'Unknown',
                 email: u.data?.email || '',
                 role: u.data?.role || 'user',
-                designation: u.data?.designation || '',
+                designation: isExEmployee ? 'Ex-Employee' : (u.data?.designation || ''),
                 avatar: u.data?.avatar || '',
                 phone: u.data?.phone || '',
                 username: u.data?.username || '',
                 managerId: u.data?.managerId || '',
                 teamLeadId: u.data?.teamLeadId || '',
-                isLive: isLive,
+                supportLevel: u.data?.supportLevel || '',
+                supportStatus: u.data?.supportStatus || (isLive ? 'active' : 'offline'),
+                isExEmployee,
+                isLive: isExEmployee ? false : isLive,
                 lastActive: lastActive || u.lastUpdated || 0,
-                status: isLive ? 'active' : 'offline',
-                supportStatus: isLive ? 'active' : 'offline'
+                status: isExEmployee ? 'left' : (isLive ? 'active' : 'offline'),
             };
         });
         res.json({ success: true, team: mappedTeam });

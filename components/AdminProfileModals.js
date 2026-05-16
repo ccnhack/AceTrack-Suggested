@@ -299,6 +299,13 @@ const TeamDirectoryView = ({ team }) => {
     (member.designation || member.role || '').toLowerCase().includes(search.toLowerCase())
   );
 
+  // Sort: active employees first, ex-employees at the bottom
+  const sortedTeam = [...filteredTeam].sort((a, b) => {
+    if (a.isExEmployee && !b.isExEmployee) return 1;
+    if (!a.isExEmployee && b.isExEmployee) return -1;
+    return 0;
+  });
+
   return (
     <View style={styles.list}>
       <TextInput 
@@ -307,13 +314,25 @@ const TeamDirectoryView = ({ team }) => {
         value={search} 
         onChangeText={setSearch} 
       />
-      {filteredTeam.map((member, i) => (
-        <View key={i} style={styles.card}>
-          <Text style={styles.memberName}>{member.name || 'Unnamed User'}</Text>
-          <Text style={styles.memberRole}>{member.designation || member.role}</Text>
-          <Text style={styles.memberContact}>{member.email}</Text>
-        </View>
-      ))}
+      {sortedTeam.map((member, i) => {
+        const isEx = member.isExEmployee;
+        return (
+          <View key={i} style={[styles.card, isEx && { opacity: 0.6, borderColor: '#FCA5A5', backgroundColor: '#FEF2F2' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={[styles.memberName, isEx && { textDecorationLine: 'line-through', color: '#94A3B8' }]}>
+                {member.name || 'Unnamed User'}
+              </Text>
+              {isEx && (
+                <View style={{ backgroundColor: '#FEE2E2', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+                  <Text style={{ color: '#DC2626', fontSize: 10, fontWeight: '800', textTransform: 'uppercase' }}>Ex-Employee</Text>
+                </View>
+              )}
+            </View>
+            <Text style={[styles.memberRole, isEx && { color: '#94A3B8' }]}>{member.designation || member.role}</Text>
+            <Text style={styles.memberContact}>{member.email}</Text>
+          </View>
+        );
+      })}
       {filteredTeam.length === 0 && <Text style={styles.empty}>No team members found.</Text>}
     </View>
   );
