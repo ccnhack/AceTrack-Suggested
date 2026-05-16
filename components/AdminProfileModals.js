@@ -11,7 +11,6 @@ export default function AdminProfileModals({ visibleModal, onClose, user }) {
   const { auditLogs, orgSettings, teamDirectory, isLoading: isAdminLoading, fetchAuditLogs, fetchOrgSettings, fetchTeamDirectory, saveOrgSetting } = useAdminCoreStore();
   const { leaveRequests, policies, reviews, attendance, payslips, documents, isLoading: isHrLoading, fetchLeaveRequests, fetchPolicies, fetchReviews, fetchAttendance, checkIn, checkOut, fetchPayslips, fetchDocuments, submitLeaveRequest, approveLeave, rejectLeave } = useHrStore();
   const { messages, announcements, isLoading: isCommsLoading, fetchMessages, sendMessage, appendMessage, fetchAnnouncements } = useCommsStore();
-  const { messages, announcements, isLoading: isCommsLoading, fetchMessages, sendMessage, appendMessage, fetchAnnouncements } = useCommsStore();
 
   useEffect(() => {
     if (visibleModal === 'audit_logs') {

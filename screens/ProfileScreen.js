@@ -515,6 +515,16 @@ const ProfileScreen = ({ navigation }) => {
                 </View>
                 <Text style={styles.featureLabel}>Support Tickets</Text>
               </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.featureTile} 
+                onPress={() => setActiveSupportModal('leave_request')}
+              >
+                <View style={[styles.featureIcon, { backgroundColor: '#EFF6FF' }]}>
+                  <Ionicons name="calendar-outline" size={24} color="#3B82F6" />
+                </View>
+                <Text style={styles.featureLabel}>HR & Approvals</Text>
+              </TouchableOpacity>
             </View>
           </View>
         ) : user?.role === 'support' ? (
@@ -529,7 +539,9 @@ const ProfileScreen = ({ navigation }) => {
                 <View style={[styles.featureIcon, { backgroundColor: '#EFF6FF' }]}>
                   <Ionicons name="calendar-outline" size={24} color="#3B82F6" />
                 </View>
-                <Text style={styles.featureLabel}>Leave Request</Text>
+                <Text style={styles.featureLabel}>
+                  {user?.supportLevel === 'Manager' ? 'Leaves & Approvals' : 'Leave Request'}
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity 
