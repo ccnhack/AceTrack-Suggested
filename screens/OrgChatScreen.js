@@ -515,12 +515,20 @@ const OrgChatScreen = ({ navigation }) => {
                               {msg.replyTo.senderName}
                             </Text>
                           )}
-                          <Text style={styles.replyQuoteText} numberOfLines={1}>
-                            {typeof msg.replyTo === 'object' ? 
-                              (msg.replyTo.content || (msg.replyTo.attachments?.length ? '[Attachment]' : 'Original message deleted'))
-                              : 'Original message deleted'
-                            }
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            {typeof msg.replyTo === 'object' && msg.replyTo.attachments?.some(a => a.mimeType?.startsWith('image/')) && (
+                              <Image 
+                                source={{ uri: msg.replyTo.attachments.find(a => a.mimeType?.startsWith('image/')).url }}
+                                style={styles.replyThumbnail}
+                              />
+                            )}
+                            <Text style={styles.replyQuoteText} numberOfLines={1}>
+                              {typeof msg.replyTo === 'object' ? 
+                                (msg.replyTo.content || (msg.replyTo.attachments?.length ? '[Attachment]' : 'Original message deleted')) :
+                                'Original message deleted'
+                              }
+                            </Text>
+                          </View>
                         </TouchableOpacity>
                       )}
 
@@ -696,9 +704,17 @@ const OrgChatScreen = ({ navigation }) => {
             <View style={styles.replyPreviewIndicator} />
             <View style={styles.replyPreviewContent}>
               <Text style={styles.replyPreviewName}>Replying to {replyTo.senderName}</Text>
-              <Text style={styles.replyPreviewText} numberOfLines={1}>
-                {replyTo.content || (replyTo.attachments?.length ? '[Attachment]' : '')}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {replyTo.attachments?.some(a => a.mimeType?.startsWith('image/')) && (
+                  <Image 
+                    source={{ uri: replyTo.attachments.find(a => a.mimeType?.startsWith('image/')).url }}
+                    style={styles.replyThumbnail}
+                  />
+                )}
+                <Text style={styles.replyPreviewText} numberOfLines={1}>
+                  {replyTo.content || (replyTo.attachments?.length ? '[Attachment]' : '')}
+                </Text>
+              </View>
             </View>
             <TouchableOpacity onPress={() => setReplyTo(null)} style={styles.replyPreviewClose}>
               <Ionicons name="close-circle" size={20} color="#94A3B8" />
@@ -1152,6 +1168,13 @@ const styles = StyleSheet.create({
     borderColor: '#6366F1',
     borderWidth: 1,
     transform: [{ scale: 0.98 }]
+  },
+  replyThumbnail: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    marginRight: 8,
+    backgroundColor: '#E2E8F0'
   },
 });
 
