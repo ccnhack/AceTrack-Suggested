@@ -16,7 +16,7 @@ import logger from '../../utils/logger';
 
 const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => {
   const { players } = usePlayers();
-  const { socketRef, isUsingCloud, isCloudOnline, activeApiUrl, metrics, refreshMetrics, loadData } = useSync();
+  const { socketRef, isUsingCloud, isCloudOnline, onToggleCloud, activeApiUrl, metrics, refreshMetrics, loadData } = useSync();
   const { currentUser } = useAuth();
   
   // Real-time metrics polling
@@ -595,18 +595,29 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
       {renderDetailModal()}
       <View style={styles.diagHeaderRow}>
         <Text style={styles.sectionTitle}>System Diagnostics</Text>
-        <TouchableOpacity 
-          onPress={() => {
-            loadData?.(true);
-            if (selectedDiagUser) {
-              handleSelectDiagPlayer(selectedDiagUser);
-            }
-          }}
-          style={styles.diagSyncBtn}
-        >
-          <Ionicons name="refresh-circle" size={16} color="#FFFFFF" />
-          <Text style={styles.diagSyncBtnText}>Refresh</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {/* ☁️ Cloud Toggle (v2.6.467) */}
+          <TouchableOpacity 
+            onPress={onToggleCloud}
+            style={[styles.diagSyncBtn, isUsingCloud ? styles.modeCloud : styles.modeLocal]}
+          >
+            <Ionicons name={isUsingCloud ? "cloud" : "laptop"} size={14} color="#FFFFFF" />
+            <Text style={styles.diagSyncBtnText}>{isUsingCloud ? "Cloud" : "Local"}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            onPress={() => {
+              loadData?.(true);
+              if (selectedDiagUser) {
+                handleSelectDiagPlayer(selectedDiagUser);
+              }
+            }}
+            style={styles.diagSyncBtn}
+          >
+            <Ionicons name="refresh-circle" size={16} color="#FFFFFF" />
+            <Text style={styles.diagSyncBtnText}>Refresh</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* 🚀 System Health Overview (New Dashboard) */}
@@ -1018,6 +1029,8 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
   diagSyncBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#6366F1', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   diagSyncBtnText: { fontSize: 10, fontWeight: 'bold', color: '#FFF', marginLeft: 4 },
+  modeCloud: { backgroundColor: '#10B981' },
+  modeLocal: { backgroundColor: '#F59E0B' },
   diagSearchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 16 },
   diagSearchInput: { flex: 1, marginLeft: 8, fontSize: 14, color: '#1E293B' },
   userListScroll: { marginBottom: 20 },
