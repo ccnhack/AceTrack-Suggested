@@ -94,24 +94,29 @@ const ExploreScreen = ({ navigation, route }) => {
   const isFocused = useIsFocused();
 
 
-  // Handle Deep Linking from ChatBot & URL Persistence
-  useEffect(() => {
-    let tid = route?.params?.selectedTournamentId;
-    
-    // 🛡️ [URL_PERSISTENCE] (v2.6.458): Detect from URL if no route param
-    if (!tid && Platform.OS === 'web') {
-      tid = new URLSearchParams(window.location.search).get('tournamentId');
+  const [initialTournamentId] = useState(() => {
+    if (Platform.OS === 'web') {
+      const tid = new URLSearchParams(window.location.search).get('tournamentId');
+      if (tid) console.log(`[Explore] [INIT] Found tournamentId in URL: ${tid}`);
+      return tid;
     }
+    return null;
+  });
 
-    if (tid) {
+  // Handle Deep Linking & Hydration (v2.6.460)
+  useEffect(() => {
+    const routeTid = route?.params?.selectedTournamentId;
+    const tid = routeTid || initialTournamentId;
+    
+    if (tid && !selectedTournament) {
       const t = (tournaments || []).find(it => String(it.id) === String(tid));
       if (t) {
+        console.log(`[Explore] Restoring tournament ${tid} from URL/Params`);
         setSelectedTournament(t);
-        // Clear param to avoid re-opening on every render
-        if (route?.params?.selectedTournamentId) navigation.setParams({ selectedTournamentId: null });
+        if (routeTid) navigation.setParams({ selectedTournamentId: null });
       }
     }
-  }, [route?.params?.selectedTournamentId, tournaments?.length]);
+  }, [route?.params?.selectedTournamentId, tournaments?.length, initialTournamentId]);
 
   // Sync URL when tournament selection changes
   useEffect(() => {

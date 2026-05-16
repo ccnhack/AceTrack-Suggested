@@ -71,9 +71,7 @@ const ProfileScreen = ({ navigation }) => {
   }, [isFocused]);
   const [showCoachOnboarding, setShowCoachOnboarding] = useState(false);
   const [activeSupportModal, setActiveSupportModal] = useState(null);
-  const [showSupport, setShowSupport] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
-  const [showEditProfile, setShowEditProfile] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [sessionCustomAvatar, setSessionCustomAvatar] = useState(null); // Persistence for session
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -158,6 +156,23 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
+  // Hydrate from URL directly in state (v2.6.460 hardened)
+  const [showSupport, setShowSupport] = useState(() => {
+    if (Platform.OS === 'web') {
+      const view = new URLSearchParams(window.location.search).get('view');
+      return view === 'support';
+    }
+    return false;
+  });
+
+  const [showEditProfile, setShowEditProfile] = useState(() => {
+    if (Platform.OS === 'web') {
+      const view = new URLSearchParams(window.location.search).get('view');
+      return view === 'edit_profile';
+    }
+    return false;
+  });
+
   // 🛡️ [URL_PERSISTENCE] (v2.6.458): Sync view state with URL
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -168,16 +183,6 @@ const ProfileScreen = ({ navigation }) => {
       window.history.pushState({}, '', currentUrl.toString());
     }
   }, [showSupport, showEditProfile]);
-
-  // Hydrate from URL on mount
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      const params = new URLSearchParams(window.location.search);
-      const view = params.get('view');
-      if (view === 'support') setShowSupport(true);
-      if (view === 'edit_profile') setShowEditProfile(true);
-    }
-  }, []);
 
   const renderUpdateCard = () => {
     if (!updateAvailable) return null;

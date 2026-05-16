@@ -17,6 +17,15 @@ const OrgChatScreen = ({ navigation }) => {
   const { messages, fetchMessages, sendMessage, appendMessage, markAsSeen, uploadAttachment, uploadingFile, replyTo, setReplyTo, toggleReaction, deleteMessage } = useCommsStore();
   
   const [selectedContact, setSelectedContact] = useState(null);
+  const [initialContactId] = useState(() => {
+    if (Platform.OS === 'web') {
+      const cid = new URLSearchParams(window.location.search).get('contactId');
+      if (cid) console.log(`[OrgChat] [INIT] Found contactId in URL: ${cid}`);
+      return cid;
+    }
+    return null;
+  });
+
   const [searchQuery, setSearchQuery] = useState('');
   const [msgText, setMsgText] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState([]);
@@ -53,20 +62,16 @@ const OrgChatScreen = ({ navigation }) => {
     }
   }, [selectedContact?.id, messages?.length]);
 
-  // 🛡️ [URL_PERSISTENCE] (v2.6.458): Hydrate selectedContact from URL on mount
+  // 🛡️ [URL_PERSISTENCE] (v2.6.460): Hydrate selectedContact from URL on mount
   useEffect(() => {
-    if (Platform.OS === 'web' && teamDirectory?.length > 0) {
-      const params = new URLSearchParams(window.location.search);
-      const cid = params.get('contactId');
-      if (cid && !selectedContact) {
-        const contact = teamDirectory.find(c => String(c.id) === String(cid));
-        if (contact) {
-          console.log(`[OrgChat] Restoring contact from URL: ${contact.name}`);
-          setSelectedContact(contact);
-        }
+    if (teamDirectory?.length > 0 && initialContactId && !selectedContact) {
+      const contact = teamDirectory.find(c => String(c.id) === String(initialContactId));
+      if (contact) {
+        console.log(`[OrgChat] Restoring contact ${initialContactId} from directory of ${teamDirectory.length} items`);
+        setSelectedContact(contact);
       }
     }
-  }, [teamDirectory?.length]);
+  }, [teamDirectory?.length, initialContactId]);
 
   useEffect(() => {
     const socket = socketService.getSocket();
