@@ -1177,13 +1177,16 @@ router.post('/support/reassign-ticket', apiKeyGuard, async (req, res) => {
         ['ex-employee', 'terminated'].includes(level) ||
         hasActiveTermination;
       
-      const isActiveSupport = role === 'support' && (status === 'active' || !status) && !isExplicitlyInactive;
+      const isActiveSupport = role === 'support' && !isExplicitlyInactive;
       const isActiveAdmin = role === 'admin' && !isExplicitlyInactive;
 
       isAuthorized = isActiveSupport || isActiveAdmin;
     }
     
-    if (!targetAgent || !isAuthorized) return res.status(404).json({ error: "Target agent not found, inactive, or unauthorized" });
+    if (!targetAgent || !isAuthorized) {
+      console.error(`[API] Reassign Ticket 404 - targetAgent found: ${!!targetAgent}, isAuthorized: ${isAuthorized}, role: ${targetAgent?.role}, status: ${targetAgent?.supportStatus}`);
+      return res.status(404).json({ error: "Target agent not found, inactive, or unauthorized" });
+    }
 
     if (!ticketDoc || !ticketDoc.data) return res.status(404).json({ error: "Ticket not found" });
     const ticket = ticketDoc.data;
