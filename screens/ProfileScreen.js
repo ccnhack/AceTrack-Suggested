@@ -525,6 +525,16 @@ const ProfileScreen = ({ navigation }) => {
                 </View>
                 <Text style={styles.featureLabel}>HR & Approvals</Text>
               </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.featureTile} 
+                onPress={() => setActiveSupportModal('org_chat')}
+              >
+                <View style={[styles.featureIcon, { backgroundColor: '#F0FDF4' }]}>
+                  <Ionicons name="chatbubbles-outline" size={24} color="#16A34A" />
+                </View>
+                <Text style={styles.featureLabel}>Org Chat</Text>
+              </TouchableOpacity>
             </View>
           </View>
         ) : user?.role === 'support' ? (
