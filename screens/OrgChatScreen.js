@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, Text, TouchableOpacity, TextInput, ScrollView, 
   StyleSheet, Platform, useWindowDimensions, SafeAreaView, ActivityIndicator,
-  Animated, Image, Linking
+  Animated, Image, Linking, Modal, Share
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -39,6 +39,7 @@ const OrgChatScreen = ({ navigation }) => {
   const [pendingAttachments, setPendingAttachments] = useState([]);
   const [hoveredMessageId, setHoveredMessageId] = useState(null); // 🖱️ [HOVER_STATE]
   const [activeMenuId, setActiveMenuId] = useState(null); // ⋯ [DROPDOWN_STATE]
+  const [previewImage, setPreviewImage] = useState(null); // 🖼️ [IMAGE_PREVIEW] (v2.6.466)
   const fileInputRef = useRef(null);
   const chatScrollRef = useRef(null);
   const chatInputRef = useRef(null);
@@ -546,18 +547,24 @@ const OrgChatScreen = ({ navigation }) => {
                               return (
                                 <TouchableOpacity 
                                   key={attIdx} 
-                                  onPress={() => handleOpenURL(att.url)}
+                                  onPress={() => isWeb ? handleOpenURL(att.url) : setPreviewImage(att)}
                                   style={styles.imageAttachmentContainer}
                                 >
                                   <View style={styles.imagePlaceholder}>
-                                    {/* Cross-platform image rendering (v2.6.465) */}
+                                    {/* Cross-platform image rendering (v2.6.466) */}
                                     {isWeb ? (
-                                      <img src={att.url} style={{ width: '100%', borderRadius: 8, maxHeight: 200, objectFit: 'cover' }} alt={att.filename} />
+                                      <img src={att.url} style={{ width: '100%', borderRadius: 8, maxHeight: 300, objectFit: 'contain' }} alt={att.filename} />
                                     ) : (
                                       <Image 
                                         source={{ uri: att.url }} 
-                                        style={{ width: '100%', height: 200, borderRadius: 8 }} 
-                                        resizeMode="cover"
+                                        style={{ 
+                                          width: '100%', 
+                                          minHeight: 150,
+                                          maxHeight: 300,
+                                          aspectRatio: 1, // Default, will contain correctly
+                                          borderRadius: 8 
+                                        }} 
+                                        resizeMode="contain"
                                       />
                                     )}
                                   </View>
@@ -738,6 +745,49 @@ const OrgChatScreen = ({ navigation }) => {
             <Ionicons name="send" size={18} color="#FFF" />
           </TouchableOpacity>
         </View>
+        {/* 🖼️ Image Preview Modal (v2.6.466) */}
+        {!isWeb && (
+          <Modal
+            visible={!!previewImage}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setPreviewImage(null)}
+          >
+            <View style={styles.modalOverlay}>
+              <SafeAreaView style={styles.modalContent}>
+                <TouchableOpacity style={styles.modalClose} onPress={() => setPreviewImage(null)}>
+                  <Ionicons name="close" size={32} color="#FFF" />
+                </TouchableOpacity>
+                
+                {previewImage && (
+                  <View style={{ flex: 1, justifyContent: 'center' }}>
+                    <Image 
+                      source={{ uri: previewImage.url }} 
+                      style={styles.fullImage}
+                      resizeMode="contain"
+                    />
+                    
+                    <View style={styles.modalFooter}>
+                      <Text style={styles.modalFilename} numberOfLines={1}>{previewImage.filename}</Text>
+                      <TouchableOpacity 
+                        style={styles.shareBtn}
+                        onPress={() => {
+                          Share.share({
+                            url: previewImage.url,
+                            message: `AceTrack File: ${previewImage.filename}\n${previewImage.url}`
+                          });
+                        }}
+                      >
+                        <Ionicons name="share-outline" size={24} color="#FFF" />
+                        <Text style={styles.shareText}>Share / Save</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </SafeAreaView>
+            </View>
+          </Modal>
+        )}
       </View>
     );
   };
@@ -1042,6 +1092,16 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(99, 102, 241, 0.5)',
   },
+  
+  // 🖼️ Modal Styles (v2.6.466)
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)' },
+  modalContent: { flex: 1 },
+  modalClose: { position: 'absolute', top: 20, right: 20, zIndex: 10, padding: 10 },
+  fullImage: { flex: 1, width: '100%' },
+  modalFooter: { padding: 20, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center' },
+  modalFilename: { color: '#FFF', fontSize: 14, fontWeight: '700', marginBottom: 16 },
+  shareBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#6366F1', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
+  shareText: { color: '#FFF', marginLeft: 10, fontWeight: '800' },
 });
 
 export default OrgChatScreen;
