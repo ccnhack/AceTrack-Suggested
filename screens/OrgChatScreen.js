@@ -484,10 +484,20 @@ const OrgChatScreen = ({ navigation }) => {
                         <Text style={styles.msgAvatarSmallText}>{getInitials(selectedContact.name)}</Text>
                       </View>
                     )}
-                    <View 
-                        style={[styles.msgBubble, isMe ? styles.msgBubbleMe : styles.msgBubbleOther, { position: 'relative' }]}
-                        onMouseEnter={() => isWeb && setHoveredMessageId(msg._id)}
-                        onMouseLeave={() => isWeb && setHoveredMessageId(null)}
+                    <TouchableOpacity 
+                      activeOpacity={0.9}
+                      onLongPress={() => {
+                        if (!isWeb) {
+                          setActiveMenuId(activeMenuId === (msg._id || msg.id) ? null : (msg._id || msg.id));
+                        }
+                      }}
+                      style={[
+                        styles.msgBubble, 
+                        isMe ? styles.msgBubbleMe : styles.msgBubbleOther,
+                        activeMenuId === (msg._id || msg.id) && styles.msgBubbleActive
+                      ]}
+                      onMouseEnter={() => isWeb && setHoveredMessageId(msg._id)}
+                      onMouseLeave={() => isWeb && setHoveredMessageId(null)}
                     >
                       {/* 🛡️ [REPLY_TO_UI] (v2.6.407): Show populated quoted message */}
                       {msg.replyTo && (
@@ -646,7 +656,7 @@ const OrgChatScreen = ({ navigation }) => {
                             style={styles.moreBtn} 
                             onPress={() => setActiveMenuId(activeMenuId === (msg._id || msg.id) ? null : (msg._id || msg.id))}
                           >
-                            <Ionicons name="ellipsis-horizontal" size={16} color="#64748B" />
+                            <Ionicons name={activeMenuId === (msg._id || msg.id) ? "close-circle" : "ellipsis-horizontal"} size={16} color="#64748B" />
                           </TouchableOpacity>
                           
                           {activeMenuId === (msg._id || msg.id) && (
@@ -672,7 +682,7 @@ const OrgChatScreen = ({ navigation }) => {
                           )}
                         </View>
                       )}
-                    </View>
+                    </TouchableOpacity>
                   </View>
                 </View>
               );
@@ -1136,6 +1146,13 @@ const styles = StyleSheet.create({
   reactionTooltipMe: { right: 0 },
   reactionTooltipOther: { left: 0 },
   reactionTooltipText: { color: '#FFF', fontSize: 10, fontWeight: '600' },
+  
+  msgBubbleActive: {
+    backgroundColor: '#EEF2FF',
+    borderColor: '#6366F1',
+    borderWidth: 1,
+    transform: [{ scale: 0.98 }]
+  },
 });
 
 export default OrgChatScreen;
