@@ -1158,8 +1158,8 @@ router.post('/support/reassign-ticket', apiKeyGuard, async (req, res) => {
 
     // 🛡️ SCALABILITY FIX (v2.6.316): Read/write from distinct collections scoped efficiently
     const [targetAgentDoc, ticketDoc] = await Promise.all([
-      Player.findOne({ id: targetAgentId }).lean(),
-      SupportTicket.findOne({ id: ticketId })
+      Player.findOne({ id: String(targetAgentId) }).lean(),
+      SupportTicket.findOne({ id: String(ticketId) })
     ]);
     const targetAgent = targetAgentDoc ? targetAgentDoc.data : null;
     
