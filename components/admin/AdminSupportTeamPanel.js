@@ -54,6 +54,8 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const [search, setSearch] = useState('');
   const [analytics, setAnalytics] = useState(null);
   const [selectedAgentId, setSelectedAgentId] = useState(null);
+  const [managerSearch, setManagerSearch] = useState('');
+  const [leadSearch, setLeadSearch] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isManaging, setIsManaging] = useState(null);
   const [activeTab, setActiveTab] = useState('employees'); // 'employees' | 'ex-employees'
@@ -480,6 +482,16 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       return lvl === 'team lead';
     });
   }, [serverAgents, players]);
+
+  // 📊 [REPORT_COUNTS] (v2.6.449): Calculate reports for load balancing
+  const reportCounts = useMemo(() => {
+    const counts = {};
+    allSupportAgents.forEach(a => {
+      if (a.managerId) counts[a.managerId] = (counts[a.managerId] || 0) + 1;
+      if (a.teamLeadId) counts[a.teamLeadId] = (counts[a.teamLeadId] || 0) + 1;
+    });
+    return counts;
+  }, [allSupportAgents]);
 
   const activeAgents = useMemo(() => {
     return allSupportAgents.filter(a => {
@@ -1618,6 +1630,20 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                   <View style={{ marginLeft: 16 }}>
                     <Text style={styles.actionUserName}>{selectedAgent.name}</Text>
                     <Text style={styles.actionUserMeta}>{selectedAgent.supportLevel || 'Intern'} • {selectedAgent.supportStatus || 'Active'}</Text>
+                    
+                    {/* 🗺️ [HIERARCHY_PATH] (v2.6.449) */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                       <Text style={{ fontSize: 9, color: '#94A3B8', fontWeight: 'bold' }}>PATH: </Text>
+                       {(() => {
+                          const mgr = allSupportAgents.find(a => String(a.id) === String(selectedAgent.managerId));
+                          const lead = allSupportAgents.find(a => String(a.id) === String(selectedAgent.teamLeadId));
+                          return (
+                            <Text style={{ fontSize: 9, color: '#64748B' }}>
+                              {mgr ? mgr.name : 'None'} ➔ {lead ? lead.name : 'None'} ➔ YOU
+                            </Text>
+                          );
+                       })()}
+                    </View>
                   </View>
                 </View>
 
@@ -1672,12 +1698,25 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                    })()}
                 </View>
 
-                <Text style={{ color: '#64748B', fontSize: 11, marginLeft: 16, marginBottom: 8, textTransform: 'uppercase', fontWeight: 'bold' }}>Assign New Manager</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: 16, marginBottom: 8 }}>
+                  <Text style={{ color: '#64748B', fontSize: 11, textTransform: 'uppercase', fontWeight: 'bold' }}>Assign New Manager</Text>
+                  <TextInput 
+                    placeholder="Search..." 
+                    placeholderTextColor="#94A3B8"
+                    style={{ fontSize: 11, color: '#F8FAFC', padding: 0, width: 80, textAlign: 'right' }} 
+                    value={managerSearch}
+                    onChangeText={setManagerSearch}
+                  />
+                </View>
                 <View style={styles.managerListContainer}>
                   {(() => {
-                    const otherManagers = availableManagers.filter(mgr => String(selectedAgent.managerId) !== String(mgr.id) && String(mgr.id) !== String(selectedAgent.id));
+                    const otherManagers = availableManagers.filter(mgr => 
+                      String(selectedAgent.managerId) !== String(mgr.id) && 
+                      String(mgr.id) !== String(selectedAgent.id) &&
+                      (mgr.name || '').toLowerCase().includes(managerSearch.toLowerCase())
+                    );
                     if (otherManagers.length === 0) {
-                      return <Text style={{ fontSize: 12, color: '#94A3B8', padding: 8, paddingHorizontal: 16 }}>No other managers available.</Text>;
+                      return <Text style={{ fontSize: 12, color: '#94A3B8', padding: 8, paddingHorizontal: 16 }}>{managerSearch ? 'No matches found' : 'No other managers available.'}</Text>;
                     }
                     return (
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingBottom: 8, paddingHorizontal: 16 }}>
@@ -1688,7 +1727,14 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                             onPress={() => handleAssignHierarchy(selectedAgent.id, 'manager', mgr.id)}
                             disabled={isAssigningManager}
                           >
-                            <SafeAvatar uri={mgr.avatar} name={mgr.name} role={mgr.role} size={28} borderRadius={14} />
+                            <View style={{ position: 'relative' }}>
+                              <SafeAvatar uri={mgr.avatar} name={mgr.name} role={mgr.role} size={28} borderRadius={14} />
+                              {reportCounts[mgr.id] > 0 && (
+                                <View style={{ position: 'absolute', top: -4, right: -4, backgroundColor: '#2563EB', borderRadius: 8, paddingHorizontal: 4, height: 14, justifyContent: 'center' }}>
+                                  <Text style={{ color: '#FFF', fontSize: 8, fontWeight: 'bold' }}>{reportCounts[mgr.id]}</Text>
+                                </View>
+                              )}
+                            </View>
                             <Text style={styles.managerBtnText}>
                               {mgr.name.split(' ')[0]}
                             </Text>
@@ -1711,7 +1757,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                              <SafeAvatar uri={curr.avatar} name={curr.name} role={curr.role} size={36} borderRadius={18} />
                              <View style={{ marginLeft: 12, flex: 1 }}>
                                <Text style={{ color: '#F8FAFC', fontWeight: '700', fontSize: 15 }}>{curr.name}</Text>
-                               <Text style={{ color: '#94A3B8', fontSize: 12 }}>Current Team Lead</Text>
+                               <Text style={{ color: '#94A3B8', fontSize: 12 }}>Current Team Lead ({reportCounts[curr.id] || 0} reports)</Text>
                              </View>
                            </>
                         )
@@ -1720,12 +1766,25 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                    })()}
                 </View>
 
-                <Text style={{ color: '#64748B', fontSize: 11, marginLeft: 16, marginBottom: 8, textTransform: 'uppercase', fontWeight: 'bold' }}>Assign New Team Lead</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: 16, marginBottom: 8 }}>
+                  <Text style={{ color: '#64748B', fontSize: 11, textTransform: 'uppercase', fontWeight: 'bold' }}>Assign New Team Lead</Text>
+                  <TextInput 
+                    placeholder="Search..." 
+                    placeholderTextColor="#94A3B8"
+                    style={{ fontSize: 11, color: '#F8FAFC', padding: 0, width: 80, textAlign: 'right' }} 
+                    value={leadSearch}
+                    onChangeText={setLeadSearch}
+                  />
+                </View>
                 <View style={styles.managerListContainer}>
                   {(() => {
-                    const otherLeads = availableTeamLeads.filter(mgr => String(selectedAgent.teamLeadId) !== String(mgr.id) && String(mgr.id) !== String(selectedAgent.id));
+                    const otherLeads = availableTeamLeads.filter(mgr => 
+                      String(selectedAgent.teamLeadId) !== String(mgr.id) && 
+                      String(mgr.id) !== String(selectedAgent.id) &&
+                      (mgr.name || '').toLowerCase().includes(leadSearch.toLowerCase())
+                    );
                     if (otherLeads.length === 0) {
-                      return <Text style={{ fontSize: 12, color: '#94A3B8', padding: 8, paddingHorizontal: 16 }}>No team leads available.</Text>;
+                      return <Text style={{ fontSize: 12, color: '#94A3B8', padding: 8, paddingHorizontal: 16 }}>{leadSearch ? 'No matches found' : 'No team leads available.'}</Text>;
                     }
                     return (
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingBottom: 8, paddingHorizontal: 16 }}>
@@ -1736,7 +1795,14 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                             onPress={() => handleAssignHierarchy(selectedAgent.id, 'teamLead', mgr.id)}
                             disabled={isAssigningManager}
                           >
-                            <SafeAvatar uri={mgr.avatar} name={mgr.name} role={mgr.role} size={28} borderRadius={14} />
+                            <View style={{ position: 'relative' }}>
+                              <SafeAvatar uri={mgr.avatar} name={mgr.name} role={mgr.role} size={28} borderRadius={14} />
+                              {reportCounts[mgr.id] > 0 && (
+                                <View style={{ position: 'absolute', top: -4, right: -4, backgroundColor: '#2563EB', borderRadius: 8, paddingHorizontal: 4, height: 14, justifyContent: 'center' }}>
+                                  <Text style={{ color: '#FFF', fontSize: 8, fontWeight: 'bold' }}>{reportCounts[mgr.id]}</Text>
+                                </View>
+                              )}
+                            </View>
                             <Text style={styles.managerBtnText}>
                               {mgr.name.split(' ')[0]}
                             </Text>
