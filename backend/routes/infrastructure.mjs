@@ -307,7 +307,11 @@ ${chatHistory.substring(0, 3000)}`;
          const query = {
              $or: [
                  { "data.createdAt": { $gte: startOfDate.toISOString(), $lte: endOfDate.toISOString() } },
-                 { lastUpdated: { $gte: startOfDate, $lte: endOfDate } }
+                 { "data.closedAt": { $gte: startOfDate.toISOString(), $lte: endOfDate.toISOString() } },
+                 { "data.resolvedAt": { $gte: startOfDate.toISOString(), $lte: endOfDate.toISOString() } },
+                 // Fallback for cases where dates might be stored as Date objects instead of strings (v2.6.462)
+                 { "data.closedAt": { $gte: startOfDate, $lte: endOfDate } },
+                 { "data.resolvedAt": { $gte: startOfDate, $lte: endOfDate } }
              ]
          };
          
