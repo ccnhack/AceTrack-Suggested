@@ -17,6 +17,7 @@ import { useSupport } from '../context/SupportContext';
 export { useAuth };
 import { useAdmin } from '../context/AdminContext';
 import { useMatchmaking } from '../context/MatchmakingContext';
+import { useCommsStore } from '../stores/useCommsStore';
 import ScreenErrorBoundary from '../components/ScreenErrorBoundary';
 
 // Screens
@@ -61,6 +62,15 @@ const MainTabs = memo(() => {
   const { supportTickets } = useSupport();
   const { matchmaking } = useMatchmaking();
   const { seenAdminActionIds, visitedAdminSubTabs } = useAdmin();
+  const { messages } = useCommsStore();
+  
+  const unreadChatCount = useMemo(() => {
+    if (!messages || !user) return 0;
+    const unreadSenders = new Set(
+      messages.filter(m => m.receiverId === user.id && m.status !== 'seen').map(m => m.senderId)
+    );
+    return unreadSenders.size;
+  }, [messages, user]);
   
   const adminBadgeCount = useMemo(() => {
     if (role !== 'admin') return 0;
@@ -81,6 +91,7 @@ const MainTabs = memo(() => {
 
   const screenOptions = useCallback(({ route }) => ({
     tabBarBadge: route.name === 'Admin' && adminBadgeCount > 0 ? adminBadgeCount : 
+                 route.name === 'OrgChat' && unreadChatCount > 0 ? unreadChatCount :
                  route.name === 'Profile' && (user?.notifications?.filter(n => !n.read)?.length > 0) ? (user?.notifications?.filter(n => !n.read)?.length) : 
                  undefined,
     tabBarIcon: ({ focused, color, size }) => {
@@ -95,9 +106,10 @@ const MainTabs = memo(() => {
       else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
       else if (route.name === 'Matchmaking') iconName = focused ? 'people' : 'people-outline';
       else if (route.name === 'Insights') iconName = focused ? 'bar-chart' : 'bar-chart-outline';
+      else if (route.name === 'OrgChat') iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
       return <Ionicons name={iconName} size={size} color={color} />;
     },
-    tabBarLabel: route.name === 'Matchmaking' && role === 'coach' ? 'Bookings' : route.name,
+    tabBarLabel: route.name === 'Matchmaking' && role === 'coach' ? 'Bookings' : route.name === 'OrgChat' ? 'Chat' : route.name,
     tabBarActiveTintColor: '#EF4444',
     tabBarInactiveTintColor: '#CBD5E1',
     headerShown: false,
@@ -133,6 +145,9 @@ const MainTabs = memo(() => {
       )}
       {role === 'support' && (
         <Tab.Screen name="Support" component={SupportDashboardScreen} options={{ tabBarTestID: 'nav.tab.Support' }} />
+      )}
+      {(role === 'admin' || role === 'support') && (
+        <Tab.Screen name="OrgChat" component={OrgChatScreen} options={{ tabBarTestID: 'nav.tab.OrgChat' }} />
       )}
       {Platform.OS !== 'web' && role !== 'admin' && (
         <Tab.Screen name="Matchmaking" component={MatchmakingScreen} options={{ tabBarTestID: 'nav.tab.Matchmaking' }} />
