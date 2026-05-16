@@ -80,6 +80,11 @@ export const AdminGrievancesPanel = ({
   const [reassignSearch, setReassignSearch] = useState('');
   const [liveAttendanceData, setLiveAttendanceData] = useState([]);
 
+  // 🛡️ [AGENT_FILTER_STATE] (v2.6.452)
+  const [assignmentScope, setAssignmentScope] = useState('me'); // 'me' | 'all'
+  const [filterAgentId, setFilterAgentId] = useState(null);
+  const [showAgentPicker, setShowAgentPicker] = useState(false);
+
   useEffect(() => {
     if (showReassignModal) {
       const fetchLiveAttendance = async () => {
@@ -418,18 +423,52 @@ export const AdminGrievancesPanel = ({
     return hasUnreadMessages || (isUnseenStatus && !wasOpenedByAdmin);
   };
 
-  const scopedTickets = (tickets || []).filter(t => {
-    // 🛡️ [STRICT SCOPING] (v2.6.271) Enforce assignment scoping for ALL non-admins.
-    // This prevents ticket leakage if a support user's session role property is missing or overridden.
+  const scopedTickets = useMemo(() => {
+    const allTickets = tickets || [];
+    
+    // 🛡️ [STRICT SCOPING] (v2.6.452)
+    // Non-admins can toggle between 'Me' and 'All' if they have support access
     if (currentUser?.id !== 'admin') {
-      const isMine = (t.assignedTo && String(t.assignedTo) === String(currentUser?.id)) || 
-                     (currentUser?.username && String(t.assignedTo) === String(currentUser?.username));
-      const isUnassigned = (!t.assignedTo || t.assignedTo === 'Unassigned' || t.assignedTo === '');
-      const isOpen = (t.status === 'Open' || !t.status);
-      return isMine || (isUnassigned && isOpen);
+      if (assignmentScope === 'me') {
+        return allTickets.filter(t => {
+          const isMine = (t.assignedTo && String(t.assignedTo) === String(currentUser?.id)) || 
+                         (currentUser?.username && String(t.assignedTo) === String(currentUser?.username));
+          const isUnassigned = (!t.assignedTo || t.assignedTo === 'Unassigned' || t.assignedTo === '');
+          const isOpen = (t.status === 'Open' || !t.status);
+          return isMine || (isUnassigned && isOpen);
+        });
+      }
+      
+      // In 'All' scope, filter by specific agent if selected
+      if (filterAgentId) {
+        return allTickets.filter(t => String(t.assignedTo) === String(filterAgentId));
+      }
+      
+      return allTickets;
     }
-    return true; // Only the System Administrator ('admin') sees all tickets
-  });
+
+    // System Admin Scoping
+    if (assignmentScope === 'all' && filterAgentId) {
+        return allTickets.filter(t => String(t.assignedTo) === String(filterAgentId));
+    }
+    if (assignmentScope === 'me') {
+        return allTickets.filter(t => t.assignedTo === 'admin' || t.assignedTo === currentUser?.id);
+    }
+    
+    return allTickets;
+  }, [tickets, currentUser, assignmentScope, filterAgentId]);
+
+  // 👥 [AGENT_EXTRACTION] (v2.6.452)
+  const availableAgents = useMemo(() => {
+    const agentsMap = new Map();
+    (tickets || []).forEach(t => {
+      if (t.assignedTo && t.assignedTo !== 'Unassigned') {
+        const name = (players || []).find(p => String(p.id) === String(t.assignedTo) || p.username === t.assignedTo)?.name || t.assignedTo;
+        agentsMap.set(String(t.assignedTo), name);
+      }
+    });
+    return Array.from(agentsMap.entries()).map(([id, name]) => ({ id, name }));
+  }, [tickets, players]);
 
   const filteredTickets = scopedTickets
     .filter(t => {
@@ -1264,6 +1303,40 @@ export const AdminGrievancesPanel = ({
         </View>
       )}
 
+      {/* 🛡️ [SCOPE_TOGGLE] (v2.6.452) */}
+      <View style={styles.scopeToggleRow}>
+        <View style={styles.scopeButtonGroup}>
+          <TouchableOpacity 
+            onPress={() => { setAssignmentScope('me'); setFilterAgentId(null); }}
+            style={[styles.scopeToggleBtn, assignmentScope === 'me' && styles.scopeToggleBtnActive]}
+          >
+            <Ionicons name="person" size={14} color={assignmentScope === 'me' ? '#FFF' : '#64748B'} />
+            <Text style={[styles.scopeToggleText, assignmentScope === 'me' && styles.scopeToggleTextActive]}>My Caseload</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => setAssignmentScope('all')}
+            style={[styles.scopeToggleBtn, assignmentScope === 'all' && styles.scopeToggleBtnActive]}
+          >
+            <Ionicons name="people" size={14} color={assignmentScope === 'all' ? '#FFF' : '#64748B'} />
+            <Text style={[styles.scopeToggleText, assignmentScope === 'all' && styles.scopeToggleTextActive]}>Full Team</Text>
+          </TouchableOpacity>
+        </View>
+
+        {assignmentScope === 'all' && availableAgents.length > 0 && (
+          <TouchableOpacity 
+            style={styles.agentSelectDropdown}
+            onPress={() => setShowAgentPicker(true)}
+          >
+            <Text style={styles.agentSelectText}>
+              {filterAgentId 
+                ? `Agent: ${availableAgents.find(a => String(a.id) === String(filterAgentId))?.name?.split(' ')[0]}` 
+                : 'All Agents'}
+            </Text>
+            <Ionicons name="chevron-down" size={12} color="#64748B" />
+          </TouchableOpacity>
+        )}
+      </View>
+
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterTabs}>
         {['All', 'Unassigned', ...statusOptions].map(s => {
@@ -1312,6 +1385,49 @@ export const AdminGrievancesPanel = ({
         players={players}
         onSelectTicket={(ticket) => setSelectedTicket(ticket)}
       />
+
+      {/* 👤 [AGENT_PICKER_MODAL] (v2.6.452) */}
+      <Modal transparent visible={showAgentPicker} animationType="fade">
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setShowAgentPicker(false)}
+        >
+          <View style={styles.pickerSheet}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>Filter by Agent</Text>
+              <TouchableOpacity onPress={() => setShowAgentPicker(false)}>
+                <Ionicons name="close" size={24} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.pickerList}>
+              <TouchableOpacity 
+                onPress={() => {
+                  setFilterAgentId(null);
+                  setShowAgentPicker(false);
+                }}
+                style={styles.pickerItem}
+              >
+                <Text style={[styles.pickerItemText, !filterAgentId && styles.pickerItemTextActive]}>All Team Members</Text>
+                {!filterAgentId && <Ionicons name="checkmark" size={20} color="#3B82F6" />}
+              </TouchableOpacity>
+              {availableAgents.map((agent) => (
+                <TouchableOpacity 
+                  key={agent.id} 
+                  onPress={() => {
+                    setFilterAgentId(agent.id);
+                    setShowAgentPicker(false);
+                  }}
+                  style={styles.pickerItem}
+                >
+                  <Text style={[styles.pickerItemText, String(filterAgentId) === String(agent.id) && styles.pickerItemTextActive]}>{agent.name}</Text>
+                  {String(filterAgentId) === String(agent.id) && <Ionicons name="checkmark" size={20} color="#3B82F6" />}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -1639,6 +1755,60 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 18,
     fontWeight: '900',
+  },
+  scopeToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  scopeButtonGroup: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  scopeToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  scopeToggleBtnActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#1D4ED8',
+  },
+  scopeToggleText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  scopeToggleTextActive: {
+    color: '#FFFFFF',
+  },
+  agentSelectDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  agentSelectText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
   },
   searchBox: {
     flexDirection: 'row',
