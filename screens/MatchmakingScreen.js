@@ -1129,6 +1129,7 @@ export default function MatchmakingScreen({ route }) {
                           setChallengeTime(time);
                           setExpandedSlot(null);
                         }, { targetTime: challengeTime })}
+                        styles={styles}
                       />
                     );
                   })}
@@ -1178,6 +1179,7 @@ export default function MatchmakingScreen({ route }) {
                               isSelected={selectedAcademyForVenue?.venueName === venue.venueName}
                               selectedSport={selectedSport}
                               onSelect={setSelectedAcademyForVenue}
+                              styles={styles}
                             />
                         ))}
                      </ScrollView>
@@ -1507,6 +1509,7 @@ export default function MatchmakingScreen({ route }) {
                           setCounterTime(time);
                           setExpandedSlot(null);
                         }, { targetTime: counterTime })}
+                        styles={styles}
                       />
                     );
                   })}
@@ -1601,6 +1604,7 @@ export default function MatchmakingScreen({ route }) {
                                 isSelected={selectedAcademyForVenue?.venueName === venue.venueName}
                                 selectedSport={selectedChallenge?.sport}
                                 onSelect={setSelectedAcademyForVenue}
+                                styles={styles}
                              />
                           ))}
                       </ScrollView>
