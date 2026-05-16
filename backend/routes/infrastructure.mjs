@@ -311,12 +311,8 @@ ${chatHistory.substring(0, 3000)}`;
              ]
          };
          
-         // If end date includes today, also include currently open tickets
-         const isToday = endOfDate.toDateString() === new Date().toDateString();
-         if (isToday) {
-            query.$or.push({ "data.status": { $nin: ['resolved', 'closed'] } });
-         }
-         
+         // 🛡️ [FILTER_FIX] (v2.6.453): Remove the automatic inclusion of all open tickets 
+         // when today is selected. This ensures the report strictly respects the chosen range.
          const tickets = await SupportTicket.find(query).lean();
          
          let totalOpen = 0, totalClosed = 0, totalUnassigned = 0;
