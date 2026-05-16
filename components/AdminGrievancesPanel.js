@@ -1695,6 +1695,7 @@ const styles = StyleSheet.create({
   messageRow: {
     flexDirection: 'row',
     width: '100%',
+    marginVertical: 4,
   },
   messageMe: { justifyContent: 'flex-end' },
   messageOther: { justifyContent: 'flex-start' },
