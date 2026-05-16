@@ -40,6 +40,7 @@ const OrgChatScreen = ({ navigation }) => {
   const [hoveredMessageId, setHoveredMessageId] = useState(null); // 🖱️ [HOVER_STATE]
   const [activeMenuId, setActiveMenuId] = useState(null); // ⋯ [DROPDOWN_STATE]
   const [previewImage, setPreviewImage] = useState(null); // 🖼️ [IMAGE_PREVIEW] (v2.6.466)
+  const [reactionTooltip, setReactionTooltip] = useState(null); // 💡 [REACTION_TOOLTIP] (v2.6.468)
   const fileInputRef = useRef(null);
   const chatScrollRef = useRef(null);
   const chatInputRef = useRef(null);
@@ -593,23 +594,37 @@ const OrgChatScreen = ({ navigation }) => {
                       {/* 😄 [REACTION_CHIPS] (v2.6.410): Added Long-Press Tooltips */}
                       {msg.reactions && Object.keys(msg.reactions).length > 0 && (
                         <View style={styles.reactionRow}>
-                          {Object.entries(msg.reactions).map(([emoji, users]) => (
-                            <TouchableOpacity 
-                              key={emoji} 
-                              style={styles.reactionChip}
-                              onPress={() => toggleReaction(msg._id, emoji)}
-                              onLongPress={() => {
-                                const reactorNames = users.map(uid => {
-                                    if (uid === currentUser?.id) return 'You';
-                                    return contacts.find(c => String(c.id) === String(uid))?.name || 'Unknown User';
-                                }).join(', ');
-                                alert(`${emoji} reacted by:\n${reactorNames}`);
-                              }}
-                            >
-                              <Text style={{ fontSize: 12 }}>{emoji}</Text>
-                              <Text style={styles.reactionCount}>{users.length}</Text>
-                            </TouchableOpacity>
-                          ))}
+                          {Object.entries(msg.reactions).map(([emoji, users]) => {
+                            const tooltipId = `${msg._id || msg.id}_${emoji}`;
+                            const isTooltipActive = reactionTooltip?.id === tooltipId;
+                            
+                            return (
+                              <View key={emoji} style={{ position: 'relative' }}>
+                                <TouchableOpacity 
+                                  style={styles.reactionChip}
+                                  onPress={() => toggleReaction(msg._id || msg.id, emoji)}
+                                  onLongPress={() => {
+                                    const reactorNames = users.map(uid => {
+                                        if (uid === currentUser?.id) return 'You';
+                                        return teamDirectory.find(c => String(c.id) === String(uid))?.name || 'Unknown User';
+                                    }).join(', ');
+                                    setReactionTooltip({ id: tooltipId, names: reactorNames });
+                                    // 🛡️ Auto-dismiss after 3s
+                                    setTimeout(() => setReactionTooltip(prev => prev?.id === tooltipId ? null : prev), 3000);
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 12 }}>{emoji}</Text>
+                                  <Text style={styles.reactionCount}>{users.length}</Text>
+                                </TouchableOpacity>
+
+                                {isTooltipActive && (
+                                  <View style={[styles.reactionTooltip, isMe ? styles.reactionTooltipMe : styles.reactionTooltipOther]}>
+                                    <Text style={styles.reactionTooltipText}>{reactionTooltip.names}</Text>
+                                  </View>
+                                )}
+                              </View>
+                            );
+                          })}
                         </View>
                       )}
 
@@ -1102,6 +1117,25 @@ const styles = StyleSheet.create({
   modalFilename: { color: '#FFF', fontSize: 14, fontWeight: '700', marginBottom: 16 },
   shareBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#6366F1', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
   shareText: { color: '#FFF', marginLeft: 10, fontWeight: '800' },
+
+  // 💡 Reaction Tooltip Styles (v2.6.468)
+  reactionTooltip: {
+    position: 'absolute',
+    bottom: 30,
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    minWidth: 100,
+    zIndex: 100,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5
+  },
+  reactionTooltipMe: { right: 0 },
+  reactionTooltipOther: { left: 0 },
+  reactionTooltipText: { color: '#FFF', fontSize: 10, fontWeight: '600' },
 });
 
 export default OrgChatScreen;
