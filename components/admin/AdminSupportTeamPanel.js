@@ -305,7 +305,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
     }
   };
 
-  const handleAssignManager = async (agentId, managerId) => {
+  const handleAssignHierarchy = async (agentId, type, newId) => {
     setIsAssigningManager(true);
     try {
       const token = await storage.getItem('userToken');
@@ -316,11 +316,15 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${config.API_BASE_URL}/api/v1/admin-core/team-directory/${agentId}/manager`, {
+      const body = {};
+      if (type === 'manager') body.managerId = newId;
+      if (type === 'teamLead') body.teamLeadId = newId;
+
+      const res = await fetch(`${config.API_BASE_URL}/api/v1/admin-core/team-directory/${agentId}/hierarchy`, {
         method: 'POST',
         headers,
         credentials: 'include',
-        body: JSON.stringify({ managerId })
+        body: JSON.stringify(body)
       });
       const data = await res.json();
       if (res.ok) {
@@ -447,6 +451,18 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       const status = (p.supportStatus || p.status || 'active').toLowerCase();
       if (status === 'terminated' || status === 'left') return false;
       return role === 'admin' || lvl === 'manager';
+    });
+  }, [serverAgents, players]);
+
+  const availableTeamLeads = useMemo(() => {
+    const list = serverAgents || players || [];
+    return list.filter(p => {
+      if (!p) return false;
+      const role = (p.role || '').toLowerCase();
+      const lvl = (p.supportLevel || '').toLowerCase();
+      const status = (p.supportStatus || p.status || 'active').toLowerCase();
+      if (status === 'terminated' || status === 'left') return false;
+      return role === 'admin' || lvl === 'manager' || lvl === 'team lead';
     });
   }, [serverAgents, players]);
 
@@ -1621,6 +1637,27 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                 </View>
 
                 <Text style={styles.actionSectionTitle}>REPORTING MANAGER</Text>
+                
+                {/* Current Manager Display */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#0F172A', padding: 12, borderRadius: 12, marginHorizontal: 16, marginBottom: 12, borderWidth: 1, borderColor: '#334155' }}>
+                   {(() => {
+                      const curr = availableManagers.find(m => String(m.id) === String(selectedAgent.managerId));
+                      if (curr) {
+                        return (
+                           <>
+                             <SafeAvatar uri={curr.avatar} name={curr.name} role={curr.role} size={36} borderRadius={18} />
+                             <View style={{ marginLeft: 12, flex: 1 }}>
+                               <Text style={{ color: '#F8FAFC', fontWeight: '700', fontSize: 15 }}>{curr.name}</Text>
+                               <Text style={{ color: '#94A3B8', fontSize: 12 }}>Current Manager</Text>
+                             </View>
+                           </>
+                        )
+                      }
+                      return <Text style={{ color: '#94A3B8', fontSize: 13, flex: 1, textAlign: 'center', paddingVertical: 8 }}>No Manager Assigned</Text>;
+                   })()}
+                </View>
+
+                <Text style={{ color: '#64748B', fontSize: 11, marginLeft: 16, marginBottom: 8, textTransform: 'uppercase', fontWeight: 'bold' }}>Assign New Manager</Text>
                 <View style={styles.managerListContainer}>
                   {availableManagers.length === 0 ? (
                     <Text style={{ fontSize: 12, color: '#94A3B8', padding: 8 }}>No active managers or admins available.</Text>
@@ -1628,11 +1665,60 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingBottom: 8, paddingHorizontal: 16 }}>
                       {availableManagers.map(mgr => {
                         const isAssigned = String(selectedAgent.managerId) === String(mgr.id);
+                        if (isAssigned) return null; // Don't show current as option to click
                         return (
                           <TouchableOpacity 
                             key={mgr.id} 
                             style={[styles.managerBtn, isAssigned && styles.managerBtnActive]}
-                            onPress={() => handleAssignManager(selectedAgent.id, mgr.id)}
+                            onPress={() => handleAssignHierarchy(selectedAgent.id, 'manager', mgr.id)}
+                            disabled={isAssigningManager}
+                          >
+                            <SafeAvatar uri={mgr.avatar} name={mgr.name} role={mgr.role} size={28} borderRadius={14} />
+                            <Text style={[styles.managerBtnText, isAssigned && styles.managerBtnTextActive]}>
+                              {mgr.name.split(' ')[0]}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  )}
+                </View>
+
+                <Text style={styles.actionSectionTitle}>TEAM LEAD</Text>
+                
+                {/* Current Team Lead Display */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#0F172A', padding: 12, borderRadius: 12, marginHorizontal: 16, marginBottom: 12, borderWidth: 1, borderColor: '#334155' }}>
+                   {(() => {
+                      const curr = availableTeamLeads.find(m => String(m.id) === String(selectedAgent.teamLeadId));
+                      if (curr) {
+                        return (
+                           <>
+                             <SafeAvatar uri={curr.avatar} name={curr.name} role={curr.role} size={36} borderRadius={18} />
+                             <View style={{ marginLeft: 12, flex: 1 }}>
+                               <Text style={{ color: '#F8FAFC', fontWeight: '700', fontSize: 15 }}>{curr.name}</Text>
+                               <Text style={{ color: '#94A3B8', fontSize: 12 }}>Current Team Lead</Text>
+                             </View>
+                           </>
+                        )
+                      }
+                      return <Text style={{ color: '#94A3B8', fontSize: 13, flex: 1, textAlign: 'center', paddingVertical: 8 }}>No Team Lead Assigned</Text>;
+                   })()}
+                </View>
+
+                <Text style={{ color: '#64748B', fontSize: 11, marginLeft: 16, marginBottom: 8, textTransform: 'uppercase', fontWeight: 'bold' }}>Assign New Team Lead</Text>
+                <View style={styles.managerListContainer}>
+                  {availableTeamLeads.length === 0 ? (
+                    <Text style={{ fontSize: 12, color: '#94A3B8', padding: 8 }}>No active team leads available.</Text>
+                  ) : (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingBottom: 8, paddingHorizontal: 16 }}>
+                      {availableTeamLeads.map(mgr => {
+                        const isAssigned = String(selectedAgent.teamLeadId) === String(mgr.id);
+                        if (isAssigned) return null; // Don't show current as option to click
+                        return (
+                          <TouchableOpacity 
+                            key={mgr.id} 
+                            style={[styles.managerBtn, isAssigned && styles.managerBtnActive]}
+                            onPress={() => handleAssignHierarchy(selectedAgent.id, 'teamLead', mgr.id)}
                             disabled={isAssigningManager}
                           >
                             <SafeAvatar uri={mgr.avatar} name={mgr.name} role={mgr.role} size={28} borderRadius={14} />

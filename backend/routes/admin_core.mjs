@@ -138,6 +138,7 @@ router.get('/team-directory', async (req, res) => {
                 phone: u.data?.phone || '',
                 username: u.data?.username || '',
                 managerId: u.data?.managerId || '',
+                teamLeadId: u.data?.teamLeadId || '',
                 isLive: isLive,
                 lastActive: lastActive || u.lastUpdated || 0,
                 status: isLive ? 'active' : 'offline',
@@ -151,35 +152,37 @@ router.get('/team-directory', async (req, res) => {
     }
 });
 
-// POST /api/v1/admin-core/team-directory/:id/manager
-router.post('/team-directory/:id/manager', requireAdmin, async (req, res) => {
+// POST /api/v1/admin-core/team-directory/:id/hierarchy
+router.post('/team-directory/:id/hierarchy', requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
-        const { managerId } = req.body;
+        const { managerId, teamLeadId } = req.body;
 
         const employeeDoc = await User.findOne({ id: String(id) });
         if (!employeeDoc) return res.status(404).json({ success: false, message: 'Employee not found' });
 
-        // Update the employee's data with their reporting manager
+        const updateFields = { lastUpdated: Date.now() };
+        if (managerId !== undefined) updateFields["data.managerId"] = managerId;
+        if (teamLeadId !== undefined) updateFields["data.teamLeadId"] = teamLeadId;
+
+        // Update the employee's data with their reporting manager and team lead
         await User.updateOne(
             { id: String(id) }, 
-            { $set: { "data.managerId": managerId, lastUpdated: Date.now() } }
+            { $set: updateFields }
         );
-
-        // Optional: Ensure the manager is actually a Manager or Admin
         
         // Log this change
         await AuditLog.create({
             userId: req.user.id,
             userEmail: req.user.email,
-            action: 'assign_manager',
-            details: { employeeId: id, managerId },
+            action: 'update_hierarchy',
+            details: { employeeId: id, managerId, teamLeadId },
             ipAddress: req.ip
         });
 
-        res.json({ success: true, message: 'Manager assigned successfully' });
+        res.json({ success: true, message: 'Hierarchy updated successfully' });
     } catch (error) {
-        console.error("Error assigning manager:", error);
+        console.error("Error updating hierarchy:", error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });

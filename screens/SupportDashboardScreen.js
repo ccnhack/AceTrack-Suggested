@@ -129,6 +129,45 @@ const SupportDashboardScreen = ({ navigation, route }) => {
                   </View>
                 ))}
               </View>
+
+              {/* Reporting Hierarchy in sidebar */}
+              <View style={{ marginTop: 24, paddingHorizontal: 12, paddingBottom: 20 }}>
+                <Text style={{ color: '#475569', fontSize: 11, fontWeight: '800', marginBottom: 16, letterSpacing: 1.5 }}>REPORTING HIERARCHY</Text>
+                
+                {currentUser?.managerId && (() => {
+                   const mgr = players?.find(p => String(p.id) === String(currentUser.managerId));
+                   return mgr ? (
+                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                       <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#334155', marginRight: 10, overflow: 'hidden' }}>
+                         {mgr.avatar ? <Image source={{uri: mgr.avatar}} style={{width: 28, height: 28}} /> : <Ionicons name="person" size={16} color="#FFF" style={{margin: 6}} />}
+                       </View>
+                       <View>
+                         <Text style={{ color: '#E2E8F0', fontSize: 13, fontWeight: '700' }}>{mgr.name}</Text>
+                         <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '600' }}>MANAGER</Text>
+                       </View>
+                     </View>
+                   ) : null;
+                })()}
+
+                {currentUser?.teamLeadId && (() => {
+                   const tl = players?.find(p => String(p.id) === String(currentUser.teamLeadId));
+                   return tl ? (
+                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                       <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#334155', marginRight: 10, overflow: 'hidden' }}>
+                         {tl.avatar ? <Image source={{uri: tl.avatar}} style={{width: 28, height: 28}} /> : <Ionicons name="person" size={16} color="#FFF" style={{margin: 6}} />}
+                       </View>
+                       <View>
+                         <Text style={{ color: '#E2E8F0', fontSize: 13, fontWeight: '700' }}>{tl.name}</Text>
+                         <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '600' }}>TEAM LEAD</Text>
+                       </View>
+                     </View>
+                   ) : null;
+                })()}
+
+                {!currentUser?.managerId && !currentUser?.teamLeadId && (
+                   <Text style={{ color: '#64748B', fontSize: 12, fontStyle: 'italic', marginBottom: 12 }}>No hierarchy assigned</Text>
+                )}
+              </View>
             </View>
           </ScrollView>
         </View>

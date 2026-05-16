@@ -195,7 +195,6 @@ export default function AppNavigator() {
           <Stack.Screen name="LiveScoring" component={LiveScoringScreen} />
           <Stack.Screen name="TournamentCalendar" component={TournamentCalendarScreen} />
           <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-          <Stack.Screen name="OrgChat" component={OrgChatScreen} />
         </>
       )}
       {/* SupportSetup stays outside auth: it's a pre-login onboarding link */}
