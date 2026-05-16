@@ -51,6 +51,8 @@ export const SupportTicketSystem = ({
   const [chatSearchText, setChatSearchText] = useState('');
   const [searchMatchIndices, setSearchMatchIndices] = useState([]);
   const [activeMatchIndex, setActiveMatchIndex] = useState(0);
+  const [listSearchQuery, setListSearchQuery] = useState('');
+  const [assignmentScope, setAssignmentScope] = useState(userRole === 'support' || userRole === 'admin' ? 'me' : 'all');
 
   // CSAT Rating State
   const [csatRating, setCsatRating] = useState(0);
@@ -69,13 +71,56 @@ export const SupportTicketSystem = ({
     }
   }, [selectedTicket?.id]);
 
-  // 🛡️ TICKET VISIBILITY SCOPING (v2.6.146):
-  // Regular users: see tickets they created (userId match)
-  // Support/Admin agents: see tickets assigned to them (assignedTo match)
   const isAgent = userRole === 'support' || userRole === 'admin';
-  const myTickets = (tickets || []).filter(t => 
-    isAgent ? (t.assignedTo === userId) : (t.userId === userId)
-  );
+  
+  // 🛡️ DYNAMIC SCOPING (v2.6.450):
+  // Based on assignmentScope ('me' | 'all') and userRole
+  const scopedTickets = useMemo(() => {
+    if (!isAgent) return (tickets || []).filter(t => t.userId === userId);
+    if (assignmentScope === 'me') return (tickets || []).filter(t => t.assignedTo === userId);
+    return tickets || [];
+  }, [tickets, assignmentScope, isAgent, userId]);
+
+  // 🔍 UNIFIED FILTER ENGINE (v2.6.450):
+  // Syncs Status Tab + Search Query + Assignment Scope
+  const filteredTickets = useMemo(() => {
+    const q = listSearchQuery.toLowerCase().trim();
+    const openStatuses = ['Open', 'In Progress', 'Awaiting Response'];
+    
+    return scopedTickets.filter(t => {
+      // 1. Status Filter
+      const status = t.status || 'Open';
+      let statusMatch = true;
+      if (listTab === 'Open') statusMatch = openStatuses.includes(status);
+      else if (listTab === 'Closed') statusMatch = status === 'Resolved' || status === 'Closed';
+      else if (listTab === 'Pool') statusMatch = !t.assignedTo && status === 'Open';
+
+      if (!statusMatch) return false;
+
+      // 2. Search Filter (ID, Title, Description)
+      if (q) {
+        const idMatch = String(t.id).includes(q);
+        const titleMatch = (t.title || '').toLowerCase().includes(q);
+        const descMatch = (t.description || '').toLowerCase().includes(q);
+        return idMatch || titleMatch || descMatch;
+      }
+
+      return true;
+    });
+  }, [scopedTickets, listTab, listSearchQuery]);
+
+  // 🌍 GLOBAL SEARCH FALLBACK (v2.6.450):
+  // Checks if results exist outside current scope
+  const globalMatchCount = useMemo(() => {
+    if (!listSearchQuery || !isAgent) return 0;
+    const q = listSearchQuery.toLowerCase().trim();
+    return (tickets || []).filter(t => {
+      const idMatch = String(t.id).includes(q);
+      const titleMatch = (t.title || '').toLowerCase().includes(q);
+      const descMatch = (t.description || '').toLowerCase().includes(q);
+      return idMatch || titleMatch || descMatch;
+    }).length;
+  }, [tickets, listSearchQuery, isAgent]);
 
   useEffect(() => {
     if (onToggleSupport) onToggleSupport(true);
@@ -420,19 +465,48 @@ export const SupportTicketSystem = ({
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>Support Requests</Text>
-            <Text style={styles.subtitle}>
-              {listTab === 'Pool' 
-                ? `Pool: ${tickets.filter(t => !t.assignedTo).length} ticket(s)` 
-                : `${isAgent ? 'My Caseload' : 'My Tickets'}: ${myTickets.length} ticket(s)`}
-            </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Support Hub</Text>
+            <View style={styles.searchBarWrapper}>
+              <Ionicons name="search" size={16} color="#94A3B8" style={{ marginLeft: 12 }} />
+              <TextInput 
+                style={styles.listSearchInput}
+                placeholder="Search ID or description..."
+                placeholderTextColor="#94A3B8"
+                value={listSearchQuery}
+                onChangeText={setListSearchQuery}
+              />
+              {listSearchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setListSearchQuery('')} style={{ padding: 8 }}>
+                  <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
           <TouchableOpacity onPress={() => setView('create')} style={styles.newTicketBtn}>
             <Ionicons name="add" size={16} color="#FFFFFF" />
             <Text style={styles.btnText}>New Ticket</Text>
           </TouchableOpacity>
         </View>
+
+        {isAgent && (
+          <View style={styles.scopeToggleContainer}>
+            <TouchableOpacity 
+              onPress={() => setAssignmentScope('me')}
+              style={[styles.scopeBtn, assignmentScope === 'me' && styles.scopeBtnActive]}
+            >
+              <Ionicons name="person" size={14} color={assignmentScope === 'me' ? '#FFF' : '#64748B'} />
+              <Text style={[styles.scopeBtnText, assignmentScope === 'me' && styles.scopeBtnTextActive]}>My Caseload</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={() => setAssignmentScope('all')}
+              style={[styles.scopeBtn, assignmentScope === 'all' && styles.scopeBtnActive]}
+            >
+              <Ionicons name="people" size={14} color={assignmentScope === 'all' ? '#FFF' : '#64748B'} />
+              <Text style={[styles.scopeBtnText, assignmentScope === 'all' && styles.scopeBtnTextActive]}>Full Team View</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={styles.tabContainer}>
           <TouchableOpacity 
@@ -460,30 +534,36 @@ export const SupportTicketSystem = ({
 
         <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
           {(() => {
-            const openStatuses = ['Open', 'In Progress', 'Awaiting Response'];
-            // Pool tab uses ALL tickets (unassigned); Open/Closed tabs use agent's own tickets
-            const sourceTickets = listTab === 'Pool' ? (tickets || []) : myTickets;
-            const filtered = sourceTickets.filter(t => {
-              const status = t.status || 'Open';
-              if (listTab === 'Pool') return !t.assignedTo && status === 'Open';
-              return listTab === 'Open' 
-                ? (openStatuses.includes(status))
-                : (status === 'Resolved' || status === 'Closed');
-            });
-
-            if (filtered.length === 0) {
+            if (filteredTickets.length === 0) {
+              const hasGlobalResults = globalMatchCount > filteredTickets.length;
               return (
                 <View style={styles.emptyContainer}>
-                  <Ionicons name="chatbubble-ellipses-outline" size={48} color="#E2E8F0" />
-                  <Text style={styles.emptyTitle}>No {listTab === 'Open' ? 'open' : 'resolved'} tickets</Text>
-                  <Text style={styles.emptySubtitle}>
-                    {listTab === 'Open' ? 'When you need help, your active tickets will appear here.' : 'Your resolved or history tickets will appear here.'}
+                  <Ionicons name="search-outline" size={48} color="#E2E8F0" />
+                  <Text style={styles.emptyTitle}>
+                    {listSearchQuery ? 'No matching tickets found' : `No ${listTab === 'Open' ? 'open' : 'resolved'} tickets`}
                   </Text>
+                  
+                  {hasGlobalResults && assignmentScope === 'me' ? (
+                    <TouchableOpacity 
+                      style={styles.searchAllFallback}
+                      onPress={() => { setAssignmentScope('all'); setListTab('Open'); }}
+                    >
+                      <Text style={styles.searchAllFallbackText}>
+                        Found {globalMatchCount} matches in Full Team View. ➔
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text style={styles.emptySubtitle}>
+                      {listSearchQuery 
+                        ? 'Try adjusting your search or filters.' 
+                        : (listTab === 'Open' ? 'When you need help, your active tickets will appear here.' : 'Your resolved or history tickets will appear here.')}
+                    </Text>
+                  )}
                 </View>
               );
             }
 
-            return filtered
+            return filteredTickets
               .sort((a, b) => {
                 const aMsgs = (a.messages || []);
                 const bMsgs = (b.messages || []);
@@ -1892,20 +1972,86 @@ const styles = StyleSheet.create({
   claimBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#3B82F6',
-    paddingVertical: 10,
-    borderRadius: 12,
+    gap: 6,
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
     marginTop: 12,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#2563EB',
+    alignSelf: 'flex-start',
   },
   claimBtnText: {
     color: '#FFF',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '900',
-    textTransform: 'uppercase'
+    textTransform: 'uppercase',
+  },
+  searchBarWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 8,
+    height: 36,
+  },
+  listSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0F172A',
+    paddingHorizontal: 8,
+  },
+  scopeToggleContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+    backgroundColor: '#FFFFFF',
+  },
+  scopeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  scopeBtnActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#1D4ED8',
+  },
+  scopeBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  scopeBtnTextActive: {
+    color: '#FFFFFF',
+  },
+  searchAllFallback: {
+    marginTop: 16,
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+  },
+  searchAllFallbackText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#4338CA',
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginTop: 8,
+    paddingHorizontal: 32,
   },
   csatCard: {
     backgroundColor: '#FFFBEB',
