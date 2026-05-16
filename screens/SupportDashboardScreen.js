@@ -22,7 +22,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
   
   const { width: windowWidth } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
-  const isMobileWeb = isWeb && windowWidth < 1024;
+  const isSmallScreen = windowWidth < 1024; // 📱 [RESPONSIVE] (v2.6.463): Covers mobile-web and native mobile
   const [isWebSidebarOpen, setIsWebSidebarOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [urlTicketId, setUrlTicketId] = useState(() => {
@@ -81,7 +81,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
 
   const renderWebSidebar = () => (
     <>
-      {(isMobileWeb && isWebSidebarOpen) && (
+      {(isSmallScreen && isWebSidebarOpen) && (
         <TouchableOpacity 
           activeOpacity={1} 
           onPress={() => setIsWebSidebarOpen(false)}
@@ -94,16 +94,16 @@ const SupportDashboardScreen = ({ navigation, route }) => {
         height: Platform.OS === 'web' ? '100dvh' : '100%', 
         paddingTop: 32, 
         justifyContent: 'space-between',
-        position: isMobileWeb ? 'absolute' : 'relative',
+        position: isSmallScreen ? 'absolute' : 'relative',
         top: 0,
         bottom: 0,
-        left: isMobileWeb ? (isWebSidebarOpen ? 0 : -280) : 0,
+        left: isSmallScreen ? (isWebSidebarOpen ? 0 : -280) : 0,
         zIndex: 101,
         transition: 'left 0.3s ease-in-out'
       }}>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, marginBottom: 24 }}>
-            {isMobileWeb ? (
+            {isSmallScreen ? (
               <TouchableOpacity onPress={() => setIsWebSidebarOpen(false)}>
                 <Ionicons name="close" size={28} color="#FFF" style={{ marginRight: 16 }} />
               </TouchableOpacity>
@@ -121,7 +121,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
               {/* Tickets - always active */}
               <TouchableOpacity 
                 style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, backgroundColor: '#6366F1', marginBottom: 4 }}
-                onPress={() => { if (isMobileWeb) setIsWebSidebarOpen(false); }}
+                onPress={() => { if (isSmallScreen) setIsWebSidebarOpen(false); }}
               >
                 <Ionicons name="chatbubbles-outline" size={20} color="#FFF" />
                 <Text style={{ marginLeft: 16, fontSize: 14, fontWeight: '700', color: '#FFF', flex: 1 }}>Support Tickets</Text>
@@ -204,7 +204,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
         }}>
           {/* Chat/Collaborate link */}
           <TouchableOpacity 
-            onPress={() => { navigation.navigate('OrgChat'); if (isMobileWeb) setIsWebSidebarOpen(false); }} 
+            onPress={() => { navigation.navigate('OrgChat'); if (isSmallScreen) setIsWebSidebarOpen(false); }} 
             style={{ 
               flexDirection: 'row', 
               alignItems: 'center', 
@@ -246,7 +246,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
 
           {/* Profile link */}
           <TouchableOpacity 
-            onPress={() => { navigation.navigate('Profile'); if (isMobileWeb) setIsWebSidebarOpen(false); }} 
+            onPress={() => { navigation.navigate('Profile'); if (isSmallScreen) setIsWebSidebarOpen(false); }} 
             style={{ 
               flexDirection: 'row', 
               alignItems: 'center', 
@@ -277,7 +277,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
           <View style={styles.headerContent}>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                {isMobileWeb && (
+                {isSmallScreen && (
                   <TouchableOpacity onPress={() => setIsWebSidebarOpen(true)} style={{ marginRight: 16 }}>
                     <Ionicons name="menu" size={28} color="#FFF" />
                   </TouchableOpacity>
@@ -348,10 +348,10 @@ const SupportDashboardScreen = ({ navigation, route }) => {
   );
 
   return isWeb ? (
-    <View style={{ flex: 1, flexDirection: isMobileWeb ? 'column' : 'row', backgroundColor: '#F8FAFC', height: '100vh', width: '100vw' }}>
+    <View style={{ flex: 1, flexDirection: isSmallScreen ? 'column' : 'row', backgroundColor: '#F8FAFC', height: '100vh', width: '100vw' }}>
       {renderWebSidebar()}
-      <View style={{ flex: 1, padding: isMobileWeb ? 16 : 32, overflow: 'hidden' }}>
-        <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: isMobileWeb ? 16 : 24, shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 30, shadowOffset: { width: 0, height: 10 }, overflow: 'hidden' }}>
+      <View style={{ flex: 1, padding: isSmallScreen ? 16 : 32, overflow: 'hidden' }}>
+        <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: isSmallScreen ? 16 : 24, shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 30, shadowOffset: { width: 0, height: 10 }, overflow: 'hidden' }}>
           {content}
         </View>
       </View>

@@ -39,7 +39,7 @@ const OrgChatScreen = ({ navigation }) => {
   const blinkAnim = useRef(new Animated.Value(0)).current;
   const { width: windowWidth } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
-  const isMobileWeb = isWeb && windowWidth < 768;
+  const isSmallScreen = windowWidth < 768; // 📱 [RESPONSIVE] (v2.6.463): Covers both mobile-web and native mobile
 
   useEffect(() => {
     fetchTeamDirectory();
@@ -291,7 +291,11 @@ const OrgChatScreen = ({ navigation }) => {
 
   // ─── Contact List Panel ───────────────────────
   const renderContactList = () => (
-    <View style={[styles.contactPanel, isMobileWeb && selectedContact && { display: 'none' }]}>
+    <View style={[
+      styles.contactPanel, 
+      isSmallScreen && { width: windowWidth }, // 📱 [MOBILE_FIX]
+      isSmallScreen && selectedContact && { display: 'none' }
+    ]}>
       {/* Search Header */}
       <View style={styles.contactHeader}>
         <Text style={styles.contactHeaderTitle}>Chat</Text>
@@ -389,7 +393,7 @@ const OrgChatScreen = ({ navigation }) => {
   const renderChatPanel = () => {
     if (!selectedContact) {
       return (
-        <View style={[styles.chatPanel, isMobileWeb && { display: 'none' }]}>
+        <View style={[styles.chatPanel, isSmallScreen && { display: 'none' }]}>
           <View style={styles.emptyChatContainer}>
             <View style={styles.emptyChatIcon}>
               <Ionicons name="chatbubbles-outline" size={48} color="#CBD5E1" />
@@ -404,10 +408,10 @@ const OrgChatScreen = ({ navigation }) => {
     const conversation = getConversation();
 
     return (
-      <View style={[styles.chatPanel, isMobileWeb && !selectedContact && { display: 'none' }]}>
+      <View style={[styles.chatPanel, isSmallScreen && !selectedContact && { display: 'none' }]}>
         {/* Chat Header */}
         <View style={styles.chatHeader}>
-          {isMobileWeb && (
+          {isSmallScreen && (
             <TouchableOpacity onPress={() => setSelectedContact(null)} style={{ marginRight: 12 }}>
               <Ionicons name="arrow-back" size={22} color="#0F172A" />
             </TouchableOpacity>
