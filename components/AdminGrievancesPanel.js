@@ -505,6 +505,18 @@ export const AdminGrievancesPanel = ({
       return dateB - dateA;
     });
 
+  // 🔍 [GLOBAL_SEARCH_CHECK] (v2.6.454): Check if search term exists outside current caseload
+  const globalMatchCount = useMemo(() => {
+    if (!search || assignmentScope !== 'me') return 0;
+    const q = search.toLowerCase();
+    return (tickets || []).filter(t => {
+      const title = (t.title || '').toLowerCase();
+      const tid = (String(t.id || '')).toLowerCase();
+      const conversation = (t.messages || []).some(m => (m.text || '').toLowerCase().includes(q));
+      return title.includes(q) || tid.includes(q) || conversation;
+    }).length;
+  }, [tickets, search, assignmentScope]);
+
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -1376,6 +1388,33 @@ export const AdminGrievancesPanel = ({
         maxToRenderPerBatch={10}
         windowSize={5}
         removeClippedSubviews={Platform.OS !== 'web'}
+        ListEmptyComponent={() => (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="search-outline" size={48} color="#E2E8F0" />
+            <Text style={styles.emptyTitle}>
+              {search ? 'No matches found' : `No ${filterStatus === 'All' ? 'tickets' : filterStatus.toLowerCase() + ' tickets'}`}
+            </Text>
+            <Text style={styles.emptySubtitle}>
+              {search 
+                ? `We couldn't find any tickets matching "${search}" in your selected filters.`
+                : 'Try adjusting your filters or search query.'}
+            </Text>
+            
+            {globalMatchCount > 0 && assignmentScope === 'me' && (
+              <TouchableOpacity 
+                style={styles.searchAllFallback}
+                onPress={() => {
+                  setAssignmentScope('all');
+                  setFilterStatus('All');
+                }}
+              >
+                <Text style={styles.searchAllFallbackText}>
+                  Found {globalMatchCount} matches in Full Team View. ➔
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       />
 
       <QueueManagementDashboard 
@@ -1809,6 +1848,89 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#475569',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+    marginTop: 40,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginTop: 16,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 8,
+    maxWidth: 300,
+  },
+  searchAllFallback: {
+    marginTop: 24,
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  searchAllFallbackText: {
+    color: '#0369A1',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pickerSheet: {
+    backgroundColor: '#FFF',
+    width: '90%',
+    maxWidth: 400,
+    borderRadius: 20,
+    padding: 24,
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  pickerTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  pickerList: {
+    marginBottom: 10,
+  },
+  pickerItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  pickerItemText: {
+    fontSize: 16,
+    color: '#475569',
+    fontWeight: '500',
+  },
+  pickerItemTextActive: {
+    color: '#2563EB',
+    fontWeight: '700',
   },
   searchBox: {
     flexDirection: 'row',
