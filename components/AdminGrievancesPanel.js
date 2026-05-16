@@ -1086,7 +1086,7 @@ export const AdminGrievancesPanel = ({
                     />
                   </View>
 
-                  <ScrollView style={styles.agentList} showsVerticalScrollIndicator={false}>
+                  <ScrollView style={styles.agentList} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                     {(players || [])
                       .filter(p => {
                         const role = (p.role || '').toLowerCase();
@@ -1132,14 +1132,21 @@ export const AdminGrievancesPanel = ({
                           key={agent.id}
                           style={styles.agentItem}
                           onPress={async () => {
-                            const res = await onReassignTicket(selectedTicket.id, agent.id);
-                             if (res.success) {
-                               // 🛡️ [OPTIMISTIC UPDATE] (v2.6.248)
-                               setSelectedTicket(prev => ({ ...prev, assignedTo: agent.id }));
-                               setShowReassignModal(false);
-                               Alert.alert("Success", `Ticket reassigned to ${agent.name}`);
-                             } else {
-                              Alert.alert("Error", res.error);
+                            console.log(`[Support] Attempting reassignment to ${agent.id} (${agent.name})`);
+                            try {
+                              const res = await onReassignTicket(selectedTicket.id, agent.id);
+                              console.log(`[Support] Reassignment response:`, res);
+                              if (res.success) {
+                                // 🛡️ [OPTIMISTIC UPDATE] (v2.6.248)
+                                setSelectedTicket(prev => ({ ...prev, assignedTo: agent.id }));
+                                setShowReassignModal(false);
+                                Alert.alert("Success", `Ticket reassigned to ${agent.name}`);
+                              } else {
+                                Alert.alert("Error", res.error || "Failed to reassign ticket.");
+                              }
+                            } catch (e) {
+                              console.error("[Support] Reassignment exception:", e);
+                              Alert.alert("Error", "An unexpected error occurred.");
                             }
                           }}
                         >
@@ -1148,7 +1155,19 @@ export const AdminGrievancesPanel = ({
                           </View>
                           <View style={styles.agentInfo}>
                             <Text style={styles.agentName} numberOfLines={1}>{agent.name}</Text>
-                            <Text style={styles.agentUser}>@{agent.username || agent.id}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                               <Text style={styles.agentUser}>@{agent.username || agent.id}</Text>
+                               <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#CBD5E1', marginHorizontal: 6 }} />
+                               <Text style={{ fontSize: 10, color: agent.supportStatus === 'leave' || agent.supportStatus === 'on_leave' ? '#F59E0B' : '#10B981', fontWeight: 'bold', textTransform: 'capitalize' }}>
+                                 {agent.supportStatus?.replace('_', ' ') || 'Active'}
+                               </Text>
+                               {agent.lastActiveAt && (
+                                  <>
+                                    <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#CBD5E1', marginHorizontal: 6 }} />
+                                    <Text style={{ fontSize: 10, color: '#94A3B8' }}>Last Active: {new Date(agent.lastActiveAt).toLocaleDateString()}</Text>
+                                  </>
+                               )}
+                            </View>
                           </View>
                           
                           <View style={styles.premiumBadgeContainer}>
