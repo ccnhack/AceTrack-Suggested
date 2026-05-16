@@ -137,19 +137,53 @@ router.get('/team-directory', async (req, res) => {
                 avatar: u.data?.avatar || '',
                 phone: u.data?.phone || '',
                 username: u.data?.username || '',
+                managerId: u.data?.managerId || '',
                 isLive: isLive,
                 lastActive: lastActive || u.lastUpdated || 0,
                 status: isLive ? 'active' : 'offline',
                 supportStatus: isLive ? 'active' : 'offline'
             };
         });
-            
         res.json({ success: true, team: mappedTeam });
     } catch (error) {
         console.error("Error fetching team directory:", error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
+
+// POST /api/v1/admin-core/team-directory/:id/manager
+router.post('/team-directory/:id/manager', requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { managerId } = req.body;
+
+        const employeeDoc = await User.findOne({ id: String(id) });
+        if (!employeeDoc) return res.status(404).json({ success: false, message: 'Employee not found' });
+
+        // Update the employee's data with their reporting manager
+        await User.updateOne(
+            { id: String(id) }, 
+            { $set: { "data.managerId": managerId, lastUpdated: Date.now() } }
+        );
+
+        // Optional: Ensure the manager is actually a Manager or Admin
+        
+        // Log this change
+        await AuditLog.create({
+            userId: req.user.id,
+            userEmail: req.user.email,
+            action: 'assign_manager',
+            details: { employeeId: id, managerId },
+            ipAddress: req.ip
+        });
+
+        res.json({ success: true, message: 'Manager assigned successfully' });
+    } catch (error) {
+        console.error("Error assigning manager:", error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
 
     return router;
 }

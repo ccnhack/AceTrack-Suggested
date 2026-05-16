@@ -10,9 +10,23 @@ export default function createHrRoutes() {
     router.use(authGuard);
 
     // Leaves
+    // Leaves
     router.get('/leaves', async (req, res) => {
         try {
-            const query = req.userRole === 'admin' ? {} : { userId: req.user.id };
+            let query = { userId: req.user.id };
+            
+            if (req.userRole === 'admin') {
+                query = {}; // Admins see all leaves
+            } else if (req.user.supportLevel === 'Manager') {
+                // Fetch users who report to this manager
+                const { Player } = await import('../models/index.mjs');
+                const reports = await Player.find({ "data.managerId": req.user.id }, 'id');
+                const reportIds = reports.map(r => r.id);
+                
+                // Manager sees their own leaves + their reports' leaves
+                query = { userId: { $in: [req.user.id, ...reportIds] } };
+            }
+
             const leaves = await LeaveRequest.find(query).sort({ appliedAt: -1 });
             res.json({ success: true, leaves });
         } catch (error) {
@@ -28,12 +42,74 @@ export default function createHrRoutes() {
                 userId: req.user.id,
                 type, startDate, endDate, reason
             });
+            
+            // Notify the manager
+            const { Player } = await import('../models/index.mjs');
+            const { addInAppNotification } = await import('../helpers/utils.mjs');
+            
+            const employeeDoc = await Player.findOne({ id: req.user.id });
+            const managerId = employeeDoc?.data?.managerId;
+            
+            if (managerId) {
+                const managerDoc = await Player.findOne({ id: managerId });
+                if (managerDoc && managerDoc.data) {
+                    const manager = managerDoc.data;
+                    manager.notifications = manager.notifications || [];
+                    addInAppNotification(manager, `New Leave Request`, `${employeeDoc.data.name} applied for ${type} leave from ${startDate}.`);
+                    await Player.updateOne({ id: managerId }, { $set: { "data.notifications": manager.notifications } });
+                }
+            } else {
+                // If no manager, maybe notify admin (optional, handled by frontend real-time later)
+            }
+
             res.json({ success: true, leave });
         } catch (error) {
             console.error("Error creating leave:", error);
             res.status(500).json({ success: false, message: 'Server error' });
         }
     });
+
+    // Leave Approvals (Admin or Manager)
+    const approveOrRejectLeave = async (req, res, status) => {
+        try {
+            const { id } = req.params;
+            const { managerComment } = req.body;
+
+            // TODO: Ensure req.user is authorized (Admin or their Manager)
+            if (req.userRole !== 'admin' && req.user.supportLevel !== 'Manager') {
+                return res.status(403).json({ success: false, message: 'Unauthorized' });
+            }
+
+            const leave = await LeaveRequest.findByIdAndUpdate(
+                id,
+                { status, managerComment, updatedAt: new Date() },
+                { new: true }
+            );
+
+            if (!leave) return res.status(404).json({ success: false, message: 'Leave not found' });
+
+            // Notify the employee
+            const { Player } = await import('../models/index.mjs');
+            const { addInAppNotification } = await import('../helpers/utils.mjs');
+            
+            const employeeDoc = await Player.findOne({ id: leave.userId });
+            if (employeeDoc && employeeDoc.data) {
+                const employee = employeeDoc.data;
+                employee.notifications = employee.notifications || [];
+                addInAppNotification(employee, `Leave ${status}`, `Your ${leave.type} leave from ${leave.startDate} was ${status.toLowerCase()}.`);
+                await Player.updateOne({ id: leave.userId }, { $set: { "data.notifications": employee.notifications } });
+            }
+
+            res.json({ success: true, leave });
+        } catch (error) {
+            console.error(`Error ${status.toLowerCase()} leave:`, error);
+            res.status(500).json({ success: false, message: 'Server error' });
+        }
+    };
+
+    router.put('/leaves/:id/approve', (req, res) => approveOrRejectLeave(req, res, 'Approved'));
+    router.put('/leaves/:id/reject', (req, res) => approveOrRejectLeave(req, res, 'Rejected'));
+
 
     // Policies
     router.get('/policies', async (req, res) => {
