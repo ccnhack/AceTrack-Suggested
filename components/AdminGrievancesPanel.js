@@ -13,6 +13,7 @@ import notify from '../utils/notify';
 import logger from '../utils/logger';
 import { colors, shadows } from '../theme/designSystem';
 import config from '../config';
+import storage from '../utils/storage';
 import QueueManagementDashboard from './QueueManagementDashboard';
 
 const statusColors = {
@@ -77,6 +78,28 @@ export const AdminGrievancesPanel = ({
   const swipeableRefs = useRef({}); // 🛡️ Track swipeable instances for snap-back (v2.6.35)
   const [showReassignModal, setShowReassignModal] = useState(false); // 🛡️ Searchable Reassign (v2.6.242)
   const [reassignSearch, setReassignSearch] = useState('');
+  const [liveAttendanceData, setLiveAttendanceData] = useState([]);
+
+  useEffect(() => {
+    if (showReassignModal) {
+      const fetchLiveAttendance = async () => {
+        try {
+          const token = await storage.getItem('userToken');
+          const headers = { 'x-ace-api-key': config.ACE_API_KEY || config.PUBLIC_APP_ID };
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+          const res = await fetch(`${config.API_BASE_URL}/api/support/attendance`, { headers });
+          if (res.ok) {
+            const data = await res.json();
+            setLiveAttendanceData(data.attendance || []);
+          }
+        } catch (e) {
+          console.warn("[AdminGrievancesPanel] Failed to fetch live attendance", e);
+        }
+      };
+      fetchLiveAttendance();
+    }
+  }, [showReassignModal]);
+
 
   // 🛡️ [STABILITY] Sync local selectedTicket with updated props (v2.6.228)
   useEffect(() => {
@@ -1086,7 +1109,7 @@ export const AdminGrievancesPanel = ({
                     />
                   </View>
 
-                  <ScrollView style={styles.agentList} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                  <ScrollView style={styles.agentList} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="always">
                     {(players || [])
                       .filter(p => {
                         const role = (p.role || '').toLowerCase();
@@ -1127,59 +1150,69 @@ export const AdminGrievancesPanel = ({
                         const q = reassignSearch.toLowerCase();
                         return p.name.toLowerCase().includes(q) || (p.username || '').toLowerCase().includes(q);
                       })
-                      .map(agent => (
-                        <TouchableOpacity 
-                          key={agent.id}
-                          style={styles.agentItem}
-                          onPress={async () => {
-                            console.log(`[Support] Attempting reassignment to ${agent.id} (${agent.name})`);
-                            try {
-                              const res = await onReassignTicket(selectedTicket.id, agent.id);
-                              console.log(`[Support] Reassignment response:`, res);
-                              if (res.success) {
-                                // 🛡️ [OPTIMISTIC UPDATE] (v2.6.248)
-                                setSelectedTicket(prev => ({ ...prev, assignedTo: agent.id }));
-                                setShowReassignModal(false);
-                                Alert.alert("Success", `Ticket reassigned to ${agent.name}`);
-                              } else {
-                                Alert.alert("Error", res.error || "Failed to reassign ticket.");
+                      .map(agent => {
+                        const att = liveAttendanceData?.find(a => String(a.id) === String(agent.id));
+                        return (
+                          <TouchableOpacity 
+                            key={agent.id}
+                            style={styles.agentItem}
+                            onPress={async (e) => {
+                              if (e && e.stopPropagation) e.stopPropagation();
+                              console.log(`[Support] Attempting reassignment to ${agent.id} (${agent.name})`);
+                              try {
+                                const res = await onReassignTicket(selectedTicket.id, agent.id);
+                                console.log(`[Support] Reassignment response:`, res);
+                                if (res.success) {
+                                  // 🛡️ [OPTIMISTIC UPDATE] (v2.6.248)
+                                  setSelectedTicket(prev => ({ ...prev, assignedTo: agent.id }));
+                                  setShowReassignModal(false);
+                                  Alert.alert("Success", `Ticket reassigned to ${agent.name}`);
+                                } else {
+                                  Alert.alert("Error", res.error || "Failed to reassign ticket.");
+                                }
+                              } catch (e) {
+                                console.error("[Support] Reassignment exception:", e);
+                                Alert.alert("Error", "An unexpected error occurred.");
                               }
-                            } catch (e) {
-                              console.error("[Support] Reassignment exception:", e);
-                              Alert.alert("Error", "An unexpected error occurred.");
-                            }
-                          }}
-                        >
-                          <View style={styles.agentAvatar}>
-                            <Text style={styles.agentInitials}>{agent.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}</Text>
-                          </View>
-                          <View style={styles.agentInfo}>
-                            <Text style={styles.agentName} numberOfLines={1}>{agent.name}</Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                               <Text style={styles.agentUser}>@{agent.username || agent.id}</Text>
-                               <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#CBD5E1', marginHorizontal: 6 }} />
-                               <Text style={{ fontSize: 10, color: agent.supportStatus === 'leave' || agent.supportStatus === 'on_leave' ? '#F59E0B' : '#10B981', fontWeight: 'bold', textTransform: 'capitalize' }}>
-                                 {agent.supportStatus?.replace('_', ' ') || 'Active'}
-                               </Text>
-                               {agent.lastActiveAt && (
-                                  <>
-                                    <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#CBD5E1', marginHorizontal: 6 }} />
-                                    <Text style={{ fontSize: 10, color: '#94A3B8' }}>Last Active: {new Date(agent.lastActiveAt).toLocaleDateString()}</Text>
-                                  </>
-                               )}
+                            }}
+                          >
+                            <View style={styles.agentAvatar}>
+                              <Text style={styles.agentInitials}>{agent.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}</Text>
                             </View>
-                          </View>
-                          
-                          <View style={styles.premiumBadgeContainer}>
-                            <View style={[styles.loadBadge, { backgroundColor: agent.activeTickets > 5 ? '#FEF2F2' : '#F0FDF4' }]}>
-                              <Text style={[styles.loadText, { color: agent.activeTickets > 5 ? '#EF4444' : '#22C55E' }]}>
-                                {agent.activeTickets}
-                              </Text>
+                            <View style={styles.agentInfo}>
+                              <Text style={styles.agentName} numberOfLines={1}>{agent.name}</Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                                 <Text style={styles.agentUser}>@{agent.username || agent.id}</Text>
+                                 <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#CBD5E1', marginHorizontal: 6 }} />
+                                 <Text style={{ fontSize: 10, color: att?.isCurrentlyOnline ? '#10B981' : (agent.supportStatus === 'leave' || agent.supportStatus === 'on_leave' ? '#F59E0B' : '#64748B'), fontWeight: 'bold', textTransform: 'capitalize' }}>
+                                   {att?.isCurrentlyOnline ? 'Online' : (agent.supportStatus === 'leave' || agent.supportStatus === 'on_leave' ? 'On Leave' : 'Offline')}
+                                 </Text>
+                                 {att?.lastSeen && !att?.isCurrentlyOnline && (
+                                    <>
+                                      <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#CBD5E1', marginHorizontal: 6 }} />
+                                      <Text style={{ fontSize: 10, color: '#94A3B8' }}>Last seen: {new Date(att.lastSeen).toLocaleString('en-US', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</Text>
+                                    </>
+                                 )}
+                                 {att?.isCurrentlyOnline && att?.activeSessions?.length > 0 && (
+                                    <>
+                                      <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#CBD5E1', marginHorizontal: 6 }} />
+                                      <Text style={{ fontSize: 10, color: '#94A3B8' }}>Session: {new Date(att.activeSessions[0].startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                                    </>
+                                 )}
+                              </View>
                             </View>
-                            <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
-                          </View>
-                        </TouchableOpacity>
-                      ))}
+                            
+                            <View style={styles.premiumBadgeContainer}>
+                              <View style={[styles.loadBadge, { backgroundColor: agent.activeTickets > 5 ? '#FEF2F2' : '#F0FDF4' }]}>
+                                <Text style={[styles.loadText, { color: agent.activeTickets > 5 ? '#EF4444' : '#22C55E' }]}>
+                                  {agent.activeTickets}
+                                </Text>
+                              </View>
+                              <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
                     
                     {(players || []).filter(p => {
                       const role = (p.role || '').toLowerCase();
