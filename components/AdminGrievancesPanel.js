@@ -157,7 +157,10 @@ export const AdminGrievancesPanel = ({
     
     const trySelect = () => {
       if (autoSelectTicketId && tickets) {
-        const ticket = (tickets || []).find(t => t.id === autoSelectTicketId || t._id === autoSelectTicketId);
+        // 🛡️ [TYPE_AGNOSTIC_COMPARE] (v2.6.459): Stringify IDs to handle numeric vs string mismatch from URL
+        const ticket = (tickets || []).find(t => String(t.id) === String(autoSelectTicketId) || String(t._id) === String(autoSelectTicketId));
+        console.log(`[AdminGrievancesPanel] Auto-select attempt for ID: ${autoSelectTicketId}. Tickets available: ${tickets.length}. Found: ${!!ticket}`);
+        
         if (ticket) { 
           setSelectedTicket(ticket); 
           onConsumeTicketId?.(); 
@@ -165,6 +168,7 @@ export const AdminGrievancesPanel = ({
         }
       } else if (autoSelectUser && tickets) {
         const userTicket = (tickets || []).find(t => t.userId === autoSelectUser);
+        console.log(`[AdminGrievancesPanel] Auto-select attempt for user: ${autoSelectUser}. Found: ${!!userTicket}`);
         if (userTicket) { 
           setSelectedTicket(userTicket); 
           onConsumeAutoSelect?.();
@@ -177,7 +181,12 @@ export const AdminGrievancesPanel = ({
     // Immediate attempt
     if (!trySelect()) {
       // Retry after a short delay in case tickets are still loading
-      const timer = setTimeout(() => trySelect(), 500);
+      const timer = setTimeout(() => {
+        const success = trySelect();
+        if (!success && autoSelectTicketId) {
+          console.warn(`[AdminGrievancesPanel] Failed to auto-select ticket ${autoSelectTicketId} after 500ms.`);
+        }
+      }, 500);
       return () => clearTimeout(timer);
     }
   }, [autoSelectUser, autoSelectTicketId, tickets]);
