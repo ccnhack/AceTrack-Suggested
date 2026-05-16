@@ -524,7 +524,7 @@ const OrgChatScreen = ({ navigation }) => {
                             )}
                             <Text style={styles.replyQuoteText} numberOfLines={1}>
                               {typeof msg.replyTo === 'object' ? 
-                                (msg.replyTo.content || (msg.replyTo.attachments?.length ? '[Attachment]' : 'Original message deleted')) :
+                                (msg.replyTo.content || (msg.replyTo.attachments?.some(a => a.mimeType?.startsWith('image/')) ? '' : (msg.replyTo.attachments?.length ? '[Attachment]' : 'Original message deleted'))) :
                                 'Original message deleted'
                               }
                             </Text>
@@ -712,7 +712,7 @@ const OrgChatScreen = ({ navigation }) => {
                   />
                 )}
                 <Text style={styles.replyPreviewText} numberOfLines={1}>
-                  {replyTo.content || (replyTo.attachments?.length ? '[Attachment]' : '')}
+                  {replyTo.content || (replyTo.attachments?.some(a => a.mimeType?.startsWith('image/')) ? '' : (replyTo.attachments?.length ? '[Attachment]' : ''))}
                 </Text>
               </View>
             </View>
