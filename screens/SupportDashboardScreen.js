@@ -25,6 +25,31 @@ const SupportDashboardScreen = ({ navigation, route }) => {
   const isMobileWeb = isWeb && windowWidth < 1024;
   const [isWebSidebarOpen, setIsWebSidebarOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [urlTicketId, setUrlTicketId] = useState(null);
+
+  // 🛡️ [URL_PERSISTENCE] (v2.6.458): Detect ticketId from URL on mount
+  React.useEffect(() => {
+    if (Platform.OS === 'web') {
+      const params = new URLSearchParams(window.location.search);
+      const tid = params.get('ticketId');
+      if (tid) {
+        console.log(`[SupportDashboard] Detected ticketId in URL: ${tid}`);
+        setUrlTicketId(tid);
+      }
+    }
+  }, []);
+
+  const handleTicketSelect = (id) => {
+    if (Platform.OS === 'web') {
+      const currentUrl = new URL(window.location.href);
+      if (id) {
+        currentUrl.searchParams.set('ticketId', id);
+      } else {
+        currentUrl.searchParams.delete('ticketId');
+      }
+      window.history.pushState({}, '', currentUrl.toString());
+    }
+  };
 
   const ticketStats = useMemo(() => {
     let tickets = supportTickets || [];
@@ -318,6 +343,9 @@ const SupportDashboardScreen = ({ navigation, route }) => {
           currentUser={currentUser}
           seenAdminActionIds={new Set()}
           search={search}
+          autoSelectTicketId={urlTicketId}
+          onSelect={handleTicketSelect}
+          onConsumeTicketId={() => setUrlTicketId(null)}
         />
       </ScrollView>
     </View>

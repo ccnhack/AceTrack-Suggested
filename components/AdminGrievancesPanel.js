@@ -48,7 +48,7 @@ const formatTicketDateFull = (dateStr) => {
 };
 
 export const AdminGrievancesPanel = ({
-  tickets, players, onReply, onUpdateStatus, onReassignTicket, onTypingStart, onTypingStop, search, onRetryMessage, onMarkSeen, onDetailToggle, autoSelectUser, autoSelectTicketId, onConsumeTicketId, onConsumeAutoSelect, currentUser, setSeenAdminActionIds, highlightActionTimestamp, ...restProps
+  tickets, players, onReply, onUpdateStatus, onReassignTicket, onTypingStart, onTypingStop, search, onRetryMessage, onMarkSeen, onDetailToggle, autoSelectUser, autoSelectTicketId, onConsumeTicketId, onConsumeAutoSelect, currentUser, setSeenAdminActionIds, highlightActionTimestamp, onSelect, ...restProps
 }) => {
 
   const [selectedTicket, setSelectedTicket] = useState(null);
@@ -143,6 +143,13 @@ export const AdminGrievancesPanel = ({
       onDetailToggle?.(false); // Unlock parent scroll
     }
   }, [selectedTicket?.id, selectedTicket?.messages?.length]);
+
+  // 🛡️ [SYNC v2.6.458]: Notify parent of selection for URL persistence
+  useEffect(() => {
+    if (onSelect) {
+      onSelect(selectedTicket?.id || null);
+    }
+  }, [selectedTicket?.id]);
 
   // Handle deep-linking auto-selection (v2.6.151 hardened)
   useEffect(() => {

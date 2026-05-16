@@ -59,6 +59,38 @@ const AdminHubScreen = ({ navigation, route }) => {
   const [isWebSidebarOpen, setIsWebSidebarOpen] = useState(false);
   const today = new Date().toISOString().split('T')[0];
 
+  // 🛡️ [URL_PERSISTENCE] (v2.6.458): Detect subTab and ticketId from URL on mount
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('subTab');
+      const tid = params.get('ticketId');
+      
+      if (tab) {
+        console.log(`[AdminHub] Restoring tab from URL: ${tab}`);
+        setSubTab(tab);
+      }
+      if (tid) {
+        console.log(`[AdminHub] Restoring ticketId from URL: ${tid}`);
+        setAutoSelectTicketId(tid);
+      }
+    }
+  }, []);
+
+  // Sync URL when state changes
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const currentUrl = new URL(window.location.href);
+      currentUrl.searchParams.set('subTab', subTab);
+      if (autoSelectTicketId) {
+        currentUrl.searchParams.set('ticketId', autoSelectTicketId);
+      } else {
+        currentUrl.searchParams.delete('ticketId');
+      }
+      window.history.pushState({}, '', currentUrl.toString());
+    }
+  }, [subTab, autoSelectTicketId]);
+
   const badges = useMemo(() => {
     // 🛡️ [STATE_RESILIENCE] (v2.6.258): Defensive checks to prevent "(v||[]).filter is not a function"
     // This handles cases where state might be corrupted (e.g. set to an empty object instead of array)
@@ -355,10 +387,10 @@ const AdminHubScreen = ({ navigation, route }) => {
             }}
             seenAdminActionIds={seenAdminActionIds}
             setSeenAdminActionIds={setSeenAdminActionIds}
-            autoSelectTicketId={autoSelectTicketId}
             highlightActionTimestamp={highlightActionTimestamp}
             onConsumeTicketId={() => { setAutoSelectTicketId(null); setHighlightActionTimestamp(null); }}
             onConsumeAutoSelect={() => setAutoSelectUser(null)}
+            onSelect={(id) => setAutoSelectTicketId(id)}
           />
 
         );
