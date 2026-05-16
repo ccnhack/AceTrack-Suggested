@@ -338,145 +338,194 @@ const LeaveRequestView = ({ leaves, onSubmit, user, onApprove, onReject }) => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
-  const [showCalendarFor, setShowCalendarFor] = useState(null); // 'start' | 'end' | null
+  const [showCalendarFor, setShowCalendarFor] = useState(null);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [activeTab, setActiveTab] = useState('my'); // 'my' | 'team'
 
-  // Mock balances for now
-  const leaveBalances = {
-    Earned: 12,
-    Sick: 8,
-    Casual: 4
-  };
+  const isManager = user?.role === 'admin' || user?.supportLevel === 'Manager';
+
+  const leaveBalances = { Earned: 12, Sick: 8, Casual: 4 };
+
+  const myLeaves = leaves.filter(l => String(l.userId) === String(user?.id));
+  const teamLeaves = leaves.filter(l => String(l.userId) !== String(user?.id));
+  const pendingTeamCount = teamLeaves.filter(l => l.status === 'Pending').length;
 
   const handleSubmit = async () => {
     if (!startDate || !endDate) return Alert.alert('Error', 'Dates are required');
     if (!reason) return Alert.alert('Error', 'Please provide a reason');
-    
     const success = await onSubmit({ type, startDate, endDate, reason });
     if (success) {
-        Alert.alert('Success', 'Leave requested applied');
+        Alert.alert('Success', 'Leave request applied');
         setStartDate(''); setEndDate(''); setReason('');
     }
   };
 
   const today = new Date().toISOString().split('T')[0];
 
+  const renderLeaveCard = (l, i, showActions) => {
+    const isPending = l.status === 'Pending';
+    const isOthers = String(l.userId) !== String(user?.id);
+    return (
+      <View key={i} style={styles.card}>
+          {isOthers && l.employeeName && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+              <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginRight: 10 }}>
+                <Text style={{ color: '#2563EB', fontWeight: 'bold', fontSize: 14 }}>{(l.employeeName || '?').charAt(0).toUpperCase()}</Text>
+              </View>
+              <View>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>{l.employeeName}</Text>
+                {l.employeeDesignation ? <Text style={{ fontSize: 11, color: '#64748B' }}>{l.employeeDesignation}</Text> : null}
+              </View>
+            </View>
+          )}
+          <View style={styles.logHeader}>
+              <Text style={styles.logAction}>{l.type} Leave</Text>
+              <Text style={{ color: l.status === 'Approved' ? '#10B981' : l.status === 'Rejected' ? '#EF4444' : '#F59E0B', fontWeight: 'bold' }}>{l.status}</Text>
+          </View>
+          <Text style={styles.logDetails}>{l.startDate} to {l.endDate}</Text>
+          {l.reason && <Text style={{ fontSize: 12, color: '#475569', marginTop: 8 }}>"{l.reason}"</Text>}
+          
+          {showActions && isManager && isOthers && isPending && (
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                  <TouchableOpacity 
+                    style={[styles.saveBtn, { flex: 1, paddingVertical: 8, backgroundColor: '#10B981' }]} 
+                    onPress={() => onApprove(l._id || l.id)}
+                  >
+                      <Text style={[styles.saveBtnText, { textAlign: 'center' }]}>Approve</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.saveBtn, { flex: 1, paddingVertical: 8, backgroundColor: '#EF4444' }]} 
+                    onPress={() => onReject(l._id || l.id)}
+                  >
+                      <Text style={[styles.saveBtnText, { textAlign: 'center' }]}>Reject</Text>
+                  </TouchableOpacity>
+              </View>
+          )}
+      </View>
+    );
+  };
+
   return (
     <View style={styles.list}>
-        {/* Balances Section */}
-        <View style={[styles.card, { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 20, backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
-            <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontSize: 24, fontWeight: '900', color: '#2563EB' }}>{leaveBalances.Earned}</Text>
-                <Text style={{ fontSize: 12, color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase', marginTop: 4 }}>Earned Leaves</Text>
-            </View>
-            <View style={{ width: 1, backgroundColor: '#BFDBFE' }} />
-            <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontSize: 24, fontWeight: '900', color: '#EF4444' }}>{leaveBalances.Sick}</Text>
-                <Text style={{ fontSize: 12, color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase', marginTop: 4 }}>Sick Leaves</Text>
-            </View>
-        </View>
+        {/* Tab Switcher for Managers */}
+        {isManager && (
+          <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 12, padding: 4, marginBottom: 16 }}>
+            <TouchableOpacity 
+              style={{ flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: activeTab === 'my' ? '#FFF' : 'transparent', alignItems: 'center', ...(activeTab === 'my' ? { shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } } : {}) }}
+              onPress={() => setActiveTab('my')}
+            >
+              <Text style={{ fontWeight: '700', fontSize: 13, color: activeTab === 'my' ? '#0F172A' : '#64748B' }}>My Leaves</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={{ flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: activeTab === 'team' ? '#FFF' : 'transparent', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', ...(activeTab === 'team' ? { shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } } : {}) }}
+              onPress={() => setActiveTab('team')}
+            >
+              <Text style={{ fontWeight: '700', fontSize: 13, color: activeTab === 'team' ? '#0F172A' : '#64748B' }}>Team Requests</Text>
+              {pendingTeamCount > 0 && (
+                <View style={{ backgroundColor: '#EF4444', borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', marginLeft: 8 }}>
+                  <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900' }}>{pendingTeamCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
 
-        <View style={styles.card}>
-            <Text style={styles.cardTitle}>Apply for Leave</Text>
-            <View style={styles.inputGroup}>
-                
-                {/* Leave Type Dropdown */}
-                <View style={{ zIndex: 10 }}>
-                  <Text style={styles.label}>Leave Type</Text>
-                  <TouchableOpacity 
-                    style={[styles.input, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]} 
-                    onPress={() => setShowDropdown(!showDropdown)}
-                  >
-                    <Text style={{ color: '#0F172A', fontSize: 14 }}>{type} Leave</Text>
-                    <Ionicons name={showDropdown ? "chevron-up" : "chevron-down"} size={20} color="#64748B" />
-                  </TouchableOpacity>
-                  
-                  {showDropdown && (
-                    <View style={{ backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, marginTop: 4, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8 }}>
-                      {Object.keys(leaveBalances).map((leaveType) => (
-                        <TouchableOpacity 
-                          key={leaveType}
-                          style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}
-                          onPress={() => { setType(leaveType); setShowDropdown(false); }}
-                        >
-                          <Text style={{ color: type === leaveType ? '#2563EB' : '#334155', fontWeight: type === leaveType ? 'bold' : 'normal' }}>
-                            {leaveType} Leave ({leaveBalances[leaveType]} remaining)
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
+        {/* MY LEAVES TAB */}
+        {activeTab === 'my' && (
+          <>
+            {/* Balances */}
+            <View style={[styles.card, { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 20, backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
+                <View style={{ alignItems: 'center' }}>
+                    <Text style={{ fontSize: 24, fontWeight: '900', color: '#2563EB' }}>{leaveBalances.Earned}</Text>
+                    <Text style={{ fontSize: 12, color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase', marginTop: 4 }}>Earned Leaves</Text>
+                </View>
+                <View style={{ width: 1, backgroundColor: '#BFDBFE' }} />
+                <View style={{ alignItems: 'center' }}>
+                    <Text style={{ fontSize: 24, fontWeight: '900', color: '#EF4444' }}>{leaveBalances.Sick}</Text>
+                    <Text style={{ fontSize: 12, color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase', marginTop: 4 }}>Sick Leaves</Text>
+                </View>
+            </View>
+
+            {/* Apply Form */}
+            <View style={styles.card}>
+                <Text style={styles.cardTitle}>Apply for Leave</Text>
+                <View style={styles.inputGroup}>
+                    <View style={{ zIndex: 10 }}>
+                      <Text style={styles.label}>Leave Type</Text>
+                      <TouchableOpacity 
+                        style={[styles.input, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]} 
+                        onPress={() => setShowDropdown(!showDropdown)}
+                      >
+                        <Text style={{ color: '#0F172A', fontSize: 14 }}>{type} Leave</Text>
+                        <Ionicons name={showDropdown ? "chevron-up" : "chevron-down"} size={20} color="#64748B" />
+                      </TouchableOpacity>
+                      {showDropdown && (
+                        <View style={{ backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, marginTop: 4, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8 }}>
+                          {Object.keys(leaveBalances).map((leaveType) => (
+                            <TouchableOpacity key={leaveType} style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }} onPress={() => { setType(leaveType); setShowDropdown(false); }}>
+                              <Text style={{ color: type === leaveType ? '#2563EB' : '#334155', fontWeight: type === leaveType ? 'bold' : 'normal' }}>{leaveType} Leave ({leaveBalances[leaveType]} remaining)</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      )}
                     </View>
-                  )}
-                </View>
 
-                {/* Dates */}
-                <View style={{ flexDirection: 'row', gap: 12, zIndex: 1, marginTop: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.label}>Start Date</Text>
-                    <TouchableOpacity style={[styles.input, { flexDirection: 'row', alignItems: 'center', gap: 8 }]} onPress={() => setShowCalendarFor('start')}>
-                      <Ionicons name="calendar-outline" size={18} color="#64748B" />
-                      <Text style={{ color: startDate ? '#0F172A' : '#94A3B8' }}>{startDate || 'Select Date'}</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.label}>End Date</Text>
-                    <TouchableOpacity style={[styles.input, { flexDirection: 'row', alignItems: 'center', gap: 8 }]} onPress={() => setShowCalendarFor('end')}>
-                      <Ionicons name="calendar-outline" size={18} color="#64748B" />
-                      <Text style={{ color: endDate ? '#0F172A' : '#94A3B8' }}>{endDate || 'Select Date'}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <View style={{ zIndex: 1, marginTop: 8 }}>
-                  <Text style={styles.label}>Reason</Text>
-                  <TextInput 
-                    style={[styles.input, { minHeight: 80, textAlignVertical: 'top' }]} 
-                    placeholder="Briefly explain why you need leave..." 
-                    value={reason} 
-                    onChangeText={setReason} 
-                    multiline={true}
-                  />
-                </View>
-
-                <TouchableOpacity style={[styles.saveBtn, { paddingVertical: 14, marginTop: 16 }]} onPress={handleSubmit}>
-                    <Text style={[styles.saveBtnText, { textAlign: 'center', fontSize: 16 }]}>Submit Request</Text>
-                </TouchableOpacity>
-            </View>
-        </View>
-
-        <Text style={[styles.cardTitle, { marginTop: 20 }]}>Past Requests</Text>
-        {leaves.map((l, i) => {
-            const isManager = user?.role === 'admin' || user?.supportLevel === 'Manager';
-            const isPending = l.status === 'Pending';
-            const isOthers = String(l.userId) !== String(user?.id);
-            
-            return (
-              <View key={i} style={styles.card}>
-                  <View style={styles.logHeader}>
-                      <Text style={styles.logAction}>{l.type} Leave</Text>
-                      <Text style={{ color: l.status === 'Approved' ? '#10B981' : l.status === 'Rejected' ? '#EF4444' : '#F59E0B', fontWeight: 'bold' }}>{l.status}</Text>
-                  </View>
-                  <Text style={styles.logDetails}>{l.startDate} to {l.endDate}</Text>
-                  {l.reason && <Text style={{ fontSize: 12, color: '#475569', marginTop: 8 }}>"{l.reason}"</Text>}
-                  
-                  {isManager && isOthers && isPending && (
-                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
-                          <TouchableOpacity 
-                            style={[styles.saveBtn, { flex: 1, paddingVertical: 8, backgroundColor: '#10B981' }]} 
-                            onPress={() => onApprove(l._id || l.id)}
-                          >
-                              <Text style={[styles.saveBtnText, { textAlign: 'center' }]}>Approve</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity 
-                            style={[styles.saveBtn, { flex: 1, paddingVertical: 8, backgroundColor: '#EF4444' }]} 
-                            onPress={() => onReject(l._id || l.id)}
-                          >
-                              <Text style={[styles.saveBtnText, { textAlign: 'center' }]}>Reject</Text>
-                          </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: 12, zIndex: 1, marginTop: 8 }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Start Date</Text>
+                        <TouchableOpacity style={[styles.input, { flexDirection: 'row', alignItems: 'center', gap: 8 }]} onPress={() => setShowCalendarFor('start')}>
+                          <Ionicons name="calendar-outline" size={18} color="#64748B" />
+                          <Text style={{ color: startDate ? '#0F172A' : '#94A3B8' }}>{startDate || 'Select Date'}</Text>
+                        </TouchableOpacity>
                       </View>
-                  )}
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>End Date</Text>
+                        <TouchableOpacity style={[styles.input, { flexDirection: 'row', alignItems: 'center', gap: 8 }]} onPress={() => setShowCalendarFor('end')}>
+                          <Ionicons name="calendar-outline" size={18} color="#64748B" />
+                          <Text style={{ color: endDate ? '#0F172A' : '#94A3B8' }}>{endDate || 'Select Date'}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    <View style={{ zIndex: 1, marginTop: 8 }}>
+                      <Text style={styles.label}>Reason</Text>
+                      <TextInput style={[styles.input, { minHeight: 80, textAlignVertical: 'top' }]} placeholder="Briefly explain why you need leave..." value={reason} onChangeText={setReason} multiline={true} />
+                    </View>
+                    <TouchableOpacity style={[styles.saveBtn, { paddingVertical: 14, marginTop: 16 }]} onPress={handleSubmit}>
+                        <Text style={[styles.saveBtnText, { textAlign: 'center', fontSize: 16 }]}>Submit Request</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+
+            <Text style={[styles.cardTitle, { marginTop: 20 }]}>Past Requests</Text>
+            {myLeaves.length === 0 && <Text style={styles.empty}>No leave requests yet.</Text>}
+            {myLeaves.map((l, i) => renderLeaveCard(l, i, false))}
+          </>
+        )}
+
+        {/* TEAM REQUESTS TAB */}
+        {activeTab === 'team' && (
+          <>
+            {teamLeaves.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <Ionicons name="checkmark-circle-outline" size={48} color="#10B981" />
+                <Text style={{ fontSize: 16, fontWeight: '700', color: '#0F172A', marginTop: 16 }}>All Caught Up!</Text>
+                <Text style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>No pending leave requests from your team.</Text>
               </View>
-            );
-        })}
+            ) : (
+              <>
+                {pendingTeamCount > 0 && (
+                  <View style={[styles.card, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#92400E' }}>
+                      {pendingTeamCount} pending request{pendingTeamCount > 1 ? 's' : ''} awaiting your approval
+                    </Text>
+                  </View>
+                )}
+                {teamLeaves.map((l, i) => renderLeaveCard(l, i, true))}
+              </>
+            )}
+          </>
+        )}
 
         {/* Calendar Picker Modal */}
         {showCalendarFor && (
@@ -497,25 +546,15 @@ const LeaveRequestView = ({ leaves, onSubmit, user, onApprove, onReject }) => {
                             onDayPress={(day) => {
                                 if (showCalendarFor === 'start') {
                                     setStartDate(day.dateString);
-                                    if (!endDate || day.dateString > endDate) {
-                                        setEndDate(day.dateString);
-                                    }
+                                    if (!endDate || day.dateString > endDate) setEndDate(day.dateString);
                                 } else {
                                     setEndDate(day.dateString);
-                                    if (startDate && day.dateString < startDate) {
-                                        setStartDate(day.dateString);
-                                    }
+                                    if (startDate && day.dateString < startDate) setStartDate(day.dateString);
                                 }
                                 setShowCalendarFor(null);
                             }}
-                            markedDates={{
-                                [showCalendarFor === 'start' ? startDate : endDate]: { selected: true, selectedColor: '#2563EB' }
-                            }}
-                            theme={{
-                                todayTextColor: '#2563EB',
-                                selectedDayBackgroundColor: '#2563EB',
-                                arrowColor: '#2563EB',
-                            }}
+                            markedDates={{ [showCalendarFor === 'start' ? startDate : endDate]: { selected: true, selectedColor: '#2563EB' } }}
+                            theme={{ todayTextColor: '#2563EB', selectedDayBackgroundColor: '#2563EB', arrowColor: '#2563EB' }}
                         />
                     </View>
                 </View>

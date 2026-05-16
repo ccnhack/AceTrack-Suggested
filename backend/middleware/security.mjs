@@ -58,15 +58,15 @@ export const apiKeyGuard = async (req, res, next) => {
     try {
       const decoded = jwt.verify(bearerToken, JWT_SECRET);
       
+      // 🛡️ [PERFORMANCE FIX] (v2.6.325): Targeted Player.findOne is sub-ms.
+      // 🛡️ [HIERARCHY ENRICHMENT] (v2.6.445): Hoisted outside role-check block so
+      // supportLevel is always available on req.user for HR/hierarchy routes.
+      const playerDoc = await Player.findOne({ id: decoded.id }).lean();
+      const targetUser = playerDoc?.data;
+
       // 🛡️ [ROLE-BASED LOCKDOWN CHECK] (v2.6.214)
       // Force logout and concurrent session validation
       if (decoded.role === 'admin' || decoded.role === 'support') {
-         // 🛡️ [PERFORMANCE FIX] (v2.6.325): Bypass monolithic AppState lookup.
-         // Searching through the entire global state blob for every authenticated request was
-         // adding 5-15s of latency on large databases. Targeted Player.findOne is sub-ms.
-         const playerDoc = await Player.findOne({ id: decoded.id }).lean();
-         const targetUser = playerDoc?.data;
-         
          if (targetUser) {
             // 1. Force Logout Verification
             if (targetUser.lastForceLogoutAt && (decoded.iat * 1000) < targetUser.lastForceLogoutAt) {
@@ -92,7 +92,16 @@ export const apiKeyGuard = async (req, res, next) => {
          }
       }
 
-      req.user = decoded;
+      // 🛡️ [HIERARCHY ENRICHMENT] (v2.6.445): Enrich req.user with supportLevel/designation
+      // from the DB lookup. Without this, HR routes checking req.user.supportLevel
+      // (e.g., manager leave approvals) always get undefined because JWT doesn't carry it.
+      req.user = { ...decoded };
+      if (targetUser) {
+        req.user.supportLevel = targetUser.supportLevel || '';
+        req.user.designation = targetUser.designation || '';
+        req.user.managerId = targetUser.managerId || '';
+        req.user.name = targetUser.name || '';
+      }
       req.userId = decoded.id;
       req.userRole = decoded.role;
 

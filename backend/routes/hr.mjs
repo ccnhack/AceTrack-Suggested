@@ -27,8 +27,24 @@ export default function createHrRoutes() {
                 query = { userId: { $in: [req.user.id, ...reportIds] } };
             }
 
-            const leaves = await LeaveRequest.find(query).sort({ appliedAt: -1 });
-            res.json({ success: true, leaves });
+            const leaves = await LeaveRequest.find(query).sort({ appliedAt: -1 }).lean();
+
+            // 🛡️ [NAME ENRICHMENT] (v2.6.446): Attach employee names to leave records
+            // so the manager UI can show "John Doe requested Earned Leave" instead of just a userId
+            const uniqueUserIds = [...new Set(leaves.map(l => l.userId))];
+            const { Player } = await import('../models/index.mjs');
+            const employeeDocs = await Player.find({ id: { $in: uniqueUserIds } }, 'id data.name data.designation').lean();
+            const nameMap = {};
+            for (const doc of employeeDocs) {
+                nameMap[doc.id] = { name: doc.data?.name || 'Unknown', designation: doc.data?.designation || '' };
+            }
+            const enrichedLeaves = leaves.map(l => ({
+                ...l,
+                employeeName: nameMap[l.userId]?.name || l.userId,
+                employeeDesignation: nameMap[l.userId]?.designation || ''
+            }));
+
+            res.json({ success: true, leaves: enrichedLeaves });
         } catch (error) {
             console.error("Error fetching leaves:", error);
             res.status(500).json({ success: false, message: 'Server error' });
