@@ -1030,7 +1030,14 @@ const authRoutes = createAuthRoutes({
   sendPasswordResetEmail
 });
 
-app.use('/api', authRoutes);
+// 🛡️ API DEPRECATION LAYER (v2.6.475): Rewrite all legacy /api calls to /api/v1
+app.use((req, res, next) => {
+  if (req.url.startsWith('/api/') && !req.url.startsWith('/api/v1/')) {
+    req.url = req.url.replace('/api/', '/api/v1/');
+  }
+  next();
+});
+
 app.use('/api/v1', authRoutes);
 
 const dataRoutes = createDataRoutes({
@@ -1048,7 +1055,6 @@ const dataRoutes = createDataRoutes({
   activeSupportSessions
 });
 
-app.use('/api', dataRoutes);
 app.use('/api/v1', dataRoutes);
 
 const supportRoutes = createSupportRoutes({
@@ -1062,7 +1068,6 @@ const supportRoutes = createSupportRoutes({
   activeSupportSessions
 });
 
-app.use('/api', supportRoutes);
 app.use('/api/v1', supportRoutes);
 
 const adminCoreRoutes = createAdminCoreRoutes({ activeSupportSessions });
@@ -1073,7 +1078,6 @@ app.use('/api/v1/hr', hrRoutes);
 
 const commsRoutes = createCommsRoutes({ io, logAudit, cloudinary, upload });
 app.use('/api/v1/comms', commsRoutes);
-app.use('/api/comms', commsRoutes); // 🛡️ Legacy/Compatibility Alias (v2.6.395)
 
 const infrastructureRoutes = createInfrastructureRoutes({ 
   APP_VERSION, 
@@ -1082,7 +1086,6 @@ const infrastructureRoutes = createInfrastructureRoutes({
   sendSecurityAlert 
 });
 app.use('/', infrastructureRoutes);
-app.use('/api', infrastructureRoutes);
 app.use('/api/v1', infrastructureRoutes); // 🛡️ COMPATIBILITY FIX (v2.6.174): Support versioned API calls from web/mobile clients
 
 
