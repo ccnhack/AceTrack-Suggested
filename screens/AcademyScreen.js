@@ -24,10 +24,10 @@ import { useAuth } from '../context/AuthContext';
 import { usePlayers } from '../context/PlayerContext';
 import { useTournaments } from '../context/TournamentContext';
 import { useVideos } from '../context/VideoContext';
-import { useEvaluations } from '../context/EvaluationContext';
 import { useSync } from '../context/SyncContext';
 import { useSupport } from '../context/SupportContext';
 import TournamentService from '../services/TournamentService';
+import { useEvaluationsStore } from '../stores';
 
 export const AcademyScreen = () => {
   const { currentUser: user, userRole, onUpdateUser, onTopUp, onRegisterUser: onRegister } = useAuth();
@@ -35,7 +35,7 @@ export const AcademyScreen = () => {
   const { tournaments, onSaveTournament, onUpdateTournament, onReschedule, onDeleteTournament } = useTournaments();
   const { players, setPlayers } = usePlayers();
   const { matchVideos, matches, onSaveVideo, onCancelVideo, onRequestDeletion } = useVideos();
-  const { evaluations } = useEvaluations();
+  const { evaluations } = useEvaluationsStore();
   const { isSyncing, serverClockOffset, onLogTrace } = useSync();
   const { onReplyTicket, onUpdateTicketStatus } = useSupport();
   

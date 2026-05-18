@@ -12,10 +12,10 @@ const SPORT_CRITERIA = {
   'Table Tennis': ['Reaction Time', 'Spin Control', 'Backhand Drive', 'Service Variety']
 };
 
-import { useEvaluations } from '../context/EvaluationContext';
+import { useEvaluationsStore } from '../stores';
 
 export default function LiveScoringScreen({ route, navigation }) {
-  const { onSaveEvaluation } = useEvaluations();
+  const { onSaveEvaluation } = useEvaluationsStore();
   const { 
     match = { sport: 'Badminton', format: 'Singles' }, 
     player1, player2, team1 = [], team2 = [], tournamentId 

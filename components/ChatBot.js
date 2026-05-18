@@ -12,7 +12,7 @@ import config from '../config';
 import { isTournamentPast, getVisibleTournaments, parseTournamentDate } from '../utils/tournamentUtils';
 import { useTournaments } from '../context/TournamentContext';
 import { usePlayers } from '../context/PlayerContext';
-import { useEvaluations } from '../context/EvaluationContext';
+import { useEvaluationsStore } from '../stores';
 import { useSupport } from '../context/SupportContext';
 
 const { width } = Dimensions.get('window');
@@ -130,7 +130,7 @@ const ChatBot = ({
 }) => {
   const { tournaments } = useTournaments();
   const { players } = usePlayers();
-  const { evaluations } = useEvaluations();
+  const { evaluations } = useEvaluationsStore();
   const { chatbotMessages, onSendChatMessage, onSaveTicket } = useSupport();
 
   const [isOpen, setIsOpen] = useState(false);

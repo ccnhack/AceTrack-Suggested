@@ -62,7 +62,6 @@ import { useSync } from './context/SyncContext';
 import { useAuth } from './context/AuthContext';
 import { usePlayers } from './context/PlayerContext';
 import { useTournaments } from './context/TournamentContext';
-import { useEvaluations } from './context/EvaluationContext';
 import { useSupport } from './context/SupportContext';
 
 

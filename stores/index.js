@@ -245,7 +245,7 @@ export const useMatchmakingStore = create((set) => {
 // ═══════════════════════════════════════════════════════════════
 // 📊 EVALUATIONS STORE — Replaces EvaluationContext state
 // ═══════════════════════════════════════════════════════════════
-export const useEvaluationsStore = create((set) => {
+export const useEvaluationsStore = create((set, get) => {
   eventBus.subscribe('ENTITY_UPDATED', async (e) => {
     if (e.payload.entity === 'evaluations') {
       const freshData = await syncOrchestrator.getSystemFlag('evaluations');
@@ -256,6 +256,13 @@ export const useEvaluationsStore = create((set) => {
   return {
     evaluations: [],
     setEvaluations: (evals) => set({ evaluations: evals }),
+
+    onSaveEvaluation: async (evaluationData) => {
+      const currentEvaluations = get().evaluations || [];
+      const updated = [evaluationData, ...currentEvaluations];
+      set({ evaluations: updated });
+      await syncOrchestrator.syncAndSaveData({ evaluations: updated });
+    },
 
     hydrate: async () => {
       const saved = await syncOrchestrator.getSystemFlag('evaluations');

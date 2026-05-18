@@ -14,7 +14,6 @@ const APP_VERSION = config.APP_VERSION;
 
 import { AdminProvider } from './AdminContext';
 import { MatchmakingProvider } from './MatchmakingContext';
-import { EvaluationProvider } from './EvaluationContext';
 
 export const MultiProvider = ({ children }) => {
   return (
@@ -27,9 +26,7 @@ export const MultiProvider = ({ children }) => {
                 <SupportProvider>
                   <AdminProvider>
                     <MatchmakingProvider>
-                      <EvaluationProvider>
-                        {children}
-                      </EvaluationProvider>
+                      {children}
                     </MatchmakingProvider>
                   </AdminProvider>
                 </SupportProvider>

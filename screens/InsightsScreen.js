@@ -13,8 +13,8 @@ import { useAuth } from '../context/AuthContext';
 import { usePlayers } from '../context/PlayerContext';
 import { useTournaments } from '../context/TournamentContext';
 import { useVideos } from '../context/VideoContext';
-import { useEvaluations } from '../context/EvaluationContext';
 import { useSupport } from '../context/SupportContext';
+import { useEvaluationsStore } from '../stores';
 import { formatDateIST } from '../utils/tournamentUtils';
 
 
@@ -23,7 +23,7 @@ const InsightsScreen = ({ navigation }) => {
   const { players } = usePlayers();
   const { tournaments } = useTournaments();
   const { matchVideos, matches } = useVideos();
-  const { evaluations } = useEvaluations();
+  const { evaluations } = useEvaluationsStore();
   const { supportTickets: tickets } = useSupport();
   
   const academyId = user?.id; // Standard fallback

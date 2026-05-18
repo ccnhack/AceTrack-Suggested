@@ -32,9 +32,10 @@ import { useSupport } from '../context/SupportContext';
 import { useAdmin } from '../context/AdminContext';
 import { useSync } from '../context/SyncContext';
 import { useMatchmaking } from '../context/MatchmakingContext';
-import { useEvaluations } from '../context/EvaluationContext';
+import { useMatchmaking } from '../context/MatchmakingContext';
 import { useAuth } from '../context/AuthContext';
 import { useCommsStore } from '../stores/useCommsStore';
+import { useEvaluationsStore } from '../stores';
 
 const AdminHubScreen = ({ navigation, route }) => {
   const { currentUser } = useAuth();
@@ -44,7 +45,7 @@ const AdminHubScreen = ({ navigation, route }) => {
   const { supportTickets, onReplyTicket, onUpdateTicketStatus, onReassignTicket, onMarkSeen } = useSupport();
 
   const { matchmaking } = useMatchmaking();
-  const { evaluations } = useEvaluations();
+  const { evaluations } = useEvaluationsStore();
   const { seenAdminActionIds = new Set(), setSeenAdminActionIds, auditLogs, hasSeen, hasVisited, setVisitedAdminSubTabs, visitedAdminSubTabs = new Set() } = useAdmin();
   const { isCloudOnline, isUsingCloud, lastSyncTime, onManualSync } = useSync();
 
