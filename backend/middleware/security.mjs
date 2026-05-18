@@ -135,7 +135,6 @@ export const apiKeyGuard = async (req, res, next) => {
                         path.includes('/support/session-status') ||
                         path.includes('/support/ai-summary') ||
                         path.includes('/slack/interact') ||
-                        (req.method === 'GET' && path.includes('/data')) ||
                         (req.method === 'POST' && path.includes('/diagnostics'));
   if (isPublicRoute && providedKey === PUBLIC_APP_ID) {
     return next();

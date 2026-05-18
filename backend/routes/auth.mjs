@@ -81,7 +81,7 @@ export default function createAuthRoutes({
     let isMatch = false;
     try {
       if (currentHash.startsWith('$2a$') || currentHash.startsWith('$2b$')) {
-        isMatch = bcrypt.compareSync(oldPassword, currentHash);
+        isMatch = await bcrypt.compare(oldPassword, currentHash);
       } else {
         isMatch = currentHash === oldPassword;
       }
@@ -94,7 +94,7 @@ export default function createAuthRoutes({
     }
 
     // Hash new password and save
-    const hashedNewPassword = bcrypt.hashSync(newPassword, 10);
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
     await Player.updateOne(
       { id: user.id },
       { $set: { "data.password": hashedNewPassword, lastUpdated: new Date() } }
@@ -191,15 +191,10 @@ export default function createAuthRoutes({
     let isMatch = false;
     try {
       if (adminPassword.startsWith('$2a$') || adminPassword.startsWith('$2b$')) {
-        isMatch = bcrypt.compareSync(password, adminPassword);
+        isMatch = await bcrypt.compare(password, adminPassword);
       } else if (adminPassword) {
-        // Legacy plaintext detected — compare then force-hash for next login
-        isMatch = adminPassword === password;
-        if (isMatch) {
-          console.warn('🛡️ [SECURITY] Admin has plaintext password — auto-hashing now.');
-          const hashed = bcrypt.hashSync(password, 10);
-          await Player.updateOne({ id: 'admin' }, { $set: { 'data.password': hashed, lastUpdated: new Date() } });
-        }
+        console.warn(`🛑 [SECURITY] Admin account has unhashed password. Forcing reset.`);
+        return res.status(401).json({ error: 'Your password needs to be reset for security. Use the Forgot Password flow.' });
       }
     } catch (e) {
       console.error('[AUTH] Password comparison error:', e.message);
@@ -296,9 +291,10 @@ export default function createAuthRoutes({
       maxAge: 24 * 60 * 60 * 1000 // 🛡️ (v2.6.319): Aligned with JWT 24h expiry
     });
 
+    const isWeb = req.headers['sec-fetch-mode'] || req.headers['origin'];
     res.json({
       success: true,
-      token,
+      ...(isWeb ? {} : { token }),
       user: {
         id: 'admin',
         name: 'System Admin',
@@ -359,14 +355,10 @@ export default function createAuthRoutes({
     let isMatch = false;
     try {
       if (userPassword.startsWith('$2a$') || userPassword.startsWith('$2b$')) {
-        isMatch = bcrypt.compareSync(password, userPassword);
+        isMatch = await bcrypt.compare(password, userPassword);
       } else {
-        isMatch = userPassword === password;
-        if (isMatch) {
-          console.warn(`🛡️ [SECURITY] Auto-hashing plaintext password for user ${user.id}.`);
-          const hashed = bcrypt.hashSync(password, 10);
-          Player.updateOne({ id: user.id }, { $set: { 'data.password': hashed, lastUpdated: new Date() } }).catch(e => console.error(e));
-        }
+        console.warn(`🛑 [SECURITY] Account ${user.id} has unhashed password. Forcing reset.`);
+        return res.status(401).json({ error: 'Your password needs to be reset for security. Use the Forgot Password flow.' });
       }
     } catch (e) {
       console.error('[AUTH] Password comparison error:', e.message);
@@ -389,7 +381,16 @@ export default function createAuthRoutes({
       scopes: ['read:basic'] 
     });
 
-    res.json({ success: true, token, user: safeUser });
+    res.cookie('acetrack_session', token, {
+      path: '/',
+      httpOnly: true,
+      secure: IS_PRODUCTION,
+      sameSite: IS_PRODUCTION ? 'strict' : 'lax',
+      maxAge: 24 * 60 * 60 * 1000 // 🛡️ (v2.6.319): Aligned with JWT 24h expiry
+    });
+
+    const isWeb = req.headers['sec-fetch-mode'] || req.headers['origin'];
+    res.json({ success: true, ...(isWeb ? {} : { token }), user: safeUser });
   }));
 
   // ═══════════════════════════════════════════════════════════════
@@ -471,15 +472,10 @@ export default function createAuthRoutes({
     let isMatch = false;
     try {
       if (userPassword.startsWith('$2a$') || userPassword.startsWith('$2b$')) {
-        isMatch = bcrypt.compareSync(password, userPassword);
+        isMatch = await bcrypt.compare(password, userPassword);
       } else {
-        // Legacy plaintext detected — compare then force-hash for next login
-        isMatch = userPassword === password;
-        if (isMatch) {
-          console.warn(`🛡️ [SECURITY] Support user ${supportUser.id} has plaintext password — auto-hashing now.`);
-          const hashed = bcrypt.hashSync(password, 10);
-          Player.updateOne({ id: supportUser.id }, { $set: { 'data.password': hashed, lastUpdated: new Date() } }).catch(e => console.error('Auto-hash failed:', e.message));
-        }
+        console.warn(`🛑 [SECURITY] Account ${supportUser.id} has unhashed password. Forcing reset.`);
+        return res.status(401).json({ error: 'Your password needs to be reset for security. Use the Forgot Password flow.' });
       }
     } catch (e) {
       console.error('[AUTH] Password comparison error:', e.message);
@@ -537,7 +533,8 @@ export default function createAuthRoutes({
       maxAge: 24 * 60 * 60 * 1000 // 🛡️ (v2.6.319): Aligned with JWT 24h expiry
     });
 
-    res.json({ success: true, token, user: safeUser });
+    const isWeb = req.headers['sec-fetch-mode'] || req.headers['origin'];
+    res.json({ success: true, ...(isWeb ? {} : { token }), user: safeUser });
 
   }));
 

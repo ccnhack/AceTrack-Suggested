@@ -21,17 +21,28 @@ export const useCommsStore = create((set, get) => ({
     uploadingFile: false,
     replyTo: null, // 💬 [QUOTED_REPLY] (v2.6.405)
 
-    fetchMessages: async () => {
+    fetchMessages: async (before = null) => {
         try {
             set({ isLoading: true });
             
-            const url = Platform.OS === 'web' ? '/api/comms/chat' : `${config.API_BASE_URL}/api/v1/comms/chat`;
+            let url = Platform.OS === 'web' ? '/api/comms/chat' : `${config.API_BASE_URL}/api/v1/comms/chat`;
+            if (before) {
+                url += `?before=${encodeURIComponent(before)}&limit=50`;
+            } else {
+                url += `?limit=50`;
+            }
             const response = await fetch(url, {
                 credentials: 'include',
                 headers: getCommsHeaders()
             });
             const data = await response.json();
-            if (data.success) set({ messages: data.messages });
+            if (data.success) {
+                if (before) {
+                    set(state => ({ messages: [...data.messages, ...state.messages] }));
+                } else {
+                    set({ messages: data.messages });
+                }
+            }
         } catch (error) {
             console.error("Failed to fetch messages:", error);
         } finally {

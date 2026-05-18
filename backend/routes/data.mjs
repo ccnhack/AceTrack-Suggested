@@ -118,7 +118,11 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
     const chatbotMessages = {};
     if (chatbotDocs && Array.isArray(chatbotDocs)) {
       chatbotDocs.forEach(doc => { 
-        if (doc && doc.userId) chatbotMessages[doc.userId] = doc.data || []; 
+        if (doc && doc.userId) {
+          if (isAdmin || String(doc.userId).toLowerCase() === normalizedReqId) {
+            chatbotMessages[doc.userId] = doc.data || [];
+          }
+        }
       });
     }
 
@@ -189,10 +193,7 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
 
       // 🛡️ [SYNC_DIAGNOSTIC] (v2.6.383)
       if (req.originalUrl.includes('data')) {
-          await logAudit(req, 'DATA_SYNC_PRESENCE', [], { 
-            activeCount: activeUserIds.size, 
-            totalPlayers: composedData.players.length 
-          });
+          // Removed DATA_SYNC_PRESENCE audit log to reduce DB write noise
       }
     }
 
@@ -883,7 +884,8 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
          }
 
          // 3. 🛡️ [RESPONSE TRACKING]
-         const newMessages = (ticket.messages || []).slice(existing ? existing.messages.length : 0);
+         const existingMsgCount = existing?.messages?.length || 0;
+         const newMessages = (ticket.messages || []).slice(existingMsgCount);
          for (const msg of newMessages) {
            if (String(msg.senderId) !== String(ticket.userId) && !ticket.firstResponseAt && msg.senderId !== 'system') {
              ticket.firstResponseAt = new Date().toISOString();
