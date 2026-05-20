@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, borderRadius, shadows } from '../../theme/designSystem';
-import { usePlayers } from '../../context/PlayerContext';
+import { usePlayersStore } from '../../stores';
 import { useTournamentsStore } from '../../stores';
 import { useAdmin } from '../../context/AdminContext';
 
 const AdminAssignmentPanel = ({ search = '' }) => {
-  const { players } = usePlayers();
+  const { players } = usePlayersStore();
   const { tournaments, onAssignCoach, onRemoveCoach } = useTournamentsStore();
   const { seenAdminActionIds } = useAdmin();
   const [viewingAssignmentFor, setViewingAssignmentFor] = useState(null);

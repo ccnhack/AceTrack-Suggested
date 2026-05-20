@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import logger from '../utils/logger';
 import { useAuth } from '../context/AuthContext';
-import { usePlayers } from '../context/PlayerContext';
+import { usePlayersStore } from '../stores';
 import { useSync } from '../context/SyncContext';
 import config from '../config';
 import { Sport } from '../types';
@@ -16,7 +16,7 @@ const { width, height } = Dimensions.get('window');
 
 const SignupScreen = ({ navigation }) => {
   const { onLogin: onSignupSuccess, setViewingLanding, onRegisterUser } = useAuth();
-  const { players, setPlayers } = usePlayers();
+  const { players, setPlayers } = usePlayersStore();
   const { isUsingCloud, onToggleCloud } = useSync();
 
   const onBack = () => {

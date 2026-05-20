@@ -21,7 +21,7 @@ import { AcademyAnalytics } from '../components/AcademyAnalytics';
 import { formatDateIST } from '../utils/tournamentUtils';
 import { AcademyTournamentCard } from '../components/AcademySubComponents';
 import { useAuth } from '../context/AuthContext';
-import { usePlayers } from '../context/PlayerContext';
+import { usePlayersStore } from '../stores';
 import { useTournamentsStore } from '../stores';
 import { useVideos } from '../context/VideoContext';
 import { useSync } from '../context/SyncContext';
@@ -33,7 +33,7 @@ export const AcademyScreen = () => {
   const { currentUser: user, userRole, onUpdateUser, onTopUp, onRegisterUser: onRegister } = useAuth();
   const academyId = user?.id; 
   const { tournaments, onSaveTournament, onUpdateTournament, onReschedule, onDeleteTournament } = useTournamentsStore();
-  const { players, setPlayers } = usePlayers();
+  const { players, setPlayers } = usePlayersStore();
   const { matchVideos, matches, onSaveVideo, onCancelVideo, onRequestDeletion } = useVideos();
   const { evaluations } = useEvaluationsStore();
   const { isSyncing, serverClockOffset, onLogTrace } = useSync();

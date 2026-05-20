@@ -142,7 +142,60 @@ export const usePlayersStore = create((set, get) => {
     // Hydrate from storage
     hydrate: async () => {
       const saved = await syncOrchestrator.getSystemFlag('players');
-      if (saved) set({ players: saved });
+      if (saved) {
+        set({ players: saved });
+        get().performReferralBackfill();
+      }
+    },
+
+    performReferralBackfill: () => {
+      const players = get().players;
+      if (players.length > 0 && players.some(p => !p.referralCode)) {
+        const getStableSuffix = (id) => {
+          const str = String(id);
+          let hash = 0;
+          for (let i = 0; i < str.length; i++) hash = ((hash << 5) - hash) + str.charCodeAt(i);
+          return Math.abs(hash).toString(36).substring(0, 4).toUpperCase();
+        };
+
+        const updated = players.map(p => {
+          if (!p.referralCode) {
+            return {
+              ...p,
+              referralCode: `ACE-${(p.id || 'PLAYER').substring(0, 5).toUpperCase()}-${getStableSuffix(p.id || 'PLAYER')}`
+            };
+          }
+          return p;
+        });
+
+        if (updated.some((p, i) => p !== players[i])) {
+          console.log('[PlayersStore] Backfilling referral codes for legacy players (local only)...');
+          set({ players: updated });
+          storage.setItem('players', updated);
+        }
+      }
+    },
+
+    sendUserNotification: (targetUserId, notification) => {
+      const currentPlayers = get().players;
+      const updatedPlayers = currentPlayers.map(p => {
+        if (String(p.id).toLowerCase() === String(targetUserId).toLowerCase()) {
+          const newNotif = {
+            id: `notif_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
+            ...notification,
+            timestamp: new Date().toISOString(),
+            isRead: false
+          };
+          return {
+            ...p,
+            notifications: [newNotif, ...(p.notifications || [])]
+          };
+        }
+        return p;
+      });
+      
+      set({ players: updatedPlayers });
+      syncOrchestrator.syncAndSaveData({ players: updatedPlayers });
     }
   };
 });

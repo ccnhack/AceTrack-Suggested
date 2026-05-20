@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, shadows } from '../../theme/designSystem';
 import config from '../../config';
 import storage from '../../utils/storage';
-import { usePlayers } from '../../context/PlayerContext';
+import { usePlayersStore } from '../../stores';
 import { useAdmin } from '../../context/AdminContext';
 import SafeAvatar from '../SafeAvatar';
 import PureJSDateTimePicker from '../PureJSDateTimePicker';
@@ -48,7 +48,7 @@ const formatDuration = (ms) => {
 };
 
 const AdminSupportTeamPanel = ({ onOpenTicket }) => {
-  const { players } = usePlayers();
+  const { players } = usePlayersStore();
   const { auditLogs } = useAdmin();
   
   const [search, setSearch] = useState('');

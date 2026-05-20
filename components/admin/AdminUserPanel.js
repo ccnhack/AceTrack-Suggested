@@ -2,11 +2,11 @@ import React, { useMemo, useState, memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image, Linking, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import PlayerDashboardView from '../PlayerDashboardView';
-import { usePlayers } from '../../context/PlayerContext';
+import { usePlayersStore } from '../../stores';
 import { useTournamentsStore } from '../../stores';
 
 const AdminUserPanel = memo(({ subTab, search }) => {
-  const { players } = usePlayers();
+  const { players } = usePlayersStore();
   const { tournaments } = useTournamentsStore();
   const [selectedAcademy, setSelectedAcademy] = useState(null);
 

@@ -2,12 +2,12 @@ import React, { useMemo, useState, memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useMatchmaking } from '../../context/MatchmakingContext';
-import { usePlayers } from '../../context/PlayerContext';
+import { usePlayersStore } from '../../stores';
 import { getSafeAvatar } from '../../utils/imageUtils';
 
 const AdminMatchesPanel = memo(({ search }) => {
   const { matchmaking } = useMatchmaking();
-  const { players } = usePlayers();
+  const { players } = usePlayersStore();
   const [matchSubTab, setMatchSubTab] = useState('active');
 
   const filteredMatches = useMemo(() => {

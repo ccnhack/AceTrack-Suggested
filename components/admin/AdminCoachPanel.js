@@ -4,12 +4,12 @@ import {
   Alert, Linking, Modal, TextInput, ActivityIndicator 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { usePlayers } from '../../context/PlayerContext';
+import { usePlayersStore } from '../../stores';
 import { useTournamentsStore } from '../../stores';
 import SafeAvatar from '../SafeAvatar';
 
 const AdminCoachPanel = memo(({ search }) => {
-  const { players } = usePlayers();
+  const { players } = usePlayersStore();
   const { onApproveCoach } = useTournamentsStore();
   
   const [coachSubTab, setCoachSubTab] = useState('pending');

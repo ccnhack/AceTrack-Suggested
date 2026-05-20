@@ -7,13 +7,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SafeAvatar from '../components/SafeAvatar';
 import { useAuth } from '../context/AuthContext';
-import { usePlayers } from '../context/PlayerContext';
+import { usePlayersStore } from '../stores';
 import { useTournamentsStore } from '../stores';
 import TournamentService from '../services/TournamentService';
 
 const RankingScreen = () => {
   const { currentUser: user, userRole: role } = useAuth();
-  const { players } = usePlayers();
+  const { players } = usePlayersStore();
   const { tournaments } = useTournamentsStore();
   const insets = useSafeAreaInsets();
   const rankingPlayers = useMemo(() => {

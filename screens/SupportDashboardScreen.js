@@ -8,14 +8,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AdminGrievancesPanel } from '../components/AdminGrievancesPanel';
 
-import { usePlayers } from '../context/PlayerContext';
+import { usePlayersStore } from '../stores';
 import { useSupport } from '../context/SupportContext';
 import { useSync } from '../context/SyncContext';
 import { useAuth } from '../context/AuthContext';
 import { useCommsStore } from '../stores/useCommsStore';
 
 const SupportDashboardScreen = ({ navigation, route }) => {
-  const { players } = usePlayers();
+  const { players } = usePlayersStore();
   const { supportTickets, onReplyTicket, onUpdateTicketStatus, onMarkSeen, onReassignTicket } = useSupport();
   const { isCloudOnline, isUsingCloud, lastSyncTime, onManualSync } = useSync();
   const { currentUser } = useAuth();

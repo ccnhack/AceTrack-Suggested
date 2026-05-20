@@ -10,7 +10,7 @@ import { AcademyAnalytics } from '../components/AcademyAnalytics';
 const screenWidth = Dimensions.get('window').width;
 
 import { useAuth } from '../context/AuthContext';
-import { usePlayers } from '../context/PlayerContext';
+import { usePlayersStore } from '../stores';
 import { useTournamentsStore } from '../stores';
 import { useVideos } from '../context/VideoContext';
 import { useSupport } from '../context/SupportContext';
@@ -20,7 +20,7 @@ import { formatDateIST } from '../utils/tournamentUtils';
 
 const InsightsScreen = ({ navigation }) => {
   const { currentUser: user, userRole: role } = useAuth();
-  const { players } = usePlayers();
+  const { players } = usePlayersStore();
   const { tournaments } = useTournamentsStore();
   const { matchVideos, matches } = useVideos();
   const { evaluations } = useEvaluationsStore();

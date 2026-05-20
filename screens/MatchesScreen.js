@@ -25,7 +25,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 import { useAuth } from '../context/AuthContext';
 import { useTournamentsStore } from '../stores';
-import { usePlayers } from '../context/PlayerContext';
+import { usePlayersStore } from '../stores';
 import { useVideos } from '../context/VideoContext';
 import { useSupport } from '../context/SupportContext';
 import { useAdmin } from '../context/AdminContext';
@@ -36,7 +36,7 @@ const MatchesScreen = ({ route, navigation }) => {
     tournaments, onReschedule, onOptOut, onStartTournament, onEndTournament, 
     onUpdateTournament, onRegister, onAssignCoach, onConfirmCoachRequest, onDeclineCoachRequest 
   } = useTournamentsStore();
-  const { players } = usePlayers();
+  const { players } = usePlayersStore();
   const { 
     evaluations, onSaveEvaluation, matchVideos, onSaveCoachComment 
   } = useVideos(); // Evaluations are in VideoContext currently

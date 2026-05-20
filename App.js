@@ -60,7 +60,7 @@ import { MultiProvider } from './context/MultiProvider';
 import { useApp } from './context/AppContext';
 import { useSync } from './context/SyncContext';
 import { useAuth } from './context/AuthContext';
-import { usePlayers } from './context/PlayerContext';
+import { usePlayersStore } from './stores';
 import { useSupport } from './context/SupportContext';
 
 

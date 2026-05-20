@@ -10,14 +10,14 @@ import logger from '../utils/logger';
 const { height } = Dimensions.get('window');
 
 import { useAuth } from '../context/AuthContext';
-import { usePlayers } from '../context/PlayerContext';
+import { usePlayersStore } from '../stores';
 import { useSync } from '../context/SyncContext';
 
 const APP_VERSION = config.APP_VERSION;
 
 const LoginScreen = ({ navigation }) => {
   const { onLogin: onLoginSuccess, onResetPassword, setViewingLanding } = useAuth();
-  const { players } = usePlayers();
+  const { players } = usePlayersStore();
   const { loadData: onRefreshData, onToggleCloud, isUsingCloud } = useSync();
 
   const onSignup = () => navigation.navigate('Signup');

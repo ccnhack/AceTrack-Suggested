@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, shadows } from '../../theme/designSystem';
 import config from '../../config';
 import storage from '../../utils/storage';
-import { usePlayers } from '../../context/PlayerContext';
+import { usePlayersStore } from '../../stores';
 
 const ACTION_LABELS = {
   link_click: { icon: '🔗', label: 'Link Clicked', color: '#3B82F6' },
@@ -16,7 +16,7 @@ const ACTION_LABELS = {
 };
 
 const AdminStaffPanel = () => {
-  const { players } = usePlayers();
+  const { players } = usePlayersStore();
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');

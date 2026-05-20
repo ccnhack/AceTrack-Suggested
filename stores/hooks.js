@@ -6,7 +6,7 @@
  * 
  * Usage:
  *   // Old way (still works):
- *   const { players } = usePlayers();
+ *   const { players } = usePlayersStore();
  *   
  *   // New way (Phase 3):
  *   import { usePlayersQuery } from '../stores/hooks';

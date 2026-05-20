@@ -9,14 +9,14 @@ import { VideoManagement } from '../components/VideoManagement';
 
 import { useAuth } from '../context/AuthContext';
 import { useTournamentsStore } from '../stores';
-import { usePlayers } from '../context/PlayerContext';
+import { usePlayersStore } from '../stores';
 import { useVideos } from '../context/VideoContext';
 
 const RecordingsScreen = () => {
   const { currentUser: user, userRole: role } = useAuth();
   const { matchVideos, onSaveVideo, onUnlockVideo, onPurchaseAiHighlights, onToggleFavourite, onVideoPlay } = useVideos();
   const { tournaments } = useTournamentsStore();
-  const { players } = usePlayers();
+  const { players } = usePlayersStore();
   const { onTopUp } = useAuth(); // onTopUp is in AuthContext
   const [activeFilter, setActiveFilter] = useState('recent');
   const insets = useSafeAreaInsets();

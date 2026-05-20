@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect, memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTournamentsStore } from '../../stores';
-import { usePlayers } from '../../context/PlayerContext';
+import { usePlayersStore } from '../../stores';
 import { useSync } from '../../context/SyncContext';
 import { getSafeAvatar } from '../../utils/imageUtils';
 
@@ -42,7 +42,7 @@ const PaymentTimer = ({ playerId, timestamps }) => {
 
 const AdminPaymentsPanel = memo(({ search }) => {
   const { tournaments, onRemovePendingPlayer, onUpdateTournament } = useTournamentsStore();
-  const { players } = usePlayers();
+  const { players } = usePlayersStore();
   const { syncAndSaveData } = useSync();
 
   const pendingPayments = useMemo(() => {

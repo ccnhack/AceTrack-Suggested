@@ -71,7 +71,7 @@ const isTimeInPast = (date, timeSlot, serverOffset = 0) => {
 };
 
 import { useAuth } from '../context/AuthContext';
-import { usePlayers } from '../context/PlayerContext';
+import { usePlayersStore } from '../stores';
 import { useSync } from '../context/SyncContext';
 import { useMatchmaking } from '../context/MatchmakingContext';
 import { useTournamentsStore } from '../stores';
@@ -80,7 +80,7 @@ import MatchService from '../services/MatchService';
 export default function MatchmakingScreen({ route }) {
   const { currentUser: user } = useAuth();
   const { matchmaking, onUpdateMatchmaking } = useMatchmaking();
-  const { players, sendUserNotification } = usePlayers();
+  const { players, sendUserNotification } = usePlayersStore();
   const { loadData: onManualSync, serverClockOffset } = useSync();
   const { tournaments } = useTournamentsStore();
   

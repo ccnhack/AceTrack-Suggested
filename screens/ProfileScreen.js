@@ -40,7 +40,7 @@ const calculateAcademyTier = (uid, tournaments = []) => {
 
 import { useAuth } from '../context/AuthContext';
 import { useTournamentsStore } from '../stores';
-import { usePlayers } from '../context/PlayerContext';
+import { usePlayersStore } from '../stores';
 import { useSupport } from '../context/SupportContext';
 import { useSync } from '../context/SyncContext';
 import { useAdmin } from '../context/AdminContext';
@@ -51,7 +51,7 @@ const ProfileScreen = ({ navigation }) => {
     currentUser: user, onUpdateUser, onLogout, onVerifyAccount, onTopUp, onMarkNotificationsRead 
   } = useAuth();
   const { tournaments } = useTournamentsStore();
-  const { players } = usePlayers();
+  const { players } = usePlayersStore();
   const { 
     supportTickets, onSaveTicket, onUpdateTicketStatus, onReplyTicket, onRetryMessage, onMarkSeen 
   } = useSupport();

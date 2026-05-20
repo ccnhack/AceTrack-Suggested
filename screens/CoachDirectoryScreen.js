@@ -12,11 +12,11 @@ import { colors, shadows, typography, borderRadius, spacing } from '../theme/des
 import { Calendar } from 'react-native-calendars';
 
 import { useAuth } from '../context/AuthContext';
-import { usePlayers } from '../context/PlayerContext';
+import { usePlayersStore } from '../stores';
 
 export default function CoachDirectoryScreen({ navigation }) {
   const { currentUser: user, userRole: role, onUpdateUser } = useAuth();
-  const { players, sendUserNotification } = usePlayers();
+  const { players, sendUserNotification } = usePlayersStore();
   const [search, setSearch] = useState('');
   const [selectedCoach, setSelectedCoach] = useState(null);
   const [bookingModalVisible, setBookingModalVisible] = useState(false);

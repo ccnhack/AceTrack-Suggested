@@ -6,7 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { usePlayers } from '../../context/PlayerContext';
+import { usePlayersStore } from '../../stores';
 import { useSync } from '../../context/SyncContext';
 import { useAuth } from '../../context/AuthContext';
 import SafeAvatar from '../SafeAvatar';
@@ -15,7 +15,7 @@ import storage from '../../utils/storage';
 import logger from '../../utils/logger';
 
 const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => {
-  const { players } = usePlayers();
+  const { players } = usePlayersStore();
   const { socketRef, isUsingCloud, isCloudOnline, onToggleCloud, activeApiUrl, metrics, refreshMetrics, loadData } = useSync();
   const { currentUser } = useAuth();
   

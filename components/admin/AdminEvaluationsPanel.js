@@ -2,14 +2,14 @@ import React, { useMemo, useState, memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useEvaluationsStore } from '../../stores';
-import { usePlayers } from '../../context/PlayerContext';
+import { usePlayersStore } from '../../stores';
 import { useTournamentsStore } from '../../stores';
 import { getSafeAvatar } from '../../utils/imageUtils';
 import { shadows, colors } from '../../theme/designSystem';
 
 const AdminEvaluationsPanel = memo(({ search }) => {
   const { evaluations } = useEvaluationsStore();
-  const { players } = usePlayers();
+  const { players } = usePlayersStore();
   const { tournaments } = useTournamentsStore();
 
   const filteredEvaluations = useMemo(() => {

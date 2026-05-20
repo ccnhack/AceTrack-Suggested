@@ -11,7 +11,7 @@ import { generateAIResponse } from '../services/aiService';
 import config from '../config';
 import { isTournamentPast, getVisibleTournaments, parseTournamentDate } from '../utils/tournamentUtils';
 import { useTournamentsStore } from '../stores';
-import { usePlayers } from '../context/PlayerContext';
+import { usePlayersStore } from '../stores';
 import { useEvaluationsStore } from '../stores';
 import { useSupport } from '../context/SupportContext';
 
@@ -129,7 +129,7 @@ const ChatBot = ({
   user, userRole, userId, userSports
 }) => {
   const { tournaments } = useTournamentsStore();
-  const { players } = usePlayers();
+  const { players } = usePlayersStore();
   const { evaluations } = useEvaluationsStore();
   const { chatbotMessages, onSendChatMessage, onSaveTicket } = useSupport();
 

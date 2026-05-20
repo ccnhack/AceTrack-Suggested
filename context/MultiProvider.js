@@ -2,7 +2,7 @@ import React from 'react';
 import { AppProvider } from './AppContext';
 import { AuthProvider } from './AuthContext';
 import { SyncProvider } from './SyncContext';
-import { PlayerProvider } from './PlayerContext';
+
 
 import { VideoProvider } from './VideoContext';
 import { SupportProvider } from './SupportContext';
@@ -20,7 +20,6 @@ export const MultiProvider = ({ children }) => {
     <AppProvider initialVersion={APP_VERSION}>
       <SyncProvider>
         <AuthProvider>
-          <PlayerProvider>
               <VideoProvider>
                 <SupportProvider>
                   <AdminProvider>
@@ -30,7 +29,6 @@ export const MultiProvider = ({ children }) => {
                   </AdminProvider>
                 </SupportProvider>
               </VideoProvider>
-          </PlayerProvider>
         </AuthProvider>
       </SyncProvider>
     </AppProvider>

@@ -5,7 +5,6 @@ import storage from '../utils/storage';
 import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 import { useSync } from './SyncContext';
 import { useAuth } from './AuthContext';
-import { usePlayers } from './PlayerContext';
 import { usePlayersStore } from '../stores';
 
 const VideoContext = createContext(null);
@@ -19,7 +18,7 @@ export const VideoProvider = ({ children }) => {
   
   const { syncAndSaveData } = useSync();
   const { currentUser, setCurrentUser, currentUserRef } = useAuth();
-  const { players, setPlayers } = usePlayers();
+  const { players, setPlayers } = usePlayersStore();
 
   useEffect(() => {
     matchVideosRef.current = matchVideos;
