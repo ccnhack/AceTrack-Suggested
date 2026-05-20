@@ -75,13 +75,13 @@ router.post('/otp/verify', otpLimiter, apiKeyGuard, (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 
 // 1. Generate Invite Link (Admin Only)
-router.post('/support/invite', apiKeyGuard, asyncHandler(async (req, res) => {
+router.post('/support/invite', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
   const { email, firstName, lastName } = req.body;
   if (!email) return res.status(400).json({ error: 'Email required' });
   if (!firstName || !lastName) return res.status(400).json({ error: 'First name and last name are required' });
   
-  // In production, enforce 'admin' role header, simulating strict RBAC
-  if (req.headers['x-user-id'] !== 'admin') {
+  // 🛡️ [RBAC HARDENING] (v2.6.475): Use JWT-verified role instead of spoofable header
+  if (req.userRole !== 'admin') {
     return res.status(403).json({ error: 'System Administrator privileges required' });
   }
 
@@ -157,11 +157,12 @@ router.get('/support/invites', apiKeyGuard, authGuard, asyncHandler(async (req, 
 }));
 
 // 2a. Retire/Expire Invite (Manual Action)
-router.post('/support/invite/expire', apiKeyGuard, asyncHandler(async (req, res) => {
+router.post('/support/invite/expire', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
   const { token } = req.body;
   if (!token) return res.status(400).json({ error: 'Token required' });
 
-  if (req.headers['x-user-id'] !== 'admin') {
+  // 🛡️ [RBAC HARDENING] (v2.6.475): Use JWT-verified role instead of spoofable header
+  if (req.userRole !== 'admin') {
     return res.status(403).json({ error: 'System Administrator privileges required' });
   }
 
@@ -187,11 +188,12 @@ router.post('/support/invite/expire', apiKeyGuard, asyncHandler(async (req, res)
 }));
 
 // 2b. Resend Onboarding Email (Rate Limited: 3 per invite, 1min cooldown, 4hr lockout)
-router.post('/support/invite/resend', apiKeyGuard, asyncHandler(async (req, res) => {
+router.post('/support/invite/resend', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
   const { token } = req.body;
   if (!token) return res.status(400).json({ error: 'Token required' });
 
-  if (req.headers['x-user-id'] !== 'admin') {
+  // 🛡️ [RBAC HARDENING] (v2.6.475): Use JWT-verified role instead of spoofable header
+  if (req.userRole !== 'admin') {
     return res.status(403).json({ error: 'System Administrator privileges required' });
   }
 
@@ -1059,10 +1061,11 @@ router.post('/support/manage-user', apiKeyGuard, authGuard, async (req, res) => 
 });
 
 // 🔄 Transfer All Open Tickets from One Agent to Another
-router.post('/support/transfer-tickets', apiKeyGuard, async (req, res) => {
+router.post('/support/transfer-tickets', apiKeyGuard, authGuard, async (req, res) => {
   const { fromAgentId, toAgentId } = req.body;
   console.log(`[API] POST /support/transfer-tickets: from=${fromAgentId}, to=${toAgentId}`);
-  if (req.headers['x-user-id'] !== 'admin') return res.status(403).json({ error: 'System Administrator privileges required' });
+  // 🛡️ [RBAC HARDENING] (v2.6.475): Use JWT-verified role instead of spoofable header
+  if (req.userRole !== 'admin') return res.status(403).json({ error: 'System Administrator privileges required' });
   if (!fromAgentId || !toAgentId) return res.status(400).json({ error: 'Both fromAgentId and toAgentId are required' });
   if (fromAgentId === toAgentId) return res.status(400).json({ error: 'Source and target agent cannot be the same' });
 

@@ -9,11 +9,12 @@ import TournamentBracket from './TournamentBracket';
 import { formatDateIST } from '../utils/tournamentUtils';
 import { useSync } from '../context/SyncContext';
 import { getReliabilityVerdict } from '../utils/verdict';
+import { getCheckInStats, processCheckIn } from '../utils/checkIn';
 
 const { width } = Dimensions.get('window');
 
 const ParticipantsModal = ({ 
-  tournament, players, evaluations = [], onClose, onAddPlayer, onRemovePendingPlayer, user, onRequireVerification, onManageInterested
+  tournament, players, matches = [], evaluations = [], onClose, onAddPlayer, onRemovePendingPlayer, user, onRequireVerification, onManageInterested, onUpdateMatch
 }) => {
   const { serverClockOffset } = useSync();
   const [tab, setTab] = useState('roster');
@@ -21,6 +22,9 @@ const ParticipantsModal = ({
   const [newPlayerName, setNewPlayerName] = useState('');
   const [newPlayerPhone, setNewPlayerPhone] = useState('');
   const [expandedPlayerId, setExpandedPlayerId] = useState(null);
+  
+  // QR Simulation State
+  const [isQRScannerVisible, setIsQRScannerVisible] = useState(false);
 
   // 🕒 [RegEngine] Roster Timer Component (v2.6.103)
   const PendingTimer = ({ playerId, timestamps }) => {
@@ -79,6 +83,21 @@ const ParticipantsModal = ({
   
   const leaderboard = [...(tournament.registeredPlayerIds || [])].filter(id => !!id).sort((a, b) => (playerScores.get(b) || 0) - (playerScores.get(a) || 0));
 
+  const handleManualCheckIn = (pid) => {
+    const result = processCheckIn(tournament, pid);
+    if (result.success) {
+      // In a real app, this would dispatch via syncOrchestrator
+      // For now, we update the local object (caller will persist)
+      if (onAddPlayer) {
+          // hacky way to trigger an update without full store refactor
+          tournament.playerStatuses = result.tournament.playerStatuses;
+          setExpandedPlayerId(null); // re-render
+      }
+    }
+  };
+
+  const checkInStats = getCheckInStats(tournament);
+
   return (
     <Modal visible animationType="slide">
       <SafeAreaView style={styles.container}>
@@ -121,11 +140,166 @@ const ParticipantsModal = ({
           >
             <Text style={[styles.tabText, tab === 'bracket' && styles.tabTextActive]}>Bracket</Text>
           </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => setTab('checkin')} 
+            style={[styles.tab, tab === 'checkin' && styles.tabActive]}
+          >
+            <Text style={[styles.tabText, tab === 'checkin' && styles.tabTextActive]}>Check-In</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => setTab('courts')} 
+            style={[styles.tab, tab === 'courts' && styles.tabActive]}
+          >
+            <Text style={[styles.tabText, tab === 'courts' && styles.tabTextActive]}>Courts</Text>
+          </TouchableOpacity>
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {tab === 'bracket' ? (
+          {tab === 'courts' ? (
+            <View>
+               <View style={styles.sectionHeader}>
+                 <Text style={styles.sectionTitle}>Court Assignments</Text>
+               </View>
+               {(() => {
+                 const tMatches = matches.filter(m => m.tournamentId === tournament.id && m.status !== 'Completed');
+                 const numCourts = tournament.numCourts || 4;
+                 const courts = Array.from({ length: numCourts }, (_, i) => i + 1);
+
+                 if (tMatches.length === 0) {
+                    return <Text style={styles.emptyNote}>No active matches available for assignment</Text>;
+                 }
+
+                 return courts.map(courtNum => {
+                   const matchOnCourt = tMatches.find(m => m.courtNumber === courtNum && m.status === 'In Progress');
+                   
+                   return (
+                     <View key={`court_${courtNum}`} style={styles.playerCard}>
+                        <View style={styles.playerRow}>
+                           <View style={[styles.avatar, styles.emptyAvatar, { backgroundColor: matchOnCourt ? '#DCFCE7' : '#F1F5F9' }]}>
+                              <Text style={{ fontSize: 14, fontWeight: '900', color: matchOnCourt ? '#16A34A' : '#94A3B8' }}>{courtNum}</Text>
+                           </View>
+                           <View style={styles.flex}>
+                              <Text style={styles.playerName}>Court {courtNum}</Text>
+                              <Text style={[styles.roleTag, { color: matchOnCourt ? '#16A34A' : '#D97706' }]}>
+                                {matchOnCourt ? 'In Use' : 'Available'}
+                              </Text>
+                           </View>
+                        </View>
+                        {matchOnCourt ? (
+                          <View style={{ marginTop: 12, padding: 12, backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                            <Text style={styles.teamName}>
+                              {players.find(p => p.id === matchOnCourt.player1Id)?.name || 'TBD'} vs {players.find(p => p.id === matchOnCourt.player2Id)?.name || 'TBD'}
+                            </Text>
+                            <TouchableOpacity 
+                              style={[styles.manualCheckInBtn, { marginTop: 8, backgroundColor: '#FEE2E2', borderColor: '#FECACA' }]}
+                              onPress={() => onUpdateMatch({ ...matchOnCourt, status: 'Scheduled', courtNumber: null })}
+                            >
+                              <Text style={[styles.manualCheckInText, { color: '#DC2626' }]}>Clear Court</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <View style={{ marginTop: 12, gap: 8 }}>
+                            {tMatches.filter(m => !m.courtNumber).map(m => (
+                              <TouchableOpacity 
+                                key={m.id}
+                                style={[styles.manualCheckInBtn, { flexDirection: 'row', justifyContent: 'space-between' }]}
+                                onPress={() => onUpdateMatch({ ...m, status: 'In Progress', courtNumber: courtNum })}
+                              >
+                                <Text style={styles.manualCheckInText}>
+                                  Assign: {players.find(p => p.id === m.player1Id)?.name || 'TBD'} vs {players.find(p => p.id === m.player2Id)?.name || 'TBD'}
+                                </Text>
+                                <Ionicons name="arrow-forward" size={14} color="#2563EB" />
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        )}
+                     </View>
+                   );
+                 });
+               })()}
+            </View>
+          ) : tab === 'bracket' ? (
             <TournamentBracket tournament={tournament} players={players} />
+          ) : tab === 'checkin' ? (
+            <View>
+              <View style={styles.checkInStatsContainer}>
+                <View style={styles.statBox}>
+                  <Text style={styles.statNum}>{checkInStats.total}</Text>
+                  <Text style={styles.statLabel}>Total</Text>
+                </View>
+                <View style={[styles.statBox, { backgroundColor: '#DCFCE7', borderColor: '#BBF7D0' }]}>
+                  <Text style={[styles.statNum, { color: '#16A34A' }]}>{checkInStats.checkedIn}</Text>
+                  <Text style={[styles.statLabel, { color: '#15803D' }]}>Checked In</Text>
+                </View>
+                <View style={[styles.statBox, { backgroundColor: '#FEE2E2', borderColor: '#FECACA' }]}>
+                  <Text style={[styles.statNum, { color: '#DC2626' }]}>{checkInStats.pending}</Text>
+                  <Text style={[styles.statLabel, { color: '#B91C1C' }]}>Pending</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity 
+                style={styles.scanQRBtn} 
+                onPress={() => setIsQRScannerVisible(!isQRScannerVisible)}
+              >
+                <Ionicons name="qr-code-outline" size={20} color="#FFFFFF" />
+                <Text style={styles.scanQRText}>Launch QR Scanner</Text>
+              </TouchableOpacity>
+
+              {isQRScannerVisible && (
+                <View style={styles.scannerSimulation}>
+                  <Ionicons name="camera-outline" size={32} color="#94A3B8" style={{ alignSelf: 'center' }} />
+                  <Text style={styles.scannerSimTitle}>Camera View (Simulation)</Text>
+                  <Text style={styles.scannerSimDesc}>Tap a player below to simulate scanning their QR code.</Text>
+                </View>
+              )}
+
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Registration Desk</Text>
+              </View>
+
+              {(() => {
+                const registered = tournament.registeredPlayerIds || [];
+                if (registered.length === 0) {
+                  return (
+                    <Text style={styles.emptyNote}>No players registered yet</Text>
+                  );
+                }
+
+                return registered.map(pid => {
+                  const p = (players || []).find(player => player && String(player.id).toLowerCase() === String(pid).toLowerCase());
+                  if (!p) return null;
+                  
+                  const status = tournament.playerStatuses?.[pid];
+                  const isCheckedIn = status === 'Checked-In';
+
+                  return (
+                    <View key={pid} style={[styles.playerCard, isCheckedIn && { opacity: 0.7 }]}>
+                      <View style={styles.playerRow}>
+                        <SafeAvatar uri={p.avatar} name={p.name} size={40} borderRadius={20} style={styles.avatar} />
+                        <View style={styles.flex}>
+                          <Text style={styles.playerName}>{p.name}</Text>
+                          <Text style={[styles.roleTag, { color: isCheckedIn ? '#16A34A' : '#D97706' }]}>
+                            {isCheckedIn ? 'Checked In' : 'Awaiting Arrival'}
+                          </Text>
+                        </View>
+                        {!isCheckedIn ? (
+                          <TouchableOpacity 
+                            style={styles.manualCheckInBtn}
+                            onPress={() => handleManualCheckIn(pid)}
+                          >
+                            <Text style={styles.manualCheckInText}>
+                              {isQRScannerVisible ? 'Simulate QR' : 'Check In'}
+                            </Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <Ionicons name="checkmark-circle" size={24} color="#16A34A" />
+                        )}
+                      </View>
+                    </View>
+                  );
+                });
+              })()}
+            </View>
           ) : tab === 'roster' ? (
             <View>
               <View style={styles.sectionHeader}>
@@ -818,6 +992,85 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '900',
     color: '#EA580C',
+  },
+  checkInStatsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+    marginTop: 10,
+  },
+  statBox: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  statNum: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  statLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    marginTop: 4,
+  },
+  scanQRBtn: {
+    backgroundColor: '#0F172A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 16,
+    gap: 8,
+    marginBottom: 20,
+  },
+  scanQRText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  scannerSimulation: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: '#CBD5E1',
+    borderStyle: 'dashed',
+  },
+  scannerSimTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#334155',
+    marginTop: 12,
+  },
+  scannerSimDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  manualCheckInBtn: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  manualCheckInText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#2563EB',
+    textTransform: 'uppercase',
   },
 });
 

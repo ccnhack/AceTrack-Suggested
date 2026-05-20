@@ -736,7 +736,12 @@ export const AcademyScreen = () => {
           <ParticipantsModal 
             tournament={viewingPlayersFor} 
             players={players} 
+            matches={matches}
             evaluations={evaluations}
+            onUpdateMatch={(updatedMatch) => {
+               const newMatches = matches.map(m => m.id === updatedMatch.id ? updatedMatch : m);
+               onBatchUpdate({ matches: newMatches });
+            }}
             onClose={() => setViewingTournamentId(null)} 
             onAddPlayer={(name, phone) => {
               if (!viewingPlayersFor) return;

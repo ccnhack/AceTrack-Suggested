@@ -12,7 +12,9 @@ const SPORT_CRITERIA = {
   'Table Tennis': ['Reaction Time', 'Spin Control', 'Backhand Drive', 'Service Variety']
 };
 
-import { useEvaluationsStore } from '../stores';
+import { useEvaluationsStore, useMatchmaking } from '../stores';
+import MatchService from '../services/MatchService';
+import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 
 export default function LiveScoringScreen({ route, navigation }) {
   const { onSaveEvaluation } = useEvaluationsStore();
@@ -31,6 +33,7 @@ export default function LiveScoringScreen({ route, navigation }) {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [ratings, setRatings] = useState({});
   const [notes, setNotes] = useState('');
+  const [completedSets, setCompletedSets] = useState([]);
 
   const isDoubles = match.format?.toLowerCase().includes('doubles');
 
@@ -169,10 +172,30 @@ export default function LiveScoringScreen({ route, navigation }) {
         <TouchableOpacity style={styles.finishBtn} onPress={() => {
            Alert.alert("Finish Set", "Advance to the next set?", [
              { text: "Cancel" },
-             { text: "Finish", onPress: () => { setCurrentSet(s => s + 1); setScore1(0); setScore2(0); }}
+             { text: "Finish Set", onPress: () => { 
+                setCompletedSets([...completedSets, { score1, score2 }]);
+                setCurrentSet(s => s + 1); setScore1(0); setScore2(0); 
+             }}
            ]);
         }}>
-           <Text style={styles.finishBtnText}>FINISH SET</Text>
+           <Text style={styles.finishBtnText}>NEXT SET</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.finishBtn, { backgroundColor: '#10B981', flex: 1.2 }]} onPress={() => {
+           Alert.alert("Finish Match", "Finalize the match with current scores?", [
+             { text: "Cancel" },
+             { text: "Finish Match", onPress: () => { 
+                const finalSets = [...completedSets, { score1, score2 }];
+                if (match && match.id) {
+                    const response = MatchService.finalizeMatch(match, finalSets, match.sport);
+                    syncOrchestrator.handleMatchUpdate(response);
+                }
+                Alert.alert("Match Saved", "The final score has been recorded.", [
+                  { text: "OK", onPress: () => navigation.canGoBack() ? navigation.goBack() : null }
+                ]);
+             }}
+           ]);
+        }}>
+           <Text style={styles.finishBtnText}>FINISH MATCH</Text>
         </TouchableOpacity>
       </View>
 

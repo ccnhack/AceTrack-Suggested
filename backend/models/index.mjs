@@ -155,6 +155,7 @@ const TournamentSchema = new mongoose.Schema({
   data: { type: TournamentDataSchema, required: true },
   lastUpdated: { type: Date, default: Date.now, index: true }
 }, { minimize: false, strict: false });
+TournamentSchema.index({ "data.status": 1 }); // 🛡️ [SCALABILITY] Query optimization
 export const Tournament = mongoose.model('Tournament', TournamentSchema);
 
 // MATCH
@@ -193,6 +194,8 @@ const MatchVideoSchema = new mongoose.Schema({
   data: { type: MatchVideoDataSchema, required: true },
   lastUpdated: { type: Date, default: Date.now, index: true }
 }, { minimize: false, strict: false });
+MatchVideoSchema.index({ "data.matchId": 1 }); // 🛡️ [SCALABILITY] Query optimization
+MatchVideoSchema.index({ "data.playerId": 1 });
 export const MatchVideo = mongoose.model('MatchVideo', MatchVideoSchema);
 
 // SUPPORT TICKET
@@ -242,6 +245,9 @@ const MatchmakingSchema = new mongoose.Schema({
   data: { type: MatchmakingDataSchema, required: true },
   lastUpdated: { type: Date, default: Date.now, index: true }
 }, { minimize: false, strict: false });
+MatchmakingSchema.index({ "data.creatorId": 1 }); // 🛡️ [SCALABILITY] Query optimization
+MatchmakingSchema.index({ "data.opponentId": 1 });
+MatchmakingSchema.index({ "data.status": 1 });
 export const Matchmaking = mongoose.model('Matchmaking', MatchmakingSchema);
 
 // CHATBOT THREAD

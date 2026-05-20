@@ -46,34 +46,70 @@ const TournamentBracket = ({ tournament, players, onTeamClick }) => {
     teams.push({ id: `bye_${teams.length}`, name: 'BYE', playerIds: [] });
   }
 
-  const matches = [];
+  const initialMatches = [];
   for (let i = 0; i < teams.length; i += 2) {
-    matches.push([teams[i], teams[i + 1]]);
+    initialMatches.push([teams[i], teams[i + 1]]);
+  }
+
+  const rounds = [];
+  let currentRoundMatches = initialMatches;
+  let roundNum = 1;
+
+  while (currentRoundMatches.length > 0) {
+    let roundTitle = `Round ${roundNum}`;
+    if (currentRoundMatches.length === 1) roundTitle = 'Final';
+    else if (currentRoundMatches.length === 2) roundTitle = 'Semifinals';
+    else if (currentRoundMatches.length === 4) roundTitle = 'Quarterfinals';
+
+    rounds.push({ title: roundTitle, matches: currentRoundMatches });
+
+    if (currentRoundMatches.length === 1) break;
+
+    const nextRoundMatches = [];
+    for (let i = 0; i < currentRoundMatches.length; i += 2) {
+      nextRoundMatches.push([
+        { id: `tbd_next_${roundNum}_${i}`, name: 'TBD', playerIds: [] },
+        { id: `tbd_next_${roundNum}_${i+1}`, name: 'TBD', playerIds: [] }
+      ]);
+    }
+    currentRoundMatches = nextRoundMatches;
+    roundNum++;
   }
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.container}>
-      <View style={styles.column}>
-        <Text style={styles.roundTitle}>Round 1</Text>
-        {matches.map((match, idx) => (
-            <View key={idx} style={styles.matchCard}>
-                <TouchableOpacity 
-                  disabled={!onTeamClick || match[0].name === 'BYE'} 
-                  onPress={() => onTeamClick && onTeamClick(match[0])}
-                >
-                  <Text style={[styles.teamName, match[0].name === 'BYE' && { color: '#CBD5E1' }]} numberOfLines={1}>{match[0].name}</Text>
-                </TouchableOpacity>
-                <View style={styles.divider} />
-                <TouchableOpacity 
-                  disabled={!onTeamClick || match[1].name === 'BYE'} 
-                  onPress={() => onTeamClick && onTeamClick(match[1])}
-                >
-                  <Text style={[styles.teamName, match[1].name === 'BYE' && { color: '#CBD5E1' }]} numberOfLines={1}>{match[1].name}</Text>
-                </TouchableOpacity>
-                <View style={styles.connector} />
-            </View>
-        ))}
-      </View>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.container} contentContainerStyle={{ paddingRight: 32 }}>
+      {rounds.map((round, rIdx) => (
+        <View key={rIdx} style={[styles.column, { marginRight: rIdx === rounds.length - 1 ? 0 : 32 }]}>
+          <Text style={styles.roundTitle}>{round.title}</Text>
+          <View style={{ flex: 1, justifyContent: 'space-around' }}>
+            {round.matches.map((match, mIdx) => (
+              <View key={mIdx} style={[styles.matchCard, { marginVertical: Math.pow(2, rIdx) * 8 }]}>
+                  <TouchableOpacity 
+                    disabled={!onTeamClick || match[0].name === 'BYE' || match[0].name === 'TBD'} 
+                    onPress={() => onTeamClick && onTeamClick(match[0])}
+                  >
+                    <Text style={[styles.teamName, (match[0].name === 'BYE' || match[0].name === 'TBD') && { color: '#CBD5E1' }]} numberOfLines={1}>{match[0].name}</Text>
+                  </TouchableOpacity>
+                  <View style={styles.divider} />
+                  <TouchableOpacity 
+                    disabled={!onTeamClick || match[1].name === 'BYE' || match[1].name === 'TBD'} 
+                    onPress={() => onTeamClick && onTeamClick(match[1])}
+                  >
+                    <Text style={[styles.teamName, (match[1].name === 'BYE' || match[1].name === 'TBD') && { color: '#CBD5E1' }]} numberOfLines={1}>{match[1].name}</Text>
+                  </TouchableOpacity>
+                  
+                  {/* Draw bracket connectors */}
+                  {rIdx < rounds.length - 1 && (
+                    <>
+                      <View style={styles.connectorLineRight} />
+                      <View style={[styles.connectorLineVertical, mIdx % 2 === 0 ? styles.connectorLineDown : styles.connectorLineUp]} />
+                    </>
+                  )}
+              </View>
+            ))}
+          </View>
+        </View>
+      ))}
     </ScrollView>
   );
 };
@@ -115,13 +151,27 @@ const styles = StyleSheet.create({
     width: '100%',
     marginVertical: 4,
   },
-  connector: {
+  connectorLineRight: {
     position: 'absolute',
     top: '50%',
     right: -16,
     width: 16,
     height: 1,
     backgroundColor: '#CBD5E1',
+  },
+  connectorLineVertical: {
+    position: 'absolute',
+    right: -16,
+    width: 1,
+    backgroundColor: '#CBD5E1',
+  },
+  connectorLineDown: {
+    top: '50%',
+    height: '100%',
+  },
+  connectorLineUp: {
+    bottom: '50%',
+    height: '100%',
   },
   empty: {
     paddingVertical: 32,

@@ -1655,6 +1655,7 @@ export default function MatchmakingScreen({ route }) {
               <Text style={styles.sectionLabel}>Game Scores</Text>
               {reportSets.map((set, idx) => (
                 <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15 }}>
+                  <Text style={{ position: 'absolute', left: 0, top: 20, fontSize: 10, fontWeight: '700', color: '#94A3B8', transform: [{rotate: '-90deg'}, {translateX: -15}, {translateY: -15}] }}>SET {idx + 1}</Text>
                   <View style={{ flex: 1, alignItems: 'center' }}>
                     <Text style={styles.detailLabel}>You</Text>
                     <TextInput 
@@ -1684,6 +1685,25 @@ export default function MatchmakingScreen({ route }) {
                   </View>
                 </View>
               ))}
+              
+              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 10, marginTop: 5, marginBottom: 15 }}>
+                {reportSets.length < 5 && (
+                  <TouchableOpacity 
+                    style={[styles.smallBtn, { backgroundColor: '#EEF2FF' }]}
+                    onPress={() => setReportSets([...reportSets, { score1: 0, score2: 0 }])}
+                  >
+                    <Text style={[styles.smallBtnText, { color: '#6366F1' }]}>+ Add Set</Text>
+                  </TouchableOpacity>
+                )}
+                {reportSets.length > 1 && (
+                  <TouchableOpacity 
+                    style={[styles.smallBtn, { backgroundColor: '#FEF2F2' }]}
+                    onPress={() => setReportSets(reportSets.slice(0, -1))}
+                  >
+                    <Text style={[styles.smallBtnText, { color: '#EF4444' }]}>- Remove Set</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
 
             <TouchableOpacity style={styles.confirmBtn} onPress={submitScoreReport}>

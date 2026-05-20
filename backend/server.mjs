@@ -102,7 +102,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.475'; // Critical for Update prompts 
+const APP_VERSION = '2.6.505'; // Critical for Update prompts 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -1050,7 +1050,7 @@ const authRoutes = createAuthRoutes({
   sendPasswordResetEmail
 });
 
-// 🛡️ API DEPRECATION LAYER (v2.6.475): Rewrite all legacy /api calls to /api/v1
+// 🛡️ API DEPRECATION LAYER (v2.6.505): Rewrite all legacy /api calls to /api/v1
 app.use((req, res, next) => {
   if (req.url.startsWith('/api/') && !req.url.startsWith('/api/v1/')) {
     req.url = req.url.replace('/api/', '/api/v1/');

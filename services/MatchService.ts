@@ -170,6 +170,34 @@ class MatchService {
   }
 
   /**
+   * Assigns a court to a match and optionally sets it to In Progress (Parallel Scheduling).
+   */
+  static assignCourt(match, courtNumber, setInProgress = false, userId = 'system', userName = 'System') {
+    const updatedMatch = {
+      ...match,
+      courtNumber,
+      lastUpdatedBy: userId,
+      lastUpdatedByName: userName,
+      lastUpdated: new Date().toISOString()
+    };
+
+    if (setInProgress) {
+       updatedMatch.status = 'In Progress';
+       updatedMatch.startTime = new Date().toISOString();
+    }
+
+    return {
+      success: true,
+      code: 'COURT_ASSIGNED',
+      type: 'success',
+      data: {
+        updatedMatch,
+        priority: 'HIGH'
+      }
+    };
+  }
+
+  /**
    * Confirms a booking (Special for Coaches/Academies).
    */
   static confirmBooking(match, userId, userName) {
