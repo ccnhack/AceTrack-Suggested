@@ -102,7 +102,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.474'; // Critical for Update prompts 
+const APP_VERSION = '2.6.475'; // Critical for Update prompts 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -964,36 +964,56 @@ const upload = multer({
 });
 
 // 🛡️ SYNC MUTEX: Prevent race conditions during concurrent /save requests
+// 🏗️ AWS READINESS UPDATE: Added queue TTL to prevent deadlocks and increased capacity.
+// For multi-instance deployments, this should be replaced with a Redis-based distributed lock.
 class AsyncMutex {
-  constructor(maxQueueSize = 100) {
+  constructor(maxQueueSize = 1000, timeoutMs = 15000) {
     this.queue = [];
     this.isLocked = false;
     this.maxQueueSize = maxQueueSize;
+    this.timeoutMs = timeoutMs;
   }
   acquire() {
     return new Promise((resolve, reject) => {
-      // 🛡️ [QUEUE BOUNDS] (v2.6.434): Drop requests if queue is saturated
+      // 🛡️ [QUEUE BOUNDS] (v2.6.434): Drop requests if queue is entirely saturated
       if (this.queue.length >= this.maxQueueSize) {
         return reject(new Error('MUTEX_QUEUE_FULL'));
       }
+      
+      let isTimeout = false;
+      const timeoutId = setTimeout(() => {
+        isTimeout = true;
+        reject(new Error('MUTEX_TIMEOUT'));
+        // We do not remove it from the array here to avoid O(N) shift, 
+        // it will be skipped during release.
+      }, this.timeoutMs);
+
       const release = () => {
-        if (this.queue.length > 0) {
-          const next = this.queue.shift();
-          next(release);
-        } else {
+        let nextResolved = false;
+        while (this.queue.length > 0 && !nextResolved) {
+          const nextItem = this.queue.shift();
+          if (!nextItem.isTimeout) {
+            clearTimeout(nextItem.timeoutId);
+            nextItem.resolve(release);
+            nextResolved = true;
+          }
+        }
+        if (!nextResolved) {
           this.isLocked = false;
         }
       };
+
       if (this.isLocked) {
-        this.queue.push(resolve);
+        this.queue.push({ resolve, timeoutId, get isTimeout() { return isTimeout; } });
       } else {
         this.isLocked = true;
+        clearTimeout(timeoutId);
         resolve(release);
       }
     });
   }
 }
-const syncMutex = new AsyncMutex(100);
+const syncMutex = new AsyncMutex(1000, 15000);
 
 // ═══════════════════════════════════════════════════════════════
 // 🌐 API v1 Routes (SE Fix: API versioning)

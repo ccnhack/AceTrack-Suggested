@@ -898,18 +898,26 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
     const nextVersion = currentVersion + 1;
 
     // 🛡️ [16MB BOMB DEFUSAL] (v2.6.316): Strip distinct collections before saving monolithic AppState
-    // ⚠️ [TECH DEBT] (v2.6.319): AppState is still updated on EVERY save, making it a single point of contention.
-    // Next phase: Move metadata (seenAdminActionIds, etc) to Player/Config and eliminate AppState completely.
+    // 🛡️ [SCALABILITY FIX] (v2.6.321): AppState bottleneck resolved via Atomic $inc and selective data writes.
     const appStateDataToSave = { ...newMasterData };
     const distinctKeys = ['players', 'tournaments', 'matches', 'matchVideos', 'supportTickets', 'evaluations', 'matchmaking', 'chatbotMessages'];
     distinctKeys.forEach(k => delete appStateDataToSave[k]);
 
     // 🛡️ [C-6 FIX] (v2.6.315): Avoid empty {} filter which can cause duplicate singletons
-    // If state._id exists, target it exactly. If not, create a new document with a generated ID.
     const updateFilter = state?._id ? { _id: state._id } : { _id: new mongoose.Types.ObjectId() };
+    
+    const hasDataChanges = changedKeys.some(k => !distinctKeys.includes(k));
+    const updateQuery = { 
+      $inc: { version: 1 }, 
+      $set: { lastUpdated: now } 
+    };
+    if (hasDataChanges) {
+      updateQuery.$set.data = appStateDataToSave;
+    }
+
     const updatedState = await AppState.findOneAndUpdate(
       updateFilter,
-      { $set: { data: appStateDataToSave, version: nextVersion, lastUpdated: now } },
+      updateQuery,
       { upsert: true, returnDocument: 'after' }
     );
 

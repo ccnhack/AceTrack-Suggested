@@ -123,11 +123,20 @@ export const AdminMFA = mongoose.model('AdminMFA', AdminMFASchema);
 // ═══════════════════════════════════════════════════════════════
 
 // PLAYER
+const PlayerDataSchema = new mongoose.Schema({
+  email: { type: String, index: true },
+  role: { type: String, index: true },
+  username: String,
+  password: { type: String, select: false },
+  devices: [mongoose.Schema.Types.Mixed],
+  seenAdminActionIds: [String],
+  visitedAdminSubTabs: [String],
+  avatarUrl: String
+}, { _id: false, strict: false });
+
 const PlayerSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, index: true },
-  // ⚠️ [TECH DEBT] (v2.6.319): Schema.Types.Mixed provides ZERO schema validation. 
-  // Any malformed data is silently accepted. Next phase: define strict subdocuments.
-  data: { type: mongoose.Schema.Types.Mixed, required: true },
+  data: { type: PlayerDataSchema, required: true },
   lastUpdated: { type: Date, default: Date.now, index: true }
 }, { minimize: false, strict: false });
 PlayerSchema.index({ "data.email": 1 });
@@ -135,17 +144,33 @@ PlayerSchema.index({ "data.role": 1 });
 export const Player = mongoose.model('Player', PlayerSchema);
 
 // TOURNAMENT
+const TournamentDataSchema = new mongoose.Schema({
+  title: String,
+  status: String,
+  registeredPlayerIds: [String]
+}, { _id: false, strict: false });
+
 const TournamentSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, index: true },
-  data: { type: mongoose.Schema.Types.Mixed, required: true },
+  data: { type: TournamentDataSchema, required: true },
   lastUpdated: { type: Date, default: Date.now, index: true }
 }, { minimize: false, strict: false });
 export const Tournament = mongoose.model('Tournament', TournamentSchema);
 
 // MATCH
+const MatchDataSchema = new mongoose.Schema({
+  player1Id: { type: String, index: true },
+  player2Id: { type: String, index: true },
+  challengerId: { type: String, index: true },
+  opponentId: { type: String, index: true },
+  tournamentId: { type: String, index: true },
+  status: String,
+  winnerId: String
+}, { _id: false, strict: false });
+
 const MatchSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, index: true },
-  data: { type: mongoose.Schema.Types.Mixed, required: true },
+  data: { type: MatchDataSchema, required: true },
   lastUpdated: { type: Date, default: Date.now, index: true }
 }, { minimize: false, strict: false });
 MatchSchema.index({ "data.player1Id": 1 });
@@ -156,17 +181,33 @@ MatchSchema.index({ "data.tournamentId": 1 });
 export const Match = mongoose.model('Match', MatchSchema);
 
 // MATCH VIDEO
+const MatchVideoDataSchema = new mongoose.Schema({
+  matchId: String,
+  playerId: String,
+  url: String,
+  status: String
+}, { _id: false, strict: false });
+
 const MatchVideoSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, index: true },
-  data: { type: mongoose.Schema.Types.Mixed, required: true },
+  data: { type: MatchVideoDataSchema, required: true },
   lastUpdated: { type: Date, default: Date.now, index: true }
 }, { minimize: false, strict: false });
 export const MatchVideo = mongoose.model('MatchVideo', MatchVideoSchema);
 
 // SUPPORT TICKET
+const SupportTicketDataSchema = new mongoose.Schema({
+  userId: { type: String, index: true },
+  assignedTo: { type: String, index: true },
+  status: { type: String, index: true },
+  subject: String,
+  category: String,
+  messages: [mongoose.Schema.Types.Mixed]
+}, { _id: false, strict: false });
+
 const SupportTicketSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, index: true },
-  data: { type: mongoose.Schema.Types.Mixed, required: true },
+  data: { type: SupportTicketDataSchema, required: true },
   lastUpdated: { type: Date, default: Date.now, index: true }
 }, { minimize: false, strict: false });
 SupportTicketSchema.index({ "data.userId": 1 });
@@ -175,26 +216,54 @@ SupportTicketSchema.index({ "data.status": 1 });
 export const SupportTicket = mongoose.model('SupportTicket', SupportTicketSchema);
 
 // EVALUATION
+const EvaluationDataSchema = new mongoose.Schema({
+  playerId: { type: String, index: true },
+  evaluatorId: String,
+  score: Number,
+  comments: String
+}, { _id: false, strict: false });
+
 const EvaluationSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, index: true },
-  data: { type: mongoose.Schema.Types.Mixed, required: true },
+  data: { type: EvaluationDataSchema, required: true },
   lastUpdated: { type: Date, default: Date.now, index: true }
 }, { minimize: false, strict: false });
 EvaluationSchema.index({ "data.playerId": 1 });
 export const Evaluation = mongoose.model('Evaluation', EvaluationSchema);
 
 // MATCHMAKING
+const MatchmakingDataSchema = new mongoose.Schema({
+  status: String,
+  queue: [mongoose.Schema.Types.Mixed]
+}, { _id: false, strict: false });
+
 const MatchmakingSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, index: true },
-  data: { type: mongoose.Schema.Types.Mixed, required: true },
+  data: { type: MatchmakingDataSchema, required: true },
   lastUpdated: { type: Date, default: Date.now, index: true }
 }, { minimize: false, strict: false });
 export const Matchmaking = mongoose.model('Matchmaking', MatchmakingSchema);
 
 // CHATBOT THREAD
+const ChatbotThreadDataSchema = new mongoose.Schema({
+  messages: [mongoose.Schema.Types.Mixed]
+}, { _id: false, strict: false });
+
 const ChatbotThreadSchema = new mongoose.Schema({
   userId: { type: String, required: true, unique: true, index: true },
-  data: { type: mongoose.Schema.Types.Mixed, required: true },
+  data: { type: ChatbotThreadDataSchema, required: true },
   lastUpdated: { type: Date, default: Date.now, index: true }
 }, { minimize: false, strict: false });
 export const ChatbotThread = mongoose.model('ChatbotThread', ChatbotThreadSchema);
+
+// PLAYER SESSION (Resolves 16MB document bloat)
+const PlayerSessionSchema = new mongoose.Schema({
+  userId: { type: String, required: true, index: true },
+  startTime: { type: Date, required: true },
+  endTime: { type: Date, required: true },
+  durationMs: { type: Number, required: true },
+  device: String,
+  userAgent: String,
+  createdAt: { type: Date, default: Date.now, expires: '90d' } // Auto-delete after 90 days
+});
+export const PlayerSession = mongoose.model('PlayerSession', PlayerSessionSchema);

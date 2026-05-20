@@ -176,31 +176,19 @@ io.on('connection', async (socket) => {
       const durationMins = Math.round(durationMs / 60000);
       console.log(`🕐 [SESSION] Support employee ${session.userId} disconnected after ${durationMins}m`);
       
-      // Only persist sessions longer than 1 minute to avoid noise from reconnects
       if (durationMs > 60000) {
         try {
-          // 🛡️ SCALABILITY FIX (v2.6.316): Persist session directly to Player collection
-          const playerDoc = await Player.findOne({ id: String(session.userId) });
-          if (playerDoc && playerDoc.data) {
-            playerDoc.data.sessionHistory = playerDoc.data.sessionHistory || [];
-            playerDoc.data.sessionHistory.push({
-              startTime: new Date(session.startTime).toISOString(),
-              endTime: new Date().toISOString(),
-              durationMs,
-              device: session.deviceName || 'Browser',
-              userAgent: session.userAgent || 'Unknown'
-            });
-            // ⚠️ [TECH DEBT] (v2.6.319): Embedding sessionHistory in Player data inflates the document.
-            // Next phase: Move this to a separate Collection or time-series DB.
-            // Cap at 200 entries to prevent unbounded growth
-            if (playerDoc.data.sessionHistory.length > 200) {
-              playerDoc.data.sessionHistory = playerDoc.data.sessionHistory.slice(-200);
-            }
-            playerDoc.lastUpdated = new Date();
-            playerDoc.markModified('data');
-            await playerDoc.save();
-            console.log(`🕐 [SESSION] Persisted ${durationMins}m session for ${session.userId}`);
-          }
+          // 🛡️ SCALABILITY FIX (v2.6.320): Write session history to distinct collection to prevent 16MB document limit
+          const { PlayerSession } = await import('../models/index.mjs');
+          await PlayerSession.create({
+            userId: session.userId,
+            startTime: new Date(session.startTime),
+            endTime: new Date(),
+            durationMs,
+            device: session.deviceName || 'Browser',
+            userAgent: session.userAgent || 'Unknown'
+          });
+          console.log(`🕐 [SESSION] Persisted ${durationMins}m session for ${session.userId} in PlayerSession collection`);
         } catch (e) {
           console.error('🕐 [SESSION] Failed to persist session:', e.message);
         }

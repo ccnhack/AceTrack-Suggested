@@ -10,22 +10,20 @@ export default function createHrRoutes() {
     router.use(authGuard);
 
     // Leaves
+    const buildHRQuery = async (req) => {
+        if (req.userRole === 'admin') return {};
+        if (req.user.supportLevel === 'Manager') {
+            const { Player } = await import('../models/index.mjs');
+            const reports = await Player.find({ "data.managerId": req.user.id }, 'id');
+            return { userId: { $in: [req.user.id, ...reports.map(r => r.id)] } };
+        }
+        return { userId: req.user.id };
+    };
+
     // Leaves
     router.get('/leaves', async (req, res) => {
         try {
-            let query = { userId: req.user.id };
-            
-            if (req.userRole === 'admin') {
-                query = {}; // Admins see all leaves
-            } else if (req.user.supportLevel === 'Manager') {
-                // Fetch users who report to this manager
-                const { Player } = await import('../models/index.mjs');
-                const reports = await Player.find({ "data.managerId": req.user.id }, 'id');
-                const reportIds = reports.map(r => r.id);
-                
-                // Manager sees their own leaves + their reports' leaves
-                query = { userId: { $in: [req.user.id, ...reportIds] } };
-            }
+            const query = await buildHRQuery(req);
 
             const leaves = await LeaveRequest.find(query).sort({ appliedAt: -1 }).lean();
 
@@ -91,18 +89,25 @@ export default function createHrRoutes() {
             const { id } = req.params;
             const { managerComment } = req.body;
 
-            // TODO: Ensure req.user is authorized (Admin or their Manager)
-            if (req.userRole !== 'admin' && req.user.supportLevel !== 'Manager') {
-                return res.status(403).json({ success: false, message: 'Unauthorized' });
+            const leave = await LeaveRequest.findById(id);
+            if (!leave) return res.status(404).json({ success: false, message: 'Leave not found' });
+
+            // 🛡️ [RBAC GUARD] Ensure req.user is authorized (Admin or their specific Manager)
+            if (req.userRole !== 'admin') {
+                if (req.user.supportLevel !== 'Manager') {
+                    return res.status(403).json({ success: false, message: 'Unauthorized' });
+                }
+                const { Player } = await import('../models/index.mjs');
+                const employeeDoc = await Player.findOne({ id: leave.userId }, 'data.managerId');
+                if (!employeeDoc || employeeDoc.data?.managerId !== req.user.id) {
+                    return res.status(403).json({ success: false, message: 'Unauthorized: You are not the manager of this employee' });
+                }
             }
 
-            const leave = await LeaveRequest.findByIdAndUpdate(
-                id,
-                { status, managerComment, updatedAt: new Date() },
-                { new: true }
-            );
-
-            if (!leave) return res.status(404).json({ success: false, message: 'Leave not found' });
+            leave.status = status;
+            if (managerComment) leave.managerComment = managerComment;
+            leave.updatedAt = new Date();
+            await leave.save();
 
             // Notify the employee
             const { Player } = await import('../models/index.mjs');
@@ -141,7 +146,7 @@ export default function createHrRoutes() {
     // Reviews
     router.get('/reviews', async (req, res) => {
         try {
-            const query = req.userRole === 'admin' ? {} : { userId: req.user.id };
+            const query = await buildHRQuery(req);
             const reviews = await PerformanceReview.find(query).sort({ createdAt: -1 });
             res.json({ success: true, reviews });
         } catch (error) {
@@ -153,7 +158,7 @@ export default function createHrRoutes() {
     // Attendance
     router.get('/attendance', async (req, res) => {
         try {
-            const query = req.userRole === 'admin' ? {} : { userId: req.user.id };
+            const query = await buildHRQuery(req);
             const records = await Attendance.find(query).sort({ date: -1 }).limit(30);
             res.json({ success: true, attendance: records });
         } catch (error) {
@@ -195,7 +200,7 @@ export default function createHrRoutes() {
     // Payslips
     router.get('/payslips', async (req, res) => {
         try {
-            const query = req.userRole === 'admin' ? {} : { userId: req.user.id };
+            const query = await buildHRQuery(req);
             const payslips = await Payslip.find(query).sort({ uploadedAt: -1 });
             res.json({ success: true, payslips });
         } catch (error) {
@@ -207,7 +212,7 @@ export default function createHrRoutes() {
     // Documents
     router.get('/documents', async (req, res) => {
         try {
-            const query = req.userRole === 'admin' ? {} : { userId: req.user.id };
+            const query = await buildHRQuery(req);
             const documents = await Document.find(query).sort({ uploadedAt: -1 });
             res.json({ success: true, documents });
         } catch (error) {
