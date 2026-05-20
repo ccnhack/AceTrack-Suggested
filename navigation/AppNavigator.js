@@ -12,7 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import { usePlayersStore } from '../stores';
 import { useTournamentsStore } from '../stores';
 import { useVideos } from '../context/VideoContext';
-import { useSupport } from '../context/SupportContext';
+import { useSupportStore } from '../stores';
 
 export { useAuth };
 import { useAdmin } from '../context/AdminContext';
@@ -59,7 +59,7 @@ const MainTabs = memo(() => {
   const { players } = usePlayersStore();
   const { tournaments } = useTournamentsStore();
   const { matchVideos } = useVideos();
-  const { supportTickets } = useSupport();
+  const { supportTickets } = useSupportStore();
   const { matchmaking } = useMatchmaking();
   const { seenAdminActionIds, visitedAdminSubTabs } = useAdmin();
   const { messages } = useCommsStore();

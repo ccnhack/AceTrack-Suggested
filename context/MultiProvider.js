@@ -5,7 +5,7 @@ import { SyncProvider } from './SyncContext';
 
 
 import { VideoProvider } from './VideoContext';
-import { SupportProvider } from './SupportContext';
+
 
 import config from '../config';
 
@@ -21,13 +21,11 @@ export const MultiProvider = ({ children }) => {
       <SyncProvider>
         <AuthProvider>
               <VideoProvider>
-                <SupportProvider>
-                  <AdminProvider>
-                    <MatchmakingProvider>
-                      {children}
-                    </MatchmakingProvider>
-                  </AdminProvider>
-                </SupportProvider>
+                <AdminProvider>
+                  <MatchmakingProvider>
+                    {children}
+                  </MatchmakingProvider>
+                </AdminProvider>
               </VideoProvider>
         </AuthProvider>
       </SyncProvider>

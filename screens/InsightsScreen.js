@@ -13,7 +13,7 @@ import { useAuth } from '../context/AuthContext';
 import { usePlayersStore } from '../stores';
 import { useTournamentsStore } from '../stores';
 import { useVideos } from '../context/VideoContext';
-import { useSupport } from '../context/SupportContext';
+import { useSupportStore } from '../stores';
 import { useEvaluationsStore } from '../stores';
 import { formatDateIST } from '../utils/tournamentUtils';
 
@@ -24,7 +24,7 @@ const InsightsScreen = ({ navigation }) => {
   const { tournaments } = useTournamentsStore();
   const { matchVideos, matches } = useVideos();
   const { evaluations } = useEvaluationsStore();
-  const { supportTickets: tickets } = useSupport();
+  const { supportTickets: tickets } = useSupportStore();
   
   const academyId = user?.id; // Standard fallback
   const [selectedCity, setSelectedCity] = useState(null);

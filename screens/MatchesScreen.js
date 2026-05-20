@@ -27,7 +27,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTournamentsStore } from '../stores';
 import { usePlayersStore } from '../stores';
 import { useVideos } from '../context/VideoContext';
-import { useSupport } from '../context/SupportContext';
+import { useSupportStore } from '../stores';
 import { useAdmin } from '../context/AdminContext';
 
 const MatchesScreen = ({ route, navigation }) => {
@@ -40,7 +40,7 @@ const MatchesScreen = ({ route, navigation }) => {
   const { 
     evaluations, onSaveEvaluation, matchVideos, onSaveCoachComment 
   } = useVideos(); // Evaluations are in VideoContext currently
-  const { supportTickets, onSaveTicket, onReplyTicket } = useSupport();
+  const { supportTickets, onSaveTicket, onReplyTicket } = useSupportStore();
   const { onLogFailedOtp } = useAdmin();
   const [viewMode, setViewMode] = useState(route?.params?.viewMode || 'upcoming');
   

@@ -61,7 +61,7 @@ import { useApp } from './context/AppContext';
 import { useSync } from './context/SyncContext';
 import { useAuth } from './context/AuthContext';
 import { usePlayersStore } from './stores';
-import { useSupport } from './context/SupportContext';
+import { useSupportStore } from './stores';
 
 
 

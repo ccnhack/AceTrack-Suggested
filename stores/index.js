@@ -494,6 +494,175 @@ export const useSupportStore = create((set, get) => {
       console.log(`[STORE_DEBUG] Support Store Hydrate: Loaded ${tickets?.length || 0} tickets in ${Date.now() - startTime}ms`);
       if (tickets) set({ supportTickets: tickets });
       if (chatbot) set({ chatbotMessages: chatbot });
+
+      const currentUser = useAuthStore.getState().currentUser;
+      const isAdminOrSupport = currentUser?.role === 'admin' || currentUser?.role === 'support';
+      if (isAdminOrSupport && (!tickets || tickets.length === 0)) {
+         console.log('[SupportStore] [HYDRATE] Tickets empty. Triggering mandatory forcePullData...');
+         syncOrchestrator.forcePullData();
+      }
+    },
+
+    // ─── Actions migrated from SupportContext ───
+
+    logSupportActivity: async (action, entityId, details) => {
+      const currentUser = useAuthStore.getState().currentUser;
+      if (!currentUser || (currentUser.role !== 'support' && currentUser.role !== 'admin')) return;
+      try {
+        const currentLogs = await syncOrchestrator.getSystemFlag('auditLogs') || [];
+        const newLog = {
+          id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          userId: currentUser.id,
+          action,
+          entityId,
+          details,
+          timestamp: new Date().toISOString(),
+          category: 'support_activity'
+        };
+        const updatedLogs = [...currentLogs, newLog].slice(-200);
+        syncOrchestrator.syncAndSaveData({ auditLogs: updatedLogs });
+      } catch (e) {
+        console.warn("[SupportStore] Failed to log support activity:", e);
+      }
+    },
+
+    onSendChatMessage: (messages) => {
+      const currentUser = useAuthStore.getState().currentUser;
+      if (!currentUser) return;
+      const userId = currentUser.id;
+      const currentMessages = get().chatbotMessages;
+      const updatedMessages = { ...currentMessages, [userId]: messages };
+      set({ chatbotMessages: updatedMessages });
+      syncOrchestrator.syncAndSaveData({ chatbotMessages: updatedMessages });
+    },
+
+    onReplyTicket: (id, text, image, replyToMsg) => {
+      const TicketService = require('../services/TicketService').default;
+      const currentUser = useAuthStore.getState().currentUser;
+      const isAdmin = currentUser?.role === 'admin';
+      const currentTickets = get().supportTickets;
+      const result = TicketService.replyToTicket(id, text, image, replyToMsg, currentUser, currentTickets, isAdmin);
+      if (result.success) {
+        set({ supportTickets: result.tickets });
+        syncOrchestrator.syncAndSaveData({ supportTickets: result.tickets }, true);
+        get().logSupportActivity('TICKET_REPLY', id, `Replied to ticket ${id}`);
+      }
+      return result;
+    },
+
+    onUpdateTicketStatus: (id, status, summary, justification) => {
+      const TicketService = require('../services/TicketService').default;
+      const currentTickets = get().supportTickets;
+      const result = TicketService.updateStatus(id, status, summary, currentTickets, justification);
+      if (result.success) {
+        set({ supportTickets: result.tickets });
+        syncOrchestrator.syncAndSaveData({ supportTickets: result.tickets }, true);
+        get().logSupportActivity('TICKET_STATUS_CHANGE', id, `Changed status to ${status}`);
+      }
+      return result;
+    },
+
+    onSaveTicket: async (ticket) => {
+      const TicketService = require('../services/TicketService').default;
+      const currentUser = useAuthStore.getState().currentUser;
+      const isAdmin = currentUser?.role === 'admin';
+      const currentTickets = get().supportTickets;
+      const result = await TicketService.saveTicket(ticket, currentTickets, isAdmin);
+      if (result.success) {
+        set({ supportTickets: result.tickets });
+        syncOrchestrator.syncAndSaveData({ supportTickets: result.tickets });
+        get().logSupportActivity('TICKET_SAVE', ticket.id || 'new', `Saved/Created ticket`);
+      }
+      return result;
+    },
+
+    onMarkSeen: (ticketId) => {
+      const TicketService = require('../services/TicketService').default;
+      const currentUser = useAuthStore.getState().currentUser;
+      if (!currentUser) return;
+      const currentTickets = get().supportTickets;
+      const result = TicketService.markSeen(ticketId, currentUser.id, currentTickets);
+      if (result.success) {
+        set({ supportTickets: result.tickets });
+        syncOrchestrator.syncAndSaveData({ supportTickets: result.tickets }, true);
+      }
+      return result;
+    },
+
+    onRetryMessage: (ticketId, msgId) => {
+      console.log(`🛡️ Retrying sync for message ${msgId} in ticket ${ticketId}`);
+      const currentTickets = get().supportTickets;
+      syncOrchestrator.syncAndSaveData({ supportTickets: currentTickets }, true);
+    },
+
+    onClaimTicket: async (ticketId) => {
+      try {
+        const config = require('../config').default;
+        const storage = require('../utils/storage').default;
+        const currentUser = useAuthStore.getState().currentUser;
+        
+        const token = await storage.getItem('userToken');
+        const headers = { 
+          'Content-Type': 'application/json', 
+          'x-ace-api-key': config.PUBLIC_APP_ID,
+          'x-user-id': currentUser?.id || 'admin'
+        };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch(`${config.API_BASE_URL}${config.getEndpoint('CLAIM_TICKET')}`, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({ ticketId })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          get().logSupportActivity('TICKET_CLAIMED', ticketId, `Claimed ticket from pool`);
+          if (data && data.ticket) {
+             const currentTickets = get().supportTickets;
+             set({ supportTickets: currentTickets.map(t => t.id === ticketId ? data.ticket : t) });
+          }
+          return { success: true };
+        }
+        return { success: false, error: "Failed to claim ticket" };
+      } catch (e) {
+        return { success: false, error: e.message };
+      }
+    },
+
+    onReassignTicket: async (ticketId, targetAgentId) => {
+      try {
+        const config = require('../config').default;
+        const storage = require('../utils/storage').default;
+        const currentUser = useAuthStore.getState().currentUser;
+        
+        const token = await storage.getItem('userToken');
+        const headers = { 
+          'Content-Type': 'application/json', 
+          'x-ace-api-key': config.PUBLIC_APP_ID,
+          'x-user-id': currentUser?.id || 'admin'
+        };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch(`${config.API_BASE_URL}${config.getEndpoint('REASSIGN_TICKET')}`, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({ ticketId, targetAgentId })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          get().logSupportActivity('TICKET_ASSIGNED', ticketId, `Assigned ticket to agent ${targetAgentId}`);
+          if (data && data.ticket) {
+             const currentTickets = get().supportTickets;
+             set({ supportTickets: currentTickets.map(t => t.id === ticketId ? data.ticket : t) });
+          }
+          return { success: true, message: data.message };
+        }
+        return { success: false, error: data.error || "Failed to reassign ticket" };
+      } catch (e) {
+        return { success: false, error: e.message };
+      }
     }
   };
 });

@@ -13,7 +13,7 @@ import { isTournamentPast, getVisibleTournaments, parseTournamentDate } from '..
 import { useTournamentsStore } from '../stores';
 import { usePlayersStore } from '../stores';
 import { useEvaluationsStore } from '../stores';
-import { useSupport } from '../context/SupportContext';
+import { useSupportStore } from '../stores';
 
 const { width } = Dimensions.get('window');
 
@@ -131,7 +131,7 @@ const ChatBot = ({
   const { tournaments } = useTournamentsStore();
   const { players } = usePlayersStore();
   const { evaluations } = useEvaluationsStore();
-  const { chatbotMessages, onSendChatMessage, onSaveTicket } = useSupport();
+  const { chatbotMessages, onSendChatMessage, onSaveTicket } = useSupportStore();
 
   const [isOpen, setIsOpen] = useState(false);
   const navigation = useNavigation();

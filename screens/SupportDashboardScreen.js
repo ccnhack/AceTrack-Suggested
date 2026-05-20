@@ -9,14 +9,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { AdminGrievancesPanel } from '../components/AdminGrievancesPanel';
 
 import { usePlayersStore } from '../stores';
-import { useSupport } from '../context/SupportContext';
+import { useSupportStore } from '../stores';
 import { useSync } from '../context/SyncContext';
 import { useAuth } from '../context/AuthContext';
 import { useCommsStore } from '../stores/useCommsStore';
 
 const SupportDashboardScreen = ({ navigation, route }) => {
   const { players } = usePlayersStore();
-  const { supportTickets, onReplyTicket, onUpdateTicketStatus, onMarkSeen, onReassignTicket } = useSupport();
+  const { supportTickets, onReplyTicket, onUpdateTicketStatus, onMarkSeen, onReassignTicket } = useSupportStore();
   const { isCloudOnline, isUsingCloud, lastSyncTime, onManualSync } = useSync();
   const { currentUser } = useAuth();
   

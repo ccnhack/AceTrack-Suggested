@@ -25,7 +25,7 @@ import { usePlayersStore } from '../stores';
 import { useTournamentsStore } from '../stores';
 import { useVideos } from '../context/VideoContext';
 import { useSync } from '../context/SyncContext';
-import { useSupport } from '../context/SupportContext';
+import { useSupportStore } from '../stores';
 import TournamentService from '../services/TournamentService';
 import { useEvaluationsStore } from '../stores';
 
@@ -37,7 +37,7 @@ export const AcademyScreen = () => {
   const { matchVideos, matches, onSaveVideo, onCancelVideo, onRequestDeletion } = useVideos();
   const { evaluations } = useEvaluationsStore();
   const { isSyncing, serverClockOffset, onLogTrace } = useSync();
-  const { onReplyTicket, onUpdateTicketStatus } = useSupport();
+  const { onReplyTicket, onUpdateTicketStatus } = useSupportStore();
   
   // onBatchUpdate -> syncAndSaveData from SyncContext
   const { syncAndSaveData: onBatchUpdate } = useSync();
