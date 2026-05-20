@@ -124,8 +124,8 @@ export const AdminMFA = mongoose.model('AdminMFA', AdminMFASchema);
 
 // PLAYER
 const PlayerDataSchema = new mongoose.Schema({
-  email: { type: String, index: true },
-  role: { type: String, index: true },
+  email: String,
+  role: String,
   username: String,
   password: { type: String, select: false },
   devices: [mongoose.Schema.Types.Mixed],
@@ -160,11 +160,11 @@ export const Tournament = mongoose.model('Tournament', TournamentSchema);
 
 // MATCH
 const MatchDataSchema = new mongoose.Schema({
-  player1Id: { type: String, index: true },
-  player2Id: { type: String, index: true },
-  challengerId: { type: String, index: true },
-  opponentId: { type: String, index: true },
-  tournamentId: { type: String, index: true },
+  player1Id: String,
+  player2Id: String,
+  challengerId: String,
+  opponentId: String,
+  tournamentId: String,
   status: String,
   winnerId: String
 }, { _id: false, strict: false });
@@ -200,9 +200,9 @@ export const MatchVideo = mongoose.model('MatchVideo', MatchVideoSchema);
 
 // SUPPORT TICKET
 const SupportTicketDataSchema = new mongoose.Schema({
-  userId: { type: String, index: true },
-  assignedTo: { type: String, index: true },
-  status: { type: String, index: true },
+  userId: String,
+  assignedTo: String,
+  status: String,
   subject: String,
   category: String,
   messages: [mongoose.Schema.Types.Mixed]
@@ -220,7 +220,7 @@ export const SupportTicket = mongoose.model('SupportTicket', SupportTicketSchema
 
 // EVALUATION
 const EvaluationDataSchema = new mongoose.Schema({
-  playerId: { type: String, index: true },
+  playerId: String,
   evaluatorId: String,
   score: Number,
   comments: String
