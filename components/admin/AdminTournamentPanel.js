@@ -1,11 +1,11 @@
 import React, { useMemo, useState, memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTournaments } from '../../context/TournamentContext';
+import { useTournamentsStore } from '../../stores';
 import { usePlayers } from '../../context/PlayerContext';
 
 const AdminTournamentPanel = memo(({ search }) => {
-  const { tournaments } = useTournaments();
+  const { tournaments } = useTournamentsStore();
   const { players } = usePlayers();
   const [tournamentSubTab, setTournamentSubTab] = useState('upcoming');
   const today = new Date().toISOString().split('T')[0];

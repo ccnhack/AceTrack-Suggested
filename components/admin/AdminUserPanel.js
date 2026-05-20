@@ -3,11 +3,11 @@ import { View, Text, TouchableOpacity, StyleSheet, Image, Linking, ScrollView } 
 import { Ionicons } from '@expo/vector-icons';
 import PlayerDashboardView from '../PlayerDashboardView';
 import { usePlayers } from '../../context/PlayerContext';
-import { useTournaments } from '../../context/TournamentContext';
+import { useTournamentsStore } from '../../stores';
 
 const AdminUserPanel = memo(({ subTab, search }) => {
   const { players } = usePlayers();
-  const { tournaments } = useTournaments();
+  const { tournaments } = useTournamentsStore();
   const [selectedAcademy, setSelectedAcademy] = useState(null);
 
   const filterData = (data, field = 'name') => {

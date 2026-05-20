@@ -74,7 +74,7 @@ import { useAuth } from '../context/AuthContext';
 import { usePlayers } from '../context/PlayerContext';
 import { useSync } from '../context/SyncContext';
 import { useMatchmaking } from '../context/MatchmakingContext';
-import { useTournaments } from '../context/TournamentContext';
+import { useTournamentsStore } from '../stores';
 import MatchService from '../services/MatchService';
 
 export default function MatchmakingScreen({ route }) {
@@ -82,7 +82,7 @@ export default function MatchmakingScreen({ route }) {
   const { matchmaking, onUpdateMatchmaking } = useMatchmaking();
   const { players, sendUserNotification } = usePlayers();
   const { loadData: onManualSync, serverClockOffset } = useSync();
-  const { tournaments } = useTournaments();
+  const { tournaments } = useTournamentsStore();
   
   const lastSyncRef = React.useRef(0);
   const insets = useSafeAreaInsets();

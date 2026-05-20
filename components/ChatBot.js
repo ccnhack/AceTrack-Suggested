@@ -10,7 +10,7 @@ import { useNavigation } from '@react-navigation/native';
 import { generateAIResponse } from '../services/aiService';
 import config from '../config';
 import { isTournamentPast, getVisibleTournaments, parseTournamentDate } from '../utils/tournamentUtils';
-import { useTournaments } from '../context/TournamentContext';
+import { useTournamentsStore } from '../stores';
 import { usePlayers } from '../context/PlayerContext';
 import { useEvaluationsStore } from '../stores';
 import { useSupport } from '../context/SupportContext';
@@ -128,7 +128,7 @@ const TicketPromptCard = ({ type, description, onConfirm, onCancel }) => {
 const ChatBot = ({ 
   user, userRole, userId, userSports
 }) => {
-  const { tournaments } = useTournaments();
+  const { tournaments } = useTournamentsStore();
   const { players } = usePlayers();
   const { evaluations } = useEvaluationsStore();
   const { chatbotMessages, onSendChatMessage, onSaveTicket } = useSupport();

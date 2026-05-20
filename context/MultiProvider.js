@@ -3,7 +3,7 @@ import { AppProvider } from './AppContext';
 import { AuthProvider } from './AuthContext';
 import { SyncProvider } from './SyncContext';
 import { PlayerProvider } from './PlayerContext';
-import { TournamentProvider } from './TournamentContext';
+
 import { VideoProvider } from './VideoContext';
 import { SupportProvider } from './SupportContext';
 
@@ -21,7 +21,6 @@ export const MultiProvider = ({ children }) => {
       <SyncProvider>
         <AuthProvider>
           <PlayerProvider>
-            <TournamentProvider>
               <VideoProvider>
                 <SupportProvider>
                   <AdminProvider>
@@ -31,7 +30,6 @@ export const MultiProvider = ({ children }) => {
                   </AdminProvider>
                 </SupportProvider>
               </VideoProvider>
-            </TournamentProvider>
           </PlayerProvider>
         </AuthProvider>
       </SyncProvider>

@@ -3,14 +3,14 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import { useEvaluationsStore } from '../../stores';
 import { usePlayers } from '../../context/PlayerContext';
-import { useTournaments } from '../../context/TournamentContext';
+import { useTournamentsStore } from '../../stores';
 import { getSafeAvatar } from '../../utils/imageUtils';
 import { shadows, colors } from '../../theme/designSystem';
 
 const AdminEvaluationsPanel = memo(({ search }) => {
   const { evaluations } = useEvaluationsStore();
   const { players } = usePlayers();
-  const { tournaments } = useTournaments();
+  const { tournaments } = useTournamentsStore();
 
   const filteredEvaluations = useMemo(() => {
     return (evaluations || []).filter(e => {

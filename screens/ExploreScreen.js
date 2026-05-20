@@ -50,13 +50,13 @@ const CITY_COORDS = {
 const POPULAR_CITIES = ['All', ...Object.keys(CITY_COORDS)];
 
 import { useAuth } from '../context/AuthContext';
-import { useTournaments } from '../context/TournamentContext';
+import { useTournamentsStore } from '../stores';
 import { usePlayers } from '../context/PlayerContext';
 import { useApp } from '../context/AppContext';
 
 const ExploreScreen = ({ navigation, route }) => {
   const { currentUser, userRole, userId } = useAuth();
-  const { tournaments, onRegister, onJoinWaitlist, onAssignCoach, onUpdateTournament, reschedulingFrom, onCancelReschedule } = useTournaments();
+  const { tournaments, onRegister, onJoinWaitlist, onAssignCoach, onUpdateTournament, reschedulingFrom, onCancelReschedule } = useTournamentsStore();
   const { players } = usePlayers();
   const { serverClockOffset } = useApp();
   

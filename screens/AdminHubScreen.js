@@ -26,7 +26,7 @@ import AdminSupportTeamPanel from '../components/admin/AdminSupportTeamPanel';
 
 // Context Hooks
 import { usePlayers } from '../context/PlayerContext';
-import { useTournaments } from '../context/TournamentContext';
+import { useTournamentsStore } from '../stores';
 import { useVideos } from '../context/VideoContext';
 import { useSupport } from '../context/SupportContext';
 import { useAdmin } from '../context/AdminContext';
@@ -39,7 +39,7 @@ import { useEvaluationsStore } from '../stores';
 const AdminHubScreen = ({ navigation, route }) => {
   const { currentUser } = useAuth();
   const { players } = usePlayers();
-  const { tournaments, onUpdateTournament, onRemovePendingPlayer } = useTournaments();
+  const { tournaments, onUpdateTournament, onRemovePendingPlayer } = useTournamentsStore();
   const { matchVideos, onUpdateVideoStatus, onBulkUpdateVideoStatus, onForceRefundVideo, onApproveDeleteVideo, onRejectDeleteVideo, onPermanentDeleteVideo, onBulkPermanentDeleteVideos } = useVideos();
   const { supportTickets, onReplyTicket, onUpdateTicketStatus, onReassignTicket, onMarkSeen } = useSupport();
 

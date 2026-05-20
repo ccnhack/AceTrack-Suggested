@@ -10,7 +10,7 @@ import { useApp } from '../context/AppContext';
 import { useSync } from '../context/SyncContext';
 import { useAuth } from '../context/AuthContext';
 import { usePlayers } from '../context/PlayerContext';
-import { useTournaments } from '../context/TournamentContext';
+import { useTournamentsStore } from '../stores';
 import { useVideos } from '../context/VideoContext';
 import { useSupport } from '../context/SupportContext';
 
@@ -57,7 +57,7 @@ const MainTabs = memo(() => {
     return null; // Prevent flash of wrong tabs during hydration
   }
   const { players } = usePlayers();
-  const { tournaments } = useTournaments();
+  const { tournaments } = useTournamentsStore();
   const { matchVideos } = useVideos();
   const { supportTickets } = useSupport();
   const { matchmaking } = useMatchmaking();

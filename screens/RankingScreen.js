@@ -8,13 +8,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SafeAvatar from '../components/SafeAvatar';
 import { useAuth } from '../context/AuthContext';
 import { usePlayers } from '../context/PlayerContext';
-import { useTournaments } from '../context/TournamentContext';
+import { useTournamentsStore } from '../stores';
 import TournamentService from '../services/TournamentService';
 
 const RankingScreen = () => {
   const { currentUser: user, userRole: role } = useAuth();
   const { players } = usePlayers();
-  const { tournaments } = useTournaments();
+  const { tournaments } = useTournamentsStore();
   const insets = useSafeAreaInsets();
   const rankingPlayers = useMemo(() => {
     let list = [...(players || [])].filter(p => p && p.id !== 'admin_sys' && p.id !== 'admin' && p.role !== 'admin' && p.role !== 'academy' && p.role !== 'coach');

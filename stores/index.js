@@ -148,9 +148,9 @@ export const usePlayersStore = create((set, get) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// 🏆 TOURNAMENTS STORE — Replaces TournamentContext state
+// 🏆 TOURNAMENTS STORE — Replaces TournamentContext state + actions
 // ═══════════════════════════════════════════════════════════════
-export const useTournamentsStore = create((set) => {
+export const useTournamentsStore = create((set, get) => {
   eventBus.subscribe('ENTITY_UPDATED', async (e) => {
     if (e.payload.entity === 'tournaments') {
       const freshData = await syncOrchestrator.getSystemFlag('tournaments');
@@ -160,12 +160,237 @@ export const useTournamentsStore = create((set) => {
 
   return {
     tournaments: [],
+    reschedulingFrom: null,
     setTournaments: (tournaments) => set({ tournaments }),
+    setReschedulingFrom: (val) => set({ reschedulingFrom: val }),
 
     hydrate: async () => {
       const saved = await syncOrchestrator.getSystemFlag('tournaments');
       if (saved) set({ tournaments: saved });
-    }
+    },
+
+    // ─── Actions migrated from TournamentContext ───
+
+    onRegister: async (t, method, cost, isResched, fromTid) => {
+      try {
+        const TournamentService = require('../services/TournamentService').default;
+        const currentUser = useAuthStore.getState().currentUser;
+        if (!currentUser || !t) {
+          console.warn('[TournamentsStore] Registration aborted: Missing User or Tournament');
+          return { success: false, message: 'Invalid registration state.' };
+        }
+        const tid = typeof t === 'object' ? t.id : t;
+        const currentTournaments = get().tournaments;
+        const tournament = currentTournaments.find(it => it.id === tid);
+        if (!tournament) {
+          console.warn('[TournamentsStore] Registration target not found:', tid);
+          return { success: false, message: 'Arena not found. Please refresh.' };
+        }
+        console.log(`[TournamentsStore] Starting registration for ${tid} via ${method}`);
+        const result = TournamentService.register(
+          tid, currentUser.id, currentTournaments,
+          usePlayersStore.getState().players, currentUser, method, cost
+        );
+        if (result && result.success) {
+          set({ tournaments: result.tournaments });
+          usePlayersStore.getState().setPlayers(result.players);
+          useAuthStore.getState().setCurrentUser(result.currentUser);
+          console.log('[TournamentsStore] State updated locally. Syncing...');
+          await syncOrchestrator.syncAndSaveData({
+            tournaments: result.tournaments,
+            players: result.players,
+            currentUser: result.currentUser
+          }, false);
+        } else {
+          const msg = result?.message || 'Could not complete registration.';
+          const { Alert } = require('react-native');
+          Alert.alert('Registration Failed', msg);
+        }
+        return result;
+      } catch (e) {
+        console.error('[TournamentsStore] FATAL_ON_REGISTER_ERROR:', e);
+        const { Alert } = require('react-native');
+        Alert.alert('System Error', `Line: onRegister\nError: ${e.message}\nStack: ${e.stack?.substring(0, 100)}`);
+        throw e;
+      }
+    },
+
+    onJoinWaitlist: (t) => {
+      const TournamentService = require('../services/TournamentService').default;
+      const currentUser = useAuthStore.getState().currentUser;
+      if (!currentUser || !t) return null;
+      const tid = typeof t === 'object' ? t.id : t;
+      const currentTournaments = get().tournaments;
+      const result = TournamentService.joinWaitlist(tid, currentUser.id, currentTournaments);
+      if (result.success) {
+        set({ tournaments: result.tournaments });
+        syncOrchestrator.syncAndSaveData({ tournaments: result.tournaments });
+      } else {
+        const { Alert } = require('react-native');
+        Alert.alert('Waitlist Error', result.message || 'Could not join waitlist.');
+      }
+      return result;
+    },
+
+    onStartTournament: (tid) => {
+      const TournamentService = require('../services/TournamentService').default;
+      const currentTournaments = get().tournaments;
+      const result = TournamentService.startTournament(tid, currentTournaments);
+      set({ tournaments: result.tournaments });
+      syncOrchestrator.syncAndSaveData({ tournaments: result.tournaments }, true);
+    },
+
+    onEndTournament: (tid) => {
+      const TournamentService = require('../services/TournamentService').default;
+      const currentTournaments = get().tournaments;
+      const result = TournamentService.endTournament(tid, currentTournaments);
+      set({ tournaments: result.tournaments });
+      syncOrchestrator.syncAndSaveData({ tournaments: result.tournaments }, true);
+    },
+
+    onAssignCoach: (tid, cid) => {
+      const TournamentService = require('../services/TournamentService').default;
+      const currentTournaments = get().tournaments;
+      const result = TournamentService.assignCoach(tid, cid, currentTournaments);
+      set({ tournaments: result.tournaments });
+      syncOrchestrator.syncAndSaveData({ tournaments: result.tournaments });
+    },
+
+    onRemoveCoach: (tid) => {
+      const TournamentService = require('../services/TournamentService').default;
+      const currentTournaments = get().tournaments;
+      const result = TournamentService.removeCoach(tid, currentTournaments);
+      set({ tournaments: result.tournaments });
+      syncOrchestrator.syncAndSaveData({ tournaments: result.tournaments }, true);
+    },
+
+    onApproveCoach: (coachId, status = 'approved', reason = '') => {
+      const TournamentService = require('../services/TournamentService').default;
+      const result = TournamentService.approveCoach(coachId, status, usePlayersStore.getState().players);
+      if (result.success) {
+        const updatedPlayers = reason
+          ? result.players.map(p => String(p.id).toLowerCase() === String(coachId).toLowerCase()
+              ? { ...p, coachRejectReason: reason } : p)
+          : result.players;
+        usePlayersStore.getState().setPlayers(updatedPlayers);
+        syncOrchestrator.syncAndSaveData({ players: updatedPlayers });
+      }
+    },
+
+    onSaveCoachComment: (tid, comment) => {
+      const TournamentService = require('../services/TournamentService').default;
+      const currentUser = useAuthStore.getState().currentUser;
+      if (!currentUser) return;
+      const currentTournaments = get().tournaments;
+      const result = TournamentService.addCoachComment(tid, currentUser.id, comment, currentTournaments);
+      set({ tournaments: result.tournaments });
+      syncOrchestrator.syncAndSaveData({ tournaments: result.tournaments });
+    },
+
+    onAddPlayer: (tid, playerName, playerPhone) => {
+      const TournamentService = require('../services/TournamentService').default;
+      const currentTournaments = get().tournaments;
+      const result = TournamentService.addPlayer(tid, playerName, playerPhone, currentTournaments, usePlayersStore.getState().players);
+      if (result.success) {
+        set({ tournaments: result.tournaments });
+        syncOrchestrator.syncAndSaveData({ tournaments: result.tournaments });
+        const { Alert } = require('react-native');
+        Alert.alert("Success", "Player added to tournament.");
+      } else {
+        const { Alert } = require('react-native');
+        Alert.alert("Error", result.message || "Failed to add player.");
+      }
+    },
+
+    onRemovePendingPlayer: (tid, pid) => {
+      const TournamentService = require('../services/TournamentService').default;
+      const currentTournaments = get().tournaments;
+      const result = TournamentService.removePendingPlayer(tid, pid, currentTournaments);
+      set({ tournaments: result.tournaments });
+      syncOrchestrator.syncAndSaveData({ tournaments: result.tournaments }, true);
+    },
+
+    onManageInterested: (tid, pid, action) => {
+      const TournamentService = require('../services/TournamentService').default;
+      const currentTournaments = get().tournaments;
+      const result = TournamentService.manageInterested(tid, pid, action, currentTournaments);
+      set({ tournaments: result.tournaments });
+      syncOrchestrator.syncAndSaveData({ tournaments: result.tournaments }, true);
+    },
+
+    onDeclineCoachRequest: (t) => {
+      const TournamentService = require('../services/TournamentService').default;
+      const currentTournaments = get().tournaments;
+      const result = TournamentService.declineCoachRequest(t.id, currentTournaments);
+      set({ tournaments: result.tournaments });
+      syncOrchestrator.syncAndSaveData({ tournaments: result.tournaments }, true);
+    },
+
+    onConfirmCoachRequest: (t) => {
+      const currentUser = useAuthStore.getState().currentUser;
+      if (!currentUser) return;
+      const currentTournaments = get().tournaments;
+      const updated = currentTournaments.map(item =>
+        item.id === t.id ? { ...item, assignedCoachId: currentUser.id, coachStatus: 'Coach Confirmed' } : item
+      );
+      set({ tournaments: updated });
+      syncOrchestrator.syncAndSaveData({ tournaments: updated });
+    },
+
+    onSaveTournament: (newT) => {
+      const currentTournaments = get().tournaments;
+      const updated = [newT, ...currentTournaments];
+      set({ tournaments: updated });
+      syncOrchestrator.syncAndSaveData({ tournaments: updated });
+    },
+
+    onUpdateTournament: (updated) => {
+      const currentTournaments = get().tournaments;
+      const updatedTournaments = currentTournaments.map(t => t.id === updated.id ? updated : t);
+      set({ tournaments: updatedTournaments });
+      syncOrchestrator.syncAndSaveData({ tournaments: updatedTournaments });
+    },
+
+    onDeleteTournament: (tid) => {
+      const currentTournaments = get().tournaments;
+      const updated = currentTournaments.filter(t => t.id !== tid);
+      set({ tournaments: updated });
+      syncOrchestrator.syncAndSaveData({ tournaments: updated }, true);
+    },
+
+    onReschedule: (tournamentId) => {
+      set({ reschedulingFrom: tournamentId });
+    },
+
+    onCancelReschedule: () => {
+      set({ reschedulingFrom: null });
+    },
+
+    onOptOut: (tid) => {
+      const TournamentService = require('../services/TournamentService').default;
+      const currentUser = useAuthStore.getState().currentUser;
+      if (!currentUser) return;
+      const currentTournaments = get().tournaments;
+      const result = TournamentService.optOut(tid, currentUser.id, currentTournaments, usePlayersStore.getState().players, currentUser);
+      if (result.success) {
+        set({ tournaments: result.tournaments });
+        if (result.players) usePlayersStore.getState().setPlayers(result.players);
+        if (result.currentUser) useAuthStore.getState().setCurrentUser(result.currentUser);
+
+        // 🛡️ [AUDIT FIX F-2/S-1] (v2.6.327): Single atomic sync call
+        syncOrchestrator.syncAndSaveData({
+          tournaments: result.tournaments,
+          players: result.players || usePlayersStore.getState().players,
+          currentUser: result.currentUser || currentUser
+        }, true);
+
+        const { Alert } = require('react-native');
+        Alert.alert('Success', 'You have successfully opted out of this tournament.');
+      } else {
+        const { Alert } = require('react-native');
+        Alert.alert('Error', result.message || 'Failed to opt out.');
+      }
+    },
   };
 });
 

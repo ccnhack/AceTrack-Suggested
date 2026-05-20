@@ -8,14 +8,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { VideoManagement } from '../components/VideoManagement';
 
 import { useAuth } from '../context/AuthContext';
-import { useTournaments } from '../context/TournamentContext';
+import { useTournamentsStore } from '../stores';
 import { usePlayers } from '../context/PlayerContext';
 import { useVideos } from '../context/VideoContext';
 
 const RecordingsScreen = () => {
   const { currentUser: user, userRole: role } = useAuth();
   const { matchVideos, onSaveVideo, onUnlockVideo, onPurchaseAiHighlights, onToggleFavourite, onVideoPlay } = useVideos();
-  const { tournaments } = useTournaments();
+  const { tournaments } = useTournamentsStore();
   const { players } = usePlayers();
   const { onTopUp } = useAuth(); // onTopUp is in AuthContext
   const [activeFilter, setActiveFilter] = useState('recent');

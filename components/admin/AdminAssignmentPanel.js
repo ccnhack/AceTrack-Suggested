@@ -3,12 +3,12 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, borderRadius, shadows } from '../../theme/designSystem';
 import { usePlayers } from '../../context/PlayerContext';
-import { useTournaments } from '../../context/TournamentContext';
+import { useTournamentsStore } from '../../stores';
 import { useAdmin } from '../../context/AdminContext';
 
 const AdminAssignmentPanel = ({ search = '' }) => {
   const { players } = usePlayers();
-  const { tournaments, onAssignCoach, onRemoveCoach } = useTournaments();
+  const { tournaments, onAssignCoach, onRemoveCoach } = useTournamentsStore();
   const { seenAdminActionIds } = useAdmin();
   const [viewingAssignmentFor, setViewingAssignmentFor] = useState(null);
 

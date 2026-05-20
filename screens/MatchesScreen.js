@@ -24,7 +24,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 
 import { useAuth } from '../context/AuthContext';
-import { useTournaments } from '../context/TournamentContext';
+import { useTournamentsStore } from '../stores';
 import { usePlayers } from '../context/PlayerContext';
 import { useVideos } from '../context/VideoContext';
 import { useSupport } from '../context/SupportContext';
@@ -35,7 +35,7 @@ const MatchesScreen = ({ route, navigation }) => {
   const { 
     tournaments, onReschedule, onOptOut, onStartTournament, onEndTournament, 
     onUpdateTournament, onRegister, onAssignCoach, onConfirmCoachRequest, onDeclineCoachRequest 
-  } = useTournaments();
+  } = useTournamentsStore();
   const { players } = usePlayers();
   const { 
     evaluations, onSaveEvaluation, matchVideos, onSaveCoachComment 
