@@ -10,11 +10,11 @@ import { VideoManagement } from '../components/VideoManagement';
 import { useAuth } from '../context/AuthContext';
 import { useTournamentsStore } from '../stores';
 import { usePlayersStore } from '../stores';
-import { useVideos } from '../context/VideoContext';
+import { useVideoStore } from '../stores';
 
 const RecordingsScreen = () => {
   const { currentUser: user, userRole: role } = useAuth();
-  const { matchVideos, onSaveVideo, onUnlockVideo, onPurchaseAiHighlights, onToggleFavourite, onVideoPlay } = useVideos();
+  const { matchVideos, onSaveVideo, onUnlockVideo, onPurchaseAiHighlights, onToggleFavourite, onVideoPlay } = useVideoStore();
   const { tournaments } = useTournamentsStore();
   const { players } = usePlayersStore();
   const { onTopUp } = useAuth(); // onTopUp is in AuthContext

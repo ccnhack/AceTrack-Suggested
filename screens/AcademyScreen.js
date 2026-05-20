@@ -23,7 +23,7 @@ import { AcademyTournamentCard } from '../components/AcademySubComponents';
 import { useAuth } from '../context/AuthContext';
 import { usePlayersStore } from '../stores';
 import { useTournamentsStore } from '../stores';
-import { useVideos } from '../context/VideoContext';
+import { useVideoStore } from '../stores';
 import { useSync } from '../context/SyncContext';
 import { useSupportStore } from '../stores';
 import TournamentService from '../services/TournamentService';
@@ -34,7 +34,7 @@ export const AcademyScreen = () => {
   const academyId = user?.id; 
   const { tournaments, onSaveTournament, onUpdateTournament, onReschedule, onDeleteTournament } = useTournamentsStore();
   const { players, setPlayers } = usePlayersStore();
-  const { matchVideos, matches, onSaveVideo, onCancelVideo, onRequestDeletion } = useVideos();
+  const { matchVideos, matches, onSaveVideo, onCancelVideo, onRequestDeletion } = useVideoStore();
   const { evaluations } = useEvaluationsStore();
   const { isSyncing, serverClockOffset, onLogTrace } = useSync();
   const { onReplyTicket, onUpdateTicketStatus } = useSupportStore();

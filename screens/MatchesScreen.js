@@ -26,7 +26,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 import { useAuth } from '../context/AuthContext';
 import { useTournamentsStore } from '../stores';
 import { usePlayersStore } from '../stores';
-import { useVideos } from '../context/VideoContext';
+import { useVideoStore } from '../stores';
 import { useSupportStore } from '../stores';
 import { useAdmin } from '../context/AdminContext';
 
@@ -39,7 +39,7 @@ const MatchesScreen = ({ route, navigation }) => {
   const { players } = usePlayersStore();
   const { 
     evaluations, onSaveEvaluation, matchVideos, onSaveCoachComment 
-  } = useVideos(); // Evaluations are in VideoContext currently
+  } = useVideoStore(); // Evaluations are in VideoContext currently
   const { supportTickets, onSaveTicket, onReplyTicket } = useSupportStore();
   const { onLogFailedOtp } = useAdmin();
   const [viewMode, setViewMode] = useState(route?.params?.viewMode || 'upcoming');

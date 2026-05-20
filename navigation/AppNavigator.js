@@ -11,7 +11,7 @@ import { useSync } from '../context/SyncContext';
 import { useAuth } from '../context/AuthContext';
 import { usePlayersStore } from '../stores';
 import { useTournamentsStore } from '../stores';
-import { useVideos } from '../context/VideoContext';
+import { useVideoStore } from '../stores';
 import { useSupportStore } from '../stores';
 
 export { useAuth };
@@ -58,7 +58,7 @@ const MainTabs = memo(() => {
   }
   const { players } = usePlayersStore();
   const { tournaments } = useTournamentsStore();
-  const { matchVideos } = useVideos();
+  const { matchVideos } = useVideoStore();
   const { supportTickets } = useSupportStore();
   const { matchmaking } = useMatchmaking();
   const { seenAdminActionIds, visitedAdminSubTabs } = useAdmin();

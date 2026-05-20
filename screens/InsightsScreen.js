@@ -12,7 +12,7 @@ const screenWidth = Dimensions.get('window').width;
 import { useAuth } from '../context/AuthContext';
 import { usePlayersStore } from '../stores';
 import { useTournamentsStore } from '../stores';
-import { useVideos } from '../context/VideoContext';
+import { useVideoStore } from '../stores';
 import { useSupportStore } from '../stores';
 import { useEvaluationsStore } from '../stores';
 import { formatDateIST } from '../utils/tournamentUtils';
@@ -22,7 +22,7 @@ const InsightsScreen = ({ navigation }) => {
   const { currentUser: user, userRole: role } = useAuth();
   const { players } = usePlayersStore();
   const { tournaments } = useTournamentsStore();
-  const { matchVideos, matches } = useVideos();
+  const { matchVideos, matches } = useVideoStore();
   const { evaluations } = useEvaluationsStore();
   const { supportTickets: tickets } = useSupportStore();
   
