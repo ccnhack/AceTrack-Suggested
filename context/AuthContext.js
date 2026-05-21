@@ -114,11 +114,14 @@ export const AuthProvider = ({ children }) => {
     };
   }, [currentUser?.id]);
 
-  // Entity Listener for currentUser updates from cloud
+  // Entity Listener for currentUser updates from cloud AND local store actions
   useEffect(() => {
     const unsub = eventBus.subscribe('ENTITY_UPDATED', async (e) => {
       const { entity, source } = e.payload;
-      if (entity === 'currentUser' && (source === 'socket' || source === 'api' || source === 'internal')) {
+      // 🛡️ [WALLET_SYNC_FIX] (v2.6.514): Added 'local' source to fix wallet/credits
+      // not updating after opt-out refund. Store actions emit with source='local',
+      // which was previously filtered out, leaving the wallet UI permanently stale.
+      if (entity === 'currentUser' && (source === 'socket' || source === 'api' || source === 'internal' || source === 'local')) {
         const freshData = await syncOrchestrator.getSystemFlag('currentUser');
         if (freshData) {
           // 🛡️ [IDENTITY GUARD] (v2.6.118)

@@ -168,7 +168,7 @@ class TournamentService {
     if (daysRemaining >= 5) return { percent: 0,  label: 'No cancellation charge (5+ days)', daysRemaining: Math.floor(daysRemaining) };
     if (daysRemaining >= 3) return { percent: 25, label: '25% cancellation charge (3-5 days)', daysRemaining: Math.floor(daysRemaining) };
     if (daysRemaining >= 1) return { percent: 50, label: '50% cancellation charge (1-3 days)', daysRemaining: Math.floor(daysRemaining) };
-    return { percent: 75, label: '75% cancellation charge (<1 day)', daysRemaining: Math.max(0, Math.floor(daysRemaining)) };
+    return { percent: 100, label: '100% cancellation charge (<1 day)', daysRemaining: Math.max(0, Math.floor(daysRemaining)) };
   }
 
   static optOut(tid, userId, tournaments, players, currentUser, refundToWallet = true, serverClockOffset = 0) {

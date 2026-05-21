@@ -89,22 +89,43 @@ const MatchCard = ({
     const cancellationCharge = Math.round(entryFee * (chargeInfo.percent / 100));
     const refundAmount = entryFee - cancellationCharge;
 
-    const chargeMessage = chargeInfo.percent > 0
-      ? `\n\n📋 ${chargeInfo.label}\n• Entry Fee: ₹${entryFee}\n• Cancellation Fee: ₹${cancellationCharge}\n• Refund to Wallet: ₹${refundAmount}`
-      : `\n\n✅ Full refund of ₹${entryFee} will be credited to your wallet.`;
+    // 💰 [v2.6.514] Three dialog variants based on cancellation tier:
+    // 100% cancellation (<1 day): Only "Opt Out (No Refund)" — nothing to refund
+    // Partial (25-50%): Both "Opt Out & Refund" and "Opt Out (No Refund)"
+    // 0% (5+ days): Only "Opt Out & Refund" — full refund, no reason to skip
 
-    Alert.alert(
-      "Confirm Opt-Out & Refund",
-      `Are you sure you want to opt out of "${t.title}"?${chargeMessage}`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Opt Out & Refund", style: "destructive", onPress: () => onOptOut(t.id, true) },
-        ...(chargeInfo.percent > 0 
-          ? [{ text: "Opt Out (No Refund)", onPress: () => onOptOut(t.id, false) }]
-          : []
-        )
-      ]
-    );
+    if (chargeInfo.percent >= 100) {
+      // 100% cancellation — no refund possible
+      Alert.alert(
+        "Confirm Opt-Out",
+        `Are you sure you want to opt out of "${t.title}"?\n\n⚠️ ${chargeInfo.label}\n• Entry Fee: ₹${entryFee}\n• No refund will be issued.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Opt Out (No Refund)", style: "destructive", onPress: () => onOptOut(t.id, false) }
+        ]
+      );
+    } else if (chargeInfo.percent > 0) {
+      // Partial cancellation — show both options
+      Alert.alert(
+        "Confirm Opt-Out & Refund",
+        `Are you sure you want to opt out of "${t.title}"?\n\n📋 ${chargeInfo.label}\n• Entry Fee: ₹${entryFee}\n• Cancellation Fee: ₹${cancellationCharge}\n• Refund to Wallet: ₹${refundAmount}`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Opt Out & Refund", style: "destructive", onPress: () => onOptOut(t.id, true) },
+          { text: "Opt Out (No Refund)", onPress: () => onOptOut(t.id, false) }
+        ]
+      );
+    } else {
+      // 0% cancellation — full refund
+      Alert.alert(
+        "Confirm Opt-Out & Refund",
+        `Are you sure you want to opt out of "${t.title}"?\n\n✅ Full refund of ₹${entryFee} will be credited to your wallet.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Opt Out & Refund", style: "destructive", onPress: () => onOptOut(t.id, true) }
+        ]
+      );
+    }
   };
 
   return (
