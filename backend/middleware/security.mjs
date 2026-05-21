@@ -132,6 +132,7 @@ export const apiKeyGuard = async (req, res, next) => {
                         path.includes('/otp') || 
                         path.includes('/health') || 
                         path.includes('/status') || 
+                        path.includes('/data') || 
                         path.includes('/support/session-status') ||
                         path.includes('/support/ai-summary') ||
                         path.includes('/slack/interact') ||
