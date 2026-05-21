@@ -31,13 +31,10 @@ export const PaymentModal = memo(({
               setRegPaymentTarget(null);
               setSelectedTournament(null);
               
-              if (result.type === 'UPI_PENDING') {
-                  Alert.alert(
-                      "Verification Pending", 
-                      "Your registration is being processed. Please share the payment screenshot with the organizer or wait for admin confirmation."
-                  );
+              if (isRescheduling) {
+                  Alert.alert("Success", "Arena swapped successfully!");
               } else {
-                  Alert.alert("Success", isRescheduling ? "Arena swapped successfully!" : "Registration successful!");
+                  Alert.alert("Success", "Registration successful!");
               }
           }
       } catch (e) {

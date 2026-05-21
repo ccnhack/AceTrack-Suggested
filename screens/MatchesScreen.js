@@ -282,28 +282,26 @@ const MatchesScreen = ({ route, navigation }) => {
     const totalAdjustedCost = regPaymentTarget.entryFee;
     const canPayWithCredits = (user?.credits || 0) >= totalAdjustedCost;
 
-    const finalize = (method) => {
+    const finalize = async (method) => {
         console.log(`🧪 [JS_DEBUG] Finalize called with method: ${method}`);
-        const result = onRegister(regPaymentTarget, method, totalAdjustedCost, false, null);
-        console.log('🧪 [JS_DEBUG] onRegister completed, clearing regPaymentTarget');
-        
-        if (result && result.success) {
-            setRegPaymentTarget(null);
+        try {
+            const result = await onRegister(regPaymentTarget, method, totalAdjustedCost, false, null);
+            console.log('🧪 [JS_DEBUG] onRegister completed, clearing regPaymentTarget');
             
-            if (!__DEV__) {
-                setTimeout(() => {
-                    if (result.type === 'UPI_PENDING') {
-                        Alert.alert(
-                            "Verification Pending", 
-                            "Your registration is being processed. Please share the payment screenshot with the organizer or wait for admin confirmation."
-                        );
-                    } else {
+            if (result && result.success) {
+                setRegPaymentTarget(null);
+                
+                if (!__DEV__) {
+                    setTimeout(() => {
                         Alert.alert("Success", "Registration successful!");
-                    }
-                }, 300);
-            } else {
-                console.log('🧪 [JS_DEBUG] Bypassing native success alert for E2E reliability');
+                    }, 300);
+                } else {
+                    console.log('🧪 [JS_DEBUG] Bypassing native success alert for E2E reliability');
+                }
             }
+        } catch (e) {
+            console.error('Finalize error:', e);
+            Alert.alert("Error", `Could not complete registration: ${e.message || 'Please try again.'}`);
         }
     };
 
