@@ -165,7 +165,7 @@ class SocketService {
           if (data?.lastSocketId && this.socket?.id && data.lastSocketId === this.socket.id) {
             return;
           }
-          await onRemoteUpdate(data.updates);
+          await onRemoteUpdate(data);
         } catch (e: any) {
           console.error('[SocketService] socket:data_updated error:', e);
         }

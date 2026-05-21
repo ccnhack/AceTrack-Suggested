@@ -487,6 +487,15 @@ class SyncOrchestrator {
           localData[key] = await storage.getItem(key);
         }
 
+        // 🛡️ [HEAL_GUARD] (v2.6.510): Preserve pending local updates during conflict resolution
+        const pendingUpdates = queueService.getPendingUpdates();
+        for (const key in pendingUpdates) {
+          if (serverData[key]) {
+            console.warn(`[SyncOrchestrator] [HEAL_GUARD] Preserving local pending changes for '${key}' during self-heal.`);
+            delete serverData[key];
+          }
+        }
+
         // Merge using dataMerger
         console.log(`[SyncOrchestrator] [SELF_HEAL] Merging ${Object.keys(serverData).length} keys from cloud...`);
         const { result, meta } = dataMerger.mergeData(localData, serverData);
@@ -611,7 +620,17 @@ class SyncOrchestrator {
 
 
   private async handleRemoteUpdate(remoteUpdates: Record<string, any>) {
-    // 1. Load local state for relevant keys
+    if (!remoteUpdates) return;
+    
+    // 🛡️ [BROADCAST_PULL] (v2.6.510): Server sends { keys, version }, not the full data payload.
+    // Trigger a force pull to get the actual data, relying on forcePullData's PULL_GUARD to protect local state.
+    if (remoteUpdates.keys && !remoteUpdates.tournaments && !remoteUpdates.players) {
+      console.log(`[SyncOrchestrator] Received remote update notification for keys: ${remoteUpdates.keys.join(', ')}. Triggering pull.`);
+      await this.forcePullData();
+      return;
+    }
+
+    // 1. Load local state for relevant keys (legacy payload fallback)
     const localState: Record<string, any> = {};
     for (const key in remoteUpdates) {
       localState[key] = await storage.getItem(key);
@@ -725,6 +744,16 @@ class SyncOrchestrator {
            localData[key] = await storage.getItem(key);
          }
        }
+
+       // 🛡️ [PULL_GUARD] (v2.6.510): Preserve pending local updates during force pull
+       const pendingUpdates = queueService.getPendingUpdates();
+       for (const key in pendingUpdates) {
+         if (data[key]) {
+           console.warn(`[SyncOrchestrator] [PULL_GUARD] Preserving local pending changes for '${key}' during force pull.`);
+           delete data[key];
+         }
+       }
+
        const { result: mergedData } = dataMerger.mergeData(localData, data);
 
        // Perform Save (isInternal=true to prevent push-back loop)
