@@ -660,7 +660,7 @@ export const PlayerWalletDashboard = ({ user, onTopUp, noCard }) => {
                     </View>
                   </View>
                   <Text style={[styles.historyAmount, { color: item.type === 'credit' ? '#16A34A' : '#DC2626' }]}>
-                    {item.type === 'credit' ? '+' : '-'}₹{item.amount}
+                    {item.type === 'credit' ? '+' : '-'}₹{Math.abs(item.amount)}
                   </Text>
                 </View>
               ))}
