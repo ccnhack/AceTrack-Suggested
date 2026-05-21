@@ -229,8 +229,10 @@ export const useTournamentsStore = create((set, get) => {
       try {
         const TournamentService = require('../services/TournamentService').default;
         const currentUser = useAuthStore.getState().currentUser;
+        // 🛡️ [DIAG_BRIDGE] (v2.6.508): Enhanced logging for registration state debugging
+        console.log(`[TournamentsStore] onRegister called. currentUser=${currentUser?.id || 'NULL'}, t=${typeof t === 'object' ? t?.id : t}, method=${method}`);
         if (!currentUser || !t) {
-          console.warn('[TournamentsStore] Registration aborted: Missing User or Tournament');
+          console.warn(`[TournamentsStore] Registration aborted: currentUser=${!!currentUser}, t=${!!t}, authStoreKeys=${Object.keys(useAuthStore.getState()).join(',')}`);
           Alert.alert('Registration Failed', 'Invalid registration state. Missing user or tournament.');
           return { success: false, message: 'Invalid registration state.' };
         }

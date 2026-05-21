@@ -9,6 +9,7 @@ import { Platform } from 'react-native';
 import config from '../config';
 
 import { useSync } from './SyncContext';
+import { useAuthStore } from '../stores';
 
 const AuthContext = createContext(null);
 
@@ -30,8 +31,13 @@ export const AuthProvider = ({ children }) => {
   const onLogoutRef = useRef(null);
 
   // Sync state and ref
+  // 🛡️ [ZUSTAND_BRIDGE] (v2.6.508): Keep Zustand useAuthStore in sync with AuthContext.
+  // Critical: Store actions (onRegister, onJoinWaitlist, etc.) read currentUser from 
+  // useAuthStore.getState().currentUser. Without this bridge, it is always null,
+  // causing "Missing user or tournament" failures on registration.
   useEffect(() => {
     currentUserRef.current = currentUser;
+    useAuthStore.getState().setCurrentUser(currentUser);
   }, [currentUser]);
 
   // Initial Session Hydration
