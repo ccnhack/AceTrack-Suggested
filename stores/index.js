@@ -430,12 +430,13 @@ export const useTournamentsStore = create((set, get) => {
       set({ reschedulingFrom: null });
     },
 
-    onOptOut: (tid) => {
+    onOptOut: (tid, refundToWallet = true) => {
       const TournamentService = require('../services/TournamentService').default;
       const currentUser = useAuthStore.getState().currentUser;
       if (!currentUser) return;
       const currentTournaments = get().tournaments;
-      const result = TournamentService.optOut(tid, currentUser.id, currentTournaments, usePlayersStore.getState().players, currentUser);
+      const serverClockOffset = useSyncStore.getState().serverClockOffset || 0;
+      const result = TournamentService.optOut(tid, currentUser.id, currentTournaments, usePlayersStore.getState().players, currentUser, refundToWallet, serverClockOffset);
       if (result.success) {
         set({ tournaments: result.tournaments });
         if (result.players) usePlayersStore.getState().setPlayers(result.players);
@@ -449,7 +450,15 @@ export const useTournamentsStore = create((set, get) => {
         }, true);
 
         const { Alert } = require('react-native');
-        Alert.alert('Success', 'You have successfully opted out of this tournament.');
+        if (result.refundInfo && result.refundInfo.refundAmount > 0) {
+          const ri = result.refundInfo;
+          Alert.alert(
+            '✅ Opted Out Successfully', 
+            `₹${ri.refundAmount} has been refunded to your wallet.${ri.cancellationCharge > 0 ? `\n\nCancellation fee: ₹${ri.cancellationCharge} (${ri.cancellationPercent}%)` : '\n\nNo cancellation charges applied.'}\n\nEntry Fee: ₹${ri.entryFee}`
+          );
+        } else {
+          Alert.alert('Success', 'You have successfully opted out of this tournament.');
+        }
       } else {
         const { Alert } = require('react-native');
         Alert.alert('Error', result.message || 'Failed to opt out.');

@@ -70,7 +70,12 @@ class TournamentService {
             const rest = { ...(t.playerStatuses || {}) };
             delete rest[safeUserId];
             return rest;
-          })()
+          })(),
+          // 💰 [PAYMENT_TRACKING] (v2.6.512): Track payment method per player for refund routing
+          playerPaymentMethods: {
+            ...(t.playerPaymentMethods || {}),
+            [safeUserId]: { method, cost, timestamp: new Date().toISOString() }
+          }
         };
       }
       return t;
@@ -146,18 +151,91 @@ class TournamentService {
 
   /**
    * Opts a user out of a tournament.
-   * Handles waitlist promotion and notifications.
+   * Handles refund with tiered cancellation charges, waitlist promotion, and notifications.
+   * 
+   * Cancellation Charge Tiers (based on time remaining before tournament date):
+   * - 5+ days:  0% cancellation charge (full refund)
+   * - 3-5 days: 25% cancellation charge
+   * - 1-3 days: 50% cancellation charge
+   * - <1 day:   75% cancellation charge
    */
-  static optOut(tid, userId, tournaments, players, currentUser) {
-    logger.logAction('TOURNAMENT_OPTOUT_START', { tid, userId });
+  static getCancellationChargePercent(tournamentDate: string, serverClockOffset: number = 0): { percent: number; label: string; daysRemaining: number } {
+    const now = Date.now() + (serverClockOffset || 0);
+    const tournamentTime = new Date(tournamentDate).getTime();
+    const msRemaining = tournamentTime - now;
+    const daysRemaining = msRemaining / (1000 * 60 * 60 * 24);
+
+    if (daysRemaining >= 5) return { percent: 0,  label: 'No cancellation charge (5+ days)', daysRemaining: Math.floor(daysRemaining) };
+    if (daysRemaining >= 3) return { percent: 25, label: '25% cancellation charge (3-5 days)', daysRemaining: Math.floor(daysRemaining) };
+    if (daysRemaining >= 1) return { percent: 50, label: '50% cancellation charge (1-3 days)', daysRemaining: Math.floor(daysRemaining) };
+    return { percent: 75, label: '75% cancellation charge (<1 day)', daysRemaining: Math.max(0, Math.floor(daysRemaining)) };
+  }
+
+  static optOut(tid, userId, tournaments, players, currentUser, refundToWallet = true, serverClockOffset = 0) {
+    logger.logAction('TOURNAMENT_OPTOUT_START', { tid, userId, refundToWallet });
 
     let updatedPlayers = [...players];
     let updatedCurrentUser = { ...currentUser };
 
+    // Find the tournament for refund calculation
+    const tournament = tournaments.find(t => t.id === tid);
+    const entryFee = tournament?.entryFee || 0;
+    const wasRegistered = tournament ? (tournament.registeredPlayerIds || []).some(
+      pid => String(pid).toLowerCase() === String(userId).toLowerCase()
+    ) : false;
+    const wasPending = tournament ? (tournament.pendingPaymentPlayerIds || []).some(
+      pid => String(pid).toLowerCase() === String(userId).toLowerCase()
+    ) : false;
+
+    // 💰 [REFUND_ENGINE] (v2.6.512): Calculate refund with cancellation charges
+    let refundAmount = 0;
+    let cancellationCharge = 0;
+    let cancellationPercent = 0;
+    let refundInfo = null;
+
+    if (refundToWallet && entryFee > 0 && wasRegistered && tournament) {
+      const chargeInfo = this.getCancellationChargePercent(tournament.date, serverClockOffset);
+      cancellationPercent = chargeInfo.percent;
+      cancellationCharge = Math.round(entryFee * (cancellationPercent / 100));
+      refundAmount = entryFee - cancellationCharge;
+
+      refundInfo = {
+        entryFee,
+        cancellationPercent,
+        cancellationCharge,
+        refundAmount,
+        daysRemaining: chargeInfo.daysRemaining,
+        label: chargeInfo.label
+      };
+
+      logger.logAction('TOURNAMENT_REFUND_CALCULATED', refundInfo);
+
+      // Credit refund to wallet
+      if (refundAmount > 0 && String(userId).toLowerCase() === String(currentUser.id).toLowerCase()) {
+        updatedCurrentUser.credits = (updatedCurrentUser.credits || 0) + refundAmount;
+        const historyEntries = [];
+
+        // Refund credit entry
+        historyEntries.push({
+          id: `refund-${Date.now()}`,
+          amount: refundAmount,
+          type: 'credit',
+          description: `Refund for ${tournament.title}${cancellationCharge > 0 ? ` (₹${cancellationCharge} cancellation fee deducted)` : ''}`,
+          date: new Date().toISOString(),
+          refundMeta: { tournamentId: tid, entryFee, cancellationPercent, cancellationCharge }
+        });
+
+        updatedCurrentUser.walletHistory = [
+          ...historyEntries,
+          ...(updatedCurrentUser.walletHistory || [])
+        ];
+      }
+    }
+
     const updatedTournaments = tournaments.map(item => {
       if (item.id !== tid) return item;
 
-      const wasRegistered = (item.registeredPlayerIds || []).some(pid => String(pid).toLowerCase() === String(userId).toLowerCase());
+      const itemWasRegistered = (item.registeredPlayerIds || []).some(pid => String(pid).toLowerCase() === String(userId).toLowerCase());
       
       let updatedItem = {
         ...item,
@@ -165,11 +243,21 @@ class TournamentService {
         pendingPaymentPlayerIds: (item.pendingPaymentPlayerIds || []).filter(pid => String(pid).toLowerCase() !== String(userId).toLowerCase()),
         waitlistedPlayerIds: (item.waitlistedPlayerIds || []).filter(pid => String(pid).toLowerCase() !== String(userId).toLowerCase()),
         optedOutPlayerIds: [...new Set([...(item.optedOutPlayerIds || []), userId.toLowerCase()])],
-        playerStatuses: { ...(item.playerStatuses || {}), [userId.toLowerCase()]: 'Opted-Out' }
+        playerStatuses: { ...(item.playerStatuses || {}), [userId.toLowerCase()]: 'Opted-Out' },
+        // Track refund history on the tournament for academy visibility
+        refundHistory: [
+          ...(item.refundHistory || []),
+          ...(refundInfo ? [{
+            playerId: userId.toLowerCase(),
+            playerName: currentUser.name || 'Unknown',
+            ...refundInfo,
+            timestamp: new Date().toISOString()
+          }] : [])
+        ]
       };
 
       // Auto-promote waitlisted player
-      if (wasRegistered && (updatedItem.waitlistedPlayerIds || []).length > 0) {
+      if (itemWasRegistered && (updatedItem.waitlistedPlayerIds || []).length > 0) {
         const promotedId = updatedItem.waitlistedPlayerIds[0];
         const isPaid = (updatedItem.entryFee || 0) > 0;
 
@@ -232,13 +320,17 @@ class TournamentService {
       );
     }
 
-    logger.logAction('TOURNAMENT_OPTOUT_SUCCESS', { tid, userId });
+    logger.logAction('TOURNAMENT_OPTOUT_SUCCESS', { 
+      tid, userId, 
+      refundAmount, cancellationCharge, cancellationPercent 
+    });
 
     return {
       success: true,
       tournaments: updatedTournaments,
       players: updatedPlayers,
-      currentUser: updatedCurrentUser
+      currentUser: updatedCurrentUser,
+      refundInfo
     };
   }
 

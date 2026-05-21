@@ -62,14 +62,47 @@ const MatchCard = ({
   }, [isPendingPayment, t.pendingPaymentTimestamps, user?.id, serverClockOffset]);
 
 
-  // 🛡️ v2.6.99: Confirmation dialog before opt-out to prevent accidental withdrawals
+  // 🛡️ v2.6.99: Confirmation dialog before opt-out
+  // 💰 v2.6.512: Shows cancellation charge breakdown for paid tournaments
   const handleOptOut = () => {
+    const entryFee = t.entryFee || 0;
+    const isRegistered = user?.id && (t.registeredPlayerIds || []).some(
+      id => String(id).toLowerCase() === String(user.id).toLowerCase()
+    );
+
+    // For free tournaments or non-registered players, use simple dialog
+    if (entryFee <= 0 || !isRegistered) {
+      Alert.alert(
+        "Confirm Opt-Out",
+        `Are you sure you want to opt out of "${t.title}"? This action cannot be undone.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Yes, Opt Out", style: "destructive", onPress: () => onOptOut(t.id) }
+        ]
+      );
+      return;
+    }
+
+    // For paid tournaments: calculate and show cancellation charges
+    const TournamentService = require('../services/TournamentService').default;
+    const chargeInfo = TournamentService.getCancellationChargePercent(t.date, serverClockOffset || 0);
+    const cancellationCharge = Math.round(entryFee * (chargeInfo.percent / 100));
+    const refundAmount = entryFee - cancellationCharge;
+
+    const chargeMessage = chargeInfo.percent > 0
+      ? `\n\n📋 ${chargeInfo.label}\n• Entry Fee: ₹${entryFee}\n• Cancellation Fee: ₹${cancellationCharge}\n• Refund to Wallet: ₹${refundAmount}`
+      : `\n\n✅ Full refund of ₹${entryFee} will be credited to your wallet.`;
+
     Alert.alert(
-      "Confirm Opt-Out",
-      `Are you sure you want to opt out of "${t.title}"? This action cannot be undone.`,
+      "Confirm Opt-Out & Refund",
+      `Are you sure you want to opt out of "${t.title}"?${chargeMessage}`,
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Yes, Opt Out", style: "destructive", onPress: () => onOptOut(t.id) }
+        { text: "Opt Out & Refund", style: "destructive", onPress: () => onOptOut(t.id, true) },
+        ...(chargeInfo.percent > 0 
+          ? [{ text: "Opt Out (No Refund)", onPress: () => onOptOut(t.id, false) }]
+          : []
+        )
       ]
     );
   };
