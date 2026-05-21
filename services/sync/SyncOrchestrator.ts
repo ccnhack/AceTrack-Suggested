@@ -617,10 +617,22 @@ class SyncOrchestrator {
       localState[key] = await storage.getItem(key);
     }
 
-    // 2. Perform Pure Merge
+    // 2. 🛡️ [PENDING_OVERWRITE_GUARD] (v2.6.509)
+    // If we have local changes queued for pushing, DO NOT overwrite them with 
+    // remote WebSocket broadcasts, as those broadcasts might contain older server state
+    // before our push was processed.
+    const pendingUpdates = queueService.getPendingUpdates();
+    for (const key in pendingUpdates) {
+      if (remoteUpdates[key]) {
+        console.warn(`[SyncOrchestrator] [SYNC_GUARD] Skipping remote update for '${key}' because local changes are pending push.`);
+        delete remoteUpdates[key];
+      }
+    }
+
+    // 3. Perform Pure Merge
     const { result, meta } = dataMerger.mergeData(localState, remoteUpdates);
 
-    // 3. Save Merged Result with Checksum Suppression (Phase 0.8)
+    // 4. Save Merged Result with Checksum Suppression (Phase 0.8)
     for (const key of meta.fieldsChanged) {
       const current = localState[key];
       const next = result[key];

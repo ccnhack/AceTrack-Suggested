@@ -253,12 +253,17 @@ export const useTournamentsStore = create((set, get) => {
           set({ tournaments: result.tournaments });
           usePlayersStore.getState().setPlayers(result.players);
           useAuthStore.getState().setCurrentUser(result.currentUser);
-          console.log('[TournamentsStore] State updated locally. Syncing...');
+          console.log(`[TournamentsStore] State updated locally. Pushing ATOMICALLY to server...`);
+          // 🛡️ [ATOMIC_REG_PUSH] (v2.6.509): Registration MUST use isAtomic=true.
+          // Previously used isAtomic=false which delayed the push by 3 seconds.
+          // During that window, a WebSocket broadcast of old server state would 
+          // overwrite the local registration via cloud-wins merge, reverting it.
           await syncOrchestrator.syncAndSaveData({
             tournaments: result.tournaments,
             players: result.players,
             currentUser: result.currentUser
-          }, false);
+          }, true);
+          console.log(`[TournamentsStore] Atomic push completed for ${tid}. Registration persisted.`);
         } else {
           const msg = result?.message || 'Could not complete registration.';
           Alert.alert('Registration Failed', msg);
