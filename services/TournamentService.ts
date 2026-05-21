@@ -272,6 +272,17 @@ class TournamentService {
     return { success: true, tournaments: updated };
   }
 
+  static optInCoach(tournament, user) {
+    if (!tournament || !user) return { success: false, message: 'Invalid request' };
+    // Optimistically assign the coach to the tournament
+    const updatedTournament = {
+      ...tournament,
+      assignedCoachId: user.id,
+      coachStatus: 'Coach Assigned'
+    };
+    return { success: true, tournaments: [updatedTournament] };
+  }
+
   static removeCoach(tid, tournaments) {
     const updated = tournaments.map(t => t.id === tid ? { ...t, assignedCoachId: null, coachStatus: 'Awaiting Coach Confirmation' } : t);
     return { success: true, tournaments: updated };

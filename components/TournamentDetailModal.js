@@ -181,7 +181,12 @@ const TournamentDetailModal = ({
   const handleOptIn = async () => {
     const res = await TournamentService.optInCoach(tournament, user);
     notify(res);
-    if (res.success) onClose();
+    if (res.success) {
+      if (onUpdateTournament) {
+        onUpdateTournament(res.tournaments[0]);
+      }
+      onClose();
+    }
   };
 
   const getRegisterBtnLabel = () => {
