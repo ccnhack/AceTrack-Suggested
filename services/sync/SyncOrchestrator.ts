@@ -363,6 +363,16 @@ class SyncOrchestrator {
       }
 
       if (hasSyncable) {
+        // 🛡️ [ATOMIC_KEYS_INJECTION] (v2.6.511): When isAtomic is true, include the atomicKeys
+        // array in the payload so the server performs a FULL OVERWRITE instead of a merge.
+        // Without this, the server merge path (entityMap) only adds/updates items — it never
+        // removes them. This caused deleted tournaments to survive on the server and reappear
+        // when the client re-pulled state 3-5 seconds later.
+        if (isAtomic) {
+          syncUpdates.atomicKeys = Object.keys(syncUpdates).filter(k => k !== 'atomicKeys');
+          console.log(`[SyncOrchestrator] [ATOMIC_KEYS] Marking keys for atomic overwrite: ${syncUpdates.atomicKeys.join(', ')}`);
+        }
+
         await queueService.setPendingUpdates(Object.keys(syncUpdates), syncUpdates);
 
         // 🛡️ [SYNC GATE] (v2.6.118)

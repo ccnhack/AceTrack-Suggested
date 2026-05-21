@@ -616,6 +616,21 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
           }
           else if (atomicKeys.includes(key) && key !== 'players') {
             console.log(`[SYNC_DEBUG] Atomic Overwrite for key: ${key} (${incoming.length} items)`);
+            // 🛡️ [DELETE_AUDIT] (v2.6.511): Log which items were removed during atomic overwrite
+            if (key === 'tournaments' && currentData.tournaments) {
+              const incomingIds = new Set(incoming.map(t => String(t.id).toLowerCase()));
+              const removedIds = currentData.tournaments
+                .filter(t => t && t.id && !incomingIds.has(String(t.id).toLowerCase()))
+                .map(t => ({ id: t.id, title: t.title }));
+              if (removedIds.length > 0) {
+                console.log(`🗑️ [DELETE_AUDIT] Tournaments REMOVED via atomic overwrite: ${JSON.stringify(removedIds)}`);
+                logAudit(req, 'TOURNAMENT_DELETED', ['tournaments'], { 
+                  deletedTournaments: removedIds, 
+                  remainingCount: incoming.length,
+                  userId: req.headers['x-user-id'] 
+                }).catch(() => {});
+              }
+            }
             newMasterData[key] = incoming;
             continue; 
           }

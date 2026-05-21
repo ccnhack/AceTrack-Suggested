@@ -414,7 +414,10 @@ export const useTournamentsStore = create((set, get) => {
 
     onDeleteTournament: (tid) => {
       const currentTournaments = get().tournaments;
+      const deletedT = currentTournaments.find(t => t.id === tid);
+      console.log(`[TournamentsStore] [DELETE] Deleting tournament: id=${tid}, title=${deletedT?.title || 'UNKNOWN'}, beforeCount=${currentTournaments.length}`);
       const updated = currentTournaments.filter(t => t.id !== tid);
+      console.log(`[TournamentsStore] [DELETE] afterCount=${updated.length}. Pushing ATOMICALLY to server...`);
       set({ tournaments: updated });
       syncOrchestrator.syncAndSaveData({ tournaments: updated }, true);
     },
