@@ -105,14 +105,13 @@ const MatchCard = ({
         ]
       );
     } else if (chargeInfo.percent > 0) {
-      // Partial cancellation — show both options
+      // Partial cancellation — show only the refund option
       Alert.alert(
         "Confirm Opt-Out & Refund",
         `Are you sure you want to opt out of "${t.title}"?\n\n📋 ${chargeInfo.label}\n• Entry Fee: ₹${entryFee}\n• Cancellation Fee: ₹${cancellationCharge}\n• Refund to Wallet: ₹${refundAmount}`,
         [
           { text: "Cancel", style: "cancel" },
-          { text: "Opt Out & Refund", style: "destructive", onPress: () => onOptOut(t.id, true) },
-          { text: "Opt Out (No Refund)", onPress: () => onOptOut(t.id, false) }
+          { text: "Opt Out & Refund", style: "destructive", onPress: () => onOptOut(t.id, true) }
         ]
       );
     } else {
