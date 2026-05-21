@@ -840,7 +840,7 @@ const ProfileScreen = ({ navigation }) => {
                 </View>
                 <PlayerWalletDashboard 
                   user={user} 
-                  onTopUp={onTopUp} 
+                  onTopUp={(amount) => onTopUp(amount, players)} 
                   noCard={true}
                 />
               </ScrollView>
