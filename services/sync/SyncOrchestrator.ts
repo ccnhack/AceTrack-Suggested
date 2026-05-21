@@ -170,18 +170,21 @@ class SyncOrchestrator {
 
         eventBus.emit('INITIALIZATION_COMPLETE', { userId });
 
-        // 🛡️ [POLLING_FALLBACK] (v2.6.331):
-        // If Socket.io fails (common on some corporate/proxy environments),
-        // we start a low-frequency REST poll to ensure the UI stays updated.
-        if (Platform.OS === 'web') {
-           setInterval(() => {
-             // Only poll if socket is NOT connected or if we have high conflict history
-             if (!this.isCloudOnline) {
-               console.log('[SyncOrchestrator] [POLLING] Socket disconnected. Performing REST poll...');
-               this.forcePullData();
-             }
-           }, 20000); // 20s poll is safe for Render free tier
-        }
+        // 🛡️ [POLLING_FALLBACK_v2] (v2.6.511):
+        // Extended to ALL platforms. Mobile academy users had zero polling, relying
+        // entirely on WebSocket broadcasts. If the broadcast was missed (app backgrounding,
+        // transient disconnect), they'd never see new registrations from other users.
+        const pollInterval = Platform.OS === 'web' ? 20000 : 30000;
+        setInterval(() => {
+          // Poll if socket is NOT connected, OR always poll on mobile at lower frequency
+          // to catch any missed broadcasts (mobile WebSocket is less reliable)
+          if (!this.isCloudOnline || Platform.OS !== 'web') {
+            if (!this.isAuthMuted && this.userId && this.userId !== 'guest') {
+              console.log(`[SyncOrchestrator] [POLLING] ${!this.isCloudOnline ? 'Socket disconnected' : 'Periodic refresh'}. Performing REST poll...`);
+              this.forcePullData();
+            }
+          }
+        }, pollInterval);
       } catch (e: any) {
         console.error('[SyncOrchestrator] FATAL_INIT_CRASH:', e);
         logger.logAction('SYNC_ORCHESTRATOR_INIT_FATAL', { error: e.message, stack: e.stack });
@@ -497,12 +500,18 @@ class SyncOrchestrator {
           localData[key] = await storage.getItem(key);
         }
 
-        // 🛡️ [HEAL_GUARD] (v2.6.510): Preserve pending local updates during conflict resolution
+        // 🛡️ [HEAL_GUARD_v2] (v2.6.511): Smart merge for pending local updates.
+        // Same fix as PULL_GUARD_v2: collections get cloud-wins merged, non-collections keep local.
         const pendingUpdates = queueService.getPendingUpdates();
         for (const key in pendingUpdates) {
           if (serverData[key]) {
-            console.warn(`[SyncOrchestrator] [HEAL_GUARD] Preserving local pending changes for '${key}' during self-heal.`);
-            delete serverData[key];
+            if (Array.isArray(serverData[key]) && Array.isArray(pendingUpdates[key])) {
+              console.warn(`[SyncOrchestrator] [HEAL_GUARD_v2] Merging pending '${key}' with server data.`);
+              serverData[key] = dataMerger.mergeCollection(pendingUpdates[key], serverData[key]);
+            } else {
+              console.warn(`[SyncOrchestrator] [HEAL_GUARD_v2] Keeping local pending '${key}'.`);
+              delete serverData[key];
+            }
           }
         }
 
@@ -755,12 +764,19 @@ class SyncOrchestrator {
          }
        }
 
-       // 🛡️ [PULL_GUARD] (v2.6.510): Preserve pending local updates during force pull
+       // 🛡️ [PULL_GUARD_v2] (v2.6.511): Smart merge for pending local updates.
+       // v2.6.510 deleted the entire key, blocking new registrations from other users.
+       // Now: collections get cloud-wins merged, non-collections keep local pending.
        const pendingUpdates = queueService.getPendingUpdates();
        for (const key in pendingUpdates) {
          if (data[key]) {
-           console.warn(`[SyncOrchestrator] [PULL_GUARD] Preserving local pending changes for '${key}' during force pull.`);
-           delete data[key];
+           if (Array.isArray(data[key]) && Array.isArray(pendingUpdates[key])) {
+             console.warn(`[SyncOrchestrator] [PULL_GUARD_v2] Merging pending '${key}' with server data.`);
+             data[key] = dataMerger.mergeCollection(pendingUpdates[key], data[key]);
+           } else {
+             console.warn(`[SyncOrchestrator] [PULL_GUARD_v2] Keeping local pending '${key}'.`);
+             delete data[key];
+           }
          }
        }
 
