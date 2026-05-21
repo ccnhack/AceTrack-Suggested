@@ -31,11 +31,13 @@ export const PaymentModal = memo(({
               setRegPaymentTarget(null);
               setSelectedTournament(null);
               
-              if (isRescheduling) {
-                  Alert.alert("Success", "Arena swapped successfully!");
-              } else {
-                  Alert.alert("Success", "Registration successful!");
-              }
+              setTimeout(() => {
+                  if (isRescheduling) {
+                      Alert.alert("Success", "Arena swapped successfully!");
+                  } else {
+                      Alert.alert("Success", "Registration successful!");
+                  }
+              }, 300);
           }
       } catch (e) {
           console.error('[ExploreScreen] Finalize Error:', e);

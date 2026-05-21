@@ -9,6 +9,7 @@ import { create } from 'zustand';
 import { eventBus } from '../services/EventBus';
 import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 import storage from '../utils/storage';
+import { Alert } from 'react-native';
 
 // ═══════════════════════════════════════════════════════════════
 // 🔄 SYNC STORE — Replaces SyncContext state
@@ -230,6 +231,7 @@ export const useTournamentsStore = create((set, get) => {
         const currentUser = useAuthStore.getState().currentUser;
         if (!currentUser || !t) {
           console.warn('[TournamentsStore] Registration aborted: Missing User or Tournament');
+          Alert.alert('Registration Failed', 'Invalid registration state. Missing user or tournament.');
           return { success: false, message: 'Invalid registration state.' };
         }
         const tid = typeof t === 'object' ? t.id : t;
@@ -237,6 +239,7 @@ export const useTournamentsStore = create((set, get) => {
         const tournament = currentTournaments.find(it => it.id === tid);
         if (!tournament) {
           console.warn('[TournamentsStore] Registration target not found:', tid);
+          Alert.alert('Registration Failed', 'Arena not found. Please refresh.');
           return { success: false, message: 'Arena not found. Please refresh.' };
         }
         console.log(`[TournamentsStore] Starting registration for ${tid} via ${method}`);
@@ -256,13 +259,11 @@ export const useTournamentsStore = create((set, get) => {
           }, false);
         } else {
           const msg = result?.message || 'Could not complete registration.';
-          const { Alert } = require('react-native');
           Alert.alert('Registration Failed', msg);
         }
         return result;
       } catch (e) {
         console.error('[TournamentsStore] FATAL_ON_REGISTER_ERROR:', e);
-        const { Alert } = require('react-native');
         Alert.alert('System Error', `Line: onRegister\nError: ${e.message}\nStack: ${e.stack?.substring(0, 100)}`);
         throw e;
       }
