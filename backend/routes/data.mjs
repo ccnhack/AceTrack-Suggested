@@ -652,7 +652,7 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
                 const isUserRegistering = (p.registeredPlayerIds || []).includes(currentUserId) && 
                                         !(existing.registeredPlayerIds || []).includes(currentUserId);
 
-                if (isUserRegistering && existingReg >= (existing.maxPlayers || 0)) {
+                if (isUserRegistering && existingReg >= (existing.maxPlayers || Infinity)) {
                   console.warn(`🛑 [SLOT_GUARD] Rejecting registration for ${currentUserId} in tournament ${p.id}. Slot already taken (Registered: ${existingReg}/${existing.maxPlayers}).`);
                   
                   // 🛡️ [DIAGNOSTICS] (v2.6.311)
