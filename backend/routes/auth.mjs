@@ -65,7 +65,7 @@ export default function createAuthRoutes({
     }
 
     // Read fresh user from DB
-    const playerDoc = await Player.findOne({ id: req.user.id }).lean();
+    const playerDoc = await Player.findOne({ id: req.user.id }).select('+data.password').lean();
     const user = playerDoc?.data;
 
     if (!user) {
@@ -167,7 +167,7 @@ export default function createAuthRoutes({
     }
 
     // 🛡️ SCALABILITY FIX (v2.6.316): Read from Player distinct collection
-    const adminDoc = await Player.findOne({ id: 'admin' }).lean();
+    const adminDoc = await Player.findOne({ id: 'admin' }).select('+data.password').lean();
     const adminUser = adminDoc?.data;
 
     if (!adminUser || adminUser.role !== 'admin') {
@@ -334,7 +334,7 @@ export default function createAuthRoutes({
         { id: searchReg },
         { "data.username": searchReg }
       ]
-    }).lean();
+    }).select('+data.password').lean();
     
     const user = userDoc?.data;
 
@@ -424,7 +424,7 @@ export default function createAuthRoutes({
         { "data.username": searchReg },
         { "data.name": searchReg }
       ]
-    }).lean();
+    }).select('+data.password').lean();
     const supportUser = supportDoc?.data;
     console.log(`[DIAG] Support Login Attempt: ${search} | Found: ${!!supportUser}`);
 
