@@ -289,13 +289,13 @@ We have two log sources:
    - ⚠️ IMPORTANT: Use $regex for string matching to avoid missing logs due to exact case or exact string mismatches! 
      Example for userId: { "userId": { "$regex": "shush", "$options": "i" } }
      Example for action: { "action": { "$regex": "LOGIN|PASSWORD", "$options": "i" } }
-2. 'server_events.jsonl' (Filesystem): Contains server-level errors, crashes, panics.
+2. 'server_events.jsonl' (Filesystem): Contains server errors, crashes, panics AND critical account/business events like 'SUPPORT_ACCOUNT_CREATED', 'PASSWORD_CHANGED', 'ADMIN_LOGIN_SUCCESS', 'OTP_VERIFY_SUCCESS'.
 
 User query: "${userQuery}"
 
 Based on this query, generate a JSON object with two fields:
 1. "mongoFilter": A valid MongoDB query object for the AuditLog collection (use $regex heavily for strings!). If the query is broad, return {} to fetch the latest logs.
-2. "checkServerEventsFile": A boolean (true if the query seems to ask about server crashes, panics, or websocket errors).
+2. "checkServerEventsFile": A boolean (MUST be true if the query asks about server crashes, panics, OR account creations, onboarding, password changes, OTPs, or admin logins!).
 
 DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. No explanations.`;
 
