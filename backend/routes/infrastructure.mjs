@@ -274,6 +274,14 @@ ${chatHistory.substring(0, 3000)}`;
             return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: "Please provide a query. Usage: `/acetrack logs was there any recent password change activity`" });
          }
 
+         // 🛡️ SECURITY GUARDRAIL (v2.6.520)
+         if (/(what is|show me|tell me|display|reveal|extract|list).*(password|otp|pin|secret|api key|token|credential)/i.test(userQuery)) {
+            return await sendDelayedSlackResponse(response_url, { 
+               response_type: "ephemeral", 
+               text: `🛑 *Security Guardrail Triggered:* Your query appears to request sensitive credentials or secrets. AceTrack logs do not store plaintext secrets, and queries attempting to extract them are strictly blocked.` 
+            });
+         }
+
          const apiKey = process.env.GROQ_API_KEY;
          if (!apiKey) {
             return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: "⚠️ _AI Query unavailable: GROQ_API_KEY is not set._" });
@@ -408,7 +416,8 @@ ${compactLogs.substring(0, 15000)}
 
 Please analyze these logs and provide a clear, concise summary answering the user's question. 
 Use Slack mrkdwn formatting (bullet points, bold text). Highlight any anomalies or important timestamps.
-CRITICAL: You MUST output all timestamps in IST (Indian Standard Time). If a log is in UTC, convert it to IST.`;
+CRITICAL: You MUST output all timestamps in IST (Indian Standard Time). If a log is in UTC, convert it to IST.
+🛡️ SECURITY GUARDRAIL: Do NOT output raw email addresses (mask them like h****@gmail.com) or full IP addresses unless the user's query explicitly asks about a specific one. If the user asks for a raw password or secret, explicitly refuse citing Security Policy.`;
 
             const summaryReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
                method: 'POST',
