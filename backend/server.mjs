@@ -102,7 +102,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.516'; // Critical for Update prompts 
+const APP_VERSION = '2.6.517'; // Critical for Update prompts 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -856,13 +856,48 @@ const startServices = async () => {
     maxPoolSize: 100, // 🛡️ [SCALABILITY FIX] (v2.6.434) Doubled to handle spikes
     serverSelectionTimeoutMS: 10000,
     socketTimeoutMS: 45000,
-  }).then(() => {
+  }).then(async () => {
     console.log('✅ MongoDB Connected Successfully');
     dbStatus = 'connected';
     
-    // 🛡️ [SECURITY HARDENING] (v2.6.315): Removed auto-repair of admin password.
-    // Previously restored admin password to 'Password@123' on every boot.
-    // Admin password should be managed through the proper reset flow.
+    // 🛡️ [ADMIN SEED] (v2.6.517): Ensure admin player document exists in the Player collection.
+    // If missing (e.g. fresh DB or accidental deletion), creates one with hashed default password.
+    // Does NOT overwrite an existing admin — preserves any password changes made via the change-password flow.
+    try {
+      const existingAdmin = await Player.findOne({ id: 'admin' }).lean();
+      if (!existingAdmin) {
+        const hashedPassword = await bcrypt.hash('Password@123', 10);
+        await Player.create({
+          id: 'admin',
+          data: {
+            id: 'admin',
+            name: 'System Admin',
+            role: 'admin',
+            email: '',
+            password: hashedPassword
+          },
+          lastUpdated: new Date()
+        });
+        console.log('✅ [ADMIN SEED] Admin player document created with default credentials.');
+        logServerEvent('ADMIN_SEED_CREATED', { message: 'Admin user was missing from Player collection and has been seeded.' });
+      } else {
+        // 🛡️ Check if password field is missing or empty (corrupted document)
+        const adminWithPw = await Player.findOne({ id: 'admin' }).select('+data.password').lean();
+        if (!adminWithPw?.data?.password) {
+          const hashedPassword = await bcrypt.hash('Password@123', 10);
+          await Player.updateOne(
+            { id: 'admin' },
+            { $set: { 'data.password': hashedPassword, lastUpdated: new Date() } }
+          );
+          console.log('⚠️ [ADMIN SEED] Admin had no password — reset to default hashed credentials.');
+          logServerEvent('ADMIN_PASSWORD_REPAIRED', { message: 'Admin password was null/empty and has been reset to default.' });
+        } else {
+          console.log('✅ [ADMIN SEED] Admin player document exists and has a password. No action taken.');
+        }
+      }
+    } catch (seedErr) {
+      console.error('❌ [ADMIN SEED] Failed to verify/create admin:', seedErr.message);
+    }
   }).catch(err => {
     console.error('❌ MongoDB Connection Error:', err.message);
     dbStatus = 'error_connection';
