@@ -36,7 +36,7 @@ import {
 import SupportMetricsService from './services/SupportMetricsService.mjs';
 
 // 🏗️ [PHASE 1 MODULARIZATION] (v2.6.315): Extracted modules
-import { AppState, AuditLog, SecuritySummary, SupportInvite, SupportPasswordReset } from './models/index.mjs';
+import { AppState, AuditLog, SecuritySummary, SupportInvite, SupportPasswordReset, Player } from './models/index.mjs';
 import { getISTTimestamp, getISTDate, addInAppNotification, asyncHandler } from './helpers/utils.mjs';
 import {
   initSecurity, PUBLIC_APP_ID,
