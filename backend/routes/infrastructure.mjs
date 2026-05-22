@@ -195,7 +195,12 @@ ${chatHistory.substring(0, 3000)}`;
                   // Force a newline before every bullet point if the AI missed it
                   summary = rawContent.replace(/(?<!\n)(•|-)/g, '\n$1').trim();
                } else {
-                  summary = `_AI Error: ${aiReq.statusText}_`;
+                  let errorBody = await aiReq.text();
+                  try { 
+                     const p = JSON.parse(errorBody);
+                     if (p.error && p.error.message) errorBody = p.error.message;
+                  } catch(e){}
+                  summary = `_AI Error (${aiReq.status}): ${aiReq.statusText || 'Request Failed'} - ${errorBody}_`;
                }
             } catch (e) {
                summary = `_AI Generation Failed: ${e.message}_`;
@@ -365,7 +370,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
 A user asked: "${userQuery}"
 
 Here are the retrieved system logs matching their request (from MongoDB and/or Filesystem):
-${compactLogs.substring(0, 80000)}
+${compactLogs.substring(0, 15000)}
 
 Please analyze these logs and provide a clear, concise summary answering the user's question. 
 Use Slack mrkdwn formatting (bullet points, bold text). Highlight any anomalies or important timestamps.`;
@@ -386,7 +391,12 @@ Use Slack mrkdwn formatting (bullet points, bold text). Highlight any anomalies 
                const summaryJson = await summaryReq.json();
                summaryContent = summaryJson.choices?.[0]?.message?.content || summaryContent;
             } else {
-               summaryContent = `_AI Error: ${summaryReq.statusText}_`;
+               let errorBody = await summaryReq.text();
+               try { 
+                  const p = JSON.parse(errorBody);
+                  if (p.error && p.error.message) errorBody = p.error.message;
+               } catch(e){}
+               summaryContent = `_AI Error (${summaryReq.status}): ${summaryReq.statusText || 'Request Failed'} - ${errorBody}_`;
             }
 
             const blocks = [

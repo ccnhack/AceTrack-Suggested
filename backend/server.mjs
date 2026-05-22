@@ -102,7 +102,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.519'; // Critical for Update prompts 
+const APP_VERSION = '2.6.520'; // Critical for Update prompts 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -860,7 +860,7 @@ const startServices = async () => {
     console.log('✅ MongoDB Connected Successfully');
     dbStatus = 'connected';
     
-    // 🛡️ [ADMIN SEED] (v2.6.519): Ensure admin player document exists in the Player collection.
+    // 🛡️ [ADMIN SEED] (v2.6.520): Ensure admin player document exists in the Player collection.
     // If missing (e.g. fresh DB or accidental deletion), creates one with hashed default password.
     // Does NOT overwrite an existing admin — preserves any password changes made via the change-password flow.
     try {

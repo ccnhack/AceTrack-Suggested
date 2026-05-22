@@ -21,6 +21,7 @@ if (Platform.OS === 'android' && (!hostIp || hostIp === '127.0.0.1' || hostIp ==
 // In production (built APK/IPA), always use the stable Render Cloud URL.
 const CLOUD_API_URL = 'https://acetrack-suggested.onrender.com';
 let _API_BASE_URL = __DEV__ ? LOCAL_API_URL : CLOUD_API_URL;
+
 // 🛡️ [SECURITY HARDENING] (v2.6.315): Keys loaded from environment only.
 // GROQ_API_KEY is NOT needed on the client — AI calls route through the backend proxy.
 // ACE_API_KEY is read from app.json > extra or EXPO_PUBLIC env var.
@@ -28,12 +29,15 @@ const GROQ_API_KEY = (Constants.expoConfig?.extra?.groqApiKey)
   || process.env.EXPO_PUBLIC_GROQ_API_KEY
   || null;
 
-const ACE_API_KEY = (Constants.expoConfig?.extra?.aceApiKey)
-  || process.env.EXPO_PUBLIC_ACE_API_KEY
-  || null;
+const ACE_API_KEY = Constants.expoConfig?.extra?.aceApiKey || process.env.EXPO_PUBLIC_ACE_API_KEY;
+
+// Ensure API key exists
+if (!ACE_API_KEY) {
+  console.warn("⚠️ ACE_API_KEY is missing! Authentication to the backend will fail.");
+}
 
 export default {
-  APP_VERSION: '2.6.519',
+  APP_VERSION: '2.6.520',
   get API_BASE_URL() { return _API_BASE_URL; },
   set API_BASE_URL(val) { _API_BASE_URL = val; },
   CLOUD_API_URL,

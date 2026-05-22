@@ -81,7 +81,7 @@ export const AdminGrievancesPanel = ({
   const [liveAttendanceData, setLiveAttendanceData] = useState([]);
 
   // 🛡️ [AGENT_FILTER_STATE] (v2.6.452)
-  const [assignmentScope, setAssignmentScope] = useState('me'); // 'me' | 'all'
+  const [assignmentScope, setAssignmentScope] = useState('all'); // 'me' | 'all'
   const [filterAgentId, setFilterAgentId] = useState(null);
   const [showAgentPicker, setShowAgentPicker] = useState(false);
 

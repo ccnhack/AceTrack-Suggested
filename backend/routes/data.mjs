@@ -38,8 +38,10 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
     const resolvedRole = req.user?.role || req.userRole || null;
     const resolvedScopes = req.user?.scopes || [];
     
+    // 🛡️ [SUPPORT FIX]: The web frontend sometimes drops cookies cross-origin. 
+    // Admins were surviving via the 'admin' ID fallback. Added fallback for 'admin_support_' IDs.
     const isAdmin = resolvedRole === 'admin' || normalizedReqId === 'admin' || resolvedScopes.includes('*');
-    const isSupport = resolvedRole === 'support' || resolvedScopes.includes('read:support');
+    const isSupport = resolvedRole === 'support' || resolvedScopes.includes('read:support') || normalizedReqId.startsWith('admin_support_');
     const canReadSupport = isAdmin || isSupport || resolvedScopes.includes('read:basic');
 
     const matchQuery = isAdmin ? {} : { 
