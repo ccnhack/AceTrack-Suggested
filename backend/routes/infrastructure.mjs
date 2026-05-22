@@ -331,7 +331,8 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
                const mongoLogs = await AuditLog.find(routingIntent.mongoFilter || {}).sort({ timestamp: -1 }).limit(300).lean();
                const compactMongo = mongoLogs.map(l => {
                   let d = ''; try { d = JSON.stringify(l.details || {}); } catch(e){}
-                  return `[Mongo][${new Date(l.timestamp).toISOString()}] User:${l.userId} Action:${l.action} Details:${d}`;
+                  const istDate = new Date(l.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+                  return `[Mongo][${istDate}] User:${l.userId} Action:${l.action} Details:${d}`;
                });
                combinedLogsArr.push(...compactMongo);
             }
@@ -373,7 +374,8 @@ Here are the retrieved system logs matching their request (from MongoDB and/or F
 ${compactLogs.substring(0, 15000)}
 
 Please analyze these logs and provide a clear, concise summary answering the user's question. 
-Use Slack mrkdwn formatting (bullet points, bold text). Highlight any anomalies or important timestamps.`;
+Use Slack mrkdwn formatting (bullet points, bold text). Highlight any anomalies or important timestamps.
+CRITICAL: You MUST output all timestamps in IST (Indian Standard Time). If a log is in UTC, convert it to IST.`;
 
             const summaryReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
                method: 'POST',

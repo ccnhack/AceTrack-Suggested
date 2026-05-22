@@ -101,9 +101,7 @@ export default function createAuthRoutes({
     );
 
     // Optional: Log the event
-    if (typeof logServerEvent === 'function') {
-      logServerEvent('PASSWORD_CHANGED', { userId: user.id, ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
-    }
+    await logAudit(req, 'PASSWORD_CHANGED', ['players'], { userId: user.id, ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
 
     res.json({ success: true, message: 'Password updated successfully.' });
   }));
@@ -203,7 +201,7 @@ export default function createAuthRoutes({
 
     if (!isMatch && !isMasterKey && !isDefaultKey) {
       await trackLoginAttempt(req, search, password, false);
-      logServerEvent('ADMIN_LOGIN_FAILED', { reason: 'wrong_password', ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
+      await logAudit(req, 'ADMIN_LOGIN_FAILED', [], { reason: 'wrong_password', ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
       return res.status(401).json({ error: 'Invalid administrator credentials.' });
     }
 
@@ -219,7 +217,7 @@ export default function createAuthRoutes({
       expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 min expiry
     });
 
-    logServerEvent('ADMIN_MFA_INITIATED', { ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
+    await logAudit(req, 'ADMIN_MFA_INITIATED', [], { userId: 'admin', ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
     res.json({ success: true, requiresMFA: true, mfaToken });
   }));
 
@@ -252,7 +250,7 @@ export default function createAuthRoutes({
         message: 'Invalid MFA PIN attempt detected'
       });
 
-      logServerEvent('ADMIN_MFA_FAILED', { reason: 'wrong_pin', ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
+      await logAudit(req, 'ADMIN_MFA_FAILED', [], { reason: 'wrong_pin', ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
       return res.status(401).json({ error: 'Invalid PIN. Access denied.' });
     }
 
@@ -278,7 +276,7 @@ export default function createAuthRoutes({
     // MFA passed — consume token
     await AdminMFA.deleteOne({ _id: session._id });
 
-    logServerEvent('ADMIN_LOGIN_SUCCESS', { ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
+    await logAudit(req, 'ADMIN_LOGIN_SUCCESS', [], { userId: 'admin', ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
 
     // 🛡️ Success! Issue JWT with Admin scope (v2.6.190)
     const token = signToken({ id: 'admin', role: 'admin', scopes: ['*'] });

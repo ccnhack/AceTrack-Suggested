@@ -115,7 +115,7 @@ router.post('/support/invite', apiKeyGuard, authGuard, asyncHandler(async (req, 
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // strict 24 hours
 
   await SupportInvite.create({ email, firstName: firstName.trim(), lastName: lastName.trim(), token, expiresAt });
-  await logServerEvent('SUPPORT_INVITE_GENERATED', { email, firstName, lastName });
+  await logAudit(req, 'SUPPORT_INVITE_GENERATED', [], { email, firstName, lastName });
 
   const setupLink = `https://acetrack-suggested.onrender.com/setup/${token}`;
 
@@ -182,7 +182,7 @@ router.post('/support/invite/expire', apiKeyGuard, authGuard, asyncHandler(async
   });
   
   await invite.save();
-  await logServerEvent('SUPPORT_INVITE_RETIRED', { email: invite.email, token });
+  await logAudit(req, 'SUPPORT_INVITE_RETIRED', [], { email: invite.email, token });
 
   res.json({ success: true, message: 'Invite link has been retired and is no longer accessible.' });
 }));
@@ -546,7 +546,7 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
   // C. Invalidate token
   invite.status = 'Used';
   await invite.save();
-  await logServerEvent('SUPPORT_ACCOUNT_CREATED', { 
+  await logAudit(req, 'SUPPORT_ACCOUNT_CREATED', ['players'], { 
     email: invite.email, 
     name: `${firstName} ${lastName}`, 
     phone: phone || '',
