@@ -239,6 +239,126 @@ ${chatHistory.substring(0, 3000)}`;
          ];
          
          await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", blocks });
+      } else if (command === '/acetrack' && String(text).trim().toLowerCase().startsWith('logs ')) {
+         const userQuery = String(text).trim().substring(5).trim();
+         if (!userQuery) {
+            return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: "Please provide a query. Usage: `/acetrack logs was there any recent password change activity`" });
+         }
+
+         const apiKey = process.env.GROQ_API_KEY;
+         if (!apiKey) {
+            return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: "⚠️ _AI Query unavailable: GROQ_API_KEY is not set._" });
+         }
+
+         try {
+            // STEP 1: Generate MongoDB Filter
+            const filterPrompt = `You are a MongoDB query generator. A user is asking to search an 'AuditLog' collection.
+Collection Schema: { userId: String, action: String, changedCollections: [String], ipAddress: String, userAgent: String, details: Mixed, timestamp: Date }
+Actions typically include: 'PASSWORD_CHANGED', 'ADMIN_PASSWORD_REPAIRED', 'LOGIN_SUCCESS', 'ADMIN_LOGIN_FAILED', 'SUPPORT_LOGIN_SUCCESS', 'BRUTE_FORCE_DETECTED', etc.
+
+User query: "${userQuery}"
+
+Based on this query, generate a valid JSON MongoDB filter object. 
+DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. No explanations.
+If you can't determine a filter, output {}.`;
+
+            const filterReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+               method: 'POST',
+               headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+               body: JSON.stringify({
+                  model: "llama-3.3-70b-versatile",
+                  messages: [{ role: 'user', content: filterPrompt }],
+                  temperature: 0.1,
+                  max_tokens: 300
+               })
+            });
+
+            let mongoFilter = {};
+            if (filterReq.ok) {
+               const filterJson = await filterReq.json();
+               let rawJson = filterJson.choices?.[0]?.message?.content || "{}";
+               // Clean up any potential markdown wrapper
+               rawJson = rawJson.replace(/```json/g, '').replace(/```/g, '').trim();
+               try {
+                  mongoFilter = JSON.parse(rawJson);
+               } catch (e) {
+                  console.error("AI MongoDB Query Parse Error:", e.message, rawJson);
+               }
+            }
+
+            // STEP 2: Fetch Logs
+            const { AuditLog } = await import('../models/index.mjs');
+            const logs = await AuditLog.find(mongoFilter).sort({ timestamp: -1 }).limit(500).lean();
+            
+            if (logs.length === 0) {
+               return await sendDelayedSlackResponse(response_url, { 
+                  response_type: "ephemeral", 
+                  text: `🔍 *Query:* "${userQuery}"\n\n*Result:* No logs found matching the AI-generated filter: \`${JSON.stringify(mongoFilter)}\`` 
+               });
+            }
+
+            // Compact logs for AI Context
+            const compactLogs = logs.map(l => {
+               const time = new Date(l.timestamp).toISOString();
+               let detailsStr = '';
+               try { detailsStr = JSON.stringify(l.details || {}); } catch(e){}
+               return `[${time}] User:${l.userId} IP:${l.ipAddress} Action:${l.action} Details:${detailsStr}`;
+            }).join('\n');
+
+            // STEP 3: Summarize Logs
+            const summaryPrompt = `You are a system administrator AI assistant.
+A user asked: "${userQuery}"
+
+Here are the retrieved system logs matching their request (limited to most recent 500):
+${compactLogs.substring(0, 80000)}
+
+Please analyze these logs and provide a clear, concise, and professional summary answering the user's question. 
+Use Slack mrkdwn formatting (bullet points, bold text). Highlight any anomalies or important timestamps.`;
+
+            const summaryReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+               method: 'POST',
+               headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+               body: JSON.stringify({
+                  model: "llama-3.3-70b-versatile",
+                  messages: [{ role: 'user', content: summaryPrompt }],
+                  temperature: 0.3,
+                  max_tokens: 800
+               })
+            });
+
+            let summaryContent = "_AI Summary failed to generate._";
+            if (summaryReq.ok) {
+               const summaryJson = await summaryReq.json();
+               summaryContent = summaryJson.choices?.[0]?.message?.content || summaryContent;
+            } else {
+               summaryContent = `_AI Error: ${summaryReq.statusText}_`;
+            }
+
+            const blocks = [
+               {
+                  "type": "header",
+                  "text": { "type": "plain_text", "text": "📊 AI Log Analysis", "emoji": true }
+               },
+               {
+                  "type": "context",
+                  "elements": [
+                     { "type": "mrkdwn", "text": `*Query:* "${userQuery}"` },
+                     { "type": "mrkdwn", "text": `*Filter Applied:* \`${JSON.stringify(mongoFilter)}\`` },
+                     { "type": "mrkdwn", "text": `*Logs Analyzed:* ${logs.length}` }
+                  ]
+               },
+               { "type": "divider" },
+               {
+                  "type": "section",
+                  "text": { "type": "mrkdwn", "text": summaryContent }
+               }
+            ];
+
+            await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", blocks });
+
+         } catch (e) {
+            await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: `⚠️ *Error running log query:* ${e.message}` });
+         }
       }
     } catch (err) {
       console.error("❌ Unified Gateway Error:", err.message);
