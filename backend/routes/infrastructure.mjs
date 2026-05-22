@@ -239,6 +239,30 @@ ${chatHistory.substring(0, 3000)}`;
          ];
          
          await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", blocks });
+      } else if (command === '/acetrack' && String(text).trim().toLowerCase() === 'help') {
+         const blocks = [
+            {
+               "type": "header",
+               "text": { "type": "plain_text", "text": "🛠️ AceTrack Slash Commands", "emoji": true }
+            },
+            {
+               "type": "section",
+               "text": { "type": "mrkdwn", "text": "*`/acetrack security`*\nGenerates a security summary report for the last 24 hours." }
+            },
+            {
+               "type": "section",
+               "text": { "type": "mrkdwn", "text": "*`/acetrack queue`*\nOpens the Support Dashboard to view ticket analytics over a date range." }
+            },
+            {
+               "type": "section",
+               "text": { "type": "mrkdwn", "text": "*`/acetrack ticket <id>`*\nFetches details and an AI summary of a specific support ticket.\n_Example: `/acetrack ticket 123456`_" }
+            },
+            {
+               "type": "section",
+               "text": { "type": "mrkdwn", "text": "*`/acetrack logs <query>`*\nUses AI to search and summarize system logs (MongoDB & Filesystem) based on natural language.\n_Example: `/acetrack logs were there any critical server panics today?`_" }
+            }
+         ];
+         return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", blocks });
       } else if (command === '/acetrack' && String(text).trim().toLowerCase().startsWith('logs ')) {
          const userQuery = String(text).trim().substring(5).trim();
          if (!userQuery) {
@@ -251,16 +275,20 @@ ${chatHistory.substring(0, 3000)}`;
          }
 
          try {
-            // STEP 1: Generate MongoDB Filter
-            const filterPrompt = `You are a MongoDB query generator. A user is asking to search an 'AuditLog' collection.
-Collection Schema: { userId: String, action: String, changedCollections: [String], ipAddress: String, userAgent: String, details: Mixed, timestamp: Date }
-Actions typically include: 'PASSWORD_CHANGED', 'ADMIN_PASSWORD_REPAIRED', 'LOGIN_SUCCESS', 'ADMIN_LOGIN_FAILED', 'SUPPORT_LOGIN_SUCCESS', 'BRUTE_FORCE_DETECTED', etc.
+            // STEP 1: Generate MongoDB Filter & Routing Intent
+            const filterPrompt = `You are an AI Log Router. A user is asking to search logs.
+We have two log sources:
+1. 'AuditLog' (MongoDB): Contains user actions like 'PASSWORD_CHANGED', 'LOGIN_SUCCESS', 'SUPPORT_LOGIN_SUCCESS', etc.
+   Schema: { userId: String, action: String, details: Mixed, timestamp: Date }
+2. 'server_events.jsonl' (Filesystem): Contains server-level errors, crashes, panics, and websocket aborts.
 
 User query: "${userQuery}"
 
-Based on this query, generate a valid JSON MongoDB filter object. 
-DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. No explanations.
-If you can't determine a filter, output {}.`;
+Based on this query, generate a JSON object with two fields:
+1. "mongoFilter": A valid MongoDB query object for the AuditLog collection (or {} if none).
+2. "checkServerEventsFile": A boolean (true if the query seems to ask about server crashes, panics, or websocket errors, false otherwise).
+
+DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. No explanations.`;
 
             const filterReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
                method: 'POST',
@@ -273,46 +301,73 @@ If you can't determine a filter, output {}.`;
                })
             });
 
-            let mongoFilter = {};
+            let routingIntent = { mongoFilter: {}, checkServerEventsFile: false };
             if (filterReq.ok) {
                const filterJson = await filterReq.json();
                let rawJson = filterJson.choices?.[0]?.message?.content || "{}";
-               // Clean up any potential markdown wrapper
                rawJson = rawJson.replace(/```json/g, '').replace(/```/g, '').trim();
                try {
-                  mongoFilter = JSON.parse(rawJson);
+                  routingIntent = JSON.parse(rawJson);
                } catch (e) {
-                  console.error("AI MongoDB Query Parse Error:", e.message, rawJson);
+                  console.error("AI Routing Parse Error:", e.message, rawJson);
                }
             }
 
-            // STEP 2: Fetch Logs
-            const { AuditLog } = await import('../models/index.mjs');
-            const logs = await AuditLog.find(mongoFilter).sort({ timestamp: -1 }).limit(500).lean();
+            // STEP 2: Fetch Logs (Multi-source)
+            let combinedLogsArr = [];
+
+            // 2A: MongoDB Logs
+            if (Object.keys(routingIntent.mongoFilter || {}).length > 0 || !routingIntent.checkServerEventsFile) {
+               const { AuditLog } = await import('../models/index.mjs');
+               const mongoLogs = await AuditLog.find(routingIntent.mongoFilter || {}).sort({ timestamp: -1 }).limit(300).lean();
+               const compactMongo = mongoLogs.map(l => {
+                  let d = ''; try { d = JSON.stringify(l.details || {}); } catch(e){}
+                  return `[Mongo][${new Date(l.timestamp).toISOString()}] User:${l.userId} Action:${l.action} Details:${d}`;
+               });
+               combinedLogsArr.push(...compactMongo);
+            }
+
+            // 2B: Filesystem Logs
+            if (routingIntent.checkServerEventsFile) {
+               const fs = await import('fs');
+               const path = await import('path');
+               
+               // Attempt to locate the diagnostics directory relative to this file
+               const dirname = process.cwd();
+               let logFile = path.join(dirname, 'diagnostics', 'server_events.jsonl');
+               
+               // Fallback just in case process.cwd is different
+               if (!fs.existsSync(logFile)) {
+                   logFile = path.join(process.cwd(), 'backend', 'diagnostics', 'server_events.jsonl');
+               }
+               
+               if (fs.existsSync(logFile)) {
+                  const fileContent = fs.readFileSync(logFile, 'utf8');
+                  const lines = fileContent.split('\n').filter(Boolean).slice(-300); // Last 300 lines
+                  const compactFs = lines.map(line => `[FS] ${line.substring(0, 500)}`);
+                  combinedLogsArr.push(...compactFs);
+               } else {
+                  combinedLogsArr.push(`[FS] No server_events.jsonl found at ${logFile}`);
+               }
+            }
             
-            if (logs.length === 0) {
+            if (combinedLogsArr.length === 0) {
                return await sendDelayedSlackResponse(response_url, { 
                   response_type: "ephemeral", 
-                  text: `🔍 *Query:* "${userQuery}"\n\n*Result:* No logs found matching the AI-generated filter: \`${JSON.stringify(mongoFilter)}\`` 
+                  text: `🔍 *Query:* "${userQuery}"\n\n*Result:* No logs found across any system based on AI intent: \`${JSON.stringify(routingIntent)}\`` 
                });
             }
 
-            // Compact logs for AI Context
-            const compactLogs = logs.map(l => {
-               const time = new Date(l.timestamp).toISOString();
-               let detailsStr = '';
-               try { detailsStr = JSON.stringify(l.details || {}); } catch(e){}
-               return `[${time}] User:${l.userId} IP:${l.ipAddress} Action:${l.action} Details:${detailsStr}`;
-            }).join('\n');
+            const compactLogs = combinedLogsArr.join('\n');
 
             // STEP 3: Summarize Logs
             const summaryPrompt = `You are a system administrator AI assistant.
 A user asked: "${userQuery}"
 
-Here are the retrieved system logs matching their request (limited to most recent 500):
+Here are the retrieved system logs matching their request (from MongoDB and/or Filesystem):
 ${compactLogs.substring(0, 80000)}
 
-Please analyze these logs and provide a clear, concise, and professional summary answering the user's question. 
+Please analyze these logs and provide a clear, concise summary answering the user's question. 
 Use Slack mrkdwn formatting (bullet points, bold text). Highlight any anomalies or important timestamps.`;
 
             const summaryReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -343,8 +398,8 @@ Use Slack mrkdwn formatting (bullet points, bold text). Highlight any anomalies 
                   "type": "context",
                   "elements": [
                      { "type": "mrkdwn", "text": `*Query:* "${userQuery}"` },
-                     { "type": "mrkdwn", "text": `*Filter Applied:* \`${JSON.stringify(mongoFilter)}\`` },
-                     { "type": "mrkdwn", "text": `*Logs Analyzed:* ${logs.length}` }
+                     { "type": "mrkdwn", "text": `*AI Routing Intent:* \`${JSON.stringify(routingIntent)}\`` },
+                     { "type": "mrkdwn", "text": `*Logs Analyzed:* ${combinedLogsArr.length}` }
                   ]
                },
                { "type": "divider" },
