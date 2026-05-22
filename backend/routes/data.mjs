@@ -44,6 +44,8 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
     const isSupport = resolvedRole === 'support' || resolvedScopes.includes('read:support') || normalizedReqId.startsWith('admin_support_');
     const canReadSupport = isAdmin || isSupport || resolvedScopes.includes('read:basic');
 
+    console.log(`[SYNC_TRACE_ROLES] ${normalizedReqId} | role:${resolvedRole} | scopes:${JSON.stringify(resolvedScopes)} | isAdmin:${isAdmin} | isSupport:${isSupport} | canReadSupport:${canReadSupport}`);
+
     const matchQuery = isAdmin ? {} : { 
       $or: [
         { "data.player1Id": normalizedReqId },
@@ -53,6 +55,7 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       ]
     };
     const ticketQuery = canReadSupport ? {} : { "data.userId": normalizedReqId };
+    console.log(`[SYNC_TRACE_TICKETS] ticketQuery for ${normalizedReqId}:`, JSON.stringify(ticketQuery));
     const evalQuery = isAdmin ? {} : { "data.playerId": normalizedReqId };
     const chatQuery = isAdmin ? {} : { "userId": normalizedReqId };
 

@@ -14,6 +14,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:selenium": "node tests/selenium/runner.mjs",
+    "test:puppeteer": "node tests/e2e_login_test.mjs",
     "heal:assets": "node scripts/heal-orphaned-assets.mjs"
   },
   "dependencies": {
@@ -52,11 +54,13 @@
     "@testing-library/user-event": "^14.5.2",
     "@types/node": "^20.12.12",
     "@vitejs/plugin-react": "^4.2.1",
+    "chromedriver": "^148.0.4",
     "concurrently": "^8.2.2",
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.2",
     "jsdom": "^24.0.0",
     "puppeteer": "^22.10.0",
+    "selenium-webdriver": "^4.44.0",
     "socket.io-client": "^4.7.5",
     "typescript": "~5.4.5",
     "vite": "^5.2.11",

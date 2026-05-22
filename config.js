@@ -29,15 +29,14 @@ const GROQ_API_KEY = (Constants.expoConfig?.extra?.groqApiKey)
   || process.env.EXPO_PUBLIC_GROQ_API_KEY
   || null;
 
-const ACE_API_KEY = Constants.expoConfig?.extra?.aceApiKey || process.env.EXPO_PUBLIC_ACE_API_KEY;
-
-// Ensure API key exists
-if (!ACE_API_KEY) {
-  console.warn("⚠️ ACE_API_KEY is missing! Authentication to the backend will fail.");
-}
+// 🛡️ [AUTH_RESILIENCE] (v2.6.531): Fall back to PUBLIC_APP_ID for web builds where
+// the master API key is intentionally not bundled. The JWT cookie handles real auth.
+const ACE_API_KEY = Constants.expoConfig?.extra?.aceApiKey
+  || process.env.EXPO_PUBLIC_ACE_API_KEY
+  || 'AceTrack_Client_v2_Production';
 
 export default {
-  APP_VERSION: '2.6.530',
+  APP_VERSION: '2.6.531',
   get API_BASE_URL() { return _API_BASE_URL; },
   set API_BASE_URL(val) { _API_BASE_URL = val; },
   CLOUD_API_URL,
