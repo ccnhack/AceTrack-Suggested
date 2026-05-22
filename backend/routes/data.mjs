@@ -433,10 +433,10 @@ router.post('/register-push-token', apiKeyGuard, async (req, res) => {
     
     if (!tokens.includes(pushToken)) {
       tokens.push(pushToken);
-      playerDoc.data = { ...player, pushTokens: tokens };
-      playerDoc.lastUpdated = new Date();
-      playerDoc.markModified('data');
-      await playerDoc.save();
+      await Player.updateOne(
+        { id: userId },
+        { $set: { "data.pushTokens": tokens }, lastUpdated: new Date() }
+      );
       console.log(`📱 [NOTIFY_DEBUG] Token Registered: ${pushToken.substring(0, 15)}... for user ${userId}. Total: ${tokens.length}`);
     } else {
       console.log(`📱 [NOTIFY_DEBUG] Token already exists for user ${userId}`);
@@ -525,7 +525,7 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
       chatbotDocs
     ] = await Promise.all([
       AppState.findOne().sort({ lastUpdated: -1 }).lean(),
-      Player.find(buildQuery('players')).lean(),
+      Player.find(buildQuery('players')).select('+data.password').lean(),
       Tournament.find(buildQuery('tournaments')).lean(),
       Match.find(buildQuery('matches')).lean(),
       MatchVideo.find(buildQuery('matchVideos')).lean(),

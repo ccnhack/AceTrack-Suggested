@@ -125,10 +125,10 @@ io.on('connection', async (socket) => {
               user.devices[dIdx].name = data.deviceName || user.devices[dIdx].name;
               user.devices[dIdx].appVersion = data.appVersion || user.devices[dIdx].appVersion;
             }
-            playerDoc.data = user;
-            playerDoc.lastUpdated = new Date();
-            playerDoc.markModified('data');
-            await playerDoc.save();
+            await Player.updateOne(
+              { id: String(data.targetUserId) },
+              { $set: { "data.devices": user.devices }, lastUpdated: new Date() }
+            );
         }
       } catch (e) {
         console.error('❌ [AUTO-REG] Failed:', e.message);

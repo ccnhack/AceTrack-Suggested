@@ -37,7 +37,7 @@ if (!ACE_API_KEY) {
 }
 
 export default {
-  APP_VERSION: '2.6.525',
+  APP_VERSION: '2.6.526',
   get API_BASE_URL() { return _API_BASE_URL; },
   set API_BASE_URL(val) { _API_BASE_URL = val; },
   CLOUD_API_URL,

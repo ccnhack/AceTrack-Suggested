@@ -974,7 +974,7 @@ router.post('/support/manage-user', apiKeyGuard, authGuard, async (req, res) => 
 
   try {
     // 🛡️ SCALABILITY FIX (v2.6.316): Read/write from distinct collections
-    const playerDoc = await Player.findOne({ id: targetUserId });
+    const playerDoc = await Player.findOne({ id: targetUserId }).select('+data.password');
     if (!playerDoc || !playerDoc.data) return res.status(404).json({ error: "User not found" });
     const user = playerDoc.data;
 
@@ -1322,10 +1322,10 @@ router.post('/support/rate-ticket', apiKeyGuard, async (req, res) => {
         p.metrics.avgRating = ((oldAvg * oldRatedCount) + rating) / (oldRatedCount + 1);
         p.metrics.ratedTickets = oldRatedCount + 1;
         
-        playerDoc.data = p;
-        playerDoc.lastUpdated = new Date();
-        playerDoc.markModified('data');
-        await playerDoc.save();
+        await Player.updateOne(
+          { id: agentId },
+          { $set: { "data.metrics": p.metrics }, lastUpdated: new Date() }
+        );
       }
     }
 
@@ -1413,17 +1413,11 @@ router.post('/support/claim-ticket', apiKeyGuard, async (req, res) => {
     ticket.status = 'In Progress';
     ticket.updatedAt = new Date().toISOString();
 
-    // Increment agent's pool bonus metrics
     if (agentId) {
-      const playerDoc = await Player.findOne({ id: agentId });
-      if (playerDoc && playerDoc.data) {
-        if (!playerDoc.data.metrics) playerDoc.data.metrics = { totalHandled: 0, closedTickets: 0, manualPicks: 0, avgRating: 0 };
-        playerDoc.data.metrics.manualPicks += 1;
-        playerDoc.data.metrics.totalHandled += 1;
-        playerDoc.lastUpdated = new Date();
-        playerDoc.markModified('data');
-        await playerDoc.save();
-      }
+      await Player.updateOne(
+        { id: agentId },
+        { $inc: { "data.metrics.manualPicks": 1, "data.metrics.totalHandled": 1 }, lastUpdated: new Date() }
+      );
     }
 
     ticketDoc.data = ticket;
@@ -1467,7 +1461,7 @@ router.post('/support/force-reset', apiKeyGuard, authGuard, async (req, res) => 
 
   try {
     // 🛡️ SCALABILITY FIX (v2.6.316): Read/write from distinct collections
-    const playerDoc = await Player.findOne({ id: targetUserId });
+    const playerDoc = await Player.findOne({ id: targetUserId }).select('+data.password');
     if (!playerDoc || !playerDoc.data) return res.status(404).json({ error: 'User account not found' });
     
     const user = playerDoc.data;
