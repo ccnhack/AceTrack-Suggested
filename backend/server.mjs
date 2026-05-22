@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import { createAdapter } from '@socket.io/mongo-adapter';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
@@ -102,7 +103,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.528'; // Critical for Update prompts 
+const APP_VERSION = '2.6.529'; // Critical for Update prompts 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -859,6 +860,25 @@ const startServices = async () => {
   }).then(async () => {
     console.log('✅ MongoDB Connected Successfully');
     dbStatus = 'connected';
+
+    // 🛡️ [ARCH-FIX] (v2.6.435): Initialize Multi-Instance WebSocket Pub/Sub via MongoDB
+    try {
+      const DB = mongoose.connection.db;
+      const COLLECTION = "socket_io_adapter_events";
+      
+      await DB.createCollection(COLLECTION, {
+        capped: true,
+        size: 1048576 // 1MB
+      }).catch(e => {
+        // collection already exists, ignore error
+      });
+      
+      const mongoCollection = DB.collection(COLLECTION);
+      io.adapter(createAdapter(mongoCollection));
+      console.log('✅ MongoDB WebSocket Adapter Initialized (Multi-Instance Ready)');
+    } catch (adapterErr) {
+      console.error('❌ [WEBSOCKET] Failed to initialize Mongo Adapter:', adapterErr.message);
+    }
     
     // 🛡️ [ADMIN SEED] (v2.6.521): Ensure admin player document exists in the Player collection.
     // If missing (e.g. fresh DB or accidental deletion), creates one with hashed default password.

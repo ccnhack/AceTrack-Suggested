@@ -181,6 +181,9 @@ router.post('/support/invite/expire', apiKeyGuard, authGuard, asyncHandler(async
     timestamp: new Date()
   });
   
+  // 🛡️ [ARRAY BOMB DEFUSAL] (v2.6.435): Cap clicks to max 50
+  if (invite.clicks.length > 50) invite.clicks = invite.clicks.slice(-50);
+  
   await invite.save();
   await logAudit(req, 'SUPPORT_INVITE_RETIRED', [], { email: invite.email, token });
 
@@ -365,6 +368,10 @@ router.post('/support/invite/click', asyncHandler(async (req, res) => {
     timezone: geo.timezone, 
     timestamp: new Date() 
   });
+
+  // 🛡️ [ARRAY BOMB DEFUSAL] (v2.6.435): Cap clicks to max 50
+  if (invite.clicks.length > 50) invite.clicks = invite.clicks.slice(-50);
+
   await invite.save();
 
   res.json({ success: true, email: invite.email });
@@ -402,6 +409,10 @@ router.post('/support/invite/track', asyncHandler(async (req, res) => {
     timezone: geo.timezone, 
     timestamp: new Date() 
   });
+
+  // 🛡️ [ARRAY BOMB DEFUSAL] (v2.6.435): Cap clicks to max 50
+  if (invite.clicks.length > 50) invite.clicks = invite.clicks.slice(-50);
+
   await invite.save();
 
   res.json({ success: true });

@@ -928,7 +928,9 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
     distinctKeys.forEach(k => delete appStateDataToSave[k]);
 
     // 🛡️ [C-6 FIX] (v2.6.315): Avoid empty {} filter which can cause duplicate singletons
-    const updateFilter = state?._id ? { _id: state._id } : { _id: new mongoose.Types.ObjectId() };
+    // 🛡️ [OCC FIX] (v2.6.435): Optimistic Concurrency Control for Multi-Instance Sync
+    const updateFilter = state?._id ? { _id: state._id, version: currentVersion } : { _id: new mongoose.Types.ObjectId() };
+    const upsertAllowed = !state?._id;
     
     const hasDataChanges = changedKeys.some(k => !distinctKeys.includes(k));
     const updateQuery = { 
@@ -942,8 +944,16 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
     const updatedState = await AppState.findOneAndUpdate(
       updateFilter,
       updateQuery,
-      { upsert: true, returnDocument: 'after' }
+      { upsert: upsertAllowed, returnDocument: 'after' }
     );
+
+    if (state?._id && !updatedState) {
+      console.warn(`🛑 [OCC] Cross-Instance Conflict detected for ${req.ip}. Rejecting save to prevent data overwrite.`);
+      return res.status(409).json({ 
+        error: 'Conflict: Server state was modified by another request. Data not saved to prevent overwrite.',
+        serverVersion: currentVersion + 1
+      });
+    }
 
     // 🏗️ PHASE 1 (DATABASE) MIGRATION: DUAL WRITE TO DISTINCT COLLECTIONS
     // This allows the frontend to continue using the monolithic payload format,

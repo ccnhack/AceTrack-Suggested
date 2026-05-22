@@ -6,6 +6,7 @@
  */
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
+import MongoStore from 'rate-limit-mongo';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { AppState, AuditLog, Player } from '../models/index.mjs';
@@ -165,6 +166,12 @@ export const authGuard = (req, res, next) => {
 // 🛡️ Rate Limiters (v2.6.185)
 // ═══════════════════════════════════════════════════════════════
 export const createRateLimiters = (appVersion) => {
+  const store = new MongoStore({
+    uri: process.env.MONGODB_URI,
+    collectionName: 'rate_limits',
+    expireTimeMs: 15 * 60 * 1000 // 15 mins default
+  });
+
   const skipTestRequests = (req) => {
     // 🛡️ [SECURITY FIX] (v2.6.433): Removed fragile User-Agent based bypass for Slackbot.
     // Relies strictly on the internal test-bypass header which is not exposed to the public internet.
@@ -172,6 +179,7 @@ export const createRateLimiters = (appVersion) => {
   };
 
   const globalApiLimiter = rateLimit({
+    store,
     windowMs: 1 * 60 * 1000,
     max: 400,
     skip: skipTestRequests,
@@ -185,6 +193,7 @@ export const createRateLimiters = (appVersion) => {
   });
 
   const loginLimiter = rateLimit({
+    store,
     windowMs: 15 * 60 * 1000,
     max: 20,
     skip: skipTestRequests,
@@ -194,6 +203,7 @@ export const createRateLimiters = (appVersion) => {
   });
 
   const otpLimiter = rateLimit({
+    store,
     windowMs: 10 * 60 * 1000,
     max: 5,
     skip: skipTestRequests,
@@ -203,6 +213,7 @@ export const createRateLimiters = (appVersion) => {
   });
 
   const passwordResetLimiter = rateLimit({
+    store,
     windowMs: 15 * 60 * 1000,
     max: 5,
     skip: skipTestRequests,
