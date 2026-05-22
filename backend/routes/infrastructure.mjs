@@ -297,6 +297,7 @@ We have two log sources:
    - ⚠️ IMPORTANT: For queries involving usernames or emails (like 'shush' or 'john'), do NOT just query 'userId'. Many events (like account creation or failed logins) store the target user in the 'details' object (e.g. details.email, details.name, details.TargetUser, details.userId).
    - Use an $or array to search across both userId and details. Example: { "$or": [{ "userId": { "$regex": "shush", "$options": "i" } }, { "details.email": { "$regex": "shush", "$options": "i" } }, { "details.name": { "$regex": "shush", "$options": "i" } }] }
    - Use $regex heavily for strings! Example for action: { "action": { "$regex": "LOGIN|PASSWORD|ACCOUNT_CREATED", "$options": "i" } }
+   - ⚠️ CRITICAL: DO NOT use aggregation operators like $date, $subtract, or $$NOW. If you need a date filter, use standard Mongoose query syntax with ISO date strings (e.g., { "timestamp": { "$gte": "2026-05-22T00:00:00.000Z" } }).
 2. 'server_events.jsonl' (Filesystem): Contains system crashes, server panics, WebSocket errors, and legacy ephemeral events.
 
 User query: "${userQuery}"
@@ -336,7 +337,13 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
             // 2A: MongoDB Logs
             if (Object.keys(routingIntent.mongoFilter || {}).length > 0 || !routingIntent.checkServerEventsFile) {
                const { AuditLog } = await import('../models/index.mjs');
-               const mongoLogs = await AuditLog.find(routingIntent.mongoFilter || {}).sort({ timestamp: -1 }).limit(300).lean();
+               let mongoLogs = [];
+               try {
+                  mongoLogs = await AuditLog.find(routingIntent.mongoFilter || {}).sort({ timestamp: -1 }).limit(300).lean();
+               } catch (err) {
+                  console.error("MongoDB Query Error (fallback to latest):", err.message);
+                  mongoLogs = await AuditLog.find({}).sort({ timestamp: -1 }).limit(300).lean();
+               }
                const compactMongo = mongoLogs.map(l => {
                   let d = ''; try { d = JSON.stringify(l.details || {}); } catch(e){}
                   const istDate = new Date(l.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
