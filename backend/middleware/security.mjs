@@ -227,7 +227,7 @@ export const getSanitizedState = (fullData, req) => {
   const normalizedReqId = String(reqUserId || '').toLowerCase();
   const isAdmin = reqUserRole === 'admin' || normalizedReqId === 'admin' || scopes.includes('*');
   const canReadPII = isAdmin || scopes.includes('read:pii');
-  const canReadSupport = isAdmin || scopes.includes('read:support') || scopes.includes('read:basic');
+  const canReadSupport = isAdmin || reqUserRole === 'support' || scopes.includes('read:support') || scopes.includes('read:basic');
 
   const sanitized = { ...fullData };
 
