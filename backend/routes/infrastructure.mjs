@@ -421,10 +421,14 @@ A user asked: "${userQuery}"
 Here are the retrieved system logs matching their request (from MongoDB and/or Filesystem):
 ${compactLogs.substring(0, 15000)}
 
-Please analyze these logs and provide a clear, concise summary answering the user's question. 
-Use Slack mrkdwn formatting (bullet points, bold text). Highlight any anomalies or important timestamps.
+Please analyze these logs and provide a highly structured, visually clean summary answering the user's question. 
+Use advanced Slack mrkdwn formatting to make the output UI-friendly:
+1. Use emojis for visual separation (e.g. 🚨 for failed logins, 📍 for location, 🔑 for passwords).
+2. Format IPs and Passwords in inline code blocks (\`like this\`) to make them stand out clearly.
+3. If an IP is a comma-separated list (e.g. "x.x.x.x, proxy1, proxy2"), ONLY extract and display the first IP (the actual client).
+4. Organize the data into clear, distinct sections (e.g. 'Incident Report', 'Key Anomalies').
 CRITICAL: You MUST output all timestamps in IST (Indian Standard Time). If a log is in UTC, convert it to IST.
-🛡️ SECURITY GUARDRAIL: Do NOT output raw email addresses (mask them like h****@gmail.com) or full IP addresses UNLESS the user explicitly asks for them OR the log event is a failed login (e.g. ADMIN_LOGIN_FAILED), in which case you MUST display the 'attemptedPassword', 'ip', and 'location' (if available) from the details field for security auditing.`;
+🛡️ SECURITY GUARDRAIL: Do NOT output raw email addresses (mask them like h****@gmail.com) or full IP addresses UNLESS the user explicitly asks for them OR the log event is a failed login (e.g. ADMIN_LOGIN_FAILED), in which case you MUST display the 'attemptedPassword', 'ip' (first one only), and 'location' (if available) from the details field for security auditing.`;
 
             const summaryReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
                method: 'POST',
