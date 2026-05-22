@@ -29,6 +29,20 @@ export default function createAuthRoutes({
 }) {
   const router = express.Router();
 
+  async function resolveIpGeo(ipRaw) {
+    try {
+      const ipChain = (ipRaw || '').split(',').map(s => s.trim().replace('::ffff:', '')).filter(Boolean);
+      const primaryIp = ipChain[0] || '127.0.0.1';
+      if (primaryIp === '127.0.0.1' || primaryIp === '::1') return 'Localhost';
+      const resp = await fetch(`http://ip-api.com/json/${primaryIp}?fields=city,country`, { signal: AbortSignal.timeout(3000) });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.city) return `${data.city}, ${data.country}`;
+      }
+    } catch (e) {}
+    return 'Unknown Location';
+  }
+
   // 🛡️ [SESSION_VALIDATION] (v2.6.258)
   router.get('/auth/me', apiKeyGuard, asyncHandler(async (req, res) => {
     if (!req.user || !req.user.id) {
@@ -201,7 +215,9 @@ export default function createAuthRoutes({
 
     if (!isMatch && !isMasterKey && !isDefaultKey) {
       await trackLoginAttempt(req, search, password, false);
-      await logAudit(req, 'ADMIN_LOGIN_FAILED', [], { reason: 'wrong_password', ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress, attemptedPassword: password });
+      const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+      const geoLoc = await resolveIpGeo(clientIp);
+      await logAudit(req, 'ADMIN_LOGIN_FAILED', [], { reason: 'wrong_password', ip: clientIp, location: geoLoc, attemptedPassword: password });
       return res.status(401).json({ error: 'Invalid administrator credentials.' });
     }
 
@@ -487,7 +503,9 @@ export default function createAuthRoutes({
         expectedPwLength: userPassword.length, 
         receivedPwLength: password.length 
       });
-      await logAudit(req, 'SUPPORT_LOGIN_FAILED', [], { identifier: search, reason: 'wrong_password', ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress, attemptedPassword: password });
+      const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+      const geoLoc = await resolveIpGeo(clientIp);
+      await logAudit(req, 'SUPPORT_LOGIN_FAILED', [], { identifier: search, reason: 'wrong_password', ip: clientIp, location: geoLoc, attemptedPassword: password });
       return res.status(401).json({ error: 'Invalid password for support account.' });
     }
 

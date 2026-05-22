@@ -424,7 +424,7 @@ ${compactLogs.substring(0, 15000)}
 Please analyze these logs and provide a clear, concise summary answering the user's question. 
 Use Slack mrkdwn formatting (bullet points, bold text). Highlight any anomalies or important timestamps.
 CRITICAL: You MUST output all timestamps in IST (Indian Standard Time). If a log is in UTC, convert it to IST.
-🛡️ SECURITY GUARDRAIL: Do NOT output raw email addresses (mask them like h****@gmail.com) or full IP addresses UNLESS the user explicitly asks for them OR the log event is a failed login (e.g. ADMIN_LOGIN_FAILED), in which case you MUST display the 'attemptedPassword' and 'ip' from the details field for security auditing.`;
+🛡️ SECURITY GUARDRAIL: Do NOT output raw email addresses (mask them like h****@gmail.com) or full IP addresses UNLESS the user explicitly asks for them OR the log event is a failed login (e.g. ADMIN_LOGIN_FAILED), in which case you MUST display the 'attemptedPassword', 'ip', and 'location' (if available) from the details field for security auditing.`;
 
             const summaryReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
                method: 'POST',
