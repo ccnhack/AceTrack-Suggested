@@ -927,7 +927,7 @@ export const AdminGrievancesPanel = ({
                              </TouchableOpacity>
                            ) : (
                              <>
-                               {selectedTicket.assignedTo && selectedTicket.assignedTo !== 'Unassigned' && selectedTicket.assignedTo !== '' ? (
+                               {selectedTicket.assignedTo && selectedTicket.assignedTo !== 'Unassigned' && selectedTicket.assignedTo !== '' && (
                                  <View style={{ 
                                    flexDirection: 'row', 
                                    alignItems: 'center', 
@@ -936,21 +936,23 @@ export const AdminGrievancesPanel = ({
                                    paddingVertical: 10, 
                                    borderRadius: 12,
                                    borderWidth: 1,
-                                   borderColor: '#E2E8F0'
+                                   borderColor: '#E2E8F0',
+                                   marginRight: 8
                                  }}>
                                    <Ionicons name="person" size={16} color="#64748B" />
                                    <Text style={{ color: '#475569', fontSize: 13, fontWeight: '700', marginLeft: 8 }}>
-                                     Assigned: {getUserName(selectedTicket.assignedTo)}
+                                     {selectedTicket.assignedTo === currentUser?.id ? 'Assigned to You' : `Assigned: ${getUserName(selectedTicket.assignedTo)}`}
                                    </Text>
                                  </View>
-                               ) : (
+                               )}
+                               
+                               {(currentUser?.role === 'support' && selectedTicket.assignedTo !== currentUser?.id) && (
                                  <TouchableOpacity 
                                    onPress={async () => {
                                      const res = await onReassignTicket(selectedTicket.id, currentUser.id);
                                      if (res.success) {
-                                       // 🛡️ [IMMEDIATE FEEDBACK] (v2.6.281): Update local state so it leaves the unassigned queue instantly
                                        setSelectedTicket(prev => prev ? { ...prev, assignedTo: currentUser.id } : null);
-                                       Alert.alert("Success", "Ticket assigned to you.");
+                                       Alert.alert("Success", "Ticket reassigned to you.");
                                      } else {
                                        Alert.alert("Error", res.error);
                                      }
@@ -971,7 +973,7 @@ export const AdminGrievancesPanel = ({
                                  >
                                    <Ionicons name="hand-right-outline" size={16} color="#FFF" />
                                    <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '700', marginLeft: 8 }}>
-                                     Assign to Myself
+                                     {(!selectedTicket.assignedTo || selectedTicket.assignedTo === 'Unassigned' || selectedTicket.assignedTo === '') ? 'Assign to Myself' : 'Reassign to Myself'}
                                    </Text>
                                  </TouchableOpacity>
                                )}
