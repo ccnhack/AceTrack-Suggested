@@ -340,15 +340,11 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
             if (routingIntent.checkServerEventsFile) {
                const fs = await import('fs');
                const path = await import('path');
+               const { fileURLToPath } = await import('url');
                
-               // Attempt to locate the diagnostics directory relative to this file
-               const dirname = process.cwd();
-               let logFile = path.join(dirname, 'diagnostics', 'server_events.jsonl');
-               
-               // Fallback just in case process.cwd is different
-               if (!fs.existsSync(logFile)) {
-                   logFile = path.join(process.cwd(), 'backend', 'diagnostics', 'server_events.jsonl');
-               }
+               const __filename = fileURLToPath(import.meta.url);
+               const __dirname = path.dirname(__filename);
+               const logFile = path.join(__dirname, '..', 'diagnostics', 'server_events.jsonl');
                
                if (fs.existsSync(logFile)) {
                   const fileContent = fs.readFileSync(logFile, 'utf8');
