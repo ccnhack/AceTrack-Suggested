@@ -273,3 +273,14 @@ const PlayerSessionSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now, expires: '90d' } // Auto-delete after 90 days
 });
 export const PlayerSession = mongoose.model('PlayerSession', PlayerSessionSchema);
+
+// ═══════════════════════════════════════════════════════════════
+// ⏱️ RATE LIMIT SCHEMA (v2.6.530)
+// Replaces rate-limit-mongo which was incompatible with express-rate-limit v7
+// ═══════════════════════════════════════════════════════════════
+const RateLimitSchema = new mongoose.Schema({
+  key: { type: String, required: true, unique: true },
+  hits: { type: Number, default: 0 },
+  expireAt: { type: Date, required: true, index: { expires: 0 } }
+});
+export const RateLimit = mongoose.model('RateLimit', RateLimitSchema);

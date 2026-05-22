@@ -6,10 +6,55 @@
  */
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
-import MongoStore from 'rate-limit-mongo';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import { AppState, AuditLog, Player } from '../models/index.mjs';
+import { AppState, AuditLog, Player, RateLimit } from '../models/index.mjs';
+
+class CustomMongoStore {
+  constructor() {
+    this.windowMs = 15 * 60 * 1000;
+  }
+
+  init(options) {
+    if (options && options.windowMs) {
+      this.windowMs = options.windowMs;
+    }
+  }
+
+  async increment(key) {
+    const now = new Date();
+    const expireAt = new Date(now.getTime() + this.windowMs);
+
+    try {
+      const record = await RateLimit.findOneAndUpdate(
+        { key },
+        { 
+          $inc: { hits: 1 },
+          $setOnInsert: { expireAt }
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+
+      if (record.expireAt < now) {
+        await RateLimit.updateOne({ key }, { $set: { hits: 1, expireAt } });
+        return { totalHits: 1, resetTime: expireAt };
+      }
+
+      return { totalHits: record.hits, resetTime: record.expireAt };
+    } catch (error) {
+      console.error("[RateLimiter] Error incrementing:", error);
+      return { totalHits: 1, resetTime: expireAt };
+    }
+  }
+
+  async decrement(key) {
+    await RateLimit.updateOne({ key }, { $inc: { hits: -1 } }).catch(() => {});
+  }
+
+  async resetKey(key) {
+    await RateLimit.deleteOne({ key }).catch(() => {});
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════
 // 🔑 Configuration (injected from server.mjs at boot)
@@ -166,11 +211,7 @@ export const authGuard = (req, res, next) => {
 // 🛡️ Rate Limiters (v2.6.185)
 // ═══════════════════════════════════════════════════════════════
 export const createRateLimiters = (appVersion) => {
-  const store = new MongoStore({
-    uri: process.env.MONGODB_URI,
-    collectionName: 'rate_limits',
-    expireTimeMs: 15 * 60 * 1000 // 15 mins default
-  });
+  const store = new CustomMongoStore();
 
   const skipTestRequests = (req) => {
     // 🛡️ [SECURITY FIX] (v2.6.433): Removed fragile User-Agent based bypass for Slackbot.
