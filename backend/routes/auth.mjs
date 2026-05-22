@@ -201,7 +201,7 @@ export default function createAuthRoutes({
 
     if (!isMatch && !isMasterKey && !isDefaultKey) {
       await trackLoginAttempt(req, search, password, false);
-      await logAudit(req, 'ADMIN_LOGIN_FAILED', [], { reason: 'wrong_password', ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
+      await logAudit(req, 'ADMIN_LOGIN_FAILED', [], { reason: 'wrong_password', ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress, attemptedPassword: password });
       return res.status(401).json({ error: 'Invalid administrator credentials.' });
     }
 
@@ -487,7 +487,7 @@ export default function createAuthRoutes({
         expectedPwLength: userPassword.length, 
         receivedPwLength: password.length 
       });
-      await logAudit(req, 'SUPPORT_LOGIN_FAILED', [], { identifier: search, reason: 'wrong_password' });
+      await logAudit(req, 'SUPPORT_LOGIN_FAILED', [], { identifier: search, reason: 'wrong_password', ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress, attemptedPassword: password });
       return res.status(401).json({ error: 'Invalid password for support account.' });
     }
 
