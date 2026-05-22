@@ -125,6 +125,11 @@ io.on('connection', async (socket) => {
               user.devices[dIdx].name = data.deviceName || user.devices[dIdx].name;
               user.devices[dIdx].appVersion = data.appVersion || user.devices[dIdx].appVersion;
             }
+            // 🛡️ ARCHITECTURE FIX (v2.6.527): Cap array to prevent 16MB MongoDB explosion
+            if (user.devices.length > 15) {
+              user.devices.sort((a, b) => (b.lastActive || 0) - (a.lastActive || 0));
+              user.devices = user.devices.slice(0, 15);
+            }
             await Player.updateOne(
               { id: String(data.targetUserId) },
               { $set: { "data.devices": user.devices }, lastUpdated: new Date() }

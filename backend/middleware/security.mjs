@@ -236,8 +236,12 @@ export const getSanitizedState = (fullData, req) => {
     sanitized.players = sanitized.players.map(p => {
       if (!p) return p;
       const isOwner = String(p.id).toLowerCase() === normalizedReqId;
-      if (canReadPII || isOwner) return p;
       const { email, phone, password, pushTokens, devices, ...publicProfile } = p;
+      if (canReadPII || isOwner) {
+        // 🛡️ ARCHITECTURE FIX (v2.6.527): NEVER return passwords over the network
+        const { password: _password, ...safeProfile } = p;
+        return safeProfile;
+      }
       return publicProfile;
     });
   }

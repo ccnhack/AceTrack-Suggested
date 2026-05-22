@@ -433,6 +433,8 @@ router.post('/register-push-token', apiKeyGuard, async (req, res) => {
     
     if (!tokens.includes(pushToken)) {
       tokens.push(pushToken);
+      // 🛡️ ARCHITECTURE FIX (v2.6.527): Cap array to prevent 16MB MongoDB explosion
+      if (tokens.length > 15) tokens = tokens.slice(-15);
       await Player.updateOne(
         { id: userId },
         { $set: { "data.pushTokens": tokens }, lastUpdated: new Date() }
@@ -779,7 +781,12 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
                       }
                     });
                   }
-                  const merged = { ...existing, ...p, messages: mergedMessages };
+                  // 🛡️ ARCHITECTURE FIX (v2.6.527): Cap messages to prevent 16MB MongoDB explosion
+                  let cappedMessages = mergedMessages;
+                  if (cappedMessages.length > 500) {
+                    cappedMessages = cappedMessages.slice(-500);
+                  }
+                  const merged = { ...existing, ...p, messages: cappedMessages };
                   entityMap.set(id, merged);
                   if (modifiedEntities[key]) modifiedEntities[key].set(id, merged);
                 } else {
