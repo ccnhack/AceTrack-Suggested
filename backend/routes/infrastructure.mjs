@@ -283,19 +283,19 @@ ${chatHistory.substring(0, 3000)}`;
             // STEP 1: Generate MongoDB Filter & Routing Intent
             const filterPrompt = `You are an AI Log Router. A user is asking to search logs.
 We have two log sources:
-1. 'AuditLog' (MongoDB): Contains user actions.
+1. 'AuditLog' (MongoDB): Contains user actions, authentication events, and security logs.
    Schema: { userId: String, action: String, details: Mixed, timestamp: Date }
-   - Common actions: 'SUPPORT_LOGIN_SUCCESS', 'SUPPORT_LOGIN_FAILED', 'SUPPORT_PASSWORD_RESET_SUCCESS', 'MFA_MONITOR', 'BRUTE_FORCE_DETECTED', 'TICKET_CREATED', 'UNAUTHORIZED_ACCESS_BLOCKED', etc.
-   - ⚠️ IMPORTANT: Use $regex for string matching to avoid missing logs due to exact case or exact string mismatches! 
-     Example for userId: { "userId": { "$regex": "shush", "$options": "i" } }
-     Example for action: { "action": { "$regex": "LOGIN|PASSWORD", "$options": "i" } }
-2. 'server_events.jsonl' (Filesystem): Contains server errors, crashes, panics AND critical account/business events like 'SUPPORT_ACCOUNT_CREATED', 'PASSWORD_CHANGED', 'ADMIN_LOGIN_SUCCESS', 'OTP_VERIFY_SUCCESS'.
+   - Common actions: 'SUPPORT_LOGIN_SUCCESS', 'SUPPORT_LOGIN_FAILED', 'PASSWORD_CHANGED', 'SUPPORT_ACCOUNT_CREATED', 'ADMIN_LOGIN_SUCCESS', 'BRUTE_FORCE_DETECTED', 'TICKET_CREATED', etc.
+   - ⚠️ IMPORTANT: For queries involving usernames or emails (like 'shush' or 'john'), do NOT just query 'userId'. Many events (like account creation or failed logins) store the target user in the 'details' object (e.g. details.email, details.name, details.TargetUser, details.userId).
+   - Use an $or array to search across both userId and details. Example: { "$or": [{ "userId": { "$regex": "shush", "$options": "i" } }, { "details.email": { "$regex": "shush", "$options": "i" } }, { "details.name": { "$regex": "shush", "$options": "i" } }] }
+   - Use $regex heavily for strings! Example for action: { "action": { "$regex": "LOGIN|PASSWORD|ACCOUNT_CREATED", "$options": "i" } }
+2. 'server_events.jsonl' (Filesystem): Contains system crashes, server panics, WebSocket errors, and legacy ephemeral events.
 
 User query: "${userQuery}"
 
 Based on this query, generate a JSON object with two fields:
 1. "mongoFilter": A valid MongoDB query object for the AuditLog collection (use $regex heavily for strings!). If the query is broad, return {} to fetch the latest logs.
-2. "checkServerEventsFile": A boolean (MUST be true if the query asks about server crashes, panics, OR account creations, onboarding, password changes, OTPs, or admin logins!).
+2. "checkServerEventsFile": A boolean (MUST be true if the query asks about server crashes, panics, WebSocket drops, or system errors).
 
 DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. No explanations.`;
 
