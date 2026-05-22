@@ -356,6 +356,39 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
                   combinedLogsArr.push(`[FS] No server_events.jsonl found at ${logFile}`);
                }
             }
+            // 2C: Database Fallback for User Queries
+            let userSearchTerm = null;
+            try {
+               const qStr = JSON.stringify(routingIntent.mongoFilter || {});
+               // Naively extract the first string $regex that isn't a complex OR pipe (to guess the username)
+               const match = qStr.match(/{"\$regex":"([^"|]+)"/);
+               if (match && match[1]) {
+                  userSearchTerm = match[1];
+               }
+            } catch(e) {}
+
+            if (userSearchTerm && userSearchTerm.length > 2) {
+               try {
+                  const { Player } = await import('../models/index.mjs');
+                  const playerDoc = await Player.findOne({ 
+                     $or: [
+                        { id: { $regex: userSearchTerm, $options: 'i' } },
+                        { 'data.email': { $regex: userSearchTerm, $options: 'i' } },
+                        { 'data.name': { $regex: userSearchTerm, $options: 'i' } },
+                        { 'data.username': { $regex: userSearchTerm, $options: 'i' } }
+                     ]
+                  }).lean();
+
+                  if (playerDoc) {
+                     const creationDate = playerDoc.data?.createdAt || playerDoc.data?.reOnboardedAt || playerDoc.lastUpdated;
+                     const istDate = new Date(creationDate).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+                     const istLastUpdated = new Date(playerDoc.lastUpdated).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+                     combinedLogsArr.push(`[Database][Fallback Record] System found an active database profile matching "${userSearchTerm}". Original Onboard/Creation Time: ${istDate}. Last Data Update Time: ${istLastUpdated}. Role: ${playerDoc.data?.role || 'user'}.`);
+                  }
+               } catch(e) {
+                  console.error('Player context fallback failed:', e.message);
+               }
+            }
             
             if (combinedLogsArr.length === 0) {
                return await sendDelayedSlackResponse(response_url, { 
