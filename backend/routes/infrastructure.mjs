@@ -283,15 +283,19 @@ ${chatHistory.substring(0, 3000)}`;
             // STEP 1: Generate MongoDB Filter & Routing Intent
             const filterPrompt = `You are an AI Log Router. A user is asking to search logs.
 We have two log sources:
-1. 'AuditLog' (MongoDB): Contains user actions like 'PASSWORD_CHANGED', 'LOGIN_SUCCESS', 'SUPPORT_LOGIN_SUCCESS', etc.
+1. 'AuditLog' (MongoDB): Contains user actions.
    Schema: { userId: String, action: String, details: Mixed, timestamp: Date }
-2. 'server_events.jsonl' (Filesystem): Contains server-level errors, crashes, panics, and websocket aborts.
+   - Common actions: 'SUPPORT_LOGIN_SUCCESS', 'SUPPORT_LOGIN_FAILED', 'SUPPORT_PASSWORD_RESET_SUCCESS', 'MFA_MONITOR', 'BRUTE_FORCE_DETECTED', 'TICKET_CREATED', 'UNAUTHORIZED_ACCESS_BLOCKED', etc.
+   - ⚠️ IMPORTANT: Use $regex for string matching to avoid missing logs due to exact case or exact string mismatches! 
+     Example for userId: { "userId": { "$regex": "shush", "$options": "i" } }
+     Example for action: { "action": { "$regex": "LOGIN|PASSWORD", "$options": "i" } }
+2. 'server_events.jsonl' (Filesystem): Contains server-level errors, crashes, panics.
 
 User query: "${userQuery}"
 
 Based on this query, generate a JSON object with two fields:
-1. "mongoFilter": A valid MongoDB query object for the AuditLog collection (or {} if none).
-2. "checkServerEventsFile": A boolean (true if the query seems to ask about server crashes, panics, or websocket errors, false otherwise).
+1. "mongoFilter": A valid MongoDB query object for the AuditLog collection (use $regex heavily for strings!). If the query is broad, return {} to fetch the latest logs.
+2. "checkServerEventsFile": A boolean (true if the query seems to ask about server crashes, panics, or websocket errors).
 
 DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. No explanations.`;
 
