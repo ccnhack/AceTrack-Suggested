@@ -132,10 +132,11 @@ const LoginScreen = ({ navigation }) => {
         } else if (!supportRes.ok && username.toLowerCase().trim() !== 'admin') {
           // 🛡️ [SECURITY HARDENING] (v2.6.238)
           // Stop fallback if the user is explicitly denied or if they simply typed the wrong password for a valid support account.
-          if (supportRes.status === 403 || (supportRes.status === 401 && supportData.error === 'Invalid password for support account.')) {
+          // Also stop fallback if their account is not fully set up.
+          if (supportRes.status === 403 || (supportRes.status === 401 && supportData.error !== 'Access Denied. This portal is for AceTrack Administrators and Support Staff only.')) {
             let errorMsg = supportData.error || supportData.message || 'Login denied by server.';
             // Mask the error on mobile to prevent account enumeration
-            if (Platform.OS !== 'web' && errorMsg === 'Invalid password for support account.') {
+            if (Platform.OS !== 'web' && (errorMsg === 'Invalid password for support account.' || errorMsg.includes('Account not fully set up'))) {
               errorMsg = 'Invalid User';
             }
             setError(errorMsg);
