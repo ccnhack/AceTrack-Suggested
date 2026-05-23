@@ -684,7 +684,8 @@ Current Server Time (ISO): ${new Date().toISOString()}
 We have two log sources:
 1. 'AuditLog' (MongoDB): Contains user actions, authentication events, and security logs.
    Schema: { userId: String, ipAddress: String, userAgent: String, action: String, details: Mixed, timestamp: Date }
-   - Common actions: 'SUPPORT_LOGIN_SUCCESS', 'SUPPORT_LOGIN_FAILED', 'ADMIN_LOGIN_SUCCESS', 'ADMIN_LOGIN_FAILED', 'PASSWORD_CHANGED', 'BRUTE_FORCE_DETECTED', etc.
+   - Common actions: 'SUPPORT_LOGIN_SUCCESS', 'SUPPORT_LOGIN_FAILED', 'ADMIN_LOGIN_SUCCESS', 'ADMIN_LOGIN_FAILED', 'PASSWORD_CHANGED', 'BRUTE_FORCE_DETECTED', 'UNAUTHORIZED_ACCESS_BLOCKED', etc.
+   - ⚠️ IMPORTANT: If the user asks about "logins" or "login attempts", you MUST either omit the action filter entirely, or ensure your regex includes "UNAUTHORIZED" alongside "LOGIN" (e.g., {"action": {"$regex": "LOGIN|UNAUTHORIZED", "$options": "i"}}).
    - ⚠️ IMPORTANT: For queries involving usernames or emails (like 'shush' or 'john'), do NOT just query 'userId'. Many events store the target user in 'details.email', 'details.name', 'details.userId', 'details.identifier', 'details.receivedIdentifier'. Use an $or array containing all of these! 
    - ⚠️ IMPORTANT: For IP address queries, search both the 'ipAddress' and 'userId' fields, as 'userId' often stores the IP for unauthenticated attempts.
    - Use $regex heavily for strings! Example for action: { "action": { "$regex": "ADMIN.*LOGIN.*FAIL", "$options": "i" } }
@@ -965,7 +966,8 @@ Current Server Time (ISO): ${new Date().toISOString()}
 We have two log sources:
 1. 'AuditLog' (MongoDB): Contains user actions, authentication events, and security logs.
    Schema: { userId: String, ipAddress: String, userAgent: String, action: String, details: Mixed, timestamp: Date }
-   - Common actions: 'SUPPORT_LOGIN_SUCCESS', 'SUPPORT_LOGIN_FAILED', 'ADMIN_LOGIN_SUCCESS', 'ADMIN_LOGIN_FAILED', 'PASSWORD_CHANGED', 'BRUTE_FORCE_DETECTED', etc.
+   - Common actions: 'SUPPORT_LOGIN_SUCCESS', 'SUPPORT_LOGIN_FAILED', 'ADMIN_LOGIN_SUCCESS', 'ADMIN_LOGIN_FAILED', 'PASSWORD_CHANGED', 'BRUTE_FORCE_DETECTED', 'UNAUTHORIZED_ACCESS_BLOCKED', etc.
+   - ⚠️ IMPORTANT: If the user asks about "logins" or "login attempts", you MUST either omit the action filter entirely, or ensure your regex includes "UNAUTHORIZED" alongside "LOGIN".
    - ⚠️ IMPORTANT: For queries involving usernames or emails, use an $or array containing 'userId', 'details.email', 'details.name', 'details.userId', 'details.identifier', 'details.receivedIdentifier'. Use $regex heavily!
    - ⚠️ CRITICAL: DO NOT use aggregation operators like $date, $subtract, or $$NOW.
    - ⚠️ CRITICAL: ONLY apply a "timestamp" date filter if the user explicitly asks for a specific timeframe.
