@@ -534,7 +534,7 @@ export default function createAuthRoutes({
     // Strip sensitive fields before sending the user object back
     const { password: _pw, pushTokens, devices, ...safeUser } = supportUser;
 
-    await logAudit(req, 'SUPPORT_LOGIN_SUCCESS', [], { userId: supportUser.id, email: supportUser.email });
+    await logAudit(req, 'SUPPORT_LOGIN_SUCCESS', [], { userId: supportUser.id, email: supportUser.email, identifier: search });
     
     // 🛡️ Success! Issue JWT with Support scope and unique JTI (v2.6.214)
     const token = signToken({ 

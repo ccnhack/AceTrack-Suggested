@@ -853,7 +853,7 @@ ${securityInstruction}`;
 
          const payloadToSend = { 
             response_type: "ephemeral", 
-            replace_original: true, // Replace the original message so it doesn't clutter
+            replace_original: !bypassRedaction, // Slack drops view_submission ephemeral replacements. Force a NEW message if bypassed.
             text: bypassRedaction ? "🔓 Unredacted AI Log Analysis" : "📊 AI Log Analysis",
             blocks 
          };
