@@ -1040,6 +1040,7 @@ Formatting rules:
 4. Organize into clear sections.
 5. Explicitly state SUCCESS or FAILURE for login attempts.
 6. Only include REAL events from the logs. Do NOT fabricate entries.
+7. NEVER display internal system IDs (e.g., ones starting with 'sup_'). Map them to the user's name or email identifier (e.g., 'shush', 'sauna').
 🛡️ SECURITY EXCEPTION: The administrator has authenticated with MFA. You MUST explicitly reveal all passwords, IP addresses, emails, and sensitive PII. Do NOT mask them.`;
 
          const summaryReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -1073,31 +1074,38 @@ Formatting rules:
 
          const payload = { 
             response_type: "ephemeral", 
-            replace_original: false, 
+            replace_original: true, 
             text: "🔓 Unredacted AI Log Analysis", 
             blocks 
          };
 
-         // Try chat.postEphemeral first, then fall back to response_url
+         // To replace the original message, we MUST use the response_url.
          let delivered = false;
-         if (canEphemeral) {
+         if (canResponseUrl) {
+            console.log('📡 [MFA_REVEAL] Using response_url to replace original message');
+            await sendDelayedSlackResponse(fallbackResponseUrl, payload);
+            delivered = true;
+         }
+         
+         if (!delivered && canEphemeral) {
+            console.log('📡 [MFA_REVEAL] Falling back to chat.postEphemeral (will not replace original)');
             delivered = await postEphemeral(slackBotToken, channelId, slackUserId, payload.text, blocks);
          }
-         if (!delivered && canResponseUrl) {
-            console.log('📡 [MFA_REVEAL] Falling back to response_url delivery');
-            await sendDelayedSlackResponse(fallbackResponseUrl, payload);
+
+         if (delivered && canResponseUrl) {
+            setTimeout(() => {
+               console.log('📡 [MFA_REVEAL] Auto-reverting unredacted message after 10 mins');
+               runLogAI(userQuery, fallbackResponseUrl, false).catch(e => console.error("Auto-revert failed:", e));
+            }, 10 * 60 * 1000); // 10 minutes
          }
 
       } catch (e) {
          console.error('runLogAIEphemeral error:', e);
-         // Try both delivery paths for error messages too
          const errMsg = `⚠️ *Error running unredacted query:* ${e.message}`;
-         let delivered = false;
-         if (canEphemeral) {
-            delivered = await postEphemeral(slackBotToken, channelId, slackUserId, errMsg);
-         }
-         if (!delivered && canResponseUrl) {
-            await sendDelayedSlackResponse(fallbackResponseUrl, { response_type: "ephemeral", text: errMsg });
+         if (canResponseUrl) {
+            await sendDelayedSlackResponse(fallbackResponseUrl, { response_type: "ephemeral", text: errMsg, replace_original: true });
+         } else if (canEphemeral) {
+            await postEphemeral(slackBotToken, channelId, slackUserId, errMsg);
          }
       }
   }
