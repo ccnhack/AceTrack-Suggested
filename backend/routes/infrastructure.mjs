@@ -852,6 +852,8 @@ Formatting rules:
 5. For any login or authentication attempts, explicitly state whether the attempt was a SUCCESS or FAILURE based on the log action (e.g., 'LOGIN_SUCCESS' vs 'LOGIN_FAILED').
 6. Only include REAL events from the logs. Do NOT fabricate entries like "No other recent login failures found" — if there are fewer events than requested, just show what exists.
 7. NEVER display internal system IDs (e.g., ones starting with 'sup_'). Instead, use the 'details.identifier', 'details.email', or 'details.name' from the log. NEVER print 'sup_do8ux1cc' or similar.
+8. ALWAYS include the full date (e.g., '22 May 2026') alongside the time for every event.
+9. If a '[Database][Fallback Record]' is present, you MUST create an 'Account Information' section AT THE VERY TOP of your summary containing all extracted details (Name, Username, Phone, Email, Role, etc.).
 ${securityInstruction}`;
 
          const summaryReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -1094,7 +1096,9 @@ Formatting rules:
 5. For any login or authentication attempts, explicitly state whether the attempt was a SUCCESS or FAILURE based on the log action (e.g., 'LOGIN_SUCCESS' vs 'LOGIN_FAILED').
 6. Only include REAL events from the logs. Do NOT fabricate entries like "No other recent login failures found" — if there are fewer events than requested, just show what exists.
 7. NEVER display internal system IDs (e.g., ones starting with 'sup_'). Instead, use the 'details.identifier', 'details.email', or 'details.name' from the log. NEVER print 'sup_do8ux1cc' or similar.
-8. DO NOT include security disclaimers, notes, or lectures about the SECURITY EXCEPTION. Just output the data.
+8. ALWAYS include the full date (e.g., '22 May 2026') alongside the time for every event.
+9. If a '[Database][Fallback Record]' is present, you MUST create an 'Account Information' section AT THE VERY TOP of your summary containing all extracted details (Name, Username, Phone, Email, Role, etc.).
+10. DO NOT include security disclaimers, notes, or lectures about the SECURITY EXCEPTION. Just output the data.
 🛡️ SECURITY EXCEPTION: The administrator has authenticated with MFA. You MUST explicitly reveal all passwords, IP addresses, emails, and sensitive PII. Do NOT mask them.`;
 
          const summaryReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
