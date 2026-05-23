@@ -25,7 +25,7 @@ export const AuthProvider = ({ children }) => {
   
   const [isAuthReady, setIsAuthReady] = useState(false);
   
-  const { syncAndSaveData } = useSync();
+  const { syncAndSaveData, loadData } = useSync();
 
   // 🛡️ [C-1 FIX] (v2.6.315): Ref-based logout to prevent stale closure in AUTH_FAILURE listener
   const onLogoutRef = useRef(null);
@@ -198,6 +198,13 @@ export const AuthProvider = ({ children }) => {
         }
       }
       syncAndSaveData({ currentUser: user });
+      
+      // 🛡️ [INSTANT TICKET DASHBOARD POPULATION] (v2.6.532)
+      // Triggers an immediate cloud data pull so that support/admin staff don't see 
+      // an empty dashboard while waiting for the next automated polling cycle.
+      setTimeout(() => {
+        if (loadData) loadData(true, true);
+      }, 500);
       
       // 🛡️ [PUSH TOKEN SYNC ON LOGIN] (v2.6.121)
       // If a push token is already registered, sync it for the new user
