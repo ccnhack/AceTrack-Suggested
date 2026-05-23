@@ -381,10 +381,10 @@ ${chatHistory.substring(0, 3000)}`;
             // Use chat.postEphemeral + response_url fallback to deliver unredacted results.
             try {
                const meta = JSON.parse(payload.view.private_metadata);
-               const { query, channelId, userId, responseUrl: storedUrl } = meta;
+               const { query, channelId, userId, responseUrl: storedUrl, intent } = meta;
                console.log('📡 [MFA_REVEAL] Parsed metadata:', { query: query?.substring(0, 30), channelId, userId, hasUrl: !!storedUrl });
                
-               runLogAIEphemeral(query, channelId, userId, storedUrl).catch(e => console.error('MFA Reveal Error:', e));
+               runLogAIEphemeral(query, channelId, userId, storedUrl, intent).catch(e => console.error('MFA Reveal Error:', e));
             } catch(e) {
                console.error("MFA View parsing error:", e);
             }
@@ -636,10 +636,12 @@ ${chatHistory.substring(0, 3000)}`;
       if (actionId === 'reveal_secure_details') {
          let query = '';
          let sourceUrl = '';
+         let intent = null;
          try {
             const parsed = JSON.parse(actionObj.value || '{}');
             query = parsed.query;
             sourceUrl = parsed.url;
+            intent = parsed.intent;
          } catch(e) {}
 
          // 🔓 [MFA REVEAL FIX] (v2.6.544)
@@ -648,7 +650,7 @@ ${chatHistory.substring(0, 3000)}`;
          const userId = payload.user?.id;
          const targetUrl = responseUrl || sourceUrl; // Prioritize button click responseUrl to perfectly replace the specific message
          console.log('📡 [REVEAL_BTN] Captured context:', { channelId, userId, hasTargetUrl: !!targetUrl });
-         const freshMeta = JSON.stringify({ query, channelId, userId, responseUrl: targetUrl });
+         const freshMeta = JSON.stringify({ query, channelId, userId, responseUrl: targetUrl, intent });
          const slackBotToken = process.env.SLACK_BOT_TOKEN;
          
          if (!slackBotToken) {
@@ -1089,7 +1091,7 @@ ${securityInstruction}`;
                    "text": { "type": "plain_text", "text": "🔓 Reveal Secure Details" },
                    "style": "danger",
                    "action_id": "reveal_secure_details",
-                   "value": JSON.stringify({ query: userQuery, url: responseUrl })
+                   "value": JSON.stringify({ query: userQuery, url: responseUrl, intent: routingIntent })
                 }]
              });
          }
@@ -1119,7 +1121,7 @@ ${securityInstruction}`;
   // 🔓 [MFA REVEAL DELIVERY] (v2.6.544)
   // Runs the same AI log query but delivers results via chat.postEphemeral (Slack Web API)
   // with response_url as fallback, because view_submission payloads don't carry a response_url.
-  async function runLogAIEphemeral(userQuery, channelId, slackUserId, fallbackResponseUrl) {
+  async function runLogAIEphemeral(userQuery, channelId, slackUserId, fallbackResponseUrl, precalculatedIntent = null) {
       const slackBotToken = process.env.SLACK_BOT_TOKEN;
       
       // We need at least ONE delivery mechanism
@@ -1139,8 +1141,10 @@ ${securityInstruction}`;
       }
 
       try {
-         // 1. Route the query (same as runLogAI)
-         const filterPrompt = `You are an AI Log Router. A user is asking to search logs.
+         let routingIntent = precalculatedIntent;
+         if (!routingIntent) {
+            // 1. Route the query (same as runLogAI)
+            const filterPrompt = `You are an AI Log Router. A user is asking to search logs.
 Current Server Time (ISO): ${new Date().toISOString()}
 
 We have two log sources:
@@ -1161,23 +1165,24 @@ Generate a JSON object with two fields:
 
 DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON.`;
 
-         const filterReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-               model: "llama-3.3-70b-versatile",
-               messages: [{ role: 'user', content: filterPrompt }],
-               temperature: 0.1,
-               max_tokens: 300
-            })
-         });
+            const filterReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+               method: 'POST',
+               headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+               body: JSON.stringify({
+                  model: "llama-3.3-70b-versatile",
+                  messages: [{ role: 'user', content: filterPrompt }],
+                  temperature: 0.1,
+                  max_tokens: 300
+               })
+            });
 
-         let routingIntent = { mongoFilter: {}, checkServerEventsFile: false };
-         if (filterReq.ok) {
-            const filterJson = await filterReq.json();
-            let rawJson = filterJson.choices?.[0]?.message?.content || "{}";
-            rawJson = rawJson.replace(/```json/g, '').replace(/```/g, '').trim();
-            try { routingIntent = JSON.parse(rawJson); } catch (e) { console.error("Ephemeral AI Routing Parse Error:", e.message); }
+            routingIntent = { mongoFilter: {}, checkServerEventsFile: false };
+            if (filterReq.ok) {
+               const filterJson = await filterReq.json();
+               let rawJson = filterJson.choices?.[0]?.message?.content || "{}";
+               rawJson = rawJson.replace(/```json/g, '').replace(/```/g, '').trim();
+               try { routingIntent = JSON.parse(rawJson); } catch (e) { console.error("Ephemeral AI Routing Parse Error:", e.message); }
+            }
          }
 
          // 2. Fetch logs
