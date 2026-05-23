@@ -497,6 +497,40 @@ export const useTournamentsStore = create((set, get) => {
         Alert.alert('Error', result.message || 'Failed to opt out.');
       }
     },
+
+    onPingCoach: async (tournamentId, coachId) => {
+      try {
+        const { API_URL } = require('../config');
+        const { Alert } = require('react-native');
+        const useAuthStore = require('./index').useAuthStore;
+        const res = await fetch(`${API_URL}/api/v1/ping-coach`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': 'ace_hackathon_super_secret_key_2024',
+            'Authorization': `Bearer ${useAuthStore.getState().currentUser?.id}`
+          },
+          body: JSON.stringify({ tournamentId, coachId })
+        });
+        const data = await res.json();
+        if (data.success) {
+          // Optimistically update
+          set(state => ({
+            tournaments: state.tournaments.map(t => 
+              t.id === tournamentId ? { ...t, individualPings: data.individualPings } : t
+            )
+          }));
+          Alert.alert('Success', 'Individual push notification sent to coach.');
+          return true;
+        } else {
+          Alert.alert('Failed', data.error || 'Could not ping coach');
+          return false;
+        }
+      } catch (err) {
+        console.error("onPingCoach error:", err);
+        return false;
+      }
+    },
   };
 });
 

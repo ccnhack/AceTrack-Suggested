@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, borderRadius, shadows } from '../../theme/designSystem';
 import { usePlayersStore } from '../../stores';
@@ -8,9 +8,10 @@ import { useAdmin } from '../../context/AdminContext';
 
 const AdminAssignmentPanel = ({ search = '' }) => {
   const { players } = usePlayersStore();
-  const { tournaments, onAssignCoach, onRemoveCoach, onUpdateTournament } = useTournamentsStore();
+  const { tournaments, onAssignCoach, onRemoveCoach, onUpdateTournament, onPingCoach } = useTournamentsStore();
   const { seenAdminActionIds } = useAdmin();
   const [viewingAssignmentFor, setViewingAssignmentFor] = useState(null);
+  const [modalState, setModalState] = useState({ isOpen: false, type: null, tournament: null, coaches: [] });
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -40,9 +41,12 @@ const AdminAssignmentPanel = ({ search = '' }) => {
 
           const platformCoaches = (players || []).filter(p => p.role === 'coach' && p.isApprovedCoach);
           const occupiedCoaches = platformCoaches.filter(c => (tournaments || []).some(other => other.id !== t.id && other.date === t.date && other.assignedCoachId === c.id));
-          const declinedCount = t.declinedCoachIds?.length || 0;
+          const declinedCoaches = platformCoaches.filter(c => t.declinedCoachIds?.includes(c.id));
+          const pendingCoaches = platformCoaches.filter(c => !t.declinedCoachIds?.includes(c.id) && !t.interestedCoachIds?.includes(c.id) && c.id !== t.assignedCoachId && !occupiedCoaches.some(oc => oc.id === c.id));
+          
+          const declinedCount = declinedCoaches.length;
           const interestedCount = t.interestedCoachIds?.length || 0;
-          const pendingCount = Math.max(0, platformCoaches.length - declinedCount - interestedCount - occupiedCoaches.length - (isAssigned ? 1 : 0));
+          const pendingCount = pendingCoaches.length;
           
           const autoPingOptions = [
             { label: 'Off', value: null },
@@ -132,18 +136,18 @@ const AdminAssignmentPanel = ({ search = '' }) => {
               {t.coachAssignmentType === 'platform' && !isAssigned && t.coachStatus !== 'Pending Coach Registration' && (
                 <>
                   <View style={styles.metricsContainer}>
-                     <View style={styles.metricBox}>
+                     <TouchableOpacity style={styles.metricBox} onPress={() => setModalState({ isOpen: true, type: 'Pending RSVP', tournament: t, coaches: pendingCoaches })}>
                         <Text style={styles.metricVal}>{pendingCount}</Text>
                         <Text style={styles.metricLabel}>Pending RSVP</Text>
-                     </View>
-                     <View style={styles.metricBox}>
+                     </TouchableOpacity>
+                     <TouchableOpacity style={styles.metricBox} onPress={() => setModalState({ isOpen: true, type: 'Declined', tournament: t, coaches: declinedCoaches })}>
                         <Text style={styles.metricVal}>{declinedCount}</Text>
                         <Text style={styles.metricLabel}>Declined</Text>
-                     </View>
-                     <View style={styles.metricBox}>
+                     </TouchableOpacity>
+                     <TouchableOpacity style={styles.metricBox} onPress={() => setModalState({ isOpen: true, type: 'Occupied', tournament: t, coaches: occupiedCoaches })}>
                         <Text style={styles.metricVal}>{occupiedCoaches.length}</Text>
                         <Text style={styles.metricLabel}>Occupied</Text>
-                     </View>
+                     </TouchableOpacity>
                   </View>
 
                   <View style={styles.pingConfigContainer}>
@@ -184,6 +188,64 @@ const AdminAssignmentPanel = ({ search = '' }) => {
           );
         })
       )}
+
+      {/* Coach List Modal */}
+      <Modal visible={modalState.isOpen} transparent={true} animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{modalState.type} Coaches</Text>
+              <TouchableOpacity onPress={() => setModalState({ isOpen: false, type: null, tournament: null, coaches: [] })}>
+                <Ionicons name="close" size={24} color={colors.navy[800]} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalSubtitle}>Tournament: {modalState.tournament?.title}</Text>
+            
+            <ScrollView style={{ marginTop: 16 }}>
+              {modalState.coaches.length === 0 ? (
+                <Text style={styles.emptyText}>No coaches in this category.</Text>
+              ) : (
+                modalState.coaches.map(c => {
+                  const pingsSent = modalState.tournament?.individualPings?.[c.id] || 0;
+                  const acceptedCount = c.coachMetrics?.tournamentsAccepted || 0;
+                  const occupiedIn = modalState.type === 'Occupied' 
+                    ? tournaments.find(other => other.id !== modalState.tournament?.id && other.date === modalState.tournament?.date && other.assignedCoachId === c.id)
+                    : null;
+
+                  return (
+                    <View key={c.id} style={styles.coachListCard}>
+                      <View style={styles.flex}>
+                        <Text style={styles.coachName}>{c.name}</Text>
+                        <Text style={styles.coachContact}>{c.phone || c.email}</Text>
+                        <View style={styles.coachStatsRow}>
+                           <Ionicons name="trophy-outline" size={12} color={colors.navy[500]} />
+                           <Text style={styles.coachStatsText}>{acceptedCount} Assignments Accepted</Text>
+                        </View>
+                        {occupiedIn && (
+                          <Text style={styles.occupiedWarning}>⚠️ Busy: {occupiedIn.title}</Text>
+                        )}
+                      </View>
+                      
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <TouchableOpacity 
+                          style={styles.pingActionButton}
+                          onPress={() => onPingCoach(modalState.tournament.id, c.id)}
+                        >
+                          <Ionicons name="paper-plane-outline" size={14} color="#FFF" />
+                          <Text style={styles.pingActionText}>Send Ping</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.pingCountText}>
+                          {pingsSent > 0 ? `${pingsSent} Pings Sent` : 'No manual pings'}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -243,7 +305,23 @@ const styles = StyleSheet.create({
   pingBtnTextActive: { color: colors.primary.dark, fontWeight: '800' },
   pingStatusText: { fontSize: 10, color: colors.navy[500], marginTop: 8, fontStyle: 'italic' },
   deliveryStatusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 },
-  deliveryStatusText: { fontSize: 10, color: colors.navy[600], fontWeight: '500' }
+  deliveryStatusText: { fontSize: 10, color: colors.navy[600], fontWeight: '500' },
+  
+  // Modal Styles
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContent: { width: '100%', maxWidth: 500, backgroundColor: '#FFF', borderRadius: borderRadius.lg, padding: 20, maxHeight: '80%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  modalTitle: { ...typography.h3, color: colors.navy[900] },
+  modalSubtitle: { ...typography.body2, color: colors.navy[500], marginTop: 4 },
+  coachListCard: { backgroundColor: colors.navy[50], padding: 12, borderRadius: borderRadius.md, marginBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  coachName: { ...typography.subtitle2, color: colors.navy[900] },
+  coachContact: { fontSize: 12, color: colors.navy[500], marginTop: 2 },
+  coachStatsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 4 },
+  coachStatsText: { fontSize: 11, color: colors.navy[600], fontWeight: '600' },
+  occupiedWarning: { fontSize: 11, color: colors.warning, fontWeight: '700', marginTop: 4 },
+  pingActionButton: { backgroundColor: colors.primary.base, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  pingActionText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
+  pingCountText: { fontSize: 10, color: colors.navy[400], marginTop: 6, fontWeight: '600' }
 });
 
 export default AdminAssignmentPanel;

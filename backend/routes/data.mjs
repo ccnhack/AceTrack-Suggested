@@ -1452,6 +1452,70 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
   }
 });
 
+// POST /api/v1/ping-coach
+router.post('/ping-coach', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
+  const { tournamentId, coachId } = req.body;
+  if (!tournamentId || !coachId) return res.status(400).json({ error: 'Missing parameters' });
+  
+  if (req.userRole !== 'admin') {
+    return res.status(403).json({ error: 'System Administrator privileges required' });
+  }
+
+  const release = await syncMutex.acquire();
+  try {
+    const state = await AppState.findOne().sort({ version: -1 });
+    if (!state) return res.status(404).json({ error: 'System state not found' });
+    
+    let tournaments = state.data?.tournaments || [];
+    let players = state.data?.players || [];
+    
+    const tournament = tournaments.find(t => t.id === tournamentId);
+    const coach = players.find(p => p.id === coachId);
+    
+    if (!tournament || !coach) return res.status(404).json({ error: 'Tournament or Coach not found' });
+    
+    if (!tournament.individualPings) tournament.individualPings = {};
+    const currentCount = tournament.individualPings[coachId] || 0;
+    const newCount = currentCount + 1;
+    tournament.individualPings[coachId] = newCount;
+    
+    const title = "Tournament Invitation 🎾";
+    const body = `You have been requested to coach for ${tournament.title}. Please review in the app.`;
+    
+    if (coach.pushTokens?.length > 0) {
+      sendPushNotification(coach.pushTokens, title, body, { type: 'COACH_INDIVIDUAL_PING', tournamentId: tournament.id, pingCount: newCount });
+    }
+    
+    // Save state
+    const now = new Date().toISOString();
+    const updatedState = await AppState.findOneAndUpdate(
+      { _id: state._id },
+      { $inc: { version: 1 }, $set: { lastUpdated: now, "data.tournaments": tournaments } },
+      { new: true }
+    );
+    
+    // Also save in atomic collection
+    await Tournament.updateOne(
+      { id: tournament.id },
+      { $set: { id: tournament.id, data: tournament, lastUpdated: now } },
+      { upsert: true }
+    );
+    
+    // Broadcast change
+    if (io) {
+      io.emit('data_updated', { lastUpdated: updatedState.lastUpdated, version: updatedState.version, keys: ['tournaments'] });
+    }
+    
+    logServerEvent('COACH_INDIVIDUAL_PING_SENT', { coachId, tournamentId, newCount });
+    res.json({ success: true, individualPings: tournament.individualPings });
+  } catch (err) {
+    console.error("❌ Ping Coach Error:", err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    release();
+  }
+}));
+
 // POST /api/v1/upload
 router.post('/upload', apiKeyGuard, upload.single('video'), async (req, res) => {
   if (!req.file) {
