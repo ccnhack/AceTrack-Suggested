@@ -278,6 +278,10 @@ ${chatHistory.substring(0, 3000)}`;
             {
                "type": "section",
                "text": { "type": "mrkdwn", "text": "*`/acetrack logs <query>`*\nUses AI to search and summarize system logs (MongoDB & Filesystem) based on natural language.\n_Example: `/acetrack logs were there any critical server panics today?`_" }
+            },
+            {
+               "type": "section",
+               "text": { "type": "mrkdwn", "text": "*`/acetrack query <json>`*\nExecutes a raw JSON MongoDB query directly against the AuditLog collection.\n_Example: `/acetrack query {\"action\": \"UNAUTHORIZED_ACCESS_BLOCKED\"}`_" }
             }
          ];
          return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", replace_original: true, blocks });
@@ -288,6 +292,57 @@ ${chatHistory.substring(0, 3000)}`;
          }
 
          await runLogAI(userQuery, response_url, false);
+      } else if (command === '/acetrack' && String(text).trim().toLowerCase().startsWith('query ')) {
+         const userQuery = String(text).trim().substring(6).trim();
+         if (!userQuery) {
+            return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: "Please provide a valid JSON query. Usage: `/acetrack query {\"action\":\"LOGIN\"}`" });
+         }
+
+         let queryObj;
+         try {
+            queryObj = JSON.parse(userQuery);
+         } catch (e) {
+            return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: `⚠️ *Invalid JSON:* ${e.message}` });
+         }
+
+         const { AuditLog } = await import('../models/index.mjs');
+         let mongoLogs = [];
+         try {
+            mongoLogs = await AuditLog.find(queryObj).sort({ timestamp: -1 }).limit(30).lean();
+         } catch (e) {
+            return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: `⚠️ *MongoDB Error:* ${e.message}` });
+         }
+
+         if (mongoLogs.length === 0) {
+            return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: `🔍 *Query:* \`${userQuery}\`\n\n*Result:* No logs found.` });
+         }
+
+         const compactLogs = mongoLogs.map(l => {
+            let d = ''; try { d = JSON.stringify(l.details || {}); } catch(e){}
+            const istDate = new Date(l.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+            return `[${istDate}] User:${l.userId} Action:${l.action}\nDetails: ${d}`;
+         }).join('\n\n');
+
+         const blocks = [
+            {
+               "type": "header",
+               "text": { "type": "plain_text", "text": "📊 Raw Mongo Query Result", "emoji": true }
+            },
+            {
+               "type": "context",
+               "elements": [
+                  { "type": "mrkdwn", "text": `*Query:* \`${userQuery}\`` },
+                  { "type": "mrkdwn", "text": `*Results:* ${mongoLogs.length} (capped at 30)` }
+               ]
+            },
+            { "type": "divider" },
+            {
+               "type": "section",
+               "text": { "type": "mrkdwn", "text": "```\n" + compactLogs.substring(0, 2500) + (compactLogs.length > 2500 ? '...\n(Truncated)' : '') + "\n```" }
+            }
+         ];
+
+         await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", blocks });
       }
     } catch (err) {
       console.error("❌ Unified Gateway Error:", err.message);
