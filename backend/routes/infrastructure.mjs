@@ -791,6 +791,7 @@ Use advanced Slack mrkdwn formatting to make the output UI-friendly:
 3. If an IP is a comma-separated list (e.g. "x.x.x.x, proxy1, proxy2"), ONLY extract and display the first IP (the actual client).
 4. Organize the data into clear, distinct sections (e.g. 'Incident Report', 'Key Anomalies').
 5. ⚠️ IMPORTANT: For any login or authentication attempts, explicitly state whether the attempt was a SUCCESS or FAILURE based on the log action (e.g., 'LOGIN_SUCCESS' vs 'LOGIN_FAILED').
+6. ⚠️ IMPORTANT: Always list events in reverse chronological order (latest event first) to ensure the most recent events are shown at the top of the list.
 CRITICAL: You MUST output all timestamps in IST (Indian Standard Time). If a log is in UTC, convert it to IST.
 ${securityInstruction}`;
 
