@@ -308,7 +308,7 @@ ${chatHistory.substring(0, 3000)}`;
          const { AuditLog } = await import('../models/index.mjs');
          let mongoLogs = [];
          try {
-            mongoLogs = await AuditLog.find(queryObj).sort({ timestamp: -1 }).limit(30).lean();
+            mongoLogs = await AuditLog.find(sanitizeMongoFilter(queryObj)).sort({ timestamp: -1 }).limit(50).lean();
          } catch (e) {
             return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: `⚠️ *MongoDB Error:* ${e.message}` });
          }
@@ -317,32 +317,8 @@ ${chatHistory.substring(0, 3000)}`;
             return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: `🔍 *Query:* \`${userQuery}\`\n\n*Result:* No logs found.` });
          }
 
-         const compactLogs = mongoLogs.map(l => {
-            let d = ''; try { d = JSON.stringify(l.details || {}); } catch(e){}
-            const istDate = new Date(l.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-            return `[${istDate}] User:${l.userId} Action:${l.action}\nDetails: ${d}`;
-         }).join('\n\n');
-
-         const blocks = [
-            {
-               "type": "header",
-               "text": { "type": "plain_text", "text": "📊 Raw Mongo Query Result", "emoji": true }
-            },
-            {
-               "type": "context",
-               "elements": [
-                  { "type": "mrkdwn", "text": `*Query:* \`${userQuery}\`` },
-                  { "type": "mrkdwn", "text": `*Results:* ${mongoLogs.length} (capped at 30)` }
-               ]
-            },
-            { "type": "divider" },
-            {
-               "type": "section",
-               "text": { "type": "mrkdwn", "text": "```\n" + compactLogs.substring(0, 2500) + (compactLogs.length > 2500 ? '...\n(Truncated)' : '') + "\n```" }
-            }
-         ];
-
-         await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", blocks });
+         // Pass raw results through AI for a clean summary
+         await runQueryAI(userQuery, mongoLogs, response_url);
       }
     } catch (err) {
       console.error("❌ Unified Gateway Error:", err.message);
@@ -726,6 +702,110 @@ ${chatHistory.substring(0, 3000)}`;
     }
   }
 
+   // 🛡️ [FILTER SANITIZER] (v2.6.545)
+   // Fixes common AI-generated MongoDB filter mistakes before execution
+   function sanitizeMongoFilter(filter) {
+      if (!filter || typeof filter !== 'object') return {};
+      const f = JSON.parse(JSON.stringify(filter)); // deep clone
+
+      // Fix 1: Broaden action regex to include UNAUTHORIZED for login queries
+      if (f.action && f.action.$regex) {
+         const r = f.action.$regex;
+         if (/login/i.test(r) && !/unauthorized/i.test(r)) {
+            f.action.$regex = `${r}|UNAUTHORIZED`;
+         }
+      }
+
+      // Fix 2: Convert string timestamps to Date objects
+      if (f.timestamp) {
+         if (f.timestamp.$gte && typeof f.timestamp.$gte === 'string') f.timestamp.$gte = new Date(f.timestamp.$gte);
+         if (f.timestamp.$lte && typeof f.timestamp.$lte === 'string') f.timestamp.$lte = new Date(f.timestamp.$lte);
+      }
+
+      // Fix 3: $regex on 'details' (an object field) is invalid — convert to $or on sub-fields
+      if (f.details && (f.details.$regex || f.details.$options)) {
+         const searchTerm = f.details.$regex || '';
+         const opts = f.details.$options || 'i';
+         delete f.details;
+         const detailsOr = [
+            { 'details.email': { $regex: searchTerm, $options: opts } },
+            { 'details.name': { $regex: searchTerm, $options: opts } },
+            { 'details.identifier': { $regex: searchTerm, $options: opts } },
+            { 'details.role': { $regex: searchTerm, $options: opts } },
+            { 'details.userId': { $regex: searchTerm, $options: opts } },
+            { 'details.receivedIdentifier': { $regex: searchTerm, $options: opts } },
+         ];
+         if (f.$or) {
+            f.$or.push(...detailsOr);
+         } else {
+            f.$or = detailsOr;
+         }
+      }
+
+      return f;
+   }
+
+   // 🔎 [QUERY AI SUMMARIZER] (v2.6.545)
+   // Summarizes raw MongoDB results via AI for /acetrack query
+   async function runQueryAI(originalQuery, mongoLogs, responseUrl) {
+      const apiKey = process.env.GROQ_API_KEY;
+
+      const compactLogs = mongoLogs.map(l => {
+         let d = ''; try { d = JSON.stringify(l.details || {}); } catch(e){}
+         const istDate = new Date(l.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+         const ip = l.ipAddress ? ` IP:${l.ipAddress}` : '';
+         return `[${istDate}] User:${l.userId}${ip} Action:${l.action} Details:${d}`;
+      }).join('\n');
+
+      let summaryContent = compactLogs.substring(0, 2500);
+
+      if (apiKey) {
+         try {
+            const summaryPrompt = `You are a system administrator AI. A user ran a direct MongoDB query: \`${originalQuery}\`
+
+Here are the raw results (${mongoLogs.length} documents):
+${compactLogs.substring(0, 12000)}
+
+Provide a concise, structured summary of these results:
+- Include full dates and times in IST (e.g., '23 May 2026, 1:04:07 pm IST')
+- Group related events logically
+- Use emojis for visual separation (🚨 failures, ✅ successes, 📍 location)
+- Show key statistics (counts, patterns)
+- NEVER display internal system IDs starting with 'sup_'. Use 'details.identifier' or 'details.email' instead.
+🛡️ SECURITY EXCEPTION: Reveal all IPs, emails, and details without masking.`;
+
+            const aiReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+               method: 'POST',
+               headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+               body: JSON.stringify({
+                  model: "llama-3.3-70b-versatile",
+                  messages: [{ role: 'user', content: summaryPrompt }],
+                  temperature: 0.3,
+                  max_tokens: 800
+               })
+            });
+            if (aiReq.ok) {
+               const aiJson = await aiReq.json();
+               summaryContent = aiJson.choices?.[0]?.message?.content || summaryContent;
+            }
+         } catch(e) {
+            console.error('Query AI summary error:', e.message);
+         }
+      }
+
+      const blocks = [
+         { "type": "header", "text": { "type": "plain_text", "text": "📊 MongoDB Query Result", "emoji": true } },
+         { "type": "context", "elements": [
+            { "type": "mrkdwn", "text": `*Query:* \`${originalQuery}\`` },
+            { "type": "mrkdwn", "text": `*Results:* ${mongoLogs.length} documents` }
+         ]},
+         { "type": "divider" },
+         { "type": "section", "text": { "type": "mrkdwn", "text": summaryContent } }
+      ];
+
+      await sendDelayedSlackResponse(responseUrl, { response_type: "ephemeral", blocks });
+   }
+
   async function runLogAI(userQuery, responseUrl, bypassRedaction = false) {
       const apiKey = process.env.GROQ_API_KEY;
       if (!apiKey) {
@@ -783,13 +863,29 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
 
          if (Object.keys(routingIntent.mongoFilter || {}).length > 0 || !routingIntent.checkServerEventsFile) {
             const { AuditLog } = await import('../models/index.mjs');
+            const sanitizedFilter = sanitizeMongoFilter(routingIntent.mongoFilter);
             let mongoLogs = [];
             try {
-               mongoLogs = await AuditLog.find(routingIntent.mongoFilter || {}).sort({ timestamp: -1 }).limit(300).lean();
+               mongoLogs = await AuditLog.find(sanitizedFilter).sort({ timestamp: -1 }).limit(300).lean();
             } catch (err) {
                console.error("MongoDB Query Error (fallback to latest):", err.message);
                mongoLogs = await AuditLog.find({}).sort({ timestamp: -1 }).limit(300).lean();
             }
+
+            // 🔄 [ZERO-RESULT FALLBACK] (v2.6.545)
+            // If the sanitized filter returned 0 results, retry without action & timestamp constraints
+            if (mongoLogs.length === 0 && Object.keys(sanitizedFilter).length > 0) {
+               console.log('[LOG_AI] Zero results with filter, retrying with relaxed constraints');
+               const relaxedFilter = { ...sanitizedFilter };
+               delete relaxedFilter.action;
+               delete relaxedFilter.timestamp;
+               try {
+                  mongoLogs = await AuditLog.find(Object.keys(relaxedFilter).length > 0 ? relaxedFilter : {}).sort({ timestamp: -1 }).limit(300).lean();
+               } catch (err2) {
+                  mongoLogs = await AuditLog.find({}).sort({ timestamp: -1 }).limit(300).lean();
+               }
+            }
+            
             const compactMongo = mongoLogs.map(l => {
                let d = ''; try { d = JSON.stringify(l.details || {}); } catch(e){}
                const istDate = new Date(l.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
@@ -853,12 +949,18 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
                }).lean();
 
                if (playerDoc) {
-                  const creationDate = playerDoc.data?.createdAt || playerDoc.data?.reOnboardedAt || playerDoc.lastUpdated;
+                  const pd = playerDoc.data || {};
+                  const creationDate = pd.createdAt || pd.reOnboardedAt || playerDoc.lastUpdated;
                   const istDate = new Date(creationDate).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
                   const istLastUpdated = new Date(playerDoc.lastUpdated).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+                  const profileName = pd.firstName ? `${pd.firstName} ${pd.lastName || ''}`.trim() : (pd.name || 'N/A');
+                  const profileEmail = pd.email || 'N/A';
+                  const profilePhone = pd.phoneNumber || pd.phone || 'N/A';
+                  const profileUsername = pd.username || playerDoc.id || 'N/A';
+                  const profileRole = pd.role || 'user';
                   combinedLogsArr.push({
                      timeMs: new Date(creationDate).getTime() || 0,
-                     text: `[Database][Fallback Record] System found an active database profile matching "${userSearchTerm}". Original Onboard/Creation Time: ${istDate}. Last Data Update Time: ${istLastUpdated}. Role: ${playerDoc.data?.role || 'user'}.`
+                     text: `[Database][Fallback Record] System found an active database profile matching "${userSearchTerm}". Name: ${profileName}. Username: ${profileUsername}. Email: ${profileEmail}. Phone: ${profilePhone}. Role: ${profileRole}. Original Onboard/Creation Time: ${istDate}. Last Data Update Time: ${istLastUpdated}.`
                   });
                }
             } catch(e) {
@@ -1059,12 +1161,26 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON.`
          let combinedLogsArr = [];
          if (Object.keys(routingIntent.mongoFilter || {}).length > 0 || !routingIntent.checkServerEventsFile) {
             const { AuditLog } = await import('../models/index.mjs');
+            const sanitizedFilter = sanitizeMongoFilter(routingIntent.mongoFilter);
             let mongoLogs = [];
             try {
-               mongoLogs = await AuditLog.find(routingIntent.mongoFilter || {}).sort({ timestamp: -1 }).limit(300).lean();
+               mongoLogs = await AuditLog.find(sanitizedFilter).sort({ timestamp: -1 }).limit(300).lean();
             } catch (err) {
                mongoLogs = await AuditLog.find({}).sort({ timestamp: -1 }).limit(300).lean();
             }
+
+            // 🔄 [ZERO-RESULT FALLBACK] (v2.6.545)
+            if (mongoLogs.length === 0 && Object.keys(sanitizedFilter).length > 0) {
+               const relaxedFilter = { ...sanitizedFilter };
+               delete relaxedFilter.action;
+               delete relaxedFilter.timestamp;
+               try {
+                  mongoLogs = await AuditLog.find(Object.keys(relaxedFilter).length > 0 ? relaxedFilter : {}).sort({ timestamp: -1 }).limit(300).lean();
+               } catch (err2) {
+                  mongoLogs = await AuditLog.find({}).sort({ timestamp: -1 }).limit(300).lean();
+               }
+            }
+
             const compactMongo = mongoLogs.map(l => {
                let d = ''; try { d = JSON.stringify(l.details || {}); } catch(e){}
                const istDate = new Date(l.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
@@ -1091,7 +1207,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON.`
          let userSearchTerm = null;
          try {
             const qStr = JSON.stringify(routingIntent.mongoFilter || {});
-            const match = qStr.match(/{"\\$regex":"([^"|]+)"/);
+            const match = qStr.match(/{"\$regex":"([^"|]+)"/);
             if (match && match[1]) {
                userSearchTerm = match[1];
             }
@@ -1110,10 +1226,16 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON.`
                }).lean();
 
                if (playerDoc) {
-                  const creationDate = playerDoc.data?.createdAt || playerDoc.data?.reOnboardedAt || playerDoc.lastUpdated;
+                  const pd = playerDoc.data || {};
+                  const creationDate = pd.createdAt || pd.reOnboardedAt || playerDoc.lastUpdated;
                   const istDate = new Date(creationDate).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
                   const istLastUpdated = new Date(playerDoc.lastUpdated).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-                  combinedLogsArr.push(`[Database][Fallback Record] System found an active database profile matching "${userSearchTerm}". Original Onboard/Creation Time: ${istDate}. Last Data Update Time: ${istLastUpdated}. Role: ${playerDoc.data?.role || 'user'}.`);
+                  const profileName = pd.firstName ? `${pd.firstName} ${pd.lastName || ''}`.trim() : (pd.name || 'N/A');
+                  const profileEmail = pd.email || 'N/A';
+                  const profilePhone = pd.phoneNumber || pd.phone || 'N/A';
+                  const profileUsername = pd.username || playerDoc.id || 'N/A';
+                  const profileRole = pd.role || 'user';
+                  combinedLogsArr.push(`[Database][Fallback Record] System found an active database profile matching "${userSearchTerm}". Name: ${profileName}. Username: ${profileUsername}. Email: ${profileEmail}. Phone: ${profilePhone}. Role: ${profileRole}. Original Onboard/Creation Time: ${istDate}. Last Data Update Time: ${istLastUpdated}.`);
                }
             } catch(e) {
                console.error('Ephemeral Player context fallback failed:', e.message);
