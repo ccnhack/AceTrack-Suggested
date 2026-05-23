@@ -734,7 +734,8 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
             const compactMongo = mongoLogs.map(l => {
                let d = ''; try { d = JSON.stringify(l.details || {}); } catch(e){}
                const istDate = new Date(l.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-               return `[Mongo][${istDate}] User:${l.userId} Action:${l.action} Details:${d}`;
+               const ip = l.ipAddress ? ` IP:${l.ipAddress}` : '';
+               return `[Mongo][${istDate}] User:${l.userId}${ip} Action:${l.action} Details:${d}`;
             });
             combinedLogsArr.push(...compactMongo);
          }
@@ -797,6 +798,12 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
             });
          }
 
+         // 🌍 [GEO-RESOLVE IPs] (v2.6.544)
+         const ipGeoMap = await resolveIpGeoLocations(combinedLogsArr);
+         const geoMapStr = Object.keys(ipGeoMap).length > 0 
+            ? `\n\nIP Geolocation Map (use this to show location next to every IP):\n${Object.entries(ipGeoMap).map(([ip, loc]) => `  ${ip} → ${loc}`).join('\n')}`
+            : '';
+
          const compactLogs = combinedLogsArr.join('\n');
 
          let securityInstruction = bypassRedaction 
@@ -807,7 +814,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
 A user asked: "${userQuery}"
 
 Here are the retrieved system logs matching their request (from MongoDB and/or Filesystem):
-${compactLogs.substring(0, 15000)}
+${compactLogs.substring(0, 15000)}${geoMapStr}
 
 Please analyze these logs and provide a highly structured, visually clean summary answering the user's question. 
 
@@ -815,10 +822,11 @@ Please analyze these logs and provide a highly structured, visually clean summar
 - You MUST sort ALL events strictly by timestamp in DESCENDING order (most recent event FIRST, oldest LAST). Do NOT group by status (success/failure) — sort ONLY by time.
 - You MUST output all timestamps in IST (Indian Standard Time). If a log is in UTC, convert it to IST.
 - You MUST number events sequentially (1, 2, 3...) where #1 is the MOST RECENT event.
+- For EVERY IP address you display, you MUST append the geographic location in parentheses using the IP Geolocation Map provided above. Format: \`IP_ADDRESS\`(City). If an IP has no geo data, show \`IP_ADDRESS\`(Unknown).
 
 Formatting rules:
 1. Use emojis for visual separation (e.g. 🚨 for failed logins, ✅ for successes, 📍 for location, 🔑 for passwords).
-2. Format IPs and Passwords in inline code blocks (\`like this\`) to make them stand out clearly.
+2. Format IPs in inline code blocks followed by location in parentheses: \`1.2.3.4\`(Mumbai).
 3. If an IP is a comma-separated list (e.g. "x.x.x.x, proxy1, proxy2"), ONLY extract and display the first IP (the actual client).
 4. Organize the data into clear, distinct sections (e.g. 'Incident Report', 'Key Anomalies').
 5. For any login or authentication attempts, explicitly state whether the attempt was a SUCCESS or FAILURE based on the log action (e.g., 'LOGIN_SUCCESS' vs 'LOGIN_FAILED').
@@ -980,7 +988,8 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON.`
             const compactMongo = mongoLogs.map(l => {
                let d = ''; try { d = JSON.stringify(l.details || {}); } catch(e){}
                const istDate = new Date(l.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-               return `[Mongo][${istDate}] User:${l.userId} Action:${l.action} Details:${d}`;
+               const ip = l.ipAddress ? ` IP:${l.ipAddress}` : '';
+               return `[Mongo][${istDate}] User:${l.userId}${ip} Action:${l.action} Details:${d}`;
             });
             combinedLogsArr.push(...compactMongo);
          }
@@ -1003,13 +1012,18 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON.`
             return await postEphemeral(slackBotToken, channelId, slackUserId, `🔍 *Query:* "${userQuery}"\n\n*Result:* No logs found.`);
          }
 
-         // 3. Summarize with AI (UNREDACTED)
+         // 3. Geo-resolve IPs and Summarize with AI (UNREDACTED)
+         const ipGeoMap = await resolveIpGeoLocations(combinedLogsArr);
+         const geoMapStr = Object.keys(ipGeoMap).length > 0 
+            ? `\n\nIP Geolocation Map (use this to show location next to every IP):\n${Object.entries(ipGeoMap).map(([ip, loc]) => `  ${ip} → ${loc}`).join('\n')}`
+            : '';
+
          const compactLogs = combinedLogsArr.join('\n');
          const summaryPrompt = `You are a system administrator AI assistant.
 A user asked: "${userQuery}"
 
 Here are the retrieved system logs:
-${compactLogs.substring(0, 15000)}
+${compactLogs.substring(0, 15000)}${geoMapStr}
 
 Provide a highly structured, visually clean summary answering the user's question.
 
@@ -1017,10 +1031,11 @@ Provide a highly structured, visually clean summary answering the user's questio
 - You MUST sort ALL events strictly by timestamp in DESCENDING order (most recent event FIRST, oldest LAST). Do NOT group by status (success/failure) — sort ONLY by time.
 - You MUST output all timestamps in IST (Indian Standard Time). If a log is in UTC, convert it to IST.
 - You MUST number events sequentially (1, 2, 3...) where #1 is the MOST RECENT event.
+- For EVERY IP address you display, you MUST append the geographic location in parentheses using the IP Geolocation Map provided above. Format: \`IP_ADDRESS\`(City). If an IP has no geo data, show \`IP_ADDRESS\`(Unknown).
 
 Formatting rules:
 1. Use emojis (🚨 failed, ✅ success, 📍 location, 🔑 passwords).
-2. Format IPs and Passwords in inline code blocks.
+2. Format IPs in inline code blocks followed by location: \`1.2.3.4\`(Mumbai).
 3. If an IP is a comma-separated list, ONLY extract and display the first IP.
 4. Organize into clear sections.
 5. Explicitly state SUCCESS or FAILURE for login attempts.
@@ -1108,6 +1123,57 @@ Formatting rules:
          console.error('postEphemeral error:', e.message);
          return false;
       }
+  }
+
+  // 🌍 Helper: Batch resolve IPs to City/Country using ip-api.com
+  async function resolveIpGeoLocations(logsArray) {
+      const ipSet = new Set();
+      const ipRegex = /\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g;
+
+      // Extract unique IPs from the logs
+      for (const log of logsArray) {
+         const matches = log.match(ipRegex);
+         if (matches) {
+            for (const match of matches) {
+               ipSet.add(match);
+            }
+         }
+      }
+
+      const uniqueIps = Array.from(ipSet);
+      if (uniqueIps.length === 0) return {};
+
+      // ip-api batch endpoint accepts max 100 IPs per request
+      const batches = [];
+      for (let i = 0; i < uniqueIps.length; i += 100) {
+         batches.push(uniqueIps.slice(i, i + 100));
+      }
+
+      const geoMap = {};
+      
+      for (const batch of batches) {
+         try {
+            // We request 'status,city,country' fields
+            const response = await fetch("http://ip-api.com/batch?fields=status,city,country,query", {
+               method: "POST",
+               headers: { "Content-Type": "application/json" },
+               body: JSON.stringify(batch)
+            });
+
+            if (response.ok) {
+               const data = await response.json();
+               for (const result of data) {
+                  if (result.status === "success" && result.query) {
+                     geoMap[result.query] = `${result.city || 'Unknown City'}, ${result.country || 'Unknown Country'}`;
+                  }
+               }
+            }
+         } catch (error) {
+            console.error("IP Geo-resolution error:", error.message);
+         }
+      }
+
+      return geoMap;
   }
 
   return router;
