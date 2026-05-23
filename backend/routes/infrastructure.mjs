@@ -601,17 +601,20 @@ ${chatHistory.substring(0, 3000)}`;
 
       if (actionId === 'reveal_secure_details') {
          let query = '';
+         let sourceUrl = '';
          try {
             const parsed = JSON.parse(actionObj.value || '{}');
             query = parsed.query;
+            sourceUrl = parsed.url;
          } catch(e) {}
 
          // 🔓 [MFA REVEAL FIX] (v2.6.544)
          // Store channelId + userId + responseUrl in metadata for dual delivery
          const channelId = payload.channel?.id || payload.container?.channel_id;
          const userId = payload.user?.id;
-         console.log('📡 [REVEAL_BTN] Captured context:', { channelId, userId, hasResponseUrl: !!responseUrl });
-         const freshMeta = JSON.stringify({ query, channelId, userId, responseUrl });
+         const targetUrl = sourceUrl || responseUrl; // Use Slash command URL to perfectly replace the original message
+         console.log('📡 [REVEAL_BTN] Captured context:', { channelId, userId, hasTargetUrl: !!targetUrl });
+         const freshMeta = JSON.stringify({ query, channelId, userId, responseUrl: targetUrl });
          const slackBotToken = process.env.SLACK_BOT_TOKEN;
          
          if (!slackBotToken) {
