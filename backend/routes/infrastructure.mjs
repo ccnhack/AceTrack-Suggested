@@ -612,7 +612,7 @@ ${chatHistory.substring(0, 3000)}`;
          // Store channelId + userId + responseUrl in metadata for dual delivery
          const channelId = payload.channel?.id || payload.container?.channel_id;
          const userId = payload.user?.id;
-         const targetUrl = sourceUrl || responseUrl; // Use Slash command URL to perfectly replace the original message
+         const targetUrl = responseUrl || sourceUrl; // Prioritize button click responseUrl to perfectly replace the specific message
          console.log('📡 [REVEAL_BTN] Captured context:', { channelId, userId, hasTargetUrl: !!targetUrl });
          const freshMeta = JSON.stringify({ query, channelId, userId, responseUrl: targetUrl });
          const slackBotToken = process.env.SLACK_BOT_TOKEN;
