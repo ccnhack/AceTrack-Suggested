@@ -35,6 +35,7 @@ import {
 } from './emailService.mjs';
 
 import SupportMetricsService from './services/SupportMetricsService.mjs';
+import { fetchWithAIFallback } from './utils/aiRouter.mjs';
 
 // 🏗️ [PHASE 1 MODULARIZATION] (v2.6.315): Extracted modules
 import { AppState, AuditLog, SecuritySummary, SupportInvite, SupportPasswordReset, Player } from './models/index.mjs';
@@ -172,15 +173,11 @@ const sendSecurityAlert = async (event, data) => {
             contextualHint = " Note: This specific event indicates the requester did not provide a valid, active JWT session token or cryptographic proof of identity.";
           }
           const prompt = `As a cybersecurity expert, provide a concise 1-2 sentence explanation of why this security event was triggered and its potential implications.${contextualHint} Event: ${event}, IP: ${data.IP}, URL: ${data.URL}, Method: ${data.Method}, Actor: ${data.Actor}.`;
-          const aiResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${process.env.GROQ_API_KEY}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              model: "llama-3.3-70b-versatile",
-              messages: [{ role: 'user', content: prompt }],
-              temperature: 0.3,
-              max_tokens: 150
-            })
+          const aiResponse = await fetchWithAIFallback({
+            messages: [{ role: 'user', content: prompt }],
+            apiKey: process.env.GROQ_API_KEY,
+            temperature: 0.3,
+            max_tokens: 150
           });
           const result = await aiResponse.json();
           if (result?.choices?.[0]?.message?.content) {
@@ -328,18 +325,11 @@ Identify patterns (brute force, enumeration, lateral movement), assess risk leve
 Keep it professional and concise.
 Events:\n${eventSummary.substring(0, 3000)}`;
 
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.5,
-        max_tokens: 800
-      })
+    const response = await fetchWithAIFallback({
+      messages: [{ role: 'user', content: prompt }],
+      apiKey,
+      temperature: 0.5,
+      max_tokens: 800
     });
     
     const result = await response.json();

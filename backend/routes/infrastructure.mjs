@@ -3,6 +3,7 @@ import { AppState, Player, AuditLog } from '../models/index.mjs';
 import { asyncHandler } from '../helpers/utils.mjs';
 import { apiKeyGuard, authGuard } from '../middleware/security.mjs';
 import nodemailer from 'nodemailer';
+import { fetchWithAIFallback } from '../utils/aiRouter.mjs';
 
 export default function createInfrastructureRoutes({ 
   syncMutex, 
@@ -190,15 +191,12 @@ Ticket Description: ${issueDesc}
 Chat History:
 ${chatHistory.substring(0, 3000)}`;
 
-               const aiReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-                 method: 'POST',
-                 headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-                 body: JSON.stringify({
+               const aiReq = await fetchWithAIFallback({
                    model: "llama-3.3-70b-versatile",
                    messages: [{ role: 'user', content: prompt }],
                    temperature: 0.3,
-                   max_tokens: 300
-                 })
+                   max_tokens: 300,
+                   apiKey
                });
                
                if (aiReq.ok) {
@@ -793,15 +791,12 @@ Provide a highly structured, visually clean summary of these results.
 - NEVER display internal system IDs starting with 'sup_'. Use 'details.identifier' or 'details.email' instead.
 🛡️ SECURITY EXCEPTION: Reveal all IPs, emails, and details without masking.`;
 
-            const aiReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-               method: 'POST',
-               headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-               body: JSON.stringify({
+            const aiReq = await fetchWithAIFallback({
                   model: "llama-3.3-70b-versatile",
                   messages: [{ role: 'user', content: summaryPrompt }],
                   temperature: 0.3,
-                  max_tokens: 800
-               })
+                  max_tokens: 800,
+                  apiKey
             });
             if (aiReq.ok) {
                const aiJson = await aiReq.json();
@@ -865,15 +860,12 @@ Based on this query, generate a JSON object with two fields:
 
 DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. No explanations.`;
 
-         const filterReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+         const filterReq = await fetchWithAIFallback({
                model: "llama-3.3-70b-versatile",
                messages: [{ role: 'user', content: filterPrompt }],
                temperature: 0.1,
-               max_tokens: 300
-            })
+               max_tokens: 300,
+               apiKey
          });
 
          let routingIntent = { mongoFilter: {}, checkServerEventsFile: false };
@@ -1043,29 +1035,13 @@ Formatting rules:
 9. If a '[Database][Fallback Record]' is present, you MUST create an 'Account Information' section AT THE VERY TOP of your summary containing all extracted details (Name, Username, Phone, Email, Role, etc.).
 ${securityInstruction}`;
 
-         let summaryReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+         let summaryReq = await fetchWithAIFallback({
                model: "llama-3.3-70b-versatile",
                messages: [{ role: 'user', content: summaryPrompt }],
                temperature: 0.3,
-               max_tokens: 800
-            })
+               max_tokens: 800,
+               apiKey
          });
-
-         if (summaryReq.status === 429 && process.env.CEREBRAS_API_KEY) {
-            summaryReq = await fetch("https://api.cerebras.ai/v1/chat/completions", {
-               method: 'POST',
-               headers: { 'Authorization': `Bearer ${process.env.CEREBRAS_API_KEY}`, 'Content-Type': 'application/json' },
-               body: JSON.stringify({
-                  model: "llama3.3-70b",
-                  messages: [{ role: 'user', content: summaryPrompt }],
-                  temperature: 0.3,
-                  max_tokens: 800
-               })
-            });
-         }
 
          let summaryContent = "_AI Summary failed to generate._";
          if (summaryReq.ok) {
@@ -1197,15 +1173,12 @@ Generate a JSON object with two fields:
 
 DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON.`;
 
-            const filterReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-               method: 'POST',
-               headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-               body: JSON.stringify({
+            const filterReq = await fetchWithAIFallback({
                   model: "llama-3.3-70b-versatile",
                   messages: [{ role: 'user', content: filterPrompt }],
                   temperature: 0.1,
-                  max_tokens: 300
-               })
+                  max_tokens: 300,
+                  apiKey
             });
 
             routingIntent = { mongoFilter: {}, checkServerEventsFile: false };
@@ -1340,29 +1313,13 @@ Formatting rules:
 10. DO NOT include security disclaimers, notes, or lectures about the SECURITY EXCEPTION. Just output the data.
 🛡️ SECURITY EXCEPTION: The administrator has authenticated with MFA. You MUST explicitly reveal all passwords, IP addresses, emails, and sensitive PII. Do NOT mask them.`;
 
-         let summaryReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+         let summaryReq = await fetchWithAIFallback({
                model: "llama-3.3-70b-versatile",
                messages: [{ role: 'user', content: summaryPrompt }],
                temperature: 0.3,
-               max_tokens: 800
-            })
+               max_tokens: 800,
+               apiKey
          });
-
-         if (summaryReq.status === 429 && process.env.CEREBRAS_API_KEY) {
-            summaryReq = await fetch("https://api.cerebras.ai/v1/chat/completions", {
-               method: 'POST',
-               headers: { 'Authorization': `Bearer ${process.env.CEREBRAS_API_KEY}`, 'Content-Type': 'application/json' },
-               body: JSON.stringify({
-                  model: "llama3.3-70b",
-                  messages: [{ role: 'user', content: summaryPrompt }],
-                  temperature: 0.3,
-                  max_tokens: 800
-               })
-            });
-         }
 
          let summaryContent = "_AI Summary failed to generate._";
          if (summaryReq.ok) {

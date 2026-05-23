@@ -17,6 +17,7 @@ import {
   sendReOnboardingEmail,
   sendSuspensionEmail
 } from '../emailService.mjs';
+import { fetchWithAIFallback } from '../utils/aiRouter.mjs';
 
 // 🏗️ PHASE 1 (DATABASE) MIGRATION HELPER
 // Ensures that direct backend state mutations are immediately synced to distinct collections
@@ -1128,18 +1129,11 @@ router.post('/support/ai-summary', apiKeyGuard, async (req, res) => {
     const groqKey = process.env.GROQ_API_KEY;
     if (!groqKey) return res.status(500).json({ error: "GROQ_API_KEY is not set" });
 
-    const aiRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${groqKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: messages,
-        temperature: 0.5,
-        max_tokens: 512
-      })
+    const aiRes = await fetchWithAIFallback({
+      messages: messages,
+      apiKey: groqKey,
+      temperature: 0.5,
+      max_tokens: 512
     });
     const data = await aiRes.json();
     if (data.choices && data.choices[0] && data.choices[0].message) {
@@ -1229,14 +1223,11 @@ router.post('/support/reassign-ticket', apiKeyGuard, async (req, res) => {
     try {
       const groqKey = process.env.GROQ_API_KEY;
       if (groqKey && issueContext) {
-        const aiRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: "llama-3.1-70b-versatile",
-            messages: [{ role: 'user', content: `Summarize this support issue in one short sentence (max 20 words), no quotes: "${issueContext}"` }],
-            temperature: 0.3, max_tokens: 50
-          })
+        const aiRes = await fetchWithAIFallback({
+          messages: [{ role: 'user', content: `Summarize this support issue in one short sentence (max 20 words), no quotes: "${issueContext}"` }],
+          apiKey: groqKey,
+          temperature: 0.3, 
+          max_tokens: 50
         });
         const aiData = await aiRes.json();
         const aiText = aiData?.choices?.[0]?.message?.content?.trim();
@@ -1395,14 +1386,11 @@ router.post('/support/claim-ticket', apiKeyGuard, async (req, res) => {
     try {
       const groqKey = process.env.GROQ_API_KEY;
       if (groqKey && issueContext) {
-        const aiRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: "llama-3.1-70b-versatile",
-            messages: [{ role: 'user', content: `Summarize this support issue in one short sentence (max 20 words), no quotes: "${issueContext}"` }],
-            temperature: 0.3, max_tokens: 50
-          })
+        const aiRes = await fetchWithAIFallback({
+          messages: [{ role: 'user', content: `Summarize this support issue in one short sentence (max 20 words), no quotes: "${issueContext}"` }],
+          apiKey: groqKey,
+          temperature: 0.3,
+          max_tokens: 50
         });
         const aiData = await aiRes.json();
         const aiText = aiData?.choices?.[0]?.message?.content?.trim();
