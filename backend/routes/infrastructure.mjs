@@ -301,6 +301,9 @@ ${chatHistory.substring(0, 3000)}`;
          let queryObj;
          try {
             queryObj = JSON.parse(userQuery);
+            if (queryObj && typeof queryObj === 'object' && queryObj.mongoFilter) {
+               queryObj = queryObj.mongoFilter;
+            }
          } catch (e) {
             return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: `⚠️ *Invalid JSON:* ${e.message}` });
          }
