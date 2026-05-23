@@ -627,13 +627,7 @@ ${chatHistory.substring(0, 3000)}`;
       }
 
       // 🛡️ [CATCH-ALL RESPONDER] (v2.6.383)
-      const catchRes = {
-        replace_original: false,
-        response_type: "ephemeral",
-        text: `📡 *Handshake Successful* (v${APP_VERSION})\nI received your interaction: \`${actionId}\`. If you don't see the expected result, please run \`/acetrack security\` to get a fresh report.`
-      };
-
-      if (actionId === 'reveal_secure_details') {
+      if (actionId === 'reveal_secure_details' || actionId === 'dump_raw_logs') {
          let query = '';
          let sourceUrl = '';
          let intent = null;
@@ -644,17 +638,27 @@ ${chatHistory.substring(0, 3000)}`;
             intent = parsed.intent;
          } catch(e) {}
 
+         const targetUrl = responseUrl || sourceUrl;
+
+         if (actionId === 'dump_raw_logs') {
+            if (isDelayed) {
+               await sendDelayedSlackResponse(targetUrl, { replace_original: false, response_type: "ephemeral", text: "🔄 *Dumping raw logs...*" });
+            } else {
+               res.status(200).send();
+            }
+            return dumpRawLogs(query, intent, targetUrl).catch(e => console.error('Dump Raw Error:', e));
+         }
+
          // 🔓 [MFA REVEAL FIX] (v2.6.544)
          // Store channelId + userId + responseUrl in metadata for dual delivery
          const channelId = payload.channel?.id || payload.container?.channel_id;
          const userId = payload.user?.id;
-         const targetUrl = responseUrl || sourceUrl; // Prioritize button click responseUrl to perfectly replace the specific message
          console.log('📡 [REVEAL_BTN] Captured context:', { channelId, userId, hasTargetUrl: !!targetUrl });
          const freshMeta = JSON.stringify({ query, channelId, userId, responseUrl: targetUrl, intent });
          const slackBotToken = process.env.SLACK_BOT_TOKEN;
          
          if (!slackBotToken) {
-            return await sendDelayedSlackResponse(responseUrl, {
+            return await sendDelayedSlackResponse(targetUrl, {
                response_type: "ephemeral",
                text: "⚠️ *Configuration Error:* SLACK_BOT_TOKEN is not set on the server. Cannot open MFA modal."
             });
@@ -1083,16 +1087,31 @@ ${securityInstruction}`;
             }
          ];
 
+         let actionsElements = [];
+         
          if (!bypassRedaction) {
+             actionsElements.push({
+                 "type": "button",
+                 "text": { "type": "plain_text", "text": "🔓 Reveal Secure Details" },
+                 "style": "danger",
+                 "action_id": "reveal_secure_details",
+                 "value": JSON.stringify({ query: userQuery, url: responseUrl, intent: routingIntent })
+             });
+         }
+
+         if (!summaryReq.ok) {
+             actionsElements.push({
+                 "type": "button",
+                 "text": { "type": "plain_text", "text": "📄 Dump Raw Logs" },
+                 "action_id": "dump_raw_logs",
+                 "value": JSON.stringify({ query: userQuery, url: responseUrl, intent: routingIntent })
+             });
+         }
+
+         if (actionsElements.length > 0) {
              blocks.push({
                 "type": "actions",
-                "elements": [{
-                   "type": "button",
-                   "text": { "type": "plain_text", "text": "🔓 Reveal Secure Details" },
-                   "style": "danger",
-                   "action_id": "reveal_secure_details",
-                   "value": JSON.stringify({ query: userQuery, url: responseUrl, intent: routingIntent })
-                }]
+                "elements": actionsElements
              });
          }
 
@@ -1338,6 +1357,18 @@ Formatting rules:
             { "type": "section", "text": { "type": "mrkdwn", "text": summaryContent } }
          ];
 
+         if (!summaryReq.ok) {
+             blocks.push({
+                 "type": "actions",
+                 "elements": [{
+                     "type": "button",
+                     "text": { "type": "plain_text", "text": "📄 Dump Raw Logs" },
+                     "action_id": "dump_raw_logs",
+                     "value": JSON.stringify({ query: userQuery, url: fallbackResponseUrl, intent: routingIntent })
+                 }]
+             });
+         }
+
          const payload = { 
             response_type: "ephemeral", 
             replace_original: true, 
@@ -1451,5 +1482,46 @@ Formatting rules:
       return geoMap;
   }
 
-  return router;
+     async function dumpRawLogs(userQuery, routingIntent, responseUrl) {
+      if (!routingIntent) {
+         return await sendDelayedSlackResponse(responseUrl, { response_type: "ephemeral", text: "⚠️ _Cannot dump raw logs: No routing intent found._" });
+      }
+
+      let combinedLogsArr = [];
+      if (Object.keys(routingIntent.mongoFilter || {}).length > 0 || !routingIntent.checkServerEventsFile) {
+         const { AuditLog } = await import('../models/index.mjs');
+         const sanitizedFilter = sanitizeMongoFilter(routingIntent.mongoFilter);
+         let mongoLogs = [];
+         try {
+            mongoLogs = await AuditLog.find(Object.keys(sanitizedFilter).length > 0 ? sanitizedFilter : {}).sort({ timestamp: -1 }).limit(300).lean();
+         } catch(e) {
+            mongoLogs = await AuditLog.find({}).sort({ timestamp: -1 }).limit(300).lean();
+         }
+         
+         const compactMongo = mongoLogs.map(l => {
+            let d = ''; try { d = JSON.stringify(l.details || {}); } catch(e){}
+            const istDate = new Date(l.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+            return `[${istDate}] ${l.userId} | ${l.ipAddress} | ${l.action} | ${d}`;
+         });
+         combinedLogsArr.push(...compactMongo);
+      }
+      
+      const rawText = combinedLogsArr.join('\n');
+      const truncated = rawText.length > 2900 ? rawText.substring(0, 2900) + "\n...[TRUNCATED]" : rawText;
+      
+      const blocks = [
+         { "type": "header", "text": { "type": "plain_text", "text": "📄 Raw Log Dump", "emoji": true } },
+         { "type": "context", "elements": [
+            { "type": "mrkdwn", "text": `*Query:* "${userQuery}"` },
+            { "type": "mrkdwn", "text": `*Logs Found:* ${combinedLogsArr.length}` }
+         ]},
+         { "type": "divider" },
+         { "type": "section", "text": { "type": "mrkdwn", "text": "```\n" + (truncated || "No logs found.") + "\n```" } }
+      ];
+
+      await sendDelayedSlackResponse(responseUrl, { response_type: "ephemeral", replace_original: false, blocks });
+   }
+
+   // Register the route
+   return router;
 }
