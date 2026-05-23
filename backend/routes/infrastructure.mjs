@@ -342,15 +342,15 @@ ${chatHistory.substring(0, 3000)}`;
             // ✅ Dismiss the modal immediately via HTTP response body
             res.json({ response_action: 'clear' });
 
-            // 🔓 [MFA REVEAL FIX] (v2.6.543)
+            // 🔓 [MFA REVEAL FIX] (v2.6.544)
             // view_submission payloads do NOT carry a response_url.
-            // Use chat.postEphemeral via Slack Bot Token to deliver unredacted results.
+            // Use chat.postEphemeral + response_url fallback to deliver unredacted results.
             try {
                const meta = JSON.parse(payload.view.private_metadata);
-               const { query, channelId, userId } = meta;
+               const { query, channelId, userId, responseUrl: storedUrl } = meta;
+               console.log('📡 [MFA_REVEAL] Parsed metadata:', { query: query?.substring(0, 30), channelId, userId, hasUrl: !!storedUrl });
                
-               // Run the AI query with bypassRedaction=true, then post via chat.postEphemeral
-               runLogAIEphemeral(query, channelId, userId).catch(e => console.error('MFA Reveal Error:', e));
+               runLogAIEphemeral(query, channelId, userId, storedUrl).catch(e => console.error('MFA Reveal Error:', e));
             } catch(e) {
                console.error("MFA View parsing error:", e);
             }
@@ -606,11 +606,12 @@ ${chatHistory.substring(0, 3000)}`;
             query = parsed.query;
          } catch(e) {}
 
-         // 🔓 [MFA REVEAL FIX] (v2.6.543)
-         // Store channelId + userId in metadata so view_submission can use chat.postEphemeral
+         // 🔓 [MFA REVEAL FIX] (v2.6.544)
+         // Store channelId + userId + responseUrl in metadata for dual delivery
          const channelId = payload.channel?.id || payload.container?.channel_id;
          const userId = payload.user?.id;
-         const freshMeta = JSON.stringify({ query, channelId, userId });
+         console.log('📡 [REVEAL_BTN] Captured context:', { channelId, userId, hasResponseUrl: !!responseUrl });
+         const freshMeta = JSON.stringify({ query, channelId, userId, responseUrl });
          const slackBotToken = process.env.SLACK_BOT_TOKEN;
          
          if (!slackBotToken) {
@@ -809,14 +810,19 @@ Here are the retrieved system logs matching their request (from MongoDB and/or F
 ${compactLogs.substring(0, 15000)}
 
 Please analyze these logs and provide a highly structured, visually clean summary answering the user's question. 
-Use advanced Slack mrkdwn formatting to make the output UI-friendly:
+
+⚠️⚠️ ABSOLUTELY CRITICAL RULES (MUST FOLLOW OR OUTPUT IS INVALID):
+- You MUST sort ALL events strictly by timestamp in DESCENDING order (most recent event FIRST, oldest LAST). Do NOT group by status (success/failure) — sort ONLY by time.
+- You MUST output all timestamps in IST (Indian Standard Time). If a log is in UTC, convert it to IST.
+- You MUST number events sequentially (1, 2, 3...) where #1 is the MOST RECENT event.
+
+Formatting rules:
 1. Use emojis for visual separation (e.g. 🚨 for failed logins, ✅ for successes, 📍 for location, 🔑 for passwords).
 2. Format IPs and Passwords in inline code blocks (\`like this\`) to make them stand out clearly.
 3. If an IP is a comma-separated list (e.g. "x.x.x.x, proxy1, proxy2"), ONLY extract and display the first IP (the actual client).
 4. Organize the data into clear, distinct sections (e.g. 'Incident Report', 'Key Anomalies').
-5. ⚠️ IMPORTANT: For any login or authentication attempts, explicitly state whether the attempt was a SUCCESS or FAILURE based on the log action (e.g., 'LOGIN_SUCCESS' vs 'LOGIN_FAILED').
-6. ⚠️ IMPORTANT: Always list events in reverse chronological order (latest event first) to ensure the most recent events are shown at the top of the list.
-CRITICAL: You MUST output all timestamps in IST (Indian Standard Time). If a log is in UTC, convert it to IST.
+5. For any login or authentication attempts, explicitly state whether the attempt was a SUCCESS or FAILURE based on the log action (e.g., 'LOGIN_SUCCESS' vs 'LOGIN_FAILED').
+6. Only include REAL events from the logs. Do NOT fabricate entries like "No other recent login failures found" — if there are fewer events than requested, just show what exists.
 ${securityInstruction}`;
 
          const summaryReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -898,15 +904,22 @@ ${securityInstruction}`;
       }
   }
 
-  // 🔓 [MFA REVEAL DELIVERY] (v2.6.543)
+  // 🔓 [MFA REVEAL DELIVERY] (v2.6.544)
   // Runs the same AI log query but delivers results via chat.postEphemeral (Slack Web API)
-  // instead of response_url, because view_submission payloads don't carry a response_url.
-  async function runLogAIEphemeral(userQuery, channelId, slackUserId) {
+  // with response_url as fallback, because view_submission payloads don't carry a response_url.
+  async function runLogAIEphemeral(userQuery, channelId, slackUserId, fallbackResponseUrl) {
       const slackBotToken = process.env.SLACK_BOT_TOKEN;
-      if (!slackBotToken || !channelId || !slackUserId) {
-         console.error('runLogAIEphemeral: Missing required params', { channelId, slackUserId, hasToken: !!slackBotToken });
+      
+      // We need at least ONE delivery mechanism
+      const canEphemeral = slackBotToken && channelId && slackUserId;
+      const canResponseUrl = !!fallbackResponseUrl;
+      
+      if (!canEphemeral && !canResponseUrl) {
+         console.error('runLogAIEphemeral: No delivery mechanism available', { channelId, slackUserId, hasToken: !!slackBotToken, hasUrl: canResponseUrl });
          return;
       }
+      
+      console.log('📡 [MFA_REVEAL_DELIVERY] Delivery paths:', { canEphemeral, canResponseUrl });
 
       const apiKey = process.env.GROQ_API_KEY;
       if (!apiKey) {
@@ -998,15 +1011,20 @@ A user asked: "${userQuery}"
 Here are the retrieved system logs:
 ${compactLogs.substring(0, 15000)}
 
-Provide a highly structured, visually clean summary.
-Use Slack mrkdwn formatting:
+Provide a highly structured, visually clean summary answering the user's question.
+
+⚠️⚠️ ABSOLUTELY CRITICAL RULES (MUST FOLLOW OR OUTPUT IS INVALID):
+- You MUST sort ALL events strictly by timestamp in DESCENDING order (most recent event FIRST, oldest LAST). Do NOT group by status (success/failure) — sort ONLY by time.
+- You MUST output all timestamps in IST (Indian Standard Time). If a log is in UTC, convert it to IST.
+- You MUST number events sequentially (1, 2, 3...) where #1 is the MOST RECENT event.
+
+Formatting rules:
 1. Use emojis (🚨 failed, ✅ success, 📍 location, 🔑 passwords).
 2. Format IPs and Passwords in inline code blocks.
 3. If an IP is a comma-separated list, ONLY extract and display the first IP.
 4. Organize into clear sections.
 5. Explicitly state SUCCESS or FAILURE for login attempts.
-6. Always list events in reverse chronological order (latest first).
-CRITICAL: Output all timestamps in IST.
+6. Only include REAL events from the logs. Do NOT fabricate entries.
 🛡️ SECURITY EXCEPTION: The administrator has authenticated with MFA. You MUST explicitly reveal all passwords, IP addresses, emails, and sensitive PII. Do NOT mask them.`;
 
          const summaryReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -1026,28 +1044,52 @@ CRITICAL: Output all timestamps in IST.
             summaryContent = summaryJson.choices?.[0]?.message?.content || summaryContent;
          }
 
-         // 4. Post via chat.postEphemeral
+         // 4. Deliver the unredacted results
          const blocks = [
             { "type": "header", "text": { "type": "plain_text", "text": "🔓 Unredacted AI Log Analysis", "emoji": true } },
             { "type": "context", "elements": [
                { "type": "mrkdwn", "text": `*Query:* "${userQuery}"` },
                { "type": "mrkdwn", "text": `*Logs Analyzed:* ${combinedLogsArr.length}` },
-               { "type": "mrkdwn", "text": `*⏳ Auto-expires in 10 minutes*` }
+               { "type": "mrkdwn", "text": `*⏳ Ephemeral — only visible to you*` }
             ]},
             { "type": "divider" },
             { "type": "section", "text": { "type": "mrkdwn", "text": summaryContent } }
          ];
 
-         await postEphemeral(slackBotToken, channelId, slackUserId, "🔓 Unredacted AI Log Analysis", blocks);
+         const payload = { 
+            response_type: "ephemeral", 
+            replace_original: false, 
+            text: "🔓 Unredacted AI Log Analysis", 
+            blocks 
+         };
+
+         // Try chat.postEphemeral first, then fall back to response_url
+         let delivered = false;
+         if (canEphemeral) {
+            delivered = await postEphemeral(slackBotToken, channelId, slackUserId, payload.text, blocks);
+         }
+         if (!delivered && canResponseUrl) {
+            console.log('📡 [MFA_REVEAL] Falling back to response_url delivery');
+            await sendDelayedSlackResponse(fallbackResponseUrl, payload);
+         }
 
       } catch (e) {
          console.error('runLogAIEphemeral error:', e);
-         await postEphemeral(slackBotToken, channelId, slackUserId, `⚠️ *Error running unredacted query:* ${e.message}`);
+         // Try both delivery paths for error messages too
+         const errMsg = `⚠️ *Error running unredacted query:* ${e.message}`;
+         let delivered = false;
+         if (canEphemeral) {
+            delivered = await postEphemeral(slackBotToken, channelId, slackUserId, errMsg);
+         }
+         if (!delivered && canResponseUrl) {
+            await sendDelayedSlackResponse(fallbackResponseUrl, { response_type: "ephemeral", text: errMsg });
+         }
       }
   }
 
-  // Helper: Post an ephemeral message via Slack Web API
+  // Helper: Post an ephemeral message via Slack Web API. Returns true on success, false on failure.
   async function postEphemeral(token, channel, user, text, blocks) {
+      if (!token || !channel || !user) return false;
       const body = { channel, user, text };
       if (blocks) body.blocks = blocks;
       try {
@@ -1057,9 +1099,14 @@ CRITICAL: Output all timestamps in IST.
             body: JSON.stringify(body)
          });
          const json = await resp.json();
-         if (!json.ok) console.error('chat.postEphemeral failed:', json.error);
+         if (!json.ok) {
+            console.error('chat.postEphemeral failed:', json.error);
+            return false;
+         }
+         return true;
       } catch(e) {
          console.error('postEphemeral error:', e.message);
+         return false;
       }
   }
 
