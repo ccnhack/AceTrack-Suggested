@@ -1043,7 +1043,7 @@ Formatting rules:
 9. If a '[Database][Fallback Record]' is present, you MUST create an 'Account Information' section AT THE VERY TOP of your summary containing all extracted details (Name, Username, Phone, Email, Role, etc.).
 ${securityInstruction}`;
 
-         const summaryReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+         let summaryReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1053,6 +1053,19 @@ ${securityInstruction}`;
                max_tokens: 800
             })
          });
+
+         if (summaryReq.status === 429 && process.env.CEREBRAS_API_KEY) {
+            summaryReq = await fetch("https://api.cerebras.ai/v1/chat/completions", {
+               method: 'POST',
+               headers: { 'Authorization': `Bearer ${process.env.CEREBRAS_API_KEY}`, 'Content-Type': 'application/json' },
+               body: JSON.stringify({
+                  model: "llama3.3-70b",
+                  messages: [{ role: 'user', content: summaryPrompt }],
+                  temperature: 0.3,
+                  max_tokens: 800
+               })
+            });
+         }
 
          let summaryContent = "_AI Summary failed to generate._";
          if (summaryReq.ok) {
@@ -1327,7 +1340,7 @@ Formatting rules:
 10. DO NOT include security disclaimers, notes, or lectures about the SECURITY EXCEPTION. Just output the data.
 🛡️ SECURITY EXCEPTION: The administrator has authenticated with MFA. You MUST explicitly reveal all passwords, IP addresses, emails, and sensitive PII. Do NOT mask them.`;
 
-         const summaryReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+         let summaryReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1337,6 +1350,19 @@ Formatting rules:
                max_tokens: 800
             })
          });
+
+         if (summaryReq.status === 429 && process.env.CEREBRAS_API_KEY) {
+            summaryReq = await fetch("https://api.cerebras.ai/v1/chat/completions", {
+               method: 'POST',
+               headers: { 'Authorization': `Bearer ${process.env.CEREBRAS_API_KEY}`, 'Content-Type': 'application/json' },
+               body: JSON.stringify({
+                  model: "llama3.3-70b",
+                  messages: [{ role: 'user', content: summaryPrompt }],
+                  temperature: 0.3,
+                  max_tokens: 800
+               })
+            });
+         }
 
          let summaryContent = "_AI Summary failed to generate._";
          if (summaryReq.ok) {
