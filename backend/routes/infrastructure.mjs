@@ -1163,7 +1163,8 @@ Formatting rules:
 
       // Extract unique IPs from the logs
       for (const log of logsArray) {
-         const matches = log.match(ipRegex);
+         const text = typeof log === 'string' ? log : (log.text || '');
+         const matches = text.match(ipRegex);
          if (matches) {
             for (const match of matches) {
                ipSet.add(match);
