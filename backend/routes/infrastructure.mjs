@@ -806,17 +806,27 @@ Provide a highly structured, visually clean summary of these results.
          }
       }
 
+      const expTs = Math.floor(Date.now() / 1000) + (30 * 60);
       const blocks = [
          { "type": "header", "text": { "type": "plain_text", "text": "📊 MongoDB Query Result", "emoji": true } },
          { "type": "context", "elements": [
             { "type": "mrkdwn", "text": `*Query:* \`${originalQuery}\`` },
-            { "type": "mrkdwn", "text": `*Results:* ${mongoLogs.length} documents` }
+            { "type": "mrkdwn", "text": `*Results:* ${mongoLogs.length} documents` },
+            { "type": "mrkdwn", "text": `*<!date^${expTs}^⏳ Auto-expiring at {time}|⏳ Auto-expiring in 30 mins>*` }
          ]},
          { "type": "divider" },
          { "type": "section", "text": { "type": "mrkdwn", "text": summaryContent } }
       ];
 
-      await sendDelayedSlackResponse(responseUrl, { response_type: "ephemeral", blocks });
+      await sendDelayedSlackResponse(responseUrl, { response_type: "ephemeral", replace_original: true, blocks });
+
+      setTimeout(() => {
+         sendDelayedSlackResponse(responseUrl, { 
+            response_type: "ephemeral", 
+            replace_original: true, 
+            text: "⏳ *Query Results Expired* - Please run `/acetrack query` again to fetch fresh logs." 
+         }).catch(e => console.error("Auto-expire failed:", e));
+      }, 29 * 60 * 1000); // 29 mins (Slack response URLs expire after 30 mins)
    }
 
   async function runLogAI(userQuery, responseUrl, bypassRedaction = false) {
