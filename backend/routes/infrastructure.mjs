@@ -753,13 +753,19 @@ ${chatHistory.substring(0, 3000)}`;
    async function runQueryAI(originalQuery, mongoLogs, responseUrl) {
       const apiKey = process.env.GROQ_API_KEY;
 
-      const compactLogs = mongoLogs.map(l => {
+      const compactLogsArr = mongoLogs.map(l => {
          let d = ''; try { d = JSON.stringify(l.details || {}); } catch(e){}
          const istDate = new Date(l.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
          const ip = l.ipAddress ? ` IP:${l.ipAddress}` : '';
          return `[${istDate}] User:${l.userId}${ip} Action:${l.action} Details:${d}`;
-      }).join('\n');
+      });
 
+      const ipGeoMap = await resolveIpGeoLocations(compactLogsArr);
+      const geoMapStr = Object.keys(ipGeoMap).length > 0 
+         ? `\n\nIP Geolocation Map (use this to show location next to every IP):\n${Object.entries(ipGeoMap).map(([ip, loc]) => `  ${ip} → ${loc}`).join('\n')}`
+         : '';
+
+      const compactLogs = compactLogsArr.join('\n');
       let summaryContent = compactLogs.substring(0, 2500);
 
       if (apiKey) {
@@ -767,7 +773,7 @@ ${chatHistory.substring(0, 3000)}`;
             const summaryPrompt = `You are a system administrator AI. A user ran a direct MongoDB query: \`${originalQuery}\`
 
 Here are the raw results (${mongoLogs.length} documents):
-${compactLogs.substring(0, 12000)}
+${compactLogs.substring(0, 12000)}${geoMapStr}
 
 Provide a highly structured, visually clean summary of these results.
 
@@ -775,6 +781,7 @@ Provide a highly structured, visually clean summary of these results.
 - You MUST sort ALL events strictly by timestamp in DESCENDING order (most recent event FIRST). Do NOT group by status.
 - You MUST output all timestamps in IST (Indian Standard Time).
 - You MUST number events sequentially (1, 2, 3...) where #1 is the MOST RECENT event.
+- For EVERY IP address you display, you MUST append the geographic location in parentheses using the IP Geolocation Map provided above. Format: \`IP_ADDRESS\`(City). If an IP has no geo data, show \`IP_ADDRESS\`(Unknown).
 - Use emojis for visual separation (🚨 failures, ✅ successes, 📍 location, 🔑 passwords).
 - Organize the data into clear, distinct sections (e.g., 'Query Results').
 - NEVER display internal system IDs starting with 'sup_'. Use 'details.identifier' or 'details.email' instead.
