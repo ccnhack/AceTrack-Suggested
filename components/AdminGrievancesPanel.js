@@ -749,6 +749,11 @@ export const AdminGrievancesPanel = ({
   }, [isTicketUnread, setSelectedTicket, getUserName]);
 
 
+  const isTicketClosed = selectedTicket?.status === 'Closed' || selectedTicket?.status === 'Resolved';
+  const ticketClosedDate = selectedTicket?.closedAt || selectedTicket?.resolvedAt || selectedTicket?.updatedAt;
+  const daysSinceTicketClosed = isTicketClosed && ticketClosedDate ? Math.floor((Date.now() - new Date(ticketClosedDate).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+  const isPermanentlyClosed = isTicketClosed && daysSinceTicketClosed >= 3;
+
   return (
     <View style={styles.container}>
       <Modal
@@ -845,19 +850,14 @@ export const AdminGrievancesPanel = ({
                       <View style={styles.statusControl}>
                         <Text style={styles.infoLabel}>Update Status</Text>
                         {(() => {
-                          const isClosed = selectedTicket.status === 'Closed' || selectedTicket.status === 'Resolved';
-                          const closedDate = selectedTicket.closedAt || selectedTicket.resolvedAt || selectedTicket.updatedAt;
-                          const daysSinceClosed = isClosed && closedDate ? Math.floor((Date.now() - new Date(closedDate).getTime()) / (1000 * 60 * 60 * 24)) : 0;
-                          const cannotReopen = isClosed && daysSinceClosed >= 3;
-
-                          if (cannotReopen) {
+                          if (isPermanentlyClosed) {
                             return (
                               <View style={{ marginTop: 8 }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF2F2', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: '#FECACA' }}>
                                   <Ionicons name="lock-closed" size={16} color="#DC2626" style={{ marginRight: 10 }} />
                                   <View style={{ flex: 1 }}>
                                     <Text style={{ color: '#DC2626', fontSize: 13, fontWeight: '700' }}>Case cannot be reopened</Text>
-                                    <Text style={{ color: '#991B1B', fontSize: 11, marginTop: 2 }}>Closed {daysSinceClosed} days ago — the 3-day reopen window has expired.</Text>
+                                    <Text style={{ color: '#991B1B', fontSize: 11, marginTop: 2 }}>Closed {daysSinceTicketClosed} days ago — the 3-day reopen window has expired.</Text>
                                   </View>
                                 </View>
                                 <View style={[styles.statusBtnRow, { opacity: 0.4, marginTop: 8 }]} pointerEvents="none">
@@ -898,7 +898,7 @@ export const AdminGrievancesPanel = ({
 
                       <View style={[styles.statusControl, { marginTop: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 16 }]}>
                          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12 }}>
-                           {(currentUser?.role === 'admin' || currentUser?.id === 'admin') ? (
+                           {((currentUser?.role === 'admin' || currentUser?.id === 'admin') && !isPermanentlyClosed) ? (
                              <TouchableOpacity 
                                onPress={handleReassign}
                                style={{ 
@@ -946,7 +946,7 @@ export const AdminGrievancesPanel = ({
                                  </View>
                                )}
                                
-                               {(currentUser?.role === 'support' && selectedTicket.assignedTo !== currentUser?.id) && (
+                               {(currentUser?.role === 'support' && selectedTicket.assignedTo !== currentUser?.id && !isPermanentlyClosed) && (
                                  <TouchableOpacity 
                                    onPress={async () => {
                                      const res = await onReassignTicket(selectedTicket.id, currentUser.id);
