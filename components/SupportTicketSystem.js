@@ -64,6 +64,7 @@ export const SupportTicketSystem = ({
   const textInputRef = useRef(null);
   const messageYOffsets = useRef({}); // 📍 Track message coordinates (v2.6.27)
   const swipeableRefs = useRef({});   // 🛡️ [SYNC v2.6.293] Fix ReferenceError on mobile chat
+  const isAtBottom = useRef(true); // 🛡️ [SCROLL_FIX] Track if user is at bottom
 
 
   // 🛡️ [Tick System] Mark as 'Seen' when ticket is opened (v2.6.28)
@@ -161,7 +162,8 @@ export const SupportTicketSystem = ({
         if (!isSearchingChat) scrollViewRef.current?.scrollToEnd({ animated: true });
       }, 100);
     }
-  }, [view, selectedTicket?.messages?.length]);
+  }, [view]); // Removed selectedTicket?.messages?.length to prevent aggressive auto-scroll
+
 
   // 🔍 Conversational Search Logic (v2.6.34)
   useEffect(() => {
@@ -928,7 +930,17 @@ export const SupportTicketSystem = ({
             ref={scrollViewRef}
             style={styles.chatArea} 
             contentContainerStyle={styles.chatContent}
-            onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+            onScroll={(e) => {
+              const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+              const paddingToBottom = 150;
+              isAtBottom.current = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
+            }}
+            scrollEventThrottle={16}
+            onContentSizeChange={() => {
+              if (isAtBottom.current && !isSearchingChat) {
+                scrollViewRef.current?.scrollToEnd({ animated: true });
+              }
+            }}
           >
             {(selectedTicket.status === 'Resolved' || selectedTicket.status === 'Closed') && selectedTicket.closureSummary && (
               <View style={styles.resolutionCard}>
