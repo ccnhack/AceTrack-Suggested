@@ -274,214 +274,7 @@ ${chatHistory.substring(0, 3000)}`;
             return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: "Please provide a query. Usage: `/acetrack logs was there any recent password change activity`" });
          }
 
-         // 🛡️ SECURITY GUARDRAIL (v2.6.520)
-         if (/(what is|show me|tell me|display|reveal|extract|list).*(password|otp|pin|secret|api key|token|credential)/i.test(userQuery)) {
-            return await sendDelayedSlackResponse(response_url, { 
-               response_type: "ephemeral", 
-               text: `🛑 *Security Guardrail Triggered:* Your query appears to request sensitive credentials or secrets. AceTrack logs do not store plaintext secrets, and queries attempting to extract them are strictly blocked.` 
-            });
-         }
-
-         const apiKey = process.env.GROQ_API_KEY;
-         if (!apiKey) {
-            return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: "⚠️ _AI Query unavailable: GROQ_API_KEY is not set._" });
-         }
-
-         try {
-            // STEP 1: Generate MongoDB Filter & Routing Intent
-            const filterPrompt = `You are an AI Log Router. A user is asking to search logs.
-Current Server Time (ISO): ${new Date().toISOString()}
-
-We have two log sources:
-1. 'AuditLog' (MongoDB): Contains user actions, authentication events, and security logs.
-   Schema: { userId: String, ipAddress: String, userAgent: String, action: String, details: Mixed, timestamp: Date }
-   - Common actions: 'SUPPORT_LOGIN_SUCCESS', 'SUPPORT_LOGIN_FAILED', 'ADMIN_LOGIN_SUCCESS', 'ADMIN_LOGIN_FAILED', 'PASSWORD_CHANGED', 'BRUTE_FORCE_DETECTED', etc.
-   - ⚠️ IMPORTANT: For queries involving usernames or emails (like 'shush' or 'john'), do NOT just query 'userId'. Many events store the target user in 'details.email', 'details.name', 'details.userId', 'details.identifier', 'details.receivedIdentifier'. Use an $or array containing all of these! 
-   - ⚠️ IMPORTANT: For IP address queries, search both the 'ipAddress' and 'userId' fields, as 'userId' often stores the IP for unauthenticated attempts.
-   - Use $regex heavily for strings! Example for action: { "action": { "$regex": "ADMIN.*LOGIN.*FAIL", "$options": "i" } }
-   - ⚠️ CRITICAL: DO NOT use aggregation operators like $date, $subtract, or $$NOW.
-   - ⚠️ CRITICAL: ONLY apply a "timestamp" date filter if the user explicitly asks for a specific timeframe (e.g., "today", "yesterday", "last week"). Use the Current Server Time provided above to calculate accurate ISO date strings for $gte/$lte.
-2. 'server_events.jsonl' (Filesystem): Contains system crashes, server panics, WebSocket errors, and legacy ephemeral events.
-
-User query: "${userQuery}"
-
-Based on this query, generate a JSON object with two fields:
-1. "mongoFilter": A valid MongoDB query object for the AuditLog collection (use $regex heavily for strings!). If the query is broad, return {} to fetch the latest logs.
-2. "checkServerEventsFile": A boolean (MUST be true if the query asks about server crashes, panics, WebSocket drops, or system errors).
-
-DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. No explanations.`;
-
-            const filterReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-               method: 'POST',
-               headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-               body: JSON.stringify({
-                  model: "llama-3.3-70b-versatile",
-                  messages: [{ role: 'user', content: filterPrompt }],
-                  temperature: 0.1,
-                  max_tokens: 300
-               })
-            });
-
-            let routingIntent = { mongoFilter: {}, checkServerEventsFile: false };
-            if (filterReq.ok) {
-               const filterJson = await filterReq.json();
-               let rawJson = filterJson.choices?.[0]?.message?.content || "{}";
-               rawJson = rawJson.replace(/```json/g, '').replace(/```/g, '').trim();
-               try {
-                  routingIntent = JSON.parse(rawJson);
-               } catch (e) {
-                  console.error("AI Routing Parse Error:", e.message, rawJson);
-               }
-            }
-
-            // STEP 2: Fetch Logs (Multi-source)
-            let combinedLogsArr = [];
-
-            // 2A: MongoDB Logs
-            if (Object.keys(routingIntent.mongoFilter || {}).length > 0 || !routingIntent.checkServerEventsFile) {
-               const { AuditLog } = await import('../models/index.mjs');
-               let mongoLogs = [];
-               try {
-                  mongoLogs = await AuditLog.find(routingIntent.mongoFilter || {}).sort({ timestamp: -1 }).limit(300).lean();
-               } catch (err) {
-                  console.error("MongoDB Query Error (fallback to latest):", err.message);
-                  mongoLogs = await AuditLog.find({}).sort({ timestamp: -1 }).limit(300).lean();
-               }
-               const compactMongo = mongoLogs.map(l => {
-                  let d = ''; try { d = JSON.stringify(l.details || {}); } catch(e){}
-                  const istDate = new Date(l.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-                  return `[Mongo][${istDate}] User:${l.userId} Action:${l.action} Details:${d}`;
-               });
-               combinedLogsArr.push(...compactMongo);
-            }
-
-            // 2B: Filesystem Logs
-            if (routingIntent.checkServerEventsFile) {
-               const fs = await import('fs');
-               const path = await import('path');
-               const { fileURLToPath } = await import('url');
-               
-               const __filename = fileURLToPath(import.meta.url);
-               const __dirname = path.dirname(__filename);
-               const logFile = path.join(__dirname, '..', 'diagnostics', 'server_events.jsonl');
-               
-               if (fs.existsSync(logFile)) {
-                  const fileContent = fs.readFileSync(logFile, 'utf8');
-                  const lines = fileContent.split('\n').filter(Boolean).slice(-300); // Last 300 lines
-                  const compactFs = lines.map(line => `[FS] ${line.substring(0, 500)}`);
-                  combinedLogsArr.push(...compactFs);
-               } else {
-                  combinedLogsArr.push(`[FS] No server_events.jsonl found at ${logFile}`);
-               }
-            }
-            // 2C: Database Fallback for User Queries
-            let userSearchTerm = null;
-            try {
-               const qStr = JSON.stringify(routingIntent.mongoFilter || {});
-               // Naively extract the first string $regex that isn't a complex OR pipe (to guess the username)
-               const match = qStr.match(/{"\$regex":"([^"|]+)"/);
-               if (match && match[1]) {
-                  userSearchTerm = match[1];
-               }
-            } catch(e) {}
-
-            if (userSearchTerm && userSearchTerm.length > 2) {
-               try {
-                  const { Player } = await import('../models/index.mjs');
-                  const playerDoc = await Player.findOne({ 
-                     $or: [
-                        { id: { $regex: userSearchTerm, $options: 'i' } },
-                        { 'data.email': { $regex: userSearchTerm, $options: 'i' } },
-                        { 'data.name': { $regex: userSearchTerm, $options: 'i' } },
-                        { 'data.username': { $regex: userSearchTerm, $options: 'i' } }
-                     ]
-                  }).lean();
-
-                  if (playerDoc) {
-                     const creationDate = playerDoc.data?.createdAt || playerDoc.data?.reOnboardedAt || playerDoc.lastUpdated;
-                     const istDate = new Date(creationDate).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-                     const istLastUpdated = new Date(playerDoc.lastUpdated).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-                     combinedLogsArr.push(`[Database][Fallback Record] System found an active database profile matching "${userSearchTerm}". Original Onboard/Creation Time: ${istDate}. Last Data Update Time: ${istLastUpdated}. Role: ${playerDoc.data?.role || 'user'}.`);
-                  }
-               } catch(e) {
-                  console.error('Player context fallback failed:', e.message);
-               }
-            }
-            
-            if (combinedLogsArr.length === 0) {
-               return await sendDelayedSlackResponse(response_url, { 
-                  response_type: "ephemeral", 
-                  text: `🔍 *Query:* "${userQuery}"\n\n*Result:* No logs found across any system based on AI intent: \`${JSON.stringify(routingIntent)}\`` 
-               });
-            }
-
-            const compactLogs = combinedLogsArr.join('\n');
-
-            // STEP 3: Summarize Logs
-            const summaryPrompt = `You are a system administrator AI assistant.
-A user asked: "${userQuery}"
-
-Here are the retrieved system logs matching their request (from MongoDB and/or Filesystem):
-${compactLogs.substring(0, 15000)}
-
-Please analyze these logs and provide a highly structured, visually clean summary answering the user's question. 
-Use advanced Slack mrkdwn formatting to make the output UI-friendly:
-1. Use emojis for visual separation (e.g. 🚨 for failed logins, 📍 for location, 🔑 for passwords).
-2. Format IPs and Passwords in inline code blocks (\`like this\`) to make them stand out clearly.
-3. If an IP is a comma-separated list (e.g. "x.x.x.x, proxy1, proxy2"), ONLY extract and display the first IP (the actual client).
-4. Organize the data into clear, distinct sections (e.g. 'Incident Report', 'Key Anomalies').
-CRITICAL: You MUST output all timestamps in IST (Indian Standard Time). If a log is in UTC, convert it to IST.
-🛡️ SECURITY GUARDRAIL: Do NOT output raw email addresses (mask them like h****@gmail.com) or full IP addresses UNLESS the user explicitly asks for them OR the log event is a failed login (e.g. ADMIN_LOGIN_FAILED), in which case you MUST display the 'attemptedPassword', 'ip' (first one only), and 'location' (if available) from the details field for security auditing.`;
-
-            const summaryReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-               method: 'POST',
-               headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-               body: JSON.stringify({
-                  model: "llama-3.3-70b-versatile",
-                  messages: [{ role: 'user', content: summaryPrompt }],
-                  temperature: 0.3,
-                  max_tokens: 800
-               })
-            });
-
-            let summaryContent = "_AI Summary failed to generate._";
-            if (summaryReq.ok) {
-               const summaryJson = await summaryReq.json();
-               summaryContent = summaryJson.choices?.[0]?.message?.content || summaryContent;
-            } else {
-               let errorBody = await summaryReq.text();
-               try { 
-                  const p = JSON.parse(errorBody);
-                  if (p.error && p.error.message) errorBody = p.error.message;
-               } catch(e){}
-               summaryContent = `_AI Error (${summaryReq.status}): ${summaryReq.statusText || 'Request Failed'} - ${errorBody}_`;
-            }
-
-            const blocks = [
-               {
-                  "type": "header",
-                  "text": { "type": "plain_text", "text": "📊 AI Log Analysis", "emoji": true }
-               },
-               {
-                  "type": "context",
-                  "elements": [
-                     { "type": "mrkdwn", "text": `*Query:* "${userQuery}"` },
-                     { "type": "mrkdwn", "text": `*AI Routing Intent:* \`${JSON.stringify(routingIntent)}\`` },
-                     { "type": "mrkdwn", "text": `*Logs Analyzed:* ${combinedLogsArr.length}` }
-                  ]
-               },
-               { "type": "divider" },
-               {
-                  "type": "section",
-                  "text": { "type": "mrkdwn", "text": summaryContent }
-               }
-            ];
-
-            await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", blocks });
-
-         } catch (e) {
-            await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: `⚠️ *Error running log query:* ${e.message}` });
-         }
+         await runLogAI(userQuery, response_url, false);
       }
     } catch (err) {
       console.error("❌ Unified Gateway Error:", err.message);
@@ -508,8 +301,36 @@ CRITICAL: You MUST output all timestamps in IST (Indian Standard Time). If a log
   async function handleInteract(req, res, isDelayed = false) {
     try {
       const payload = JSON.parse(req.body.payload);
-      const responseUrl = payload.response_url;
       
+      if (payload.type === 'view_submission') {
+         if (payload.view.callback_id === 'mfa_pin_modal') {
+            const stateValues = payload.view.state.values;
+            const submittedPin = stateValues.pin_block.pin_input.value;
+            
+            const ADMIN_MFA_PIN = process.env.ADMIN_MFA_PIN || '120522';
+            if (submittedPin !== ADMIN_MFA_PIN) {
+               return res.json({
+                  response_action: 'errors',
+                  errors: {
+                     pin_block: 'Invalid Admin MFA PIN.'
+                  }
+               });
+            }
+
+            res.json({ response_action: 'clear' });
+
+            try {
+               const meta = JSON.parse(payload.view.private_metadata);
+               const { query, url } = meta;
+               runLogAI(query, url, true).catch(e => console.error(e));
+            } catch(e) {
+               console.error("MFA View parsing error:", e);
+            }
+            return;
+         }
+      }
+
+      const responseUrl = payload.response_url;
       const actionObj = payload.actions?.[0] || {};
       const actionId = actionObj.action_id || actionObj.name;
       
@@ -749,11 +570,275 @@ CRITICAL: You MUST output all timestamps in IST (Indian Standard Time). If a log
         response_type: "ephemeral",
         text: `📡 *Handshake Successful* (v${APP_VERSION})\nI received your interaction: \`${actionId}\`. If you don't see the expected result, please run \`/acetrack security\` to get a fresh report.`
       };
-      if (isDelayed) return await sendDelayedSlackResponse(responseUrl, catchRes);
-      return res.json(catchRes);
+
+      if (actionId === 'reveal_secure_details') {
+         const btnData = actionObj.value; // stringified JSON
+         const slackBotToken = process.env.SLACK_BOT_TOKEN;
+         
+         if (!slackBotToken) {
+            return await sendDelayedSlackResponse(responseUrl, {
+               response_type: "ephemeral",
+               text: "⚠️ *Configuration Error:* SLACK_BOT_TOKEN is not set on the server. Cannot open MFA modal."
+            });
+         }
+
+         if (!isDelayed) res.status(200).send();
+
+         try {
+            await fetch('https://slack.com/api/views.open', {
+               method: 'POST',
+               headers: {
+                  'Authorization': `Bearer ${slackBotToken}`,
+                  'Content-Type': 'application/json'
+               },
+               body: JSON.stringify({
+                  trigger_id: payload.trigger_id,
+                  view: {
+                     type: "modal",
+                     callback_id: "mfa_pin_modal",
+                     private_metadata: btnData,
+                     title: { type: "plain_text", text: "Security Verification" },
+                     submit: { type: "plain_text", text: "Verify" },
+                     close: { type: "plain_text", text: "Cancel" },
+                     blocks: [
+                        {
+                           type: "input",
+                           block_id: "pin_block",
+                           element: {
+                              type: "plain_text_input",
+                              action_id: "pin_input",
+                              placeholder: { type: "plain_text", text: "Enter Admin PIN" }
+                           },
+                           label: { type: "plain_text", text: "Admin MFA PIN" }
+                        }
+                     ]
+                  }
+               })
+            });
+         } catch(e) {
+            console.error("Slack views.open error:", e);
+         }
+         return;
+      }
+      
+      if (!isDelayed) res.status(200).send();
     } catch (err) {
       console.error("❌ Slack interaction failed:", err.message);
     }
+  }
+
+  async function runLogAI(userQuery, responseUrl, bypassRedaction = false) {
+      const apiKey = process.env.GROQ_API_KEY;
+      if (!apiKey) {
+         return await sendDelayedSlackResponse(responseUrl, { response_type: "ephemeral", text: "⚠️ _AI Query unavailable: GROQ_API_KEY is not set._" });
+      }
+
+      try {
+         const filterPrompt = `You are an AI Log Router. A user is asking to search logs.
+Current Server Time (ISO): ${new Date().toISOString()}
+
+We have two log sources:
+1. 'AuditLog' (MongoDB): Contains user actions, authentication events, and security logs.
+   Schema: { userId: String, ipAddress: String, userAgent: String, action: String, details: Mixed, timestamp: Date }
+   - Common actions: 'SUPPORT_LOGIN_SUCCESS', 'SUPPORT_LOGIN_FAILED', 'ADMIN_LOGIN_SUCCESS', 'ADMIN_LOGIN_FAILED', 'PASSWORD_CHANGED', 'BRUTE_FORCE_DETECTED', etc.
+   - ⚠️ IMPORTANT: For queries involving usernames or emails (like 'shush' or 'john'), do NOT just query 'userId'. Many events store the target user in 'details.email', 'details.name', 'details.userId', 'details.identifier', 'details.receivedIdentifier'. Use an $or array containing all of these! 
+   - ⚠️ IMPORTANT: For IP address queries, search both the 'ipAddress' and 'userId' fields, as 'userId' often stores the IP for unauthenticated attempts.
+   - Use $regex heavily for strings! Example for action: { "action": { "$regex": "ADMIN.*LOGIN.*FAIL", "$options": "i" } }
+   - ⚠️ CRITICAL: DO NOT use aggregation operators like $date, $subtract, or $$NOW.
+   - ⚠️ CRITICAL: ONLY apply a "timestamp" date filter if the user explicitly asks for a specific timeframe (e.g., "today", "yesterday", "last week"). Use the Current Server Time provided above to calculate accurate ISO date strings for $gte/$lte.
+2. 'server_events.jsonl' (Filesystem): Contains system crashes, server panics, WebSocket errors, and legacy ephemeral events.
+
+User query: "${userQuery}"
+
+Based on this query, generate a JSON object with two fields:
+1. "mongoFilter": A valid MongoDB query object for the AuditLog collection (use $regex heavily for strings!). If the query is broad, return {} to fetch the latest logs.
+2. "checkServerEventsFile": A boolean (MUST be true if the query asks about server crashes, panics, WebSocket drops, or system errors).
+
+DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. No explanations.`;
+
+         const filterReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+               model: "llama-3.3-70b-versatile",
+               messages: [{ role: 'user', content: filterPrompt }],
+               temperature: 0.1,
+               max_tokens: 300
+            })
+         });
+
+         let routingIntent = { mongoFilter: {}, checkServerEventsFile: false };
+         if (filterReq.ok) {
+            const filterJson = await filterReq.json();
+            let rawJson = filterJson.choices?.[0]?.message?.content || "{}";
+            rawJson = rawJson.replace(/```json/g, '').replace(/```/g, '').trim();
+            try {
+               routingIntent = JSON.parse(rawJson);
+            } catch (e) {
+               console.error("AI Routing Parse Error:", e.message, rawJson);
+            }
+         }
+
+         let combinedLogsArr = [];
+
+         if (Object.keys(routingIntent.mongoFilter || {}).length > 0 || !routingIntent.checkServerEventsFile) {
+            const { AuditLog } = await import('../models/index.mjs');
+            let mongoLogs = [];
+            try {
+               mongoLogs = await AuditLog.find(routingIntent.mongoFilter || {}).sort({ timestamp: -1 }).limit(300).lean();
+            } catch (err) {
+               console.error("MongoDB Query Error (fallback to latest):", err.message);
+               mongoLogs = await AuditLog.find({}).sort({ timestamp: -1 }).limit(300).lean();
+            }
+            const compactMongo = mongoLogs.map(l => {
+               let d = ''; try { d = JSON.stringify(l.details || {}); } catch(e){}
+               const istDate = new Date(l.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+               return `[Mongo][${istDate}] User:${l.userId} Action:${l.action} Details:${d}`;
+            });
+            combinedLogsArr.push(...compactMongo);
+         }
+
+         if (routingIntent.checkServerEventsFile) {
+            const fs = await import('fs');
+            const path = await import('path');
+            const { fileURLToPath } = await import('url');
+            
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = path.dirname(__filename);
+            const logFile = path.join(__dirname, '..', 'diagnostics', 'server_events.jsonl');
+            
+            if (fs.existsSync(logFile)) {
+               const fileContent = fs.readFileSync(logFile, 'utf8');
+               const lines = fileContent.split('\n').filter(Boolean).slice(-300);
+               const compactFs = lines.map(line => `[FS] ${line.substring(0, 500)}`);
+               combinedLogsArr.push(...compactFs);
+            } else {
+               combinedLogsArr.push(`[FS] No server_events.jsonl found at ${logFile}`);
+            }
+         }
+
+         let userSearchTerm = null;
+         try {
+            const qStr = JSON.stringify(routingIntent.mongoFilter || {});
+            const match = qStr.match(/{"\$regex":"([^"|]+)"/);
+            if (match && match[1]) {
+               userSearchTerm = match[1];
+            }
+         } catch(e) {}
+
+         if (userSearchTerm && userSearchTerm.length > 2) {
+            try {
+               const { Player } = await import('../models/index.mjs');
+               const playerDoc = await Player.findOne({ 
+                  $or: [
+                     { id: { $regex: userSearchTerm, $options: 'i' } },
+                     { 'data.email': { $regex: userSearchTerm, $options: 'i' } },
+                     { 'data.name': { $regex: userSearchTerm, $options: 'i' } },
+                     { 'data.username': { $regex: userSearchTerm, $options: 'i' } }
+                  ]
+               }).lean();
+
+               if (playerDoc) {
+                  const creationDate = playerDoc.data?.createdAt || playerDoc.data?.reOnboardedAt || playerDoc.lastUpdated;
+                  const istDate = new Date(creationDate).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+                  const istLastUpdated = new Date(playerDoc.lastUpdated).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+                  combinedLogsArr.push(`[Database][Fallback Record] System found an active database profile matching "${userSearchTerm}". Original Onboard/Creation Time: ${istDate}. Last Data Update Time: ${istLastUpdated}. Role: ${playerDoc.data?.role || 'user'}.`);
+               }
+            } catch(e) {
+               console.error('Player context fallback failed:', e.message);
+            }
+         }
+         
+         if (combinedLogsArr.length === 0) {
+            return await sendDelayedSlackResponse(responseUrl, { 
+               response_type: "ephemeral", 
+               text: `🔍 *Query:* "${userQuery}"\n\n*Result:* No logs found across any system based on AI intent: \`${JSON.stringify(routingIntent)}\`` 
+            });
+         }
+
+         const compactLogs = combinedLogsArr.join('\n');
+
+         let securityInstruction = bypassRedaction 
+            ? `🛡️ SECURITY EXCEPTION: The administrator has authenticated with MFA. You MUST explicitly reveal all passwords, IP addresses, emails, and sensitive PII that answer the user's query. Do NOT mask them.`
+            : `🛡️ ZERO-TRUST GUARDRAIL: ALWAYS mask email addresses, IP addresses, and passwords (e.g., h****@gmail.com, 10.x.x.x, [REDACTED]). Do NOT reveal sensitive PII under any circumstances in this initial summary.`;
+
+         const summaryPrompt = `You are a system administrator AI assistant.
+A user asked: "${userQuery}"
+
+Here are the retrieved system logs matching their request (from MongoDB and/or Filesystem):
+${compactLogs.substring(0, 15000)}
+
+Please analyze these logs and provide a highly structured, visually clean summary answering the user's question. 
+Use advanced Slack mrkdwn formatting to make the output UI-friendly:
+1. Use emojis for visual separation (e.g. 🚨 for failed logins, 📍 for location, 🔑 for passwords).
+2. Format IPs and Passwords in inline code blocks (\`like this\`) to make them stand out clearly.
+3. If an IP is a comma-separated list (e.g. "x.x.x.x, proxy1, proxy2"), ONLY extract and display the first IP (the actual client).
+4. Organize the data into clear, distinct sections (e.g. 'Incident Report', 'Key Anomalies').
+CRITICAL: You MUST output all timestamps in IST (Indian Standard Time). If a log is in UTC, convert it to IST.
+${securityInstruction}`;
+
+         const summaryReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+               model: "llama-3.3-70b-versatile",
+               messages: [{ role: 'user', content: summaryPrompt }],
+               temperature: 0.3,
+               max_tokens: 800
+            })
+         });
+
+         let summaryContent = "_AI Summary failed to generate._";
+         if (summaryReq.ok) {
+            const summaryJson = await summaryReq.json();
+            summaryContent = summaryJson.choices?.[0]?.message?.content || summaryContent;
+         } else {
+            let errorBody = await summaryReq.text();
+            try { 
+               const p = JSON.parse(errorBody);
+               if (p.error && p.error.message) errorBody = p.error.message;
+            } catch(e){}
+            summaryContent = `_AI Error (${summaryReq.status}): ${summaryReq.statusText || 'Request Failed'} - ${errorBody}_`;
+         }
+
+         const blocks = [
+            {
+               "type": "header",
+               "text": { "type": "plain_text", "text": bypassRedaction ? "🔓 Unredacted AI Log Analysis" : "📊 AI Log Analysis", "emoji": true }
+            },
+            {
+               "type": "context",
+               "elements": [
+                  { "type": "mrkdwn", "text": `*Query:* "${userQuery}"` },
+                  { "type": "mrkdwn", "text": `*AI Routing Intent:* \`${JSON.stringify(routingIntent)}\`` },
+                  { "type": "mrkdwn", "text": `*Logs Analyzed:* ${combinedLogsArr.length}` }
+               ]
+            },
+            { "type": "divider" },
+            {
+               "type": "section",
+               "text": { "type": "mrkdwn", "text": summaryContent }
+            }
+         ];
+
+         if (!bypassRedaction) {
+             blocks.push({
+                "type": "actions",
+                "elements": [{
+                   "type": "button",
+                   "text": { "type": "plain_text", "text": "🔓 Reveal Secure Details" },
+                   "style": "danger",
+                   "action_id": "reveal_secure_details",
+                   "value": JSON.stringify({ query: userQuery, url: responseUrl })
+                }]
+             });
+         }
+
+         await sendDelayedSlackResponse(responseUrl, { response_type: "ephemeral", blocks });
+
+      } catch (e) {
+         await sendDelayedSlackResponse(responseUrl, { response_type: "ephemeral", text: `⚠️ *Error running log query:* ${e.message}` });
+      }
   }
 
   return router;
