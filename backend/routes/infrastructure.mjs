@@ -292,7 +292,16 @@ ${chatHistory.substring(0, 3000)}`;
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       };
-      const req = https.request(options);
+      const req = https.request(options, (res) => {
+         let data = '';
+         res.on('data', chunk => data += chunk);
+         res.on('end', () => {
+             if (res.statusCode >= 400) {
+                 console.error(`Slack Response Error (${res.statusCode}):`, data);
+             }
+         });
+      });
+      req.on('error', (e) => console.error("Delayed Response Req Error:", e.message));
       req.write(JSON.stringify(payload));
       req.end();
     } catch (e) { console.error("Delayed Response Failed:", e.message); }
@@ -572,7 +581,14 @@ ${chatHistory.substring(0, 3000)}`;
       };
 
       if (actionId === 'reveal_secure_details') {
-         const btnData = actionObj.value; // stringified JSON
+         let query = '';
+         try {
+            const parsed = JSON.parse(actionObj.value || '{}');
+            query = parsed.query;
+         } catch(e) {}
+
+         // Inject the fresh responseUrl from this button click to ensure it's valid for replacement!
+         const freshMeta = JSON.stringify({ query, url: responseUrl });
          const slackBotToken = process.env.SLACK_BOT_TOKEN;
          
          if (!slackBotToken) {
@@ -596,7 +612,7 @@ ${chatHistory.substring(0, 3000)}`;
                   view: {
                      type: "modal",
                      callback_id: "mfa_pin_modal",
-                     private_metadata: btnData,
+                     private_metadata: freshMeta,
                      title: { type: "plain_text", text: "Security Verification" },
                      submit: { type: "plain_text", text: "Verify" },
                      close: { type: "plain_text", text: "Cancel" },
@@ -770,10 +786,11 @@ ${compactLogs.substring(0, 15000)}
 
 Please analyze these logs and provide a highly structured, visually clean summary answering the user's question. 
 Use advanced Slack mrkdwn formatting to make the output UI-friendly:
-1. Use emojis for visual separation (e.g. 🚨 for failed logins, 📍 for location, 🔑 for passwords).
+1. Use emojis for visual separation (e.g. 🚨 for failed logins, ✅ for successes, 📍 for location, 🔑 for passwords).
 2. Format IPs and Passwords in inline code blocks (\`like this\`) to make them stand out clearly.
 3. If an IP is a comma-separated list (e.g. "x.x.x.x, proxy1, proxy2"), ONLY extract and display the first IP (the actual client).
 4. Organize the data into clear, distinct sections (e.g. 'Incident Report', 'Key Anomalies').
+5. ⚠️ IMPORTANT: For any login or authentication attempts, explicitly state whether the attempt was a SUCCESS or FAILURE based on the log action (e.g., 'LOGIN_SUCCESS' vs 'LOGIN_FAILED').
 CRITICAL: You MUST output all timestamps in IST (Indian Standard Time). If a log is in UTC, convert it to IST.
 ${securityInstruction}`;
 
@@ -837,6 +854,7 @@ ${securityInstruction}`;
          const payloadToSend = { 
             response_type: "ephemeral", 
             replace_original: true, // Replace the original message so it doesn't clutter
+            text: bypassRedaction ? "🔓 Unredacted AI Log Analysis" : "📊 AI Log Analysis",
             blocks 
          };
 

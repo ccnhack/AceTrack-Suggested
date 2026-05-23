@@ -9,7 +9,7 @@ import { Platform } from 'react-native';
 import config from '../config';
 
 import { useSync } from './SyncContext';
-import { useAuthStore } from '../stores';
+import { useAuthStore, usePlayersStore, useTournamentsStore, useSupportStore, useVideoStore, useMatchmakingStore } from '../stores';
 
 const AuthContext = createContext(null);
 
@@ -90,9 +90,31 @@ export const AuthProvider = ({ children }) => {
             setUserRole(rawUser.role);
             setViewingLanding(false);
             
+            // 🛡️ [SYNC ZUSTAND] Update Zustand store synchronously so hydrators see it
+            useAuthStore.getState().setCurrentUser(rawUser);
+
             // Re-initialize SyncOrchestrator immediately for background processes
             syncOrchestrator.init(rawUser.id, rawUser.role);
             if (token) syncOrchestrator.setUserToken(token);
+          }
+
+          // 🛡️ [STORE HYDRATION] Hydrate all stores from local storage
+          await Promise.all([
+             usePlayersStore.getState().hydrate(),
+             useTournamentsStore.getState().hydrate(),
+             useSupportStore.getState().hydrate(),
+             useVideoStore.getState().hydrate(),
+             useMatchmakingStore.getState().hydrate()
+          ]);
+
+          // 🛡️ [INSTANT DATA PULL] For staff, pull immediately to prevent empty dashboards
+          if (rawUser && (rawUser.role === 'admin' || rawUser.role === 'support')) {
+            setTimeout(() => {
+              if (loadData) {
+                console.log('[AuthContext] Triggering instant data pull for staff...');
+                loadData(true, true);
+              }
+            }, 100);
           }
       } catch (e) {
         console.error("[AuthContext] Hydration failed:", e);

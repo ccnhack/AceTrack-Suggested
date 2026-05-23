@@ -63,6 +63,7 @@ const LoginScreen = ({ navigation }) => {
   const [showMFA, setShowMFA] = useState(false);
   const [mfaToken, setMfaToken] = useState('');
   const [mfaPin, setMfaPin] = useState('');
+  const [showMfaPin, setShowMfaPin] = useState(false);
   const [mfaError, setMfaError] = useState('');
   const [mfaLoading, setMfaLoading] = useState(false);
 
@@ -633,16 +634,17 @@ const LoginScreen = ({ navigation }) => {
                   </View>
                 ) : null}
 
-                <TextInput
-                  style={[styles.modalInput, { textAlign: 'center', fontSize: 28, fontWeight: '900', letterSpacing: 12 }]}
-                  placeholder="• • • • • •"
-                  placeholderTextColor="#CBD5E1"
-                  value={mfaPin}
-                  onChangeText={(t) => setMfaPin(t.replace(/[^0-9]/g, '').substring(0, 6))}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  secureTextEntry
-                  autoFocus
+                <View style={{ position: 'relative', width: '100%', justifyContent: 'center' }}>
+                  <TextInput
+                    style={[styles.modalInput, { textAlign: 'center', fontSize: 28, fontWeight: '900', letterSpacing: showMfaPin ? 4 : 12, paddingRight: 40 }]}
+                    placeholder="• • • • • •"
+                    placeholderTextColor="#CBD5E1"
+                    value={mfaPin}
+                    onChangeText={(t) => setMfaPin(t.replace(/[^0-9]/g, '').substring(0, 6))}
+                    keyboardType={showMfaPin ? "number-pad" : "default"}
+                    maxLength={6}
+                    secureTextEntry={!showMfaPin}
+                    autoFocus
                   onSubmitEditing={async () => {
                     if (mfaPin.length < 6) { setMfaError('PIN must be 6 digits.'); return; }
                     setMfaLoading(true); setMfaError('');
@@ -665,6 +667,13 @@ const LoginScreen = ({ navigation }) => {
                     finally { setMfaLoading(false); }
                   }}
                 />
+                <TouchableOpacity
+                  onPress={() => setShowMfaPin(!showMfaPin)}
+                  style={{ position: 'absolute', right: 16, top: '50%', transform: [{ translateY: -12 }], zIndex: 10, padding: 4 }}
+                >
+                  <Ionicons name={showMfaPin ? "eye-outline" : "eye-off-outline"} size={24} color="#94A3B8" />
+                </TouchableOpacity>
+              </View>
 
                 <TouchableOpacity
                   style={[styles.modalBtn, { marginTop: 16, opacity: mfaPin.length < 6 ? 0.5 : 1 }]}
@@ -956,16 +965,17 @@ const LoginScreen = ({ navigation }) => {
                 </View>
               ) : null}
 
-              <TextInput
-                style={[styles.modalInput, { textAlign: 'center', fontSize: 28, fontWeight: '900', letterSpacing: 12 }]}
-                placeholder="• • • • • •"
-                placeholderTextColor="#CBD5E1"
-                value={mfaPin}
-                onChangeText={(t) => setMfaPin(t.replace(/[^0-9]/g, '').substring(0, 6))}
-                keyboardType="number-pad"
-                maxLength={6}
-                secureTextEntry
-                autoFocus
+              <View style={{ position: 'relative', width: '100%', justifyContent: 'center' }}>
+                  <TextInput
+                    style={[styles.modalInput, { textAlign: 'center', fontSize: 28, fontWeight: '900', letterSpacing: showMfaPin ? 4 : 12, paddingRight: 40 }]}
+                    placeholder="• • • • • •"
+                    placeholderTextColor="#CBD5E1"
+                    value={mfaPin}
+                    onChangeText={(t) => setMfaPin(t.replace(/[^0-9]/g, '').substring(0, 6))}
+                    keyboardType={showMfaPin ? "number-pad" : "default"}
+                    maxLength={6}
+                    secureTextEntry={!showMfaPin}
+                    autoFocus
                 onSubmitEditing={async () => {
                   if (mfaPin.length < 6) { setMfaError('PIN must be 6 digits.'); return; }
                   setMfaLoading(true); setMfaError('');
@@ -987,6 +997,13 @@ const LoginScreen = ({ navigation }) => {
                   finally { setMfaLoading(false); }
                 }}
               />
+              <TouchableOpacity
+                onPress={() => setShowMfaPin(!showMfaPin)}
+                style={{ position: 'absolute', right: 16, top: '50%', transform: [{ translateY: -12 }], zIndex: 10, padding: 4 }}
+              >
+                <Ionicons name={showMfaPin ? "eye-outline" : "eye-off-outline"} size={24} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
 
               <TouchableOpacity
                 style={[styles.modalBtn, { marginTop: 16, opacity: mfaPin.length < 6 ? 0.5 : 1 }]}
