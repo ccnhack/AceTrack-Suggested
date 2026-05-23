@@ -75,7 +75,7 @@ export default function createInfrastructureRoutes({
       if (command === '/acetrack' && String(text).trim().toLowerCase() === 'security') {
         const { generateSecuritySummaryBlocks } = await import('../services/scheduler.mjs');
         const summary = await generateSecuritySummaryBlocks(24);
-        await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", ...summary });
+         await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", replace_original: true, ...summary });
       } else if (command === '/acetrack' && String(text).trim().toLowerCase() === 'queue') {
          const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
          
@@ -115,7 +115,7 @@ export default function createInfrastructureRoutes({
             }
          ];
          
-         await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", blocks });
+         await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", replace_original: true, blocks });
       } else if (command === '/acetrack' && String(text).trim().toLowerCase().startsWith('ticket ')) {
          const ticketId = String(text).trim().split(' ')[1];
          if (!ticketId) {
@@ -267,7 +267,7 @@ ${chatHistory.substring(0, 3000)}`;
                "text": { "type": "mrkdwn", "text": "*`/acetrack logs <query>`*\nUses AI to search and summarize system logs (MongoDB & Filesystem) based on natural language.\n_Example: `/acetrack logs were there any critical server panics today?`_" }
             }
          ];
-         return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", blocks });
+         return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", replace_original: true, blocks });
       } else if (command === '/acetrack' && String(text).trim().toLowerCase().startsWith('logs ')) {
          const userQuery = String(text).trim().substring(5).trim();
          if (!userQuery) {
@@ -834,7 +834,21 @@ ${securityInstruction}`;
              });
          }
 
-         await sendDelayedSlackResponse(responseUrl, { response_type: "ephemeral", blocks });
+         const payloadToSend = { 
+            response_type: "ephemeral", 
+            replace_original: true, // Replace the original message so it doesn't clutter
+            blocks 
+         };
+
+         await sendDelayedSlackResponse(responseUrl, payloadToSend);
+
+         // 🕒 Auto-Revert after 10 minutes for security
+         if (bypassRedaction) {
+            setTimeout(() => {
+               // Re-run the log AI with bypassRedaction = false to replace the unredacted message with the redacted one
+               runLogAI(userQuery, responseUrl, false).catch(e => console.error("Auto-revert failed:", e));
+            }, 10 * 60 * 1000); // 10 minutes
+         }
 
       } catch (e) {
          await sendDelayedSlackResponse(responseUrl, { response_type: "ephemeral", text: `⚠️ *Error running log query:* ${e.message}` });
