@@ -52,8 +52,8 @@ const AdminAssignmentPanel = ({ search = '' }) => {
                   )}
                 </View>
                 <View style={[styles.statusBadge, { 
-                  backgroundColor: t.coachStatus?.includes('Assigned') ? colors.success + '20' : 
-                                 t.coachStatus?.includes('Awaiting') ? colors.warning + '20' : 
+                  backgroundColor: t.coachStatus?.includes('Assigned') ? colors.success.replace('hsl', 'hsla').replace(')', ', 0.2)') : 
+                                 t.coachStatus?.includes('Awaiting') ? colors.warning.replace('hsl', 'hsla').replace(')', ', 0.2)') : 
                                  colors.navy[100] 
                 }]}>
                   <Text style={[styles.statusText, { 
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     marginTop: 12 
   },
   successBlock: {
-    backgroundColor: colors.success + '10',
+    backgroundColor: colors.success.replace('hsl', 'hsla').replace(')', ', 0.1)'),
   },
   infoLabel: { fontSize: 10, fontWeight: '800', color: colors.navy[400], textTransform: 'uppercase', marginBottom: 8 },
   coachDetailName: { ...typography.subtitle2, color: colors.navy[800] },
