@@ -834,7 +834,6 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
          const summaryPrompt = `You are a system administrator AI assistant.
 A user asked: "${userQuery}"
 
-Here are the retrieved system logs matching their request (from MongoDB and/or Filesystem):
 ${compactLogs.substring(0, 15000)}${geoMapStr}
 
 Please analyze these logs and provide a highly structured, visually clean summary answering the user's question. 
