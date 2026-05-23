@@ -738,7 +738,10 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
                let d = ''; try { d = JSON.stringify(l.details || {}); } catch(e){}
                const istDate = new Date(l.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
                const ip = l.ipAddress ? ` IP:${l.ipAddress}` : '';
-               return `[Mongo][${istDate}] User:${l.userId}${ip} Action:${l.action} Details:${d}`;
+               return {
+                  timeMs: new Date(l.timestamp).getTime() || 0,
+                  text: `[Mongo][${istDate}] User:${l.userId}${ip} Action:${l.action} Details:${d}`
+               };
             });
             combinedLogsArr.push(...compactMongo);
          }
@@ -755,10 +758,20 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
             if (fs.existsSync(logFile)) {
                const fileContent = fs.readFileSync(logFile, 'utf8');
                const lines = fileContent.split('\n').filter(Boolean).slice(-300);
-               const compactFs = lines.map(line => `[FS] ${line.substring(0, 500)}`);
+               const compactFs = lines.map(line => {
+                  let timeMs = 0;
+                  try {
+                     const obj = JSON.parse(line);
+                     if (obj.timestamp) timeMs = new Date(obj.timestamp).getTime();
+                  } catch(e) {}
+                  return {
+                     timeMs,
+                     text: `[FS] ${line.substring(0, 500)}`
+                  };
+               });
                combinedLogsArr.push(...compactFs);
             } else {
-               combinedLogsArr.push(`[FS] No server_events.jsonl found at ${logFile}`);
+               combinedLogsArr.push({ timeMs: 0, text: `[FS] No server_events.jsonl found at ${logFile}` });
             }
          }
 
@@ -787,7 +800,10 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
                   const creationDate = playerDoc.data?.createdAt || playerDoc.data?.reOnboardedAt || playerDoc.lastUpdated;
                   const istDate = new Date(creationDate).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
                   const istLastUpdated = new Date(playerDoc.lastUpdated).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-                  combinedLogsArr.push(`[Database][Fallback Record] System found an active database profile matching "${userSearchTerm}". Original Onboard/Creation Time: ${istDate}. Last Data Update Time: ${istLastUpdated}. Role: ${playerDoc.data?.role || 'user'}.`);
+                  combinedLogsArr.push({
+                     timeMs: new Date(creationDate).getTime() || 0,
+                     text: `[Database][Fallback Record] System found an active database profile matching "${userSearchTerm}". Original Onboard/Creation Time: ${istDate}. Last Data Update Time: ${istLastUpdated}. Role: ${playerDoc.data?.role || 'user'}.`
+                  });
                }
             } catch(e) {
                console.error('Player context fallback failed:', e.message);
@@ -807,7 +823,9 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
             ? `\n\nIP Geolocation Map (use this to show location next to every IP):\n${Object.entries(ipGeoMap).map(([ip, loc]) => `  ${ip} → ${loc}`).join('\n')}`
             : '';
 
-         const compactLogs = combinedLogsArr.join('\n');
+         // Sort all collected logs strictly by timeMs descending, then map to text strings
+         combinedLogsArr.sort((a, b) => b.timeMs - a.timeMs);
+         const compactLogs = combinedLogsArr.map(item => item.text).join('\n');
 
          let securityInstruction = bypassRedaction 
             ? `🛡️ SECURITY EXCEPTION: The administrator has authenticated with MFA. You MUST explicitly reveal all passwords, IP addresses, emails, and sensitive PII that answer the user's query. Do NOT mask them.`
