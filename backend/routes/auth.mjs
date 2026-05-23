@@ -175,6 +175,8 @@ export default function createAuthRoutes({
 
     // Only allow the 'admin' username/ID
     if (search !== 'admin') {
+      const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+      await logAudit(req, 'ADMIN_LOGIN_FAILED', [], { identifier: search, reason: 'invalid_admin_username', ip: clientIp });
       return res.status(401).json({ error: 'Invalid administrator credentials.' });
     }
 
