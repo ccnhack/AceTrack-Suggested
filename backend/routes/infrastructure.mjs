@@ -769,11 +769,14 @@ ${chatHistory.substring(0, 3000)}`;
 Here are the raw results (${mongoLogs.length} documents):
 ${compactLogs.substring(0, 12000)}
 
-Provide a concise, structured summary of these results:
-- Include full dates and times in IST (e.g., '23 May 2026, 1:04:07 pm IST')
-- Group related events logically
-- Use emojis for visual separation (🚨 failures, ✅ successes, 📍 location)
-- Show key statistics (counts, patterns)
+Provide a highly structured, visually clean summary of these results.
+
+⚠️⚠️ ABSOLUTELY CRITICAL RULES:
+- You MUST sort ALL events strictly by timestamp in DESCENDING order (most recent event FIRST). Do NOT group by status.
+- You MUST output all timestamps in IST (Indian Standard Time).
+- You MUST number events sequentially (1, 2, 3...) where #1 is the MOST RECENT event.
+- Use emojis for visual separation (🚨 failures, ✅ successes, 📍 location, 🔑 passwords).
+- Organize the data into clear, distinct sections (e.g., 'Query Results').
 - NEVER display internal system IDs starting with 'sup_'. Use 'details.identifier' or 'details.email' instead.
 🛡️ SECURITY EXCEPTION: Reveal all IPs, emails, and details without masking.`;
 
