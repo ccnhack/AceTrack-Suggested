@@ -163,7 +163,21 @@ export const SupportTicketSystem = ({
         if (!isSearchingChat) scrollViewRef.current?.scrollToEnd({ animated: true });
       }, 100);
     }
-  }, [view]); // Removed selectedTicket?.messages?.length to prevent aggressive auto-scroll
+  }, [view]); 
+
+  // 📜 Auto-scroll on New Message (v2.6.75)
+  const prevMessageCount = useRef(0);
+  useEffect(() => {
+    if (view === 'detail' && selectedTicket?.messages) {
+      const currentCount = selectedTicket.messages.length;
+      if (currentCount > prevMessageCount.current && isAtBottom.current && !isSearchingChat && scrollViewRef.current && typeof scrollViewRef.current.scrollToEnd === 'function') {
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+      prevMessageCount.current = currentCount;
+    }
+  }, [selectedTicket?.messages?.length, view, isSearchingChat]);
 
 
   // 🔍 Conversational Search Logic (v2.6.34)
@@ -934,14 +948,14 @@ export const SupportTicketSystem = ({
             onScroll={(e) => {
               const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
               if (!contentSize || contentSize.height === 0) return;
-              const paddingToBottom = 150;
-              isAtBottom.current = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
+              const paddingToBottom = 50;
+              // Only consider 'at bottom' if we can actually scroll down (contentSize > layoutMeasurement)
+              // AND we are near the bottom.
+              const maxScroll = Math.max(0, contentSize.height - layoutMeasurement.height);
+              isAtBottom.current = contentOffset.y >= maxScroll - paddingToBottom;
             }}
             scrollEventThrottle={16}
             onContentSizeChange={(w, h) => {
-              if (h > prevContentHeight.current && isAtBottom.current && !isSearchingChat) {
-                scrollViewRef.current?.scrollToEnd({ animated: true });
-              }
               prevContentHeight.current = h;
             }}
           >
