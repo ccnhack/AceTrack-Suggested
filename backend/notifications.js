@@ -69,3 +69,27 @@ export async function sendPushNotification(tokens, title, body, data = {}) {
 
   return tickets;
 }
+
+/**
+ * Checks the delivery receipts for a batch of Expo tickets.
+ * @param {string[]} ticketIds 
+ * @returns {Promise<Object>} Map of ticketId to receipt status
+ */
+export async function checkPushReceipts(ticketIds) {
+  if (!ticketIds || ticketIds.length === 0) return {};
+  
+  let receiptIdChunks = expo.chunkPushNotificationReceiptIds(ticketIds);
+  let allReceipts = {};
+  
+  for (let chunk of receiptIdChunks) {
+    try {
+      let receipts = await expo.getPushNotificationReceiptsAsync(chunk);
+      // The receipts object is a map of receipt IDs to receipt objects
+      allReceipts = { ...allReceipts, ...receipts };
+    } catch (error) {
+      console.error('❌ [NOTIFY_DEBUG] Error fetching receipts:', error);
+    }
+  }
+  
+  return allReceipts;
+}

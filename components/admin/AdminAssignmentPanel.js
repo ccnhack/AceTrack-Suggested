@@ -8,7 +8,7 @@ import { useAdmin } from '../../context/AdminContext';
 
 const AdminAssignmentPanel = ({ search = '' }) => {
   const { players } = usePlayersStore();
-  const { tournaments, onAssignCoach, onRemoveCoach } = useTournamentsStore();
+  const { tournaments, onAssignCoach, onRemoveCoach, onUpdateTournament } = useTournamentsStore();
   const { seenAdminActionIds } = useAdmin();
   const [viewingAssignmentFor, setViewingAssignmentFor] = useState(null);
 
@@ -37,6 +37,19 @@ const AdminAssignmentPanel = ({ search = '' }) => {
         assignmentTournaments.map(t => {
           const academy = (players || []).find(p => p.id === t.creatorId);
           const isAssigned = !!t.assignedCoachId;
+
+          const platformCoaches = (players || []).filter(p => p.role === 'coach' && p.isApprovedCoach);
+          const occupiedCoaches = platformCoaches.filter(c => (tournaments || []).some(other => other.id !== t.id && other.date === t.date && other.assignedCoachId === c.id));
+          const declinedCount = t.declinedCoachIds?.length || 0;
+          const interestedCount = t.interestedCoachIds?.length || 0;
+          const pendingCount = Math.max(0, platformCoaches.length - declinedCount - interestedCount - occupiedCoaches.length - (isAssigned ? 1 : 0));
+          
+          const autoPingOptions = [
+            { label: 'Off', value: null },
+            { label: 'Every 2 Hrs', value: 2 * 60 * 60 * 1000 },
+            { label: 'Every 6 Hrs', value: 6 * 60 * 60 * 1000 },
+            { label: 'Every 24 Hrs', value: 24 * 60 * 60 * 1000 }
+          ];
 
           return (
             <View key={t.id} style={[styles.adminCard, isAssigned && styles.assignedCard]}>
@@ -115,6 +128,58 @@ const AdminAssignmentPanel = ({ search = '' }) => {
                   <Text style={styles.noInterestedText}>No platform coaches have opted in yet.</Text>
                 </View>
               )}
+
+              {t.coachAssignmentType === 'platform' && !isAssigned && t.coachStatus !== 'Pending Coach Registration' && (
+                <>
+                  <View style={styles.metricsContainer}>
+                     <View style={styles.metricBox}>
+                        <Text style={styles.metricVal}>{pendingCount}</Text>
+                        <Text style={styles.metricLabel}>Pending RSVP</Text>
+                     </View>
+                     <View style={styles.metricBox}>
+                        <Text style={styles.metricVal}>{declinedCount}</Text>
+                        <Text style={styles.metricLabel}>Declined</Text>
+                     </View>
+                     <View style={styles.metricBox}>
+                        <Text style={styles.metricVal}>{occupiedCoaches.length}</Text>
+                        <Text style={styles.metricLabel}>Occupied</Text>
+                     </View>
+                  </View>
+
+                  <View style={styles.pingConfigContainer}>
+                    <Text style={styles.infoLabel}>Auto-Ping Interval (Background Pings)</Text>
+                    <View style={styles.pingRow}>
+                       {autoPingOptions.map(opt => (
+                          <TouchableOpacity
+                             key={opt.label}
+                             style={[styles.pingBtn, t.autoPingInterval === opt.value && styles.pingBtnActive]}
+                             onPress={() => onUpdateTournament({ ...t, autoPingInterval: opt.value })}
+                          >
+                             <Text style={[styles.pingBtnText, t.autoPingInterval === opt.value && styles.pingBtnTextActive]}>{opt.label}</Text>
+                          </TouchableOpacity>
+                       ))}
+                    </View>
+                    {t.autoPingInterval ? (
+                      <View>
+                        <Text style={styles.pingStatusText}>
+                           {t.lastCoachPingTimestamp ? `Last pinged ${new Date(t.lastCoachPingTimestamp).toLocaleTimeString()}. Ping #${t.lastCoachPingCount || 1}` : 'Waiting for next background sweep...'}
+                        </Text>
+                        {t.pingDeliveryTracking && t.pingDeliveryTracking.length > 0 && (() => {
+                           const latestTracking = t.pingDeliveryTracking[t.pingDeliveryTracking.length - 1];
+                           return (
+                             <View style={styles.deliveryStatusRow}>
+                               <Ionicons name={latestTracking.undeliveredCount === 0 ? "checkmark-done-circle" : "time-outline"} size={14} color={latestTracking.undeliveredCount === 0 ? colors.success : colors.warning} />
+                               <Text style={styles.deliveryStatusText}>
+                                 Delivery (Ping #{latestTracking.pingCount}): {latestTracking.deliveredCount} Delivered, {latestTracking.undeliveredCount} Pending/Offline
+                               </Text>
+                             </View>
+                           );
+                        })()}
+                      </View>
+                    ) : null}
+                  </View>
+                </>
+              )}
             </View>
           );
         })
@@ -165,7 +230,20 @@ const styles = StyleSheet.create({
   removeBtnText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
   noInterestedText: { fontSize: 12, color: colors.navy[400], fontStyle: 'italic' },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 60 },
-  emptyText: { ...typography.body1, color: colors.navy[400], marginTop: 12 }
+  emptyText: { ...typography.body1, color: colors.navy[400], marginTop: 12 },
+  metricsContainer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, gap: 8 },
+  metricBox: { flex: 1, backgroundColor: colors.navy[50], padding: 12, borderRadius: borderRadius.md, alignItems: 'center' },
+  metricVal: { ...typography.h2, color: colors.navy[900] },
+  metricLabel: { fontSize: 10, fontWeight: '700', color: colors.navy[500], textTransform: 'uppercase', marginTop: 4 },
+  pingConfigContainer: { marginTop: 16, borderTopWidth: 1, borderTopColor: colors.navy[100], paddingTop: 16 },
+  pingRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  pingBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: borderRadius.sm, backgroundColor: colors.navy[50], borderWidth: 1, borderColor: colors.navy[100] },
+  pingBtnActive: { backgroundColor: '#EFF6FF', borderColor: colors.primary.base },
+  pingBtnText: { fontSize: 12, fontWeight: '600', color: colors.navy[600] },
+  pingBtnTextActive: { color: colors.primary.dark, fontWeight: '800' },
+  pingStatusText: { fontSize: 10, color: colors.navy[500], marginTop: 8, fontStyle: 'italic' },
+  deliveryStatusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 },
+  deliveryStatusText: { fontSize: 10, color: colors.navy[600], fontWeight: '500' }
 });
 
 export default AdminAssignmentPanel;

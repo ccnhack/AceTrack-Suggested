@@ -1,7 +1,65 @@
 import cron from 'node-cron';
 import mongoose from 'mongoose';
-import { sendPushNotification } from './notifications.js';
+import { sendPushNotification, checkPushReceipts } from './notifications.js';
 import { processTournamentWaitlist } from './promotion_logic.mjs';
+
+/**
+ * 📊 EXPO NOTIFICATION DELIVERY TRACKER
+ * Runs every 30 minutes to check if pending Expo tickets have been delivered.
+ */
+cron.schedule('*/30 * * * *', async () => {
+  console.log('⏰ Running Notification Delivery Tracker Job...');
+  try {
+    const AppState = mongoose.model('AppState');
+    const state = await AppState.findOne().sort({ lastUpdated: -1 });
+    if (!state || !state.data || !state.data.tournaments) return;
+
+    let changed = false;
+    for (let t of state.data.tournaments) {
+      if (!t.pingDeliveryTracking || t.pingDeliveryTracking.length === 0) continue;
+
+      for (let tracking of t.pingDeliveryTracking) {
+        // Skip if all tickets are already resolved or if there are no tickets
+        if (!tracking.tickets || tracking.tickets.length === 0) continue;
+
+        const receipts = await checkPushReceipts(tracking.tickets);
+        
+        let stillPending = [];
+        let newlyDelivered = 0;
+
+        for (let ticketId of tracking.tickets) {
+          const receipt = receipts[ticketId];
+          if (receipt && receipt.status === 'ok') {
+            newlyDelivered++;
+          } else if (receipt && receipt.status === 'error') {
+            console.error(`❌ [DELIVERY_ERROR] Ticket ${ticketId} failed: ${receipt.message} (${receipt.details?.error})`);
+            // It's resolved (as an error), so we don't put it back in stillPending
+          } else {
+            // No receipt yet, or still pending
+            stillPending.push(ticketId);
+          }
+        }
+
+        if (newlyDelivered > 0 || stillPending.length < tracking.tickets.length) {
+          tracking.deliveredCount = (tracking.deliveredCount || 0) + newlyDelivered;
+          tracking.undeliveredCount = tracking.undeliveredCount - (tracking.tickets.length - stillPending.length);
+          if (tracking.undeliveredCount < 0) tracking.undeliveredCount = 0;
+          tracking.tickets = stillPending; // Keep only unresolved tickets
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
+      state.markModified('data.tournaments');
+      state.lastUpdated = new Date();
+      await state.save();
+      console.log('✅ Notification Delivery Tracker complete.');
+    }
+  } catch (error) {
+    console.error('❌ Error in Notification Delivery Tracker Job:', error.message);
+  }
+});
 
 // ... existing reminders code ...
 
@@ -108,6 +166,99 @@ cron.schedule('*/5 * * * *', async () => {
     }
   } catch (error) {
     console.error('❌ Error in Batch Expiry Job:', error.message);
+  }
+});
+
+/**
+ * 📣 AUTO-PING COACHES JOB (v2.6.350)
+ * Runs every 15 minutes to ping available coaches for tournaments needing one.
+ */
+cron.schedule('*/15 * * * *', async () => {
+  console.log('⏰ Running Auto-Ping Coaches Job...');
+  try {
+    const AppState = mongoose.model('AppState');
+    const state = await AppState.findOne().sort({ lastUpdated: -1 });
+    if (!state || !state.data || !state.data.tournaments) return;
+
+    const tournaments = state.data.tournaments;
+    const players = state.data.players || [];
+    const now = Date.now();
+    let changed = false;
+
+    for (let t of tournaments) {
+      if (t.coachAssignmentType !== 'platform' || t.assignedCoachId || !t.autoPingInterval) continue;
+      if (t.status === 'completed' || t.tournamentConcluded) continue;
+
+      const lastPing = t.lastCoachPingTimestamp || 0;
+      if (now - lastPing >= t.autoPingInterval) {
+        // Time to ping!
+        const platformCoaches = players.filter(p => p.role === 'coach' && p.isApprovedCoach);
+        const occupiedCoaches = platformCoaches.filter(c => tournaments.some(other => other.id !== t.id && other.date === t.date && other.assignedCoachId === c.id));
+        
+        const availableCoaches = platformCoaches.filter(c => {
+           if (occupiedCoaches.some(oc => oc.id === c.id)) return false;
+           if (t.declinedCoachIds && t.declinedCoachIds.includes(c.id)) return false;
+           if (t.interestedCoachIds && t.interestedCoachIds.includes(c.id)) return false;
+           return true;
+        });
+
+        if (availableCoaches.length > 0) {
+           const pingCount = (t.lastCoachPingCount || 0) + 1;
+           
+           // 🛡️ Track ignored pings if this is a follow-up
+           if (pingCount > 1) {
+             availableCoaches.forEach(c => {
+               const metrics = c.coachMetrics || { pingsIgnored: 0, tournamentsDeclined: 0, tournamentsAccepted: 0 };
+               c.coachMetrics = { ...metrics, pingsIgnored: (metrics.pingsIgnored || 0) + 1 };
+             });
+           }
+
+           let title = "New Coaching Opportunity! 🏆";
+           let body = `A new tournament (${t.title}) needs a coach. Tap to view.`;
+
+           if (pingCount === 2) {
+             title = "Follow-up: Coach needed 🔔";
+             body = `If you are not available for ${t.title}, please click Decline in the app so we can notify others.`;
+           } else if (pingCount >= 3) {
+             title = "Urgent: Available Coaches Needed ⏳";
+             body = `We are still looking for a coach for ${t.title} on ${t.date}. Please RSVP or Decline ASAP.`;
+           }
+
+           const tokensToPing = availableCoaches.flatMap(c => c.pushTokens || []);
+           
+           if (tokensToPing.length > 0) {
+             console.log(`[AUTO-PING] Ping #${pingCount} for tournament ${t.id} to ${tokensToPing.length} tokens.`);
+             const tickets = await sendPushNotification(tokensToPing, title, body, { type: 'COACH_AUTO_PING', tournamentId: t.id, pingCount });
+             
+             // 🛡️ Delivery Tracking Setup
+             if (tickets && tickets.length > 0) {
+               if (!t.pingDeliveryTracking) t.pingDeliveryTracking = [];
+               t.pingDeliveryTracking.push({
+                 timestamp: new Date().toISOString(),
+                 pingCount,
+                 tickets: tickets.filter(t => t.status === 'ok').map(t => t.id),
+                 deliveredCount: 0,
+                 undeliveredCount: tokensToPing.length
+               });
+             }
+
+             t.lastCoachPingTimestamp = now;
+             t.lastCoachPingCount = pingCount;
+             changed = true;
+           }
+        }
+      }
+    }
+
+    if (changed) {
+      state.markModified('data.tournaments');
+      state.markModified('data.players'); // Save coachMetrics updates
+      state.lastUpdated = new Date();
+      await state.save();
+      console.log('✅ Auto-Ping Coaches Job complete.');
+    }
+  } catch (error) {
+    console.error('❌ Error in Auto-Ping Coaches Job:', error.message);
   }
 });
 

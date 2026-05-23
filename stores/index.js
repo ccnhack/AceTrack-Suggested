@@ -381,10 +381,27 @@ export const useTournamentsStore = create((set, get) => {
 
     onDeclineCoachRequest: (t) => {
       const TournamentService = require('../services/TournamentService').default;
+      const currentUser = useAuthStore.getState().currentUser;
       const currentTournaments = get().tournaments;
       const result = TournamentService.declineCoachRequest(t.id, currentTournaments);
       set({ tournaments: result.tournaments });
-      syncOrchestrator.syncAndSaveData({ tournaments: result.tournaments }, true);
+      
+      if (currentUser && currentUser.role === 'coach') {
+         const currentPlayers = usePlayersStore.getState().players;
+         const updatedPlayers = currentPlayers.map(p => {
+           if (p.id === currentUser.id) {
+             const metrics = p.coachMetrics || { pingsIgnored: 0, tournamentsDeclined: 0, tournamentsAccepted: 0 };
+             return { ...p, coachMetrics: { ...metrics, tournamentsDeclined: (metrics.tournamentsDeclined || 0) + 1 } };
+           }
+           return p;
+         });
+         usePlayersStore.getState().setPlayers(updatedPlayers);
+         const updatedUser = updatedPlayers.find(p => p.id === currentUser.id);
+         useAuthStore.getState().setCurrentUser(updatedUser);
+         syncOrchestrator.syncAndSaveData({ tournaments: result.tournaments, players: updatedPlayers, currentUser: updatedUser }, true);
+      } else {
+         syncOrchestrator.syncAndSaveData({ tournaments: result.tournaments }, true);
+      }
     },
 
     onConfirmCoachRequest: (t) => {
@@ -395,7 +412,23 @@ export const useTournamentsStore = create((set, get) => {
         item.id === t.id ? { ...item, assignedCoachId: currentUser.id, coachStatus: 'Coach Confirmed' } : item
       );
       set({ tournaments: updated });
-      syncOrchestrator.syncAndSaveData({ tournaments: updated });
+      
+      if (currentUser.role === 'coach') {
+         const currentPlayers = usePlayersStore.getState().players;
+         const updatedPlayers = currentPlayers.map(p => {
+           if (p.id === currentUser.id) {
+             const metrics = p.coachMetrics || { pingsIgnored: 0, tournamentsDeclined: 0, tournamentsAccepted: 0 };
+             return { ...p, coachMetrics: { ...metrics, tournamentsAccepted: (metrics.tournamentsAccepted || 0) + 1 } };
+           }
+           return p;
+         });
+         usePlayersStore.getState().setPlayers(updatedPlayers);
+         const updatedUser = updatedPlayers.find(p => p.id === currentUser.id);
+         useAuthStore.getState().setCurrentUser(updatedUser);
+         syncOrchestrator.syncAndSaveData({ tournaments: updated, players: updatedPlayers, currentUser: updatedUser }, true);
+      } else {
+         syncOrchestrator.syncAndSaveData({ tournaments: updated });
+      }
     },
 
     onSaveTournament: (newT) => {

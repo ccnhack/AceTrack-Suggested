@@ -156,10 +156,43 @@ const AdminCoachPanel = memo(({ search }) => {
             )}
 
             {coachSubTab === 'approved' && (
-              <TouchableOpacity onPress={() => handleStatusUpdate(c.id, 'revoked')} style={styles.fullActionBtn}>
-                <Ionicons name="close-circle-outline" size={16} color="#EF4444" style={{ marginRight: 6 }} />
-                <Text style={[styles.fullActionBtnText, { color: '#EF4444' }]}>Revoke Access</Text>
-              </TouchableOpacity>
+              <View style={styles.metricsContainer}>
+                 <Text style={styles.infoLabel}>Performance & Rating</Text>
+                 <View style={styles.metricsRow}>
+                    <View style={styles.metricBox}>
+                       <Text style={styles.metricVal}>{c.coachMetrics?.tournamentsAccepted || 0}</Text>
+                       <Text style={styles.metricLabel}>Assigned</Text>
+                    </View>
+                    <View style={styles.metricBox}>
+                       <Text style={styles.metricVal}>{c.coachMetrics?.tournamentsDeclined || 0}</Text>
+                       <Text style={styles.metricLabel}>Declined</Text>
+                    </View>
+                    <View style={styles.metricBox}>
+                       <Text style={styles.metricVal}>{c.coachMetrics?.pingsIgnored || 0}</Text>
+                       <Text style={styles.metricLabel}>Ignored</Text>
+                    </View>
+                 </View>
+                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+                    <Text style={styles.detailTitle}>Responsiveness Score:</Text>
+                    <Text style={[styles.detailValue, { color: '#16A34A' }]}>
+                       {(() => {
+                          const m = c.coachMetrics || { pingsIgnored: 0, tournamentsDeclined: 0, tournamentsAccepted: 0 };
+                          const total = m.pingsIgnored + m.tournamentsDeclined + m.tournamentsAccepted;
+                          return total === 0 ? 'N/A' : `${Math.round(((m.tournamentsDeclined + m.tournamentsAccepted) / total) * 100)}%`;
+                       })()}
+                    </Text>
+                 </View>
+                 
+                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                    <Text style={styles.detailTitle}>Base Judgement Fee (₹)</Text>
+                    <Text style={styles.detailValue}>{c.baseJudgementFee || 'Global Default (₹1500)'}</Text>
+                 </View>
+                 
+                 <TouchableOpacity onPress={() => handleStatusUpdate(c.id, 'revoked')} style={[styles.fullActionBtn, { marginTop: 16 }]}>
+                   <Ionicons name="close-circle-outline" size={16} color="#EF4444" style={{ marginRight: 6 }} />
+                   <Text style={[styles.fullActionBtnText, { color: '#EF4444' }]}>Revoke Access</Text>
+                 </TouchableOpacity>
+              </View>
             )}
 
             {coachSubTab === 'revoked' && (
@@ -260,7 +293,12 @@ const styles = StyleSheet.create({
   detailRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   detailTitle: { fontSize: 12, color: '#64748B', fontWeight: '600' },
   detailValue: { fontSize: 12, color: '#1E293B', fontWeight: '700' },
-  documentGrid: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  documentGrid: { flexDirection: 'row', gap: 12, marginTop: 8, marginBottom: 16 },
+  metricsContainer: { backgroundColor: '#F8FAFC', padding: 16, borderRadius: 16, marginTop: 12 },
+  metricsRow: { flexDirection: 'row', gap: 8 },
+  metricBox: { flex: 1, backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9' },
+  metricVal: { fontSize: 16, fontWeight: '900', color: '#1E293B' },
+  metricLabel: { fontSize: 9, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', marginTop: 4 },
   docBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', padding: 12, borderRadius: 12, gap: 8, borderWidth: 1, borderColor: '#E2E8F0' },
   docBtnText: { fontSize: 12, fontWeight: '700', color: '#1E293B' },
   reasonBox: { backgroundColor: '#FEF2F2', padding: 12, borderRadius: 12, borderLeftWidth: 4, borderLeftColor: '#EF4444', marginTop: 12 },
