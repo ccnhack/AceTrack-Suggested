@@ -62,8 +62,21 @@ export default function createInfrastructureRoutes({
   router.post('/infrastructure/slack/interact', handleSlackUnified);
 
   async function handleSlackUnified(req, res) {
+    // 🛡️ [VIEW_SUBMISSION FIX] (v2.6.543)
+    // Slack view_submission payloads MUST receive the response_action in the HTTP body.
+    // We cannot pre-flush a blank 200 for these — let the handler respond directly.
+    if (req.body.payload) {
+      try {
+        const peek = JSON.parse(req.body.payload);
+        if (peek.type === 'view_submission') {
+          // Route directly WITHOUT pre-flushing. The handler will res.json() the modal dismissal.
+          return await handleInteract(req, res, false);
+        }
+      } catch(e) { /* parse failed, fall through to normal flow */ }
+    }
+
     // 🛡️ [INSTANT ACK] (v2.6.383)
-    // Slack requires a 200 OK within 3 seconds. We respond instantly and process in the background.
+    // For slash commands and block_actions, Slack requires a 200 OK within 3 seconds.
     res.status(200).send();
 
     try {
@@ -326,12 +339,18 @@ ${chatHistory.substring(0, 3000)}`;
                });
             }
 
+            // ✅ Dismiss the modal immediately via HTTP response body
             res.json({ response_action: 'clear' });
 
+            // 🔓 [MFA REVEAL FIX] (v2.6.543)
+            // view_submission payloads do NOT carry a response_url.
+            // Use chat.postEphemeral via Slack Bot Token to deliver unredacted results.
             try {
                const meta = JSON.parse(payload.view.private_metadata);
-               const { query, url } = meta;
-               runLogAI(query, url, true).catch(e => console.error(e));
+               const { query, channelId, userId } = meta;
+               
+               // Run the AI query with bypassRedaction=true, then post via chat.postEphemeral
+               runLogAIEphemeral(query, channelId, userId).catch(e => console.error('MFA Reveal Error:', e));
             } catch(e) {
                console.error("MFA View parsing error:", e);
             }
@@ -587,8 +606,11 @@ ${chatHistory.substring(0, 3000)}`;
             query = parsed.query;
          } catch(e) {}
 
-         // Inject the fresh responseUrl from this button click to ensure it's valid for replacement!
-         const freshMeta = JSON.stringify({ query, url: responseUrl });
+         // 🔓 [MFA REVEAL FIX] (v2.6.543)
+         // Store channelId + userId in metadata so view_submission can use chat.postEphemeral
+         const channelId = payload.channel?.id || payload.container?.channel_id;
+         const userId = payload.user?.id;
+         const freshMeta = JSON.stringify({ query, channelId, userId });
          const slackBotToken = process.env.SLACK_BOT_TOKEN;
          
          if (!slackBotToken) {
@@ -601,7 +623,7 @@ ${chatHistory.substring(0, 3000)}`;
          if (!isDelayed) res.status(200).send();
 
          try {
-            await fetch('https://slack.com/api/views.open', {
+            const openRes = await fetch('https://slack.com/api/views.open', {
                method: 'POST',
                headers: {
                   'Authorization': `Bearer ${slackBotToken}`,
@@ -631,6 +653,8 @@ ${chatHistory.substring(0, 3000)}`;
                   }
                })
             });
+            const openJson = await openRes.json();
+            if (!openJson.ok) console.error('Slack views.open failed:', openJson.error);
          } catch(e) {
             console.error("Slack views.open error:", e);
          }
@@ -871,6 +895,171 @@ ${securityInstruction}`;
 
       } catch (e) {
          await sendDelayedSlackResponse(responseUrl, { response_type: "ephemeral", text: `⚠️ *Error running log query:* ${e.message}` });
+      }
+  }
+
+  // 🔓 [MFA REVEAL DELIVERY] (v2.6.543)
+  // Runs the same AI log query but delivers results via chat.postEphemeral (Slack Web API)
+  // instead of response_url, because view_submission payloads don't carry a response_url.
+  async function runLogAIEphemeral(userQuery, channelId, slackUserId) {
+      const slackBotToken = process.env.SLACK_BOT_TOKEN;
+      if (!slackBotToken || !channelId || !slackUserId) {
+         console.error('runLogAIEphemeral: Missing required params', { channelId, slackUserId, hasToken: !!slackBotToken });
+         return;
+      }
+
+      const apiKey = process.env.GROQ_API_KEY;
+      if (!apiKey) {
+         return await postEphemeral(slackBotToken, channelId, slackUserId, "⚠️ _AI Query unavailable: GROQ_API_KEY is not set._");
+      }
+
+      try {
+         // 1. Route the query (same as runLogAI)
+         const filterPrompt = `You are an AI Log Router. A user is asking to search logs.
+Current Server Time (ISO): ${new Date().toISOString()}
+
+We have two log sources:
+1. 'AuditLog' (MongoDB): Contains user actions, authentication events, and security logs.
+   Schema: { userId: String, ipAddress: String, userAgent: String, action: String, details: Mixed, timestamp: Date }
+   - Common actions: 'SUPPORT_LOGIN_SUCCESS', 'SUPPORT_LOGIN_FAILED', 'ADMIN_LOGIN_SUCCESS', 'ADMIN_LOGIN_FAILED', 'PASSWORD_CHANGED', 'BRUTE_FORCE_DETECTED', etc.
+   - ⚠️ IMPORTANT: For queries involving usernames or emails, use an $or array containing 'userId', 'details.email', 'details.name', 'details.userId', 'details.identifier', 'details.receivedIdentifier'. Use $regex heavily!
+   - ⚠️ CRITICAL: DO NOT use aggregation operators like $date, $subtract, or $$NOW.
+   - ⚠️ CRITICAL: ONLY apply a "timestamp" date filter if the user explicitly asks for a specific timeframe.
+2. 'server_events.jsonl' (Filesystem): Contains system crashes, server panics, WebSocket errors.
+
+User query: "${userQuery}"
+
+Generate a JSON object with two fields:
+1. "mongoFilter": A valid MongoDB query object for the AuditLog collection.
+2. "checkServerEventsFile": A boolean.
+
+DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON.`;
+
+         const filterReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+               model: "llama-3.3-70b-versatile",
+               messages: [{ role: 'user', content: filterPrompt }],
+               temperature: 0.1,
+               max_tokens: 300
+            })
+         });
+
+         let routingIntent = { mongoFilter: {}, checkServerEventsFile: false };
+         if (filterReq.ok) {
+            const filterJson = await filterReq.json();
+            let rawJson = filterJson.choices?.[0]?.message?.content || "{}";
+            rawJson = rawJson.replace(/```json/g, '').replace(/```/g, '').trim();
+            try { routingIntent = JSON.parse(rawJson); } catch (e) { console.error("Ephemeral AI Routing Parse Error:", e.message); }
+         }
+
+         // 2. Fetch logs
+         let combinedLogsArr = [];
+         if (Object.keys(routingIntent.mongoFilter || {}).length > 0 || !routingIntent.checkServerEventsFile) {
+            const { AuditLog } = await import('../models/index.mjs');
+            let mongoLogs = [];
+            try {
+               mongoLogs = await AuditLog.find(routingIntent.mongoFilter || {}).sort({ timestamp: -1 }).limit(300).lean();
+            } catch (err) {
+               mongoLogs = await AuditLog.find({}).sort({ timestamp: -1 }).limit(300).lean();
+            }
+            const compactMongo = mongoLogs.map(l => {
+               let d = ''; try { d = JSON.stringify(l.details || {}); } catch(e){}
+               const istDate = new Date(l.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+               return `[Mongo][${istDate}] User:${l.userId} Action:${l.action} Details:${d}`;
+            });
+            combinedLogsArr.push(...compactMongo);
+         }
+
+         if (routingIntent.checkServerEventsFile) {
+            const fs = await import('fs');
+            const path = await import('path');
+            const { fileURLToPath } = await import('url');
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = path.dirname(__filename);
+            const logFile = path.join(__dirname, '..', 'diagnostics', 'server_events.jsonl');
+            if (fs.existsSync(logFile)) {
+               const fileContent = fs.readFileSync(logFile, 'utf8');
+               const lines = fileContent.split('\n').filter(Boolean).slice(-300);
+               combinedLogsArr.push(...lines.map(line => `[FS] ${line.substring(0, 500)}`));
+            }
+         }
+
+         if (combinedLogsArr.length === 0) {
+            return await postEphemeral(slackBotToken, channelId, slackUserId, `🔍 *Query:* "${userQuery}"\n\n*Result:* No logs found.`);
+         }
+
+         // 3. Summarize with AI (UNREDACTED)
+         const compactLogs = combinedLogsArr.join('\n');
+         const summaryPrompt = `You are a system administrator AI assistant.
+A user asked: "${userQuery}"
+
+Here are the retrieved system logs:
+${compactLogs.substring(0, 15000)}
+
+Provide a highly structured, visually clean summary.
+Use Slack mrkdwn formatting:
+1. Use emojis (🚨 failed, ✅ success, 📍 location, 🔑 passwords).
+2. Format IPs and Passwords in inline code blocks.
+3. If an IP is a comma-separated list, ONLY extract and display the first IP.
+4. Organize into clear sections.
+5. Explicitly state SUCCESS or FAILURE for login attempts.
+6. Always list events in reverse chronological order (latest first).
+CRITICAL: Output all timestamps in IST.
+🛡️ SECURITY EXCEPTION: The administrator has authenticated with MFA. You MUST explicitly reveal all passwords, IP addresses, emails, and sensitive PII. Do NOT mask them.`;
+
+         const summaryReq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+               model: "llama-3.3-70b-versatile",
+               messages: [{ role: 'user', content: summaryPrompt }],
+               temperature: 0.3,
+               max_tokens: 800
+            })
+         });
+
+         let summaryContent = "_AI Summary failed to generate._";
+         if (summaryReq.ok) {
+            const summaryJson = await summaryReq.json();
+            summaryContent = summaryJson.choices?.[0]?.message?.content || summaryContent;
+         }
+
+         // 4. Post via chat.postEphemeral
+         const blocks = [
+            { "type": "header", "text": { "type": "plain_text", "text": "🔓 Unredacted AI Log Analysis", "emoji": true } },
+            { "type": "context", "elements": [
+               { "type": "mrkdwn", "text": `*Query:* "${userQuery}"` },
+               { "type": "mrkdwn", "text": `*Logs Analyzed:* ${combinedLogsArr.length}` },
+               { "type": "mrkdwn", "text": `*⏳ Auto-expires in 10 minutes*` }
+            ]},
+            { "type": "divider" },
+            { "type": "section", "text": { "type": "mrkdwn", "text": summaryContent } }
+         ];
+
+         await postEphemeral(slackBotToken, channelId, slackUserId, "🔓 Unredacted AI Log Analysis", blocks);
+
+      } catch (e) {
+         console.error('runLogAIEphemeral error:', e);
+         await postEphemeral(slackBotToken, channelId, slackUserId, `⚠️ *Error running unredacted query:* ${e.message}`);
+      }
+  }
+
+  // Helper: Post an ephemeral message via Slack Web API
+  async function postEphemeral(token, channel, user, text, blocks) {
+      const body = { channel, user, text };
+      if (blocks) body.blocks = blocks;
+      try {
+         const resp = await fetch('https://slack.com/api/chat.postEphemeral', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+         });
+         const json = await resp.json();
+         if (!json.ok) console.error('chat.postEphemeral failed:', json.error);
+      } catch(e) {
+         console.error('postEphemeral error:', e.message);
       }
   }
 
