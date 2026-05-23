@@ -290,14 +290,17 @@ ${chatHistory.substring(0, 3000)}`;
          try {
             // STEP 1: Generate MongoDB Filter & Routing Intent
             const filterPrompt = `You are an AI Log Router. A user is asking to search logs.
+Current Server Time (ISO): ${new Date().toISOString()}
+
 We have two log sources:
 1. 'AuditLog' (MongoDB): Contains user actions, authentication events, and security logs.
-   Schema: { userId: String, action: String, details: Mixed, timestamp: Date }
+   Schema: { userId: String, ipAddress: String, userAgent: String, action: String, details: Mixed, timestamp: Date }
    - Common actions: 'SUPPORT_LOGIN_SUCCESS', 'SUPPORT_LOGIN_FAILED', 'ADMIN_LOGIN_SUCCESS', 'ADMIN_LOGIN_FAILED', 'PASSWORD_CHANGED', 'BRUTE_FORCE_DETECTED', etc.
-   - ⚠️ IMPORTANT: For queries involving usernames or emails (like 'shush' or 'john'), do NOT just query 'userId'. Many events store the target user in 'details.email', 'details.name', 'details.userId', 'details.identifier', 'details.receivedIdentifier'. Use an $or array containing all of these! Note that 'userId' often stores the IP address for unauthenticated login attempts.
+   - ⚠️ IMPORTANT: For queries involving usernames or emails (like 'shush' or 'john'), do NOT just query 'userId'. Many events store the target user in 'details.email', 'details.name', 'details.userId', 'details.identifier', 'details.receivedIdentifier'. Use an $or array containing all of these! 
+   - ⚠️ IMPORTANT: For IP address queries, search both the 'ipAddress' and 'userId' fields, as 'userId' often stores the IP for unauthenticated attempts.
    - Use $regex heavily for strings! Example for action: { "action": { "$regex": "ADMIN.*LOGIN.*FAIL", "$options": "i" } }
    - ⚠️ CRITICAL: DO NOT use aggregation operators like $date, $subtract, or $$NOW.
-   - ⚠️ CRITICAL: ONLY apply a "timestamp" date filter if the user explicitly asks for a specific timeframe (e.g., "today", "yesterday", "last week"). If they just ask for "last 5", DO NOT apply a date filter! If you must use a date filter, use ISO date strings (e.g., { "timestamp": { "$gte": "2024-01-01T00:00:00.000Z" } }).
+   - ⚠️ CRITICAL: ONLY apply a "timestamp" date filter if the user explicitly asks for a specific timeframe (e.g., "today", "yesterday", "last week"). Use the Current Server Time provided above to calculate accurate ISO date strings for $gte/$lte.
 2. 'server_events.jsonl' (Filesystem): Contains system crashes, server panics, WebSocket errors, and legacy ephemeral events.
 
 User query: "${userQuery}"
