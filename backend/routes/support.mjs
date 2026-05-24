@@ -1113,6 +1113,14 @@ router.post('/support/transfer-tickets', apiKeyGuard, authGuard, async (req, res
 
     const transferCount = result.modifiedCount || 0;
 
+    // 📡 [REAL-TIME SYNC FIX] Ensure clients pull the updated assignedTo status
+    if (io && transferCount > 0) {
+      io.emit('data_updated', { 
+         keys: ['supportTickets'], 
+         version: null 
+      });
+    }
+
     logServerEvent('SUPPORT_TICKETS_TRANSFERRED', { fromAgentId, toAgentId, count: transferCount });
     res.json({ success: true, transferred: transferCount, message: `${transferCount} ticket(s) transferred to ${toAgent.name}` });
   } catch (e) {
@@ -1267,6 +1275,14 @@ router.post('/support/reassign-ticket', apiKeyGuard, async (req, res) => {
         await latestState.save();
         console.log(`[SYNC] Ticket ${ticketId} synced to AppState v${latestState.version} (Reassign)`);
       }
+    }
+
+    // 📡 [REAL-TIME SYNC FIX] Ensure clients pull the updated In Progress status
+    if (io) {
+      io.emit('data_updated', { 
+         keys: ['supportTickets'], 
+         version: latestState ? latestState.version : null 
+      });
     }
 
     logServerEvent('SUPPORT_TICKET_REASSIGNED', { ticketId, fromAgentId: oldAgentId, toAgentId: targetAgentId });
@@ -1437,6 +1453,14 @@ router.post('/support/claim-ticket', apiKeyGuard, async (req, res) => {
         await latestState.save();
         console.log(`[SYNC] Ticket ${ticketId} synced to AppState v${latestState.version} (Claim)`);
       }
+    }
+
+    // 📡 [REAL-TIME SYNC FIX] Ensure clients pull the updated In Progress status
+    if (io) {
+      io.emit('data_updated', { 
+         keys: ['supportTickets'], 
+         version: latestState ? latestState.version : null 
+      });
     }
 
     logAudit(req, 'TICKET_CLAIMED', ['supportTickets'], { ticketId, agentId });
