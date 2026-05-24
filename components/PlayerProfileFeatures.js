@@ -1215,6 +1215,7 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     padding: 32,
     alignItems: 'center',
+    maxHeight: '90%'
   },
   modalIcon: {
     width: 64,

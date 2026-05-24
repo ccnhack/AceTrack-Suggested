@@ -930,6 +930,11 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    width: '90%',
+    maxWidth: 600,
+    maxHeight: '90%',
     padding: 20,
   },
   deletionCard: {

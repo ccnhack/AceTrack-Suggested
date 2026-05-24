@@ -1134,7 +1134,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1
   },
   modalContent: {
-    gap: 16
+    gap: 16,
+    maxHeight: '90%'
   },
   scoreRow: {
     alignItems: 'center',

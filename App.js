@@ -66,7 +66,7 @@ import { useSupportStore } from './stores';
 
 
 // 🔄 Centralized Versioning Hook (Must match app.json)
-const APP_VERSION = '2.6.544';
+const APP_VERSION = '2.6.545';
 const linking = {
   prefixes: [config.API_BASE_URL || 'https://acetrack-suggested.onrender.com', 'acetrack://'],
   config: {

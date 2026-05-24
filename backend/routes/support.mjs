@@ -1369,6 +1369,49 @@ router.post('/support/rate-ticket', apiKeyGuard, async (req, res) => {
     ticketDoc.markModified('data');
     await ticketDoc.save();
 
+    // 📡 [REAL-TIME SYNC FIX] Sync ticket and player metrics to AppState
+    const latestState = await AppState.findOne().sort({ version: -1 });
+    if (latestState && latestState.data) {
+      let stateUpdated = false;
+      const stateData = latestState.data;
+
+      // Update Support Ticket
+      if (Array.isArray(stateData.supportTickets)) {
+        const ticketIdx = stateData.supportTickets.findIndex(t => t.id === ticketId);
+        if (ticketIdx !== -1) {
+          stateData.supportTickets[ticketIdx] = ticket;
+          stateUpdated = true;
+        }
+      }
+
+      // Update Agent Metrics
+      if (agentId && Array.isArray(stateData.players)) {
+        const agentIdx = stateData.players.findIndex(p => p.id === agentId);
+        if (agentIdx !== -1) {
+          const playerDoc = await Player.findOne({ id: agentId }).lean();
+          if (playerDoc && playerDoc.data) {
+            stateData.players[agentIdx] = playerDoc.data;
+            stateUpdated = true;
+          }
+        }
+      }
+
+      if (stateUpdated) {
+        latestState.version += 1;
+        latestState.markModified('data');
+        await latestState.save();
+        
+        const io = req.app.get('io');
+        if (io) {
+          io.emit('data_updated', {
+            version: latestState.version,
+            keys: ['supportTickets', 'players']
+          });
+          console.log(`[SYNC] Ticket ${ticketId} and Agent ${agentId} metrics synced to AppState v${latestState.version}`);
+        }
+      }
+    }
+
     logServerEvent('TICKET_RATED', { ticketId, rating, agentId });
     res.json({ success: true, ticket });
   } catch (e) {
@@ -1524,6 +1567,27 @@ router.post('/support/force-reset', apiKeyGuard, authGuard, async (req, res) => 
     playerDoc.markModified('data');
     await playerDoc.save();
     console.log(`[FORCE-RESET] Database updated for ${user.email}`);
+
+    // 📡 [REAL-TIME SYNC FIX] Sync user lockouts back to AppState
+    const latestState = await AppState.findOne().sort({ version: -1 });
+    if (latestState && latestState.data && Array.isArray(latestState.data.players)) {
+      const pIdx = latestState.data.players.findIndex(p => p.id === targetUserId);
+      if (pIdx !== -1) {
+        latestState.data.players[pIdx] = user;
+        latestState.version += 1;
+        latestState.markModified('data');
+        await latestState.save();
+        
+        const io = req.app.get('io');
+        if (io) {
+          io.emit('data_updated', {
+            version: latestState.version,
+            keys: ['players']
+          });
+          console.log(`[SYNC] User ${targetUserId} force-reset synced to AppState v${latestState.version}`);
+        }
+      }
+    }
 
     // Log Event
     await logServerEvent('SUPPORT_FORCE_PASSWORD_RESET', { 

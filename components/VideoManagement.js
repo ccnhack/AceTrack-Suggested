@@ -1340,6 +1340,7 @@ const styles = StyleSheet.create({
   modalContent: {
     padding: 24,
     gap: 20,
+    maxHeight: '90%',
   },
   inputGroup: {
     gap: 8,
