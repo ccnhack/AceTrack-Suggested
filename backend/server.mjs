@@ -1130,7 +1130,8 @@ const supportRoutes = createSupportRoutes({
   upload,
   otpLimiter,
   SupportMetricsService,
-  activeSupportSessions
+  activeSupportSessions,
+  syncMutex
 });
 
 app.use('/api/v1', supportRoutes);

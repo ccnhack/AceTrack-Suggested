@@ -46,7 +46,8 @@ export default function createSupportRoutes({
   upload,
   otpLimiter,
   SupportMetricsService,
-  activeSupportSessions
+  activeSupportSessions,
+  syncMutex
 }) {
   const router = express.Router();
 
@@ -1049,10 +1050,15 @@ router.post('/support/manage-user', apiKeyGuard, authGuard, async (req, res) => 
        console.log(`[AUTH_LOCK] Invalidated all sessions for ${user.email} due to ${status}`);
 
        // Update all assigned tickets directly in DB
-       await SupportTicket.updateMany(
-         { "data.assignedTo": targetUserId },
-         { $set: { "data.assignedTo": null, "data.assignedAt": null, lastUpdated: new Date() } }
-       );
+       const releaseTickets = syncMutex ? await syncMutex.acquire() : null;
+       try {
+         await SupportTicket.updateMany(
+           { "data.assignedTo": targetUserId },
+           { $set: { "data.assignedTo": null, "data.assignedAt": null, lastUpdated: new Date() } }
+         );
+       } finally {
+         if (releaseTickets) releaseTickets();
+       }
 
        if (status === 'terminated') {
          // 📧 Trigger Termination Email
@@ -1060,26 +1066,34 @@ router.post('/support/manage-user', apiKeyGuard, authGuard, async (req, res) => 
        }
     }
 
-    playerDoc.data = user;
-    playerDoc.lastUpdated = new Date();
-    playerDoc.markModified('data');
-    await playerDoc.save();
+    const releaseUser = syncMutex ? await syncMutex.acquire() : null;
+    let finalVersion = null;
+    try {
+      playerDoc.data = user;
+      playerDoc.lastUpdated = new Date();
+      playerDoc.markModified('data');
+      await playerDoc.save();
 
-    // 📡 [REAL-TIME SYNC FIX] Sync player to AppState so Admin Hub sees the new supportStatus
-    const latestState = await AppState.findOne().sort({ version: -1 });
-    if (latestState && latestState.data && latestState.data.players) {
-       const players = latestState.data.players;
-       const idx = players.findIndex(p => String(p.id) === String(targetUserId));
-       if (idx !== -1) {
-          players[idx] = user;
-          latestState.markModified('data');
-          latestState.version += 1;
-          await latestState.save();
-          console.log(`[SYNC] User ${targetUserId} status synced to AppState v${latestState.version}`);
-       }
+      // 📡 [REAL-TIME SYNC FIX] Sync player to AppState so Admin Hub sees the new supportStatus
+      const latestState = await AppState.findOne().sort({ version: -1 });
+      if (latestState && latestState.data && latestState.data.players) {
+         const players = latestState.data.players;
+         const idx = players.findIndex(p => String(p.id) === String(targetUserId));
+         if (idx !== -1) {
+            players[idx] = user;
+            latestState.markModified('data');
+            latestState.version += 1;
+            await latestState.save();
+            finalVersion = latestState.version;
+            console.log(`[SYNC] User ${targetUserId} status synced to AppState v${latestState.version}`);
+         }
+      }
+    } finally {
+      if (releaseUser) releaseUser();
     }
+    
     if (io) {
-       io.emit('data_updated', { keys: ['players', 'supportTickets'], version: latestState ? latestState.version : null });
+       io.emit('data_updated', { keys: ['players', 'supportTickets'], version: finalVersion });
     }
 
     logServerEvent('SUPPORT_USER_MANAGED', { admin: req.headers['x-user-id'] || 'admin', targetUserId, status, level });
@@ -1562,31 +1576,38 @@ router.post('/support/force-reset', apiKeyGuard, authGuard, async (req, res) => 
     // Security Guard: Invalidate all existing sessions
     user.devices = [];
 
-    playerDoc.data = user;
-    playerDoc.lastUpdated = new Date();
-    playerDoc.markModified('data');
-    await playerDoc.save();
-    console.log(`[FORCE-RESET] Database updated for ${user.email}`);
+    const releaseReset = syncMutex ? await syncMutex.acquire() : null;
+    let finalVersion = null;
+    try {
+      playerDoc.data = user;
+      playerDoc.lastUpdated = new Date();
+      playerDoc.markModified('data');
+      await playerDoc.save();
+      console.log(`[FORCE-RESET] Database updated for ${user.email}`);
 
-    // 📡 [REAL-TIME SYNC FIX] Sync user lockouts back to AppState
-    const latestState = await AppState.findOne().sort({ version: -1 });
-    if (latestState && latestState.data && Array.isArray(latestState.data.players)) {
-      const pIdx = latestState.data.players.findIndex(p => p.id === targetUserId);
-      if (pIdx !== -1) {
-        latestState.data.players[pIdx] = user;
-        latestState.version += 1;
-        latestState.markModified('data');
-        await latestState.save();
-        
-        const io = req.app.get('io');
-        if (io) {
-          io.emit('data_updated', {
-            version: latestState.version,
-            keys: ['players']
-          });
+      // 📡 [REAL-TIME SYNC FIX] Sync user lockouts back to AppState
+      const latestState = await AppState.findOne().sort({ version: -1 });
+      if (latestState && latestState.data && Array.isArray(latestState.data.players)) {
+        const pIdx = latestState.data.players.findIndex(p => p.id === targetUserId);
+        if (pIdx !== -1) {
+          latestState.data.players[pIdx] = user;
+          latestState.version += 1;
+          latestState.markModified('data');
+          await latestState.save();
+          finalVersion = latestState.version;
           console.log(`[SYNC] User ${targetUserId} force-reset synced to AppState v${latestState.version}`);
         }
       }
+    } finally {
+      if (releaseReset) releaseReset();
+    }
+
+    const io = req.app.get('io');
+    if (io && finalVersion !== null) {
+      io.emit('data_updated', {
+        version: finalVersion,
+        keys: ['players']
+      });
     }
 
     // Log Event
