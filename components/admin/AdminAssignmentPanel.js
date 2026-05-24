@@ -237,6 +237,14 @@ const AdminAssignmentPanel = ({ search = '' }) => {
                         <Text style={styles.pingCountText}>
                           {pingsSent > 0 ? `${pingsSent} Pings Sent` : 'No manual pings'}
                         </Text>
+                        {modalState.tournament?.individualPingTracking?.[c.id] && (
+                          <View style={[styles.deliveryStatusRow, { marginTop: 4, justifyContent: 'flex-end' }]}>
+                            <Ionicons name={modalState.tournament.individualPingTracking[c.id].undeliveredCount === 0 ? "checkmark-done-circle" : "time-outline"} size={12} color={modalState.tournament.individualPingTracking[c.id].undeliveredCount === 0 ? colors.success : colors.warning} />
+                            <Text style={[styles.deliveryStatusText, { fontSize: 9 }]}>
+                              {modalState.tournament.individualPingTracking[c.id].deliveredCount} Delivered, {modalState.tournament.individualPingTracking[c.id].undeliveredCount} Pending
+                            </Text>
+                          </View>
+                        )}
                       </View>
                     </View>
                   );

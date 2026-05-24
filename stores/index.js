@@ -500,10 +500,10 @@ export const useTournamentsStore = create((set, get) => {
 
     onPingCoach: async (tournamentId, coachId) => {
       try {
-        const { API_URL } = require('../config');
+        const config = require('../config').default;
         const { Alert } = require('react-native');
         const useAuthStore = require('./index').useAuthStore;
-        const res = await fetch(`${API_URL}/api/v1/ping-coach`, {
+        const res = await fetch(`${config.API_BASE_URL}/api/v1/ping-coach`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -517,7 +517,7 @@ export const useTournamentsStore = create((set, get) => {
           // Optimistically update
           set(state => ({
             tournaments: state.tournaments.map(t => 
-              t.id === tournamentId ? { ...t, individualPings: data.individualPings } : t
+              t.id === tournamentId ? { ...t, individualPings: data.individualPings, individualPingTracking: data.individualPingTracking } : t
             )
           }));
           Alert.alert('Success', 'Individual push notification sent to coach.');

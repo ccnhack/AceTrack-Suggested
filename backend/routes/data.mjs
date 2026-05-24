@@ -1483,7 +1483,22 @@ router.post('/ping-coach', apiKeyGuard, authGuard, asyncHandler(async (req, res)
     const body = `You have been requested to coach for ${tournament.title}. Please review in the app.`;
     
     if (coach.pushTokens?.length > 0) {
-      sendPushNotification(coach.pushTokens, title, body, { type: 'COACH_INDIVIDUAL_PING', tournamentId: tournament.id, pingCount: newCount });
+      const tickets = await sendPushNotification(coach.pushTokens, title, body, { type: 'COACH_INDIVIDUAL_PING', tournamentId: tournament.id, pingCount: newCount });
+      
+      if (!tournament.individualPingTracking) tournament.individualPingTracking = {};
+      const deliveredCount = tickets ? tickets.filter(t => t.status === 'ok').length : 0;
+      tournament.individualPingTracking[coachId] = {
+        deliveredCount,
+        undeliveredCount: coach.pushTokens.length - deliveredCount,
+        timestamp: new Date().toISOString()
+      };
+    } else {
+      if (!tournament.individualPingTracking) tournament.individualPingTracking = {};
+      tournament.individualPingTracking[coachId] = {
+        deliveredCount: 0,
+        undeliveredCount: 1, // Coach has no tokens (offline/pending)
+        timestamp: new Date().toISOString()
+      };
     }
     
     // Save state
@@ -1507,7 +1522,7 @@ router.post('/ping-coach', apiKeyGuard, authGuard, asyncHandler(async (req, res)
     }
     
     logServerEvent('COACH_INDIVIDUAL_PING_SENT', { coachId, tournamentId, newCount });
-    res.json({ success: true, individualPings: tournament.individualPings });
+    res.json({ success: true, individualPings: tournament.individualPings, individualPingTracking: tournament.individualPingTracking });
   } catch (err) {
     console.error("❌ Ping Coach Error:", err);
     res.status(500).json({ error: err.message });
