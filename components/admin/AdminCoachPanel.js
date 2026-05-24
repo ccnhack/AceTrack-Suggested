@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
   fullActionBtn: { height: 48, borderRadius: 16, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center', marginTop: 20 },
   fullActionBtnText: { fontSize: 14, fontWeight: '800', color: '#64748B' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', padding: 24 },
-  modalContent: { backgroundColor: '#FFFFFF', borderRadius: 32, padding: 24, gap: 16 },
+  modalContent: { backgroundColor: '#FFFFFF', borderRadius: 32, maxHeight: '90%', padding: 24, gap: 16 },
   modalTitle: { fontSize: 18, fontWeight: '900', color: '#1E293B' },
   modalSubtitle: { fontSize: 12, color: '#64748B' },
   modalInput: { backgroundColor: '#F8FAFC', borderRadius: 16, padding: 16, height: 120, textAlignVertical: 'top', fontSize: 14, borderWidth: 1, borderColor: '#F1F5F9' },

@@ -783,7 +783,7 @@ const styles = StyleSheet.create({
   emptyText: { textAlign: 'center', color: '#94A3B8', marginTop: 40 },
   // Modal Styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalContent: { backgroundColor: '#FFF', width: '100%', borderRadius: 20, padding: 24, ...shadows.lg },
+  modalContent: { backgroundColor: '#FFF', width: '100%', maxHeight: '90%', borderRadius: 20, padding: 24, ...shadows.lg },
   modalHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   modalIconBox: { width: 50, height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   modalTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A' },

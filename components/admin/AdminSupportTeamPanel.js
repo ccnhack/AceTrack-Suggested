@@ -2358,7 +2358,7 @@ const styles = StyleSheet.create({
 
   // Actions Modal
   actionsModalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  actionsModalContent: { backgroundColor: '#FFFFFF', borderRadius: 24, width: '100%', maxWidth: 450, padding: 24, ...shadows.lg },
+  actionsModalContent: { backgroundColor: '#FFFFFF', borderRadius: 24, width: '100%', maxWidth: 450, maxHeight: '90%', padding: 24, ...shadows.lg },
   actionsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   actionsTitle: { fontSize: 18, fontWeight: '900', color: '#0F172A' },
   actionUserCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', padding: 16, borderRadius: 16, marginBottom: 24 },
