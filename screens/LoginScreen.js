@@ -130,14 +130,26 @@ const LoginScreen = ({ navigation }) => {
           }
           onLoginSuccess('support', { ...supportData.user, token: supportData.token });
           return;
-        } else if (!supportRes.ok && username.toLowerCase().trim() !== 'admin') {
-          // 🛡️ [SECURITY HARDENING] (v2.6.238)
-          // Stop fallback if the user is explicitly denied or if they simply typed the wrong password for a valid support account.
-          // Also stop fallback if their account is not fully set up.
+          } else if (!supportRes.ok && username.toLowerCase().trim() !== 'admin') {
           if (supportRes.status === 403 || (supportRes.status === 401 && supportData.error !== 'Access Denied. This portal is for AceTrack Administrators and Support Staff only.')) {
             let errorMsg = supportData.error || supportData.message || 'Login denied by server.';
+            
+            // Gracefully handle un-setup accounts by redirecting to password reset
+            if (errorMsg.includes('Account not fully set up')) {
+              Alert.alert(
+                "Account Setup Required",
+                "Your account requires a secure password to continue. Please set one up now.",
+                [{ text: "Set Password", onPress: () => {
+                    setForgotUser(username);
+                    handleStartForgot();
+                }}]
+              );
+              setIsLoading(false);
+              return;
+            }
+
             // Mask the error on mobile to prevent account enumeration
-            if (Platform.OS !== 'web' && (errorMsg === 'Invalid password for support account.' || errorMsg.includes('Account not fully set up'))) {
+            if (Platform.OS !== 'web' && errorMsg === 'Invalid password for support account.') {
               errorMsg = 'Invalid User';
             }
             setError(errorMsg);
@@ -168,7 +180,23 @@ const LoginScreen = ({ navigation }) => {
           } else if (userRes.status === 401 || userRes.status === 403) {
             // Only block fallback if it's a definitive credential rejection
             const userData = await userRes.json();
-            setError(userData.error || 'Invalid credentials.');
+            const errorMsg = userData.error || 'Invalid credentials.';
+            
+            // Gracefully handle un-setup accounts by redirecting to password reset
+            if (errorMsg.includes('Account not fully set up') || errorMsg.includes('needs to be reset for security')) {
+              Alert.alert(
+                "Account Setup Required",
+                "Your account requires a secure password to continue. Please set one up now.",
+                [{ text: "Set Password", onPress: () => {
+                    setForgotUser(username);
+                    handleStartForgot();
+                }}]
+              );
+              setIsLoading(false);
+              return;
+            }
+
+            setError(errorMsg);
             setIsLoading(false);
             return;
           }
