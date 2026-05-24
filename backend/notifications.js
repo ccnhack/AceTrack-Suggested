@@ -50,6 +50,9 @@ export async function sendPushNotification(tokens, title, body, data = {}) {
     try {
       console.log(`📡 [NOTIFY_DEBUG] Dispatching chunk of ${chunk.length} to Expo...`);
       let ticketChunk = await expo.sendPushNotificationsAsync(chunk);
+      ticketChunk.forEach((ticket, index) => {
+        if (ticket) ticket.pushToken = chunk[index].to;
+      });
       tickets.push(...ticketChunk);
     } catch (error) {
       console.error('❌ [NOTIFY_DEBUG] Expo API Critical Error:', error);

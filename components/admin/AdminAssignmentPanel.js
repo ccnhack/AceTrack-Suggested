@@ -174,8 +174,25 @@ const AdminAssignmentPanel = ({ search = '' }) => {
                              <View style={styles.deliveryStatusRow}>
                                <Ionicons name={latestTracking.undeliveredCount === 0 ? "checkmark-done-circle" : "time-outline"} size={14} color={latestTracking.undeliveredCount === 0 ? colors.success : colors.warning} />
                                <Text style={styles.deliveryStatusText}>
-                                 Delivery (Ping #{latestTracking.pingCount}): {latestTracking.deliveredCount} Delivered, {latestTracking.undeliveredCount} Pending/Offline
+                                 Delivery (Ping #{latestTracking.pingCount}): 
                                </Text>
+                               <TouchableOpacity style={{ marginLeft: 4 }} onPress={() => {
+                                  const deliveredCoaches = players.filter(c => latestTracking.deliveredCoachIds?.includes(c.id));
+                                  setModalState({ isOpen: true, type: `Ping #${latestTracking.pingCount} Delivered`, tournament: t, coaches: deliveredCoaches });
+                               }}>
+                                 <Text style={[styles.deliveryStatusText, { textDecorationLine: 'underline', color: colors.primary.base }]}>
+                                   {latestTracking.deliveredCount} Delivered
+                                 </Text>
+                               </TouchableOpacity>
+                               <Text style={styles.deliveryStatusText}>, </Text>
+                               <TouchableOpacity onPress={() => {
+                                  const pendingCoaches = players.filter(c => latestTracking.pendingCoachIds?.includes(c.id));
+                                  setModalState({ isOpen: true, type: `Ping #${latestTracking.pingCount} Pending/Offline`, tournament: t, coaches: pendingCoaches });
+                               }}>
+                                 <Text style={[styles.deliveryStatusText, { textDecorationLine: 'underline', color: colors.warning }]}>
+                                   {latestTracking.undeliveredCount} Pending/Offline
+                                 </Text>
+                               </TouchableOpacity>
                              </View>
                            );
                         })()}

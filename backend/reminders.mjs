@@ -31,6 +31,15 @@ cron.schedule('*/30 * * * *', async () => {
           const receipt = receipts[ticketId];
           if (receipt && receipt.status === 'ok') {
             newlyDelivered++;
+            
+            // Move coach to delivered list
+            const coachId = tracking.ticketToCoach?.[ticketId];
+            if (coachId) {
+               if (!tracking.deliveredCoachIds) tracking.deliveredCoachIds = [];
+               if (!tracking.deliveredCoachIds.includes(coachId)) tracking.deliveredCoachIds.push(coachId);
+               tracking.pendingCoachIds = (tracking.pendingCoachIds || []).filter(id => id !== coachId);
+            }
+            
           } else if (receipt && receipt.status === 'error') {
             console.error(`❌ [DELIVERY_ERROR] Ticket ${ticketId} failed: ${receipt.message} (${receipt.details?.error})`);
             // It's resolved (as an error), so we don't put it back in stillPending
@@ -233,10 +242,26 @@ cron.schedule('*/15 * * * *', async () => {
              // 🛡️ Delivery Tracking Setup
              if (tickets && tickets.length > 0) {
                if (!t.pingDeliveryTracking) t.pingDeliveryTracking = [];
+               
+               const tokenToCoach = {};
+               availableCoaches.forEach(c => {
+                 (c.pushTokens || []).forEach(tok => { tokenToCoach[tok] = c.id; });
+               });
+               
+               const ticketToCoach = {};
+               tickets.forEach(ticket => {
+                 if (ticket.status === 'ok' && ticket.pushToken && tokenToCoach[ticket.pushToken]) {
+                   ticketToCoach[ticket.id] = tokenToCoach[ticket.pushToken];
+                 }
+               });
+
                t.pingDeliveryTracking.push({
                  timestamp: new Date().toISOString(),
                  pingCount,
                  tickets: tickets.filter(t => t.status === 'ok').map(t => t.id),
+                 ticketToCoach,
+                 deliveredCoachIds: [],
+                 pendingCoachIds: availableCoaches.map(c => c.id),
                  deliveredCount: 0,
                  undeliveredCount: tokensToPing.length
                });
