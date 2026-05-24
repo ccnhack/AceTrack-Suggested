@@ -280,6 +280,10 @@ ${chatHistory.substring(0, 3000)}`;
             {
                "type": "section",
                "text": { "type": "mrkdwn", "text": "*`/acetrack query <json>`*\nExecutes a raw JSON MongoDB query directly against the AuditLog collection.\n_Example: `/acetrack query {\"action\": \"UNAUTHORIZED_ACCESS_BLOCKED\"}`_" }
+            },
+            {
+               "type": "section",
+               "text": { "type": "mrkdwn", "text": "*`/acetrack users [role]`*\nFetches a formatted list of users from the Player database. Optional roles: `support`, `coach`, `academy`, `regular`, `all`.\n_Example: `/acetrack users all`_" }
             }
          ];
          return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", replace_original: true, blocks });
@@ -317,6 +321,85 @@ ${chatHistory.substring(0, 3000)}`;
          if (mongoLogs.length === 0) {
             return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: `🔍 *Query:* \`${userQuery}\`\n\n*Result:* No logs found.` });
          }
+      } else if (command === '/acetrack' && String(text).trim().toLowerCase().startsWith('users')) {
+         const args = String(text).trim().toLowerCase().split(' ').slice(1);
+         const roleFilter = args.length > 0 && args[0] !== '' ? args[0] : 'all';
+
+         const { Player } = await import('../models/index.mjs');
+         
+         let filter = { id: { $ne: 'admin' } };
+         if (roleFilter === 'support') {
+            filter['data.role'] = 'support';
+         } else if (roleFilter === 'coaches' || roleFilter === 'coach') {
+            filter['data.role'] = 'coach';
+         } else if (roleFilter === 'academies' || roleFilter === 'academy') {
+            filter['data.role'] = 'academy';
+         } else if (roleFilter === 'regular' || roleFilter === 'user' || roleFilter === 'users') {
+            filter['data.role'] = { $in: ['user', null, undefined] };
+         } else if (roleFilter !== 'all') {
+            return await sendDelayedSlackResponse(response_url, { 
+               response_type: "ephemeral", 
+               text: `⚠️ *Invalid Role:* '${roleFilter}'. Supported roles are: \`support\`, \`coach\`, \`academy\`, \`regular\`, \`all\`.` 
+            });
+         }
+
+         let players = [];
+         try {
+            players = await Player.find(filter).lean();
+         } catch (e) {
+            return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: `⚠️ *Database Error:* ${e.message}` });
+         }
+
+         let blocks = [];
+         
+         const createSections = (title, userList) => {
+             if (userList.length === 0) return [];
+             let sections = [];
+             let currentText = `*${title}*\n`;
+             
+             for (const p of userList) {
+                 const data = p.data || {};
+                 const line = `${data.name || 'N/A'} (${p.id}) -\n\n${data.email || 'N/A'}\n`;
+                 // Slack limits text block to 3000 chars. Split safely.
+                 if (currentText.length + line.length > 2900) {
+                     sections.push({ type: "section", text: { type: "mrkdwn", text: currentText } });
+                     currentText = line;
+                 } else {
+                     currentText += line;
+                 }
+             }
+             if (currentText.trim() !== '') {
+                 sections.push({ type: "section", text: { type: "mrkdwn", text: currentText } });
+             }
+             return sections;
+         };
+
+         blocks.push({ type: "header", text: { type: "plain_text", text: `👥 AceTrack Users List${roleFilter !== 'all' ? ` (${roleFilter.toUpperCase()})` : ''}`, emoji: true } });
+
+         if (roleFilter === 'all') {
+            const regular = players.filter(p => !p.data?.role || p.data.role === 'user');
+            const academies = players.filter(p => p.data?.role === 'academy');
+            const coaches = players.filter(p => p.data?.role === 'coach');
+            const support = players.filter(p => p.data?.role === 'support');
+
+            blocks.push(...createSections('Regular Users', regular));
+            blocks.push(...createSections('Academies', academies));
+            blocks.push(...createSections('Coaches', coaches));
+            blocks.push(...createSections('Support Staff', support));
+         } else {
+            const secs = createSections('Users', players);
+            if (secs.length > 0) blocks.push(...secs);
+            else blocks.push({ type: "section", text: { type: "mrkdwn", text: "No users found for this role." } });
+         }
+
+         // Ensure we don't exceed Slack's 50 block limit.
+         if (blocks.length > 50) {
+             blocks = blocks.slice(0, 49);
+             blocks.push({ type: "section", text: { type: "mrkdwn", text: "_...Results truncated due to Slack limits._" } });
+         }
+
+         return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", blocks });
+      }
 
          // Pass raw results through AI for a clean summary
          await runQueryAI(userQuery, mongoLogs, response_url);
