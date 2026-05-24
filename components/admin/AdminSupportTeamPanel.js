@@ -769,7 +769,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
         </ScrollView>
       </View>
 
-      <ScrollView style={styles.mainContent} showsVerticalScrollIndicator={false}>
+      <View style={styles.mainContent}>
         {selectedAgent ? (
           <View style={[styles.detailCard, isSelectedTerminated && styles.detailCardTerminated]}>
             {/* Terminated Banner */}
@@ -1007,7 +1007,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
               ))}
           </View>
         )}
-      </ScrollView>
+      </View>
 
       {/* Drill-Down Modal Configuration (Phase 5) */}
       {drillDownConfig && (
