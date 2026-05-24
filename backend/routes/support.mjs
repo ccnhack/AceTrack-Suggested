@@ -1065,6 +1065,23 @@ router.post('/support/manage-user', apiKeyGuard, authGuard, async (req, res) => 
     playerDoc.markModified('data');
     await playerDoc.save();
 
+    // 📡 [REAL-TIME SYNC FIX] Sync player to AppState so Admin Hub sees the new supportStatus
+    const latestState = await AppState.findOne().sort({ version: -1 });
+    if (latestState && latestState.data && latestState.data.players) {
+       const players = latestState.data.players;
+       const idx = players.findIndex(p => String(p.id) === String(targetUserId));
+       if (idx !== -1) {
+          players[idx] = user;
+          latestState.markModified('data');
+          latestState.version += 1;
+          await latestState.save();
+          console.log(`[SYNC] User ${targetUserId} status synced to AppState v${latestState.version}`);
+       }
+    }
+    if (io) {
+       io.emit('data_updated', { keys: ['players', 'supportTickets'], version: latestState ? latestState.version : null });
+    }
+
     logServerEvent('SUPPORT_USER_MANAGED', { admin: req.headers['x-user-id'] || 'admin', targetUserId, status, level });
     res.json({ success: true, user: user });
   } catch (e) {
