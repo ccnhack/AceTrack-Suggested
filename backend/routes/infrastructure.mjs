@@ -321,6 +321,8 @@ ${chatHistory.substring(0, 3000)}`;
          if (mongoLogs.length === 0) {
             return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: `🔍 *Query:* \`${userQuery}\`\n\n*Result:* No logs found.` });
          }
+         // Pass raw results through AI for a clean summary
+         await runQueryAI(userQuery, mongoLogs, response_url);
       } else if (command === '/acetrack' && String(text).trim().toLowerCase().startsWith('users')) {
          const args = String(text).trim().toLowerCase().split(' ').slice(1);
          const roleFilter = args.length > 0 && args[0] !== '' ? args[0] : 'all';
@@ -399,10 +401,6 @@ ${chatHistory.substring(0, 3000)}`;
          }
 
          return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", blocks });
-      }
-
-         // Pass raw results through AI for a clean summary
-         await runQueryAI(userQuery, mongoLogs, response_url);
       }
     } catch (err) {
       console.error("❌ Unified Gateway Error:", err.message);
