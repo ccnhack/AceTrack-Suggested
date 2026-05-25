@@ -13,7 +13,7 @@ import logger from '../utils/logger';
 import TournamentDetailModal from '../components/TournamentDetailModal';
 import TournamentCard from '../components/TournamentCard';
 import { colors, shadows, typography, borderRadius, spacing } from '../theme/designSystem';
-import { isTournamentPast, getVisibleTournaments, formatDateIST } from '../utils/tournamentUtils';
+import { isTournamentPast, getVisibleTournaments, formatDateIST, parseTournamentDate } from '../utils/tournamentUtils';
 import { PaymentModal } from '../components/ExploreSubComponents';
 import { useIsFocused } from '@react-navigation/native';
 import { Sport } from '../types';
