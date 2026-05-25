@@ -163,6 +163,9 @@ describe('Complete System Regression E2E', () => {
     // Autofill data
     await element(by.id('academy.form.autofillBtn')).tap();
     
+    // Override random autofill title with deterministic title
+    await element(by.id('academy.form.title')).replaceText('Detox Regression Tournament');
+    
     // Submit
     await element(by.id('academy.form.scrollview')).scroll(1000, 'down');
     await element(by.id('academy.form.submitBtn')).tap();

@@ -15,7 +15,7 @@ export async function cleanupTestData() {
     await db.collection('appstates').updateMany({}, { 
       $pull: { 
         "data.players": { phone: { $in: phones } },
-        "data.tournaments": { title: 'Detox Test Tournament' }
+        "data.tournaments": { title: { $in: ['Detox Test Tournament', 'Detox E2E Championship', 'Detox Regression Tournament', 'Waitlist Test E2E Sync'] } }
       } 
     });
     console.log('Cleanup successful');
