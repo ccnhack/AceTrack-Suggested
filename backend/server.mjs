@@ -34,6 +34,8 @@ import {
   sendSecurityAlertEmail
 } from './emailService.mjs';
 
+import { logAudit, logServerEvent, sendSecurityAlert } from './services/AuditService.mjs';
+import { loginAttempts, trackLoginAttempt } from './services/LoginTracker.mjs';
 import SupportMetricsService from './services/SupportMetricsService.mjs';
 import { fetchWithAIFallback } from './utils/aiRouter.mjs';
 
@@ -104,7 +106,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.550'; // Critical for Update prompts 
+const APP_VERSION = '2.6.551'; // Critical for Update prompts 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -135,140 +137,6 @@ const signToken = (user, jti = null) => {
 };
 
 // 🛡️ SECURITY: Real-time Alerting (v2.6.191)
-const sendSecurityAlert = async (event, data) => {
-  let webhookSuccess = false;
-
-  // 1. Slack Webhook Alert (Primary Channel)
-  if (SECURITY_WEBHOOK_URL) {
-    try {
-      const osint = data.OSINT || {};
-      const score = typeof osint.score === 'number' ? osint.score : 0;
-      const color = score > 75 ? "#EF4444" : (score > 25 ? "#F59E0B" : "#10B981");
-
-      const payload = {
-        text: `🚨 *SECURITY ALERT: ${event}*`,
-        attachments: [{
-          color: color,
-          fallback: `Security Alert: ${event} from ${data.IP}`,
-          fields: [
-            { title: "Event", value: event, short: false },
-            { title: "Source IP", value: `\`${data.IP}\` (${osint.country || '??'})`, short: false },
-            { title: "Actor", value: data.Actor, short: false },
-            { title: "Abuse Confidence", value: `${score}%`, short: false },
-            { title: "Method", value: data.Method, short: false },
-            { title: "URL", value: `\`${data.URL}\``, short: false },
-            { title: "User-Agent", value: data['User-Agent'], short: false },
-            { title: "Payload Snippet", value: `\`\`\`${String(data.Payload).substring(0, 500)}\`\`\``, short: false }
-          ],
-          footer: "Zero-Trust Guard v2.6.208",
-          ts: Math.floor(Date.now() / 1000)
-        }]
-      };
-
-      // 🤖 [AI EVENT INSIGHT] (v2.6.309)
-      if (process.env.GROQ_API_KEY) {
-        try {
-          let contextualHint = "";
-          if (event === 'UNAUTHORIZED_ACCESS_BLOCKED') {
-            contextualHint = " Note: This specific event indicates the requester did not provide a valid, active JWT session token or cryptographic proof of identity.";
-          }
-          const prompt = `As a cybersecurity expert, provide a concise 1-2 sentence explanation of why this security event was triggered and its potential implications.${contextualHint} Event: ${event}, IP: ${data.IP}, URL: ${data.URL}, Method: ${data.Method}, Actor: ${data.Actor}.`;
-          const aiResponse = await fetchWithAIFallback({
-            messages: [{ role: 'user', content: prompt }],
-            apiKey: process.env.GROQ_API_KEY,
-            temperature: 0.3,
-            max_tokens: 150
-          });
-          const result = await aiResponse.json();
-          if (result?.choices?.[0]?.message?.content) {
-            payload.attachments[0].fields.push({ title: "🤖 AI Event Summary", value: result.choices[0].message.content, short: false });
-          }
-        } catch (e) {
-          // Fail silently, don't block alert
-        }
-      }
-
-      // 🛡️ [BRUTE FORCE ENRICHMENT] (v2.6.202)
-      if (data.TargetUser) {
-        payload.attachments[0].fields.push({ title: "Target User", value: data.TargetUser, short: true });
-      }
-      if (data.Passwords) {
-        payload.attachments[0].fields.push({ title: "History", value: `\`${data.Passwords}\``, short: false });
-      }
-      if (data.FinalOutcome) {
-        let outcomeValue = `*${data.FinalOutcome}*`;
-        // 🛡️ [VISUAL HARDENING] (v2.6.212)
-        if (data.FinalOutcome.includes('SUCCESS') && data.FinalOutcome.includes('ALERT')) {
-          outcomeValue = `🟢 *SUCCESS* 🔴 *(ALERT: Potential Unauthorized Access)*`;
-          payload.attachments[0].color = "#EF4444"; // Force high-contrast red for breach
-          
-          // 🛡️ [INTERACTIVE LOCKDOWN] (v2.6.212)
-          // Add Slack Buttons for immediate Admin response
-          payload.attachments[0].actions = [
-            {
-              name: "security_action",
-              text: "Approve Login",
-              type: "button",
-              style: "primary",
-              value: JSON.stringify({ action: "approve", target: data.TargetUser, ip: data.IP })
-            },
-            {
-              name: "security_action",
-              text: "BLOCK ACCOUNT",
-              type: "button",
-              style: "danger",
-              confirm: {
-                title: "Confirm Admin Lockdown?",
-                text: "This will force-logout all sessions and block Admin login for 5 minutes.",
-                ok_text: "Yes, Block Account",
-                dismiss_text: "Cancel"
-              },
-              value: JSON.stringify({ action: "block", target: data.TargetUser, ip: data.IP })
-            }
-          ];
-        }
-        payload.attachments[0].fields.push({ title: "Final Outcome", value: outcomeValue, short: true });
-      }
-
-      // 🌩️ [CUMULATIVE SUMMARY ENRICHMENT] (v2.6.208)
-      if (event === 'BRUTE_FORCE_CUMULATIVE_SUMMARY') {
-        payload.text = `🌩️ *SECURITY SUMMARY: SUSTAINED ATTACK DETECTED*`;
-        payload.attachments[0].color = "#FF9800"; // Orange for summary
-        payload.attachments[0].fields = [
-          { title: "Target Account", value: data.TargetUser, short: true },
-          { title: "Source IP", value: `\`${data.IP}\``, short: true },
-          { title: "Total Attempts", value: String(data.TotalAttempts), short: true },
-          { title: "Failures (5m)", value: String(data.FailureCount), short: true },
-          { title: "Passwords Sample", value: `\`${data.SamplePasswords}\``, short: false },
-          { title: "Status", value: "⚠️ Throttling Active", short: true }
-        ];
-      }
-
-      const res = await fetch(SECURITY_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      
-      if (res.ok) {
-        webhookSuccess = true;
-        console.log(`📡 [ALERT] Security event broadcast to Slack: ${event}`);
-      }
-    } catch (err) {
-      console.error("❌ Slack Alert Failed:", err.message);
-    }
-  }
-
-  // 2. Email Alert (Fallback Channel)
-  // Only send email if Slack is not configured or failed, to reduce noise.
-  if (!webhookSuccess) {
-    try {
-      await sendSecurityAlertEmail(event, data);
-    } catch (err) {
-      // Silent fail to ensure main thread stability
-    }
-  }
-};
 
 // 📊 Schemas: MOVED to ./models/index.mjs (Phase 1 Modularization)
 // AppState, AuditLog, SecuritySummary are now imported at the top.
@@ -277,255 +145,16 @@ const sendSecurityAlert = async (event, data) => {
 
 // 🛡️ SECURITY: Reputation & OSINT Helpers (v2.6.192)
 // Checks if an IP has a record of successful authentication in the last 24 hours.
-const checkInternalReputation = async (ip) => {
-  try {
-    const recentSuccess = await AuditLog.findOne({
-      ipAddress: ip,
-      action: { $in: ['SUPPORT_LOGIN_SUCCESS', 'ADMIN_LOGIN_SUCCESS', 'LOGIN_SUCCESS'] },
-      timestamp: { $gt: new Date(Date.now() - 24 * 60 * 60 * 1000) }
-    }).lean();
-    return !!recentSuccess;
-  } catch (e) {
-    return false;
-  }
-};
 
-// Queries AbuseIPDB for real-time reputation scoring.
-const getIPReputation = async (ip) => {
-  const apiKey = process.env.ABUSEIPDB_API_KEY;
-  if (!apiKey) return { score: 'N/A', provider: 'AbuseIPDB (Missing Key)' };
-  
-  try {
-    const response = await fetch(`https://api.abuseipdb.com/api/v2/check?ipAddress=${ip}&maxAgeInDays=90`, {
-      headers: { 'Key': apiKey, 'Accept': 'application/json' }
-    });
-    const result = await response.json();
-    return {
-      score: result?.data?.abuseConfidenceScore ?? 0,
-      country: result?.data?.countryCode || '??',
-      usage: result?.data?.usageType || 'unknown',
-      provider: 'AbuseIPDB'
-    };
-  } catch (e) {
-    return { score: 'ERR', provider: 'AbuseIPDB' };
-  }
-};
-
-// SecuritySummary schema: MOVED to ./models/index.mjs (Phase 1 Modularization)
-
-// 🛡️ SECURITY: AI Summary Helper (v2.6.194)
-const generateSecuritySummary = async (events) => {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) return "AI Summary unavailable: GROQ_API_KEY is not set.";
-
-  try {
-    const eventSummary = events.map(e => `${e.timestamp.toISOString()}: ${e.action} on ${e.url} (${e.method})`).join('\n');
-    const prompt = `You are a cybersecurity expert. Summarize the following security events detected on the AceTrack platform in the last 30 minutes. 
-Identify patterns (brute force, enumeration, lateral movement), assess risk level, and suggest 2 technical actions.
-Keep it professional and concise.
-Events:\n${eventSummary.substring(0, 3000)}`;
-
-    const response = await fetchWithAIFallback({
-      messages: [{ role: 'user', content: prompt }],
-      apiKey,
-      temperature: 0.5,
-      max_tokens: 800
-    });
-    
-    const result = await response.json();
-    return result?.choices?.[0]?.message?.content || "AI failed to generate a summary.";
-  } catch (err) {
-    return `AI Summary Error: ${err.message}`;
-  }
-};
-
-const logAudit = async (req, action, changedCollections = [], details = {}) => {
-  try {
-    await AuditLog.create({
-      userId: (req && req.headers && req.headers['x-user-id']) || (req && req.ip) || 'system',
-      action,
-      changedCollections,
-      ipAddress: (req && req.ip) || '0.0.0.0',
-      userAgent: (req && req.headers && req.headers['user-agent']) || 'unknown',
-      details
-    });
-
-    // 🚨 Real-time Alert for Critical Events (v2.6.195)
-    // 🛡️ [PRODUCTION HARDENING] (v2.6.327): Demoted noisy route blocks to batch-only aggregation
-    const criticalEvents = ['OTP_BRUTE_FORCE_DETECTED', 'ADMIN_PRIVILEGE_ESCALATION', 'SENSITIVE_ACCESS_ATTEMPT', 'BRUTE_FORCE_DETECTED'];
-    const aggregationEvents = [...criticalEvents, 'UNAUTHORIZED_ACCESS_BLOCKED', 'HARD_ROUTE_BLOCK', 'LOGIN_SUCCESS', 'SUPPORT_LOGIN_SUCCESS'];
-
-    if (aggregationEvents.includes(action)) {
-      const ip = (req && req.ip) || '0.0.0.0';
-      let actor = (req && req.headers && req.headers['x-user-id']) || (req && req.user && req.user.id);
-      
-      // 🛡️ [ACTOR INFERENCE] (v2.6.209)
-      // If actor is missing or generic 'guest' (e.g. hard browser navigation or syncManager default), look for recent session from this IP
-      if ((!actor || actor === 'guest') && ip !== '0.0.0.0') {
-        try {
-          const lastSession = await AuditLog.findOne({
-            ipAddress: ip,
-            action: { $in: ['LOGIN_SUCCESS', 'SUPPORT_LOGIN_SUCCESS'] },
-            timestamp: { $gt: new Date(Date.now() - 2 * 60 * 60 * 1000) }
-          }).sort({ timestamp: -1 }).lean();
-          
-          if (lastSession) {
-            const inferredId = lastSession.details?.userId || lastSession.userId;
-            // 🛡️ Ensure we don't just "infer" the IP address back as the ID
-            if (inferredId && inferredId !== ip && inferredId !== 'guest') {
-              actor = `${inferredId} (Inferred)`;
-            }
-          }
-        } catch (e) {
-          console.error("Actor inference failed:", e.message);
-        }
-      }
-      
-      actor = actor || 'guest';
-      const url = (req && (req.originalUrl || req.url)) || 'Unknown';
-      const method = (req && req.method) || 'Unknown';
-
-      // 🛡️ [AI AGGREGATION] (v2.6.195)
-      let summary = await SecuritySummary.findOne({
-        ipAddress: ip,
-        actor: actor,
-        isSummarized: false,
-        firstEventAt: { $gt: new Date(Date.now() - 30 * 60 * 1000) }
-      });
-
-      if (summary) {
-        summary.events.push({ action, url, method, details });
-        summary.lastEventAt = new Date();
-        await summary.save();
-      } else {
-        await SecuritySummary.create({
-          ipAddress: ip,
-          userId: (req && req.headers && req.headers['x-user-id']) || (req && req.user && req.user.id) || actor,
-          actor: actor,
-          events: [{ action, url, method, details }]
-        });
-      }
-
-      // Only send individual Slack alerts for CRITICAL events
-      if (criticalEvents.includes(action)) {
-        // 🛡️ [LOCAL_BYPASS] (v2.6.258)
-        // Do not spam alerts for local development activities on localhost or private network ranges.
-        const isLocal = (ip) => {
-          if (!ip) return false;
-          if (process.env.NODE_ENV === 'production') return false; // Never suppress in production
-          return ip === '127.0.0.1' || 
-                 ip === '::1' || 
-                 ip.includes('127.0.0.1') || 
-                 ip.includes('192.168.') || 
-                 ip.includes('10.') || 
-                 ip.startsWith('172.') || // Simplified for 172.16.0.0/12
-                 ip === 'localhost' ||
-                 ip === '::ffff:127.0.0.1';
-        };
-        
-        if (isLocal(ip) && process.env.NODE_ENV !== 'production' && process.env.TEST_ALERTS_LOCALLY !== 'true') {
-          console.log(`[AUTH] Local critical event detected (${action}) from ${ip}. Alert suppressed.`);
-        } else {
-          const osint = await getIPReputation(ip);
-          await sendSecurityAlert(action, {
-            IP: ip,
-            Actor: actor,
-            URL: url,
-            Method: method,
-            'User-Agent': (req && req.headers && req.headers['user-agent']) || 'unknown',
-            Payload: JSON.stringify(req.body || {}),
-            OSINT: osint,
-            ...details // 🛡️ Spread extra details (TargetUser, Passwords, etc.)
-          });
-        }
-      }
-    }
-  } catch (e) {
-    console.error("❌ Audit log error:", e.message);
-  }
-};
 
 // 🏗️ [PHASE 1b] Initialize security middleware with runtime dependencies
 initSecurity({ aceApiKey: ACE_API_KEY, jwtSecret: JWT_SECRET, appVersion: APP_VERSION, logAudit });
 const { globalApiLimiter, loginLimiter, otpLimiter, passwordResetLimiter } = createRateLimiters(APP_VERSION);
 
-const loginAttempts = new Map(); // identifier_IP -> { attempts: [], lastAlertedAt: 0, lastSummaryAt: 0 }
-
-const trackLoginAttempt = async (req, identifier, password, success) => {
-  const ip = (req && req.ip) || '0.0.0.0';
-  const key = `${identifier}_${ip}`;
-  const now = Date.now();
-  
-  if (!loginAttempts.has(key)) {
-    loginAttempts.set(key, { attempts: [], lastSummaryAt: now });
-  }
-  
-  const state = loginAttempts.get(key);
-  const maskedPassword = password || '';
-  state.attempts.push({ timestamp: now, password: maskedPassword, success });
-  
-  // Cleanup old attempts (> 5 minutes for summary context, but logic uses 1m windows)
-  state.attempts = state.attempts.filter(a => now - a.timestamp < 300000); 
-  
-  const oneMinuteAgo = now - 60000;
-  const recentAttempts = state.attempts.filter(a => a.timestamp > oneMinuteAgo);
-  const recentFailures = recentAttempts.filter(a => !a.success);
-  
-  // 🛡️ [ADVANCED BRUTE-FORCE MONITOR] (v2.6.208)
-  
-  // 🛡️ [ROLE-BASED THRESHOLD] (v2.6.213 / v2.6.434 PERF FIX)
-  // Admin: 5 attempts | Support: 10 attempts | Others: 10 attempts
-  // v2.6.434: Use Player.findOne instead of loading entire AppState blob
-  const search = String(identifier).toLowerCase().trim();
-  let role = (identifier === 'admin_mfa' ? 'admin' : 'user');
-  try {
-    const { Player } = await import('./models/index.mjs');
-    const playerDoc = await Player.findOne({ $or: [{ id: search }, { 'data.email': search }, { 'data.username': search }] }).lean();
-    if (playerDoc?.data?.role) role = playerDoc.data.role;
-  } catch (e) { /* fallback to default role */ }
-  const threshold = role === 'admin' ? 5 : 10;
-
-  // 1. IMMEDIATE ALERT: Success after significant failure (Critical Breach Potential)
-  if (success && recentFailures.length >= threshold) {
-    const history = recentAttempts.map(a => `${a.password} (${a.success ? '✅' : '❌'})`).join(', ');
-    await logAudit(req, 'BRUTE_FORCE_DETECTED', [], { 
-      TargetUser: identifier, 
-      Passwords: history, 
-      AttemptCount: recentAttempts.length,
-      FailureCount: recentFailures.length,
-      FinalOutcome: "SUCCESS (ALERT: Potential Unauthorized Access)",
-      Timeframe: '1 minute'
-    });
-    // Reset to prevent double alerts
-    loginAttempts.delete(key);
-    return;
-  }
-  
-  // 2. BURST ALERT: Notify every 5 failures within 1 minute
-  if (!success && recentFailures.length >= 5 && (recentFailures.length % 5 === 0)) {
-    const history = recentAttempts.map(a => `${a.password} (${a.success ? '✅' : '❌'})`).join(', ');
-    await logAudit(req, 'BRUTE_FORCE_DETECTED', [], { 
-      TargetUser: identifier, 
-      Passwords: history, 
-      AttemptCount: recentAttempts.length,
-      FailureCount: recentFailures.length,
-      FinalOutcome: "FAILED (Persistent Attack in Progress)",
-      Timeframe: '1 minute'
-    });
-  }
-};
 
 // Cumulative Security Summary moved to services/scheduler.mjs
 initScheduler(loginAttempts, sendSecurityAlert);
 
-// 🛡️ [MEMORY LEAK FIX] (v2.6.434): Purge stale loginAttempts entries every 10 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, state] of loginAttempts) {
-    state.attempts = state.attempts.filter(a => now - a.timestamp < 300000);
-    if (state.attempts.length === 0) loginAttempts.delete(key);
-  }
-}, 600000);
 
 // 🛡️ [MEMORY LEAK FIX] (v2.6.434): Purge disconnected activeSupportSessions every 5 minutes
 setInterval(() => {
@@ -956,16 +585,6 @@ app.use('/api/', globalApiLimiter);
 // ═══════════════════════════════════════════════════════════════
 // Helpers
 // ═══════════════════════════════════════════════════════════════
-async function logServerEvent(action, details = {}) {
-  try {
-    const logFile = path.join(DIAGNOSTICS_DIR, 'server_events.jsonl'); // 🛡️ Switched to JSONL (v2.6.48)
-    const entry = JSON.stringify({ timestamp: new Date().toISOString(), action, ...details }) + '\n';
-    await fs.promises.appendFile(logFile, entry);
-    console.log(`📡 [Server Log] ${action}:`, details);
-  } catch (e) {
-    console.error("❌ Failed to write server log:", e.message);
-  }
-};
 
 // asyncHandler: MOVED to ./helpers/utils.mjs (Phase 1 Modularization)
 
