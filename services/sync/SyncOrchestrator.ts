@@ -116,6 +116,30 @@ class SyncOrchestrator {
     return this.activeSyncs > 0;
   }
 
+  /**
+   * 🛡️ [SYNC LEAK FIX] (v2.6.435)
+   * Resets all internal states, including delta-sync timestamps.
+   * MUST be called during logout to prevent stale timestamps from causing
+   * empty delta syncs on subsequent logins on the same device.
+   */
+  public reset() {
+    console.log('[SyncOrchestrator] Full state reset requested (Logout/Cleanup)');
+    this.userId = null;
+    this.userToken = null;
+    this.userRole = null;
+    this.initPromise = null;
+    this.lastSuccessfulPullTimestamp = null;
+    this.syncVersion = 0;
+    this.isAuthMuted = false;
+    this.activeSyncs = 0;
+    this.isSyncing = false;
+    
+    if (this.syncTimeout) {
+      clearTimeout(this.syncTimeout);
+      this.syncTimeout = null;
+    }
+  }
+
   public getLastServerUpdate(): number {
     return this.lastServerUpdate;
   }

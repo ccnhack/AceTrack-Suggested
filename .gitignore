@@ -75,3 +75,5 @@ scratch/
 
 # 🛡️ [SECURITY] (v2.6.327): Firebase credentials must never be committed
 backend/firebase-service-account.json
+backend/test_sync.mjs
+backend/test_users.mjs

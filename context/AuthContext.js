@@ -270,12 +270,24 @@ export const AuthProvider = ({ children }) => {
 
     syncOrchestrator.setUserToken(null);
     
+    // 🛡️ [SYNC LEAK FIX] (v2.6.552): Reset SyncOrchestrator singleton state.
+    // Without this, the stale lastSuccessfulPullTimestamp survives across logouts,
+    // causing the next login to perform an empty delta sync instead of a full hydration.
+    // This was the root cause of the "only 1 player in rankings" bug after Maestro testing.
+    syncOrchestrator.reset();
+    
+    // 🛡️ [ZUSTAND CLEANUP] (v2.6.552): Clear Zustand stores to prevent stale data
+    // from bleeding into the next user session without requiring an app restart.
+    useAuthStore.getState().logout();
+    usePlayersStore.getState().setPlayers([]);
+    useTournamentsStore.getState().setTournaments([]);
+    
     // 🛡️ [COOKIE_CLEANUP] (v2.6.258): Notify backend to clear secure cookie on web logout
     if (Platform.OS === 'web') {
       fetch(`${config.API_BASE_URL}/api/v1/logout`, { method: 'POST' }).catch(() => {});
     }
     
-    console.log('[AuthContext] Privacy Guard: All session data cleared.');
+    console.log('[AuthContext] Privacy Guard: All session and sync state cleared.');
   }, []);
 
   // 🛡️ [C-1 FIX] (v2.6.315): Keep ref in sync so AUTH_FAILURE listener always has latest

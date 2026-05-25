@@ -1,0 +1,242 @@
+appId: com.acetrack
+---
+- clearState
+- launchApp
+
+# -- Phase 1: Login as Academy and Create Tournament --
+- tapOn:
+    id: "landing.login.btn"
+
+- tapOn:
+    text: "Using Local API"
+    optional: true
+
+- tapOn: "Enter your username or email"
+- tapOn:
+    text: "Cancel"
+    optional: true
+- inputText: "testingacademy"
+- tapOn: "Welcome Back"
+
+- tapOn:
+    below: "Password"
+- inputText: "password"
+- tapOn: "Welcome Back"
+
+- tapOn: "Continue"
+
+- assertVisible:
+    id: "nav.tab.Profile"
+
+- tapOn:
+    id: "nav.tab.Academy"
+
+- assertVisible:
+    id: "academy.createTournament.btn"
+- tapOn:
+    id: "academy.createTournament.btn"
+
+- assertVisible:
+    id: "academy.form.autofillBtn"
+- tapOn:
+    id: "academy.form.autofillBtn"
+
+- extendedWaitUntil:
+    visible:
+        text: "Olympic Sports Complex"
+    timeout: 5000
+
+- tapOn:
+    id: "academy.form.title"
+- eraseText: 50
+- inputText: "Maestro E2E Championship"
+- pressKey: Enter
+
+- scrollUntilVisible:
+    element:
+        id: "academy.form.submitBtn"
+    direction: DOWN
+    speed: 40
+- tapOn:
+    id: "academy.form.submitBtn"
+
+- assertVisible: "MAESTRO E2E CHAMPIONSHIP"
+
+# Logout Academy
+- tapOn:
+    id: "nav.tab.Profile"
+
+- scrollUntilVisible:
+    element:
+        id: "profile.logout.button"
+    direction: DOWN
+    speed: 40
+- tapOn:
+    id: "profile.logout.button"
+
+# -- Phase 2: Login as User and Register --
+- assertVisible:
+    id: "landing.login.btn"
+- tapOn:
+    id: "landing.login.btn"
+- tapOn: "Enter your username or email"
+- inputText: "testindividual"
+- tapOn: "Welcome Back"
+- tapOn:
+    below: "Password"
+- inputText: "password"
+- tapOn: "Welcome Back"
+- tapOn: "Continue"
+
+- assertVisible:
+    id: "nav.tab.Profile"
+
+- tapOn:
+    id: "nav.tab.Explore"
+
+# Force City Filter to 'All Locations' to bypass emulator GPS
+- tapOn:
+    id: "explore.city.picker"
+- tapOn: "All Locations"
+
+- scrollUntilVisible:
+    element:
+        text: "MAESTRO E2E CHAMPIONSHIP"
+    direction: DOWN
+    speed: 10
+- tapOn: "MAESTRO E2E CHAMPIONSHIP"
+
+- scrollUntilVisible:
+    element:
+        id: "match.detail.registerBtn"
+    direction: DOWN
+    speed: 40
+- tapOn:
+    id: "match.detail.registerBtn"
+
+- assertVisible: "Wallet Payment"
+
+- tapOn:
+    id: "match.detail.payWalletBtn"
+
+- assertVisible: "Payment Successful"
+- tapOn: "OK"
+
+# Logout Individual
+- tapOn:
+    id: "match.detail.closeBtn"
+
+- tapOn:
+    id: "nav.tab.Profile"
+
+- scrollUntilVisible:
+    element:
+        id: "profile.logout.button"
+    direction: DOWN
+    speed: 40
+- tapOn:
+    id: "profile.logout.button"
+
+# -- Phase 3: Login as Academy and Add Player --
+- assertVisible:
+    id: "landing.login.btn"
+- tapOn:
+    id: "landing.login.btn"
+- tapOn: "Enter your username or email"
+- inputText: "testingacademy"
+- tapOn: "Welcome Back"
+- tapOn:
+    below: "Password"
+- inputText: "password"
+- tapOn: "Welcome Back"
+- tapOn: "Continue"
+
+- tapOn:
+    id: "nav.tab.Academy"
+
+- scrollUntilVisible:
+    element:
+        text: "MAESTRO E2E CHAMPIONSHIP"
+    direction: DOWN
+    speed: 40
+- tapOn: "MAESTRO E2E CHAMPIONSHIP"
+
+- tapOn:
+    id: "match.detail.manageBtn"
+
+- assertVisible:
+    id: "academy.manage.addPlayerBtn"
+- tapOn:
+    id: "academy.manage.addPlayerBtn"
+
+- tapOn:
+    id: "academy.addPlayer.input"
+- inputText: "maestro_added_player"
+- pressKey: Enter
+- tapOn:
+    id: "academy.addPlayer.submitBtn"
+
+- assertVisible: "maestro_added_player"
+
+- tapOn:
+    id: "match.detail.closeBtn"
+
+# Logout Academy
+- tapOn:
+    id: "nav.tab.Profile"
+- scrollUntilVisible:
+    element:
+        id: "profile.logout.button"
+    direction: DOWN
+    speed: 40
+- tapOn:
+    id: "profile.logout.button"
+
+# -- Phase 4: Login as Added Player and Pay --
+- assertVisible:
+    id: "landing.login.btn"
+- tapOn:
+    id: "landing.login.btn"
+- tapOn: "Enter your username or email"
+- inputText: "maestro_added_player"
+- tapOn: "Welcome Back"
+- tapOn:
+    below: "Password"
+- inputText: "password"
+- tapOn: "Welcome Back"
+- tapOn: "Continue"
+
+- tapOn:
+    id: "nav.tab.Matches"
+- tapOn: "My Tournaments"
+
+- scrollUntilVisible:
+    element:
+        text: "MAESTRO E2E CHAMPIONSHIP"
+    direction: DOWN
+    speed: 40
+- tapOn: "MAESTRO E2E CHAMPIONSHIP"
+
+- tapOn:
+    id: "match.detail.payPendingBtn"
+
+- assertVisible: "Wallet Payment"
+- tapOn:
+    id: "match.detail.payWalletBtn"
+
+- assertVisible: "Payment Successful"
+- tapOn: "OK"
+
+# Logout Final
+- tapOn:
+    id: "match.detail.closeBtn"
+
+- tapOn:
+    id: "nav.tab.Profile"
+- scrollUntilVisible:
+    element:
+        id: "profile.logout.button"
+    direction: DOWN
+    speed: 40
+- tapOn:
+    id: "profile.logout.button"

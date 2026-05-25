@@ -31,9 +31,27 @@ class PlayerService {
   static async logout() {
     logger.logAction('USER_LOGOUT_START');
     
+    // 🛡️ [SYNC LEAK FIX] (v2.6.435) 
+    // Prevent stale delta sync timestamps from breaking the next user's hydration
+    try {
+      const SyncOrchestrator = require('./sync/SyncOrchestrator').default;
+      if (SyncOrchestrator && typeof SyncOrchestrator.getInstance === 'function') {
+        const instance = SyncOrchestrator.getInstance();
+        if (typeof instance.reset === 'function') {
+          instance.reset();
+        }
+      }
+    } catch (e) {
+      console.warn('[PlayerService] Failed to reset SyncOrchestrator on logout:', e);
+    }
+    
     await storage.removeItem('currentUser');
     await storage.removeItem('pendingSync');
     await storage.removeItem('sessionCustomAvatar');
+    
+    // 🛡️ [COLLECTION CLEAR] Wipe cached global collections to force clean fetch on next login
+    await storage.removeItem('players');
+    await storage.removeItem('tournaments');
     
     return {
       success: true,
