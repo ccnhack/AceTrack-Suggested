@@ -435,7 +435,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${config.API_BASE_URL}/api/data`, {
+      const res = await fetch(`${config.API_BASE_URL}/api/data?_t=${Date.now()}`, {
         headers,
         credentials: 'include'
       });

@@ -890,7 +890,9 @@ router.get('/support/analytics', apiKeyGuard, authGuard, async (req, res) => {
     });
 
     const overdueCount = tickets.filter(t => {
-      if (t.status === 'Closed' || t.status === 'Resolved') return false;
+      const status = (t.status || 'Open').toLowerCase();
+      if (status === 'closed' || status === 'resolved') return false;
+      if (!t.createdAt) return false;
       const created = new Date(t.createdAt);
       return (Date.now() - created.getTime()) > (48 * 60 * 60 * 1000);
     }).length;
@@ -1074,19 +1076,13 @@ router.post('/support/manage-user', apiKeyGuard, authGuard, async (req, res) => 
       playerDoc.markModified('data');
       await playerDoc.save();
 
-      // 📡 [REAL-TIME SYNC FIX] Sync player to AppState so Admin Hub sees the new supportStatus
+      // 📡 [REAL-TIME SYNC FIX] Bump AppState version so clients pull the new Player status
       const latestState = await AppState.findOne().sort({ version: -1 });
-      if (latestState && latestState.data && latestState.data.players) {
-         const players = latestState.data.players;
-         const idx = players.findIndex(p => String(p.id) === String(targetUserId));
-         if (idx !== -1) {
-            players[idx] = user;
-            latestState.markModified('data');
-            latestState.version += 1;
-            await latestState.save();
-            finalVersion = latestState.version;
-            console.log(`[SYNC] User ${targetUserId} status synced to AppState v${latestState.version}`);
-         }
+      if (latestState) {
+          latestState.version += 1;
+          await latestState.save();
+          finalVersion = latestState.version;
+          console.log(`[SYNC] User ${targetUserId} status updated. Global version bumped to v${latestState.version}`);
       }
     } finally {
       if (releaseUser) releaseUser();
