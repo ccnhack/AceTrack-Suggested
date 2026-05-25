@@ -14,12 +14,14 @@ const ACTION_LABELS = {
   'Security Setup Reached': { icon: '3️⃣', label: 'Security Setup Reached', color: '#EC4899' },
   form_submit: { icon: '✅', label: 'Form Submitted', color: '#10B981' },
 };
+const SUPPORT_HIERARCHY = ['Manager', 'Team Lead', 'Senior', 'Grade-7', 'Grade-5', 'Grade-3', 'Junior', 'Intern'];
 
 const AdminStaffPanel = () => {
   const { players } = usePlayersStore();
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [supportLevel, setSupportLevel] = useState('Intern');
   const [invites, setInvites] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [resendingToken, setResendingToken] = useState(null);
@@ -88,14 +90,14 @@ const AdminStaffPanel = () => {
         method: 'POST',
         headers,
         credentials: 'include',
-        body: JSON.stringify({ email, firstName: firstName.trim(), lastName: lastName.trim() })
+        body: JSON.stringify({ email, firstName: firstName.trim(), lastName: lastName.trim(), supportLevel })
       });
       const data = await res.json();
       if (res.ok) {
         const link = `https://acetrack-suggested.onrender.com/setup/${data.token}`;
         const emailNote = data.emailSent ? '📧 Onboarding email sent!' : '⚠️ Email not sent (configure GMAIL on Render)';
         Alert.alert("Invite Generated", `${emailNote}\n\nSetup Link:\n${link}`);
-        setEmail(''); setFirstName(''); setLastName('');
+        setEmail(''); setFirstName(''); setLastName(''); setSupportLevel('Intern');
         fetchInvites();
       } else if (res.status === 409) {
         Alert.alert(
@@ -319,6 +321,19 @@ const AdminStaffPanel = () => {
 
             <Text style={[styles.label, { marginTop: 12 }]}>Employee Corporate Email</Text>
             <TextInput style={styles.input} placeholder="e.g. j.doe@acetrack.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+
+            <Text style={[styles.label, { marginTop: 16 }]}>Initial Designation (Hidden during setup)</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4, marginBottom: 4 }} contentContainerStyle={{ gap: 8 }}>
+              {SUPPORT_HIERARCHY.map(level => (
+                <TouchableOpacity
+                  key={level}
+                  onPress={() => setSupportLevel(level)}
+                  style={[styles.hierarchyBtn, supportLevel === level && styles.hierarchyBtnActive]}
+                >
+                  <Text style={[styles.hierarchyBtnText, supportLevel === level && styles.hierarchyBtnTextActive]}>{level}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
             {firstName.trim() && lastName.trim() && (() => {
               const existingExEmployee = players?.find(p => 
@@ -741,6 +756,10 @@ const styles = StyleSheet.create({
   btn: { backgroundColor: '#4F46E5', borderRadius: 8, padding: 14, alignItems: 'center', marginTop: 16 },
   btnDisabled: { backgroundColor: '#94A3B8' },
   btnText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
+  hierarchyBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#FFF' },
+  hierarchyBtnActive: { backgroundColor: '#EEF2FF', borderColor: '#6366F1' },
+  hierarchyBtnText: { fontSize: 12, fontWeight: '700', color: '#64748B' },
+  hierarchyBtnTextActive: { color: '#6366F1' },
   inviteCard: { backgroundColor: '#FFF', padding: 16, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' },
   inviteHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   inviteName: { fontSize: 15, fontWeight: '800', color: '#0F172A', marginBottom: 2 },

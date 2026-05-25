@@ -66,6 +66,7 @@ const SupportInviteSchema = new mongoose.Schema({
   email: { type: String, required: true },
   firstName: { type: String, default: '' },
   lastName: { type: String, default: '' },
+  supportLevel: { type: String },
   token: { type: String, required: true, unique: true },
   status: { type: String, enum: ['Pending', 'Clicked', 'Used', 'Expired', 'Retired'], default: 'Pending' },
   clicks: [{

@@ -78,7 +78,7 @@ router.post('/otp/verify', otpLimiter, apiKeyGuard, (req, res) => {
 
 // 1. Generate Invite Link (Admin Only)
 router.post('/support/invite', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
-  const { email, firstName, lastName } = req.body;
+  const { email, firstName, lastName, supportLevel } = req.body;
   if (!email) return res.status(400).json({ error: 'Email required' });
   if (!firstName || !lastName) return res.status(400).json({ error: 'First name and last name are required' });
   
@@ -116,7 +116,7 @@ router.post('/support/invite', apiKeyGuard, authGuard, asyncHandler(async (req, 
   const token = bcrypt.hashSync(Date.now().toString() + email, 10).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // strict 24 hours
 
-  await SupportInvite.create({ email, firstName: firstName.trim(), lastName: lastName.trim(), token, expiresAt });
+  await SupportInvite.create({ email, firstName: firstName.trim(), lastName: lastName.trim(), supportLevel, token, expiresAt });
   await logAudit(req, 'SUPPORT_INVITE_GENERATED', [], { email, firstName, lastName });
 
   const setupLink = `https://acetrack-suggested.onrender.com/setup/${token}`;
@@ -484,8 +484,8 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
       phone: phone || '',
       password: bcrypt.hashSync(password, 10),
       supportStatus: 'active', // Restores access
-      supportLevel: 'Trainee',  // Default to Trainee on re-onboard
-      designation: 'Trainee',   // 🔄 Initialization sync
+      supportLevel: invite.supportLevel || 'Intern',  // Default from invite on re-onboard
+      designation: invite.supportLevel || 'Intern',   // 🔄 Initialization sync
       address: {
         line1: addressLine1 || '',
         line2: addressLine2 || '',
@@ -524,8 +524,8 @@ router.post('/support/invite/setup', upload.single('govId'), asyncHandler(async 
       password: bcrypt.hashSync(password, 10),
       role: 'support',
       supportStatus: 'active',
-      supportLevel: 'Trainee',  // ✨ Explicit Rank Initialization
-      designation: 'Trainee',   // 🔄 Explicit Designation Sync
+      supportLevel: invite.supportLevel || 'Intern',  // ✨ Explicit Rank Initialization
+      designation: invite.supportLevel || 'Intern',   // 🔄 Explicit Designation Sync
       address: {
         line1: addressLine1 || '',
         line2: addressLine2 || '',
