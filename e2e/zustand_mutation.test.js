@@ -14,30 +14,26 @@ describe('Zustand State Mutation Integrity', () => {
 
   beforeAll(async () => {
     await device.launchApp({
-      delete: true,
+      newInstance: true,
       launchArgs: { detoxPrintBusyIdleResources: 'YES' }
     });
     await new Promise(resolve => setTimeout(resolve, 3000));
   });
 
-  afterAll(async () => {
-    // Teardown
-    await device.disableSynchronization();
-    try { await element(by.id('nav.tab.Profile')).tap(); } catch(e){}
-    try {
-      await element(by.id('profile.scrollview')).scroll(800, 'down');
-      await element(by.id('profile.logout.button')).tap();
-    } catch(e){}
-    await device.enableSynchronization();
-  });
+  // afterAll teardown removed. setup.js globally wipes app data via adb pm clear
 
   it('1. Logs in and validates initial store hydration', async () => {
     await device.disableSynchronization();
     
     // Login flow
-    try { await element(by.id('landing.login.button')).tap(); } 
+    try { await element(by.id('landing.login.btn')).tap(); } 
     catch (e) { await element(by.text('LOGIN')).atIndex(0).tap(); }
     
+    try {
+      await waitFor(element(by.text('Using Local API'))).toBeVisible().withTimeout(1000);
+      await element(by.id('dev.toggle.cloud')).tap();
+    } catch (e) {}
+
     await element(by.id('auth.login.username.input')).replaceText('testindividual');
     await element(by.id('auth.login.password.input')).replaceText('password');
     await element(by.id('auth.login.password.input')).tapReturnKey();

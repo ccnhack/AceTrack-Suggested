@@ -1,11 +1,16 @@
 describe('Security & Identity Integrity', () => {
   beforeAll(async () => {
-    await device.launchApp({ delete: true });
+    await device.launchApp({ newInstance: true });
     // Seed test accounts
     await new Promise(resolve => setTimeout(resolve, 2000));
 
     // Login as testindividual
-    await element(by.id('landing.login.button')).tap();
+    await element(by.id('landing.login.btn')).tap();
+    try {
+      await waitFor(element(by.text('Using Local API'))).toBeVisible().withTimeout(1000);
+      await element(by.id('dev.toggle.cloud')).tap();
+    } catch (e) {}
+
     await element(by.id('auth.login.username.input')).replaceText('testindividual');
     await element(by.id('auth.login.password.input')).replaceText('password');
     await element(by.id('auth.login.submit.button')).tap();

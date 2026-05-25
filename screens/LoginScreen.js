@@ -800,6 +800,7 @@ const LoginScreen = ({ navigation }) => {
 
           {__DEV__ && (
             <TouchableOpacity 
+              testID="dev.toggle.cloud"
               onPress={onToggleCloud} 
               style={[styles.devToggle, isUsingCloud && styles.devToggleActive]}
             >

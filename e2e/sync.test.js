@@ -1,11 +1,16 @@
 describe('Sync & Conflict Resolution', () => {
   beforeAll(async () => {
-    await device.launchApp({ delete: true });
+    await device.launchApp({ newInstance: true });
     // Wait for TEST_API auto-seeding to complete
     await new Promise(resolve => setTimeout(resolve, 3000));
 
     // Login as admin (hardcoded in LoginScreen.js)
-    await element(by.id('landing.login.button')).tap();
+    await element(by.id('landing.login.btn')).tap();
+    try {
+      await waitFor(element(by.text('Using Local API'))).toBeVisible().withTimeout(1000);
+      await element(by.id('dev.toggle.cloud')).tap();
+    } catch (e) {}
+
     await element(by.id('auth.login.username.input')).replaceText('admin');
     await element(by.id('auth.login.password.input')).replaceText(process.env.ADMIN_PASSWORD || 'Password@123');
     await element(by.id('auth.login.password.input')).tapReturnKey();

@@ -4,16 +4,7 @@ import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 import storage, { thinPlayer, capPlayerDetail } from '../utils/storage';
 import { Alert } from 'react-native';
 
-// Cross-store imports to allow .getState() access
-import { usePlayersStore } from './usePlayersStore.js';
-import { useSyncStore } from './useSyncStore.js';
-import { useAppStore } from './useAppStore.js';
-import { useTournamentsStore } from './useTournamentsStore.js';
-import { useSupportStore } from './useSupportStore.js';
-import { useMatchmakingStore } from './useMatchmakingStore.js';
-import { useEvaluationsStore } from './useEvaluationsStore.js';
-import { useVideoStore } from './useVideoStore.js';
-
+// Removed unused cross-store imports that were causing require cycles.
 export const useAuthStore = create((set, get) => {
   return {
     // State

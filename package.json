@@ -66,8 +66,10 @@
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
+    "@config-plugins/detox": "^11.0.0",
     "babel-plugin-transform-remove-console": "^6.9.4",
-    "detox": "^20.18.1",
+    "detox": "^20.50.4",
+    "expo-build-properties": "^56.0.14",
     "jest": "^29.7.0",
     "jest-circus": "^29.7.0",
     "jest-expo": "~50.0.1"

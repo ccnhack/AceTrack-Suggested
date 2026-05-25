@@ -75,7 +75,7 @@ describe('Migration Feature Parity E2E', () => {
     // 4. Navigate to Login if on Landing
     if (!isOnLoginScreen) {
       try {
-        await element(by.id('landing.login.button')).tap();
+        await element(by.id('landing.login.btn')).tap();
       } catch (e) {
         await element(by.text('LOGIN')).atIndex(0).tap();
       }
@@ -83,6 +83,11 @@ describe('Migration Feature Parity E2E', () => {
 
     // 5. Fill credentials
     await device.enableSynchronization();
+    try {
+      await waitFor(element(by.text('Using Local API'))).toBeVisible().withTimeout(1000);
+      await element(by.id('dev.toggle.cloud')).tap();
+    } catch (e) {}
+
     await element(by.id('auth.login.username.input')).replaceText(username);
     await element(by.id('auth.login.password.input')).replaceText(password);
     await element(by.id('auth.login.password.input')).tapReturnKey();
@@ -101,14 +106,12 @@ describe('Migration Feature Parity E2E', () => {
     await device.disableSynchronization();
 
     // Dismiss any stray alerts
-    try { await element(by.text('OK')).tap(); } catch (e) {}
-    try { await element(by.text('Close')).tap(); } catch (e) {}
+    
     await new Promise(resolve => setTimeout(resolve, 500));
 
     // Navigate to Profile
-    await waitFor(element(by.id('nav.tab.Profile')))
-      .toBeVisible()
-      .withTimeout(TIMEOUT.MEDIUM);
+    await waitFor(element(by.id('nav.tab.Profile'))).toBeVisible().withTimeout(TIMEOUT.MEDIUM);
+    await device.enableSynchronization();
     await element(by.id('nav.tab.Profile')).tap();
 
     // Wait for profile to load
@@ -142,9 +145,8 @@ describe('Migration Feature Parity E2E', () => {
    */
   const navigateToTab = async (tabName) => {
     await device.disableSynchronization();
-    await waitFor(element(by.id(`nav.tab.${tabName}`)))
-      .toBeVisible()
-      .withTimeout(TIMEOUT.MEDIUM);
+    await waitFor(element(by.id(`nav.tab.${tabName}`))).toBeVisible().withTimeout(TIMEOUT.MEDIUM);
+    await device.enableSynchronization();
     await element(by.id(`nav.tab.${tabName}`)).tap();
     await new Promise(resolve => setTimeout(resolve, 2000));
   };
@@ -157,7 +159,7 @@ describe('Migration Feature Parity E2E', () => {
 
     beforeAll(async () => {
       await device.launchApp({
-        delete: true,
+        newInstance: true,
         launchArgs: { detoxPrintBusyIdleResources: 'YES' }
       });
       await new Promise(resolve => setTimeout(resolve, 3000));
@@ -276,7 +278,7 @@ describe('Migration Feature Parity E2E', () => {
 
     beforeAll(async () => {
       await device.launchApp({
-        delete: true,
+        newInstance: true,
         launchArgs: { detoxPrintBusyIdleResources: 'YES' }
       });
       await new Promise(resolve => setTimeout(resolve, 3000));
@@ -370,7 +372,7 @@ describe('Migration Feature Parity E2E', () => {
 
     beforeAll(async () => {
       await device.launchApp({
-        delete: true,
+        newInstance: true,
         permissions: { notifications: 'YES' },
         launchArgs: { detoxPrintBusyIdleResources: 'YES' }
       });
@@ -417,7 +419,7 @@ describe('Migration Feature Parity E2E', () => {
 
     beforeAll(async () => {
       await device.launchApp({
-        delete: true,
+        newInstance: true,
         launchArgs: { detoxPrintBusyIdleResources: 'YES' }
       });
       await new Promise(resolve => setTimeout(resolve, 3000));
@@ -482,7 +484,7 @@ describe('Migration Feature Parity E2E', () => {
 
     beforeAll(async () => {
       await device.launchApp({
-        delete: true,
+        newInstance: true,
         launchArgs: { detoxPrintBusyIdleResources: 'YES' }
       });
       await new Promise(resolve => setTimeout(resolve, 3000));
@@ -515,7 +517,7 @@ describe('Migration Feature Parity E2E', () => {
 
     beforeAll(async () => {
       await device.launchApp({
-        delete: true,
+        newInstance: true,
         launchArgs: { detoxPrintBusyIdleResources: 'YES' }
       });
       await new Promise(resolve => setTimeout(resolve, 3000));
@@ -629,7 +631,7 @@ describe('Migration Feature Parity E2E', () => {
 
     beforeAll(async () => {
       await device.launchApp({
-        delete: true,
+        newInstance: true,
         launchArgs: { detoxPrintBusyIdleResources: 'YES' }
       });
       await new Promise(resolve => setTimeout(resolve, 3000));

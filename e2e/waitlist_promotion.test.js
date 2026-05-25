@@ -3,7 +3,7 @@ describe('Tournament Waitlist Promotion E2E', () => {
 
   beforeAll(async () => {
     await device.launchApp({ 
-      delete: true,
+      newInstance: true,
       launchArgs: { detoxPrintBusyIdleResources: 'YES' }
     });
     await new Promise(resolve => setTimeout(resolve, 3000));
@@ -68,6 +68,11 @@ describe('Tournament Waitlist Promotion E2E', () => {
     await waitFor(element(by.id('auth.login.username.input'))).toBeVisible().withTimeout(5000).catch(() => {});
     
     await device.enableSynchronization();
+    try {
+      await waitFor(element(by.text('Using Local API'))).toBeVisible().withTimeout(1000);
+      await element(by.id('dev.toggle.cloud')).tap();
+    } catch (e) {}
+
     await element(by.id('auth.login.username.input')).clearText();
     await element(by.id('auth.login.username.input')).typeText(username);
     await element(by.id('auth.login.password.input')).clearText();

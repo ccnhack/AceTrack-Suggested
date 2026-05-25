@@ -5,7 +5,6 @@
     "version": "2.6.551",
     "sdkVersion": "50.0.0",
     "scheme": "acetrack",
-
     "platforms": [
       "ios",
       "android",
@@ -39,6 +38,15 @@
         {
           "icon": "./assets/icon.png",
           "color": "#3B82F6"
+        }
+      ],
+      "@config-plugins/detox",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 24
+          }
         }
       ]
     ],

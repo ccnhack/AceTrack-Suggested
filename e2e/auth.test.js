@@ -1,17 +1,17 @@
 describe('Authentication Flow', () => {
   beforeAll(async () => {
-    await device.launchApp({ delete: true });
+    await device.launchApp({ newInstance: true });
     // Wait for TEST_API auto-seeding to complete
     await new Promise(resolve => setTimeout(resolve, 3000));
   });
 
   it('should show landing screen on first launch', async () => {
-    await expect(element(by.id('landing.login.button'))).toBeVisible();
+    await expect(element(by.id('landing.login.btn'))).toBeVisible();
     await expect(element(by.id('landing.signup.button'))).toBeVisible();
   });
 
   it('should navigate to login screen', async () => {
-    await element(by.id('landing.login.button')).tap();
+    await element(by.id('landing.login.btn')).tap();
     await expect(element(by.id('auth.login.username.input'))).toBeVisible();
   });
 
@@ -19,6 +19,11 @@ describe('Authentication Flow', () => {
     // Admin login (v2.6.171: Use environment variables for CI/CD)
     const ADMIN_ID = process.env.ADMIN_ID || 'admin';
     const ADMIN_PW = process.env.ADMIN_PASSWORD || 'Password@123';
+    try {
+      await waitFor(element(by.text('Using Local API'))).toBeVisible().withTimeout(1000);
+      await element(by.id('dev.toggle.cloud')).tap();
+    } catch (e) {}
+
     await element(by.id('auth.login.username.input')).replaceText(ADMIN_ID);
     await element(by.id('auth.login.password.input')).replaceText(ADMIN_PW);
     await element(by.id('auth.login.password.input')).tapReturnKey();
@@ -50,7 +55,7 @@ describe('Authentication Flow', () => {
     await element(by.id('profile.logout.button')).tap();
     
     // After logout, landing screen should appear again
-    await waitFor(element(by.id('landing.login.button')))
+    await waitFor(element(by.id('landing.login.btn')))
       .toBeVisible()
       .withTimeout(10000);
     

@@ -45,14 +45,20 @@ describe('Complete System Regression E2E', () => {
     }
 
     if (!isOnLoginScreen) {
-      try {
-        await element(by.id('landing.login.button')).tap();
-      } catch (e) {
+        await element(by.id('landing.login.btn')).tap();
         await element(by.text('LOGIN')).atIndex(0).tap();
       }
     }
 
     await device.enableSynchronization();
+    
+    try {
+      await waitFor(element(by.text('Using Local API'))).toBeVisible().withTimeout(1000);
+      await element(by.id('dev.toggle.cloud')).tap();
+    } catch (e) {
+      // Already using Cloud API or toggle not present
+    }
+
     await element(by.id('auth.login.username.input')).replaceText(username);
     await element(by.id('auth.login.password.input')).replaceText(password);
     await element(by.id('auth.login.password.input')).tapReturnKey();
@@ -67,10 +73,10 @@ describe('Complete System Regression E2E', () => {
   const performLogout = async () => {
     await device.disableSynchronization();
 
-    try { await element(by.text('OK')).tap(); } catch (e) {}
-    try { await element(by.text('Close')).tap(); } catch (e) {}
+    
 
     await waitFor(element(by.id('nav.tab.Profile'))).toBeVisible().withTimeout(TIMEOUT.MEDIUM);
+    await device.enableSynchronization();
     await element(by.id('nav.tab.Profile')).tap();
 
     await waitFor(element(by.id('profile.scrollview'))).toBeVisible().withTimeout(TIMEOUT.MEDIUM);
@@ -90,27 +96,20 @@ describe('Complete System Regression E2E', () => {
   const navigateToTab = async (tabName) => {
     await device.disableSynchronization();
     await waitFor(element(by.id(`nav.tab.${tabName}`))).toBeVisible().withTimeout(TIMEOUT.MEDIUM);
+    await device.enableSynchronization();
     await element(by.id(`nav.tab.${tabName}`)).tap();
     await new Promise(resolve => setTimeout(resolve, 2000));
   };
 
   beforeAll(async () => {
     await device.launchApp({
-      delete: true,
+      newInstance: true,
       launchArgs: { detoxPrintBusyIdleResources: 'YES' }
     });
     await new Promise(resolve => setTimeout(resolve, 3000));
   });
 
-  afterAll(async () => {
-    // Teardown block ensures any session left open is closed
-    try {
-      await performLogout();
-    } catch (e) {
-      console.log("Cleanup: Already logged out or unable to find logout button.");
-    }
-  });
-
+  // afterAll teardown removed. setup.js globally wipes app data via adb pm clear
   it('1. Authenticates successfully with test seed credentials', async () => {
     // Uses the deterministically seeded account in test_api.js
     await performLogin('testindividual', 'password');
@@ -186,8 +185,12 @@ describe('Complete System Regression E2E', () => {
     
     await navigateToTab('Profile');
     
-    // Tap Help & Support
-    await waitFor(element(by.text('Help & Support'))).toBeVisible().withTimeout(TIMEOUT.SHORT);
+    // Tap Help & Support (scroll down if necessary since it's at the bottom)
+    await waitFor(element(by.text('Help & Support')))
+      .toBeVisible()
+      .whileElement(by.id('profile.scrollview'))
+      .scroll(200, 'down');
+    
     await element(by.text('Help & Support')).tap();
     
     // Wait for Support Center

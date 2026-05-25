@@ -18,7 +18,7 @@ describe('Pre-Signup OTP Verification Integrity', () => {
 
   beforeAll(async () => {
     await device.launchApp({
-      delete: true,
+      newInstance: true,
       launchArgs: { detoxPrintBusyIdleResources: 'YES' }
     });
     // Wait for auto-seeding

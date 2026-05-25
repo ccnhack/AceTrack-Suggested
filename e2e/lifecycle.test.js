@@ -1,7 +1,7 @@
 describe('Tournament Lifecycle E2E', () => {
   beforeAll(async () => {
     await device.launchApp({ 
-      delete: true,
+      newInstance: true,
       launchArgs: { detoxPrintBusyIdleResources: 'YES' }
     });
     // Wait for auto-seeding
@@ -44,7 +44,7 @@ describe('Tournament Lifecycle E2E', () => {
     // 2. Perform Login Navigation (if on Landing)
     if (!isOnLoginScreen) {
       try {
-        await element(by.id('landing.login.button')).tap();
+        await element(by.id('landing.login.btn')).tap();
       } catch (e) {
         console.log('🧪 [TEST_DEBUG] Landing Login button ID tap failed, trying text target...');
         await element(by.text('LOGIN')).atIndex(0).tap();
@@ -52,6 +52,11 @@ describe('Tournament Lifecycle E2E', () => {
     }
     await device.enableSynchronization();
     
+    try {
+      await waitFor(element(by.text('Using Local API'))).toBeVisible().withTimeout(1000);
+      await element(by.id('dev.toggle.cloud')).tap();
+    } catch (e) {}
+
     await element(by.id('auth.login.username.input')).replaceText(username);
     await element(by.id('auth.login.password.input')).replaceText(password);
     await element(by.id('auth.login.password.input')).tapReturnKey();
@@ -115,10 +120,10 @@ describe('Tournament Lifecycle E2E', () => {
     await performLogin('testingacademy', 'password');
 
     // Navigate to Academy Hub
-    await waitFor(element(by.id('tab.academy')))
+    await waitFor(element(by.id('nav.tab.Academy')))
       .toBeVisible()
       .withTimeout(15000);
-    await element(by.id('tab.academy')).tap();
+    await element(by.id('nav.tab.Academy')).tap();
 
     // Wait for Academy Hub Create Button
     await waitFor(element(by.id('academy.createTournament.btn')))
@@ -221,10 +226,10 @@ describe('Tournament Lifecycle E2E', () => {
     await device.disableSynchronization();
 
     // 2. Navigate to Academy Hub
-    await waitFor(element(by.id('tab.academy')))
+    await waitFor(element(by.id('nav.tab.Academy')))
       .toBeVisible()
       .withTimeout(15000);
-    await element(by.id('tab.academy')).tap();
+    await element(by.id('nav.tab.Academy')).tap();
 
     // Give Academy Hub time to fully render and hydrate tournament list
     await new Promise(resolve => setTimeout(resolve, 3000));

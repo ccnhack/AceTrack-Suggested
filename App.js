@@ -1,7 +1,10 @@
 import React, { useRef, useState } from 'react';
 import { 
-  View, Text, StyleSheet, StatusBar, ActivityIndicator, Modal, TouchableOpacity, Platform, Alert
+  View, Text, StyleSheet, StatusBar, ActivityIndicator, Modal, TouchableOpacity, Platform, Alert, LogBox
 } from 'react-native';
+
+// 🛡️ Disable all yellow warning overlays during E2E tests
+LogBox.ignoreAllLogs();
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';

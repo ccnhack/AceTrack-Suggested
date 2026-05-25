@@ -1022,6 +1022,7 @@ export const SupportTicketSystem = ({
                       style={[styles.csatSubmitBtn, isSubmittingRating && styles.csatSubmitBtnDisabled]} 
                       onPress={() => handleRateTicket(csatRating)}
                       disabled={isSubmittingRating}
+                      testID="support.ticket.submit"
                     >
                       {isSubmittingRating ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.csatSubmitBtnText}>Submit Feedback</Text>}
                     </TouchableOpacity>
