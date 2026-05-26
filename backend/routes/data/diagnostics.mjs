@@ -102,7 +102,7 @@ router.get('/diagnostics', apiKeyGuard, sensitiveCacheGuard, asyncHandler(async 
     res.json({ success: true, files: sortedFiles });
   } catch (error) {
     console.error('Diagnostics Fetch Error:', error);
-    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 }));
 

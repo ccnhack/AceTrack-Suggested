@@ -277,7 +277,7 @@ router.get('/status', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       latestAppVersion: APP_VERSION
     });
   } catch (error) {
-    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -450,24 +450,33 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
             }
           }
           else if (atomicKeys.includes(key) && key !== 'players') {
-            console.log(`[SYNC_DEBUG] Atomic Overwrite for key: ${key} (${incoming.length} items)`);
-            // 🛡️ [DELETE_AUDIT] (v2.6.511): Log which items were removed during atomic overwrite
-            if (key === 'tournaments' && currentData.tournaments) {
-              const incomingIds = new Set(incoming.map(t => String(t.id).toLowerCase()));
-              const removedIds = currentData.tournaments
-                .filter(t => t && t.id && !incomingIds.has(String(t.id).toLowerCase()))
-                .map(t => ({ id: t.id, title: t.title }));
-              if (removedIds.length > 0) {
-                console.log(`🗑️ [DELETE_AUDIT] Tournaments REMOVED via atomic overwrite: ${JSON.stringify(removedIds)}`);
-                logAudit(req, 'TOURNAMENT_DELETED', ['tournaments'], { 
-                  deletedTournaments: removedIds, 
-                  remainingCount: incoming.length,
-                  userId: req.headers['x-user-id'] 
-                }).catch(() => {});
+            // 🛡️ [ATOMIC_GUARD] (Phase 1 Concurrency Fix): Block standard users from overwriting entire tournament collections
+            if (key === 'tournaments' && req.userRole !== 'admin') {
+              console.warn(`🛑 [ATOMIC_GUARD] Blocked unauthorized atomic overwrite of tournaments by ${req.userRole || 'user'} (userId: ${req.headers['x-user-id']})`);
+              // Do NOT `continue`. Fall through to standard delta merge logic below.
+            } else if (['supportTickets', 'matchVideos'].includes(key)) {
+              console.warn(`🛑 [ATOMIC_GUARD] Blocked atomic overwrite of ${key}. This collection must be updated via REST APIs only.`);
+              // Fall through to standard delta merge logic
+            } else {
+              console.log(`[SYNC_DEBUG] Atomic Overwrite for key: ${key} (${incoming.length} items)`);
+              // 🛡️ [DELETE_AUDIT] (v2.6.511): Log which items were removed during atomic overwrite
+              if (key === 'tournaments' && currentData.tournaments) {
+                const incomingIds = new Set(incoming.map(t => String(t.id).toLowerCase()));
+                const removedIds = currentData.tournaments
+                  .filter(t => t && t.id && !incomingIds.has(String(t.id).toLowerCase()))
+                  .map(t => ({ id: t.id, title: t.title }));
+                if (removedIds.length > 0) {
+                  console.log(`🗑️ [DELETE_AUDIT] Tournaments REMOVED via atomic overwrite: ${JSON.stringify(removedIds)}`);
+                  logAudit(req, 'TOURNAMENT_DELETED', ['tournaments'], { 
+                    deletedTournaments: removedIds, 
+                    remainingCount: incoming.length,
+                    userId: req.headers['x-user-id'] 
+                  }).catch(() => {});
+                }
               }
+              newMasterData[key] = incoming;
+              continue; 
             }
-            newMasterData[key] = incoming;
-            continue; 
           }
           const entityMap = new Map();
           (currentData[key] || []).forEach(e => { if (e && e.id) entityMap.set(String(e.id).toLowerCase(), e); });
@@ -1274,7 +1283,7 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
     }
   } catch (error) {
     console.error("❌ Save Error:", error);
-    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message });
+    res.status(500).json({ error: 'Internal server error' });
   } finally {
     release();
   }

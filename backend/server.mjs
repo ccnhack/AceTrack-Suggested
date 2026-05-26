@@ -47,7 +47,8 @@ import {
   apiKeyGuard, authGuard, sensitiveCacheGuard,
   createRateLimiters, getSanitizedState,
   DiagnosticsSchema, AutoFlushSchema, SaveDataSchema, validate,
-  hashOtp, compareOtp
+  hashOtp, compareOtp,
+  generateCsrfToken, csrfGuard
 } from './middleware/security.mjs';
 import createAuthRoutes from './routes/auth.mjs';
 import createDataRoutes from './routes/data.mjs';
@@ -56,9 +57,11 @@ import createAdminCoreRoutes from './routes/admin_core.mjs';
 import createHrRoutes from './routes/hr.mjs';
 import createCommsRoutes from './routes/comms.mjs';
 import createWebRoutes from './routes/web.mjs';
+import createInfrastructureRoutes from './routes/infrastructure.mjs';
+import tournamentsRoutes from './routes/tournaments.mjs';
+import evaluationsRoutes from './routes/evaluations.mjs';
 import registerWebSocketHandlers from './services/websocket.mjs';
 import initScheduler from './services/scheduler.mjs';
-import createInfrastructureRoutes from './routes/infrastructure.mjs';
 
 dotenv.config();
 
@@ -106,7 +109,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.553'; // Critical for Update prompts 
+const APP_VERSION = '2.6.556'; // Critical for Update prompts 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -133,7 +136,12 @@ const signToken = (user, jti = null) => {
   };
   if (jti) payload.jti = jti;
   
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
+  // 🛡️ [VAPT-F21] (v2.6.556): Add audience & issuer claims to prevent cross-service token reuse
+  return jwt.sign(payload, JWT_SECRET, { 
+    expiresIn: '24h',
+    issuer: 'acetrack-api',
+    audience: 'acetrack-client'
+  });
 };
 
 // 🛡️ SECURITY: Real-time Alerting (v2.6.191)
@@ -225,7 +233,7 @@ app.use((req, res, next) => {
     // 🛡️ [SESSION_AWARE_GUARD] (v2.6.258): Allow refresh if valid session cookie exists
     if (!isAuthorized && cookieToken) {
       try {
-        const decoded = jwt.verify(cookieToken, JWT_SECRET);
+        const decoded = jwt.verify(cookieToken, JWT_SECRET, { issuer: 'acetrack-api', audience: 'acetrack-client' });
         if (decoded.role === 'admin' || decoded.role === 'support') {
           isAuthorized = true;
         }
@@ -421,7 +429,7 @@ io.use((socket, next) => {
       const token = cookies['acetrack_session'];
       if (token) {
         try {
-          const decoded = jwt.verify(token, JWT_SECRET);
+          const decoded = jwt.verify(token, JWT_SECRET, { issuer: 'acetrack-api', audience: 'acetrack-client' });
           socket.user = decoded;
           console.log(`✅ [WS_AUTH] Authenticated Web socket ${socket.id} via HttpOnly Cookie (User: ${decoded.id})`);
           return next();
@@ -500,12 +508,54 @@ const startServices = async () => {
     }
     
     // 🛡️ [ADMIN SEED] (v2.6.521): Ensure admin player document exists in the Player collection.
-    // If missing (e.g. fresh DB or accidental deletion), creates one with hashed default password.
-    // Does NOT overwrite an existing admin — preserves any password changes made via the change-password flow.
+    // 🛡️ [VAPT-F11] (v2.6.556): Random password generation + email notification. No hardcoded defaults.
     try {
       const existingAdmin = await Player.findOne({ id: 'admin' }).lean();
+      
+      const generateRandomPassword = () => {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*';
+        let password = '';
+        const randomBytes = crypto.randomBytes(24);
+        for (let i = 0; i < 24; i++) {
+          password += chars[randomBytes[i] % chars.length];
+        }
+        return password;
+      };
+      
+      const sendAdminPasswordEmail = async (password, reason) => {
+        try {
+          const nodemailer = (await import('nodemailer')).default;
+          const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+              user: process.env.SMTP_USER || 'acetrack.noreply@gmail.com',
+              pass: process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD
+            }
+          });
+          await transporter.sendMail({
+            from: '"AceTrack Security" <acetrack.noreply@gmail.com>',
+            to: 'acetrack.noreply@gmail.com',
+            subject: `🔐 [SECURITY ALERT] Admin Password ${reason}`,
+            html: `
+              <h2>AceTrack Admin Password ${reason}</h2>
+              <p><strong>Reason:</strong> ${reason}</p>
+              <p><strong>Temporary Password:</strong> <code>${password}</code></p>
+              <p><strong>Time:</strong> ${new Date().toISOString()}</p>
+              <p>⚠️ Please change this password immediately after login.</p>
+              <p><em>This is an automated security notification from AceTrack Backend.</em></p>
+            `
+          });
+          console.log('📧 [ADMIN SEED] Password notification email sent to acetrack.noreply@gmail.com');
+        } catch (emailErr) {
+          console.error('❌ [ADMIN SEED] Failed to send email notification:', emailErr.message);
+          // Log password to server event as fallback (redacted in logs)
+          logServerEvent('ADMIN_SEED_EMAIL_FAILED', { error: emailErr.message, passwordHint: password.substring(0, 3) + '***' });
+        }
+      };
+      
       if (!existingAdmin) {
-        const hashedPassword = await bcrypt.hash('Password@123', 10);
+        const randomPw = generateRandomPassword();
+        const hashedPassword = await bcrypt.hash(randomPw, 10);
         await Player.create({
           id: 'admin',
           data: {
@@ -513,23 +563,27 @@ const startServices = async () => {
             name: 'System Admin',
             role: 'admin',
             email: '',
-            password: hashedPassword
+            password: hashedPassword,
+            mustChangePassword: true
           },
           lastUpdated: new Date()
         });
-        console.log('✅ [ADMIN SEED] Admin player document created with default credentials.');
-        logServerEvent('ADMIN_SEED_CREATED', { message: 'Admin user was missing from Player collection and has been seeded.' });
+        console.log('✅ [ADMIN SEED] Admin player document created with random credentials.');
+        logServerEvent('ADMIN_SEED_CREATED', { message: 'Admin user was missing and has been seeded with a random password.' });
+        await sendAdminPasswordEmail(randomPw, 'New Admin Account Created');
       } else {
         // 🛡️ Check if password field is missing or empty (corrupted document)
         const adminWithPw = await Player.findOne({ id: 'admin' }).select('+data.password').lean();
         if (!adminWithPw?.data?.password) {
-          const hashedPassword = await bcrypt.hash('Password@123', 10);
+          const randomPw = generateRandomPassword();
+          const hashedPassword = await bcrypt.hash(randomPw, 10);
           await Player.updateOne(
             { id: 'admin' },
-            { $set: { 'data.password': hashedPassword, lastUpdated: new Date() } }
+            { $set: { 'data.password': hashedPassword, 'data.mustChangePassword': true, lastUpdated: new Date() } }
           );
-          console.log('⚠️ [ADMIN SEED] Admin had no password — reset to default hashed credentials.');
-          logServerEvent('ADMIN_PASSWORD_REPAIRED', { message: 'Admin password was null/empty and has been reset to default.' });
+          console.log('⚠️ [ADMIN SEED] Admin had no password — reset to random credentials.');
+          logServerEvent('ADMIN_PASSWORD_REPAIRED', { message: 'Admin password was null/empty and has been reset to a random value.' });
+          await sendAdminPasswordEmail(randomPw, 'Password Reset (Empty/Corrupted)');
         } else {
           console.log('✅ [ADMIN SEED] Admin player document exists and has a password. No action taken.');
         }
@@ -722,6 +776,13 @@ app.use((req, res, next) => {
   next();
 });
 
+// 🛡️ [VAPT-F09] (v2.6.556): CSRF Token Endpoint for Web Admin/Support
+app.get('/api/csrf-token', apiKeyGuard, generateCsrfToken);
+// Apply CSRF guard to web admin/support state-changing routes
+app.use('/api/v1/admin', csrfGuard);
+app.use('/api/support', csrfGuard);
+app.use('/api/comms', csrfGuard);
+
 app.use('/api/v1', authRoutes);
 
 const dataRoutes = createDataRoutes({
@@ -772,6 +833,9 @@ const infrastructureRoutes = createInfrastructureRoutes({
 });
 app.use('/', infrastructureRoutes);
 app.use('/api/v1', infrastructureRoutes); // 🛡️ COMPATIBILITY FIX (v2.6.174): Support versioned API calls from web/mobile clients
+
+app.use('/api/v1/tournaments', tournamentsRoutes({ io }));
+app.use('/api/v1/evaluations', evaluationsRoutes({ io }));
 
 
 // [Consolidated with primary /health guard at /api/v1/health]

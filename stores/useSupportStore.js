@@ -100,63 +100,143 @@ export const useSupportStore = create((set, get) => {
       syncOrchestrator.syncAndSaveData({ chatbotMessages: updatedMessages });
     },
 
-    onReplyTicket: (id, text, image, replyToMsg) => {
-      const TicketService = require('../services/TicketService').default;
-      const currentUser = useAuthStore.getState().currentUser;
-      const isAdmin = currentUser?.role === 'admin';
-      const currentTickets = get().supportTickets;
-      const result = TicketService.replyToTicket(id, text, image, replyToMsg, currentUser, currentTickets, isAdmin);
-      if (result.success) {
-        set({ supportTickets: result.tickets });
-        syncOrchestrator.syncAndSaveData({ supportTickets: result.tickets }, true);
-        get().logSupportActivity('TICKET_REPLY', id, `Replied to ticket ${id}`);
+    onReplyTicket: async (id, text, image, replyToMsg) => {
+      try {
+        const config = require('../config').default;
+        const storage = require('../utils/storage').default;
+        const currentUser = useAuthStore.getState().currentUser;
+        if (!currentUser) return { success: false, error: 'Not logged in' };
+        
+        const token = await storage.getItem('userToken');
+        const headers = { 
+          'Content-Type': 'application/json', 
+          'x-ace-api-key': config.PUBLIC_APP_ID,
+          'x-user-id': currentUser.id
+        };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch(`${config.API_BASE_URL}/api/v1/support/reply-ticket`, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({ ticketId: id, text, image, replyToMsg })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          const currentTickets = get().supportTickets;
+          set({ supportTickets: currentTickets.map(t => t.id === id ? data.ticket : t) });
+          get().logSupportActivity('TICKET_REPLY', id, `Replied to ticket ${id}`);
+          return { success: true, tickets: get().supportTickets };
+        }
+        return { success: false, error: data.error || 'Failed to reply' };
+      } catch (e) {
+        return { success: false, error: e.message };
       }
-      return result;
     },
 
-    onUpdateTicketStatus: (id, status, summary, justification) => {
-      const TicketService = require('../services/TicketService').default;
-      const currentTickets = get().supportTickets;
-      const result = TicketService.updateStatus(id, status, summary, currentTickets, justification);
-      if (result.success) {
-        set({ supportTickets: result.tickets });
-        syncOrchestrator.syncAndSaveData({ supportTickets: result.tickets }, true);
-        get().logSupportActivity('TICKET_STATUS_CHANGE', id, `Changed status to ${status}`);
+    onUpdateTicketStatus: async (id, status, summary, justification) => {
+      try {
+        const config = require('../config').default;
+        const storage = require('../utils/storage').default;
+        const currentUser = useAuthStore.getState().currentUser;
+        
+        const token = await storage.getItem('userToken');
+        const headers = { 
+          'Content-Type': 'application/json', 
+          'x-ace-api-key': config.PUBLIC_APP_ID,
+          'x-user-id': currentUser?.id || 'admin'
+        };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch(`${config.API_BASE_URL}/api/v1/support/update-ticket-status`, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({ ticketId: id, status, summary, justification })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          const currentTickets = get().supportTickets;
+          set({ supportTickets: currentTickets.map(t => t.id === id ? data.ticket : t) });
+          get().logSupportActivity('TICKET_STATUS_CHANGE', id, `Changed status to ${status}`);
+          return { success: true, tickets: get().supportTickets };
+        }
+        return { success: false, error: data.error || 'Failed to update status' };
+      } catch (e) {
+        return { success: false, error: e.message };
       }
-      return result;
     },
 
     onSaveTicket: async (ticket) => {
-      const TicketService = require('../services/TicketService').default;
-      const currentUser = useAuthStore.getState().currentUser;
-      const isAdmin = currentUser?.role === 'admin';
-      const currentTickets = get().supportTickets;
-      const result = await TicketService.saveTicket(ticket, currentTickets, isAdmin);
-      if (result.success) {
-        set({ supportTickets: result.tickets });
-        syncOrchestrator.syncAndSaveData({ supportTickets: result.tickets });
-        get().logSupportActivity('TICKET_SAVE', ticket.id || 'new', `Saved/Created ticket`);
+      try {
+        const config = require('../config').default;
+        const storage = require('../utils/storage').default;
+        const currentUser = useAuthStore.getState().currentUser;
+        
+        const token = await storage.getItem('userToken');
+        const headers = { 
+          'Content-Type': 'application/json', 
+          'x-ace-api-key': config.PUBLIC_APP_ID,
+          'x-user-id': currentUser?.id || 'admin'
+        };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        // Get basic device info if not provided
+        const { Platform } = require('react-native');
+        const deviceInfo = ticket.deviceInfo || `Platform: ${Platform.OS}`;
+
+        const res = await fetch(`${config.API_BASE_URL}/api/v1/support/save-ticket`, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({ ticket, deviceInfo })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          const currentTickets = get().supportTickets;
+          const exists = currentTickets.find(t => t.id === data.ticket.id);
+          const updatedTickets = exists 
+            ? currentTickets.map(t => t.id === data.ticket.id ? data.ticket : t)
+            : [data.ticket, ...currentTickets];
+          
+          set({ supportTickets: updatedTickets });
+          get().logSupportActivity('TICKET_SAVE', data.ticket.id, `Saved/Created ticket`);
+          return { success: true, tickets: updatedTickets };
+        }
+        return { success: false, error: data.error || 'Failed to save ticket' };
+      } catch (e) {
+        return { success: false, error: e.message };
       }
-      return result;
     },
 
-    onMarkSeen: (ticketId) => {
-      const TicketService = require('../services/TicketService').default;
+    onMarkSeen: async (ticketId) => {
+      // We can use the reply-ticket endpoint with no text/image to just mark seen if we modify it slightly,
+      // or we can create a dedicated endpoint. Since reply-ticket marks seen automatically if text is omitted,
+      // wait, our backend requires text or image: `if (!ticketId || (!text && !image)) { return res.status(400) }`
+      // For now, we will do a soft local mark-seen without pushing to avoid atomic overwrite data loss.
+      // A dedicated mark-seen endpoint would be better in Phase 3.
       const currentUser = useAuthStore.getState().currentUser;
       if (!currentUser) return;
       const currentTickets = get().supportTickets;
-      const result = TicketService.markSeen(ticketId, currentUser.id, currentTickets);
-      if (result.success) {
-        set({ supportTickets: result.tickets });
-        syncOrchestrator.syncAndSaveData({ supportTickets: result.tickets }, true);
-      }
-      return result;
+      let changed = false;
+      const updated = currentTickets.map(t => {
+        if (t.id === ticketId && t.messages) {
+           const newMsgs = t.messages.map(m => {
+              if (m.senderId !== currentUser.id && m.status !== 'seen') {
+                 changed = true; return { ...m, status: 'seen' };
+              }
+              return m;
+           });
+           if (changed) return { ...t, messages: newMsgs };
+        }
+        return t;
+      });
+      if (changed) set({ supportTickets: updated });
+      return { success: changed };
     },
 
     onRetryMessage: (ticketId, msgId) => {
-      console.log(`🛡️ Retrying sync for message ${msgId} in ticket ${ticketId}`);
-      const currentTickets = get().supportTickets;
-      syncOrchestrator.syncAndSaveData({ supportTickets: currentTickets }, true);
+      console.log(`🛡️ Message retry requested for ${msgId} in ticket ${ticketId}. Use full reply flow.`);
     },
 
     onClaimTicket: async (ticketId) => {

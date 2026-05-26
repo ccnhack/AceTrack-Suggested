@@ -102,7 +102,11 @@ export const apiKeyGuard = async (req, res, next) => {
   // 1. JWT TOKEN (v2.6.190): High-security authenticated session
   if (bearerToken) {
     try {
-      const decoded = jwt.verify(bearerToken, JWT_SECRET);
+      // 🛡️ [VAPT-F21] (v2.6.556): Validate issuer & audience claims
+      const decoded = jwt.verify(bearerToken, JWT_SECRET, {
+        issuer: 'acetrack-api',
+        audience: 'acetrack-client'
+      });
       
       // 🛡️ [PERFORMANCE FIX] (v2.6.325): Targeted Player.findOne is sub-ms.
       // 🛡️ [HIERARCHY ENRICHMENT] (v2.6.445): Hoisted outside role-check block so
@@ -212,9 +216,12 @@ export const authGuard = (req, res, next) => {
 // ═══════════════════════════════════════════════════════════════
 export const createRateLimiters = (appVersion) => {
   const skipTestRequests = (req) => {
-    // 🛡️ [SECURITY FIX] (v2.6.433): Removed fragile User-Agent based bypass for Slackbot.
-    // Relies strictly on the internal test-bypass header which is not exposed to the public internet.
-    return req.headers['x-ace-test-bypass'] === 'true';
+    // 🛡️ [VAPT-F03] (v2.6.556): Rate limit bypass DISABLED in production.
+    // In non-production, requires TEST_BYPASS_SECRET env var to match.
+    if (process.env.NODE_ENV === 'production') return false;
+    const bypassSecret = process.env.TEST_BYPASS_SECRET;
+    if (!bypassSecret) return false;
+    return req.headers['x-ace-test-bypass'] === bypassSecret;
   };
 
   const globalApiLimiter = rateLimit({
@@ -426,5 +433,72 @@ export const sensitiveCacheGuard = (req, res, next) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
+  next();
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 🛡️ [VAPT-F09] (v2.6.556): CSRF Protection for Web Admin/Support
+// Uses double-submit cookie pattern. Token generated on GET /api/csrf-token,
+// validated on state-changing requests from web origins.
+// ═══════════════════════════════════════════════════════════════
+import crypto from 'crypto';
+
+const CSRF_SECRET = process.env.CSRF_SECRET || crypto.randomBytes(32).toString('hex');
+const CSRF_COOKIE_NAME = 'acetrack_csrf';
+const CSRF_HEADER_NAME = 'x-csrf-token';
+
+export const generateCsrfToken = (req, res) => {
+  const token = crypto.randomBytes(32).toString('hex');
+  const hmac = crypto.createHmac('sha256', CSRF_SECRET).update(token).digest('hex');
+  const csrfValue = `${token}.${hmac}`;
+  
+  res.cookie(CSRF_COOKIE_NAME, csrfValue, {
+    httpOnly: false, // Must be readable by JS to send as header
+    sameSite: 'strict',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 4 * 60 * 60 * 1000 // 4 hours
+  });
+  
+  res.json({ success: true, csrfToken: csrfValue });
+};
+
+export const csrfGuard = (req, res, next) => {
+  // Skip CSRF for non-browser requests (mobile app uses Authorization header, no cookies)
+  const origin = req.headers.origin || '';
+  const isWebRequest = origin.includes('localhost') || origin.includes('render.com') || origin.includes('acetrack');
+  const hasCookie = !!req.cookies?.acetrack_session;
+  
+  // Only enforce CSRF for web-based cookie-authenticated requests
+  if (!isWebRequest && !hasCookie) return next();
+  
+  // Skip safe methods
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  
+  const headerToken = req.headers[CSRF_HEADER_NAME];
+  const cookieToken = req.cookies?.[CSRF_COOKIE_NAME];
+  
+  if (!headerToken || !cookieToken) {
+    console.warn(`🛑 [CSRF] Missing token. Header: ${!!headerToken}, Cookie: ${!!cookieToken}, Path: ${req.path}`);
+    return res.status(403).json({ error: 'CSRF validation failed. Please refresh the page.' });
+  }
+  
+  // Validate double-submit: header token must match cookie token
+  if (headerToken !== cookieToken) {
+    console.warn(`🛑 [CSRF] Token mismatch on ${req.path}`);
+    return res.status(403).json({ error: 'CSRF validation failed. Token mismatch.' });
+  }
+  
+  // Validate HMAC integrity
+  const parts = headerToken.split('.');
+  if (parts.length !== 2) {
+    return res.status(403).json({ error: 'CSRF validation failed. Malformed token.' });
+  }
+  
+  const [token, hmac] = parts;
+  const expectedHmac = crypto.createHmac('sha256', CSRF_SECRET).update(token).digest('hex');
+  if (!crypto.timingSafeEqual(Buffer.from(hmac, 'hex'), Buffer.from(expectedHmac, 'hex'))) {
+    return res.status(403).json({ error: 'CSRF validation failed. Invalid signature.' });
+  }
+  
   next();
 };

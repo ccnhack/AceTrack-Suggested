@@ -3,6 +3,19 @@ import { Platform } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
 
+// 🛡️ [VAPT-F13] (v2.6.556): Use expo-secure-store for sensitive data on native platforms
+// SecureStore uses Keychain (iOS) / Keystore (Android) for hardware-backed encryption
+let SecureStore: any = null;
+const SENSITIVE_NATIVE_KEYS = new Set(['authToken', 'userToken', 'currentUser']);
+
+if (!isWeb) {
+  try {
+    SecureStore = require('expo-secure-store');
+  } catch (e) {
+    console.warn('[Storage] expo-secure-store not available, falling back to AsyncStorage');
+  }
+}
+
 /**
  * 🔐 PRODUCTION-GRADE WEB SECURITY POLICY (v2.6.155)
  * Defines where specific data types are allowed to be stored on Web.
@@ -53,11 +66,12 @@ const getSessionKey = async () => {
       if (exportedKey) {
         try {
           const jwk = JSON.parse(exportedKey);
+          // 🛡️ [VAPT-F14] (v2.6.556): Import as non-extractable to prevent XSS key theft
           sessionKey = await window.crypto.subtle.importKey(
             'jwk',
             jwk,
             { name: 'AES-GCM' },
-            true,
+            false,
             ['encrypt', 'decrypt']
           );
           console.log('[WebCrypto] Session key restored from storage');
@@ -68,9 +82,10 @@ const getSessionKey = async () => {
       }
 
       // Generate a new key if restoration failed or was not available
+      // 🛡️ [VAPT-F14] (v2.6.556): Generate non-extractable key
       sessionKey = await window.crypto.subtle.generateKey(
         { name: 'AES-GCM', length: 256 },
-        true,
+        true, // Must stay true for export to sessionStorage (trade-off for page refresh support)
         ['encrypt', 'decrypt']
       );
 
@@ -205,7 +220,17 @@ const storage = {
           storedValue = await AsyncStorage.getItem(key);
         }
       } else {
-        storedValue = await AsyncStorage.getItem(key);
+        // 🛡️ [VAPT-F13] (v2.6.556): Use SecureStore for sensitive keys on native
+        if (SecureStore && SENSITIVE_NATIVE_KEYS.has(key)) {
+          try {
+            storedValue = await SecureStore.getItemAsync(key);
+          } catch (secureErr) {
+            console.warn(`[SecureStore] Failed to read ${key}, falling back to AsyncStorage:`, secureErr);
+            storedValue = await AsyncStorage.getItem(key);
+          }
+        } else {
+          storedValue = await AsyncStorage.getItem(key);
+        }
       }
 
       if (!storedValue || storedValue === 'undefined') return null;
@@ -251,7 +276,17 @@ const storage = {
         }
       } else {
         const jsonValue = JSON.stringify(value);
-        await AsyncStorage.setItem(key, jsonValue); // Native uses OS-level encryption for AsyncStorage
+        // 🛡️ [VAPT-F13] (v2.6.556): Use SecureStore for sensitive keys on native
+        if (SecureStore && SENSITIVE_NATIVE_KEYS.has(key)) {
+          try {
+            await SecureStore.setItemAsync(key, jsonValue);
+          } catch (secureErr) {
+            console.warn(`[SecureStore] Failed to write ${key}, falling back to AsyncStorage:`, secureErr);
+            await AsyncStorage.setItem(key, jsonValue);
+          }
+        } else {
+          await AsyncStorage.setItem(key, jsonValue);
+        }
       }
     } catch (e) {
       console.error(`Error writing value for key "${key}":`, e);

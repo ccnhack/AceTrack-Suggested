@@ -6,12 +6,15 @@ import { asyncHandler } from '../helpers/utils.mjs';
 import { apiKeyGuard } from '../middleware/security.mjs';
 
 // 🛡️ [PRODUCTION HARDENING] (v2.6.319): MFA PIN must be set in production
+// 🛡️ [VAPT-F04] (v2.6.556): ADMIN_MFA_PIN MUST be set via environment variable.
+// Hardcoded fallback removed per security audit.
 const ADMIN_MFA_PIN = process.env.ADMIN_MFA_PIN || (() => {
   if (process.env.NODE_ENV === 'production') {
     console.error('🛑 FATAL: ADMIN_MFA_PIN must be set in production environment!');
     process.exit(1);
   }
-  return '120522'; // Dev-only fallback
+  console.error('🛑 FATAL: ADMIN_MFA_PIN environment variable is not set. Admin MFA will not function.');
+  return null; // No fallback — MFA will reject all PINs until env var is set
 })();
 // 🛡️ [SCALABILITY] (v2.6.319): Removed in-memory pendingAdminMFA Map
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -196,8 +199,9 @@ export default function createAuthRoutes({
       return res.status(403).json({ error: `Security Lockdown: Account is temporarily blocked. Try again in ${remaining} minutes.` });
     }
 
-    // 🛡️ EMERGENCY BYPASS (v2.6.197): Allow ACE_API_KEY if DB is corrupted
-    const isMasterKey = password === ACE_API_KEY;
+    // 🛡️ [VAPT-F02] (v2.6.556): Master key password bypass REMOVED per security audit.
+    // Emergency recovery must use the dedicated /admin/restore-last-state endpoint.
+    const isMasterKey = false;
     // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Default password bypass disabled in production
     const isDefaultKey = !IS_PRODUCTION && (adminPassword === '' || !adminPassword) && password === 'Password@123';
 

@@ -48,18 +48,65 @@ export const useVideoStore = create((set, get) => {
       syncOrchestrator.syncAndSaveData({ matchVideos: result.videos });
     },
 
-    onBulkUpdateVideoStatus: (ids, status) => {
-      const VideoService = require('../services/VideoService').default;
-      const result = VideoService.bulkUpdateStatus(ids, status, get().matchVideos);
-      set({ matchVideos: result.videos });
-      syncOrchestrator.syncAndSaveData({ matchVideos: result.videos }, true);
+    onSaveVideo: async (newVideo) => {
+      try {
+        const config = require('../config').default;
+        const storage = require('../utils/storage').default;
+        const token = await storage.getItem('userToken');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        
+        const res = await fetch(`${config.API_BASE_URL}/api/v1/videos/save-metadata`, {
+          method: 'POST', headers, credentials: 'include',
+          body: JSON.stringify({ video: newVideo })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          const updated = [data.video, ...get().matchVideos];
+          set({ matchVideos: updated });
+        }
+      } catch (e) { console.error('Save Video Error:', e); }
     },
 
-    onBulkPermanentDeleteVideos: (ids) => {
-      const VideoService = require('../services/VideoService').default;
-      const result = VideoService.bulkDelete(ids, get().matchVideos);
-      set({ matchVideos: result.videos });
-      syncOrchestrator.syncAndSaveData({ matchVideos: result.videos }, true); 
+    onUpdateVideoStatus: async (vid, status, additionalData = null) => {
+      try {
+        const config = require('../config').default;
+        const storage = require('../utils/storage').default;
+        const token = await storage.getItem('userToken');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        
+        const res = await fetch(`${config.API_BASE_URL}/api/v1/videos/update-status`, {
+          method: 'POST', headers, credentials: 'include',
+          body: JSON.stringify({ videoId: vid, status, additionalData })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          const updated = get().matchVideos.map(v => v.id === vid ? data.video : v);
+          set({ matchVideos: updated });
+        }
+      } catch (e) { console.error('Update Video Status Error:', e); }
+    },
+
+    onBulkUpdateVideoStatus: (ids, status) => {
+      // For bulk, loop through them using REST API.
+      ids.forEach(id => get().onUpdateVideoStatus(id, status));
+    },
+
+    onApproveDeleteVideo: async (id) => {
+      await get().onUpdateVideoStatus(id, 'Deleted');
+    },
+
+    onRejectDeleteVideo: async (id) => {
+      await get().onUpdateVideoStatus(id, 'Active');
+    },
+
+    onPermanentDeleteVideo: async (id) => {
+      await get().onUpdateVideoStatus(id, 'Permanently Deleted');
+    },
+
+    onRequestDeletion: async (id, reason) => {
+      await get().onUpdateVideoStatus(id, 'Deletion Requested', { deletionReason: reason });
     },
 
     onForceRefundVideo: (id) => {
@@ -67,42 +114,6 @@ export const useVideoStore = create((set, get) => {
       const result = VideoService.refundVideo(id, get().matchVideos);
       set({ matchVideos: result.videos });
       syncOrchestrator.syncAndSaveData({ matchVideos: result.videos });
-    },
-
-    onApproveDeleteVideo: (id) => {
-      const VideoService = require('../services/VideoService').default;
-      const players = usePlayersStore.getState().players;
-      const result = VideoService.approveDeletion(id, get().matchVideos, players);
-      if (result.success) {
-        set({ matchVideos: result.videos });
-        usePlayersStore.getState().setPlayers(result.players);
-        syncOrchestrator.syncAndSaveData({ matchVideos: result.videos, players: result.players });
-      }
-    },
-
-    onRejectDeleteVideo: async (id) => {
-      const VideoService = require('../services/VideoService').default;
-      const result = await VideoService.updateStatus(id, 'Active', get().matchVideos);
-      if (result.success) {
-        set({ matchVideos: result.videos });
-        syncOrchestrator.syncAndSaveData({ matchVideos: result.videos });
-      }
-    },
-
-    onPermanentDeleteVideo: (id) => {
-      const VideoService = require('../services/VideoService').default;
-      const result = VideoService.bulkDelete([id], get().matchVideos);
-      set({ matchVideos: result.videos });
-      syncOrchestrator.syncAndSaveData({ matchVideos: result.videos }, true);
-    },
-
-    onRequestDeletion: async (id, reason) => {
-      const VideoService = require('../services/VideoService').default;
-      const result = await VideoService.updateStatus(id, 'Deletion Requested', get().matchVideos, { deletionReason: reason });
-      if (result.success) {
-        set({ matchVideos: result.videos });
-        syncOrchestrator.syncAndSaveData({ matchVideos: result.videos });
-      }
     },
 
     onUnlockVideo: async (vid, price, method) => {
@@ -137,12 +148,6 @@ export const useVideoStore = create((set, get) => {
         usePlayersStore.getState().setPlayers(currentPlayers.map(p => p.id === updatedUser.id ? updatedUser : p));
         syncOrchestrator.syncAndSaveData({ currentUser: updatedUser });
       }
-    },
-
-    onSaveVideo: (newVideo) => {
-      const updated = [newVideo, ...get().matchVideos];
-      set({ matchVideos: updated });
-      syncOrchestrator.syncAndSaveData({ matchVideos: updated });
     },
 
     onCancelVideo: () => {},

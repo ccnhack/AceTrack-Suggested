@@ -25,10 +25,18 @@ io.on('connection', async (socket) => {
     console.warn(`⚠️ [WS_WARN] socket=${socket.id} connected without userId! Waiting for manual join...`);
   }
 
-  // 🛡️ [FAIL-SAFE JOIN] (v2.6.392): Allow client to manually identify if handshake was thinned
+  // 🛡️ [VAPT-F10] (v2.6.556): Validate room joins against authenticated identity
   socket.on('join', (userId) => {
     if (!userId) return;
-    const room = `user:${userId.toLowerCase()}`;
+    const requestedId = userId.toLowerCase();
+    // Only allow joining own room if authenticated
+    if (socket.user && socket.user.id) {
+      if (socket.user.id.toLowerCase() !== requestedId && socket.user.role !== 'admin') {
+        console.warn(`🛑 [ROOM_BLOCKED] ${socket.user.id} tried to join room user:${requestedId} — rejected`);
+        return;
+      }
+    }
+    const room = `user:${requestedId}`;
     socket.join(room);
     socket.join('authenticated');
     console.log(`🎯 [ROOM_MANUAL] ${userId} joined room ${room} via explicit join event.`);

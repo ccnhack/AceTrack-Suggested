@@ -177,7 +177,7 @@ router.get('/support/attendance', apiKeyGuard, authGuard, async (req, res) => {
 
     res.json({ attendance, timestamp: new Date().toISOString() });
   } catch (e) {
-    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -407,7 +407,7 @@ router.get('/support/analytics', apiKeyGuard, authGuard, async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (e) {
-    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -441,7 +441,7 @@ router.get('/support/export', apiKeyGuard, authGuard, async (req, res) => {
     res.setHeader('Content-Disposition', 'attachment; filename="support_tickets.csv"');
     res.send(csv);
   } catch(e) {
-    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -562,7 +562,7 @@ router.post('/support/manage-user', apiKeyGuard, authGuard, async (req, res) => 
     logServerEvent('SUPPORT_USER_MANAGED', { admin: req.headers['x-user-id'] || 'admin', targetUserId, status, level });
     res.json({ success: true, user: user });
   } catch (e) {
-    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -647,7 +647,7 @@ router.post('/support/force-reset', apiKeyGuard, authGuard, async (req, res) => 
     });
   } catch (e) {
     console.error(`[FORCE-RESET] CRITICAL ERROR: ${e.message}`, e.stack);
-    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

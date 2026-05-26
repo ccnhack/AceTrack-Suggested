@@ -442,8 +442,11 @@ ${chatHistory.substring(0, 3000)}`;
             const stateValues = payload.view.state.values;
             const submittedPin = stateValues.pin_block.pin_input.value;
             
-            const ADMIN_MFA_PIN = process.env.ADMIN_MFA_PIN || '120522';
-            if (submittedPin !== ADMIN_MFA_PIN) {
+            // 🛡️ [VAPT-F04] (v2.6.556): Hardcoded PIN removed per security audit
+            const ADMIN_MFA_PIN = process.env.ADMIN_MFA_PIN;
+            if (!ADMIN_MFA_PIN) {
+               return res.json({ response_action: 'errors', errors: { pin_block: 'MFA PIN not configured on server.' } });
+            }            if (submittedPin !== ADMIN_MFA_PIN) {
                return res.json({
                   response_action: 'errors',
                   errors: {

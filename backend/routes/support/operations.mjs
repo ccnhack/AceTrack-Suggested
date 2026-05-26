@@ -103,7 +103,7 @@ router.post('/support/transfer-tickets', apiKeyGuard, authGuard, async (req, res
     logServerEvent('SUPPORT_TICKETS_TRANSFERRED', { fromAgentId, toAgentId, count: transferCount });
     res.json({ success: true, transferred: transferCount, message: `${transferCount} ticket(s) transferred to ${toAgent.name}` });
   } catch (e) {
-    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -128,13 +128,14 @@ router.post('/support/ai-summary', apiKeyGuard, async (req, res) => {
       res.status(500).json({ error: data.error?.message || "AI Error" });
     }
   } catch (e) {
-    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-router.post('/support/reassign-ticket', apiKeyGuard, async (req, res) => {
+router.post('/support/reassign-ticket', apiKeyGuard, authGuard, async (req, res) => {
   const { ticketId, targetAgentId } = req.body;
-  const requesterId = req.headers['x-user-id'];
+  // 🛡️ [VAPT-F05] (v2.6.556): Use JWT-verified identity instead of spoofable header
+  const requesterId = req.user?.id;
   console.log(`[API] POST /support/reassign-ticket: ticket=${ticketId}, to=${targetAgentId}, requester=${requesterId}`);
   
   if (!ticketId || !targetAgentId) return res.status(400).json({ error: 'Both ticketId and targetAgentId are required' });
@@ -269,13 +270,14 @@ router.post('/support/reassign-ticket', apiKeyGuard, async (req, res) => {
       ticket: ticket
     });
   } catch (e) {
-    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-router.post('/support/rate-ticket', apiKeyGuard, async (req, res) => {
+router.post('/support/rate-ticket', apiKeyGuard, authGuard, async (req, res) => {
   const { ticketId, rating, feedback } = req.body;
-  const userId = req.headers['x-user-id'];
+  // 🛡️ [VAPT-F05] (v2.6.556): Use JWT-verified identity
+  const userId = req.user?.id;
   console.log(`[API] POST /support/rate-ticket: ticket=${ticketId}, user=${userId}, rating=${rating}`);
   
   if (!ticketId || !rating || rating < 1 || rating > 5) {
@@ -373,13 +375,14 @@ router.post('/support/rate-ticket', apiKeyGuard, async (req, res) => {
     logServerEvent('TICKET_RATED', { ticketId, rating, agentId });
     res.json({ success: true, ticket });
   } catch (e) {
-    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-router.post('/support/claim-ticket', apiKeyGuard, async (req, res) => {
+router.post('/support/claim-ticket', apiKeyGuard, authGuard, async (req, res) => {
   const { ticketId } = req.body;
-  const agentId = req.headers['x-user-id'];
+  // 🛡️ [VAPT-F05] (v2.6.556): Use JWT-verified identity
+  const agentId = req.user?.id;
   console.log(`[API] POST /support/claim-ticket: ticketID=${ticketId}, agentID=${agentId}`);
   if (!agentId) return res.status(400).json({ error: "Agent ID required in headers" });
 
@@ -485,10 +488,228 @@ router.post('/support/claim-ticket', apiKeyGuard, async (req, res) => {
 
     res.json({ success: true, ticket: ticket });
   } catch (e) {
-    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
+
+router.post('/support/reply-ticket', apiKeyGuard, authGuard, async (req, res) => {
+  const { ticketId, text, image, replyToMsg } = req.body;
+  // 🛡️ [VAPT-F05] (v2.6.556): Use JWT-verified identity
+  const userId = req.user?.id;
+  
+  if (!ticketId || (!text && !image)) {
+    return res.status(400).json({ error: 'ticketId and text/image are required' });
+  }
+
+  try {
+    const ticketDoc = await SupportTicket.findOne({ id: ticketId });
+    if (!ticketDoc || !ticketDoc.data) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+
+    const ticket = ticketDoc.data;
+    
+    // Fetch sender role to determine if admin/staff
+    const userDoc = await Player.findOne({ id: userId }).lean();
+    const currentUser = userDoc ? userDoc.data : null;
+    const isStaff = currentUser && (currentUser.role === 'support' || currentUser.role === 'admin');
+
+    // 1. Mark existing messages as seen if staff is replying (or user is replying)
+    let changedStatus = false;
+    if (ticket.messages) {
+      ticket.messages = ticket.messages.map(m => {
+        if (m.senderId !== userId && m.status !== 'seen') {
+          changedStatus = true;
+          return { ...m, status: 'seen' };
+        }
+        return m;
+      });
+    }
+
+    // 2. Add new message
+    const msgText = typeof text === 'string' ? text : (text?.text || String(text || ''));
+    const msg = { 
+      id: `m-${Date.now()}`, 
+      senderId: userId || 'admin', 
+      text: msgText, 
+      timestamp: new Date().toISOString(),
+      status: 'delivered'
+    };
+    if (image) msg.image = image;
+    if (replyToMsg) {
+      msg.replyTo = { 
+        id: replyToMsg.id, 
+        timestamp: replyToMsg.timestamp, 
+        text: replyToMsg.text || '', 
+        senderId: replyToMsg.senderId || '' 
+      };
+    }
+
+    ticket.messages = [...(ticket.messages || []), msg];
+    ticket.updatedAt = new Date().toISOString();
+
+    // 3. Status/Assignment updates
+    if (!isStaff && ticket.status === 'Awaiting Response') {
+      ticket.status = 'In Progress';
+    }
+
+    if (isStaff && (!ticket.assignedTo || ticket.assignedTo === 'Unassigned')) {
+      ticket.assignedTo = userId;
+      ticket.assignedAt = new Date().toISOString();
+    }
+
+    ticketDoc.data = ticket;
+    ticketDoc.lastUpdated = new Date();
+    ticketDoc.markModified('data');
+    await ticketDoc.save();
+
+    // Broadcast
+    if (io) {
+      io.emit('entity_updated', {
+        entity: 'supportTickets',
+        data: ticketDoc.data,
+        source: 'api',
+        timestamp: Date.now()
+      });
+    }
+
+    res.json({ success: true, ticket: ticketDoc.data });
+  } catch (e) {
+    console.error('[API] /support/reply-ticket error:', e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/support/update-ticket-status', apiKeyGuard, authGuard, async (req, res) => {
+  const { ticketId, status, summary, justification } = req.body;
+  // 🛡️ [VAPT-F05] (v2.6.556): Use JWT-verified identity
+  const userId = req.user?.id;
+  
+  if (!ticketId || !status) {
+    return res.status(400).json({ error: 'ticketId and status are required' });
+  }
+
+  try {
+    const ticketDoc = await SupportTicket.findOne({ id: ticketId });
+    if (!ticketDoc || !ticketDoc.data) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+
+    const ticket = ticketDoc.data;
+    const oldStatus = ticket.status || 'Open';
+    
+    ticket.status = status;
+    ticket.updatedAt = new Date().toISOString();
+    if (summary) ticket.closureSummary = summary;
+
+    const activeStates = ['Open', 'In Progress', 'Awaiting Response'];
+    if (activeStates.includes(status)) {
+      if (oldStatus === 'Resolved' || oldStatus === 'Closed') {
+        ticket.closureSummary = null;
+        ticket.closedAt = null;
+      }
+    } else if (status === 'Resolved' || status === 'Closed') {
+      ticket.closedAt = new Date().toISOString();
+    }
+
+    const messages = [...(ticket.messages || [])];
+    if (justification) {
+      messages.push({
+        id: `justification-${Date.now()}`,
+        senderId: 'system',
+        text: `REOPEN JUSTIFICATION: ${justification}`,
+        timestamp: new Date().toISOString(),
+        type: 'internal'
+      });
+    }
+
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    messages.push({
+      id: `system-${Date.now()}`,
+      senderId: 'system',
+      text: `-------- ${status.toUpperCase()} WAS ${oldStatus.toUpperCase()} --------\n(${time})`,
+      timestamp: new Date().toISOString(),
+      type: 'event'
+    });
+    
+    ticket.messages = messages;
+
+    ticketDoc.data = ticket;
+    ticketDoc.lastUpdated = new Date();
+    ticketDoc.markModified('data');
+    await ticketDoc.save();
+
+    if (io) {
+      io.emit('entity_updated', {
+        entity: 'supportTickets',
+        data: ticketDoc.data,
+        source: 'api',
+        timestamp: Date.now()
+      });
+    }
+
+    logAudit(req, 'TICKET_STATUS_CHANGE', ['supportTickets'], { ticketId, oldStatus, newStatus: status });
+    res.json({ success: true, ticket: ticketDoc.data });
+  } catch (e) {
+    console.error('[API] /support/update-ticket-status error:', e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/support/save-ticket', apiKeyGuard, authGuard, async (req, res) => {
+  const { ticket, deviceInfo } = req.body;
+  if (!ticket) return res.status(400).json({ error: 'Ticket object required' });
+
+  try {
+    const generatedId = ticket.id || `${Math.floor(1000000 + Math.random() * 9000000)}`;
+    const isNew = !ticket.id;
+    
+    let ticketDoc = await SupportTicket.findOne({ id: generatedId });
+    if (!ticketDoc) {
+      ticketDoc = new SupportTicket({ id: generatedId, data: {} });
+    }
+
+    const enrichmentTicket = { 
+      id: generatedId,
+      status: ticket.status || 'Open',
+      createdAt: ticket.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      ...ticket, 
+      deviceInfo: ticket.deviceInfo || deviceInfo
+    };
+
+    if (isNew) {
+      const autoResponse = {
+        id: `auto-${Date.now()}`,
+        senderId: 'admin',
+        text: 'Thanks for reaching out to AceTrack Support Team, Our team will look into the issue and provide an update shortly',
+        timestamp: new Date(Date.now() + 1000).toISOString(),
+        status: 'delivered'
+      };
+      enrichmentTicket.messages = [...(enrichmentTicket.messages || []), autoResponse];
+    }
+
+    ticketDoc.data = enrichmentTicket;
+    ticketDoc.lastUpdated = new Date();
+    ticketDoc.markModified('data');
+    await ticketDoc.save();
+
+    if (io) {
+      io.emit('entity_updated', {
+        entity: 'supportTickets',
+        data: ticketDoc.data,
+        source: 'api',
+        timestamp: Date.now()
+      });
+    }
+
+    res.json({ success: true, ticket: ticketDoc.data });
+  } catch (e) {
+    console.error('[API] /support/save-ticket error:', e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
   return router;
 }

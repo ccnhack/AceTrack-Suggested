@@ -58,7 +58,7 @@ router.post('/register-push-token', apiKeyGuard, async (req, res) => {
     }
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

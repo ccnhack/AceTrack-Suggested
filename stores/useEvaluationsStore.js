@@ -27,10 +27,35 @@ export const useEvaluationsStore = create((set, get) => {
     setEvaluations: (evals) => set({ evaluations: evals }),
 
     onSaveEvaluation: async (evaluationData) => {
-      const currentEvaluations = get().evaluations || [];
-      const updated = [evaluationData, ...currentEvaluations];
-      set({ evaluations: updated });
-      await syncOrchestrator.syncAndSaveData({ evaluations: updated });
+      try {
+        const config = require('../../config').default;
+        const storage = require('../utils/storage').default;
+        const userToken = await storage.getItem('userToken');
+        
+        const headers = {
+          'Content-Type': 'application/json',
+          'x-ace-api-key': config.PUBLIC_APP_ID
+        };
+        if (userToken) headers['Authorization'] = `Bearer ${userToken}`;
+
+        const res = await fetch(`${config.API_BASE_URL}/api/v1/evaluations`, {
+          method: 'POST',
+          headers,
+          credentials: 'omit',
+          body: JSON.stringify({ evaluation: evaluationData })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to save evaluation');
+
+        // Optimistic update for UI responsiveness
+        const currentEvaluations = get().evaluations || [];
+        const updated = [data.evaluation || evaluationData, ...currentEvaluations.filter(e => e.id !== evaluationData.id)];
+        set({ evaluations: updated });
+      } catch (err) {
+        console.error('[EvaluationsStore] Save Error:', err);
+        Alert.alert('Error', err.message || 'Could not save evaluation');
+      }
     },
 
     hydrate: async () => {

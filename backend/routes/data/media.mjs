@@ -23,7 +23,7 @@ export default function ({
 }) {
   const router = express.Router();
 
-router.post('/upload', apiKeyGuard, upload.single('video'), async (req, res) => {
+router.post('/upload', apiKeyGuard, authGuard, upload.single('video'), async (req, res) => {
   if (!req.file) {
     logServerEvent('UPLOAD_FAILED', { error: 'No file received' });
     return res.status(400).json({ error: 'No file uploaded' });
@@ -63,10 +63,83 @@ router.post('/upload', apiKeyGuard, upload.single('video'), async (req, res) => 
     fs.createReadStream(req.file.path).pipe(stream);
   } catch (error) {
     console.error('Upload Process Error:', error);
-    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
+
+router.post('/videos/save-metadata', apiKeyGuard, authGuard, async (req, res) => {
+  const { video } = req.body;
+  if (!video) return res.status(400).json({ error: 'Video metadata required' });
+
+  try {
+    const generatedId = video.id || `vid-${Date.now()}`;
+    const enrichmentVideo = { 
+      id: generatedId,
+      ...video,
+      adminStatus: video.adminStatus || 'Pending',
+      timestamp: video.timestamp || new Date().toISOString()
+    };
+
+    let doc = await MatchVideo.findOne({ id: generatedId });
+    if (!doc) {
+      doc = new MatchVideo({ id: generatedId, data: enrichmentVideo });
+    } else {
+      doc.data = enrichmentVideo;
+    }
+    
+    doc.lastUpdated = new Date();
+    doc.markModified('data');
+    await doc.save();
+
+    if (io) {
+      io.emit('entity_updated', {
+        entity: 'matchVideos',
+        data: doc.data,
+        source: 'api',
+        timestamp: Date.now()
+      });
+    }
+
+    res.json({ success: true, video: doc.data });
+  } catch (error) {
+    console.error('[API] /videos/save-metadata error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/videos/update-status', apiKeyGuard, authGuard, async (req, res) => {
+  const { videoId, status, additionalData } = req.body;
+  if (!videoId || !status) return res.status(400).json({ error: 'videoId and status required' });
+
+  try {
+    const doc = await MatchVideo.findOne({ id: videoId });
+    if (!doc || !doc.data) return res.status(404).json({ error: 'Video not found' });
+
+    doc.data.adminStatus = status;
+    if (additionalData) {
+      Object.assign(doc.data, additionalData);
+    }
+
+    doc.lastUpdated = new Date();
+    doc.markModified('data');
+    await doc.save();
+
+    if (io) {
+      io.emit('entity_updated', {
+        entity: 'matchVideos',
+        data: doc.data,
+        source: 'api',
+        timestamp: Date.now()
+      });
+    }
+
+    res.json({ success: true, video: doc.data });
+  } catch (error) {
+    console.error('[API] /videos/update-status error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
   return router;
 }

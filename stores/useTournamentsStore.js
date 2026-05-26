@@ -3,6 +3,7 @@ import { eventBus } from '../services/EventBus';
 import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 import storage, { thinPlayer, capPlayerDetail } from '../utils/storage';
 import { Alert } from 'react-native';
+import config from '../config';
 
 // Cross-store imports to allow .getState() access
 import { useAuthStore } from './useAuthStore.js';
@@ -37,48 +38,57 @@ export const useTournamentsStore = create((set, get) => {
 
     onRegister: async (t, method, cost, isResched, fromTid) => {
       try {
-        const TournamentService = require('../services/TournamentService').default;
         const currentUser = useAuthStore.getState().currentUser;
-        // 🛡️ [DIAG_BRIDGE] (v2.6.508): Enhanced logging for registration state debugging
-        console.log(`[TournamentsStore] onRegister called. currentUser=${currentUser?.id || 'NULL'}, t=${typeof t === 'object' ? t?.id : t}, method=${method}`);
         if (!currentUser || !t) {
-          console.warn(`[TournamentsStore] Registration aborted: currentUser=${!!currentUser}, t=${!!t}, authStoreKeys=${Object.keys(useAuthStore.getState()).join(',')}`);
           Alert.alert('Registration Failed', 'Invalid registration state. Missing user or tournament.');
           return { success: false, message: 'Invalid registration state.' };
         }
+        
         const tid = typeof t === 'object' ? t.id : t;
-        const currentTournaments = get().tournaments;
-        const tournament = currentTournaments.find(it => it.id === tid);
-        if (!tournament) {
-          console.warn('[TournamentsStore] Registration target not found:', tid);
-          Alert.alert('Registration Failed', 'Arena not found. Please refresh.');
-          return { success: false, message: 'Arena not found. Please refresh.' };
-        }
-        console.log(`[TournamentsStore] Starting registration for ${tid} via ${method}`);
-        const result = TournamentService.register(
-          tid, currentUser.id, currentTournaments,
-          usePlayersStore.getState().players, currentUser, method, cost
-        );
-        if (result && result.success) {
-          set({ tournaments: result.tournaments });
-          usePlayersStore.getState().setPlayers(result.players);
+        console.log(`[TournamentsStore] Starting API registration for ${tid} via ${method}`);
+        const token = await storage.getItem('userToken');
+
+        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}/register`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'X-User-Id': currentUser.id
+          },
+          body: JSON.stringify({ method, cost })
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+          // 🛡️ Registration success: update local state with authoritative server data
+          // We no longer push back to the server (Atomic Overwrite)
+          
+          const currentTournaments = get().tournaments;
+          const updatedTournaments = currentTournaments.map(it => 
+            it.id === tid ? result.tournament : it
+          );
+          
+          set({ tournaments: updatedTournaments });
+          
+          const currentPlayers = usePlayersStore.getState().players;
+          const updatedPlayers = currentPlayers.map(p => 
+            p.id === currentUser.id ? result.currentUser : p
+          );
+          usePlayersStore.getState().setPlayers(updatedPlayers);
           useAuthStore.getState().setCurrentUser(result.currentUser);
-          console.log(`[TournamentsStore] State updated locally. Pushing ATOMICALLY to server...`);
-          // 🛡️ [ATOMIC_REG_PUSH] (v2.6.509): Registration MUST use isAtomic=true.
-          // Previously used isAtomic=false which delayed the push by 3 seconds.
-          // During that window, a WebSocket broadcast of old server state would 
-          // overwrite the local registration via cloud-wins merge, reverting it.
-          await syncOrchestrator.syncAndSaveData({
-            tournaments: result.tournaments,
-            players: result.players,
-            currentUser: result.currentUser
-          }, true);
-          console.log(`[TournamentsStore] Atomic push completed for ${tid}. Registration persisted.`);
+          
+          console.log(`[TournamentsStore] API Registration successful for ${tid}. Local state synced.`);
+          
+          // Trigger a background pull to grab any other missing data
+          syncOrchestrator.forcePullData();
+          
+          return result;
         } else {
           const msg = result?.message || 'Could not complete registration.';
           Alert.alert('Registration Failed', msg);
+          return { success: false, message: msg };
         }
-        return result;
       } catch (e) {
         console.error('[TournamentsStore] FATAL_ON_REGISTER_ERROR:', e);
         Alert.alert('System Error', `Line: onRegister\nError: ${e.message}\nStack: ${e.stack?.substring(0, 100)}`);
@@ -103,20 +113,44 @@ export const useTournamentsStore = create((set, get) => {
       return result;
     },
 
-    onStartTournament: (tid) => {
-      const TournamentService = require('../services/TournamentService').default;
-      const currentTournaments = get().tournaments;
-      const result = TournamentService.startTournament(tid, currentTournaments);
-      set({ tournaments: result.tournaments });
-      syncOrchestrator.syncAndSaveData({ tournaments: result.tournaments }, true);
+    onStartTournament: async (tid) => {
+      try {
+        const config = require('../config').default;
+        const storage = require('../utils/storage').default;
+        const currentUser = useAuthStore.getState().currentUser;
+        if (!currentUser) return;
+        
+        const token = await storage.getItem('userToken');
+        const headers = { 'Content-Type': 'application/json', 'X-User-Id': currentUser.id };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}/start`, { method: 'POST', headers });
+        const result = await response.json();
+        if (response.ok && result.success) {
+          const currentTournaments = get().tournaments;
+          set({ tournaments: currentTournaments.map(t => t.id === tid ? result.tournament : t) });
+        }
+      } catch (e) { console.error('onStartTournament Error', e); }
     },
 
-    onEndTournament: (tid) => {
-      const TournamentService = require('../services/TournamentService').default;
-      const currentTournaments = get().tournaments;
-      const result = TournamentService.endTournament(tid, currentTournaments);
-      set({ tournaments: result.tournaments });
-      syncOrchestrator.syncAndSaveData({ tournaments: result.tournaments }, true);
+    onEndTournament: async (tid) => {
+      try {
+        const config = require('../config').default;
+        const storage = require('../utils/storage').default;
+        const currentUser = useAuthStore.getState().currentUser;
+        if (!currentUser) return;
+        
+        const token = await storage.getItem('userToken');
+        const headers = { 'Content-Type': 'application/json', 'X-User-Id': currentUser.id };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}/end`, { method: 'POST', headers });
+        const result = await response.json();
+        if (response.ok && result.success) {
+          const currentTournaments = get().tournaments;
+          set({ tournaments: currentTournaments.map(t => t.id === tid ? result.tournament : t) });
+        }
+      } catch (e) { console.error('onEndTournament Error', e); }
     },
 
     onAssignCoach: (tid, cid) => {
@@ -127,12 +161,24 @@ export const useTournamentsStore = create((set, get) => {
       syncOrchestrator.syncAndSaveData({ tournaments: result.tournaments });
     },
 
-    onRemoveCoach: (tid) => {
-      const TournamentService = require('../services/TournamentService').default;
-      const currentTournaments = get().tournaments;
-      const result = TournamentService.removeCoach(tid, currentTournaments);
-      set({ tournaments: result.tournaments });
-      syncOrchestrator.syncAndSaveData({ tournaments: result.tournaments }, true);
+    onRemoveCoach: async (tid) => {
+      try {
+        const config = require('../config').default;
+        const storage = require('../utils/storage').default;
+        const currentUser = useAuthStore.getState().currentUser;
+        if (!currentUser) return;
+        
+        const token = await storage.getItem('userToken');
+        const headers = { 'Content-Type': 'application/json', 'X-User-Id': currentUser.id };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}/remove-coach`, { method: 'POST', headers });
+        const result = await response.json();
+        if (response.ok && result.success) {
+          const currentTournaments = get().tournaments;
+          set({ tournaments: currentTournaments.map(t => t.id === tid ? result.tournament : t) });
+        }
+      } catch (e) { console.error('onRemoveCoach Error', e); }
     },
 
     onApproveCoach: (coachId, status = 'approved', reason = '') => {
@@ -173,72 +219,94 @@ export const useTournamentsStore = create((set, get) => {
       }
     },
 
-    onRemovePendingPlayer: (tid, pid) => {
-      const TournamentService = require('../services/TournamentService').default;
-      const currentTournaments = get().tournaments;
-      const result = TournamentService.removePendingPlayer(tid, pid, currentTournaments);
-      set({ tournaments: result.tournaments });
-      syncOrchestrator.syncAndSaveData({ tournaments: result.tournaments }, true);
+    onRemovePendingPlayer: async (tid, pid) => {
+      try {
+        const config = require('../config').default;
+        const storage = require('../utils/storage').default;
+        const currentUser = useAuthStore.getState().currentUser;
+        if (!currentUser) return;
+        
+        const token = await storage.getItem('userToken');
+        const headers = { 'Content-Type': 'application/json', 'X-User-Id': currentUser.id };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}/remove-pending`, { method: 'POST', headers, body: JSON.stringify({ pid }) });
+        const result = await response.json();
+        if (response.ok && result.success) {
+          const currentTournaments = get().tournaments;
+          set({ tournaments: currentTournaments.map(t => t.id === tid ? result.tournament : t) });
+        }
+      } catch (e) { console.error('onRemovePendingPlayer Error', e); }
     },
 
-    onManageInterested: (tid, pid, action) => {
-      const TournamentService = require('../services/TournamentService').default;
-      const currentTournaments = get().tournaments;
-      const result = TournamentService.manageInterested(tid, pid, action, currentTournaments);
-      set({ tournaments: result.tournaments });
-      syncOrchestrator.syncAndSaveData({ tournaments: result.tournaments }, true);
+    onManageInterested: async (tid, pid, action) => {
+      try {
+        const config = require('../config').default;
+        const storage = require('../utils/storage').default;
+        const currentUser = useAuthStore.getState().currentUser;
+        if (!currentUser) return;
+        
+        const token = await storage.getItem('userToken');
+        const headers = { 'Content-Type': 'application/json', 'X-User-Id': currentUser.id };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}/manage-interested`, { method: 'POST', headers, body: JSON.stringify({ pid, action }) });
+        const result = await response.json();
+        if (response.ok && result.success) {
+          const currentTournaments = get().tournaments;
+          set({ tournaments: currentTournaments.map(t => t.id === tid ? result.tournament : t) });
+        }
+      } catch (e) { console.error('onManageInterested Error', e); }
     },
 
-    onDeclineCoachRequest: (t) => {
-      const TournamentService = require('../services/TournamentService').default;
-      const currentUser = useAuthStore.getState().currentUser;
-      const currentTournaments = get().tournaments;
-      const result = TournamentService.declineCoachRequest(t.id, currentTournaments);
-      set({ tournaments: result.tournaments });
-      
-      if (currentUser && currentUser.role === 'coach') {
-         const currentPlayers = usePlayersStore.getState().players;
-         const updatedPlayers = currentPlayers.map(p => {
-           if (p.id === currentUser.id) {
-             const metrics = p.coachMetrics || { pingsIgnored: 0, tournamentsDeclined: 0, tournamentsAccepted: 0 };
-             return { ...p, coachMetrics: { ...metrics, tournamentsDeclined: (metrics.tournamentsDeclined || 0) + 1 } };
-           }
-           return p;
-         });
-         usePlayersStore.getState().setPlayers(updatedPlayers);
-         const updatedUser = updatedPlayers.find(p => p.id === currentUser.id);
-         useAuthStore.getState().setCurrentUser(updatedUser);
-         syncOrchestrator.syncAndSaveData({ tournaments: result.tournaments, players: updatedPlayers, currentUser: updatedUser }, true);
-      } else {
-         syncOrchestrator.syncAndSaveData({ tournaments: result.tournaments }, true);
-      }
+    onDeclineCoachRequest: async (t) => {
+      try {
+        const config = require('../config').default;
+        const storage = require('../utils/storage').default;
+        const currentUser = useAuthStore.getState().currentUser;
+        if (!currentUser) return;
+        
+        const token = await storage.getItem('userToken');
+        const headers = { 'Content-Type': 'application/json', 'X-User-Id': currentUser.id };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${t.id}/decline-coach`, { method: 'POST', headers });
+        const result = await response.json();
+        if (response.ok && result.success) {
+          const currentTournaments = get().tournaments;
+          set({ tournaments: currentTournaments.map(item => item.id === t.id ? result.tournament : item) });
+          if (result.currentUser) {
+            useAuthStore.getState().setCurrentUser(result.currentUser);
+            const currentPlayers = usePlayersStore.getState().players;
+            usePlayersStore.getState().setPlayers(currentPlayers.map(p => p.id === result.currentUser.id ? result.currentUser : p));
+          }
+        }
+      } catch (e) { console.error('onDeclineCoachRequest Error', e); }
     },
 
-    onConfirmCoachRequest: (t) => {
-      const currentUser = useAuthStore.getState().currentUser;
-      if (!currentUser) return;
-      const currentTournaments = get().tournaments;
-      const updated = currentTournaments.map(item =>
-        item.id === t.id ? { ...item, assignedCoachId: currentUser.id, coachStatus: 'Coach Confirmed' } : item
-      );
-      set({ tournaments: updated });
-      
-      if (currentUser.role === 'coach') {
-         const currentPlayers = usePlayersStore.getState().players;
-         const updatedPlayers = currentPlayers.map(p => {
-           if (p.id === currentUser.id) {
-             const metrics = p.coachMetrics || { pingsIgnored: 0, tournamentsDeclined: 0, tournamentsAccepted: 0 };
-             return { ...p, coachMetrics: { ...metrics, tournamentsAccepted: (metrics.tournamentsAccepted || 0) + 1 } };
-           }
-           return p;
-         });
-         usePlayersStore.getState().setPlayers(updatedPlayers);
-         const updatedUser = updatedPlayers.find(p => p.id === currentUser.id);
-         useAuthStore.getState().setCurrentUser(updatedUser);
-         syncOrchestrator.syncAndSaveData({ tournaments: updated, players: updatedPlayers, currentUser: updatedUser }, true);
-      } else {
-         syncOrchestrator.syncAndSaveData({ tournaments: updated });
-      }
+    onConfirmCoachRequest: async (t) => {
+      try {
+        const config = require('../config').default;
+        const storage = require('../utils/storage').default;
+        const currentUser = useAuthStore.getState().currentUser;
+        if (!currentUser) return;
+        
+        const token = await storage.getItem('userToken');
+        const headers = { 'Content-Type': 'application/json', 'X-User-Id': currentUser.id };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${t.id}/confirm-coach`, { method: 'POST', headers });
+        const result = await response.json();
+        if (response.ok && result.success) {
+          const currentTournaments = get().tournaments;
+          set({ tournaments: currentTournaments.map(item => item.id === t.id ? result.tournament : item) });
+          if (result.currentUser) {
+            useAuthStore.getState().setCurrentUser(result.currentUser);
+            const currentPlayers = usePlayersStore.getState().players;
+            usePlayersStore.getState().setPlayers(currentPlayers.map(p => p.id === result.currentUser.id ? result.currentUser : p));
+          }
+        }
+      } catch (e) { console.error('onConfirmCoachRequest Error', e); }
     },
 
     onSaveTournament: (newT) => {
@@ -255,14 +323,24 @@ export const useTournamentsStore = create((set, get) => {
       syncOrchestrator.syncAndSaveData({ tournaments: updatedTournaments });
     },
 
-    onDeleteTournament: (tid) => {
-      const currentTournaments = get().tournaments;
-      const deletedT = currentTournaments.find(t => t.id === tid);
-      console.log(`[TournamentsStore] [DELETE] Deleting tournament: id=${tid}, title=${deletedT?.title || 'UNKNOWN'}, beforeCount=${currentTournaments.length}`);
-      const updated = currentTournaments.filter(t => t.id !== tid);
-      console.log(`[TournamentsStore] [DELETE] afterCount=${updated.length}. Pushing ATOMICALLY to server...`);
-      set({ tournaments: updated });
-      syncOrchestrator.syncAndSaveData({ tournaments: updated }, true);
+    onDeleteTournament: async (tid) => {
+      try {
+        const config = require('../config').default;
+        const storage = require('../utils/storage').default;
+        const currentUser = useAuthStore.getState().currentUser;
+        if (!currentUser) return;
+        
+        const token = await storage.getItem('userToken');
+        const headers = { 'Content-Type': 'application/json', 'X-User-Id': currentUser.id };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}`, { method: 'DELETE', headers });
+        const result = await response.json();
+        if (response.ok && result.success) {
+          const currentTournaments = get().tournaments;
+          set({ tournaments: currentTournaments.filter(t => t.id !== tid) });
+        }
+      } catch (e) { console.error('onDeleteTournament Error', e); }
     },
 
     onReschedule: (tournamentId) => {
@@ -273,38 +351,64 @@ export const useTournamentsStore = create((set, get) => {
       set({ reschedulingFrom: null });
     },
 
-    onOptOut: (tid, refundToWallet = true) => {
-      const TournamentService = require('../services/TournamentService').default;
-      const currentUser = useAuthStore.getState().currentUser;
-      if (!currentUser) return;
-      const currentTournaments = get().tournaments;
-      const serverClockOffset = useSyncStore.getState().serverClockOffset || 0;
-      const result = TournamentService.optOut(tid, currentUser.id, currentTournaments, usePlayersStore.getState().players, currentUser, refundToWallet, serverClockOffset);
-      if (result.success) {
-        set({ tournaments: result.tournaments });
-        if (result.players) usePlayersStore.getState().setPlayers(result.players);
-        if (result.currentUser) useAuthStore.getState().setCurrentUser(result.currentUser);
+    onOptOut: async (tid, refundToWallet = true) => {
+      try {
+        const currentUser = useAuthStore.getState().currentUser;
+        if (!currentUser) return;
+        
+        console.log(`[TournamentsStore] Starting API opt-out for ${tid}`);
+        const token = await storage.getItem('userToken');
 
-        // 🛡️ [AUDIT FIX F-2/S-1] (v2.6.327): Single atomic sync call
-        syncOrchestrator.syncAndSaveData({
-          tournaments: result.tournaments,
-          players: result.players || usePlayersStore.getState().players,
-          currentUser: result.currentUser || currentUser
-        }, true);
+        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}/optout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'X-User-Id': currentUser.id
+          },
+          body: JSON.stringify({ refundToWallet })
+        });
 
-        const { Alert } = require('react-native');
-        if (result.refundInfo && result.refundInfo.refundAmount > 0) {
-          const ri = result.refundInfo;
-          Alert.alert(
-            '✅ Opted Out Successfully', 
-            `₹${ri.refundAmount} has been refunded to your wallet.${ri.cancellationCharge > 0 ? `\n\nCancellation fee: ₹${ri.cancellationCharge} (${ri.cancellationPercent}%)` : '\n\nNo cancellation charges applied.'}\n\nEntry Fee: ₹${ri.entryFee}`
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+          const currentTournaments = get().tournaments;
+          const updatedTournaments = currentTournaments.map(it => 
+            it.id === tid ? result.tournament : it
           );
+          
+          set({ tournaments: updatedTournaments });
+          
+          const currentPlayers = usePlayersStore.getState().players;
+          let updatedPlayers = currentPlayers.map(p => 
+            p.id === currentUser.id ? result.currentUser : p
+          );
+          
+          if (result.promotedPlayer) {
+             updatedPlayers = updatedPlayers.map(p => 
+                p.id === result.promotedPlayer.id ? result.promotedPlayer : p
+             );
+          }
+          
+          usePlayersStore.getState().setPlayers(updatedPlayers);
+          useAuthStore.getState().setCurrentUser(result.currentUser);
+          
+          if (result.refundInfo && result.refundInfo.refundAmount > 0) {
+            Alert.alert(
+              'Opt-out Successful', 
+              `Refund of ₹${result.refundInfo.refundAmount} has been credited to your wallet.\n(${result.refundInfo.cancellationPercent}% cancellation charge applied)`
+            );
+          } else {
+             Alert.alert('Opt-out Successful', 'You have been removed from the tournament.');
+          }
+          
+          syncOrchestrator.forcePullData();
         } else {
-          Alert.alert('Success', 'You have successfully opted out of this tournament.');
+          Alert.alert('Opt-out Failed', result?.message || 'Could not process request.');
         }
-      } else {
-        const { Alert } = require('react-native');
-        Alert.alert('Error', result.message || 'Failed to opt out.');
+      } catch (e) {
+        console.error('[TournamentsStore] FATAL_ON_OPTOUT_ERROR:', e);
+        Alert.alert('System Error', 'Could not process opt-out at this time.');
       }
     },
 
@@ -313,13 +417,16 @@ export const useTournamentsStore = create((set, get) => {
         const config = require('../config').default;
         const { Alert } = require('react-native');
         const useAuthStore = require('./index').useAuthStore;
+        const token = await storage.getItem('userToken');
         const res = await fetch(`${config.API_BASE_URL}/api/v1/ping-coach`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-api-key': 'ace_hackathon_super_secret_key_2024',
-            'Authorization': `Bearer ${useAuthStore.getState().currentUser?.id}`
+            // 🛡️ [VAPT-F07] (v2.6.556): Removed hardcoded secret key. Use standard auth pattern.
+            'x-ace-api-key': config.ACE_API_KEY,
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
           },
+          credentials: 'include',
           body: JSON.stringify({ tournamentId, coachId })
         });
         const data = await res.json();
