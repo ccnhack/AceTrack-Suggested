@@ -224,8 +224,17 @@ export const AuthProvider = ({ children }) => {
       // 🛡️ [INSTANT TICKET DASHBOARD POPULATION] (v2.6.532)
       // Triggers an immediate cloud data pull so that support/admin staff don't see 
       // an empty dashboard while waiting for the next automated polling cycle.
-      setTimeout(() => {
-        if (loadData) loadData(true, true);
+      setTimeout(async () => {
+        if (loadData) {
+          await loadData(true, true);
+          // 🛡️ [VAPT-F23] (v2.6.558): Explicitly hydrate stores after initial load
+          // Prevents empty dashboard on first login due to Zustand event listener races
+          await Promise.all([
+             useSupportStore.getState().hydrate(),
+             usePlayersStore.getState().hydrate(),
+             useTournamentsStore.getState().hydrate()
+          ]);
+        }
       }, 500);
       
       // 🛡️ [PUSH TOKEN SYNC ON LOGIN] (v2.6.121)

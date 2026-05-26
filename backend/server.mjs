@@ -109,7 +109,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.557'; // Critical for Update prompts 
+const APP_VERSION = '2.6.558'; // Critical for Update prompts 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -136,7 +136,7 @@ const signToken = (user, jti = null) => {
   };
   if (jti) payload.jti = jti;
   
-  // 🛡️ [VAPT-F21] (v2.6.557): Add audience & issuer claims to prevent cross-service token reuse
+  // 🛡️ [VAPT-F21] (v2.6.558): Add audience & issuer claims to prevent cross-service token reuse
   return jwt.sign(payload, JWT_SECRET, { 
     expiresIn: '24h',
     issuer: 'acetrack-api',
@@ -508,7 +508,7 @@ const startServices = async () => {
     }
     
     // 🛡️ [ADMIN SEED] (v2.6.521): Ensure admin player document exists in the Player collection.
-    // 🛡️ [VAPT-F11] (v2.6.557): Random password generation + email notification. No hardcoded defaults.
+    // 🛡️ [VAPT-F11] (v2.6.558): Random password generation + email notification. No hardcoded defaults.
     try {
       const existingAdmin = await Player.findOne({ id: 'admin' }).lean();
       
