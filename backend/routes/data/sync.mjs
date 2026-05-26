@@ -137,7 +137,12 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       const map = new Map();
       legacy.forEach(item => { if (item && item.id) map.set(String(item.id), item); });
       distinctDocs.forEach(doc => { 
-        if (doc && doc.data && (doc.data.id || doc.id)) map.set(String(doc.data.id || doc.id), doc.data); 
+        if (doc && doc.data && (doc.data.id || doc.id)) {
+          const docId = String(doc.data.id || doc.id);
+          // 🛡️ [VAPT-F22] (v2.6.556): Ensure 'id' is explicitly injected into the data payload
+          // if it only exists at the document root, preventing frontend silent dropping
+          map.set(docId, { ...doc.data, id: docId });
+        }
       });
       return Array.from(map.values());
     };
