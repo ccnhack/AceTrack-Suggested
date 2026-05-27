@@ -167,7 +167,7 @@ export default function createInfrastructureRoutes({
          
          // AI Summary Generation
          let summary = "Generating AI summary...";
-         const apiKey = process.env.GROQ_API_KEY;
+         const apiKey = process.env.GROQ_API_KEY || process.env.CEREBRAS_API_KEY;
          
          if (apiKey) {
             try {
@@ -839,7 +839,7 @@ ${chatHistory.substring(0, 3000)}`;
    // 🔎 [QUERY AI SUMMARIZER] (v2.6.545)
    // Summarizes raw MongoDB results via AI for /acetrack query
    async function runQueryAI(originalQuery, mongoLogs, responseUrl) {
-      const apiKey = process.env.GROQ_API_KEY;
+      const apiKey = process.env.GROQ_API_KEY || process.env.CEREBRAS_API_KEY;
 
       const compactLogsArr = mongoLogs.map(l => {
          let d = ''; try { d = JSON.stringify(l.details || {}); } catch(e){}
@@ -915,7 +915,7 @@ Provide a highly structured, visually clean summary of these results.
    }
 
   async function runLogAI(userQuery, responseUrl, bypassRedaction = false) {
-      const apiKey = process.env.GROQ_API_KEY;
+      const apiKey = process.env.GROQ_API_KEY || process.env.CEREBRAS_API_KEY;
       if (!apiKey) {
          return await sendDelayedSlackResponse(responseUrl, { response_type: "ephemeral", text: "⚠️ _AI Query unavailable: GROQ_API_KEY is not set._" });
       }
@@ -1227,7 +1227,7 @@ ${securityInstruction}`;
       
       console.log('📡 [MFA_REVEAL_DELIVERY] Delivery paths:', { canEphemeral, canResponseUrl });
 
-      const apiKey = process.env.GROQ_API_KEY;
+      const apiKey = process.env.GROQ_API_KEY || process.env.CEREBRAS_API_KEY;
       if (!apiKey) {
          return await postEphemeral(slackBotToken, channelId, slackUserId, "⚠️ _AI Query unavailable: GROQ_API_KEY is not set._");
       }

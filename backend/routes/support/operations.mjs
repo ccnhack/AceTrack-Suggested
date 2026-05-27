@@ -112,7 +112,7 @@ router.post('/support/ai-summary', apiKeyGuard, async (req, res) => {
   if (!messages) return res.status(400).json({ error: "Messages array required" });
   
   try {
-    const groqKey = process.env.GROQ_API_KEY;
+    const groqKey = process.env.GROQ_API_KEY || process.env.CEREBRAS_API_KEY;
     if (!groqKey) return res.status(500).json({ error: "GROQ_API_KEY is not set" });
 
     const aiRes = await fetchWithAIFallback({
@@ -207,7 +207,7 @@ router.post('/support/reassign-ticket', apiKeyGuard, authGuard, async (req, res)
 
     let issueDescription = `${ticketType}: ${ticketTitle}`;
     try {
-      const groqKey = process.env.GROQ_API_KEY;
+      const groqKey = process.env.GROQ_API_KEY || process.env.CEREBRAS_API_KEY;
       if (groqKey && issueContext) {
         const aiRes = await fetchWithAIFallback({
           messages: [{ role: 'user', content: `Summarize this support issue in one short sentence (max 20 words), no quotes: "${issueContext}"` }],
@@ -421,7 +421,7 @@ router.post('/support/claim-ticket', apiKeyGuard, authGuard, async (req, res) =>
 
     let issueDescription = `${ticketType}: ${ticketTitle}`;
     try {
-      const groqKey = process.env.GROQ_API_KEY;
+      const groqKey = process.env.GROQ_API_KEY || process.env.CEREBRAS_API_KEY;
       if (groqKey && issueContext) {
         const aiRes = await fetchWithAIFallback({
           messages: [{ role: 'user', content: `Summarize this support issue in one short sentence (max 20 words), no quotes: "${issueContext}"` }],

@@ -61,7 +61,7 @@ export const getIPReputation = async (ip) => {
 // ═══════════════════════════════════════════════════════════════
 
 export const generateSecuritySummary = async (events) => {
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY || process.env.CEREBRAS_API_KEY;
   if (!apiKey) return "AI Summary unavailable: GROQ_API_KEY is not set.";
 
   try {
@@ -127,7 +127,8 @@ export function createSecurityAlertSender() {
         };
 
         // 🤖 [AI EVENT INSIGHT] (v2.6.309)
-        if (process.env.GROQ_API_KEY) {
+        const activeApiKey = process.env.GROQ_API_KEY || process.env.CEREBRAS_API_KEY;
+        if (activeApiKey) {
           try {
             let contextualHint = "";
             if (event === 'UNAUTHORIZED_ACCESS_BLOCKED') {
@@ -136,7 +137,7 @@ export function createSecurityAlertSender() {
             const prompt = `As a cybersecurity expert, provide a concise 1-2 sentence explanation of why this security event was triggered and its potential implications.${contextualHint} Event: ${event}, IP: ${data.IP}, URL: ${data.URL}, Method: ${data.Method}, Actor: ${data.Actor}.`;
             const aiResponse = await fetchWithAIFallback({
               messages: [{ role: 'user', content: prompt }],
-              apiKey: process.env.GROQ_API_KEY,
+              apiKey: activeApiKey,
               temperature: 0.3,
               max_tokens: 150
             });
