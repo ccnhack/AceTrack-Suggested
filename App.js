@@ -68,8 +68,8 @@ import { useSupportStore } from './stores';
 
 
 
-// 🔄 Centralized Versioning// 🚀 ACE TRACK STABILITY VERSION (v2.6.562)
-const APP_VERSION = '2.6.562';
+// 🔄 Centralized Versioning// 🚀 ACE TRACK STABILITY VERSION (v2.6.565)
+const APP_VERSION = '2.6.565';
 const linking = {
   prefixes: [config.API_BASE_URL || 'https://acetrack-suggested.onrender.com', 'acetrack://'],
   config: {
