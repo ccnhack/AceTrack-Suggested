@@ -5,6 +5,8 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+import { logServerEvent } from './services/AuditService.mjs';
+
 /**
  * Dispatches an email payload via the Google Apps Script Web App.
  * This runs over port 443 (HTTPS), completely bypassing Render's port 465 SMTP firewall.
@@ -940,9 +942,11 @@ export async function sendSuspensionEmail(toEmail, name) {
   };
   try {
     await sendMailWithTimeout(mailOptions);
+    logServerEvent('EMAIL_DISPATCH_SUCCESS', { type: 'suspension', to: toEmail });
     return { success: true };
   } catch (err) {
     console.error("Suspension email failed:", err.message);
+    logServerEvent('EMAIL_DISPATCH_FAILED', { type: 'suspension', to: toEmail, error: err.message });
     return { success: false };
   }
 }

@@ -562,7 +562,8 @@ router.post('/support/manage-user', apiKeyGuard, authGuard, async (req, res) => 
     logServerEvent('SUPPORT_USER_MANAGED', { admin: req.headers['x-user-id'] || 'admin', targetUserId, status, level });
     res.json({ success: true, user: user });
   } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
+    console.error(`[API] POST /support/manage-user Error:`, e);
+    res.status(500).json({ error: `Internal server error: ${e.message}` });
   }
 });
 
