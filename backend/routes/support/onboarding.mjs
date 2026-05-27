@@ -80,12 +80,17 @@ router.post('/support/invite', apiKeyGuard, authGuard, asyncHandler(async (req, 
   const escapedEmail = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const existingAgent = await Player.findOne({ "data.role": "support", "data.email": { $regex: new RegExp(`^${escapedEmail}$`, 'i') } }).lean();
 
-  if (existingAgent && existingAgent.data.supportStatus !== 'terminated') {
-    return res.status(422).json({
-      error: 'Employee Already Exists',
-      message: `The email ${email} is already associated with an active support employee (${existingAgent.data.name || existingAgent.data.firstName + ' ' + existingAgent.data.lastName}). Use the Support tab to manage their account.`,
-      employeeName: existingAgent.data.name || `${existingAgent.data.firstName} ${existingAgent.data.lastName}`
-    });
+  if (existingAgent) {
+    const status = (existingAgent.data.supportStatus || '').toLowerCase();
+    const isTerminated = status === 'terminated' || status === 'inactive' || existingAgent.data.supportLevel === 'EX-EMPLOYEE';
+    
+    if (!isTerminated) {
+      return res.status(422).json({
+        error: 'Employee Already Exists',
+        message: `The email ${email} is already associated with an active support employee (${existingAgent.data.name || existingAgent.data.firstName + ' ' + existingAgent.data.lastName}). Use the Support tab to manage their account.`,
+        employeeName: existingAgent.data.name || `${existingAgent.data.firstName} ${existingAgent.data.lastName}`
+      });
+    }
   }
 
   const token = bcrypt.hashSync(Date.now().toString() + email, 10).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);

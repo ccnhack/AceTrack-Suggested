@@ -338,7 +338,7 @@ const AdminStaffPanel = () => {
             {firstName.trim() && lastName.trim() && (() => {
               const existingExEmployee = players?.find(p => 
                 p.role === 'support' && 
-                p.supportStatus === 'terminated' && 
+                ((p.supportStatus || '').toLowerCase() === 'terminated' || (p.supportStatus || '').toLowerCase() === 'inactive' || p.supportLevel === 'EX-EMPLOYEE') && 
                 email && p.email?.toLowerCase() === email.toLowerCase().trim()
               );
 
