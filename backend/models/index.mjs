@@ -128,11 +128,16 @@ const PlayerDataSchema = new mongoose.Schema({
   email: String,
   role: String,
   username: String,
+  name: String,
   password: { type: String, select: false },
   devices: [mongoose.Schema.Types.Mixed],
   seenAdminActionIds: [String],
   visitedAdminSubTabs: [String],
-  avatarUrl: String
+  avatarUrl: String,
+  supportStatus: String,
+  supportLevel: String,
+  suspendedAt: String,
+  terminatedAt: String
 }, { _id: false, strict: false });
 
 const PlayerSchema = new mongoose.Schema({
