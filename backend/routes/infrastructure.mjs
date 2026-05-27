@@ -954,7 +954,7 @@ Provide a highly structured, visually clean summary of these results.
          const filterPrompt = `You are an AI Log Router. A user is asking to search logs.
 Current Server Time (ISO): ${new Date().toISOString()}
 
-We have two log sources:
+We have three data sources:
 1. 'AuditLog' (MongoDB): Contains user actions, authentication events, and security logs.
    Schema: { userId: String, ipAddress: String, userAgent: String, action: String, details: Mixed, timestamp: Date }
    - Common actions: 'SUPPORT_LOGIN_SUCCESS', 'SUPPORT_LOGIN_FAILED', 'ADMIN_LOGIN_SUCCESS', 'ADMIN_LOGIN_FAILED', 'PASSWORD_CHANGED', 'BRUTE_FORCE_DETECTED', 'UNAUTHORIZED_ACCESS_BLOCKED', etc.
@@ -965,12 +965,17 @@ We have two log sources:
    - ⚠️ CRITICAL: DO NOT use aggregation operators like $date, $subtract, or $$NOW.
    - ⚠️ CRITICAL: ONLY apply a "timestamp" date filter if the user explicitly asks for a specific timeframe (e.g., "today", "yesterday", "last week"). Use the Current Server Time provided above to calculate accurate ISO date strings for $gte/$lte.
 2. 'server_events.jsonl' (Filesystem): Contains system crashes, server panics, WebSocket errors, and legacy ephemeral events.
+3. 'Player' (MongoDB): Contains user profiles and their current state (e.g. active, suspended, role).
+   Schema: { id: String, role: String, data: { name: String, email: String, supportStatus: String } }
+   - ⚠️ IMPORTANT: If the user is asking about specific users, employee lists, or current statuses (like "suspended employee names"), query this!
+   - Example: { "role": "support", "data.supportStatus": "suspended" }
 
 User query: "${userQuery}"
 
-Based on this query, generate a JSON object with two fields:
+Based on this query, generate a JSON object with three fields:
 1. "mongoFilter": A valid MongoDB query object for the AuditLog collection (use $regex heavily for strings!). If the query is broad, return {} to fetch the latest logs.
-2. "checkServerEventsFile": A boolean (MUST be true if the query asks about server crashes, panics, WebSocket drops, or system errors).
+2. "playerFilter": A valid MongoDB query object for the Player collection. If the query does not ask about user profiles or statuses, return {}.
+3. "checkServerEventsFile": A boolean (MUST be true if the query asks about server crashes, panics, WebSocket drops, or system errors).
 
 DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. No explanations.`;
 
@@ -982,7 +987,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
                apiKey
          });
 
-         let routingIntent = { mongoFilter: {}, checkServerEventsFile: false };
+         let routingIntent = { mongoFilter: {}, playerFilter: {}, checkServerEventsFile: false };
          if (filterReq.ok) {
             const filterJson = await filterReq.json();
             let rawJson = filterJson.choices?.[0]?.message?.content || "{}";
@@ -996,7 +1001,28 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
 
          let combinedLogsArr = [];
 
-         if (Object.keys(routingIntent.mongoFilter || {}).length > 0 || !routingIntent.checkServerEventsFile) {
+         const hasMongoFilter = Object.keys(routingIntent.mongoFilter || {}).length > 0;
+         const hasPlayerFilter = Object.keys(routingIntent.playerFilter || {}).length > 0;
+
+         if (hasPlayerFilter) {
+            const { Player } = await import('../models/index.mjs');
+            const sanitizedPlayerFilter = sanitizeMongoFilter(routingIntent.playerFilter);
+            try {
+               const players = await Player.find(sanitizedPlayerFilter).limit(100).lean();
+               const compactPlayers = players.map(p => {
+                  const pd = p.data || {};
+                  return {
+                     timeMs: new Date(p.lastUpdated || pd.createdAt).getTime() || 0,
+                     text: `[Database][Player Record] ID:${p.id} Name:${pd.name || pd.firstName || 'N/A'} Role:${p.role || pd.role || 'N/A'} Status:${pd.supportStatus || pd.status || 'active'} Email:${pd.email || 'N/A'}`
+                  };
+               });
+               combinedLogsArr.push(...compactPlayers);
+            } catch (err) {
+               console.error("Player Query Error:", err.message);
+            }
+         }
+
+         if (hasMongoFilter || (!routingIntent.checkServerEventsFile && !hasPlayerFilter)) {
             const { AuditLog } = await import('../models/index.mjs');
             const sanitizedFilter = sanitizeMongoFilter(routingIntent.mongoFilter);
             let mongoLogs = [];
