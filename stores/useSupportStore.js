@@ -210,28 +210,71 @@ export const useSupportStore = create((set, get) => {
     },
 
     onMarkSeen: async (ticketId) => {
-      // We can use the reply-ticket endpoint with no text/image to just mark seen if we modify it slightly,
-      // or we can create a dedicated endpoint. Since reply-ticket marks seen automatically if text is omitted,
-      // wait, our backend requires text or image: `if (!ticketId || (!text && !image)) { return res.status(400) }`
-      // For now, we will do a soft local mark-seen without pushing to avoid atomic overwrite data loss.
-      // A dedicated mark-seen endpoint would be better in Phase 3.
       const currentUser = useAuthStore.getState().currentUser;
       if (!currentUser) return;
+      
       const currentTickets = get().supportTickets;
       let changed = false;
+      
       const updated = currentTickets.map(t => {
-        if (t.id === ticketId && t.messages) {
-           const newMsgs = t.messages.map(m => {
-              if (m.senderId !== currentUser.id && m.status !== 'seen') {
-                 changed = true; return { ...m, status: 'seen' };
+        if (t.id === ticketId) {
+          changed = true;
+          const isAssigned = t.assignedTo === currentUser.id;
+          const isUnassigned = !t.assignedTo || t.assignedTo === 'Unassigned';
+          
+          // 1. Update private lastReadBy timestamp
+          const newLastReadBy = { ...(t.lastReadBy || {}), [currentUser.id]: new Date().toISOString() };
+          
+          // 2. Only trigger global 'seen' read-receipts if assigned agent or unassigned
+          let newMsgs = t.messages;
+          if ((isAssigned || isUnassigned) && t.messages) {
+            newMsgs = t.messages.map(m => {
+              if (m.senderId !== currentUser.id && m.status !== 'seen' && m.type !== 'event' && m.senderId !== 'system') {
+                return { ...m, status: 'seen' };
               }
               return m;
-           });
-           if (changed) return { ...t, messages: newMsgs };
+            });
+          }
+          
+          return { ...t, messages: newMsgs, lastReadBy: newLastReadBy };
         }
         return t;
       });
-      if (changed) set({ supportTickets: updated });
+
+      if (changed) {
+        // 🛡️ [v2.6.557] Optimistic local update for instant UI feedback
+        set({ supportTickets: updated });
+        
+        // 🛡️ [v2.6.557] Persist to server so 'seen' status survives sync events
+        // Fire-and-forget to avoid blocking the UI
+        try {
+          const config = require('../config').default;
+          const storageUtil = require('../utils/storage').default;
+          const token = await storageUtil.getItem('userToken');
+          const headers = {
+            'Content-Type': 'application/json',
+            'x-ace-api-key': config.PUBLIC_APP_ID
+          };
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+          
+          const res = await fetch(`${config.API_BASE_URL}/api/v1/support/mark-seen`, {
+            method: 'POST',
+            headers,
+            credentials: 'include',
+            body: JSON.stringify({ ticketId })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            // If the server returned the updated ticket, use it to stay in sync
+            if (data.ticket) {
+              const freshTickets = get().supportTickets;
+              set({ supportTickets: freshTickets.map(t => t.id === ticketId ? data.ticket : t) });
+            }
+          }
+        } catch (e) {
+          console.warn('[SupportStore] mark-seen server persist failed (local still applied):', e.message);
+        }
+      }
       return { success: changed };
     },
 

@@ -109,7 +109,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.558'; // Critical for Update prompts 
+const APP_VERSION = '2.6.559'; // Critical for Update prompts 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -336,8 +336,8 @@ app.use(cors({
 // 🔐 SECURITY: Request body size limit (SEC Fix — 5MB max)
 // ═══════════════════════════════════════════════════════════════
 app.use(compression());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '10mb', verify: (req, res, buf) => { req.rawBody = buf; } }));
+app.use(express.urlencoded({ extended: true, limit: '10mb', verify: (req, res, buf) => { req.rawBody = buf; } }));
 
 // 🛡️ DIAGNOSTICS: Global Request Logger (v2.6.395)
 app.use(async (req, res, next) => {

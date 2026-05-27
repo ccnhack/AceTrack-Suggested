@@ -403,6 +403,11 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
     const changedKeys = Object.keys(req.body).filter(k => syncableKeys.includes(k));
     await logAudit(req, 'DATA_SAVE', changedKeys, { atomicKeys: req.body.atomicKeys, version: clientVersion });
 
+    // 🛡️ [VAPT-F23] (v2.6.557): BOLA/IDOR Prevention — JWT-verified identity for ownership checks
+    const bolaActorId = String(req.user?.id || req.userId || '').toLowerCase();
+    const bolaIsAdmin = req.userRole === 'admin';
+    const bolaIsSupport = req.userRole === 'support';
+
     const newMasterData = { ...currentData };
     
     // 🛡️ SECURITY HARDENING (v2.6.164): Purge any legacy currentUser leaked into global state
@@ -490,6 +495,58 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
             if (p && p.id) {
               const id = String(p.id).toLowerCase();
               const existing = entityMap.get(id);
+
+              // 🛡️ [VAPT-F23] (v2.6.557): BOLA/IDOR OWNERSHIP GUARD
+              // Prevents horizontal privilege escalation where User A can modify User B's data.
+              // Uses JWT-verified identity (bolaActorId) — NOT the spoofable x-user-id header.
+              if (key === 'players' && !bolaIsAdmin && id !== bolaActorId) {
+                console.warn(`🛑 [BOLA_GUARD] Blocked ${bolaActorId} from modifying player profile ${id}`);
+                logAudit(req, 'BOLA_PLAYER_BLOCKED', [key], { targetId: id, actorId: bolaActorId }).catch(() => {});
+                return;
+              }
+              if (key === 'supportTickets' && !bolaIsAdmin && !bolaIsSupport) {
+                const ticketOwner = String(existing?.userId || p.userId || '').toLowerCase();
+                if (ticketOwner !== bolaActorId) {
+                  console.warn(`🛑 [BOLA_GUARD] Blocked ${bolaActorId} from modifying ticket ${id} (owner: ${ticketOwner})`);
+                  logAudit(req, 'BOLA_TICKET_BLOCKED', [key], { targetId: id, actorId: bolaActorId, ownerId: ticketOwner }).catch(() => {});
+                  return;
+                }
+              }
+              if (key === 'evaluations' && !bolaIsAdmin) {
+                console.warn(`🛑 [BOLA_GUARD] Blocked ${bolaActorId} from modifying evaluation ${id}`);
+                logAudit(req, 'BOLA_EVAL_BLOCKED', [key], { targetId: id, actorId: bolaActorId }).catch(() => {});
+                return;
+              }
+              if (key === 'tournaments' && !bolaIsAdmin) {
+                const tCreator = String(existing?.creatorId || p.creatorId || '').toLowerCase();
+                const tCoach = String(existing?.assignedCoachId || p.assignedCoachId || '').toLowerCase();
+                const tParticipants = [
+                  ...(existing?.registeredPlayerIds || []),
+                  ...(existing?.waitlistedPlayerIds || []),
+                  ...(existing?.pendingPaymentPlayerIds || [])
+                ].map(pid => String(pid).toLowerCase());
+                if (tCreator !== bolaActorId && tCoach !== bolaActorId && !tParticipants.includes(bolaActorId)) {
+                  console.warn(`🛑 [BOLA_GUARD] Blocked ${bolaActorId} from modifying tournament ${id}`);
+                  logAudit(req, 'BOLA_TOURNAMENT_BLOCKED', [key], { targetId: id, actorId: bolaActorId }).catch(() => {});
+                  return;
+                }
+              }
+              if (key === 'matches' && !bolaIsAdmin) {
+                const matchPlayers = [existing?.player1Id, existing?.player2Id, p.player1Id, p.player2Id, p.challengerId, p.opponentId]
+                  .filter(Boolean).map(pid => String(pid).toLowerCase());
+                if (!matchPlayers.includes(bolaActorId)) {
+                  console.warn(`🛑 [BOLA_GUARD] Blocked ${bolaActorId} from modifying match ${id}`);
+                  return;
+                }
+              }
+              if (key === 'matchmaking' && !bolaIsAdmin) {
+                const mmParticipants = [existing?.senderId, existing?.receiverId, existing?.creatorId, p.senderId, p.receiverId, p.creatorId]
+                  .filter(Boolean).map(pid => String(pid).toLowerCase());
+                if (!mmParticipants.includes(bolaActorId)) {
+                  console.warn(`🛑 [BOLA_GUARD] Blocked ${bolaActorId} from modifying matchmaking ${id}`);
+                  return;
+                }
+              }
 
               // 🛡️ [AUTO-ASSIGNMENT ENGINE] (v2.6.254)
               // If supportTickets are being saved and there's a new message from a staff member on an unassigned ticket, assign it.

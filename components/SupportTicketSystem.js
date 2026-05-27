@@ -623,9 +623,25 @@ export const SupportTicketSystem = ({
                 const aLast = aMsgs[aMsgs.length - 1];
                 const bLast = bMsgs[bMsgs.length - 1];
                 
-                // 🛡️ [v2.6.35] UNREAD LOGIC: Last message from admin && NOT seen
-                const aUnread = aLast && aLast.senderId !== userId && aLast.senderId !== 'system' && aLast.status !== 'seen';
-                const bUnread = bLast && bLast.senderId !== userId && bLast.senderId !== 'system' && bLast.status !== 'seen';
+                // 🛡️ [v2.6.558] UNREAD LOGIC: Dynamic per-agent or global user check
+                const checkUnread = (t) => {
+                  const msgs = t.messages || [];
+                  const last = msgs[msgs.length - 1];
+                  if (!last || last.type === 'event' || last.senderId === 'system' || last.senderId === userId) return false;
+                  
+                  if (isAgent) {
+                    const myLastRead = t.lastReadBy?.[userId];
+                    if (myLastRead) {
+                       return new Date(last.timestamp) > new Date(myLastRead);
+                    }
+                  }
+                  
+                  // End-User view (or legacy fallback): Only care if it's unread globally
+                  return last.status !== 'seen';
+                };
+                
+                const aUnread = checkUnread(a);
+                const bUnread = checkUnread(b);
                 
                 if (aUnread && !bUnread) return -1;
                 if (!aUnread && bUnread) return 1;
@@ -639,7 +655,16 @@ export const SupportTicketSystem = ({
                 const lastMessage = ticket.messages?.[ticket.messages.length - 1];
                 const isSystem = lastMessage?.senderId === 'system';
                 const isAdminReply = lastMessage && !isSystem && lastMessage.senderId !== userId;
-                const hasUnread = isAdminReply && lastMessage.status !== 'seen';
+                
+                // 🛡️ [v2.6.558] PER-AGENT UNREAD INDICATOR
+                const hasUnread = (() => {
+                  if (!lastMessage || lastMessage.type === 'event' || lastMessage.senderId === 'system' || lastMessage.senderId === userId) return false;
+                  if (isAgent) {
+                    const myLastRead = ticket.lastReadBy?.[userId];
+                    if (myLastRead) return new Date(lastMessage.timestamp) > new Date(myLastRead);
+                  }
+                  return lastMessage.status !== 'seen';
+                })();
                 const st = statusColors[ticket.status || 'Open'] || statusColors['Open'];
 
                 return (

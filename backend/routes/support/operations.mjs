@@ -492,6 +492,67 @@ router.post('/support/claim-ticket', apiKeyGuard, authGuard, async (req, res) =>
   }
 });
 
+// 🛡️ [MARK-SEEN ENDPOINT] (v2.6.557): Persist message read-receipts to the database
+// Previously, onMarkSeen was local-only (Zustand state), so any sync event would overwrite
+// the 'seen' status and cause the blue unread highlight to reappear permanently.
+router.post('/support/mark-seen', apiKeyGuard, authGuard, async (req, res) => {
+  const { ticketId } = req.body;
+  const viewerId = req.user?.id;
+
+  if (!ticketId) return res.status(400).json({ error: 'ticketId is required' });
+  if (!viewerId) return res.status(401).json({ error: 'Authentication required' });
+
+  try {
+    const ticketDoc = await SupportTicket.findOne({ id: ticketId });
+    if (!ticketDoc || !ticketDoc.data) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+
+    const ticket = ticketDoc.data;
+    
+    // 🛡️ [PER-AGENT READ STATE] (v2.6.558)
+    if (!ticket.lastReadBy) ticket.lastReadBy = {};
+    ticket.lastReadBy[viewerId] = new Date().toISOString();
+
+    // 🛡️ [GLOBAL READ RECEIPT GUARD] (v2.6.558)
+    // Only the assigned agent (or anyone if unassigned) triggers the global 'seen' receipt for the end user.
+    // This prevents other agents from clearing the user's unread indicator or marking messages read on behalf of the owner.
+    const isAssignedAgent = ticket.assignedTo === viewerId;
+    const isUnassigned = !ticket.assignedTo || ticket.assignedTo === 'Unassigned';
+
+    if (isAssignedAgent || isUnassigned) {
+      if (ticket.messages) {
+        ticket.messages = ticket.messages.map(m => {
+          if (m.senderId !== viewerId && m.status !== 'seen' && m.type !== 'event' && m.senderId !== 'system') {
+            return { ...m, status: 'seen' };
+          }
+          return m;
+        });
+      }
+    }
+
+    ticketDoc.data = ticket;
+    ticketDoc.lastUpdated = new Date();
+    ticketDoc.markModified('data');
+    await ticketDoc.save();
+
+    // 📡 Broadcast so other clients also see the updated read-receipts
+    if (io) {
+      io.emit('entity_updated', {
+        entity: 'supportTickets',
+        data: ticketDoc.data,
+        source: 'api',
+        timestamp: Date.now()
+      });
+    }
+
+    res.json({ success: true, changed: true, ticket: ticketDoc.data });
+  } catch (e) {
+    console.error('[API] /support/mark-seen error:', e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
 router.post('/support/reply-ticket', apiKeyGuard, authGuard, async (req, res) => {
   const { ticketId, text, image, replyToMsg } = req.body;
