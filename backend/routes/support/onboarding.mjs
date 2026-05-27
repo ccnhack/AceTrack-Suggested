@@ -38,6 +38,51 @@ async function syncCollectionsFromState(state) {
     ]);
 }
 
+async function resolveIpGeo(ipRaw) {
+  try {
+    const ipChain = (ipRaw || '').split(',').map(s => s.trim().replace('::ffff:', '')).filter(Boolean);
+    const primaryIp = ipChain[0] || '127.0.0.1';
+    if (primaryIp === '127.0.0.1' || primaryIp === '::1') return { ip: primaryIp, city: 'Localhost', country: 'Localhost', region: 'Localhost', isp: 'Localhost', lat: 0, lon: 0, timezone: 'UTC' };
+    
+    const resp = await fetch(`http://ip-api.com/json/${primaryIp}?fields=status,country,regionName,city,lat,lon,timezone,isp`, { signal: AbortSignal.timeout(3000) });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.status === 'success') {
+        return {
+          ip: primaryIp,
+          city: data.city || 'Unknown',
+          country: data.country || 'Unknown',
+          region: data.regionName || 'Unknown',
+          isp: data.isp || 'Unknown',
+          lat: data.lat || 0,
+          lon: data.lon || 0,
+          timezone: data.timezone || 'UTC'
+        };
+      }
+    }
+    return { ip: primaryIp, city: 'Unknown', country: 'Unknown', region: 'Unknown', isp: 'Unknown', lat: 0, lon: 0, timezone: 'UTC' };
+  } catch (e) {
+    return { ip: ipRaw || 'Unknown', city: 'Unknown', country: 'Unknown', region: 'Unknown', isp: 'Unknown', lat: 0, lon: 0, timezone: 'UTC' };
+  }
+}
+
+function detectBot(userAgent, isp) {
+  if (!userAgent) return 'unknown_bot';
+  const ua = userAgent.toLowerCase();
+  if (ua.includes('googlebot')) return 'google';
+  if (ua.includes('bingbot')) return 'bing';
+  if (ua.includes('slackbot') || ua.includes('slack-imgroutine')) return 'slack';
+  if (ua.includes('twitterbot')) return 'twitter';
+  if (ua.includes('facebookexternalhit')) return 'facebook';
+  if (ua.includes('bot') || ua.includes('spider') || ua.includes('crawler')) return 'generic';
+  
+  const ispLower = (isp || '').toLowerCase();
+  if (ispLower.includes('amazon') || ispLower.includes('aws') || ispLower.includes('google cloud') || ispLower.includes('microsoft azure') || ispLower.includes('digitalocean') || ispLower.includes('hetzner') || ispLower.includes('ovh')) {
+    return 'datacenter_bot';
+  }
+  
+  return null;
+}
 export default function ({
   io,
   logServerEvent,
