@@ -808,17 +808,17 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
 
                     <View style={[
                       styles.statusPill,
-                      { backgroundColor: isSelectedTerminated ? '#FEE2E2' : (selectedAgent.supportStatus === 'suspended' ? '#FFF7ED' : (selectedAgent.supportStatus === 'overwhelmed' ? '#FEF3C7' : '#D1FAE5')) }
+                      { backgroundColor: isSelectedTerminated ? '#FEE2E2' : ((selectedAgent.supportStatus === 'suspended' || selectedAgent.status === 'suspended') ? '#FFF7ED' : ((selectedAgent.supportStatus === 'overwhelmed' || selectedAgent.status === 'overwhelmed') ? '#FEF3C7' : '#D1FAE5')) }
                     ]}>
                       <View style={[
                         styles.statusPillDot, 
-                        { backgroundColor: isSelectedTerminated ? '#EF4444' : (selectedAgent.supportStatus === 'suspended' ? '#F97316' : (selectedAgent.supportStatus === 'overwhelmed' ? '#F59E0B' : '#10B981')) }
+                        { backgroundColor: isSelectedTerminated ? '#EF4444' : ((selectedAgent.supportStatus === 'suspended' || selectedAgent.status === 'suspended') ? '#F97316' : ((selectedAgent.supportStatus === 'overwhelmed' || selectedAgent.status === 'overwhelmed') ? '#F59E0B' : '#10B981')) }
                       ]} />
                       <Text style={[
                         styles.statusPillText,
-                        { color: isSelectedTerminated ? '#DC2626' : (selectedAgent.supportStatus === 'suspended' ? '#EA580C' : (selectedAgent.supportStatus === 'overwhelmed' ? '#D97706' : '#059669')) }
+                        { color: isSelectedTerminated ? '#DC2626' : ((selectedAgent.supportStatus === 'suspended' || selectedAgent.status === 'suspended') ? '#EA580C' : ((selectedAgent.supportStatus === 'overwhelmed' || selectedAgent.status === 'overwhelmed') ? '#D97706' : '#059669')) }
                       ]}>
-                        {isSelectedTerminated ? 'Terminated' : (selectedAgent.supportStatus || 'Active')}
+                        {isSelectedTerminated ? 'Terminated' : (selectedAgent.supportStatus || selectedAgent.status || 'Active')}
                       </Text>
                     </View>
                   </View>
@@ -1629,7 +1629,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                   <SafeAvatar uri={selectedAgent.avatar} name={selectedAgent.name} role="support" size={50} borderRadius={16} />
                   <View style={{ marginLeft: 16 }}>
                     <Text style={styles.actionUserName}>{selectedAgent.name}</Text>
-                    <Text style={styles.actionUserMeta}>{selectedAgent.supportLevel || 'Intern'} • {selectedAgent.supportStatus || 'Active'}</Text>
+                    <Text style={styles.actionUserMeta}>{selectedAgent.supportLevel || 'Intern'} • {selectedAgent.supportStatus || selectedAgent.status || 'Active'}</Text>
                     
                     {/* 🗺️ [HIERARCHY_PATH] (v2.6.449) */}
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
@@ -1819,7 +1819,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                   <TouchableOpacity 
                     style={styles.actionBtn}
                     onPress={async () => {
-                      const status = (selectedAgent.supportStatus || '').toLowerCase();
+                      const status = (selectedAgent.supportStatus || selectedAgent.status || '').toLowerCase();
                       const isTerminated = status === 'terminated' || status === 'inactive' || selectedAgent.supportLevel === 'EX-EMPLOYEE';
                       const isSuspended = status === 'suspended';
                       
@@ -1840,15 +1840,15 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                   >
                     <Ionicons 
                       name={
-                        (selectedAgent.supportStatus === 'terminated' || selectedAgent.supportStatus === 'inactive') ? "person-add-outline" : 
-                        (selectedAgent.supportStatus === 'suspended' ? "play-circle" : "pause-circle")
+                        (selectedAgent.supportStatus === 'terminated' || selectedAgent.status === 'terminated' || selectedAgent.supportStatus === 'inactive' || selectedAgent.status === 'inactive') ? "person-add-outline" : 
+                        (selectedAgent.supportStatus === 'suspended' || selectedAgent.status === 'suspended' ? "play-circle" : "pause-circle")
                       } 
                       size={20} 
                       color="#6366F1" 
                     />
                     <Text style={styles.actionBtnText}>
-                      {(selectedAgent.supportStatus === 'terminated' || selectedAgent.supportStatus === 'inactive') ? "Re-onboard" : 
-                       (selectedAgent.supportStatus === 'suspended' ? "Unsuspend" : "Suspend")}
+                      {(selectedAgent.supportStatus === 'terminated' || selectedAgent.status === 'terminated' || selectedAgent.supportStatus === 'inactive' || selectedAgent.status === 'inactive') ? "Re-onboard" : 
+                       (selectedAgent.supportStatus === 'suspended' || selectedAgent.status === 'suspended' ? "Unsuspend" : "Suspend")}
                     </Text>
                   </TouchableOpacity>
 

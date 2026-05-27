@@ -170,6 +170,13 @@ class SocketService {
           console.error('[SocketService] socket:data_updated error:', e);
         }
       });
+
+      // 🛡️ [SECURITY_SYNC] (v2.6.562): Force logout when backend suspends/terminates user
+      this.socket.on('auth_invalidated', (data) => {
+        console.warn(`🛑 [SocketService] Received auth_invalidated: ${data?.reason}`);
+        eventBus.emit('AUTH_FAILURE', { status: 401, endpoint: 'socket:auth_invalidated' });
+        this.disconnect();
+      });
     } catch (e: any) {
       console.error('[SocketService] setupSocket listeners failed:', e);
     }
