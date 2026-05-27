@@ -429,11 +429,13 @@ export const AdminGrievancesPanel = ({
     
     // 🛡️ SYNC (v2.6.227): Dynamically detect admin identity
     const myId = currentUser?.id || 'admin';
-    const status = ticket.status || 'Open';
-    const isUnseenStatus = (status === 'Open' || status === 'Awaiting Response');
     
-    // If the admin opened it this session, it's definitively read (hides the blue box)
-    const wasOpenedByAdmin = restProps.seenAdminActionIds?.has ? restProps.seenAdminActionIds.has(String(ticket.id)) : false;
+    // 🛡️ [SESSION READ GATE] (v2.6.561): If the current user opened this ticket
+    // in this session, immediately suppress the unread highlight. This is the
+    // PRIMARY mechanism for clearing the blue box on the admin view.
+    const seenSet = restProps.seenAdminActionIds;
+    const wasOpenedThisSession = seenSet?.has ? seenSet.has(String(ticket.id)) : false;
+    if (wasOpenedThisSession) return false;
     
     // 🛡️ [PER-AGENT READ STATE] (v2.6.558)
     const myLastRead = ticket.lastReadBy?.[myId] || (myId === 'admin' && ticket.lastReadBy?.['admin']);
@@ -443,7 +445,6 @@ export const AdminGrievancesPanel = ({
       
       // If we have a per-agent read timestamp, check if the message is newer
       if (myLastRead) {
-        // Strict timestamp comparison to handle invalid dates and identical timestamps
         const msgTime = new Date(m.timestamp || 0).getTime();
         const readTime = new Date(myLastRead).getTime();
         if (!isNaN(msgTime) && !isNaN(readTime)) {
@@ -455,12 +456,10 @@ export const AdminGrievancesPanel = ({
       return m.status !== 'seen';
     });
     
-    // If admin has actively opened this ticket, force it to be read regardless of other agents' status
-    if (myId === 'admin' && wasOpenedByAdmin && !hasUnreadMessages) {
-       return false;
-    }
+    const status = ticket.status || 'Open';
+    const isUnseenStatus = (status === 'Open' || status === 'Awaiting Response');
     
-    return hasUnreadMessages || (isUnseenStatus && !wasOpenedByAdmin);
+    return hasUnreadMessages || isUnseenStatus;
   };
 
   const scopedTickets = useMemo(() => {
@@ -1444,6 +1443,7 @@ export const AdminGrievancesPanel = ({
 
       <FlatList
         data={filteredTickets || []}
+        extraData={restProps.seenAdminActionIds}
         keyExtractor={(item, idx) => item.id || `temp-${idx}`}
         renderItem={renderTicketItem}
         getItemLayout={(data, index) => ({ length: 90, offset: 90 * index, index })}
