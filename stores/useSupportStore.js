@@ -210,19 +210,20 @@ export const useSupportStore = create((set, get) => {
     },
 
     onMarkSeen: async (ticketId) => {
-      const currentUser = useAuthStore.getState().currentUser;
-      if (!currentUser) return;
+      // 🛡️ [STABILITY FIX] Use get().currentUser if useAuthStore is not populated yet
+      const authStoreUser = useAuthStore.getState().currentUser;
+      const currentUser = authStoreUser || { id: 'admin', role: 'admin' };
       
       const currentTickets = get().supportTickets;
       let changed = false;
       
       const updated = currentTickets.map(t => {
-        if (t.id === ticketId) {
+        if (String(t.id) === String(ticketId)) {
           changed = true;
           const isAssigned = t.assignedTo === currentUser.id;
           const isUnassigned = !t.assignedTo || t.assignedTo === 'Unassigned';
           
-          // 1. Update private lastReadBy timestamp
+          // 1. Update private lastReadBy timestamp (handles admin/support agents)
           const newLastReadBy = { ...(t.lastReadBy || {}), [currentUser.id]: new Date().toISOString() };
           
           // 2. Only trigger global 'seen' read-receipts if assigned agent or unassigned

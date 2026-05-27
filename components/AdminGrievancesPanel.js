@@ -431,22 +431,34 @@ export const AdminGrievancesPanel = ({
     const myId = currentUser?.id || 'admin';
     const status = ticket.status || 'Open';
     const isUnseenStatus = (status === 'Open' || status === 'Awaiting Response');
+    
+    // If the admin opened it this session, it's definitively read (hides the blue box)
     const wasOpenedByAdmin = restProps.seenAdminActionIds?.has ? restProps.seenAdminActionIds.has(String(ticket.id)) : false;
     
     // 🛡️ [PER-AGENT READ STATE] (v2.6.558)
-    const myLastRead = ticket.lastReadBy?.[myId];
+    const myLastRead = ticket.lastReadBy?.[myId] || (myId === 'admin' && ticket.lastReadBy?.['admin']);
     
     const hasUnreadMessages = (ticket.messages || []).some(m => {
       if (!m || m.senderId === myId || m.type === 'event' || m.senderId === 'system') return false;
       
       // If we have a per-agent read timestamp, check if the message is newer
       if (myLastRead) {
-        return new Date(m.timestamp) > new Date(myLastRead);
+        // Strict timestamp comparison to handle invalid dates and identical timestamps
+        const msgTime = new Date(m.timestamp || 0).getTime();
+        const readTime = new Date(myLastRead).getTime();
+        if (!isNaN(msgTime) && !isNaN(readTime)) {
+           return msgTime > readTime;
+        }
       }
       
       // Legacy fallback
       return m.status !== 'seen';
     });
+    
+    // If admin has actively opened this ticket, force it to be read regardless of other agents' status
+    if (myId === 'admin' && wasOpenedByAdmin && !hasUnreadMessages) {
+       return false;
+    }
     
     return hasUnreadMessages || (isUnseenStatus && !wasOpenedByAdmin);
   };
