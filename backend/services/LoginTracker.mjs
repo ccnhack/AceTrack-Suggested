@@ -7,14 +7,14 @@
  * - Advanced brute-force detection
  * - In-memory state (Note: Scheduled for Redis migration in future phase)
  */
-import { logAudit } from './AuditService.mjs';
+import { logAudit, getClientIp } from './AuditService.mjs';
 
 // ⚠️ ARCHITECTURE WARNING: This Map will fragment if deployed to multiple instances.
 // Scheduled for Redis migration in Phase 2/3.
 export const loginAttempts = new Map(); // identifier_IP -> { attempts: [], lastAlertedAt: 0, lastSummaryAt: 0 }
 
 export const trackLoginAttempt = async (req, identifier, password, success) => {
-  const ip = (req && req.ip) || '0.0.0.0';
+  const ip = getClientIp(req);
   const key = `${identifier}_${ip}`;
   const now = Date.now();
   

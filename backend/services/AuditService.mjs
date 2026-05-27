@@ -25,13 +25,27 @@ const sendSecurityAlert = createSecurityAlertSender();
 /**
  * Main security audit logger and alert aggregator
  */
+export const getClientIp = (req) => {
+  if (!req) return '0.0.0.0';
+  let ip = req.headers && req.headers['x-forwarded-for'];
+  if (ip) {
+    ip = ip.split(',')[0].trim();
+  } else {
+    ip = req.ip || (req.connection && req.connection.remoteAddress) || '0.0.0.0';
+  }
+  if (ip.startsWith('::ffff:')) ip = ip.substring(7);
+  return ip;
+};
+
 export const logAudit = async (req, action, changedCollections = [], details = {}) => {
   try {
+    const ip = getClientIp(req);
+    
     await AuditLog.create({
-      userId: (req && req.headers && req.headers['x-user-id']) || (req && req.ip) || 'system',
+      userId: (req && req.headers && req.headers['x-user-id']) || ip || 'system',
       action,
       changedCollections,
-      ipAddress: (req && req.ip) || '0.0.0.0',
+      ipAddress: ip,
       userAgent: (req && req.headers && req.headers['user-agent']) || 'unknown',
       details
     });
@@ -42,7 +56,6 @@ export const logAudit = async (req, action, changedCollections = [], details = {
     const aggregationEvents = [...criticalEvents, 'UNAUTHORIZED_ACCESS_BLOCKED', 'HARD_ROUTE_BLOCK', 'LOGIN_SUCCESS', 'SUPPORT_LOGIN_SUCCESS'];
 
     if (aggregationEvents.includes(action)) {
-      const ip = (req && req.ip) || '0.0.0.0';
       let actor = (req && req.headers && req.headers['x-user-id']) || (req && req.user && req.user.id);
       
       // 🛡️ [ACTOR INFERENCE] (v2.6.209)
