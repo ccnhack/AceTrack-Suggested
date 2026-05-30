@@ -36,7 +36,7 @@ const ACE_API_KEY = Constants.expoConfig?.extra?.aceApiKey
   || 'AceTrack_Client_v2_Production';
 
 export default {
-  APP_VERSION: '2.6.565',
+  APP_VERSION: '2.6.566',
   get API_BASE_URL() { return _API_BASE_URL; },
   set API_BASE_URL(val) { _API_BASE_URL = val; },
   CLOUD_API_URL,
@@ -64,7 +64,8 @@ export default {
       'CLAIM_TICKET': '/api/support/claim-ticket',
       'REASSIGN_TICKET': '/api/support/reassign-ticket',
       'OTP_SEND': '/api/otp/send',
-      'OTP_VERIFY': '/api/otp/verify'
+      'OTP_VERIFY': '/api/otp/verify',
+      'SUBSCRIBE_PRO': '/api/v1/user/subscribe'
     };
     return _m[key] || '';
   },

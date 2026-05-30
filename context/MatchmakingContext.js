@@ -2,16 +2,18 @@ import React, { createContext, useContext, useCallback, useMemo } from 'react';
 import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 import MatchService from '../services/MatchService';
 import { useSync } from './SyncContext';
-import { useMatchmakingQuery } from '../stores/hooks';
+import { useMatchmakingQuery, usePartnerRequestsQuery } from '../stores/hooks';
 
 const MatchmakingContext = createContext(null);
 
 export const useMatchmaking = () => {
   const { data: matchmaking } = useMatchmakingQuery();
+  const { data: partnerRequests } = usePartnerRequestsQuery();
   const context = useContext(MatchmakingContext);
   
   return { 
     matchmaking: matchmaking || [], 
+    partnerRequests: partnerRequests || [],
     ...context 
   };
 };
@@ -94,18 +96,42 @@ export const MatchmakingProvider = ({ children }) => {
     }
   }, [syncAndSaveData]);
 
+  const onUpdatePartnerRequests = useCallback((updatedData) => {
+    if (Array.isArray(updatedData)) {
+      syncAndSaveData({ partnerRequests: updatedData }, true);
+    } else {
+      syncAndSaveData({
+        partnerRequests: (prev) => {
+          const reqs = Array.isArray(prev) ? prev : [];
+          if (updatedData.status === 'expired' || updatedData.status === 'deleted') {
+             return reqs.filter(r => r.id !== updatedData.id);
+          }
+          const idx = reqs.findIndex(r => r.id === updatedData.id);
+          if (idx !== -1) {
+             const newReqs = [...reqs];
+             newReqs[idx] = updatedData;
+             return newReqs;
+          }
+          return [...reqs, updatedData];
+        }
+      }, true);
+    }
+  }, [syncAndSaveData]);
+
   const value = useMemo(() => ({
     createChallenge,
     respondToChallenge,
     proposeCounter,
     finalizeMatch,
-    onUpdateMatchmaking
+    onUpdateMatchmaking,
+    onUpdatePartnerRequests
   }), [
     createChallenge,
     respondToChallenge,
     proposeCounter,
     finalizeMatch,
-    onUpdateMatchmaking
+    onUpdateMatchmaking,
+    onUpdatePartnerRequests
   ]);
 
   return (

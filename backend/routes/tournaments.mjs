@@ -20,20 +20,37 @@ export default function({ io }) {
 
       const tData = tournamentDoc.data || {};
 
-      // 🛡️ [VAPT-BL2] (v2.6.556): Server-side cost validation — NEVER trust client-provided cost.
-      // Always look up the actual entry fee from the tournament document.
+      // 🛡️ [VAPT-BL2] (v2.6.556): Server-side cost validation
       const serverCost = Number(tData.entryFee || tData.cost || tData.registrationFee || 0);
-      const { method = 'credits' } = req.body;
-      const cost = serverCost; // Override client value
+      const isDoubles = ["Men's Doubles", "Women's Doubles", "Mixed Doubles"].includes(tData.format);
+      
+      const { method = 'credits', partnerId, teamCode } = req.body;
+      const wasAlreadyRegistered = (tData.registeredPlayerIds || []).includes(userId);
+      const wasPending = (tData.pendingPaymentPlayerIds || []).includes(userId);
+      const baseCost = isDoubles ? serverCost / 2 : serverCost;
+      const cost = (wasAlreadyRegistered || wasPending) ? 0 : baseCost;
+
+      // Find if we are joining an existing team
+      let joiningTeam = null;
+      if (isDoubles) {
+        const teams = tData.doublesTeams || [];
+        if (teamCode) {
+           joiningTeam = teams.find(t => t.teamCode === teamCode && !t.player2Id);
+           if (!joiningTeam) return res.status(404).json({ success: false, message: 'Invalid or full team code.' });
+        } else if (partnerId) {
+           joiningTeam = teams.find(t => t.player1Id === partnerId && !t.player2Id);
+           if (!joiningTeam) return res.status(404).json({ success: false, message: 'Partner already has a full team or is not registered.' });
+        }
+      }
 
       // 2. Capacity Guard (Server-Side)
       const registeredCount = (tData.registeredPlayerIds || []).length;
       const pendingCount = (tData.pendingPaymentPlayerIds || []).filter(pid => pid !== userId).length;
       const max = tData.maxPlayers || Infinity;
-      const wasAlreadyRegistered = (tData.registeredPlayerIds || []).includes(userId);
-      const wasPending = (tData.pendingPaymentPlayerIds || []).includes(userId);
 
-      if (registeredCount + pendingCount >= max && !wasAlreadyRegistered && !wasPending) {
+      // If joining an existing team, they take up the remaining half slot (which was technically already reserved by player1, but for simplicity let's just count them as a slot).
+      // Actually, if player1 is already registered, that's 1 slot. Player2 adds 1 slot.
+      if (registeredCount + pendingCount + 1 > max && !wasAlreadyRegistered && !wasPending) {
         return res.status(400).json({ success: false, message: 'Slots Full', type: 'FULL' });
       }
 
@@ -56,25 +73,61 @@ export default function({ io }) {
       const referralBonus = (isFirstRegistration && pData.referredBy) ? 100 : 0;
 
       // 6. Execute Atomic Updates
+      const usersToRegister = [userId];
 
       // A. Update Tournament
       const tUpdate = {
-        $addToSet: { 'data.registeredPlayerIds': userId },
+        $addToSet: {},
         $pull: { 
-          'data.pendingPaymentPlayerIds': userId,
-          'data.waitlistedPlayerIds': userId,
-          'data.optedOutPlayerIds': userId
+          'data.waitlistedPlayerIds': { $in: usersToRegister },
+          'data.optedOutPlayerIds': { $in: usersToRegister }
+        },
+        $unset: {},
+        $set: { lastUpdated: new Date() }
+      };
+
+      let newTeamCode = null;
+
+      if (isDoubles) {
+        if (joiningTeam) {
+          // Update the existing team to add player2Id
+          const teamIndex = tData.doublesTeams.findIndex(t => t.id === joiningTeam.id);
+          if (teamIndex !== -1) {
+            tUpdate.$set[`data.doublesTeams.${teamIndex}.player2Id`] = userId;
+            tUpdate.$set[`data.doublesTeams.${teamIndex}.updatedAt`] = new Date().toISOString();
+          }
+        } else {
+          // Create a new team
+          const teamId = `team_${Date.now()}`;
+          newTeamCode = Math.random().toString(36).substring(2, 8).toUpperCase(); // 6 chars
+          tUpdate.$push = {
+            'data.doublesTeams': {
+              id: teamId,
+              teamCode: newTeamCode,
+              player1Id: userId,
+              player2Id: null,
+              createdAt: new Date().toISOString()
+            }
+          };
         }
-      };
-      // We must unset playerStatuses[userId] and pendingPaymentTimestamps[userId]
-      tUpdate.$unset = {
-        [`data.playerStatuses.${userId}`]: "",
-        [`data.pendingPaymentTimestamps.${userId}`]: ""
-      };
-      tUpdate.$set = {
-        [`data.playerPaymentMethods.${userId}`]: { method, cost, timestamp: new Date().toISOString() },
-        lastUpdated: new Date()
-      };
+      }
+
+      if (method === 'pending' || method === 'upi') {
+         tUpdate.$addToSet['data.pendingPaymentPlayerIds'] = { $each: usersToRegister };
+         tUpdate.$pull['data.registeredPlayerIds'] = { $in: usersToRegister };
+         for (const uId of usersToRegister) {
+           tUpdate.$set[`data.pendingPaymentTimestamps.${uId}`] = Date.now();
+           tUpdate.$set[`data.playerPaymentMethods.${uId}`] = { method, cost, timestamp: new Date().toISOString() };
+         }
+      } else {
+         tUpdate.$addToSet['data.registeredPlayerIds'] = { $each: usersToRegister };
+         tUpdate.$pull['data.pendingPaymentPlayerIds'] = { $in: usersToRegister };
+         for (const uId of usersToRegister) {
+           tUpdate.$unset[`data.playerStatuses.${uId}`] = "";
+           tUpdate.$unset[`data.pendingPaymentTimestamps.${uId}`] = "";
+           tUpdate.$set[`data.playerPaymentMethods.${uId}`] = { method, cost, timestamp: new Date().toISOString() };
+         }
+      }
 
       const updatedTournament = await Tournament.findOneAndUpdate(
         { id: tid },
@@ -172,6 +225,7 @@ export default function({ io }) {
         type: method === 'upi' ? 'UPI_SUCCESS' : 'SUCCESS',
         tournament: updatedTournament.data,
         currentUser: updatedUser.data,
+        teamCode: newTeamCode,
         referralBonus
       });
 

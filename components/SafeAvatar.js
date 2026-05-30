@@ -33,7 +33,6 @@ const SafeAvatar = memo(({ uri, name, role, size = 44, borderRadius = 14, style,
   // Reset error state if the URI changes
   useEffect(() => {
     setHasError(false);
-    setRetryCount(0);
   }, [uri]);
 
   const initials = getInitials(name);
@@ -65,24 +64,14 @@ const SafeAvatar = memo(({ uri, name, role, size = 44, borderRadius = 14, style,
 
   // 🛡️ [REPLICATION] High-precision URL preparation matching mobile-app 4
   const sanitizedUri = config.sanitizeUrl(uri);
-  const finalUri = retryCount > 0 ? `${sanitizedUri}${sanitizedUri.includes('?') ? '&' : '?'}retry=${retryCount}` : sanitizedUri;
+  const finalUri = sanitizedUri;
   
   if (isRemoteImage && !hasError) {
     return (
       <Image
         source={{ uri: finalUri }}
         style={[styles.avatar, { width: size, height: size, borderRadius }, style]}
-        onError={() => {
-          if (retryCount < 2) {
-            console.log(`[SafeAvatar] Load failed for ${sanitizedUri}. Retrying (${retryCount + 1}/2)...`);
-            setTimeout(() => setRetryCount(prev => prev + 1), 1000);
-          } else {
-            if (!sanitizedUri.includes('ui-avatars.com') && !sanitizedUri.includes('api.dicebear.com')) {
-              console.log(`[SafeAvatar] Permanent load failure: ${sanitizedUri}. Falling back.`);
-            }
-            setHasError(true);
-          }
-        }}
+        onError={() => setHasError(true)}
       />
     );
   }

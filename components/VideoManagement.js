@@ -13,6 +13,7 @@ import config from '../config';
 import VideoService from '../services/VideoService';
 import TournamentService from '../services/TournamentService';
 import notify from '../utils/notify';
+import VideoHighlights from './VideoHighlights';
 
 const { width } = Dimensions.get('window');
 
@@ -165,6 +166,34 @@ export const VideoManagement = ({
   const [playingPreview, setPlayingPreview] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [generatedHighlights, setGeneratedHighlights] = useState({});
+  const [isGeneratingHighlights, setIsGeneratingHighlights] = useState({});
+
+  const handleGenerateHighlights = async (videoId, videoUrl) => {
+    setIsGeneratingHighlights(prev => ({ ...prev, [videoId]: true }));
+    try {
+      const response = await fetch(`${config.API_BASE_URL}/api/v1/videos/${videoId}/highlights`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-ace-api-key': config.PUBLIC_APP_ID
+        },
+        credentials: 'omit',
+        body: JSON.stringify({ videoUrl })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setGeneratedHighlights(prev => ({ ...prev, [videoId]: data.highlights }));
+      } else {
+        Alert.alert('Error', data.error || 'Failed to generate highlights');
+      }
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'Network error generating highlights');
+    } finally {
+      setIsGeneratingHighlights(prev => ({ ...prev, [videoId]: false }));
+    }
+  };
 
 
   const myTournaments = (academyId === 'all') 
@@ -584,10 +613,42 @@ export const VideoManagement = ({
 
                           if (hasHighlights) {
                             return (
-                              <TouchableOpacity style={styles.highlightsBtn}>
-                                <Ionicons name="sparkles" size={14} color="#FFFFFF" />
-                                <Text style={styles.highlightsBtnText}>Watch AI Highlights</Text>
-                              </TouchableOpacity>
+                              <View>
+                                <TouchableOpacity 
+                                  style={[styles.highlightsBtn, generatedHighlights[v.id] && { backgroundColor: '#4F46E5' }]}
+                                  onPress={() => {
+                                    if (!generatedHighlights[v.id]) {
+                                      handleGenerateHighlights(v.id, config.sanitizeUrl(v.watermarkedUrl || v.videoUrl));
+                                    }
+                                  }}
+                                  disabled={isGeneratingHighlights[v.id]}
+                                >
+                                  {isGeneratingHighlights[v.id] ? (
+                                    <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 4 }} />
+                                  ) : (
+                                    <Ionicons name="sparkles" size={14} color="#FFFFFF" />
+                                  )}
+                                  <Text style={styles.highlightsBtnText}>
+                                    {isGeneratingHighlights[v.id] ? 'Generating...' : (generatedHighlights[v.id] ? 'Highlights Ready' : 'Watch AI Highlights')}
+                                  </Text>
+                                </TouchableOpacity>
+                                
+                                {generatedHighlights[v.id] && (
+                                  <VideoHighlights 
+                                    highlights={generatedHighlights[v.id]} 
+                                    onSeekTo={(time) => {
+                                      // Optional: Set full screen video and seek to time
+                                      setFullscreenVideo(v);
+                                      // Seeking would ideally require a ref or an initialTime prop to FullscreenVideoPlayer
+                                      // We pass the start time to miniStatus to be used by FullscreenVideoPlayer
+                                      setMiniStatus(prev => ({ 
+                                        ...prev, 
+                                        [v.id]: { positionMillis: time * 1000, shouldPlay: true } 
+                                      }));
+                                    }} 
+                                  />
+                                )}
+                              </View>
                             );
                           }
 

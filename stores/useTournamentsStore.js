@@ -36,7 +36,7 @@ export const useTournamentsStore = create((set, get) => {
 
     // ─── Actions migrated from TournamentContext ───
 
-    onRegister: async (t, method, cost, isResched, fromTid) => {
+    onRegister: async (t, method, cost, isResched, fromTid, partnerId = null, teamCode = null) => {
       try {
         const currentUser = useAuthStore.getState().currentUser;
         if (!currentUser || !t) {
@@ -55,7 +55,7 @@ export const useTournamentsStore = create((set, get) => {
             'Authorization': `Bearer ${token}`,
             'X-User-Id': currentUser.id
           },
-          body: JSON.stringify({ method, cost })
+          body: JSON.stringify({ method, cost, partnerId, teamCode })
         });
 
         const result = await response.json();
@@ -128,7 +128,14 @@ export const useTournamentsStore = create((set, get) => {
         const result = await response.json();
         if (response.ok && result.success) {
           const currentTournaments = get().tournaments;
-          set({ tournaments: currentTournaments.map(t => t.id === tid ? result.tournament : t) });
+          const TournamentService = require('../services/TournamentService').default;
+          const players = usePlayersStore.getState().players;
+          
+          const seededTournament = TournamentService.generateSeededBracket(result.tournament, players);
+          
+          const updatedTournaments = currentTournaments.map(t => t.id === tid ? seededTournament : t);
+          set({ tournaments: updatedTournaments });
+          syncOrchestrator.syncAndSaveData({ tournaments: updatedTournaments });
         }
       } catch (e) { console.error('onStartTournament Error', e); }
     },

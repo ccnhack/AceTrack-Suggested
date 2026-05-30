@@ -424,6 +424,17 @@ const SignupScreen = ({ navigation }) => {
             <Text style={[styles.cardTitle, { color: '#1E3A8A' }]}>Coach</Text>
             <Text style={[styles.cardDescription, { color: '#3B82F6' }]}>Evaluate players, manage matches, and track performance.</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity 
+            onPress={() => { setAccountType('corporate'); setStep(2); }}
+            style={[styles.card, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}
+          >
+            <View style={[styles.cardIcon, { backgroundColor: '#10B981' }]}>
+              <Ionicons name="briefcase" size={20} color="#FFFFFF" />
+            </View>
+            <Text style={[styles.cardTitle, { color: '#065F46' }]}>Corporate</Text>
+            <Text style={[styles.cardDescription, { color: '#10B981' }]}>Track wellness, organize inter-department leagues, and foster team building.</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -436,7 +447,7 @@ const SignupScreen = ({ navigation }) => {
           <Ionicons name="chevron-back" size={24} color="#475569" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {accountType === 'academy' ? 'Academy Sign Up' : accountType === 'coach' ? 'Coach Sign Up' : 'Player Details'}
+          {accountType === 'academy' ? 'Academy Sign Up' : accountType === 'coach' ? 'Coach Sign Up' : accountType === 'corporate' ? 'Corporate Sign Up' : 'Player Details'}
         </Text>
       </View>
 
@@ -483,10 +494,10 @@ const SignupScreen = ({ navigation }) => {
         ) : (
           <>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Academy Name</Text>
+              <Text style={styles.inputLabel}>{accountType === 'corporate' ? 'Company Name' : 'Academy Name'}</Text>
               <TextInput 
                 style={styles.input}
-                placeholder="Elite Sports Center"
+                placeholder={accountType === 'corporate' ? "Tech Corp Inc." : "Elite Sports Center"}
                 value={formData.academyName}
                 onChangeText={(val) => setFormData({...formData, academyName: val})}
               />
@@ -511,56 +522,58 @@ const SignupScreen = ({ navigation }) => {
                 />
               </View>
             </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Managed Sports</Text>
-              <TouchableOpacity 
-                onPress={() => {
-                  setIsSportsDropdownOpen(!isSportsDropdownOpen);
-                  if (isSportsDropdownOpen) setSportsSearchQuery('');
-                }}
-                style={styles.dropdownButton}
-              >
-                <Text style={styles.dropdownButtonText}>
-                  {formData.managedSports.length > 0 
-                    ? formData.managedSports.join(', ') 
-                    : 'Select Sports (Multi)'}
-                </Text>
-                <Ionicons name={isSportsDropdownOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#94A3B8" />
-              </TouchableOpacity>
-              
-              {isSportsDropdownOpen && (
-                <View style={styles.dropdownList}>
-                  <TextInput
-                    style={[styles.input, { borderWidth: 0, borderBottomWidth: 1, borderRadius: 0, paddingVertical: 10 }]}
-                    placeholder="Search sports..."
-                    value={sportsSearchQuery}
-                    onChangeText={setSportsSearchQuery}
-                    autoCapitalize="none"
-                  />
-                  <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled={true}>
-                    {Object.values(Sport)
-                      .filter(s => s.toLowerCase().includes(sportsSearchQuery.toLowerCase()))
-                      .map(s => {
-                      const isSelected = formData.managedSports.includes(s);
-                      return (
-                        <TouchableOpacity
-                          key={s}
-                          onPress={() => {
-                            const newSports = isSelected
-                              ? formData.managedSports.filter(sport => sport !== s)
-                              : [...formData.managedSports, s];
-                            setFormData({ ...formData, managedSports: newSports });
-                          }}
-                          style={[styles.dropdownItem, isSelected && styles.dropdownItemActive]}
-                        >
-                          <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemTextActive]}>{s}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
-              )}
-            </View>
+            {accountType === 'academy' && (
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Managed Sports</Text>
+                <TouchableOpacity 
+                  onPress={() => {
+                    setIsSportsDropdownOpen(!isSportsDropdownOpen);
+                    if (isSportsDropdownOpen) setSportsSearchQuery('');
+                  }}
+                  style={styles.dropdownButton}
+                >
+                  <Text style={styles.dropdownButtonText}>
+                    {formData.managedSports.length > 0 
+                      ? formData.managedSports.join(', ') 
+                      : 'Select Sports (Multi)'}
+                  </Text>
+                  <Ionicons name={isSportsDropdownOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#94A3B8" />
+                </TouchableOpacity>
+                
+                {isSportsDropdownOpen && (
+                  <View style={styles.dropdownList}>
+                    <TextInput
+                      style={[styles.input, { borderWidth: 0, borderBottomWidth: 1, borderRadius: 0, paddingVertical: 10 }]}
+                      placeholder="Search sports..."
+                      value={sportsSearchQuery}
+                      onChangeText={setSportsSearchQuery}
+                      autoCapitalize="none"
+                    />
+                    <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled={true}>
+                      {Object.values(Sport)
+                        .filter(s => s.toLowerCase().includes(sportsSearchQuery.toLowerCase()))
+                        .map(s => {
+                        const isSelected = formData.managedSports.includes(s);
+                        return (
+                          <TouchableOpacity
+                            key={s}
+                            onPress={() => {
+                              const newSports = isSelected
+                                ? formData.managedSports.filter(sport => sport !== s)
+                                : [...formData.managedSports, s];
+                              setFormData({ ...formData, managedSports: newSports });
+                            }}
+                            style={[styles.dropdownItem, isSelected && styles.dropdownItemActive]}
+                          >
+                            <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemTextActive]}>{s}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+            )}
           </>
         )}
 

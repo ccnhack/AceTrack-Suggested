@@ -57,10 +57,10 @@ class SyncApi {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        if (response.status === 401) {
-          console.warn('[SyncApi] 🛑 Terminal Auth Failure (401). Muting sync.');
-          eventBus.emit('AUTH_FAILURE', { status: 401, endpoint: `${cloudUrl}${config.getEndpoint('DATA_SAVE')}` });
-          return { success: false, status: 401 };
+        if (response.status === 401 || response.status === 403) {
+          console.warn(`[SyncApi] 🛑 Terminal Auth Failure (${response.status}). Muting sync.`);
+          eventBus.emit('AUTH_FAILURE', { status: response.status, endpoint: `${cloudUrl}${config.getEndpoint('DATA_SAVE')}` });
+          return { success: false, status: response.status };
         }
         if (response.status === 429) {
           console.warn('[SyncApi] Rate limited by server');

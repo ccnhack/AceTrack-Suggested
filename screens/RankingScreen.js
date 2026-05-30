@@ -10,6 +10,8 @@ import { useAuth } from '../context/AuthContext';
 import { usePlayersStore } from '../stores';
 import { useTournamentsStore } from '../stores';
 import TournamentService from '../services/TournamentService';
+import { getWeeklyLeaderboard, getRankEmoji, getRankColor } from '../utils/leaderboardUtils';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const RankingScreen = () => {
   const { currentUser: user, userRole: role } = useAuth();
@@ -69,11 +71,39 @@ const RankingScreen = () => {
     );
   }, [user?.id]);
 
+  const weeklyLeaders = useMemo(() => getWeeklyLeaderboard(players, tournaments), [players, tournaments]);
+
   const listHeader = useMemo(() => (
     <View style={styles.header}>
-      <Text style={styles.headerTitle}>LEADERBOARD</Text>
+      {weeklyLeaders.length > 0 && (
+        <View style={styles.weeklySection}>
+          <View style={styles.weeklyHeader}>
+            <Ionicons name="flame" size={20} color="#F59E0B" />
+            <Text style={styles.weeklyTitle}>HOT THIS WEEK</Text>
+          </View>
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            data={weeklyLeaders}
+            keyExtractor={item => `weekly-${item.id}`}
+            renderItem={({ item }) => (
+              <View style={styles.weeklyCard}>
+                <View style={[styles.weeklyRankBadge, { backgroundColor: getRankColor(item.rank) }]}>
+                  <Text style={styles.weeklyRankText}>{getRankEmoji(item.rank)}</Text>
+                </View>
+                <SafeAvatar uri={item.avatar} name={item.name} size={64} style={styles.weeklyAvatar} />
+                <Text style={styles.weeklyName} numberOfLines={1}>{item.name}</Text>
+                <Text style={styles.weeklyStat}>{item.weekWins} Wins</Text>
+              </View>
+            )}
+            contentContainerStyle={styles.weeklyListContainer}
+          />
+        </View>
+      )}
+
+      <Text style={[styles.headerTitle, { marginTop: weeklyLeaders.length > 0 ? 16 : 0 }]}>ALL-TIME LEADERBOARD</Text>
     </View>
-  ), []);
+  ), [weeklyLeaders]);
 
   const emptyComponent = useMemo(() => (
     <Text style={styles.emptyText}>NO RANKINGS AVAILABLE</Text>
@@ -124,10 +154,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   header: {
-    padding: 24,
-    paddingBottom: 16,
+    paddingVertical: 16,
   },
   headerTitle: {
+    paddingHorizontal: 24,
     fontSize: 20,
     fontWeight: '900',
     color: '#0F172A',
@@ -135,13 +165,85 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   listContent: {
-    paddingHorizontal: 24,
     paddingBottom: 120, // Extra padding for the bottom tab bar
+  },
+  // Weekly Leaderboard Styles
+  weeklySection: {
+    marginBottom: 24,
+  },
+  weeklyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+    paddingHorizontal: 24,
+  },
+  weeklyTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0F172A',
+    letterSpacing: 1,
+  },
+  weeklyListContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 10,
+    gap: 12,
+  },
+  weeklyCard: {
+    width: 110,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    position: 'relative',
+    overflow: 'visible',
+  },
+  weeklyRankBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  weeklyRankText: {
+    fontSize: 14,
+  },
+  weeklyAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#F8FAFC',
+  },
+  weeklyName: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  weeklyStat: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#3B82F6',
   },
   playerCard: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
+    marginHorizontal: 24,
     borderRadius: 20,
     borderWidth: 1,
     gap: 16,

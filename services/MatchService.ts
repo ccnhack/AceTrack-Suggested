@@ -165,7 +165,12 @@ class MatchService {
         updatedMatch: finalizedMatch,
         priority: 'HIGH'
       },
-      winnerId
+      winnerId,
+      notification: {
+        type: 'match_result',
+        title: 'Match Finalized',
+        message: `Your match has been finalized with the score: ${finalizedMatch.resultText}`,
+      }
     };
   }
 

@@ -20,15 +20,25 @@ export const useMatchmakingStore = create((set) => {
       const freshData = await syncOrchestrator.getSystemFlag('matchmaking');
       if (freshData) set({ matchmaking: freshData });
     }
+    if (e.payload.entity === 'partnerRequests') {
+      const freshData = await syncOrchestrator.getSystemFlag('partnerRequests');
+      if (freshData) set({ partnerRequests: freshData });
+    }
   });
 
   return {
     matchmaking: [],
+    partnerRequests: [],
     setMatchmaking: (mm) => set({ matchmaking: mm }),
+    setPartnerRequests: (pr) => set({ partnerRequests: pr }),
 
     hydrate: async () => {
-      const saved = await syncOrchestrator.getSystemFlag('matchmaking');
-      if (saved) set({ matchmaking: saved });
+      const [savedMM, savedPR] = await Promise.all([
+        syncOrchestrator.getSystemFlag('matchmaking'),
+        syncOrchestrator.getSystemFlag('partnerRequests')
+      ]);
+      if (savedMM) set({ matchmaking: savedMM });
+      if (savedPR) set({ partnerRequests: savedPR });
     }
   };
 });

@@ -256,6 +256,25 @@ MatchmakingSchema.index({ "data.opponentId": 1 });
 MatchmakingSchema.index({ "data.status": 1 });
 export const Matchmaking = mongoose.model('Matchmaking', MatchmakingSchema);
 
+// COACH BOOKING
+const CoachBookingDataSchema = new mongoose.Schema({
+  coachId: String,
+  playerId: String,
+  date: String,
+  timeSlot: String,
+  status: String,
+  notes: String
+}, { _id: false, strict: false });
+
+const CoachBookingSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true, index: true },
+  data: { type: CoachBookingDataSchema, required: true },
+  lastUpdated: { type: Date, default: Date.now, index: true }
+}, { minimize: false, strict: false });
+CoachBookingSchema.index({ "data.coachId": 1 });
+CoachBookingSchema.index({ "data.playerId": 1 });
+export const CoachBooking = mongoose.model('CoachBooking', CoachBookingSchema);
+
 // CHATBOT THREAD
 const ChatbotThreadDataSchema = new mongoose.Schema({
   messages: [mongoose.Schema.Types.Mixed]

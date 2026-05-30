@@ -8,6 +8,7 @@ import { useSync } from '../context/SyncContext';
 import { formatDateIST } from '../utils/tournamentUtils';
 import TournamentService from '../services/TournamentService';
 import notify from '../utils/notify';
+import config from '../config';
 
 const TournamentDetailModal = ({
   tournament,
@@ -223,6 +224,16 @@ const TournamentDetailModal = ({
 
             {/* Title & Description */}
             <Text style={styles.title}>{tournament.title}</Text>
+            {tournament.sponsorName && (
+              <View style={styles.sponsorBadge}>
+                {tournament.sponsorLogoUrl ? (
+                  <Image source={{ uri: config.sanitizeUrl(tournament.sponsorLogoUrl) }} style={styles.sponsorLogo} />
+                ) : (
+                  <Ionicons name="star" size={12} color="#FFF" />
+                )}
+                <Text style={styles.sponsorBadgeText}>Sponsored by {tournament.sponsorName}</Text>
+              </View>
+            )}
             <Text style={styles.description}>{tournament.description || 'No description provided.'}</Text>
 
             {/* Info Grid */}
@@ -485,6 +496,29 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 12,
     paddingRight: 80,
+  },
+  sponsorBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+    gap: 6,
+  },
+  sponsorLogo: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  sponsorBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   description: {
     fontSize: 13,

@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import * as Location from 'expo-location';
 import { colors, shadows, typography, borderRadius, spacing } from '../theme/designSystem';
-import { Sport } from '../types';
+import { Sport, SkillLevel } from '../types';
 import SafeAvatar from '../components/SafeAvatar';
 import { Calendar } from 'react-native-calendars';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,6 +21,7 @@ import {
   SentRequestCard, ReceivedRequestCard, CounteredRequestCard,
   ExpiredRequestCard, AcceptedMatchCard, HistoryMatchCard
 } from '../components/MatchmakingSubComponents';
+import DoublesPartnerBoard from '../components/DoublesPartnerBoard';
 
 
 // Mock tournament hostings to check for busy slots
@@ -76,10 +77,51 @@ import { useSync } from '../context/SyncContext';
 import { useMatchmaking } from '../context/MatchmakingContext';
 import { useTournamentsStore } from '../stores';
 import MatchService from '../services/MatchService';
+import { getSuggestedOpponents, getSuggestionReason } from '../utils/matchmakingUtils';
+
+const FilterDropdown = ({ label, options, selectedValue, onSelect, styles }) => {
+  const [visible, setVisible] = useState(false);
+  return (
+    <View style={{ flex: 1 }}>
+      <TouchableOpacity style={styles.dropdownBox} onPress={() => setVisible(true)}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.dropdownLabel}>{label}</Text>
+          <Text style={styles.dropdownValue}>{selectedValue}</Text>
+        </View>
+        <Ionicons name="chevron-down" size={16} color="#94A3B8" />
+      </TouchableOpacity>
+      
+      <Modal visible={visible} transparent animationType="fade">
+        <TouchableOpacity style={styles.dropdownOverlay} activeOpacity={1} onPress={() => setVisible(false)}>
+          <View style={styles.dropdownMenu} onStartShouldSetResponder={() => true}>
+            <View style={styles.dropdownMenuHeader}>
+              <Text style={styles.dropdownMenuTitle}>Select {label}</Text>
+              <TouchableOpacity onPress={() => setVisible(false)}>
+                <Ionicons name="close" size={24} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+              {options.map(opt => (
+                <TouchableOpacity 
+                  key={opt} 
+                  style={[styles.dropdownItem, selectedValue === opt && styles.dropdownItemActive]}
+                  onPress={() => { onSelect(opt); setVisible(false); }}
+                >
+                  <Text style={[styles.dropdownItemText, selectedValue === opt && styles.dropdownItemTextActive]}>{opt}</Text>
+                  {selectedValue === opt && <Ionicons name="checkmark" size={20} color="#3B82F6" />}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  );
+};
 
 export default function MatchmakingScreen({ route }) {
   const { currentUser: user } = useAuth();
-  const { matchmaking, onUpdateMatchmaking } = useMatchmaking();
+  const { matchmaking, onUpdateMatchmaking, partnerRequests, onUpdatePartnerRequests } = useMatchmaking();
   const { players, sendUserNotification } = usePlayersStore();
   const { loadData: onManualSync, serverClockOffset } = useSync();
   const { tournaments } = useTournamentsStore();
@@ -210,6 +252,11 @@ export default function MatchmakingScreen({ route }) {
   const [venueDropdownSearchQuery, setVenueDropdownSearchQuery] = useState('');
   const [reportScoreMatch, setReportScoreMatch] = useState(null);
   const [reportSets, setReportSets] = useState([{ score1: 0, score2: 0 }]);
+  const [showRightArrow, setShowRightArrow] = useState(false);
+  const scrollViewWidthRef = React.useRef(0);
+  const [filterSport, setFilterSport] = useState('All');
+  const [filterSkill, setFilterSkill] = useState('All');
+  const [filterLocation, setFilterLocation] = useState('');
 
   // PERFORMANCE: Separate Static Marks from Dynamic Selection to prevent Calendar Lag
   const staticChallengeMarks = React.useMemo(() => {
@@ -713,6 +760,11 @@ export default function MatchmakingScreen({ route }) {
     const response = finalizeMatch(reportScoreMatch, reportSets, reportScoreMatch.sport);
     
     if (response.success) {
+      if (sendUserNotification && response.notification) {
+        // Send notification to both players
+        const opponentId = reportScoreMatch.player1Id === user.id ? reportScoreMatch.player2Id : reportScoreMatch.player1Id;
+        sendUserNotification(opponentId, response.notification);
+      }
       setReportScoreMatch(null);
       setIsDetailsModalVisible(false);
       Alert.alert("Match Finalized", "The match has been updated with the final scores.");
@@ -972,66 +1024,200 @@ export default function MatchmakingScreen({ route }) {
       : allPlayers.filter(p => p.id !== user?.id && p.role === 'user')
     );
     
-    if (!playerSearchQuery) return base;
-    const query = playerSearchQuery.toLowerCase();
-    return base.filter(item => 
-      item.name?.toLowerCase().includes(query) || 
-      item.username?.toLowerCase().includes(query) ||
-      item.email?.toLowerCase().includes(query)
+    let result = base;
+    
+    if (playerSearchQuery) {
+      const query = playerSearchQuery.toLowerCase();
+      result = result.filter(item => 
+        item.name?.toLowerCase().includes(query) || 
+        item.username?.toLowerCase().includes(query) ||
+        item.email?.toLowerCase().includes(query)
+      );
+    }
+    
+    if (filterSport !== 'All') {
+      result = result.filter(item => {
+        const playerSport = item.sport || (item.certifiedSports && item.certifiedSports[0]) || 'Badminton';
+        return playerSport === filterSport || (item.managedSports && item.managedSports.includes(filterSport));
+      });
+    }
+    
+    if (filterSkill !== 'All') {
+      result = result.filter(item => {
+        const playerSkill = item.skillLevel || item.level || 'Intermediate';
+        return playerSkill === filterSkill;
+      });
+    }
+    
+    if (filterLocation) {
+      const query = filterLocation.toLowerCase();
+      result = result.filter(item => 
+        item.city?.toLowerCase().includes(query) || 
+        item.location?.toLowerCase().includes(query)
+      );
+    }
+    
+    return result;
+  }, [role, user?.id, mySports, allPlayers, playerSearchQuery, filterSport, filterSkill, filterLocation]);
+
+  // 🎯 [PHASE 1.2] Auto-suggest opponents based on city, skill, and sport
+  const suggestedOpponents = React.useMemo(() => {
+    if (role !== 'user' || playerSearchQuery) return []; // Only show for players, hide during search
+    return getSuggestedOpponents(user, allPlayers, matchmaking, 3);
+  }, [role, user, allPlayers, matchmaking, playerSearchQuery]);
+
+  const renderSuggestedHeader = useCallback(() => {
+    if (suggestedOpponents.length === 0) return null;
+    return (
+      <View style={styles.suggestedSection}>
+        <View style={styles.suggestedHeader}>
+          <View style={styles.suggestedBadge}>
+            <Ionicons name="sparkles" size={14} color="#F59E0B" />
+            <Text style={styles.suggestedTitle}>Suggested for You</Text>
+          </View>
+          <Text style={styles.suggestedSubtitle}>Based on your city, skill level & sport</Text>
+        </View>
+        {suggestedOpponents.map((item) => {
+          const isSent = sentRequests.some(r => r.receiverId === item.id);
+          const reason = getSuggestionReason(user, item);
+          return (
+            <View key={`suggest-${item.id}`}>
+              <OpponentCard 
+                item={item} 
+                role={role} 
+                isSent={isSent} 
+                onChallenge={handleChallenge} 
+                styles={styles} 
+              />
+              <View style={styles.suggestionReasonRow}>
+                <Text style={styles.suggestionReasonText}>{reason}</Text>
+              </View>
+            </View>
+          );
+        })}
+        <View style={styles.suggestedDivider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>All Players</Text>
+          <View style={styles.dividerLine} />
+        </View>
+      </View>
     );
-  }, [role, user?.id, mySports, allPlayers, playerSearchQuery]);
+  }, [suggestedOpponents, sentRequests, role, user, handleChallenge]);
 
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]}>
         <Text style={styles.title}>{role === 'coach' ? 'Coach Bookings' : (role === 'academy' ? 'Academy Matchmaking' : 'Matchmaking')}</Text>
-        <View style={styles.tabs}>
-           {(role === 'coach' ? ['Bookings', 'Accepted', 'Expired', 'History'] : ['Challenge', 'Requests', 'Accepted', 'Expired', 'History']).map((tab, index) => (
-             <TouchableOpacity
-               testID={`matchmaking.tab.${tab}`}
-               key={`tab-${index}`}
-               style={[styles.tab, activeTab === tab && styles.activeTab]}
-               onPress={() => handleTabChange(tab)}
-             >
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</Text>
-                  {tab === 'Requests' && receivedRequests.filter(r => r.isNew).length > 0 && (
-                    <View testID="matchmaking.tab.requests.badge" style={styles.tabBadge}>
-                      <Text style={styles.tabBadgeText}>{receivedRequests.filter(r => r.isNew).length}</Text>
-                    </View>
-                  )}
-                  {tab === 'Bookings' && receivedRequests.filter(r => r.isNew).length > 0 && role === 'coach' && (
-                    <View testID="matchmaking.tab.bookings.badge" style={styles.tabBadge}>
-
-                      <Text style={styles.tabBadgeText}>{receivedRequests.filter(r => r.isNew).length}</Text>
-                    </View>
-                  )}
-                  {tab === 'Expired' && expiredRequests.filter(r => !r.isExpiredRead).length > 0 && (
-                    <View testID="matchmaking.tab.expired.badge" style={styles.tabBadge}>
-                      <Text style={styles.tabBadgeText}>{expiredRequests.filter(r => !r.isExpiredRead).length}</Text>
-                    </View>
-                  )}
-                </View>
-             </TouchableOpacity>
-           ))}
+        <View style={{ position: 'relative' }}>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false} 
+            contentContainerStyle={styles.tabsContainer}
+            scrollEventThrottle={16}
+            onLayout={(e) => {
+              scrollViewWidthRef.current = e.nativeEvent.layout.width;
+            }}
+            onContentSizeChange={(w, h) => {
+              setShowRightArrow(w > scrollViewWidthRef.current + 5);
+            }}
+            onScroll={(e) => {
+              const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+              setShowRightArrow(layoutMeasurement.width + contentOffset.x < contentSize.width - 5);
+            }}
+          >
+            <View style={styles.tabs}>
+             {(role === 'coach' ? ['Bookings', 'Accepted', 'Expired', 'History'] : ['Challenge', 'Partners', 'Requests', 'Accepted', 'Expired', 'History']).map((tab, index) => (
+               <TouchableOpacity
+                 testID={`matchmaking.tab.${tab}`}
+                 key={`tab-${index}`}
+                 style={[styles.tab, activeTab === tab && styles.activeTab]}
+                 onPress={() => handleTabChange(tab)}
+               >
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</Text>
+                    {tab === 'Requests' && receivedRequests.filter(r => r.isNew).length > 0 && (
+                      <View testID="matchmaking.tab.requests.badge" style={styles.tabBadge}>
+                        <Text style={styles.tabBadgeText}>{receivedRequests.filter(r => r.isNew).length}</Text>
+                      </View>
+                    )}
+                    {tab === 'Bookings' && receivedRequests.filter(r => r.isNew).length > 0 && role === 'coach' && (
+                      <View testID="matchmaking.tab.bookings.badge" style={styles.tabBadge}>
+                        <Text style={styles.tabBadgeText}>{receivedRequests.filter(r => r.isNew).length}</Text>
+                      </View>
+                    )}
+                    {tab === 'Expired' && expiredRequests.filter(r => !r.isExpiredRead).length > 0 && (
+                      <View testID="matchmaking.tab.expired.badge" style={styles.tabBadge}>
+                        <Text style={styles.tabBadgeText}>{expiredRequests.filter(r => !r.isExpiredRead).length}</Text>
+                      </View>
+                    )}
+                  </View>
+               </TouchableOpacity>
+             ))}
+            </View>
+          </ScrollView>
+          {showRightArrow && (
+            <LinearGradient
+              colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.9)', '#FFFFFF']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.rightScrollIndicator}
+              pointerEvents="none"
+            >
+              <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+            </LinearGradient>
+          )}
         </View>
       </View>
       
       {activeTab === 'Challenge' && role !== 'coach' && (
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#94A3B8" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search players by name or username..."
-            value={playerSearchQuery}
-            onChangeText={setPlayerSearchQuery}
-            placeholderTextColor="#94A3B8"
-          />
-          {playerSearchQuery !== '' && (
-            <TouchableOpacity onPress={() => setPlayerSearchQuery('')}>
-              <Ionicons name="close-circle" size={18} color="#94A3B8" />
-            </TouchableOpacity>
-          )}
+        <View style={styles.filtersWrapper}>
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color="#94A3B8" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search players by name or username..."
+              value={playerSearchQuery}
+              onChangeText={setPlayerSearchQuery}
+              placeholderTextColor="#94A3B8"
+            />
+            {playerSearchQuery !== '' && (
+              <TouchableOpacity onPress={() => setPlayerSearchQuery('')}>
+                <Ionicons name="close-circle" size={18} color="#94A3B8" />
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={styles.dropdownsRow}>
+            <FilterDropdown 
+              label="Sport" 
+              options={['All', 'Badminton', 'Table Tennis', 'Cricket', 'Football']} 
+              selectedValue={filterSport} 
+              onSelect={setFilterSport} 
+              styles={styles}
+            />
+            <FilterDropdown 
+              label="Skill Level" 
+              options={['All', ...Object.values(SkillLevel)]} 
+              selectedValue={filterSkill} 
+              onSelect={setFilterSkill} 
+              styles={styles}
+            />
+          </View>
+
+          <View style={[styles.searchContainer, { marginTop: 0, marginBottom: 10 }]}>
+            <Ionicons name="location-outline" size={20} color="#94A3B8" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Filter by city or location..."
+              value={filterLocation}
+              onChangeText={setFilterLocation}
+              placeholderTextColor="#94A3B8"
+            />
+            {filterLocation !== '' && (
+              <TouchableOpacity onPress={() => setFilterLocation('')}>
+                <Ionicons name="close-circle" size={18} color="#94A3B8" />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       )}
 
@@ -1042,8 +1228,19 @@ export default function MatchmakingScreen({ route }) {
             renderItem={renderOpponent}
             keyExtractor={item => item.id}
             contentContainerStyle={styles.list}
+            ListHeaderComponent={renderSuggestedHeader}
             ListEmptyComponent={<Text style={styles.emptyText}>No Matching {role === 'academy' ? 'Academies' : 'Players'} Found Near You</Text>}
             estimatedItemSize={100}
+          />
+        </View>
+      )}
+      {activeTab === 'Partners' && (
+        <View style={{ flex: 1 }}>
+          <DoublesPartnerBoard
+            requests={partnerRequests || []}
+            user={user}
+            onAddRequest={(req) => onUpdatePartnerRequests(req)}
+            onRemoveRequest={(id) => onUpdatePartnerRequests({ id, status: 'deleted' })}
           />
         </View>
       )}
@@ -1721,10 +1918,22 @@ const styles = StyleSheet.create({
   header: { padding: 20, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: colors.navy[100] },
 
   title: { fontSize: 22, fontWeight: '900', color: '#0F172A', textTransform: 'uppercase', letterSpacing: -0.5, marginBottom: 15 },
-  tabs: { flexDirection: 'row', backgroundColor: '#f0f0f0', borderRadius: 10, padding: 4 },
-  tab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
+  rightScrollIndicator: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 40,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    paddingRight: 5,
+    borderRadius: 10,
+  },
+  tabsContainer: { flexGrow: 1 },
+  tabs: { flex: 1, flexDirection: 'row', backgroundColor: '#f0f0f0', borderRadius: 10, padding: 4, minWidth: '100%' },
+  tab: { paddingVertical: 8, paddingHorizontal: 16, alignItems: 'center', borderRadius: 8 },
   activeTab: { backgroundColor: '#fff', elevation: 2 },
-  tabText: { fontSize: 12, fontWeight: '600', color: '#666' },
+  tabText: { fontSize: 13, fontWeight: '700', color: '#64748B' },
   activeTabText: { color: colors.primary.base },
   detailsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 15, marginTop: 20 },
   detailItem: { width: '45%', flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, backgroundColor: '#F8FAFC', borderRadius: 12 },
@@ -1750,6 +1959,86 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     height: 50,
     ...shadows.sm,
+  },
+  filtersWrapper: {
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    paddingBottom: 5,
+  },
+  dropdownsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 15,
+    marginBottom: 10,
+  },
+  dropdownBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  dropdownLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+  },
+  dropdownValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  dropdownOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  dropdownMenu: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    maxHeight: '80%',
+  },
+  dropdownMenuHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  dropdownMenuTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  dropdownItemActive: {
+    backgroundColor: '#EEF2FF',
+    marginHorizontal: -24,
+    paddingHorizontal: 24,
+  },
+  dropdownItemText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#334155',
+  },
+  dropdownItemTextActive: {
+    fontWeight: '700',
+    color: '#3B82F6',
   },
   searchIcon: { marginRight: 10 },
   searchInput: { flex: 1, fontSize: 14, color: colors.navy[900], fontWeight: '500' },
@@ -2078,5 +2367,62 @@ const styles = StyleSheet.create({
     backgroundColor: '#EFF6FF', // Very light blue background
     borderLeftWidth: 4,
     borderLeftColor: '#3B82F6', // Solid blue indicator
+  },
+  // 🎯 [PHASE 1.2] Suggested Opponents Styles
+  suggestedSection: {
+    marginBottom: 8,
+  },
+  suggestedHeader: {
+    paddingHorizontal: 4,
+    paddingTop: 8,
+    paddingBottom: 12,
+  },
+  suggestedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  suggestedTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0F172A',
+    letterSpacing: -0.3,
+  },
+  suggestedSubtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  suggestionReasonRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    marginTop: -4,
+  },
+  suggestionReasonText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#6366F1',
+    letterSpacing: 0.2,
+  },
+  suggestedDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 4,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E2E8F0',
+  },
+  dividerText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#94A3B8',
+    marginHorizontal: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
 });

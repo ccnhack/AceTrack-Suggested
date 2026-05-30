@@ -27,6 +27,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTournamentsStore } from '../stores';
 import { usePlayersStore } from '../stores';
 import { useVideoStore } from '../stores';
+import QuickEvaluationView from '../components/QuickEvaluationView';
 import { useSupportStore } from '../stores';
 import { useAdmin } from '../context/AdminContext';
 
@@ -56,6 +57,7 @@ const MatchesScreen = ({ route, navigation }) => {
   const [evaluatingPlayer, setEvaluatingPlayer] = useState(null);
   const [viewingHistoryForPlayer, setViewingHistoryForPlayer] = useState(null);
   const [evaluationScores, setEvaluationScores] = useState({});
+  const [evalMode, setEvalMode] = useState('quick'); // 'quick' or 'detailed'
   const [analyzingVideo, setAnalyzingVideo] = useState(null);
   const [regPaymentTarget, setRegPaymentTarget] = useState(null);
   const [rosterTab, setRosterTab] = useState('roster');
@@ -231,6 +233,26 @@ const MatchesScreen = ({ route, navigation }) => {
       sport: evaluatingPlayer?.tournament?.sport,
       scores: evaluationScores,
       averageScore,
+      round: evaluatingPlayer?.tournament?.currentRound || 1
+    };
+
+    onSaveEvaluation(newEvaluation);
+    setEvaluatingPlayer(null);
+    setEvaluationScores({});
+  };
+
+  const handleQuickSubmitEvaluation = (quickData) => {
+    if (!evaluatingPlayer || !user) return;
+
+    const newEvaluation = {
+      id: `eval_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
+      playerId: evaluatingPlayer?.player?.id,
+      coachId: user?.id,
+      tournamentId: evaluatingPlayer?.tournament?.id,
+      date: new Date().toISOString(),
+      sport: evaluatingPlayer?.tournament?.sport,
+      scores: quickData.scores,
+      averageScore: quickData.averageScore,
       round: evaluatingPlayer?.tournament?.currentRound || 1
     };
 
@@ -469,47 +491,72 @@ const MatchesScreen = ({ route, navigation }) => {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView style={styles.evalList} showsVerticalScrollIndicator={false}>
-                {evaluatingPlayer && getEvaluationQuestions(evaluatingPlayer?.tournament?.sport).map((q) => (
-                  <View key={q.id} style={styles.evalItem}>
-                    <View style={styles.evalItemHeader}>
-                      <Text style={styles.evalLabel}>{q.label}</Text>
-                      <View style={styles.scoreBadge}>
-                        <Text style={styles.scoreBadgeText}>{evaluationScores[q.id] || 0}/10</Text>
-                      </View>
-                    </View>
-                    {q.desc ? <Text style={styles.evalDesc}>{q.desc}</Text> : null}
-                    <View style={styles.sliderContainer}>
-                      <Slider
-                        style={styles.slider}
-                        minimumValue={0}
-                        maximumValue={10}
-                        step={1}
-                        value={evaluationScores[q.id] || 0}
-                        onValueChange={(value) => handleScoreChange(q.id, value)}
-                        minimumTrackTintColor="#2563EB"
-                        maximumTrackTintColor="#E2E8F0"
-                        thumbTintColor="#2563EB"
-                      />
-                    </View>
-                    <View style={styles.evalRange}>
-                      <Text style={styles.rangeText}>Poor</Text>
-                      <Text style={styles.rangeText}>Excellent</Text>
-                    </View>
-                  </View>
-                ))}
-              </ScrollView>
-
-              <TouchableOpacity onPress={handleSubmitEvaluation} style={styles.submitEvalButton}>
-                <LinearGradient
-                  colors={['#3B82F6', '#8B5CF6', '#EC4899']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.submitEvalGradient}
+              <View style={styles.evalModeToggle}>
+                <TouchableOpacity 
+                  style={[styles.evalModeBtn, evalMode === 'quick' && styles.evalModeBtnActive]}
+                  onPress={() => setEvalMode('quick')}
                 >
-                  <Text style={styles.submitEvalButtonText}>Submit Evaluation</Text>
-                </LinearGradient>
-              </TouchableOpacity>
+                  <Text style={[styles.evalModeBtnText, evalMode === 'quick' && styles.evalModeBtnTextActive]}>Quick Rate</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.evalModeBtn, evalMode === 'detailed' && styles.evalModeBtnActive]}
+                  onPress={() => setEvalMode('detailed')}
+                >
+                  <Text style={[styles.evalModeBtnText, evalMode === 'detailed' && styles.evalModeBtnTextActive]}>Detailed</Text>
+                </TouchableOpacity>
+              </View>
+
+              {evalMode === 'quick' ? (
+                <QuickEvaluationView 
+                  playerName={evaluatingPlayer?.player?.name}
+                  sport={evaluatingPlayer?.tournament?.sport}
+                  onSubmit={handleQuickSubmitEvaluation}
+                />
+              ) : (
+                <>
+                  <ScrollView style={styles.evalList} showsVerticalScrollIndicator={false}>
+                    {evaluatingPlayer && getEvaluationQuestions(evaluatingPlayer?.tournament?.sport).map((q) => (
+                      <View key={q.id} style={styles.evalItem}>
+                        <View style={styles.evalItemHeader}>
+                          <Text style={styles.evalLabel}>{q.label}</Text>
+                          <View style={styles.scoreBadge}>
+                            <Text style={styles.scoreBadgeText}>{evaluationScores[q.id] || 0}/10</Text>
+                          </View>
+                        </View>
+                        {q.desc ? <Text style={styles.evalDesc}>{q.desc}</Text> : null}
+                        <View style={styles.sliderContainer}>
+                          <Slider
+                            style={styles.slider}
+                            minimumValue={0}
+                            maximumValue={10}
+                            step={1}
+                            value={evaluationScores[q.id] || 0}
+                            onValueChange={(value) => handleScoreChange(q.id, value)}
+                            minimumTrackTintColor="#2563EB"
+                            maximumTrackTintColor="#E2E8F0"
+                            thumbTintColor="#2563EB"
+                          />
+                        </View>
+                        <View style={styles.evalRange}>
+                          <Text style={styles.rangeText}>Poor</Text>
+                          <Text style={styles.rangeText}>Excellent</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+
+                  <TouchableOpacity onPress={handleSubmitEvaluation} style={styles.submitEvalButton}>
+                    <LinearGradient
+                      colors={['#3B82F6', '#8B5CF6', '#EC4899']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.submitEvalGradient}
+                    >
+                      <Text style={styles.submitEvalButtonText}>Submit Evaluation</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </View>
         </Modal>

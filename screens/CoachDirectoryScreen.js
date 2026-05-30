@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, 
   Image, Modal, Alert, ScrollView, TextInput, SafeAreaView, Platform, LayoutAnimation
@@ -13,16 +13,23 @@ import { Calendar } from 'react-native-calendars';
 
 import { useAuth } from '../context/AuthContext';
 import { usePlayersStore } from '../stores';
+import { useCoachBookingStore } from '../stores/useCoachBookingStore';
+import CoachBookingModal from '../components/CoachBookingModal';
 
 export default function CoachDirectoryScreen({ navigation }) {
   const { currentUser: user, userRole: role, onUpdateUser } = useAuth();
   const { players, sendUserNotification } = usePlayersStore();
+  const { bookings: coachBookings, hydrate: hydrateBookings, updateBookingStatus } = useCoachBookingStore();
+  
   const [search, setSearch] = useState('');
   const [selectedCoach, setSelectedCoach] = useState(null);
   const [bookingModalVisible, setBookingModalVisible] = useState(false);
-  const [selectedDate, setSelectedDate] = useState('');
-  const [selectedTime, setSelectedTime] = useState(null);
-  const [expandedSlot, setExpandedSlot] = useState(null);
+
+  useEffect(() => {
+    if (role === 'coach') {
+      hydrateBookings(user.id);
+    }
+  }, [role, user.id, hydrateBookings]);
   
   const filteredCoaches = useMemo(() => {
     return (players || []).filter(p => p && p.role === 'coach')
@@ -32,68 +39,25 @@ export default function CoachDirectoryScreen({ navigation }) {
 
   const handleBook = (coach) => {
     setSelectedCoach(coach);
-    setSelectedDate('');
-    setSelectedTime(null);
     setBookingModalVisible(true);
   };
 
-  const confirmBookingRequest = () => {
-    if (!selectedDate || !selectedTime) {
-      Alert.alert("Selection Required", "Please choose both a date and a time slot.");
-      return;
-    }
-
-    const newBooking = {
-      id: `book_${Date.now()}`,
-      coachId: selectedCoach.id,
-      coachName: selectedCoach.name,
-      userId: user.id,
-      userName: user.name,
-      date: selectedDate,
-      time: selectedTime,
-      status: 'Requested', // Requested -> Confirmed -> Pending Payment -> Paid
-      createdAt: new Date().toISOString()
-    };
-
-    const updatedUser = {
-      ...user,
-      bookings: [...(user.bookings || []), newBooking]
-    };
-
-    if (onUpdateUser) {
-      onUpdateUser(updatedUser);
+  const handleUpdateBookingStatus = async (bookingId, newStatus) => {
+    try {
+      updateBookingStatus(bookingId, newStatus);
+      const { default: CoachBookingService } = await import('../services/CoachBookingService');
+      await CoachBookingService.updateBookingStatus(bookingId, newStatus);
       
-      // Send Notification to Coach
-      if (sendUserNotification) {
-        sendUserNotification(selectedCoach.id, {
-          type: 'booking',
-          title: 'New Booking Request',
-          message: `${user.name} has requested a session on ${selectedDate} at ${selectedTime}.`,
-        });
-      }
-
-      Alert.alert("Request Sent", `Booking request sent to ${selectedCoach.name}. You will be notified of the confirmation.`);
-    }
-    setBookingModalVisible(false);
-  };
-
-  const handleUpdateBookingStatus = (bookingId, newStatus) => {
-    const updatedUser = {
-      ...user,
-      bookings: (user.bookings || []).map(b => b.id === bookingId ? { ...b, status: newStatus } : b)
-    };
-    if (onUpdateUser) {
-      onUpdateUser(updatedUser);
-      
-      // Find the booking to get the userId for notification
-      const booking = (user.bookings || []).find(b => b.id === bookingId);
+      const booking = coachBookings.find(b => b.id === bookingId);
       if (booking && sendUserNotification) {
-        sendUserNotification(booking.userId, {
+        sendUserNotification(booking.playerId, {
           type: 'booking',
           title: `Booking ${newStatus}`,
           message: `Your booking with ${user.name} for ${booking.date} has been ${newStatus.toLowerCase()}.`,
         });
       }
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -142,8 +106,8 @@ export default function CoachDirectoryScreen({ navigation }) {
     <View key={booking.id} style={styles.dashboardCard}>
        <View style={styles.cardHeader}>
           <View>
-            <Text style={styles.cardTitle}>{booking.userName || booking.coachName}</Text>
-            <Text style={styles.cardDate}>{booking.date} @ {booking.time}</Text>
+            <Text style={styles.cardTitle}>{booking.playerId || booking.coachId}</Text>
+            <Text style={styles.cardDate}>{booking.date} @ {booking.timeSlot}</Text>
           </View>
           <View style={[styles.statusTag, 
             booking.status === 'Requested' && { backgroundColor: '#FEF3C7' },
@@ -158,7 +122,7 @@ export default function CoachDirectoryScreen({ navigation }) {
           </View>
        </View>
        
-       {role === 'coach' && booking.status === 'Requested' && (
+       {role === 'coach' && booking.status === 'Pending' && (
          <View style={styles.actionRow}>
            <TouchableOpacity 
              style={[styles.actionBtn, { backgroundColor: '#10B981' }]}
@@ -187,7 +151,6 @@ export default function CoachDirectoryScreen({ navigation }) {
   );
 
   if (role === 'coach') {
-    const coachBookings = (players || []).flatMap(p => p.bookings || []).filter(b => b.coachId === user.id);
     
     return (
       <SafeAreaView style={styles.container}>
@@ -199,7 +162,7 @@ export default function CoachDirectoryScreen({ navigation }) {
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.statsGrid}>
              <View style={styles.statBox}>
-               <Text style={styles.statNum}>{coachBookings.filter(b => b.status === 'Requested').length}</Text>
+               <Text style={styles.statNum}>{coachBookings.filter(b => b.status === 'Pending').length}</Text>
                <Text style={styles.statLab}>Requests</Text>
              </View>
              <View style={styles.statBox}>
@@ -292,88 +255,16 @@ export default function CoachDirectoryScreen({ navigation }) {
       />
 
       {/* Booking Modal */}
-      <Modal visible={bookingModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalLabel}>BOOKING REQUEST</Text>
-                <Text style={styles.modalTitle}>{selectedCoach?.name}</Text>
-              </View>
-              <TouchableOpacity onPress={() => setBookingModalVisible(false)} style={styles.modalClose}>
-                <Ionicons name="close" size={28} color="#0F172A" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.calendarBox}>
-                 <Text style={styles.calLabel}>Select Preferred Date</Text>
-                 <Calendar 
-                   onDayPress={(day) => setSelectedDate(day.dateString)}
-                   markedDates={{
-                     ...(selectedCoach?.blockedDates || {}),
-                     [selectedDate]: { selected: true, selectedColor: '#6366F1' }
-                   }}
-                   theme={{
-                     todayTextColor: '#6366F1',
-                     selectedDayBackgroundColor: '#6366F1',
-                   }}
-                 />
-              </View>
-
-              <Text style={styles.calLabel}>Select Time Slot</Text>
-              <View style={styles.timeSlots}>
-                 {['09:00 AM', '10:00 AM', '11:00 AM', '04:00 PM', '05:00 PM', '06:00 PM'].map((slot, index) => {
-                   const isExpanded = expandedSlot === slot;
-                   const slotHour = slot.split(':')[0];
-                   const slotAmPm = slot.slice(-2);
-                   const isSelBase = selectedTime && selectedTime.split(':')[0] === slotHour && selectedTime.slice(-2) === slotAmPm;
-
-                   return (
-                     <View key={`slot-${index}`} style={[styles.slotWrapper, { zIndex: isExpanded ? 100 : 1 }]}>
-                       <TouchableOpacity 
-                         style={[styles.slotBtn, isSelBase && styles.slotBtnActive]}
-                         onPress={() => setExpandedSlot(isExpanded ? null : slot)}
-                       >
-                         <Text style={[styles.slotText, isSelBase && styles.slotTextActive]}>
-                           {isSelBase ? selectedTime : slot}
-                         </Text>
-                       </TouchableOpacity>
-
-                       {isExpanded && (
-                         <View style={styles.subIntervalsPopup}>
-                           {[':00', ':15', ':30', ':45'].map((mins, subIndex) => {
-                             const fullTime = slot.replace(':00', mins);
-                             const isSel = selectedTime === fullTime;
-                             return (
-                               <TouchableOpacity 
-                                 key={`sub-${subIndex}`}
-                                 style={[styles.subBtn, isSel && styles.subBtnActive]}
-                                 onPress={() => {
-                                   setSelectedTime(fullTime);
-                                   setExpandedSlot(null);
-                                 }}
-                               >
-                                 <Text style={[styles.subBtnText, isSel && styles.subBtnTextActive]}>{fullTime}</Text>
-                               </TouchableOpacity>
-                             );
-                           })}
-                         </View>
-                       )}
-                     </View>
-                   );
-                 })}
-              </View>
-
-              <TouchableOpacity style={styles.confirmBtn} onPress={confirmBookingRequest}>
-                <Text style={styles.confirmBtnText}>Request Booking</Text>
-                <Ionicons name="arrow-forward" size={20} color="#fff" />
-              </TouchableOpacity>
-              <Text style={styles.disclaimer}>No payment required at this stage.</Text>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      {selectedCoach && (
+        <CoachBookingModal 
+          visible={bookingModalVisible} 
+          onClose={() => {
+            setBookingModalVisible(false);
+            setSelectedCoach(null);
+          }} 
+          coach={selectedCoach} 
+        />
+      )}
     </SafeAreaView>
   );
 }

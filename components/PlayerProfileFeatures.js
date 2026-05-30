@@ -7,7 +7,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import { FullscreenVideoPlayer } from './FullscreenVideoPlayer';
+import ProGate from './ProGate';
 import config from '../config';
+import AIAnalysisCard from './AIAnalysisCard';
 
 const { width } = Dimensions.get('window');
 
@@ -63,7 +65,7 @@ export const PlayerReferralDashboard = ({ user }) => {
   );
 };
 
-export const PlayerSkillDashboard = ({ user }) => {
+export const PlayerSkillDashboard = ({ user, latestEvaluation }) => {
   return (
     <View style={styles.card}>
       <Text style={styles.cardSubLabel}>Skill Dashboard</Text>
@@ -119,6 +121,15 @@ export const PlayerSkillDashboard = ({ user }) => {
           </View>
         </View>
       )}
+
+      {latestEvaluation && (
+        <AIAnalysisCard 
+          evaluationScores={latestEvaluation.scores} 
+          playerName={user.name} 
+          playerSkillLevel={user.skillLevel} 
+          isPro={user.isPro} 
+        />
+      )}
     </View>
   );
 };
@@ -128,53 +139,55 @@ export const PlayerPerformanceAnalytics = ({ user }) => {
   const { shotDistribution, rallyStats } = user.performanceAnalytics;
 
   return (
-    <View style={styles.card}>
-      <Text style={styles.cardSubLabel}>Performance Analytics</Text>
-      
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Shot Distribution</Text>
-        <View style={styles.analyticsGrid}>
-          <View style={styles.analyticItemRow}>
-            <Text style={styles.analyticTextLabel}>Smashes</Text>
-            <Text style={styles.analyticTextValue}>{shotDistribution.smashes}%</Text>
-          </View>
-          <View style={styles.analyticItemRow}>
-            <Text style={styles.analyticTextLabel}>Drops</Text>
-            <Text style={styles.analyticTextValue}>{shotDistribution.drops}%</Text>
-          </View>
-          <View style={styles.analyticItemRow}>
-            <Text style={styles.analyticTextLabel}>Clears</Text>
-            <Text style={styles.analyticTextValue}>{shotDistribution.clears}%</Text>
-          </View>
-          <View style={styles.analyticItemRow}>
-            <Text style={styles.analyticTextLabel}>Net Shots</Text>
-            <Text style={styles.analyticTextValue}>{shotDistribution.netShots}%</Text>
+    <ProGate user={user} featureName="AI Analytics">
+      <View style={styles.card}>
+        <Text style={styles.cardSubLabel}>Performance Analytics</Text>
+        
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Shot Distribution</Text>
+          <View style={styles.analyticsGrid}>
+            <View style={styles.analyticItemRow}>
+              <Text style={styles.analyticTextLabel}>Smashes</Text>
+              <Text style={styles.analyticTextValue}>{shotDistribution.smashes}%</Text>
+            </View>
+            <View style={styles.analyticItemRow}>
+              <Text style={styles.analyticTextLabel}>Drops</Text>
+              <Text style={styles.analyticTextValue}>{shotDistribution.drops}%</Text>
+            </View>
+            <View style={styles.analyticItemRow}>
+              <Text style={styles.analyticTextLabel}>Clears</Text>
+              <Text style={styles.analyticTextValue}>{shotDistribution.clears}%</Text>
+            </View>
+            <View style={styles.analyticItemRow}>
+              <Text style={styles.analyticTextLabel}>Net Shots</Text>
+              <Text style={styles.analyticTextValue}>{shotDistribution.netShots}%</Text>
+            </View>
           </View>
         </View>
-      </View>
 
-      <View>
-        <Text style={styles.sectionTitle}>Rally Statistics</Text>
-        <View style={styles.analyticsGrid}>
-          <View style={styles.analyticBox}>
-            <Text style={styles.analyticBoxLabel}>Longest Rally</Text>
-            <Text style={styles.analyticBoxValue}>{rallyStats.longestRally} shots</Text>
-          </View>
-          <View style={styles.analyticBox}>
-            <Text style={styles.analyticBoxLabel}>Avg Rally</Text>
-            <Text style={styles.analyticBoxValue}>{rallyStats.averageRallyLength} shots</Text>
-          </View>
-          <View style={styles.analyticBox}>
-            <Text style={[styles.analyticBoxLabel, { color: '#22C55E' }]}>Winning Shots</Text>
-            <Text style={[styles.analyticBoxValue, { color: '#22C55E' }]}>{rallyStats.winningShots}</Text>
-          </View>
-          <View style={styles.analyticBox}>
-            <Text style={[styles.analyticBoxLabel, { color: '#EF4444' }]}>Unforced Errors</Text>
-            <Text style={[styles.analyticBoxValue, { color: '#EF4444' }]}>{rallyStats.unforcedErrors}</Text>
+        <View>
+          <Text style={styles.sectionTitle}>Rally Statistics</Text>
+          <View style={styles.analyticsGrid}>
+            <View style={styles.analyticBox}>
+              <Text style={styles.analyticBoxLabel}>Longest Rally</Text>
+              <Text style={styles.analyticBoxValue}>{rallyStats.longestRally} shots</Text>
+            </View>
+            <View style={styles.analyticBox}>
+              <Text style={styles.analyticBoxLabel}>Avg Rally</Text>
+              <Text style={styles.analyticBoxValue}>{rallyStats.averageRallyLength} shots</Text>
+            </View>
+            <View style={styles.analyticBox}>
+              <Text style={[styles.analyticBoxLabel, { color: '#22C55E' }]}>Winning Shots</Text>
+              <Text style={[styles.analyticBoxValue, { color: '#22C55E' }]}>{rallyStats.winningShots}</Text>
+            </View>
+            <View style={styles.analyticBox}>
+              <Text style={[styles.analyticBoxLabel, { color: '#EF4444' }]}>Unforced Errors</Text>
+              <Text style={[styles.analyticBoxValue, { color: '#EF4444' }]}>{rallyStats.unforcedErrors}</Text>
+            </View>
           </View>
         </View>
       </View>
-    </View>
+    </ProGate>
   );
 };
 

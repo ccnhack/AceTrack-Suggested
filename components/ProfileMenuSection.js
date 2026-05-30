@@ -12,24 +12,38 @@ const ProfileMenuSection = memo(({
   onDiagnostics,
   onChangePassword,
   onReferral,
+  onShareStats,
   onSupport,
   onCoachOnboarding,
+  onCoachAvailability,
   onLogout,
   onOpenModal,
 }) => {
   return (
     <View style={styles.menuSection}>
       {user.role === 'coach' && (
-        <TouchableOpacity 
-          onPress={onCoachOnboarding}
-          style={styles.menuItem}
-        >
-          <View style={[styles.menuIcon, { backgroundColor: '#F0FDF4' }]}>
-            <Ionicons name="ribbon" size={20} color="#16A34A" />
-          </View>
-          <Text style={styles.menuLabel}>Affiliation</Text>
-          <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
-        </TouchableOpacity>
+        <>
+          <TouchableOpacity 
+            onPress={onCoachOnboarding}
+            style={styles.menuItem}
+          >
+            <View style={[styles.menuIcon, { backgroundColor: '#F0FDF4' }]}>
+              <Ionicons name="ribbon" size={20} color="#16A34A" />
+            </View>
+            <Text style={styles.menuLabel}>Affiliation</Text>
+            <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={onCoachAvailability}
+            style={styles.menuItem}
+          >
+            <View style={[styles.menuIcon, { backgroundColor: '#EEF2FF' }]}>
+              <Ionicons name="calendar-outline" size={20} color="#4F46E5" />
+            </View>
+            <Text style={styles.menuLabel}>Manage Availability</Text>
+            <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+          </TouchableOpacity>
+        </>
       )}
 
       <TouchableOpacity 
@@ -123,7 +137,22 @@ const ProfileMenuSection = memo(({
         </TouchableOpacity>
       )}
 
-
+      {user.role === 'user' && onShareStats && (
+        <TouchableOpacity 
+          testID="profile.shareStats.button"
+          onPress={() => {
+            logger.logAction('MODAL_OPEN', { modal: 'ShareStats' });
+            onShareStats();
+          }}
+          style={styles.menuItem}
+        >
+          <View style={[styles.menuIcon, { backgroundColor: '#FDF2F8' }]}>
+            <Ionicons name="share-social-outline" size={20} color="#DB2777" />
+          </View>
+          <Text style={styles.menuLabel}>Share My Stats</Text>
+          <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+        </TouchableOpacity>
+      )}
 
       {/* --- Support: Report Issue (auto-assigns to admin) --- */}
       {user.role === 'support' && (

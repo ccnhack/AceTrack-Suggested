@@ -162,24 +162,25 @@ const ParticipantsModal = ({
                </View>
                {(() => {
                  const tMatches = matches.filter(m => m.tournamentId === tournament.id && m.status !== 'Completed');
-                 const numCourts = tournament.numCourts || 4;
-                 const courts = Array.from({ length: numCourts }, (_, i) => i + 1);
+                 const academyCourts = user?.courts && user.courts.length > 0 
+                    ? user.courts.map(c => c.name) 
+                    : Array.from({ length: tournament.numCourts || 4 }, (_, i) => `Court ${i + 1}`);
 
                  if (tMatches.length === 0) {
                     return <Text style={styles.emptyNote}>No active matches available for assignment</Text>;
                  }
 
-                 return courts.map(courtNum => {
-                   const matchOnCourt = tMatches.find(m => m.courtNumber === courtNum && m.status === 'In Progress');
+                 return academyCourts.map((courtName, index) => {
+                   const matchOnCourt = tMatches.find(m => m.courtNumber === courtName && m.status === 'In Progress');
                    
                    return (
-                     <View key={`court_${courtNum}`} style={styles.playerCard}>
+                     <View key={`court_${index}`} style={styles.playerCard}>
                         <View style={styles.playerRow}>
                            <View style={[styles.avatar, styles.emptyAvatar, { backgroundColor: matchOnCourt ? '#DCFCE7' : '#F1F5F9' }]}>
-                              <Text style={{ fontSize: 14, fontWeight: '900', color: matchOnCourt ? '#16A34A' : '#94A3B8' }}>{courtNum}</Text>
+                              <Text style={{ fontSize: 12, fontWeight: '900', color: matchOnCourt ? '#16A34A' : '#94A3B8' }}>{index + 1}</Text>
                            </View>
                            <View style={styles.flex}>
-                              <Text style={styles.playerName}>Court {courtNum}</Text>
+                              <Text style={styles.playerName}>{courtName}</Text>
                               <Text style={[styles.roleTag, { color: matchOnCourt ? '#16A34A' : '#D97706' }]}>
                                 {matchOnCourt ? 'In Use' : 'Available'}
                               </Text>
@@ -199,11 +200,11 @@ const ParticipantsModal = ({
                           </View>
                         ) : (
                           <View style={{ marginTop: 12, gap: 8 }}>
-                            {tMatches.filter(m => !m.courtNumber).map(m => (
+                              {tMatches.filter(m => !m.courtNumber).map(m => (
                               <TouchableOpacity 
                                 key={m.id}
-                                style={[styles.manualCheckInBtn, { flexDirection: 'row', justifyContent: 'space-between' }]}
-                                onPress={() => onUpdateMatch({ ...m, status: 'In Progress', courtNumber: courtNum })}
+                                style={[styles.manualCheckInBtn, { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }]}
+                                onPress={() => onUpdateMatch({ ...m, status: 'In Progress', courtNumber: courtName })}
                               >
                                 <Text style={styles.manualCheckInText}>
                                   Assign: {players.find(p => p.id === m.player1Id)?.name || 'TBD'} vs {players.find(p => p.id === m.player2Id)?.name || 'TBD'}

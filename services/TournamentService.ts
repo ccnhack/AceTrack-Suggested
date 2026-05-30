@@ -400,6 +400,58 @@ class TournamentService {
     return { success: true, tournaments: updated };
   }
 
+  /**
+   * Generates a seeded bracket by sorting registered players by TrueSkill rating.
+   * Standard tennis seeding pattern (1 plays N, etc.).
+   */
+  static generateSeededBracket(tournament, players) {
+    if (!tournament.registeredPlayerIds || tournament.registeredPlayerIds.length === 0) {
+      return tournament;
+    }
+
+    const registeredPlayers = tournament.registeredPlayerIds
+      .map(id => {
+        const p = players.find(player => player && player.id === id);
+        return { id, rating: p?.trueSkillRating || 1200 };
+      })
+      .sort((a, b) => b.rating - a.rating);
+
+    const n = registeredPlayers.length;
+    let bracketSize = 2;
+    while (bracketSize < n) {
+      bracketSize *= 2;
+    }
+
+    let seedsArray = [1, 2];
+    for (let round = 2; round <= bracketSize; round *= 2) {
+      const nextSeeds = [];
+      const sum = round + 1;
+      for (let i = 0; i < seedsArray.length; i++) {
+        nextSeeds.push(seedsArray[i]);
+        nextSeeds.push(sum - seedsArray[i]);
+      }
+      seedsArray = nextSeeds;
+    }
+
+    const orderedIds = [];
+    const seeds = {};
+
+    for (let i = 0; i < seedsArray.length; i++) {
+      const seedNumber = seedsArray[i];
+      if (seedNumber <= n) {
+        const playerId = registeredPlayers[seedNumber - 1].id;
+        orderedIds.push(playerId);
+        seeds[playerId] = seedNumber;
+      }
+    }
+
+    return {
+      ...tournament,
+      registeredPlayerIds: orderedIds,
+      seeds
+    };
+  }
+
   static declineCoachRequest(tid, tournaments) {
     const updated = (tournaments || []).map(item => item && item.id === tid ? { ...item, coachStatus: 'Declined' } : item);
     return { success: true, tournaments: updated };

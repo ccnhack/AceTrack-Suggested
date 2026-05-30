@@ -16,6 +16,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import OfflineScreen from './components/OfflineScreen';
 import ChatBot from './components/ChatBot';
 import NotificationsModal from './components/NotificationsModal';
+import InteractiveDemo, { useInteractiveDemo } from './components/InteractiveDemo';
 import config from './config';
 
 // 🏗️ Phase 3: React Query
@@ -69,7 +70,7 @@ import { useSupportStore } from './stores';
 
 
 // 🔄 Centralized Versioning// 🚀 ACE TRACK STABILITY VERSION (v2.6.565)
-const APP_VERSION = '2.6.565';
+const APP_VERSION = '2.6.566';
 const linking = {
   prefixes: [config.API_BASE_URL || 'https://acetrack-suggested.onrender.com', 'acetrack://'],
   config: {
@@ -101,6 +102,8 @@ function Root() {
   
   const { isFullyConnected, isSyncing } = useSync();
   const { currentUser, userRole, userId, onMarkNotificationsRead, isAuthReady } = useAuth();
+  
+  const { showDemo, hasChecked, markDemoSeen } = useInteractiveDemo(currentUser);
 
   const navigationRef = useRef();
   if (isLoading || !isInitialized || !isAuthReady) {
@@ -143,6 +146,11 @@ function Root() {
           </View>
         )}
       </NavigationContainer>
+
+      <InteractiveDemo 
+        visible={showDemo && hasChecked}
+        onComplete={markDemoSeen}
+      />
 
       <NotificationsModal 
         visible={showNotifications}

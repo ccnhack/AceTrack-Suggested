@@ -16,6 +16,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Updates from 'expo-updates';
 import { PlayerSkillDashboard, PlayerPerformanceAnalytics, PlayerWalletDashboard, PlayerReferralDashboard } from '../components/PlayerProfileFeatures';
 import CoachOnboardingModal from '../components/CoachOnboardingModal';
+import CoachAvailabilityManager from '../components/CoachAvailabilityManager';
 import { SupportTicketSystem } from '../components/SupportTicketSystem';
 import DiagnosticsModal from '../components/DiagnosticsModal';
 import config from '../config';
@@ -26,6 +27,7 @@ import ProfileHeader, { AvatarPlaceholder, getInitials } from '../components/Pro
 import ProfileMenuSection from '../components/ProfileMenuSection';
 import { OTPVerificationModal, CalendarWidget } from '../components/ProfileSubComponents';
 import AdminProfileModals from '../components/AdminProfileModals';
+import ShareablePlayerCard from '../components/ShareablePlayerCard';
 
 const calculateAcademyTier = (uid, tournaments = []) => {
   const hostedCount = (tournaments || []).filter(t => t.creatorId === uid).length;
@@ -39,9 +41,8 @@ const calculateAcademyTier = (uid, tournaments = []) => {
 
 
 import { useAuth } from '../context/AuthContext';
-import { useTournamentsStore } from '../stores';
-import { usePlayersStore } from '../stores';
-import { useSupportStore } from '../stores';
+import { useTournamentsStore, usePlayersStore, useSupportStore } from '../stores';
+import { useEvaluationsStore } from '../stores/useEvaluationsStore';
 import { useSync } from '../context/SyncContext';
 import { useAdmin } from '../context/AdminContext';
 import { useApp } from '../context/AppContext';
@@ -55,6 +56,7 @@ const ProfileScreen = ({ navigation }) => {
   const { 
     supportTickets, onSaveTicket, onUpdateTicketStatus, onReplyTicket, onRetryMessage, onMarkSeen 
   } = useSupportStore();
+  const { evaluations } = useEvaluationsStore();
   const { 
     isCloudOnline, isUsingCloud, lastSyncTime, onManualSync, onToggleCloud 
   } = useSync();
@@ -70,6 +72,7 @@ const ProfileScreen = ({ navigation }) => {
     }
   }, [isFocused]);
   const [showCoachOnboarding, setShowCoachOnboarding] = useState(false);
+  const [showCoachAvailability, setShowCoachAvailability] = useState(false);
   const [activeSupportModal, setActiveSupportModal] = useState(null);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
@@ -77,6 +80,7 @@ const ProfileScreen = ({ navigation }) => {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [showReferralModal, setShowReferralModal] = useState(false);
+  const [showShareCard, setShowShareCard] = useState(false);
   const [isPickingImage, setIsPickingImage] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -450,7 +454,18 @@ const ProfileScreen = ({ navigation }) => {
           <View style={styles.section}>
               <Text style={styles.sectionTitle}>Skills</Text>
               {renderUpdateCard()}
-              <PlayerSkillDashboard user={user} />
+              <PlayerSkillDashboard 
+                user={user} 
+                latestEvaluation={
+                  (evaluations || [])
+                    .filter(e => e.playerId === user.id)
+                    .sort((a, b) => new Date(b.date) - new Date(a.date))[0]
+                }
+              />
+              
+              <View style={{ marginTop: 24 }}>
+                <PlayerPerformanceAnalytics user={user} />
+              </View>
           </View>
         )}
 
@@ -684,6 +699,7 @@ const ProfileScreen = ({ navigation }) => {
           onDiagnostics={() => setShowDiagnostics(true)}
           onChangePassword={() => setShowChangePassword(true)}
           onReferral={() => setShowReferralModal(true)}
+          onShareStats={() => setShowShareCard(true)}
           onSupport={(signal) => {
              if (signal === 'admin_hub') {
                // Support users can report issues via the ticket system; admin users go to admin hub
@@ -697,8 +713,17 @@ const ProfileScreen = ({ navigation }) => {
              }
           }}
           onCoachOnboarding={() => setShowCoachOnboarding(true)}
+          onCoachAvailability={() => setShowCoachAvailability(true)}
           onLogout={onLogout}
           onOpenModal={(modalId) => setActiveSupportModal(modalId)}
+        />
+
+        {/* Shareable Player Stats Card Modal */}
+        <ShareablePlayerCard
+          visible={showShareCard}
+          onClose={() => setShowShareCard(false)}
+          user={user}
+          tournaments={tournaments}
         />
 
         <View style={styles.footer}>
@@ -766,6 +791,13 @@ const ProfileScreen = ({ navigation }) => {
           visibleModal={activeSupportModal}
           onClose={() => setActiveSupportModal(null)}
           user={user}
+        />
+      )}
+
+      {showCoachAvailability && (
+        <CoachAvailabilityManager
+          visible={showCoachAvailability}
+          onClose={() => setShowCoachAvailability(false)}
         />
       )}
 

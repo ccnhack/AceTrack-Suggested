@@ -17,6 +17,9 @@ import { isTournamentPast, getVisibleTournaments, formatDateIST, parseTournament
 import { PaymentModal } from '../components/ExploreSubComponents';
 import { useIsFocused } from '@react-navigation/native';
 import { Sport } from '../types';
+import SocialFeed from '../components/SocialFeed';
+import { generateFeed } from '../utils/feedUtils';
+import { useMatchmaking } from '../context/MatchmakingContext';
 
 const { width } = Dimensions.get('window');
 
@@ -65,6 +68,8 @@ const ExploreScreen = ({ navigation, route }) => {
   const [sportFilter, setSportFilter] = useState('All');
   const [cityFilter, setCityFilter] = useState('All');
   const [isCityDropdownVisible, setIsCityDropdownVisible] = useState(false);
+  const [isCommunityTab, setIsCommunityTab] = useState(false);
+  const { matchmaking } = useMatchmaking();
   
   const toggleCityDropdown = () => {
     if (Platform.OS !== 'web') {
@@ -290,7 +295,7 @@ const ExploreScreen = ({ navigation, route }) => {
     }
   };
 
-  const availableSports = userRole === 'coach' && userSports?.length > 0 ? userSports : Object.values(Sport);
+  const availableSports = userRole === 'coach' && userSports?.length > 0 ? userSports : ['Badminton', 'Table Tennis', 'Cricket', 'Football'];
   const currentPlayer = userId ? (players || []).find(p => p.id === userId) : null;
 
   const processedTournaments = useMemo(() => {
@@ -368,6 +373,10 @@ const ExploreScreen = ({ navigation, route }) => {
   ), [userId, userRole]);
 
 
+
+  const feedData = useMemo(() => {
+    return generateFeed(tournaments || [], players || [], matchmaking || [], 20);
+  }, [tournaments, players, matchmaking]);
 
   return (
     <View style={styles.container}>
@@ -456,10 +465,31 @@ const ExploreScreen = ({ navigation, route }) => {
             ))}
           </ScrollView>
         </View>
+
+        <View style={{ flexDirection: 'row', paddingHorizontal: 24, marginTop: 16, gap: 12 }}>
+          <TouchableOpacity 
+            onPress={() => setIsCommunityTab(false)}
+            style={[styles.tabToggleBtn, !isCommunityTab && styles.tabToggleBtnActive]}
+          >
+            <Text style={[styles.tabToggleText, !isCommunityTab && styles.tabToggleTextActive]}>Tournaments</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => setIsCommunityTab(true)}
+            style={[styles.tabToggleBtn, isCommunityTab && styles.tabToggleBtnActive]}
+          >
+            <Text style={[styles.tabToggleText, isCommunityTab && styles.tabToggleTextActive]}>Community</Text>
+          </TouchableOpacity>
+        </View>
       </LinearGradient>
 
-      <FlashList
-        data={sortedTournaments}
+      {isCommunityTab ? (
+        <SocialFeed 
+          feed={feedData} 
+          onTournamentPress={(t) => setSelectedTournament(t)}
+        />
+      ) : (
+        <FlashList
+          data={sortedTournaments}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         estimatedItemSize={180}
@@ -541,8 +571,7 @@ const ExploreScreen = ({ navigation, route }) => {
         }
         contentContainerStyle={{ paddingBottom: 40 }}
       />
-
-
+      )}
 
       <TournamentDetailModal
         tournament={selectedTournament}
@@ -582,6 +611,10 @@ const styles = StyleSheet.create({
   filterButtonActive: { backgroundColor: colors.primary.base },
   filterButtonText: { fontSize: 12, fontWeight: '900', color: '#CBD5E1', textTransform: 'uppercase', letterSpacing: 1 },
   filterButtonTextActive: { color: '#FFFFFF' },
+  tabToggleBtn: { flex: 1, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  tabToggleBtnActive: { backgroundColor: 'rgba(255,255,255,0.2)', borderColor: '#EF4444' },
+  tabToggleText: { fontSize: 13, fontWeight: '700', color: '#94A3B8' },
+  tabToggleTextActive: { color: '#FFFFFF' },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   compactCityPicker: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', maxWidth: '40%' },
   compactCityPickerActive: { backgroundColor: 'rgba(255,255,255,0.2)', borderColor: '#EF4444' },

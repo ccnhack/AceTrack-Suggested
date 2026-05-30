@@ -20,6 +20,8 @@ import BroadcastTools from '../components/BroadcastTools';
 import { AcademyAnalytics } from '../components/AcademyAnalytics';
 import { formatDateIST } from '../utils/tournamentUtils';
 import { AcademyTournamentCard } from '../components/AcademySubComponents';
+import AcademyMembersPanel from '../components/AcademyMembersPanel';
+import CourtManager from '../components/CourtManager';
 import { useAuth } from '../context/AuthContext';
 import { usePlayersStore } from '../stores';
 import { useTournamentsStore } from '../stores';
@@ -104,6 +106,8 @@ export const AcademyScreen = () => {
   const [formFormat, setFormFormat] = useState(TournamentFormat.Singles);
   const [formPrize, setFormPrize] = useState('');
   const [formDescription, setFormDescription] = useState('');
+  const [formSponsorName, setFormSponsorName] = useState('');
+  const [formSponsorLogoUrl, setFormSponsorLogoUrl] = useState('');
 
   // Picker States
   const [activePicker, setActivePicker] = useState(null); // 'sport', 'skill', 'structure', 'format', 'coach', 'date', 'deadline', 'time'
@@ -123,6 +127,8 @@ export const AcademyScreen = () => {
       setFormFormat(editingT.format || TournamentFormat.Singles);
       setFormPrize(editingT.prizePool || '');
       setFormDescription(editingT.description || '');
+      setFormSponsorName(editingT.sponsorName || '');
+      setFormSponsorLogoUrl(editingT.sponsorLogoUrl || '');
       setSelectedDate(editingT.date || '');
       setCoachAssignmentType(editingT.coachAssignmentType || null);
       
@@ -161,6 +167,8 @@ export const AcademyScreen = () => {
     setFormFormat(TournamentFormat.Singles);
     setFormPrize('');
     setFormDescription('');
+    setFormSponsorName('');
+    setFormSponsorLogoUrl('');
     setSelectedDate('');
     setCoachAssignmentType(null);
     setSelectedAcademyCoachId(null);
@@ -307,6 +315,8 @@ export const AcademyScreen = () => {
       format: formFormat,
       entryFee: Number(formFee),
       prizePool: formPrize,
+      sponsorName: formSponsorName,
+      sponsorLogoUrl: formSponsorLogoUrl,
       minMatches: Number(editingT?.minMatches || 1),
       maxPlayers: Number(formMaxPlayers),
       registeredPlayerIds: editingT?.registeredPlayerIds || [],
@@ -356,6 +366,8 @@ export const AcademyScreen = () => {
     setFormFormat(t.format);
     setFormPrize(t.prizePool);
     setFormDescription(t.description);
+    setFormSponsorName(t.sponsorName || '');
+    setFormSponsorLogoUrl(t.sponsorLogoUrl || '');
     setCoachAssignmentType(t.coachAssignmentType);
     setSelectedAcademyCoachId(t.assignedCoachId);
     
@@ -623,6 +635,20 @@ export const AcademyScreen = () => {
             <Ionicons name="megaphone" size={16} color={subTab === 'broadcast' ? colors.primary.base : colors.navy[400]} />
             <Text style={[styles.segTabText, subTab === 'broadcast' && styles.segTabTextActive]}>Blast</Text>
           </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => handleTabChange('members')} 
+            style={[styles.segTab, subTab === 'members' && styles.segTabActive]}
+          >
+            <Ionicons name="people-circle" size={16} color={subTab === 'members' ? colors.primary.base : colors.navy[400]} />
+            <Text style={[styles.segTabText, subTab === 'members' && styles.segTabTextActive]}>Members</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => handleTabChange('courts')} 
+            style={[styles.segTab, subTab === 'courts' && styles.segTabActive]}
+          >
+            <Ionicons name="tennisball" size={16} color={subTab === 'courts' ? colors.primary.base : colors.navy[400]} />
+            <Text style={[styles.segTabText, subTab === 'courts' && styles.segTabTextActive]}>Courts</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -726,6 +752,14 @@ export const AcademyScreen = () => {
                 />
             </View>
           </View>
+        )}
+
+        {subTab === 'members' && (
+          <AcademyMembersPanel academyId={academyId} />
+        )}
+
+        {subTab === 'courts' && (
+          <CourtManager />
         )}
       </ScrollView>
 
@@ -1045,6 +1079,29 @@ export const AcademyScreen = () => {
                             multiline
                             style={[styles.formInput, styles.textArea]}
                         />
+                    </View>
+
+                    <View style={styles.gridRow}>
+                        <View style={[styles.inputGroup, styles.flex]}>
+                            <Text style={styles.fieldLabel}>Sponsor Name</Text>
+                            <TextInput 
+                                value={formSponsorName}
+                                onChangeText={setFormSponsorName}
+                                editable={!isReadOnly}
+                                style={styles.formInput}
+                                placeholder="e.g. Wilson"
+                            />
+                        </View>
+                        <View style={[styles.inputGroup, styles.flex]}>
+                            <Text style={styles.fieldLabel}>Sponsor Logo URL</Text>
+                            <TextInput 
+                                value={formSponsorLogoUrl}
+                                onChangeText={setFormSponsorLogoUrl}
+                                editable={!isReadOnly}
+                                style={styles.formInput}
+                                placeholder="https://..."
+                            />
+                        </View>
                     </View>
 
                     {!isReadOnly && (

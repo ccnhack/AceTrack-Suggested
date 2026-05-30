@@ -41,6 +41,7 @@ import OnboardingScreen from '../screens/OnboardingScreen';
 import SupportDashboardScreen from '../screens/SupportDashboardScreen';
 import SupportSetupScreen from '../screens/SupportSetupScreen';
 import OrgChatScreen from '../screens/OrgChatScreen';
+import CorporateDashboardScreen from '../screens/CorporateDashboardScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -107,6 +108,7 @@ const MainTabs = memo(() => {
       else if (route.name === 'Matchmaking') iconName = focused ? 'people' : 'people-outline';
       else if (route.name === 'Insights') iconName = focused ? 'bar-chart' : 'bar-chart-outline';
       else if (route.name === 'OrgChat') iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
+      else if (route.name === 'Corporate') iconName = focused ? 'briefcase' : 'briefcase-outline';
       return <Ionicons name={iconName} size={size} color={color} />;
     },
     tabBarLabel: route.name === 'Matchmaking' && role === 'coach' ? 'Bookings' : route.name === 'OrgChat' ? 'Chat' : route.name,
@@ -124,6 +126,7 @@ const MainTabs = memo(() => {
   const initialRouteName = useMemo(() => {
     if (role === 'admin') return 'Admin';
     if (role === 'support') return 'Support';
+    if (role === 'corporate') return 'Corporate';
     return 'Profile'; // Default for web/unmatched roles
   }, [role]);
 
@@ -139,6 +142,9 @@ const MainTabs = memo(() => {
       {Platform.OS !== 'web' && <Tab.Screen name="Ranking" component={RankingScreen} options={{ tabBarTestID: 'nav.tab.Ranking' }} /> }
       {Platform.OS !== 'web' && role === 'academy' && (
         <Tab.Screen name="Academy" component={AcademyScreen} options={{ tabBarTestID: 'nav.tab.Academy' }} />
+      )}
+      {role === 'corporate' && (
+        <Tab.Screen name="Corporate" component={CorporateDashboardScreen} options={{ tabBarTestID: 'nav.tab.Corporate' }} />
       )}
       {role === 'admin' && (
         <Tab.Screen name="Admin" component={AdminHubScreen} options={{ tabBarTestID: 'nav.tab.Admin' }} />

@@ -115,6 +115,25 @@ export function useMatchmakingQuery() {
 }
 
 /**
+ * Partner Requests query
+ */
+export function usePartnerRequestsQuery() {
+  const { partnerRequests, hydrate } = useMatchmakingStore();
+  
+  const query = useQuery({
+    queryKey: ['partnerRequests'],
+    queryFn: async () => {
+      await hydrate();
+      return useMatchmakingStore.getState().partnerRequests;
+    },
+    placeholderData: partnerRequests,
+    staleTime: 30 * 1000,
+  });
+  
+  return { ...query, data: partnerRequests?.length > 0 ? partnerRequests : query.data };
+}
+
+/**
  * Evaluations query
  */
 export function useEvaluationsQuery() {

@@ -677,5 +677,42 @@ export default function createAuthRoutes({
     res.json({ available: !existing });
   }));
 
+  // ═══════════════════════════════════════════════════════════════
+  // 🏆 PRO SUBSCRIPTION API (Phase 2.2)
+  // ═══════════════════════════════════════════════════════════════
+  router.post('/user/subscribe', apiKeyGuard, asyncHandler(async (req, res) => {
+    const userId = req.headers['x-user-id'] || req.user?.id;
+    const { tier } = req.body; // 'monthly' or 'annual'
+    
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'User ID required' });
+    }
+
+    const playerDoc = await Player.findOne({ id: userId }).lean();
+    if (!playerDoc || !playerDoc.data) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const durationDays = tier === 'annual' ? 365 : 30;
+    const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+
+    await Player.updateOne(
+      { id: userId },
+      { 
+        $set: { 
+          "data.isPro": true,
+          "data.proTier": tier || 'monthly',
+          "data.proExpiresAt": expiresAt,
+          lastUpdated: new Date() 
+        } 
+      }
+    );
+
+    const updatedDoc = await Player.findOne({ id: userId }).lean();
+    const { password: _pw, pushTokens, devices, ...safeUser } = updatedDoc.data;
+
+    res.json({ success: true, user: safeUser });
+  }));
+
   return router;
 }

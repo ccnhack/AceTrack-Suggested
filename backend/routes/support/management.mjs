@@ -465,6 +465,10 @@ router.post('/support/manage-user', apiKeyGuard, authGuard, async (req, res) => 
       user.supportStatus = status;
       if (status === 'terminated') {
         user.terminatedAt = new Date().toISOString();
+        if (io) {
+          console.log(`[TERMINATE] Emitting auth_invalidated to user ${targetUserId}`);
+          io.emit('auth_invalidated', { userId: targetUserId, reason: 'account_terminated' });
+        }
       } else if (status === 'suspended') {
         // 🔒 SUSPEND: Freeze account without full termination
         user.suspendedAt = new Date().toISOString();
@@ -472,6 +476,12 @@ router.post('/support/manage-user', apiKeyGuard, authGuard, async (req, res) => 
         
         // 📧 Trigger Suspension Email (v2.6.419)
         await sendSuspensionEmail(user.email, user.name);
+        
+        // 🛑 Force Logout (v2.6.565): Instantly invalidate the user's session
+        if (io) {
+          console.log(`[SUSPEND] Emitting auth_invalidated to user ${targetUserId}`);
+          io.emit('auth_invalidated', { userId: targetUserId, reason: 'account_suspended' });
+        }
       } else if (status === 'active') {
         // Re-onboarding or unsuspend: clear metadata
         delete user.terminatedAt;

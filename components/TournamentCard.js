@@ -131,6 +131,16 @@ const TournamentCard = ({
               <View style={styles.pulseDot} />
               <Text style={styles.levelBadgeText}>{t.skillLevel}</Text>
             </View>
+            {t.sponsorName && (
+              <View style={[styles.statusBadge, { backgroundColor: '#F59E0B', flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                {t.sponsorLogoUrl ? (
+                  <Image source={{ uri: config.sanitizeUrl(t.sponsorLogoUrl) }} style={{ width: 12, height: 12, borderRadius: 6 }} />
+                ) : (
+                  <Ionicons name="star" size={10} color="#FFF" />
+                )}
+                <Text style={styles.statusBadgeText}>Sponsored by {t.sponsorName}</Text>
+              </View>
+            )}
             {isRegistered && userRole !== 'coach' && (
               <View style={[styles.statusBadge, { backgroundColor: '#EF4444' }]}>
                 <Text style={styles.statusBadgeText}>Registered</Text>

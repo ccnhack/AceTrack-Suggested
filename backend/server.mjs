@@ -60,6 +60,7 @@ import createWebRoutes from './routes/web.mjs';
 import createInfrastructureRoutes from './routes/infrastructure.mjs';
 import tournamentsRoutes from './routes/tournaments.mjs';
 import evaluationsRoutes from './routes/evaluations.mjs';
+import bookingsRoutes from './routes/bookings.mjs';
 import registerWebSocketHandlers from './services/websocket.mjs';
 import initScheduler from './services/scheduler.mjs';
 
@@ -109,7 +110,7 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.565'; // Critical for Update prompts 
+const APP_VERSION = '2.6.566'; // Critical for Update prompts 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -835,6 +836,7 @@ app.use('/api/v1', infrastructureRoutes); // 🛡️ COMPATIBILITY FIX (v2.6.174
 
 app.use('/api/v1/tournaments', tournamentsRoutes({ io }));
 app.use('/api/v1/evaluations', evaluationsRoutes({ io }));
+app.use('/api/v1/bookings', bookingsRoutes);
 
 
 // [Consolidated with primary /health guard at /api/v1/health]

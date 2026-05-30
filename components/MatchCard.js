@@ -24,6 +24,15 @@ const MatchCard = ({
   const isWaitlisted = user?.id && (t.waitlistedPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
   const [timeLeft, setTimeLeft] = useState('');
 
+  const isDoubles = t.format && ["Men's Doubles", "Women's Doubles", "Mixed Doubles"].includes(t.format);
+  let userTeamCode = null;
+  if (isDoubles && user?.id && t.doublesTeams) {
+    const userTeam = t.doublesTeams.find(team => team.player1Id === user.id && !team.player2Id);
+    if (userTeam) {
+      userTeamCode = userTeam.teamCode;
+    }
+  }
+
 
   // 🕒 [RegEngine] Timer Logic: 30-minute reservation countdown (v2.6.103)
   useEffect(() => {
@@ -192,6 +201,14 @@ const MatchCard = ({
           <Text style={[styles.detailValue, isCoach && { color: '#3B82F6' }]}>{(t.registeredPlayerIds || []).length}/{t.maxPlayers}</Text>
         </TouchableOpacity>
       </View>
+
+      {userTeamCode && (
+        <View style={{ backgroundColor: '#EEF2FF', padding: 12, borderRadius: 16, marginBottom: 16, alignItems: 'center', borderWidth: 1, borderColor: '#C7D2FE' }}>
+          <Text style={{ fontSize: 10, fontWeight: '900', color: '#4F46E5', textTransform: 'uppercase', marginBottom: 4 }}>Your Team Code</Text>
+          <Text style={{ fontSize: 24, fontWeight: '900', color: '#312E81', letterSpacing: 4 }}>{userTeamCode}</Text>
+          <Text style={{ fontSize: 10, color: '#6366F1', textAlign: 'center', marginTop: 4 }}>Share this with your partner or wait for matchmaking</Text>
+        </View>
+      )}
 
       <View style={styles.matchActions}>
         {viewMode === 'requests' ? (

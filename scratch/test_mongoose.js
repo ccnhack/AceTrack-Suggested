@@ -1,39 +1,25 @@
-require("dotenv").config({ path: "/Users/shashankshekhar/Final Working/AceTrack_Stablility_Enhanced/backend/.env" });
-const mongoose = require("mongoose");
-const z = require("zod");
+const mongoose = require('mongoose');
 
-async function run() {
-  await mongoose.connect(process.env.MONGO_URI);
-  console.log("Connected to MongoDB.");
-
-  // Fetch the data
-  const db = mongoose.connection.db;
-  const state = await db.collection("appstates").findOne({}, { sort: { lastUpdated: -1 } });
+async function test() {
+  const PlayerDataSchema = new mongoose.Schema({
+    email: String,
+    role: String
+  }, { _id: false, strict: false });
   
-  if (!state) return console.log("No state");
+  const PlayerSchema = new mongoose.Schema({
+    id: String,
+    data: PlayerDataSchema
+  }, { minimize: false, strict: false });
   
-  const currentData = state.data;
+  const Player = mongoose.model('TestPlayer', PlayerSchema);
   
-  // Simulate the UNION MERGE
-  const incoming = [
-      { "0": "1", "1": "0", "2": "1", "3": "6", "4": "5", "5": "5", "6": "2" },
-      "123"
-  ];
-  const existing = Array.isArray(currentData.seenAdminActionIds) ? currentData.seenAdminActionIds : [];
+  const doc = new Player({ id: '1', data: { email: 'a@a.com', role: 'admin' } });
   
-  try {
-     const merged = [...new Set([...existing, ...incoming])];
-     currentData.seenAdminActionIds = merged;
-     
-     await db.collection("appstates").updateOne(
-        { _id: state._id },
-        { $set: { data: currentData } }
-     );
-     console.log("Successfully ran direct update!");
-  } catch (e) {
-     console.error("Crash during update!", e);
-  }
-
-  mongoose.disconnect();
+  // modify undocumented field
+  doc.data.supportStatus = 'suspended';
+  doc.markModified('data');
+  
+  console.log("Before save (toJSON):", doc.toJSON());
+  console.log("Before save (toObject):", doc.toObject());
 }
-run();
+test();

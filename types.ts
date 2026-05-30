@@ -43,7 +43,7 @@ export enum TournamentFormat {
   MIXED_DOUBLES = "Mixed Doubles"
 }
 
-export type UserRole = 'user' | 'academy' | 'admin' | 'coach';
+export type UserRole = 'user' | 'academy' | 'admin' | 'coach' | 'corporate';
 
 export interface Evaluation {
   id: string;
@@ -60,6 +60,18 @@ export interface Evaluation {
 export interface TrueSkillHistory {
   date: string;
   rating: number;
+  tournamentId: string;
+}
+
+export interface AcademyMembership {
+  id: string;
+  playerId: string;
+  academyId: string;
+  academyName?: string; // Phase 1.5 requirement
+  startDate: string;
+  endDate: string;
+  monthlyFee: number;
+  status: 'active' | 'past_due' | 'cancelled';
 }
 
 export interface PlayerPerformance {
@@ -76,6 +88,20 @@ export interface PlayerPerformance {
     unforcedErrors: number;
   };
   heatmapUrl?: string;
+}
+
+export interface CorporateDepartment {
+  id: string;
+  name: string; // e.g., "Engineering", "Sales"
+  managerId?: string;
+  employeeIds: string[];
+  points?: number;
+}
+
+export interface WeeklySlot {
+  dayOfWeek: number; // 0 = Sunday, 1 = Monday, etc.
+  startTime: string; // "09:00"
+  endTime: string;   // "17:00"
 }
 
 export interface Player {
@@ -119,7 +145,17 @@ export interface Player {
   trueSkillRating?: number;
   trueSkillHistory?: TrueSkillHistory[];
   performanceAnalytics?: PlayerPerformance;
-  notifications?: { id: string; title: string; message: string; read: boolean; date: string; type: 'video' | 'general' | 'support'; tournamentId?: string }[];
+  notifications?: { id: string; type: string; title: string; body: string; date: string; read: boolean; data?: any }[];
+  isSuspended?: boolean;
+  isTerminated?: boolean;
+  
+  // Phase 2 Fields
+  isPro?: boolean;
+  proExpiresAt?: string;
+  proTier?: 'monthly' | 'annual';
+  memberships?: AcademyMembership[];
+  availability?: WeeklySlot[]; // For coaches
+  courts?: { id: string, name: string }[]; // For academies
   purchasedVideos?: string[];
   purchasedHighlights?: string[];
   favouritedVideos?: string[];
@@ -176,6 +212,11 @@ export interface Tournament {
   ratingsModified?: boolean;
   failedOtpAttempts?: { coachId: string; otp: string; timestamp: string }[];
   
+  // Phase 2 Fields
+  seeds?: Record<string, number>;
+  sponsorName?: string;
+  sponsorLogoUrl?: string;
+  
   // Coach Assignment Fields
   coachAssignmentType?: 'academy' | 'platform';
   coachStatus?: 'Awaiting Coach Confirmation' | 'Coach Confirmed - Awaiting Assignment' | 'Coach Assigned' | 'Confirmation Reopened' | 'Pending Coach Registration' | 'Coach Assigned - Academy';
@@ -207,6 +248,7 @@ export interface Match {
   round: number;
   videoUrl?: string;
   consentRecorded: boolean;
+  courtId?: string; // For academies to allocate courts
 }
 
 export interface Season {
@@ -223,6 +265,44 @@ export interface SeasonLeaderboard {
   playerName: string;
   points: number;
   rank: number;
+}
+
+export interface MatchmakingRequest {
+  id: string;
+  creatorId: string;
+  sport: string;
+  status: 'Open' | 'Matched';
+}
+
+export interface CoachBooking {
+  id: string;
+  coachId: string;
+  playerId: string;
+  date: string;       // "YYYY-MM-DD"
+  timeSlot: string;   // "14:00 - 15:00"
+  status: 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled';
+  notes?: string;
+}
+
+export interface PartnerRequest {
+  id: string;
+  creatorId: string;
+  creatorName: string;
+  creatorImage?: string;
+  sport: Sport | string;
+  city: string;
+  skillLevel: SkillLevel | string;
+  comment?: string;
+  createdAt: string;
+  status: 'active' | 'fulfilled' | 'expired';
+}
+
+export interface AcademyStats {
+  id: string;
+  tournamentId: string;
+  matchId: string;
+  sport: Sport;
+  date: string;
 }
 
 export interface MatchVideo {

@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTournamentsStore } from '../stores';
 import { usePlayersStore } from '../stores';
 import { useVideoStore } from '../stores';
+import AIVideoAnalysisPreview from '../components/AIVideoAnalysisPreview';
 
 const RecordingsScreen = () => {
   const { currentUser: user, userRole: role } = useAuth();
@@ -120,21 +121,26 @@ const RecordingsScreen = () => {
             </Text>
           </View>
         ) : (
-          <VideoManagement 
-            academyId={user.id} 
-            tournaments={tournaments} 
-            players={players} 
-            matchVideos={filteredVideos} 
-            onSaveVideo={onSaveVideo}
-            onUnlockVideo={onUnlockVideo}
-            onPurchaseAiHighlights={onPurchaseAiHighlights}
-            onTopUp={onTopUp}
-            onVideoPlay={onVideoPlay}
-            onToggleFavourite={onToggleFavourite}
-            isPlayerMode={true}
-            user={user}
-            hideSelector={activeFilter === 'favorites'}
-          />
+          <ScrollView style={{ flex: 1 }}>
+            <View style={{ paddingHorizontal: 24 }}>
+              <AIVideoAnalysisPreview user={user} />
+            </View>
+            <VideoManagement 
+              academyId={user.id} 
+              tournaments={tournaments} 
+              players={players} 
+              matchVideos={filteredVideos} 
+              onSaveVideo={onSaveVideo}
+              onUnlockVideo={onUnlockVideo}
+              onPurchaseAiHighlights={onPurchaseAiHighlights}
+              onTopUp={onTopUp}
+              onVideoPlay={onVideoPlay}
+              onToggleFavourite={onToggleFavourite}
+              isPlayerMode={true}
+              user={user}
+              hideSelector={activeFilter === 'favorites'}
+            />
+          </ScrollView>
         )}
       </View>
     </View>

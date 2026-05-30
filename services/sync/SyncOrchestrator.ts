@@ -748,9 +748,9 @@ class SyncOrchestrator {
 
        // Check again in case the retry also failed, or if it was a full pull failure
        if (!result.success || !result.data) {
-         // 🛡️ [AUTH_FAILURE] (v2.6.432): Emit auth failure for 401 responses
-         if (result.status === 401) {
-           eventBus.emit('AUTH_FAILURE', { status: 401, endpoint: '/api/data' });
+         // 🛡️ [AUTH_FAILURE] (v2.6.432): Emit auth failure for 401 or 403 responses
+         if (result.status === 401 || result.status === 403) {
+           eventBus.emit('AUTH_FAILURE', { status: result.status, endpoint: '/api/data' });
          }
          return null;
        }
