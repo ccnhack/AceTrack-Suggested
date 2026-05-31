@@ -425,12 +425,42 @@ export const AcademyScreen = () => {
             currentVal = formFormat;
             setter = setFormFormat;
             break;
-        case 'coach':
-            options = players.filter(p => p.role === 'coach' && p.academyId === academyId && p.isApprovedCoach).map(c => ({ id: c.id, name: c.name }));
+        case 'coach': {
+            let tDayOfWeek = -1;
+            let tTime24 = '';
+            if (formDate && formTime) {
+                const d = new Date(formDate);
+                if (!isNaN(d.getTime())) {
+                    tDayOfWeek = d.getDay();
+                    const parts = formTime.split(' ');
+                    if (parts.length === 2) {
+                        let [hours, minutes] = parts[0].split(':');
+                        if (hours === '12') hours = '00';
+                        if (parts[1].toUpperCase() === 'PM') hours = (parseInt(hours, 10) + 12).toString();
+                        hours = hours.toString().padStart(2, '0');
+                        tTime24 = `${hours}:${minutes}`;
+                    } else {
+                        tTime24 = formTime;
+                    }
+                }
+            }
+
+            options = players.filter(p => p.role === 'coach' && p.academyId === academyId && p.isApprovedCoach).map(c => {
+                let nameLabel = c.name;
+                if (tDayOfWeek !== -1 && tTime24) {
+                    const avail = c.availability || [];
+                    const isAvail = avail.some(slot => slot.dayOfWeek === tDayOfWeek && tTime24 >= slot.startTime && tTime24 < slot.endTime);
+                    if (!isAvail) {
+                        nameLabel = `${c.name} (Unavailable)`;
+                    }
+                }
+                return { id: c.id, name: nameLabel };
+            });
             options.push({ id: 'other', name: '+ Other Coach (Invite)' });
             currentVal = selectedAcademyCoachId;
             setter = setSelectedAcademyCoachId;
             break;
+        }
         case 'date':
             return (
                 <Modal transparent animationType="fade">
@@ -607,7 +637,12 @@ export const AcademyScreen = () => {
       {/* Modern Segmented Tabs */}
       <View style={styles.segmentedTabContainer}>
         <View style={styles.segmentedTabBar}>
-          <TouchableOpacity 
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+          >
+            <TouchableOpacity 
             onPress={() => handleTabChange('tournaments')} 
             style={[styles.segTab, subTab === 'tournaments' && styles.segTabActive]}
           >
@@ -649,6 +684,7 @@ export const AcademyScreen = () => {
             <Ionicons name="tennisball" size={16} color={subTab === 'courts' ? colors.primary.base : colors.navy[400]} />
             <Text style={[styles.segTabText, subTab === 'courts' && styles.segTabTextActive]}>Courts</Text>
           </TouchableOpacity>
+          </ScrollView>
         </View>
       </View>
 
@@ -692,24 +728,10 @@ export const AcademyScreen = () => {
             ))}
             {filteredTournaments.length === 0 && (
                 <View style={[styles.emptyView, { paddingBottom: 100 }]} testID="academy.tournaments.empty">
-                    {isSyncing ? (
-                        <ActivityIndicator size="large" color="#6366F1" />
-                    ) : (
-                        <View style={{ alignItems: 'center' }}>
-                            <Ionicons name="alert-circle-outline" size={40} color="#94A3B8" />
-                            <Text style={styles.emptyText}>No {tFilter} tournaments found</Text>
-                            <View style={{ marginTop: 20, padding: 10, backgroundColor: '#F1F5F9', borderRadius: 8 }}>
-                                <Text testID="academy.debug.metrics" style={{ fontSize: 11, color: '#475569', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
-                                    DEBUG_DUMP:
-                                    Total: {tournaments.length}
-                                    My: {myTournaments.length}
-                                    Filtered: {filteredTournaments.length}
-                                    ActiveID: {academyId || 'NULL'}
-                                    Role: {userRole || 'NONE'}
-                                </Text>
-                            </View>
-                        </View>
-                    )}
+                    <View style={{ alignItems: 'center' }}>
+                        <Ionicons name="alert-circle-outline" size={40} color="#94A3B8" />
+                        <Text style={styles.emptyText}>No {tFilter} tournaments found</Text>
+                    </View>
                 </View>
             )}
           </View>
@@ -1255,7 +1277,6 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   segmentedTabBar: {
-    flexDirection: 'row',
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 6,
@@ -1266,9 +1287,9 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   segTab: {
-    flex: 1,
     flexDirection: 'row',
     paddingVertical: 10,
+    paddingHorizontal: 16,
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',

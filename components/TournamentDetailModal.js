@@ -105,6 +105,21 @@ const TournamentDetailModal = ({
   const pendingCount = (tournament.pendingPaymentPlayerIds || []).length;
   const isFull = (registeredCount + pendingCount) >= tournament.maxPlayers;
   
+  const parseDateRobust = (d) => {
+    if (!d) return null;
+    let date = new Date(d);
+    if (isNaN(date.getTime())) {
+      const parts = d.split('-');
+      if (parts.length === 3) {
+        // Check if DD-MM-YYYY (parts[2] is year)
+        if (parts[2].length === 4) return new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+        // Check if YYYY-MM-DD (parts[0] is year)
+        if (parts[0].length === 4) return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      }
+    }
+    return isNaN(date.getTime()) ? null : date;
+  };
+
   // DATE-BASED CLOSURE: Check if deadline has passed or tournament started
   const isClosed = (() => {
     // 🛡️ [RegEngine] Status Guard: ONLY allow registration for upcoming tournaments
@@ -115,26 +130,25 @@ const TournamentDetailModal = ({
       const today = new Date(Date.now() + (serverClockOffset || 0));
       today.setHours(0, 0, 0, 0);
 
-      // 🛡️ [RegEngine] Robust Parsing for regional formats (DD-MM-YYYY)
-      const parseDate = (d) => {
-        if (!d) return null;
-        let date = new Date(d);
-        if (isNaN(date.getTime())) {
-          const parts = d.split('-');
-          if (parts.length === 3) {
-            // Check if DD-MM-YYYY (parts[2] is year)
-            if (parts[2].length === 4) return new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
-            // Check if YYYY-MM-DD (parts[0] is year)
-            if (parts[0].length === 4) return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-          }
-        }
-        return isNaN(date.getTime()) ? null : date;
-      };
-
-      const deadline = parseDate(tournament.registrationDeadline);
+      const deadline = parseDateRobust(tournament.registrationDeadline);
       if (deadline) {
         deadline.setHours(23, 59, 59, 999);
         if (today > deadline) return true;
+      }
+    }
+    return false;
+  })();
+
+  const isPast = (() => {
+    if (tournament.status === 'completed' || tournament.status === 'past') return true;
+    if (tournament.date) {
+      const today = new Date(Date.now() + (serverClockOffset || 0));
+      today.setHours(0, 0, 0, 0);
+
+      const tDate = parseDateRobust(tournament.date);
+      if (tDate) {
+        tDate.setHours(23, 59, 59, 999);
+        if (today > tDate) return true;
       }
     }
     return false;
@@ -240,7 +254,7 @@ const TournamentDetailModal = ({
             <View style={styles.grid}>
               <View style={styles.gridItem}>
                 <Text style={styles.gridLabel}>Prize Pool</Text>
-                <Text style={[styles.gridValue, { color: '#EF4444' }]}>₹{tournament.prizePool || 'N/A'}</Text>
+                <Text style={[styles.gridValue, { color: '#EF4444' }]}>{tournament.prizePool ? (String(tournament.prizePool).includes('₹') ? tournament.prizePool : `₹${tournament.prizePool}`) : 'N/A'}</Text>
               </View>
               <View style={styles.gridItem}>
                 <Text style={styles.gridLabel}>Format</Text>
@@ -296,87 +310,96 @@ const TournamentDetailModal = ({
             {/* Registration Area — Regular Users */}
             {isRegularUser && (
               <View style={styles.actionArea}>
-                {isAlreadyRegistered && !isPendingPayment && (
-                  <Text style={styles.alreadyRegistered}>You are already registered</Text>
-                )}
-                {isWaitlisted && !isPendingPayment && (
-                  <Text style={styles.alreadyRegistered}>You are in the waitlist</Text>
-                )}
-                {isClosed && !isAlreadyRegistered && !isPendingPayment && (
+                {isPast ? (
                   <View style={styles.closedContactContainer}>
-                    <Text style={styles.closedMessageTitle}>Registration Closed.</Text>
-                    <Text style={styles.closedMessageSub}>Kindly get in touch with the academy to register for the tournament</Text>
-                    
-                    {isRejected ? (
-                      <View style={styles.rejectionBlock}>
-                        <Ionicons name="information-circle-outline" size={20} color="#EF4444" />
-                        <Text style={styles.rejectionText}>
-                          Academy has declined the registration and are no longer accepting responses, Kindly check other tournaments
-                        </Text>
-                      </View>
-                    ) : (
-                      <View style={styles.interestActions}>
-                        <TouchableOpacity 
-                           testID="tournament.detail.interestedBtn"
-                           style={[styles.interestBtn, isInterested && styles.interestedBtnActive]}
-                           onPress={handleInterestPress}
-                        >
-                          <Text style={[styles.interestBtnText, isInterested && styles.interestedBtnTextActive]}>
-                            {isInterested ? 'Interested' : 'Interested'}
-                          </Text>
-                        </TouchableOpacity>
+                    <Text style={styles.closedMessageTitle}>Tournament Ended.</Text>
+                    <Text style={styles.closedMessageSub}>This tournament has already concluded.</Text>
+                  </View>
+                ) : (
+                  <>
+                    {isAlreadyRegistered && !isPendingPayment && (
+                      <Text style={styles.alreadyRegistered}>You are already registered</Text>
+                    )}
+                    {isWaitlisted && !isPendingPayment && (
+                      <Text style={styles.alreadyRegistered}>You are in the waitlist</Text>
+                    )}
+                    {isClosed && !isAlreadyRegistered && !isPendingPayment && (
+                      <View style={styles.closedContactContainer}>
+                        <Text style={styles.closedMessageTitle}>Registration Closed.</Text>
+                        <Text style={styles.closedMessageSub}>Kindly get in touch with the academy to register for the tournament</Text>
+                        
+                        {isRejected ? (
+                          <View style={styles.rejectionBlock}>
+                            <Ionicons name="information-circle-outline" size={20} color="#EF4444" />
+                            <Text style={styles.rejectionText}>
+                              Academy has declined the registration and are no longer accepting responses, Kindly check other tournaments
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={styles.interestActions}>
+                            <TouchableOpacity 
+                               testID="tournament.detail.interestedBtn"
+                               style={[styles.interestBtn, isInterested && styles.interestedBtnActive]}
+                               onPress={handleInterestPress}
+                            >
+                              <Text style={[styles.interestBtnText, isInterested && styles.interestedBtnTextActive]}>
+                                {isInterested ? 'Interested' : 'Interested'}
+                              </Text>
+                            </TouchableOpacity>
 
-                        <TouchableOpacity 
-                          style={styles.detailsBtn}
-                          onPress={() => setShowAcademyDetails(!showAcademyDetails)}
-                        >
-                          <Text style={styles.detailsBtnText}>
-                            {showAcademyDetails ? 'Hide Details' : 'Academy Details'}
-                          </Text>
-                        </TouchableOpacity>
+                            <TouchableOpacity 
+                              style={styles.detailsBtn}
+                              onPress={() => setShowAcademyDetails(!showAcademyDetails)}
+                            >
+                              <Text style={styles.detailsBtnText}>
+                                {showAcademyDetails ? 'Hide Details' : 'Academy Details'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+
+                        {showAcademyDetails && creator && (
+                          <View style={styles.academyContactInfo}>
+                            <View style={styles.academyContactRow}>
+                              <Ionicons name="business" size={14} color="#64748B" />
+                              <Text style={styles.academyContactLabel}>Academy:</Text>
+                              <Text style={styles.academyContactValue}>{creator.name}</Text>
+                            </View>
+                            <View style={styles.academyContactRow}>
+                              <Ionicons name="call" size={14} color="#3B82F6" />
+                              <Text style={styles.academyContactLabel}>Contact:</Text>
+                              <Text style={styles.academyContactValue}>{creator.phone || 'N/A'}</Text>
+                            </View>
+                          </View>
+                        )}
                       </View>
                     )}
-
-                    {showAcademyDetails && creator && (
-                      <View style={styles.academyContactInfo}>
-                        <View style={styles.academyContactRow}>
-                          <Ionicons name="business" size={14} color="#64748B" />
-                          <Text style={styles.academyContactLabel}>Academy:</Text>
-                          <Text style={styles.academyContactValue}>{creator.name}</Text>
-                        </View>
-                        <View style={styles.academyContactRow}>
-                          <Ionicons name="call" size={14} color="#3B82F6" />
-                          <Text style={styles.academyContactLabel}>Contact:</Text>
-                          <Text style={styles.academyContactValue}>{creator.phone || 'N/A'}</Text>
-                        </View>
+                    {isFull && !isAlreadyRegistered && !isPendingPayment && !isClosed && !isWaitlisted && (
+                      <Text testID="tournament.detail.waitlistMsg" style={styles.alreadyRegistered}>
+                        Slots Full - {(tournament.waitlistedPlayerIds || []).length} people on Waitlist
+                      </Text>
+                    )}
+                    {isPendingPayment && timeLeft !== '' && (
+                      <View style={styles.timerBadge}>
+                        <Ionicons name="time" size={14} color="#F97316" />
+                        <Text style={styles.timerText}>Reservation expires in: {timeLeft}</Text>
                       </View>
                     )}
-                  </View>
+                    <TouchableOpacity
+                      testID="tournament.detail.actionBtn"
+                      onPress={handleRegister}
+                      disabled={isRegisterDisabled}
+                      style={[
+                        styles.registerBtn,
+                        isPendingPayment && { backgroundColor: '#F97316' },
+                        isWaitlisted && { backgroundColor: '#64748B' },
+                        isRegisterDisabled && styles.registerBtnDisabled,
+                      ]}
+                    >
+                      <Text style={styles.registerBtnText}>{getRegisterBtnLabel()}</Text>
+                    </TouchableOpacity>
+                  </>
                 )}
-                {isFull && !isAlreadyRegistered && !isPendingPayment && !isClosed && !isWaitlisted && (
-                  <Text testID="tournament.detail.waitlistMsg" style={styles.alreadyRegistered}>
-                    Slots Full - {(tournament.waitlistedPlayerIds || []).length} people on Waitlist
-                  </Text>
-                )}
-                {isPendingPayment && timeLeft !== '' && (
-                  <View style={styles.timerBadge}>
-                    <Ionicons name="time" size={14} color="#F97316" />
-                    <Text style={styles.timerText}>Reservation expires in: {timeLeft}</Text>
-                  </View>
-                )}
-                <TouchableOpacity
-                  testID="tournament.detail.actionBtn"
-                  onPress={handleRegister}
-                  disabled={isRegisterDisabled}
-                  style={[
-                    styles.registerBtn,
-                    isPendingPayment && { backgroundColor: '#F97316' },
-                    isWaitlisted && { backgroundColor: '#64748B' },
-                    isRegisterDisabled && styles.registerBtnDisabled,
-                  ]}
-                >
-                  <Text style={styles.registerBtnText}>{getRegisterBtnLabel()}</Text>
-                </TouchableOpacity>
               </View>
             )}
 

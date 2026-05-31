@@ -1,7 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { AppState, SupportPasswordReset, Player, AdminMFA } from '../models/index.mjs';
+import { AppState, SupportPasswordReset, Player, AdminMFA, CoachInvite } from '../models/index.mjs';
 import { asyncHandler } from '../helpers/utils.mjs';
 import { apiKeyGuard } from '../middleware/security.mjs';
 
@@ -63,6 +63,120 @@ export default function createAuthRoutes({
     // Return sanitized user object
     const { password, ...sanitizedUser } = user;
     res.json({ success: true, user: sanitizedUser });
+  }));
+
+  // 🛡️ [COACH INVITE TRACKING] (v2.6.400)
+  router.get('/auth/coach-invite/validate', apiKeyGuard, asyncHandler(async (req, res) => {
+    const { token } = req.query;
+    if (!token) return res.status(400).json({ error: 'Token is required' });
+
+    const invite = await CoachInvite.findOne({ token });
+    if (!invite) return res.status(404).json({ error: 'Invite not found or invalid' });
+
+    if (new Date() > invite.expiresAt) {
+      if (invite.status !== 'Expired') {
+        invite.status = 'Expired';
+        await invite.save();
+      }
+      return res.status(410).json({ error: 'This invitation has expired' });
+    }
+
+    if (invite.status === 'Used') {
+      return res.status(409).json({ error: 'This invitation has already been used' });
+    }
+
+    res.json({ 
+      success: true, 
+      invite: { 
+        email: invite.email, 
+        academyId: invite.academyId, 
+        tournamentId: invite.tournamentId 
+      } 
+    });
+  }));
+
+  router.post('/auth/coach-invite/track', apiKeyGuard, asyncHandler(async (req, res) => {
+    const { token, action } = req.body; // e.g., 'link_click', 'form_view'
+    if (!token || !action) return res.status(400).json({ error: 'Token and action required' });
+
+    const invite = await CoachInvite.findOne({ token });
+    if (!invite) return res.status(404).json({ error: 'Invite not found' });
+
+    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const userAgent = req.headers['user-agent'] || '';
+
+    // If first click, update status
+    if (invite.status === 'Pending' && action === 'link_click') {
+      invite.status = 'Clicked';
+    }
+
+    invite.clicks.push({
+      action,
+      ip: clientIp,
+      userAgent,
+      timestamp: new Date()
+    });
+
+    await invite.save();
+    res.json({ success: true });
+  }));
+
+  router.post('/auth/coach-invite/consume', apiKeyGuard, asyncHandler(async (req, res) => {
+    const { token, username } = req.body;
+    if (!token || !username) return res.status(400).json({ error: 'Token and username required' });
+
+    const invite = await CoachInvite.findOne({ token });
+    if (!invite) return res.status(404).json({ error: 'Invite not found' });
+    if (invite.status === 'Used') return res.status(409).json({ error: 'Invite already used' });
+
+    invite.status = 'Used';
+    invite.clicks.push({
+      action: 'form_submit',
+      ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+      userAgent: req.headers['user-agent'] || '',
+      timestamp: new Date()
+    });
+
+    await invite.save();
+
+    // Log the affiliation
+    await logAudit(req, 'COACH_INVITE_CONSUMED', ['players', 'tournaments'], { 
+      coachUsername: username, 
+      academyId: invite.academyId,
+      tournamentId: invite.tournamentId
+    });
+
+    // Auto-Affiliate Magic: Update the coach and tournament directly
+    await Player.updateOne(
+      { id: username },
+      { $set: { "data.isApprovedCoach": true, "data.affiliatedAcademy": invite.academyId, lastUpdated: new Date() } }
+    );
+
+    const t = await Tournament.findOne({ id: invite.tournamentId }).lean();
+    if (t && t.data) {
+      await Tournament.updateOne(
+        { id: invite.tournamentId },
+        { 
+          $set: { 
+            "data.coachStatus": "Accepted", 
+            "data.assignedCoachId": username, 
+            lastUpdated: new Date() 
+          }
+        }
+      );
+    }
+
+    res.json({ success: true });
+  }));
+
+  // 🛡️ [ADMIN VISIBILITY] Fetch all Coach Invites (v2.6.400)
+  router.get('/admin/coach-invites', apiKeyGuard, asyncHandler(async (req, res) => {
+    // 🛡️ SECURITY HARDENING: Ensure admin only
+    if (req.userRole !== 'admin') {
+      return res.status(403).json({ error: 'System Administrator privileges required' });
+    }
+    const invites = await CoachInvite.find().sort({ createdAt: -1 }).lean();
+    res.json({ success: true, invites });
   }));
 
   // 🛡️ [SECURITY] Change Password for Authenticated Users (v2.6.425)

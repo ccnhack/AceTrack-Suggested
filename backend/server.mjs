@@ -31,7 +31,8 @@ import {
   sendDemotionEmail,
   sendTerminationEmail,
   sendReOnboardingEmail,
-  sendSecurityAlertEmail
+  sendSecurityAlertEmail,
+  sendCoachInviteEmail
 } from './emailService.mjs';
 
 import { logAudit, logServerEvent, sendSecurityAlert } from './services/AuditService.mjs';
@@ -109,8 +110,8 @@ const initFirebase = async () => {
 };
 initFirebase();
 
-// 🚀 ACE TRACK STABILITY VERSION (v2.6.175)
-const APP_VERSION = '2.6.566'; // Critical for Update prompts 
+// 🚀 ACE TRACK STABILITY// EXPO OTA SYNC TARGET
+const APP_VERSION = '2.6.568'; // Critical for Update prompts 
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -797,7 +798,8 @@ const dataRoutes = createDataRoutes({
   SupportMetricsService,
   sendPushNotification,
   addInAppNotification,
-  activeSupportSessions
+  activeSupportSessions,
+  sendCoachInviteEmail
 });
 
 app.use('/api/v1', dataRoutes);

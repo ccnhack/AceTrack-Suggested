@@ -37,7 +37,43 @@ const SignupScreen = ({ navigation }) => {
         isShortScreen: Dimensions.get('window').height < 750
       })}`);
     }
+
+    // 🛡️ COACH INVITE PARSING (v2.6.400)
+    if (Platform.OS === 'web' && window.location) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get('invite_token');
+      if (token) {
+        setInviteToken(token);
+        validateInviteToken(token);
+      }
+    }
   }, []);
+
+  const validateInviteToken = async (token) => {
+    try {
+      const response = await fetch(`${config.API_BASE_URL}/api/v1/auth/coach-invite/validate?token=${token}`, {
+        headers: { 'x-ace-api-key': config.PUBLIC_APP_ID }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setInviteData(data.invite);
+        setAccountType('coach');
+        setStep(2);
+        setFormData(prev => ({ ...prev, email: data.invite.email }));
+        setIsEmailVerified(true);
+        // Track the click
+        fetch(`${config.API_BASE_URL}/api/v1/auth/coach-invite/track`, {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID },
+           body: JSON.stringify({ token, action: 'link_click' })
+        }).catch(e => console.error(e));
+      } else {
+        Alert.alert('Invite Error', data.error || 'Invalid or expired invite token');
+      }
+    } catch (err) {
+      console.error('Invite Validate Error:', err);
+    }
+  };
 
   const isShortScreen = height < 700;
   const [step, setStep] = useState(1);
@@ -60,6 +96,8 @@ const SignupScreen = ({ navigation }) => {
     referralCode: 'ACE-'
   });
   const [error, setError] = useState('');
+  const [inviteToken, setInviteToken] = useState('');
+  const [inviteData, setInviteData] = useState(null);
   const [usernameStatus, setUsernameStatus] = useState('idle');
   const [usernameSuggestions, setUsernameSuggestions] = useState([]);
   const [isSportsDropdownOpen, setIsSportsDropdownOpen] = useState(false);
@@ -334,7 +372,8 @@ const SignupScreen = ({ navigation }) => {
         }
       ] : [],
       ...(isCoach && {
-        isApprovedCoach: false,
+        isApprovedCoach: inviteToken ? true : false,
+        affiliatedAcademy: inviteToken ? inviteData?.academyId : null,
         certifiedSports: formData.certifiedSports,
         govIdUrl: formData.govIdUrl,
         certificationUrl: formData.certificationUrl
@@ -371,6 +410,15 @@ const SignupScreen = ({ navigation }) => {
     const success = onRegisterUser(newPlayer, players);
     
     if (success) {
+      // 🛡️ CONSUME COACH INVITE (v2.6.400)
+      if (inviteToken && accountType === 'coach') {
+         fetch(`${config.API_BASE_URL}/api/v1/auth/coach-invite/consume`, {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID },
+           body: JSON.stringify({ token: inviteToken, username: newPlayer.id })
+         }).catch(e => console.error('Consume Invite Error:', e));
+      }
+
       setNewlyCreatedUser(newPlayer);
       setShowSuccessModal(true);
     } else {
@@ -618,9 +666,9 @@ const SignupScreen = ({ navigation }) => {
               onChangeText={(val) => { setFormData({...formData, email: val}); setIsEmailVerified(false); }}
               keyboardType="email-address"
               autoCapitalize="none"
-              editable={!isEmailVerified}
+              editable={!isEmailVerified && !inviteToken}
             />
-            {!isEmailVerified ? (
+            {!isEmailVerified && !inviteToken ? (
               <TouchableOpacity 
                 style={styles.fieldActionBtn} 
                 onPress={() => handleOTPRequest('email')}

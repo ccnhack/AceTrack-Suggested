@@ -125,6 +125,28 @@ const TicketPromptCard = ({ type, description, onConfirm, onCancel }) => {
   );
 };
 
+const CreatedTicketCard = ({ type, description, ticketId, onManage }) => {
+  return (
+    <View style={styles.actionCard}>
+      <View style={[styles.actionCardHeader, { borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8 }]}>
+        <Ionicons name="ticket" size={20} color="#16A34A" />
+        <Text style={[styles.actionCardTitle, { color: '#16A34A' }]}>{type} Ticket</Text>
+      </View>
+      <View style={[styles.actionCardBody, { marginTop: 8 }]}>
+        <Text style={[styles.actionCardText, { color: '#334155' }]} numberOfLines={2}><Text style={{fontWeight: 'bold'}}>Issue:</Text> {description}</Text>
+        <Text style={[styles.actionCardText, { marginTop: 6, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 10, color: '#94A3B8' }]}>ID: {ticketId}</Text>
+      </View>
+      <TouchableOpacity 
+        style={[styles.actionCardButton, { backgroundColor: '#16A34A', marginTop: 4 }]} 
+        onPress={() => onManage(ticketId)}
+      >
+        <Text style={styles.actionCardButtonText}>Manage Ticket</Text>
+        <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
+      </TouchableOpacity>
+    </View>
+  );
+};
+
 const ChatBot = ({ 
   user, userRole, userId, userSports
 }) => {
@@ -136,7 +158,9 @@ const ChatBot = ({
   const [isOpen, setIsOpen] = useState(false);
   const navigation = useNavigation();
   const initialMessage = { role: 'model', text: 'Hi! I am your AceTrack assistant. Ask me anything about tournaments, rules, or training tips!' };
-  const messages = (chatbotMessages && user && chatbotMessages[user.id]) || [initialMessage];
+  const userMessages = chatbotMessages && user ? chatbotMessages[user.id] : null;
+  // 🛡️ [RUNTIME SAFETY] Guarantee messages is a valid array with a .map function and has at least one message
+  const messages = (Array.isArray(userMessages) && typeof userMessages.map === 'function' && userMessages.length > 0) ? userMessages : [initialMessage];
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [handledActions, setHandledActions] = useState(new Set()); // Track message timestamps that were acted upon
@@ -208,8 +232,10 @@ const ChatBot = ({
   const handleConfirmTicket = (type, description, msgTimestamp) => {
     if (!onSaveTicket) return;
     
+    const newTicketId = `ticket_${Date.now()}`;
+    
     onSaveTicket({
-      id: `ticket_${Date.now()}`,
+      id: newTicketId,
       userId: user.id,
       userName: user.name,
       type: type,
@@ -217,16 +243,17 @@ const ChatBot = ({
       description: description,
       status: 'Open',
       date: new Date().toISOString(),
+      source: 'AI', // 🤖 Tag as AI-generated
       messages: [{
         senderId: user.id,
-        text: `(Raised via AI Chat) ${description}`,
+        text: `Description: ${description}`, // Send clean description
         timestamp: new Date().toISOString()
       }]
     });
     
     setHandledActions(prev => new Set(prev).add(msgTimestamp));
-    // Provide immediate feedback in chat
-    const feedbackMsg = `I've raised a ${type} ticket for you. Our team will look into it shortly.`;
+    // Provide immediate feedback in chat with action trigger
+    const feedbackMsg = `I've raised a ${type} ticket for you. Our team will look into it shortly.\n\nACTION:TICKET_CREATED ID:${newTicketId} TYPE:${type.replace(/\s+/g, '_')} DESC:${description}`;
     const newMessages = [...messages, { role: 'model', text: feedbackMsg }];
     onSendChatMessage(newMessages);
   };
@@ -235,10 +262,35 @@ const ChatBot = ({
     if (!text) return '';
     // Hide all ACTION: triggers (including ID: and TYPE: suffixes) and technical ID mentions
     return text
+      .replace(/ACTION:TICKET_CREATED.+/g, '')
       .replace(/ACTION:[A-Z_]+\s+ID:[a-zA-Z0-9_-]+/g, '')
       .replace(/ACTION:[A-Z_]+\s+[^:]+:.+/g, '')
+      .replace(/ACTION:[A-Z_]+\s+\[?[^\]]+\]?:\[?[^\]]+\]?/g, '')
       .replace(/(?:Tournament\s+)?ID:\s*[a-zA-Z0-9_-]+/gi, '')
       .trim();
+  };
+
+  const parseTicketAction = (text) => {
+    if (!text.includes('ACTION:RAISE_TICKET')) return null;
+    
+    // Format 1: [TYPE]:[DESCRIPTION]
+    let match = text.match(/ACTION:RAISE_TICKET\s+\[([^\]]+)\]:\[([^\]]+)\]/);
+    if (match) return { type: match[1].trim(), desc: match[2].trim() };
+    
+    // Format 2: TYPE:Other DESCRIPTION:Request...
+    match = text.match(/ACTION:RAISE_TICKET\s+TYPE:\s*([^\s]+(?: \w+)?)\s+DESCRIPTION:\s*(.+)/);
+    if (match) return { type: match[1].trim(), desc: match[2].trim() };
+    
+    // Format 3: TYPE:DESCRIPTION
+    match = text.match(/ACTION:RAISE_TICKET\s+([^:]+):(.+)/);
+    if (match) {
+      return { 
+        type: match[1].replace(/^\[|\]$/g, '').trim(), 
+        desc: match[2].replace(/^\[|\]$/g, '').trim() 
+      };
+    }
+    
+    return null;
   };
 
   const getTournamentsFromAction = (text) => {
@@ -260,10 +312,12 @@ const ChatBot = ({
     });
   };
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleSend = async (textToSubmit) => {
+    // If textToSubmit is not a string (e.g. event object), fallback to input state
+    const currentInput = typeof textToSubmit === 'string' ? textToSubmit : input;
+    if (!currentInput.trim() || isLoading) return;
 
-    const userMsg = input.trim();
+    const userMsg = currentInput.trim();
     setInput('');
     const newMessages = [...messages, { role: 'user', text: userMsg }];
     onSendChatMessage(newMessages); // Pushes to cloud global state
@@ -315,9 +369,9 @@ Special Protocol Instructions:
    - NEVER invent fake tournaments, IDs, or details.
    - For EACH recommended tournament, you MUST add "ACTION:NAV_TO_TOURNAMENT ID:ID" at the end of your message (where ID is the ID from the list). 
 2. IMPORTANT: DO NOT include the technical 'ID' (e.g., t1, t_123) in your visible verbal response. Use it ONLY in the ACTION:NAV_TO_TOURNAMENT code.
-3. Support Tickets: If a user has a technical issue, bug, or payment problem, confirm you'll help and add "ACTION:RAISE_TICKET TYPE:DESCRIPTION" at the end.
-   - TYPE must be one of: [Technical Issue, Bug, Refund, Payment Issue, Other].
-   - DESCRIPTION must be a one-sentence summary of their problem.
+3. Support Tickets: If a user has a technical issue, bug, or payment problem, confirm you'll help and add "ACTION:RAISE_TICKET [TYPE]:[DESCRIPTION]" at the end.
+   - Replace [TYPE] with exactly one of: Technical Issue, Bug, Refund, Payment Issue, Other.
+   - Replace [DESCRIPTION] with a concise one-sentence summary of their problem.
 
 General App Knowledge:
 1. Tournaments: Automated scheduling, draws, and live digital scoring.
@@ -349,6 +403,17 @@ Keep answers concise, premium, and friendly. Use ### for headers and **bold** fo
     setIsOpen(false);
     // Deep linking to Explore tab with the tournament ID
     navigation.navigate('Explore', { selectedTournamentId: t.id });
+  };
+
+  const handleManageTicket = (tid) => {
+    setIsOpen(false);
+    if (userRole === 'admin') {
+      navigation.navigate('Admin', { subTab: 'grievances', selectedTicketId: tid });
+    } else if (userRole === 'support') {
+      navigation.navigate('Support', { selectedTicketId: tid });
+    } else {
+      navigation.navigate('Profile', { selectedTicketId: tid });
+    }
   };
 
   return (
@@ -407,7 +472,8 @@ Keep answers concise, premium, and friendly. Use ### for headers and **bold** fo
             >
               {messages.map((m, i) => {
                 const recommendedTournaments = m.role === 'model' ? getTournamentsFromAction(m.text) : [];
-                const ticketMatch = m.role === 'model' ? m.text.match(/ACTION:RAISE_TICKET\s+([^:]+):(.+)/) : null;
+                const parsedTicket = m.role === 'model' ? parseTicketAction(m.text) : null;
+                const createdTicketMatch = m.role === 'model' ? m.text.match(/ACTION:TICKET_CREATED\s+ID:([^\s]+)\s+TYPE:([^\s]+)\s+DESC:(.+)/) : null;
                 const cleanedText = cleanMessage(m.text);
                 const msgKey = m.timestamp || `msg-${i}`;
 
@@ -419,6 +485,18 @@ Keep answers concise, premium, and friendly. Use ### for headers and **bold** fo
                         isUser={m.role === 'user'}
                       />
                       
+                      {/* Interactive Ticket Management Card */}
+                      {createdTicketMatch && (
+                        <View style={{ marginTop: 12 }}>
+                          <CreatedTicketCard
+                            ticketId={createdTicketMatch[1].replace(/^\[|\]$/g, '')}
+                            type={createdTicketMatch[2].replace(/_/g, ' ').replace(/^\[|\]$/g, '')}
+                            description={createdTicketMatch[3].replace(/^\[|\]$/g, '')}
+                            onManage={handleManageTicket}
+                          />
+                        </View>
+                      )}
+
                       {/* Interactive Tournament Recommendations */}
                       {recommendedTournaments.length > 0 && (
                         <ScrollView
@@ -440,11 +518,15 @@ Keep answers concise, premium, and friendly. Use ### for headers and **bold** fo
                       )}
 
                       {/* Interactive Ticket Confirmation Prompt */}
-                      {ticketMatch && !handledActions.has(msgKey) && (
+                      {parsedTicket && !handledActions.has(msgKey) && (
                         <TicketPromptCard 
-                          type={ticketMatch[1].trim()}
-                          description={ticketMatch[2].trim()}
-                          onConfirm={() => handleConfirmTicket(ticketMatch[1].trim(), ticketMatch[2].trim(), msgKey)}
+                          type={parsedTicket.type}
+                          description={parsedTicket.desc}
+                          onConfirm={() => handleConfirmTicket(
+                            parsedTicket.type, 
+                            parsedTicket.desc, 
+                            msgKey
+                          )}
                           onCancel={() => setHandledActions(prev => new Set(prev).add(msgKey))}
                         />
                       )}
@@ -467,7 +549,14 @@ Keep answers concise, premium, and friendly. Use ### for headers and **bold** fo
                 <TextInput
                   style={styles.input}
                   value={input}
-                  onChangeText={setInput}
+                  onChangeText={(text) => {
+                    if (Platform.OS !== 'web' && text.includes('\n')) {
+                      // Intercept newline from mobile keyboard to send message
+                      handleSend(text.replace(/\n/g, ''));
+                    } else {
+                      setInput(text);
+                    }
+                  }}
                   placeholder="Ask about tournaments, report issues..."
                   placeholderTextColor="#94A3B8"
                   multiline

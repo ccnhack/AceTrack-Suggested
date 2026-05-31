@@ -658,11 +658,11 @@ export const PlayerWalletDashboard = ({ user, onTopUp, noCard }) => {
                         color={item.type === 'credit' ? "#16A34A" : "#DC2626"} 
                       />
                     </View>
-                    <View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={styles.historyDesc}>{item.description}</Text>
+                    <View style={{ flex: 1, paddingRight: 8 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6, flexWrap: 'wrap' }}>
+                        <Text style={[styles.historyDesc, { flexShrink: 1 }]}>{item.description}</Text>
                         {item.status === 'Pending' && (
-                          <View style={styles.pendingBadge}>
+                          <View style={[styles.pendingBadge, { marginTop: 2 }]}>
                             <Text style={styles.pendingBadgeText}>Pending</Text>
                           </View>
                         )}
@@ -1370,6 +1370,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    flex: 1,
   },
   historyIcon: {
     padding: 8,

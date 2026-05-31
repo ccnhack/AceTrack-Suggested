@@ -27,7 +27,8 @@ const statusColors = {
 export const SupportTicketSystem = ({
   userId, userName, tickets = [], onCreateTicket, onSendMessage, 
   onTypingStart, onTypingStop, onResolvePrompt, onToggleSupport,
-  onUpdateStatus, onReply, onRetryMessage, onMarkSeen, onClaimTicket, userRole
+  onUpdateStatus, onReply, onRetryMessage, onMarkSeen, onClaimTicket, userRole,
+  autoSelectTicketId, onConsumeTicketId
 }) => {
   const [view, setView] = useState('list');
   const [selectedTicket, setSelectedTicket] = useState(null);
@@ -155,6 +156,18 @@ export const SupportTicketSystem = ({
       if (updated) setSelectedTicket(updated);
     }
   }, [tickets]);
+
+  // 🔗 [DEEP LINKING] Auto-select ticket from ChatBot / Profile (v2.6.500)
+  useEffect(() => {
+    if (autoSelectTicketId && tickets && tickets.length > 0) {
+      const ticketToOpen = tickets.find(t => String(t.id) === String(autoSelectTicketId));
+      if (ticketToOpen) {
+        setSelectedTicket(ticketToOpen);
+        setView('detail');
+        if (onConsumeTicketId) onConsumeTicketId();
+      }
+    }
+  }, [autoSelectTicketId, tickets]);
 
   // 📜 Auto-scroll on Open/Update (v2.6.25)
   useEffect(() => {
@@ -480,15 +493,13 @@ export const SupportTicketSystem = ({
       const aiSummary = await generateAIResponse(prompt);
       
       const res = await onUpdateStatus(selectedTicket.id, 'Closed', aiSummary);
-      if (res.success) {
-        setShowClosureModal(false);
-        setClosureReason('');
-      }
-      notify(res);
+      if (res?.success) notify(res);
     } catch (e) {
       console.error("User-initiated closure failed:", e);
       await onUpdateStatus(selectedTicket.id, 'Closed');
     } finally {
+      setShowClosureModal(false);
+      setClosureReason('');
       setIsClosing(false);
     }
   };
@@ -501,10 +512,10 @@ export const SupportTicketSystem = ({
   if (view === 'list') {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title}>Support Hub</Text>
-            <View style={styles.searchBarWrapper}>
+        <View style={[styles.header, { flexDirection: 'column', alignItems: 'stretch' }]}>
+          <Text style={styles.title}>Support Hub</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 12 }}>
+            <View style={[styles.searchBarWrapper, { flex: 1, marginTop: 0 }]}>
               <Ionicons name="search" size={16} color="#94A3B8" style={{ marginLeft: 12 }} />
               <TextInput 
                 style={styles.listSearchInput}
@@ -519,11 +530,11 @@ export const SupportTicketSystem = ({
                 </TouchableOpacity>
               )}
             </View>
+            <TouchableOpacity onPress={() => setView('create')} style={styles.newTicketBtn}>
+              <Ionicons name="add" size={16} color="#FFFFFF" />
+              <Text style={styles.btnText}>New Ticket</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity onPress={() => setView('create')} style={styles.newTicketBtn}>
-            <Ionicons name="add" size={16} color="#FFFFFF" />
-            <Text style={styles.btnText}>New Ticket</Text>
-          </TouchableOpacity>
         </View>
 
         {isAgent && (
@@ -689,7 +700,14 @@ export const SupportTicketSystem = ({
                       </View>
                     </View>
 
-                    <Text style={styles.ticketTypeParens}>({ticket.type})</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.ticketTypeParens}>({ticket.type})</Text>
+                      {ticket.source === 'AI' && isAgent && (
+                        <View style={{ backgroundColor: '#E0E7FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#4338CA' }}>AI GENERATED</Text>
+                        </View>
+                      )}
+                    </View>
 
                     {lastMessage && (
                       <View style={styles.lastMessageContainer}>
@@ -931,6 +949,9 @@ export const SupportTicketSystem = ({
                             <Text style={[styles.typeTag, { backgroundColor: '#F1F5F9', color: '#64748B', flexShrink: 1 }]} numberOfLines={1}>
                                 {selectedTicket.assignedTo ? `Assigned to ${selectedTicket.assignedTo === userId ? 'You' : (selectedTicket.assignedAgentName || 'Agent')}` : 'Unassigned'}
                             </Text>
+                            {selectedTicket.source === 'AI' && isAgent && (
+                                <Text style={[styles.typeTag, { backgroundColor: '#E0E7FF', color: '#4338CA' }]}>AI GENERATED</Text>
+                            )}
                         </View>
                       </>
                     )}

@@ -2,7 +2,8 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import mongoose from 'mongoose';
-import { AppState, AuditLog, Player, Tournament, Match, MatchVideo, SupportTicket, Evaluation, Matchmaking, ChatbotThread } from '../../models/index.mjs';
+import crypto from 'crypto';
+import { AppState, AuditLog, Player, Tournament, Match, MatchVideo, SupportTicket, Evaluation, Matchmaking, ChatbotThread, CoachInvite } from '../../models/index.mjs';
 import { asyncHandler, getISTTimestamp } from '../../helpers/utils.mjs';
 import { processTournamentWaitlist } from '../../promotion_logic.mjs';
 import { apiKeyGuard, authGuard, sensitiveCacheGuard, validate, SaveDataSchema, DiagnosticsSchema, AutoFlushSchema, getSanitizedState } from '../../middleware/security.mjs';
@@ -19,7 +20,8 @@ export default function ({
   SupportMetricsService,
   sendPushNotification,
   addInAppNotification,
-  activeSupportSessions
+  activeSupportSessions,
+  sendCoachInviteEmail
 }) {
   const router = express.Router();
 
@@ -1235,10 +1237,72 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
           if (existing && !existing.assignedCoachId && tournament.assignedCoachId) {
             const coach = newMasterData.players.find(p => p.id === tournament.assignedCoachId);
             if (coach) {
-              const t = "Tournament Assignment 🎓";
-              const b = `You have been assigned as coach for ${tournament.title}.`;
-              addInAppNotification(coach, t, b, { tournamentId: tournament.id, type: 'COACH_ASSIGNED' });
-              if (coach.pushTokens?.length > 0) sendPushNotification(coach.pushTokens, t, b, { tournamentId: tournament.id, type: 'COACH_ASSIGNED' });
+              let isAvailable = true;
+              if (tournament.date && tournament.time) {
+                const d = new Date(tournament.date);
+                if (!isNaN(d.getTime())) {
+                  const tDayOfWeek = d.getDay();
+                  const parts = tournament.time.split(' ');
+                  let tTime24 = '';
+                  if (parts.length === 2) {
+                    let [hours, minutes] = parts[0].split(':');
+                    if (hours === '12') hours = '00';
+                    if (parts[1].toUpperCase() === 'PM') hours = (parseInt(hours, 10) + 12).toString();
+                    hours = hours.toString().padStart(2, '0');
+                    tTime24 = `${hours}:${minutes}`;
+                  } else {
+                    tTime24 = tournament.time;
+                  }
+
+                  const avail = coach.availability || [];
+                  isAvailable = avail.some(slot => slot.dayOfWeek === tDayOfWeek && tTime24 >= slot.startTime && tTime24 < slot.endTime);
+                }
+              }
+
+              if (isAvailable) {
+                const t = "Tournament Assignment 🎓";
+                const b = `You have been assigned as coach for ${tournament.title}.`;
+                addInAppNotification(coach, t, b, { tournamentId: tournament.id, type: 'COACH_ASSIGNED' });
+                if (coach.pushTokens?.length > 0) sendPushNotification(coach.pushTokens, t, b, { tournamentId: tournament.id, type: 'COACH_ASSIGNED' });
+              } else {
+                console.log(`🛑 [NOTIFY_GUARD] Skipping Coach Assignment notification for ${coach.id} - Coach is unavailable.`);
+              }
+            }
+          // 4h. Coach Invitation Dispatch (Off-Platform Invites)
+          if (tournament.coachStatus === 'Pending Coach Registration' && tournament.invitedCoachDetails) {
+            const inviteEmail = tournament.invitedCoachDetails.email?.toLowerCase().trim();
+            if (inviteEmail) {
+              // Check if invite already exists
+              CoachInvite.findOne({ tournamentId: tournament.id, email: inviteEmail }).then(async existingInvite => {
+                if (!existingInvite) {
+                  console.log(`[INVITE] Generating secure coach invite for ${inviteEmail} (Tournament: ${tournament.id})`);
+                  const token = crypto.randomBytes(24).toString('hex');
+                  // Expire in 48 hours as per admin config
+                  const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); 
+                  
+                  const organizer = newMasterData.players.find(p => p.id === tournament.creatorId);
+                  const academyName = organizer?.name || organizer?.username || 'An Academy';
+
+                  await CoachInvite.create({
+                    email: inviteEmail,
+                    name: tournament.invitedCoachDetails.name || '',
+                    phone: tournament.invitedCoachDetails.phone || '',
+                    academyId: tournament.creatorId || 'unknown',
+                    tournamentId: tournament.id,
+                    token,
+                    expiresAt
+                  });
+
+                  const inviteLink = `https://acetrack-web.onrender.com/signup?invite_token=${token}`;
+                  
+                  // Fire off email dispatch in background
+                  if (sendCoachInviteEmail) {
+                     sendCoachInviteEmail(inviteEmail, tournament.invitedCoachDetails.name, academyName, tournament.title, inviteLink, expiresAt)
+                       .then(res => console.log(`[INVITE] Email dispatch result for ${inviteEmail}:`, res))
+                       .catch(err => console.error(`[INVITE] Email dispatch failed for ${inviteEmail}:`, err));
+                  }
+                }
+              }).catch(err => console.error("[INVITE] Error checking coach invites:", err));
             }
           }
         }

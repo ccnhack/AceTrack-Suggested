@@ -17,6 +17,8 @@ import OfflineScreen from './components/OfflineScreen';
 import ChatBot from './components/ChatBot';
 import NotificationsModal from './components/NotificationsModal';
 import InteractiveDemo, { useInteractiveDemo } from './components/InteractiveDemo';
+import AcademyInteractiveDemo, { useAcademyInteractiveDemo } from './components/AcademyInteractiveDemo';
+import CoachInteractiveDemo, { useCoachInteractiveDemo } from './components/CoachInteractiveDemo';
 import config from './config';
 
 // 🏗️ Phase 3: React Query
@@ -69,8 +71,9 @@ import { useSupportStore } from './stores';
 
 
 
-// 🔄 Centralized Versioning// 🚀 ACE TRACK STABILITY VERSION (v2.6.565)
-const APP_VERSION = '2.6.566';
+// 🔄 Centralized Versioning// 🚀 EXPO OTA SYNC HUB (v2.6.568)
+// ALWAYS BUMP THIS VERSION TO TRIGGER CLIENT-SIDE CACHE INVALIDATION
+const APP_VERSION = '2.6.568';
 const linking = {
   prefixes: [config.API_BASE_URL || 'https://acetrack-suggested.onrender.com', 'acetrack://'],
   config: {
@@ -104,6 +107,8 @@ function Root() {
   const { currentUser, userRole, userId, onMarkNotificationsRead, isAuthReady } = useAuth();
   
   const { showDemo, hasChecked, markDemoSeen } = useInteractiveDemo(currentUser);
+  const { showDemo: showAcademyDemo, hasChecked: academyHasChecked, markDemoSeen: markAcademyDemoSeen } = useAcademyInteractiveDemo(currentUser);
+  const { showDemo: showCoachDemo, hasChecked: coachHasChecked, markDemoSeen: markCoachDemoSeen } = useCoachInteractiveDemo(currentUser);
 
   const navigationRef = useRef();
   if (isLoading || !isInitialized || !isAuthReady) {
@@ -150,6 +155,14 @@ function Root() {
       <InteractiveDemo 
         visible={showDemo && hasChecked}
         onComplete={markDemoSeen}
+      />
+      <AcademyInteractiveDemo 
+        visible={showAcademyDemo && academyHasChecked}
+        onComplete={markAcademyDemoSeen}
+      />
+      <CoachInteractiveDemo 
+        visible={showCoachDemo && coachHasChecked}
+        onComplete={markCoachDemoSeen}
       />
 
       <NotificationsModal 

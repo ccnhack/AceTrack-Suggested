@@ -1,5 +1,7 @@
 import express from 'express';
-import { CoachBooking, Player } from '../models/index.mjs';
+import { CoachBooking, Player, Tournament } from '../models/index.mjs';
+import { sendPushNotification } from '../notifications.js';
+import { addInAppNotification } from '../helpers/utils.mjs';
 
 const router = express.Router();
 
@@ -108,6 +110,62 @@ router.put('/coach/:coachId/availability', async (req, res) => {
       
       if (!player) {
         return res.status(404).json({ success: false, message: 'Coach not found' });
+      }
+      
+      // RETROACTIVE NOTIFICATION LOGIC (v2.6.x)
+      try {
+        const coach = player.data;
+        const tournaments = await Tournament.find({ 'data.assignedCoachId': coachId }).lean();
+        let notificationsModified = false;
+        
+        for (const doc of tournaments) {
+          const t = doc.data;
+          
+          if (!t.tournamentConcluded && t.date && t.time) {
+            const hasNotification = coach.notifications && coach.notifications.some(
+              n => n.data && n.data.tournamentId === t.id && n.data.type === 'COACH_ASSIGNED'
+            );
+
+            // If we already sent the assignment notification, skip.
+            if (!hasNotification) {
+              const d = new Date(t.date);
+              if (!isNaN(d.getTime())) {
+                const tDayOfWeek = d.getDay();
+                const parts = t.time.split(' ');
+                let tTime24 = '';
+                if (parts.length === 2) {
+                  let [hours, minutes] = parts[0].split(':');
+                  if (hours === '12') hours = '00';
+                  if (parts[1].toUpperCase() === 'PM') hours = (parseInt(hours, 10) + 12).toString();
+                  hours = hours.toString().padStart(2, '0');
+                  tTime24 = `${hours}:${minutes}`;
+                } else {
+                  tTime24 = t.time;
+                }
+
+                const isAvailable = availability.some(slot => slot.dayOfWeek === tDayOfWeek && tTime24 >= slot.startTime && tTime24 < slot.endTime);
+                
+                if (isAvailable) {
+                   const title = "Tournament Assignment 🎓";
+                   const body = `You have been assigned as coach for ${t.title}.`;
+                   
+                   addInAppNotification(coach, title, body, { tournamentId: t.id, type: 'COACH_ASSIGNED' });
+                   notificationsModified = true;
+                   
+                   if (coach.pushTokens && coach.pushTokens.length > 0) {
+                     await sendPushNotification(coach.pushTokens, title, body, { tournamentId: t.id, type: 'COACH_ASSIGNED' });
+                   }
+                }
+              }
+            }
+          }
+        }
+
+        if (notificationsModified) {
+          await Player.updateOne({ id: coachId }, { $set: { 'data.notifications': coach.notifications } });
+        }
+      } catch (err) {
+        console.error('[Bookings API] Retroactive Notification Error:', err);
       }
   
       res.json({ success: true, availability: player.data.availability });

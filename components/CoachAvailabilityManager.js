@@ -18,9 +18,15 @@ const PREDEFINED_SLOTS = [
   { startTime: '08:00', endTime: '09:00' },
   { startTime: '09:00', endTime: '10:00' },
   { startTime: '10:00', endTime: '11:00' },
+  { startTime: '11:00', endTime: '12:00' },
+  { startTime: '12:00', endTime: '13:00' },
+  { startTime: '13:00', endTime: '14:00' },
+  { startTime: '14:00', endTime: '15:00' },
+  { startTime: '15:00', endTime: '16:00' },
   { startTime: '16:00', endTime: '17:00' },
   { startTime: '17:00', endTime: '18:00' },
   { startTime: '18:00', endTime: '19:00' },
+  { startTime: '19:00', endTime: '20:00' },
 ];
 
 export default function CoachAvailabilityManager({ visible, onClose }) {
@@ -41,6 +47,17 @@ export default function CoachAvailabilityManager({ visible, onClose }) {
     } else {
       setAvailability([...availability, { ...slot, dayOfWeek: selectedDay }]);
     }
+  };
+
+  const handleApplyToAllDays = () => {
+    const currentDaySlots = availability.filter(a => a.dayOfWeek === selectedDay);
+    const newAvailability = [];
+    DAYS_OF_WEEK.forEach(day => {
+      currentDaySlots.forEach(slot => {
+        newAvailability.push({ ...slot, dayOfWeek: day.id });
+      });
+    });
+    setAvailability(newAvailability);
   };
 
   const handleSave = async () => {
@@ -121,6 +138,14 @@ export default function CoachAvailabilityManager({ visible, onClose }) {
           </View>
 
           <View style={styles.footer}>
+            <TouchableOpacity 
+              style={styles.applyAllBtn}
+              onPress={handleApplyToAllDays}
+            >
+              <Ionicons name="copy-outline" size={18} color="#6366F1" />
+              <Text style={styles.applyAllBtnText}>Apply to All Days</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity 
               style={[styles.saveBtn, isSaving && styles.saveBtnDisabled]}
               onPress={handleSave}
@@ -251,6 +276,23 @@ const styles = StyleSheet.create({
     padding: 24,
     borderTopWidth: 1,
     borderTopColor: '#1E293B',
+  },
+  applyAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#6366F1',
+    gap: 8,
+  },
+  applyAllBtnText: {
+    color: '#6366F1',
+    fontSize: 15,
+    fontWeight: '600',
   },
   saveBtn: {
     backgroundColor: '#10B981',

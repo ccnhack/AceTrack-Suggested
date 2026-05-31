@@ -47,7 +47,7 @@ import { useSync } from '../context/SyncContext';
 import { useAdmin } from '../context/AdminContext';
 import { useApp } from '../context/AppContext';
 
-const ProfileScreen = ({ navigation }) => {
+const ProfileScreen = ({ navigation, route }) => {
   const { 
     currentUser: user, onUpdateUser, onLogout, onVerifyAccount, onTopUp, onMarkNotificationsRead 
   } = useAuth();
@@ -176,6 +176,33 @@ const ProfileScreen = ({ navigation }) => {
     }
     return false;
   });
+
+  const [urlTicketId, setUrlTicketId] = useState(() => {
+    if (Platform.OS === 'web') {
+      return new URLSearchParams(window.location.search).get('ticketId');
+    }
+    return null;
+  });
+
+  // Handle auto-open for Edit Profile and Support Tickets from navigation params
+  useEffect(() => {
+    try {
+      const params = route?.params;
+      if (params) {
+        if (params.autoEdit) {
+          setShowEditProfile(true);
+          navigation.setParams({ autoEdit: false });
+        }
+        if (params.selectedTicketId) {
+          setUrlTicketId(params.selectedTicketId);
+          setShowSupport(true);
+          navigation.setParams({ selectedTicketId: null });
+        }
+      }
+    } catch (e) {
+      console.warn("[ProfileScreen] Navigation state access failed:", e);
+    }
+  }, [route?.params]);
 
   // 🛡️ [URL_PERSISTENCE] (v2.6.458): Sync view state with URL
   useEffect(() => {
@@ -323,18 +350,6 @@ const ProfileScreen = ({ navigation }) => {
     };
     saveSessionAvatar();
   }, [sessionCustomAvatar]);
-  
-  // Handle auto-open for Edit Profile (from global verification prompt)
-  useEffect(() => {
-    try {
-      if (navigation?.getState?.()?.routes[navigation.getState().index]?.params?.autoEdit) {
-        setShowEditProfile(true);
-        navigation.setParams({ autoEdit: false });
-      }
-    } catch (e) {
-      console.warn("[ProfileScreen] Navigation state access failed:", e);
-    }
-  }, [navigation]);
 
   const suggestedAvatars = [
     'https://api.dicebear.com/7.x/avataaars/png?seed=Felix',
@@ -823,16 +838,18 @@ const ProfileScreen = ({ navigation }) => {
               </View>
               {SupportTicketSystem ? (
                 <SupportTicketSystem 
-                    tickets={supportTickets || []}
-                    userId={user?.id || 'unknown'}
-                    userName={user?.name || 'User'}
-                    onCreateTicket={onSaveTicket}
-
-                    onSendMessage={onReplyTicket}
-                    onReply={onReplyTicket}
-                    onUpdateStatus={onUpdateTicketStatus}
-                    onRetryMessage={onRetryMessage}
-                    onMarkSeen={onMarkSeen}
+                  userId={user.id}
+                  userName={user.name}
+                  userRole={user.role}
+                  tickets={supportTickets || []}
+                  onCreateTicket={onSaveTicket}
+                  onSendMessage={(tid, m) => onReplyTicket(tid, user.id, m)}
+                  onReply={onReplyTicket}
+                  onUpdateStatus={onUpdateTicketStatus}
+                  onRetryMessage={onRetryMessage}
+                  onMarkSeen={onMarkSeen}
+                  autoSelectTicketId={urlTicketId}
+                  onConsumeTicketId={() => setUrlTicketId(null)}
                 />
               ) : <Text>Support System Unavailable</Text>}
           </SafeAreaView>

@@ -83,6 +83,33 @@ router.post('/ping-coach', apiKeyGuard, authGuard, asyncHandler(async (req, res)
     
     if (!tournament || !coach) return res.status(404).json({ error: 'Tournament or Coach not found' });
     
+    // VERIFY COACH AVAILABILITY
+    let isAvailable = true;
+    if (tournament.date && tournament.time) {
+      const d = new Date(tournament.date);
+      if (!isNaN(d.getTime())) {
+        const tDayOfWeek = d.getDay();
+        const parts = tournament.time.split(' ');
+        let tTime24 = '';
+        if (parts.length === 2) {
+          let [hours, minutes] = parts[0].split(':');
+          if (hours === '12') hours = '00';
+          if (parts[1].toUpperCase() === 'PM') hours = (parseInt(hours, 10) + 12).toString();
+          hours = hours.toString().padStart(2, '0');
+          tTime24 = `${hours}:${minutes}`;
+        } else {
+          tTime24 = tournament.time;
+        }
+
+        const avail = coach.availability || [];
+        isAvailable = avail.some(slot => slot.dayOfWeek === tDayOfWeek && tTime24 >= slot.startTime && tTime24 < slot.endTime);
+      }
+    }
+
+    if (!isAvailable) {
+      return res.status(400).json({ error: 'Cannot ping a coach who is unavailable at the tournament time.' });
+    }
+    
     if (!tournament.individualPings) tournament.individualPings = {};
     const currentCount = tournament.individualPings[coachId] || 0;
     const newCount = currentCount + 1;

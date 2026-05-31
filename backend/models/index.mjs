@@ -94,6 +94,37 @@ const SupportInviteSchema = new mongoose.Schema({
 export const SupportInvite = mongoose.model('SupportInvite', SupportInviteSchema);
 
 // ═══════════════════════════════════════════════════════════════
+// 🎫 COACH INVITE SCHEMA (v2.6.400)
+// Secure cryptographic invites for off-platform coaches
+// ═══════════════════════════════════════════════════════════════
+const CoachInviteSchema = new mongoose.Schema({
+  email: { type: String, required: true },
+  name: { type: String, default: '' },
+  phone: { type: String, default: '' },
+  academyId: { type: String, required: true },
+  tournamentId: { type: String, required: true },
+  token: { type: String, required: true, unique: true },
+  status: { type: String, enum: ['Pending', 'Clicked', 'Used', 'Expired'], default: 'Pending' },
+  clicks: [{
+    action: { type: String, default: 'link_click' }, // link_click, form_view, form_submit
+    ip: String,
+    userAgent: String,
+    city: String,
+    region: String,
+    country: String,
+    isp: String,
+    lat: Number,
+    lon: Number,
+    timezone: String,
+    timestamp: { type: Date, default: Date.now }
+  }],
+  expiresAt: { type: Date, required: true },
+  createdAt: { type: Date, default: Date.now }
+});
+
+export const CoachInvite = mongoose.model('CoachInvite', CoachInviteSchema);
+
+// ═══════════════════════════════════════════════════════════════
 // 🔒 PASSWORD RESET TOKEN SCHEMA (v2.6.131)
 // ═══════════════════════════════════════════════════════════════
 const SupportPasswordResetSchema = new mongoose.Schema({

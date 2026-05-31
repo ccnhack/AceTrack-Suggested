@@ -42,6 +42,18 @@ export const dataMerger = {
       fieldsChanged.push('supportTickets');
     }
 
+    // 1.6 🛡️ [CHATBOT_MERGE] (v2.6.567): Dedicated merge for chatbotMessages
+    // chatbotMessages is an object keyed by userId, where each value is an array of messages.
+    // Cloud only returns the requesting user's thread (via getSanitizedState isolation).
+    // We must merge per-userId, keeping the version with MORE messages to prevent wipe.
+    if (localData.chatbotMessages || cloudData.chatbotMessages) {
+      mergedResult.chatbotMessages = this.mergeChatbotMessages(
+        localData.chatbotMessages || {},
+        cloudData.chatbotMessages || {}
+      );
+      fieldsChanged.push('chatbotMessages');
+    }
+
     // 2. Specialized Player Merge (Thinning required)
     if (localData.players || cloudData.players) {
       mergedResult.players = this.mergePlayers(localData.players || [], cloudData.players || []);
@@ -58,7 +70,7 @@ export const dataMerger = {
     */
 
     // 4. Merge static keys
-    const staticKeys = ['isCloudOnline', 'isUsingCloud', 'seenAdminActionIds', 'visitedAdminSubTabs'];
+    const staticKeys = ['seenAdminActionIds', 'visitedAdminSubTabs'];
     staticKeys.forEach(key => {
         if (key === 'seenAdminActionIds' || key === 'visitedAdminSubTabs') {
             mergedResult[key] = this.mergeHistorySets(localData[key], cloudData[key]);
@@ -201,5 +213,31 @@ export const dataMerger = {
     });
 
     return merged.filter(t => !!t);
+  },
+
+  /**
+   * 🛡️ [CHATBOT_MERGE] (v2.6.567)
+   * Merge chatbotMessages objects. Each key is a userId, each value is a message array.
+   * Strategy: For each userId, keep the array with MORE messages (longest-thread-wins).
+   * This prevents cloud sync from wiping locally-sent messages that haven't round-tripped yet.
+   */
+  mergeChatbotMessages(local: Record<string, any[]>, cloud: Record<string, any[]>): Record<string, any[]> {
+    const allUserIds = new Set([...Object.keys(local || {}), ...Object.keys(cloud || {})]);
+    const merged: Record<string, any[]> = {};
+
+    allUserIds.forEach(userId => {
+      const localMsgs = Array.isArray(local?.[userId]) ? local[userId] : [];
+      const cloudMsgs = Array.isArray(cloud?.[userId]) ? cloud[userId] : [];
+
+      // Keep whichever has more messages — local messages are authoritative
+      // because they're written locally first, then pushed to cloud.
+      if (localMsgs.length >= cloudMsgs.length) {
+        merged[userId] = localMsgs;
+      } else {
+        merged[userId] = cloudMsgs;
+      }
+    });
+
+    return merged;
   }
 };
