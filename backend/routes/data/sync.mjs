@@ -1268,6 +1268,7 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
                 console.log(`🛑 [NOTIFY_GUARD] Skipping Coach Assignment notification for ${coach.id} - Coach is unavailable.`);
               }
             }
+          }
           // 4h. Coach Invitation Dispatch (Off-Platform Invites)
           if (tournament.coachStatus === 'Pending Coach Registration' && tournament.invitedCoachDetails) {
             const inviteEmail = tournament.invitedCoachDetails.email?.toLowerCase().trim();
