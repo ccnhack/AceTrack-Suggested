@@ -1294,7 +1294,7 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
                     expiresAt
                   });
 
-                  const inviteLink = `https://acetrack-web.onrender.com/signup?invite_token=${token}`;
+                  const inviteLink = `https://acetrack-suggested.onrender.com/signup?invite_token=${token}`;
                   
                   // Fire off email dispatch in background
                   if (sendCoachInviteEmail) {

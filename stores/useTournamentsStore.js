@@ -55,6 +55,7 @@ export const useTournamentsStore = create((set, get) => {
             'Authorization': `Bearer ${token}`,
             'X-User-Id': currentUser.id
           },
+          credentials: 'include',
           body: JSON.stringify({ method, cost, partnerId, teamCode })
         });
 
@@ -85,7 +86,7 @@ export const useTournamentsStore = create((set, get) => {
           
           return result;
         } else {
-          const msg = result?.message || 'Could not complete registration.';
+          const msg = result?.message || result?.error || 'Could not complete registration.';
           Alert.alert('Registration Failed', msg);
           return { success: false, message: msg };
         }
@@ -124,7 +125,7 @@ export const useTournamentsStore = create((set, get) => {
         const headers = { 'Content-Type': 'application/json', 'X-User-Id': currentUser.id };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}/start`, { method: 'POST', headers });
+        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}/start`, { method: 'POST', headers, credentials: 'include' });
         const result = await response.json();
         if (response.ok && result.success) {
           const currentTournaments = get().tournaments;
@@ -151,7 +152,7 @@ export const useTournamentsStore = create((set, get) => {
         const headers = { 'Content-Type': 'application/json', 'X-User-Id': currentUser.id };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}/end`, { method: 'POST', headers });
+        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}/end`, { method: 'POST', headers, credentials: 'include' });
         const result = await response.json();
         if (response.ok && result.success) {
           const currentTournaments = get().tournaments;
@@ -179,7 +180,7 @@ export const useTournamentsStore = create((set, get) => {
         const headers = { 'Content-Type': 'application/json', 'X-User-Id': currentUser.id };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}/remove-coach`, { method: 'POST', headers });
+        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}/remove-coach`, { method: 'POST', headers, credentials: 'include' });
         const result = await response.json();
         if (response.ok && result.success) {
           const currentTournaments = get().tournaments;
@@ -237,7 +238,7 @@ export const useTournamentsStore = create((set, get) => {
         const headers = { 'Content-Type': 'application/json', 'X-User-Id': currentUser.id };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}/remove-pending`, { method: 'POST', headers, body: JSON.stringify({ pid }) });
+        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}/remove-pending`, { method: 'POST', headers, credentials: 'include', body: JSON.stringify({ pid }) });
         const result = await response.json();
         if (response.ok && result.success) {
           const currentTournaments = get().tournaments;
@@ -257,7 +258,7 @@ export const useTournamentsStore = create((set, get) => {
         const headers = { 'Content-Type': 'application/json', 'X-User-Id': currentUser.id };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}/manage-interested`, { method: 'POST', headers, body: JSON.stringify({ pid, action }) });
+        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}/manage-interested`, { method: 'POST', headers, credentials: 'include', body: JSON.stringify({ pid, action }) });
         const result = await response.json();
         if (response.ok && result.success) {
           const currentTournaments = get().tournaments;
@@ -277,7 +278,7 @@ export const useTournamentsStore = create((set, get) => {
         const headers = { 'Content-Type': 'application/json', 'X-User-Id': currentUser.id };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${t.id}/decline-coach`, { method: 'POST', headers });
+        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${t.id}/decline-coach`, { method: 'POST', headers, credentials: 'include' });
         const result = await response.json();
         if (response.ok && result.success) {
           const currentTournaments = get().tournaments;
@@ -302,7 +303,7 @@ export const useTournamentsStore = create((set, get) => {
         const headers = { 'Content-Type': 'application/json', 'X-User-Id': currentUser.id };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${t.id}/confirm-coach`, { method: 'POST', headers });
+        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${t.id}/confirm-coach`, { method: 'POST', headers, credentials: 'include' });
         const result = await response.json();
         if (response.ok && result.success) {
           const currentTournaments = get().tournaments;
@@ -341,7 +342,7 @@ export const useTournamentsStore = create((set, get) => {
         const headers = { 'Content-Type': 'application/json', 'X-User-Id': currentUser.id };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}`, { method: 'DELETE', headers });
+        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}`, { method: 'DELETE', headers, credentials: 'include' });
         const result = await response.json();
         if (response.ok && result.success) {
           const currentTournaments = get().tournaments;
@@ -373,6 +374,7 @@ export const useTournamentsStore = create((set, get) => {
             'Authorization': `Bearer ${token}`,
             'X-User-Id': currentUser.id
           },
+          credentials: 'include',
           body: JSON.stringify({ refundToWallet })
         });
 
@@ -411,7 +413,7 @@ export const useTournamentsStore = create((set, get) => {
           
           syncOrchestrator.forcePullData();
         } else {
-          Alert.alert('Opt-out Failed', result?.message || 'Could not process request.');
+          Alert.alert('Opt-out Failed', result?.message || result?.error || 'Could not process request.');
         }
       } catch (e) {
         console.error('[TournamentsStore] FATAL_ON_OPTOUT_ERROR:', e);
