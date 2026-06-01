@@ -741,6 +741,14 @@ router.post('/support/save-ticket', apiKeyGuard, authGuard, async (req, res) => 
     };
 
     if (isNew) {
+      // 🛡️ [AUTO-ASSIGN] (v2.6.569): If the ticket is raised by a support agent, assign it to admin automatically
+      const userDoc = await Player.findOne({ id: ticket.userId }).lean();
+      if (userDoc && userDoc.data && userDoc.data.role === 'support') {
+        enrichmentTicket.assignedTo = 'admin';
+        enrichmentTicket.assignedAt = new Date().toISOString();
+        enrichmentTicket.assignmentSource = 'auto_assign_support_staff';
+      }
+
       const autoResponse = {
         id: `auto-${Date.now()}`,
         senderId: 'admin',

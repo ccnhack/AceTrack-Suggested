@@ -153,7 +153,7 @@ export const SupportTicketSystem = ({
   useEffect(() => {
     if (selectedTicket) {
       const updated = tickets.find(t => t.id === selectedTicket.id);
-      // 🛡️ [SCROLL_FIX] (v2.6.568): Only update if data actually changed to prevent
+      // 🛡️ [SCROLL_FIX] (v2.6.569): Only update if data actually changed to prevent
       // unnecessary re-renders that hijack scroll position while user is reading history.
       if (updated && JSON.stringify(updated) !== JSON.stringify(selectedTicket)) {
         setSelectedTicket(updated);
@@ -355,7 +355,7 @@ export const SupportTicketSystem = ({
     }
     const timestamp = msg?.timestamp || new Date().toISOString();
     const senderId = msg?.senderId || (text?.startsWith('ISSUE_DESCRIPTION:') ? (selectedTicket?.userId || 'user') : userId);
-    // 🛡️ [IDENTITY_FIX] (v2.6.568): Compare against both the logged-in user AND the ticket owner.
+    // 🛡️ [IDENTITY_FIX] (v2.6.569): Compare against both the logged-in user AND the ticket owner.
     // For agents viewing tickets they created, senderId === userId is sufficient.
     // For agents viewing OTHER users' tickets, the ticket owner's messages should show on the left.
     const isMe = String(senderId) === String(userId);
@@ -887,8 +887,11 @@ export const SupportTicketSystem = ({
     const st = statusColors[selectedTicket.status] || statusColors['Open'];
 
     const canReopen = (() => {
-        if (!selectedTicket.closedAt) return false;
-        const diff = Date.now() - new Date(selectedTicket.closedAt).getTime();
+        // 🛡️ [REOPEN_FIX] (v2.6.569): If closedAt is missing (e.g. 'Resolved' tickets or legacy closed tickets),
+        // fallback to resolvedAt or updatedAt. Previously this was returning false immediately.
+        const closedDate = selectedTicket.closedAt || selectedTicket.resolvedAt || selectedTicket.updatedAt;
+        if (!closedDate) return false;
+        const diff = Date.now() - new Date(closedDate).getTime();
         return diff < (3 * 24 * 60 * 60 * 1000); // 3 days
     })();
 
