@@ -153,7 +153,11 @@ export const SupportTicketSystem = ({
   useEffect(() => {
     if (selectedTicket) {
       const updated = tickets.find(t => t.id === selectedTicket.id);
-      if (updated) setSelectedTicket(updated);
+      // 🛡️ [SCROLL_FIX] (v2.6.568): Only update if data actually changed to prevent
+      // unnecessary re-renders that hijack scroll position while user is reading history.
+      if (updated && JSON.stringify(updated) !== JSON.stringify(selectedTicket)) {
+        setSelectedTicket(updated);
+      }
     }
   }, [tickets]);
 
@@ -337,7 +341,7 @@ export const SupportTicketSystem = ({
         }}
         activeOpacity={0.7}
       >
-        <Text style={styles.msgReplyUser}>{reply.senderId === userId ? 'You' : 'Admin'}</Text>
+        <Text style={styles.msgReplyUser}>{reply.senderId === userId ? 'You' : 'Support Agent'}</Text>
         <Text style={styles.msgReplyText} numberOfLines={1}>{reply.text}</Text>
       </TouchableOpacity>
     );
@@ -351,6 +355,9 @@ export const SupportTicketSystem = ({
     }
     const timestamp = msg?.timestamp || new Date().toISOString();
     const senderId = msg?.senderId || (text?.startsWith('ISSUE_DESCRIPTION:') ? (selectedTicket?.userId || 'user') : userId);
+    // 🛡️ [IDENTITY_FIX] (v2.6.568): Compare against both the logged-in user AND the ticket owner.
+    // For agents viewing tickets they created, senderId === userId is sufficient.
+    // For agents viewing OTHER users' tickets, the ticket owner's messages should show on the left.
     const isMe = String(senderId) === String(userId);
 
     // 🛡️ [INTERNAL FILTER] (v2.6.290): Skip rendering private admin notes
@@ -434,7 +441,7 @@ export const SupportTicketSystem = ({
               isMe ? styles.myBubble : styles.otherBubble,
               isHighlighted && styles.highlightedBubble
             ]}>
-              {!isMe && <Text style={styles.adminLabel}>{senderId === 'admin' ? 'Support Agent' : 'User'}</Text>}
+              {!isMe && <Text style={styles.adminLabel}>{String(senderId) === String(selectedTicket?.userId) ? 'User' : 'Support Agent'}</Text>}
               {renderMessageReply(msg.replyTo)}
               {msg.image && (
                 <Image source={{ uri: config.sanitizeUrl(msg.image) }} style={styles.msgImage} resizeMode="contain" />
