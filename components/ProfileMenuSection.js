@@ -211,7 +211,14 @@ const ProfileMenuSection = memo(({
                 ]);
               } else {
                 logger.logAction('MANUAL_OTA_CHECK_UP_TO_DATE');
-                Alert.alert("Up to Date", "You are already on the latest version.");
+                Alert.alert(
+                  "Up to Date", 
+                  "No new updates found on the server. If an update was downloaded in the background, you can apply it now.",
+                  [
+                    { text: "OK", style: "cancel" },
+                    { text: "Force Reload", onPress: () => Updates.reloadAsync() }
+                  ]
+                );
               }
             } catch (e) {
               logger.logAction('MANUAL_OTA_CHECK_ERROR', { error: e.message });

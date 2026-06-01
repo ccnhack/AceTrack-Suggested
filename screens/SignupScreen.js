@@ -59,7 +59,19 @@ const SignupScreen = ({ navigation }) => {
         setInviteData(data.invite);
         setAccountType('coach');
         setStep(2);
-        setFormData(prev => ({ ...prev, email: data.invite.email }));
+        
+        const fullName = data.invite.name || '';
+        const nameParts = fullName.trim().split(' ');
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
+
+        setFormData(prev => ({ 
+          ...prev, 
+          email: data.invite.email,
+          phone: data.invite.phone || prev.phone,
+          firstName: firstName || prev.firstName,
+          lastName: lastName || prev.lastName
+        }));
         setIsEmailVerified(true);
         // Track the click
         fetch(`${config.API_BASE_URL}/api/v1/auth/coach-invite/track`, {
@@ -491,7 +503,7 @@ const SignupScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => setStep(1)} style={styles.backButton}>
+        <TouchableOpacity onPress={() => inviteToken ? onBack() : setStep(1)} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color="#475569" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>

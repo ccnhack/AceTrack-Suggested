@@ -89,6 +89,8 @@ export default function createAuthRoutes({
       success: true, 
       invite: { 
         email: invite.email, 
+        name: invite.name,
+        phone: invite.phone,
         academyId: invite.academyId, 
         tournamentId: invite.tournamentId 
       } 
