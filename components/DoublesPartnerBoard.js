@@ -38,8 +38,8 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
        if (t.status === 'completed' || t.status === 'cancelled') return false;
        if (!t.format) return false;
        
-       const isMensDoubles = t.format === "Men's Doubles" && user.gender === 'Male';
-       const isWomensDoubles = t.format === "Women's Doubles" && user.gender === 'Female';
+       const isMensDoubles = t.format === "Men's Doubles";
+       const isWomensDoubles = t.format === "Women's Doubles";
        const isMixedDoubles = t.format === "Mixed Doubles";
        
        if (!isMensDoubles && !isWomensDoubles && !isMixedDoubles) return false;

@@ -348,12 +348,15 @@ const TournamentDetailModal = ({
                             onPress={() => {
                               onClose();
                               navigation.navigate('Matchmaking', { 
+                                initialTab: 'Partners',
                                 createPartnerRequest: true, 
                                 tournamentId: tournament.id,
                                 tournamentName: tournament.title,
                                 teamCode: myTeamCode,
                                 genderRequirement: tournament.format.includes('Men') ? 'Male' : tournament.format.includes('Women') ? 'Female' : 'Any',
-                                prefilledMessage: `Hey, I am looking for a partner for the ${tournament.title} tournament. Please accept if you're interested!`
+                                prefilledMessage: myTeamCode 
+                                  ? `I have already registered for the tournament!\nMy Team code is: ${myTeamCode} (Use it directly to join my team)\nIf you register for the tournament using my team code and pay your share of fee, we will be successfully matched.`
+                                  : `Looking for a partner for ${tournament.name || tournament.title}.`
                               });
                             }}
                           >
