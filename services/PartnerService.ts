@@ -11,7 +11,7 @@ class PartnerService {
       id: `partner_req_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
       creatorId: user.id,
       creatorName: user.name,
-      creatorImage: user.image,
+      creatorImage: user.avatar || user.image,
       sport,
       city,
       skillLevel,

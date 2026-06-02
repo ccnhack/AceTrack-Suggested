@@ -185,16 +185,31 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
     const trueSkillRating = item.creatorRating || 1200;
     const creatorStats = item.creatorStats || { wins: 0, losses: 0 };
 
+    // Look up creator's avatar from players store as fallback for old requests
+    const creatorPlayer = (players || []).find(p => p.id === item.creatorId);
+    const avatarUri = item.creatorImage || creatorPlayer?.avatar || creatorPlayer?.image || null;
+
+    // Format date as dd/mm/yyyy hh:mm AM/PM
+    const createdDate = new Date(item.createdAt);
+    const dd = String(createdDate.getDate()).padStart(2, '0');
+    const mm = String(createdDate.getMonth() + 1).padStart(2, '0');
+    const yyyy = createdDate.getFullYear();
+    let hours = createdDate.getHours();
+    const minutes = String(createdDate.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    const formattedDate = `${dd}/${mm}/${yyyy} at ${hours}:${minutes} ${ampm}`;
+
     return (
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.userInfo}>
-            <Image source={{ uri: item.creatorImage || 'https://via.placeholder.com/50' }} style={styles.avatar} />
+            <SafeAvatar uri={avatarUri} name={item.creatorName} size={44} />
             <View style={styles.userNameContainer}>
               <Text style={styles.creatorName}>
                 {item.creatorName} {isAcademyUser && <Ionicons name="school" size={14} color="#3B82F6" />}
               </Text>
-              <Text style={styles.timeAgo}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+              <Text style={styles.timeAgo}>{formattedDate}</Text>
             </View>
           </View>
           {isMine && (
