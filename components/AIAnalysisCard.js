@@ -60,7 +60,23 @@ const AIAnalysisCard = ({ evaluationScores, playerName, playerSkillLevel, isPro 
     );
   }
 
-  if (!analysis) return null;
+  if (!analysis) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.headerRow}>
+          <View style={styles.titleRow}>
+            <View style={styles.iconContainer}>
+              <Ionicons name="sparkles" size={18} color="#FFFFFF" />
+            </View>
+            <Text style={styles.title}>AI Coach Analysis</Text>
+          </View>
+        </View>
+        <View style={styles.contentBox}>
+          <Text style={styles.analysisText}>Complete a coach evaluation to unlock your personalized AI insights.</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -102,6 +118,7 @@ const styles = StyleSheet.create({
   blurredContainer: {
     backgroundColor: '#F8FAFC',
     position: 'relative',
+    minHeight: 220,
   },
   blurOverlay: {
     position: 'absolute',

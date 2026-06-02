@@ -122,14 +122,12 @@ export const PlayerSkillDashboard = ({ user, latestEvaluation }) => {
         </View>
       )}
 
-      {latestEvaluation && (
-        <AIAnalysisCard 
-          evaluationScores={latestEvaluation.scores} 
-          playerName={user.name} 
-          playerSkillLevel={user.skillLevel} 
-          isPro={user.isPro} 
-        />
-      )}
+      <AIAnalysisCard 
+        evaluationScores={latestEvaluation ? latestEvaluation.scores : null} 
+        playerName={user.name} 
+        playerSkillLevel={user.skillLevel} 
+        isPro={user.isPro} 
+      />
     </View>
   );
 };
