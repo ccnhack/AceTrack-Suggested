@@ -1385,23 +1385,30 @@ ${securityInstruction}`;
             const filterPrompt = `You are an AI Log Router. A user is asking to search logs.
 Current Server Time (ISO): ${new Date().toISOString()}
 
-We have two log sources:
+We have four data sources:
 1. 'AuditLog' (MongoDB): Contains user actions, authentication events, and security logs.
    Schema: { userId: String, ipAddress: String, userAgent: String, action: String, details: Mixed, timestamp: Date }
    - Common actions: 'SUPPORT_LOGIN_SUCCESS', 'SUPPORT_LOGIN_FAILED', 'ADMIN_LOGIN_SUCCESS', 'ADMIN_LOGIN_FAILED', 'PASSWORD_CHANGED', 'BRUTE_FORCE_DETECTED', 'UNAUTHORIZED_ACCESS_BLOCKED', etc.
-   - ⚠️ IMPORTANT: If the user asks about "logins" or "login attempts", you MUST either omit the action filter entirely, or ensure your regex includes "UNAUTHORIZED" alongside "LOGIN".
-   - ⚠️ IMPORTANT: For queries involving usernames or emails, use an $or array containing 'userId', 'details.email', 'details.name', 'details.userId', 'details.identifier', 'details.receivedIdentifier'. Use $regex heavily!
-   - ⚠️ CRITICAL: DO NOT use aggregation operators like $date, $subtract, or $$NOW.
-   - ⚠️ CRITICAL: ONLY apply a "timestamp" date filter if the user explicitly asks for a specific timeframe.
-2. 'server_events.jsonl' (Filesystem): Contains system crashes, server panics, WebSocket errors.
+   - ⚠️ IMPORTANT: If the user asks about "logins" or "login attempts", ensure your regex includes "UNAUTHORIZED" alongside "LOGIN" (e.g., {"action": {"$regex": "LOGIN|UNAUTHORIZED", "$options": "i"}}).
+   - ⚠️ IMPORTANT: For queries involving usernames or emails (like 'shush' or 'john'), do NOT just query 'userId'. Use an $or array on 'details.email', 'details.name', 'details.userId', 'details.identifier', 'details.receivedIdentifier'.
+   - ⚠️ CRITICAL: ONLY apply a "timestamp" date filter if the user explicitly asks for a specific timeframe. Use the Current Server Time provided above to calculate accurate ISO date strings for $gte/$lte.
+2. 'server_events.jsonl' (Filesystem): Contains system crashes, server panics, WebSocket errors, and legacy ephemeral events.
+3. 'Player' (MongoDB): Contains user profiles and their current state (e.g. active, suspended, role).
+   Schema: { id: String, role: String, data: { name: String, email: String, supportStatus: String } }
+   - Example: { "role": "support", "data.supportStatus": "suspended" }
+4. 'CoachInvite' & 'SupportInvite' (MongoDB): Contains registration invites for coaches and support staff.
+   Schema: { email: String, name: String, status: String (Pending|Clicked|Used|Expired), academyId: String, tournamentId: String }
+   - ⚠️ IMPORTANT: If the user asks about a coach or support staff's registration status, invite link, or if they completed registration, you MUST provide an "inviteFilter"!
 
 User query: "${userQuery}"
 
-Generate a JSON object with two fields:
-1. "mongoFilter": A valid MongoDB query object for the AuditLog collection.
-2. "checkServerEventsFile": A boolean.
+Based on this query, generate a JSON object with four fields:
+1. "mongoFilter": A valid MongoDB query object for the AuditLog collection. Use {} if broad.
+2. "playerFilter": A valid MongoDB query object for the Player collection. Use {} if not asking about users.
+3. "inviteFilter": A valid MongoDB query object for CoachInvite/SupportInvite collections. Use {} if not asking about invites/registration.
+4. "checkServerEventsFile": A boolean.
 
-DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON.`;
+DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. No explanations.`;
 
             const filterReq = await fetchWithAIFallback({
                   model: "llama-3.3-70b-versatile",
@@ -1411,7 +1418,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON.`
                   apiKey
             });
 
-            routingIntent = { mongoFilter: {}, checkServerEventsFile: false };
+            routingIntent = { mongoFilter: {}, playerFilter: {}, inviteFilter: {}, checkServerEventsFile: false };
             if (filterReq.ok) {
                const filterJson = await filterReq.json();
                let rawJson = filterJson.choices?.[0]?.message?.content || "{}";
@@ -1422,7 +1429,45 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON.`
 
          // 2. Fetch logs
          let combinedLogsArr = [];
-         if (Object.keys(routingIntent.mongoFilter || {}).length > 0 || !routingIntent.checkServerEventsFile) {
+
+         const hasMongoFilter = Object.keys(routingIntent.mongoFilter || {}).length > 0;
+         const hasPlayerFilter = Object.keys(routingIntent.playerFilter || {}).length > 0;
+         const hasInviteFilter = Object.keys(routingIntent.inviteFilter || {}).length > 0;
+
+         if (hasInviteFilter) {
+            const { CoachInvite, SupportInvite } = await import('../models/index.mjs');
+            const sanitizedInviteFilter = sanitizeMongoFilter(routingIntent.inviteFilter);
+            try {
+               const cInvites = await CoachInvite.find(sanitizedInviteFilter).limit(50).lean();
+               const sInvites = await SupportInvite.find(sanitizedInviteFilter).limit(50).lean();
+               
+               const formatInvite = (i, type) => {
+                  return `[Database][${type}] Email:${i.email} Name:${i.name || i.firstName || 'N/A'} Status:${i.status} Clicks:${i.clicks?.length || 0} AcademyId:${i.academyId || 'N/A'} TournamentId:${i.tournamentId || 'N/A'}`;
+               };
+               
+               combinedLogsArr.push(...cInvites.map(i => formatInvite(i, 'CoachInvite')));
+               combinedLogsArr.push(...sInvites.map(i => formatInvite(i, 'SupportInvite')));
+            } catch (err) {
+               console.error("Ephemeral Invite Query Error:", err.message);
+            }
+         }
+
+         if (hasPlayerFilter) {
+            const { Player } = await import('../models/index.mjs');
+            const sanitizedPlayerFilter = sanitizeMongoFilter(routingIntent.playerFilter);
+            try {
+               const players = await Player.find(sanitizedPlayerFilter).limit(100).lean();
+               const compactPlayers = players.map(p => {
+                  const pd = p.data || {};
+                  return `[Database][Player Record] ID:${p.id} Name:${pd.name || pd.firstName || 'N/A'} Role:${p.role || pd.role || 'N/A'} Status:${pd.supportStatus || pd.status || 'active'} Email:${pd.email || 'N/A'}`;
+               });
+               combinedLogsArr.push(...compactPlayers);
+            } catch (err) {
+               console.error("Ephemeral Player Query Error:", err.message);
+            }
+         }
+
+         if (hasMongoFilter || (!routingIntent.checkServerEventsFile && !hasPlayerFilter && !hasInviteFilter)) {
             const { AuditLog } = await import('../models/index.mjs');
             const sanitizedFilter = sanitizeMongoFilter(routingIntent.mongoFilter);
             let mongoLogs = [];
