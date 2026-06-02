@@ -88,7 +88,7 @@ const ProUpgradeModal = ({ visible, onClose, user }) => {
               onPress={() => setSelectedTier('monthly')}
             >
               <Text style={[styles.tierDuration, selectedTier === 'monthly' && { color: '#0F172A' }]}>Monthly</Text>
-              <Text style={[styles.tierPrice, selectedTier === 'monthly' && { color: '#0F172A' }]}>$9.99<Text style={styles.tierPeriod}>/mo</Text></Text>
+              <Text style={[styles.tierPrice, selectedTier === 'monthly' && { color: '#0F172A' }]}>₹499<Text style={styles.tierPeriod}>/mo</Text></Text>
               {selectedTier === 'monthly' && <View style={styles.radioActive} />}
             </TouchableOpacity>
 
@@ -100,7 +100,7 @@ const ProUpgradeModal = ({ visible, onClose, user }) => {
                 <Text style={styles.saveText}>SAVE 20%</Text>
               </View>
               <Text style={[styles.tierDuration, selectedTier === 'annual' && { color: '#0F172A' }]}>Annual</Text>
-              <Text style={[styles.tierPrice, selectedTier === 'annual' && { color: '#0F172A' }]}>$95.99<Text style={styles.tierPeriod}>/yr</Text></Text>
+              <Text style={[styles.tierPrice, selectedTier === 'annual' && { color: '#0F172A' }]}>₹4,999<Text style={styles.tierPeriod}>/yr</Text></Text>
               {selectedTier === 'annual' && <View style={styles.radioActive} />}
             </TouchableOpacity>
           </View>

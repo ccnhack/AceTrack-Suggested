@@ -49,7 +49,15 @@ const ProfileHeader = memo(({
         </TouchableOpacity>
       </View>
       <View style={styles.userInfo}>
-        <Text testID="profile.header.name" style={styles.userName}>{user?.name}</Text>
+        <View style={styles.nameRow}>
+          <Text testID="profile.header.name" style={styles.userName}>{user?.name}</Text>
+          {user?.isPro && (
+            <View style={styles.proBadge}>
+              <Ionicons name="star" size={10} color="#FFFFFF" />
+              <Text style={styles.proBadgeText}>PRO</Text>
+            </View>
+          )}
+        </View>
         {academyTier && (
           <View style={styles.roleRow}>
             <View style={[styles.tierBadge, academyTier === 'Gold' ? styles.tierGold : academyTier === 'Silver' ? styles.tierSilver : styles.tierBronze]}>
@@ -166,11 +174,31 @@ const styles = StyleSheet.create({
   userInfo: {
     flex: 1,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   userName: {
     fontSize: 18,
     fontWeight: '700',
     color: '#0F172A',
     letterSpacing: -0.3,
+  },
+  proBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 2,
+  },
+  proBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
   roleRow: {
     flexDirection: 'row',
