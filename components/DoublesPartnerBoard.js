@@ -71,6 +71,27 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
   // Auto-select tournament ONLY when navigating from route params (handled in the routeParams effect above).
   // When user clicks "Post a Request" manually, tournament defaults to "None" — they can pick one if they want.
 
+  // Premium auto-fill message pools — randomly picked so every post feels unique
+  const REGISTERED_MESSAGES = [
+    (code) => `Hey! I'm registered and ready to compete 🏆\nMy Team Code: ${code}\n\nUse this code when you register — once your payment goes through, we're officially paired up. Let's make it happen!`,
+    (code) => `Already signed up and looking for a strong partner 💪\nTeam Code: ${code}\n\nJust enter this code during registration and complete payment — we'll be matched instantly. Let's dominate the court!`,
+    (code) => `Registered and waiting for the right partner 🎯\nUse my Team Code: ${code}\n\nOnce you register with this code and pay your entry, we're locked in as a team. Excited to play together!`,
+    (code) => `All set on my end — just need a doubles partner! 🔥\nMy Team Code: ${code}\n\nRegister for the tournament using this code. After payment, we're automatically paired. Let's go for the win!`,
+    (code) => `I've secured my spot — looking for someone competitive to team up with 🏸\nTeam Code: ${code}\n\nEnter this code at registration, complete your payment, and we're a team. See you on the court!`,
+    (code) => `Spot booked, partner needed! 🚀\nTeam Code: ${code}\n\nUse this code during sign-up and pay your share — we'll be instantly matched. Let's bring our A-game!`,
+  ];
+
+  const SEEKING_MESSAGES = [
+    `Looking for a competitive doubles partner for this tournament 🎯\n\nIf you're up for it, register and let's team up. Drop me a message if you have any questions!`,
+    `Need a reliable partner to compete in this doubles tournament 🏆\n\nLet's register together and aim for the top. Reach out if you're interested!`,
+    `Searching for a doubles teammate who's ready to compete 💪\n\nIf you're looking to play, let's pair up and make a strong team. Message me!`,
+    `Open to teaming up with a skilled player for this event 🔥\n\nRegister for the tournament and let's partner up — I'm committed and ready to play!`,
+    `Looking for someone who takes doubles seriously 🏸\n\nIf you want to compete and have fun, let's team up for this one. Looking forward to connecting!`,
+    `Doubles partner wanted — let's make this tournament count! 🚀\n\nI'm registered and ready. If you're keen, sign up and we'll pair up. Let's do this!`,
+  ];
+
+  const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
   React.useEffect(() => {
     if (isModalVisible && newLinkedTournament) {
       const t = eligibleTournaments.find(x => x.id === newLinkedTournament);
@@ -85,13 +106,13 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
         const myTeamCode = myTeam ? myTeam.teamCode : null;
 
         if (!routeParams?.prefilledMessage) {
-           const dynamicMessage = myTeamCode 
-             ? `I have already registered for the tournament!\nMy Team code is: ${myTeamCode} (Use it directly to join my team)\nIf you register for the tournament using my team code and pay your share of fee, we will be successfully matched.`
-             : `Looking for a partner for ${t.title || t.name}.`;
+           const message = myTeamCode 
+             ? pickRandom(REGISTERED_MESSAGES)(myTeamCode)
+             : pickRandom(SEEKING_MESSAGES);
            
-           // Replace if empty or if it was the old generic one
-           if (!newComment || newComment.startsWith('Looking for a partner for') || newComment.startsWith('I have already registered for the tournament!')) {
-             setNewComment(dynamicMessage);
+           // Only auto-fill if empty or if it was a previous auto-filled message
+           if (!newComment || !newComment.trim()) {
+             setNewComment(message);
            }
         }
       }
