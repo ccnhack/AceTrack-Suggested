@@ -140,7 +140,14 @@ cron.schedule('*/5 * * * *', async () => {
         // Remove expired users entirely (per user request)
         const newPending = pending.filter(pid => !toExpire.includes(pid));
         const newTimestamps = { ...timestamps };
-        toExpire.forEach(pid => delete newTimestamps[pid]);
+        toExpire.forEach(pid => {
+          delete newTimestamps[pid];
+          // Fix: Also remove the tournament from the player's profile so it drops from their 'Matches' tab
+          const player = players.find(p => String(p.id) === String(pid));
+          if (player && player.registeredTournamentIds) {
+            player.registeredTournamentIds = player.registeredTournamentIds.filter(id => id !== t.id);
+          }
+        });
 
         const updatedT = {
           ...t,
