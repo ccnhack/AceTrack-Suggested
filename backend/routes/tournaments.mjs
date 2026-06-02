@@ -5,6 +5,7 @@ import { addInAppNotification } from '../helpers/utils.mjs';
 import { sendPushNotification } from '../notifications.js';
 
 export default function({ io }) {
+  const router = express.Router();
 
   // POST /api/v1/tournaments/:id/register
   router.post('/:id/register', authGuard, async (req, res) => {
