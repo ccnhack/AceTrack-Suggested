@@ -99,13 +99,15 @@ export default function({ io }) {
 
       // 6. Execute Atomic Updates
       const usersToRegister = registeringPartnerId ? [userId, registeringPartnerId] : [userId];
+      const lowerUsersToRegister = usersToRegister.map(u => String(u).toLowerCase());
+      const caseInsensitiveUsers = usersToRegister.flatMap(u => [u, String(u).toLowerCase(), new RegExp(`^${u}$`, 'i')]);
 
       // A. Update Tournament
       const tUpdate = {
         $addToSet: {},
         $pull: { 
-          'data.waitlistedPlayerIds': { $in: usersToRegister },
-          'data.optedOutPlayerIds': { $in: usersToRegister }
+          'data.waitlistedPlayerIds': { $in: caseInsensitiveUsers },
+          'data.optedOutPlayerIds': { $in: caseInsensitiveUsers }
         },
         $unset: {},
         $set: { lastUpdated: new Date() }
@@ -138,19 +140,23 @@ export default function({ io }) {
       }
 
       if (method === 'pending' || method === 'upi') {
-         tUpdate.$addToSet['data.pendingPaymentPlayerIds'] = { $each: usersToRegister };
-         tUpdate.$pull['data.registeredPlayerIds'] = { $in: usersToRegister };
-         for (const uId of usersToRegister) {
+         tUpdate.$addToSet['data.pendingPaymentPlayerIds'] = { $each: lowerUsersToRegister };
+         tUpdate.$pull['data.registeredPlayerIds'] = { $in: caseInsensitiveUsers };
+         for (const uId of lowerUsersToRegister) {
            tUpdate.$set[`data.pendingPaymentTimestamps.${uId}`] = Date.now();
            tUpdate.$set[`data.playerPaymentMethods.${uId}`] = { method, cost, timestamp: new Date().toISOString() };
          }
       } else {
-         tUpdate.$addToSet['data.registeredPlayerIds'] = { $each: usersToRegister };
-         tUpdate.$pull['data.pendingPaymentPlayerIds'] = { $in: usersToRegister };
-         for (const uId of usersToRegister) {
+         tUpdate.$addToSet['data.registeredPlayerIds'] = { $each: lowerUsersToRegister };
+         tUpdate.$pull['data.pendingPaymentPlayerIds'] = { $in: caseInsensitiveUsers };
+         for (let i = 0; i < usersToRegister.length; i++) {
+           const uId = usersToRegister[i];
+           const lowerUId = lowerUsersToRegister[i];
            tUpdate.$unset[`data.playerStatuses.${uId}`] = "";
+           tUpdate.$unset[`data.playerStatuses.${lowerUId}`] = "";
            tUpdate.$unset[`data.pendingPaymentTimestamps.${uId}`] = "";
-           tUpdate.$set[`data.playerPaymentMethods.${uId}`] = { method, cost, timestamp: new Date().toISOString() };
+           tUpdate.$unset[`data.pendingPaymentTimestamps.${lowerUId}`] = "";
+           tUpdate.$set[`data.playerPaymentMethods.${lowerUId}`] = { method, cost, timestamp: new Date().toISOString() };
          }
       }
 
@@ -313,9 +319,10 @@ export default function({ io }) {
 
       const tData = tournamentDoc.data || {};
       const entryFee = tData.entryFee || 0;
-      const wasRegistered = (tData.registeredPlayerIds || []).includes(userId);
-      const isWaitlisted = (tData.waitlistedPlayerIds || []).includes(userId);
-      const isPending = (tData.pendingPaymentPlayerIds || []).includes(userId);
+      const lowerUserId = String(userId).toLowerCase();
+      const wasRegistered = (tData.registeredPlayerIds || []).some(id => String(id).toLowerCase() === lowerUserId);
+      const isWaitlisted = (tData.waitlistedPlayerIds || []).some(id => String(id).toLowerCase() === lowerUserId);
+      const isPending = (tData.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === lowerUserId);
 
       if (!wasRegistered && !isWaitlisted && !isPending) {
         // ZOMBIE STATE RECOVERY: The user thinks they are registered, but the tournament doesn't.
@@ -366,18 +373,27 @@ export default function({ io }) {
       }
 
       // 2. Prepare Tournament Updates
+      // Fix: Case-insensitive removal for arrays and proper cleanup of timestamps
+      const lowerUserId = String(userId).toLowerCase();
       const tUpdate = {
         $pull: {
-          'data.registeredPlayerIds': userId,
-          'data.pendingPaymentPlayerIds': userId,
-          'data.waitlistedPlayerIds': userId
+          'data.registeredPlayerIds': { $in: [userId, lowerUserId, new RegExp(`^${userId}$`, 'i')] },
+          'data.pendingPaymentPlayerIds': { $in: [userId, lowerUserId, new RegExp(`^${userId}$`, 'i')] },
+          'data.waitlistedPlayerIds': { $in: [userId, lowerUserId, new RegExp(`^${userId}$`, 'i')] }
         },
         $addToSet: {
-          'data.optedOutPlayerIds': userId
+          'data.optedOutPlayerIds': lowerUserId
         },
         $set: {
-          [`data.playerStatuses.${userId}`]: 'Opted-Out',
+          [`data.playerStatuses.${lowerUserId}`]: 'Opted-Out',
           lastUpdated: new Date()
+        },
+        $unset: {
+          [`data.pendingPaymentTimestamps.${userId}`]: "",
+          [`data.pendingPaymentTimestamps.${lowerUserId}`]: "",
+          [`data.playerPaymentMethods.${userId}`]: "",
+          [`data.playerPaymentMethods.${lowerUserId}`]: "",
+          [`data.playerStatuses.${userId}`]: ""
         }
       };
 
