@@ -145,7 +145,7 @@ cron.schedule('*/5 * * * *', async () => {
           // Fix: Also remove the tournament from the player's profile so it drops from their 'Matches' tab
           const player = players.find(p => String(p.id) === String(pid));
           if (player && player.registeredTournamentIds) {
-            player.registeredTournamentIds = player.registeredTournamentIds.filter(id => id !== t.id);
+            player.registeredTournamentIds = player.registeredTournamentIds.filter(id => String(id) !== String(t.id));
           }
         });
 

@@ -585,6 +585,32 @@ export default function MatchmakingScreen({ route }) {
     return item.name || 'Opponent';
   };
 
+  const getOpponentStats = (req) => {
+    const oppId = req.senderId === user?.id ? req.receiverId : req.senderId;
+    const opp = players.find(p => p.id === oppId);
+    if (!opp) return null;
+    return {
+      rating: opp.trueSkillRating || opp.rating || 1200,
+      wins: opp.wins || 0,
+      losses: opp.losses || 0,
+      level: opp.skillLevel || opp.level || 'Intermediate'
+    };
+  };
+
+  const getTournamentDetails = (req) => {
+    if (!req.tournamentId) return null;
+    const t = tournaments.find(t => t.id === req.tournamentId);
+    if (!t) return null;
+    // Navigate to Explore screen with the tournament ID to open the detail modal
+    return {
+      id: t.id,
+      title: t.title,
+      onViewDetails: (id) => {
+         navigation.navigate('Explore', { openTournamentId: id });
+      }
+    };
+  };
+
   const handleCancelChallenge = (req) => {
     const oppName = getOpponentName(req);
     Alert.alert(
@@ -867,6 +893,8 @@ export default function MatchmakingScreen({ route }) {
                 key={req.id || `sent-${index}`}
                 req={req}
                 getOpponentName={getOpponentName}
+                getOpponentStats={getOpponentStats}
+                getTournamentDetails={getTournamentDetails}
                 onOpenDetails={openDetails}
                 onCounter={handleCounter}
                 onCancel={handleCancelChallenge}
@@ -890,6 +918,8 @@ export default function MatchmakingScreen({ route }) {
                 req={req}
                 role={role}
                 getOpponentName={getOpponentName}
+                getOpponentStats={getOpponentStats}
+                getTournamentDetails={getTournamentDetails}
                 onOpenDetails={openDetails}
                 onDecline={handleDeclineChallenge}
                 onCounter={handleCounter}
@@ -919,6 +949,8 @@ export default function MatchmakingScreen({ route }) {
               req={req}
               role={role}
               getOpponentName={getOpponentName}
+              getOpponentStats={getOpponentStats}
+              getTournamentDetails={getTournamentDetails}
               onOpenDetails={openDetails}
               onCounter={handleCounter}
               onAccept={role === 'coach' ? handleConfirmBooking : handleAcceptCountered}

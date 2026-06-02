@@ -100,11 +100,29 @@ export const OpponentCard = memo(({ item, role, isSent, onChallenge, styles }) =
   );
 });
 
-export const SentRequestCard = memo(({ req, getOpponentName, onOpenDetails, onCounter, onCancel, styles }) => (
+export const SentRequestCard = memo(({ req, getOpponentName, getOpponentStats, getTournamentDetails, onOpenDetails, onCounter, onCancel, styles }) => {
+  const stats = getOpponentStats ? getOpponentStats(req) : null;
+  const tourney = getTournamentDetails ? getTournamentDetails(req) : null;
+  return (
   <TouchableOpacity style={styles.requestCard} onPress={() => onOpenDetails(req)}>
     <View style={styles.info}>
       <Text style={styles.name} numberOfLines={1}>{getOpponentName(req)}</Text>
+      {stats && (
+        <Text style={[styles.details, { color: '#64748B', fontSize: 11, marginBottom: 4 }]}>
+          ★ {Math.round(stats.rating || 1200)}  •  W: {stats.wins || 0} / L: {stats.losses || 0}
+        </Text>
+      )}
+      {tourney && (
+        <Text style={[styles.details, { color: '#0F172A', fontWeight: '600', marginBottom: 2 }]}>
+          {tourney.title}
+        </Text>
+      )}
       <Text style={styles.details}>{req.sport} • {req.proposedDate} at {req.proposedTime} • {req.status || 'Pending'}</Text>
+      {tourney && (
+        <TouchableOpacity style={{ marginTop: 6 }} onPress={() => tourney.onViewDetails && tourney.onViewDetails(tourney.id)}>
+          <Text style={{ fontSize: 11, color: '#3B82F6', fontWeight: 'bold' }}>View Tournament Details</Text>
+        </TouchableOpacity>
+      )}
     </View>
     <View style={styles.actionRow}>
       <TouchableOpacity 
@@ -123,19 +141,38 @@ export const SentRequestCard = memo(({ req, getOpponentName, onOpenDetails, onCo
       </TouchableOpacity>
     </View>
   </TouchableOpacity>
-));
+  );
+});
 
-export const ReceivedRequestCard = memo(({ req, role, getOpponentName, onOpenDetails, onDecline, onCounter, onAccept, styles }) => (
+export const ReceivedRequestCard = memo(({ req, role, getOpponentName, getOpponentStats, getTournamentDetails, onOpenDetails, onDecline, onCounter, onAccept, styles }) => {
+  const stats = getOpponentStats ? getOpponentStats(req) : null;
+  const tourney = getTournamentDetails ? getTournamentDetails(req) : null;
+  return (
   <TouchableOpacity 
     style={[styles.requestCard, req.isNew && styles.unreadRequestCard]} 
     onPress={() => onOpenDetails(req)}
   >
     <View style={styles.info}>
       <Text style={styles.name}>{getOpponentName(req)}</Text>
+      {stats && (
+        <Text style={[styles.details, { color: '#64748B', fontSize: 11, marginBottom: 4 }]}>
+          ★ {Math.round(stats.rating || 1200)}  •  W: {stats.wins || 0} / L: {stats.losses || 0}
+        </Text>
+      )}
+      {tourney && (
+        <Text style={[styles.details, { color: '#0F172A', fontWeight: '600', marginBottom: 2 }]}>
+          {tourney.title}
+        </Text>
+      )}
       <Text style={[styles.details, req.status === 'Counter Proposed' && { color: '#D97706' }]}>
         {req.sport} • {req.time || (req.proposedDate + ' @ ' + req.proposedTime)}
         {req.status === 'Counter Proposed' ? ' (Negotiating)' : ''}
       </Text>
+      {tourney && (
+        <TouchableOpacity style={{ marginTop: 6 }} onPress={() => tourney.onViewDetails && tourney.onViewDetails(tourney.id)}>
+          <Text style={{ fontSize: 11, color: '#3B82F6', fontWeight: 'bold' }}>View Tournament Details</Text>
+        </TouchableOpacity>
+      )}
     </View>
     <View style={styles.actionRow}>
       <TouchableOpacity 
@@ -161,9 +198,13 @@ export const ReceivedRequestCard = memo(({ req, role, getOpponentName, onOpenDet
       </TouchableOpacity>
     </View>
   </TouchableOpacity>
-));
+  );
+});
 
-export const CounteredRequestCard = memo(({ req, role, getOpponentName, onOpenDetails, onCounter, onAccept, styles }) => (
+export const CounteredRequestCard = memo(({ req, role, getOpponentName, getOpponentStats, getTournamentDetails, onOpenDetails, onCounter, onAccept, styles }) => {
+  const stats = getOpponentStats ? getOpponentStats(req) : null;
+  const tourney = getTournamentDetails ? getTournamentDetails(req) : null;
+  return (
   <TouchableOpacity style={[styles.requestCard, { borderLeftColor: '#F59E0B' }]} onPress={() => onOpenDetails(req)}>
     <View style={styles.info}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
@@ -174,7 +215,22 @@ export const CounteredRequestCard = memo(({ req, role, getOpponentName, onOpenDe
           </View>
         )}
       </View>
+      {stats && (
+        <Text style={[styles.details, { color: '#64748B', fontSize: 11, marginBottom: 4 }]}>
+          ★ {Math.round(stats.rating || 1200)}  •  W: {stats.wins || 0} / L: {stats.losses || 0}
+        </Text>
+      )}
+      {tourney && (
+        <Text style={[styles.details, { color: '#0F172A', fontWeight: '600', marginBottom: 2 }]}>
+          {tourney.title}
+        </Text>
+      )}
       <Text style={styles.details}>{req.sport} • {req.proposedDate} at {req.proposedTime} • {req.status}</Text>
+      {tourney && (
+        <TouchableOpacity style={{ marginTop: 6 }} onPress={() => tourney.onViewDetails && tourney.onViewDetails(tourney.id)}>
+          <Text style={{ fontSize: 11, color: '#3B82F6', fontWeight: 'bold' }}>View Tournament Details</Text>
+        </TouchableOpacity>
+      )}
     </View>
     <View style={styles.actionRow}>
       <TouchableOpacity style={styles.smallBtn} onPress={() => onCounter(req)}>
@@ -190,7 +246,8 @@ export const CounteredRequestCard = memo(({ req, role, getOpponentName, onOpenDe
       </TouchableOpacity>
     </View>
   </TouchableOpacity>
-));
+  );
+});
 
 export const ExpiredRequestCard = memo(({ req, getOpponentName, onOpenDetails, onRemove, isUnread, styles }) => (
   <TouchableOpacity 
