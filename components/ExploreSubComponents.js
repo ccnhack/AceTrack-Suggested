@@ -73,7 +73,7 @@ export const PaymentModal = memo(({
   const rescheduleFee = (isRescheduling && rescheduleCount > 0) ? 20 : 0;
   
   const baseEntryFee = isDoubles ? (regPaymentTarget.entryFee / 2) : regPaymentTarget.entryFee;
-  const isRegisteringPartner = isDoubles && registerPartner && partnerId;
+  const isRegisteringPartner = isDoubles && registerPartner;
   const effectiveBaseFee = isRegisteringPartner ? (baseEntryFee * 2) : baseEntryFee;
 
   const oldBaseFee = (oldT && oldT.format && ["Men's Doubles", "Women's Doubles", "Mixed Doubles"].includes(oldT.format)) ? (oldT.entryFee / 2) : (oldT ? oldT.entryFee : 0);
@@ -84,6 +84,11 @@ export const PaymentModal = memo(({
 
   const finalize = async (method) => {
       try {
+          if (isRegisteringPartner && !partnerId) {
+              Alert.alert("Missing Partner", "Please enter a valid partner phone number, or uncheck the register partner option.");
+              return;
+          }
+
           const result = await onRegister(
             regPaymentTarget, 
             method, 
