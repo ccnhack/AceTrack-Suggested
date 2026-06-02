@@ -300,7 +300,12 @@ const MatchCard = ({
             {isDoublesSoloPaid ? (
               <>
                 <TouchableOpacity 
-                  onPress={() => navigation.navigate('Matchmaking', { initialTab: 'Partners', createPartnerRequest: true, tournamentId: t.id })}
+                  onPress={() => navigation.navigate('Matchmaking', { 
+                    initialTab: 'Partners', 
+                    createPartnerRequest: true, 
+                    tournamentId: t.id,
+                    prefilledMessage: userTeamCode ? `Looking for a partner for ${t.title}. My Team Code is ${userTeamCode}` : `Looking for a partner for ${t.title}`
+                  })}
                   style={[styles.actionButton, { backgroundColor: '#EEF2FF', borderWidth: 1, borderColor: '#C7D2FE' }]}
                 >
                   <Ionicons name="people-outline" size={14} color="#4F46E5" />
