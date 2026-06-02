@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { aiAnalysisService } from '../services/aiAnalysisService';
+import ProUpgradeModal from './ProUpgradeModal';
 
-const AIAnalysisCard = ({ evaluationScores, playerName, playerSkillLevel, isPro }) => {
+const AIAnalysisCard = ({ evaluationScores, playerName, playerSkillLevel, isPro, user }) => {
   const [analysis, setAnalysis] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   useEffect(() => {
     // Only generate analysis if Pro and scores are present
@@ -37,7 +39,10 @@ const AIAnalysisCard = ({ evaluationScores, playerName, playerSkillLevel, isPro 
           <Ionicons name="lock-closed" size={32} color="#1E293B" style={styles.lockIcon} />
           <Text style={styles.lockedTitle}>Pro AI Coach Analysis</Text>
           <Text style={styles.lockedSubtitle}>Unlock AceTrack Pro to get personalized, AI-driven insights on your game after every evaluation.</Text>
-          <TouchableOpacity style={styles.upgradeBtn}>
+          <TouchableOpacity 
+            style={styles.upgradeBtn}
+            onPress={() => setShowUpgradeModal(true)}
+          >
             <Text style={styles.upgradeBtnText}>Upgrade to Pro</Text>
           </TouchableOpacity>
         </View>
@@ -45,6 +50,11 @@ const AIAnalysisCard = ({ evaluationScores, playerName, playerSkillLevel, isPro 
           <Text style={styles.title}>AI Coach Analysis</Text>
           <Text style={styles.mockText}>Keep up the great work on the court! Your fundamentals are looking solid... [Unlock to read full analysis]</Text>
         </View>
+        <ProUpgradeModal 
+          visible={showUpgradeModal} 
+          onClose={() => setShowUpgradeModal(false)} 
+          user={user}
+        />
       </View>
     );
   }

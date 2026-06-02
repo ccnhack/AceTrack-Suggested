@@ -127,6 +127,7 @@ export const PlayerSkillDashboard = ({ user, latestEvaluation }) => {
         playerName={user.name} 
         playerSkillLevel={user.skillLevel} 
         isPro={user.isPro} 
+        user={user}
       />
     </View>
   );
