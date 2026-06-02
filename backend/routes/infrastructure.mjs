@@ -1081,15 +1081,26 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
                const cInvites = await CoachInvite.find(sanitizedInviteFilter).limit(50).lean();
                const sInvites = await SupportInvite.find(sanitizedInviteFilter).limit(50).lean();
                
-               const formatInvite = (i, type) => {
+               const { Tournament, Player } = await import('../models/index.mjs');
+               const formatInvite = async (i, type) => {
+                  let acName = i.academyId || 'N/A';
+                  let trName = i.tournamentId || 'N/A';
+                  if (i.academyId) {
+                     const ac = await Player.findOne({ id: i.academyId }).lean();
+                     if (ac && ac.data && ac.data.name) acName = `${ac.data.name} (${i.academyId})`;
+                  }
+                  if (i.tournamentId) {
+                     const tr = await Tournament.findOne({ id: i.tournamentId }).lean();
+                     if (tr && tr.data && tr.data.title) trName = `${tr.data.title} (${i.tournamentId})`;
+                  }
                   return {
                      timeMs: new Date(i.createdAt).getTime() || 0,
-                     text: `[Database][${type}] Email:${i.email} Name:${i.name || i.firstName || 'N/A'} Status:${i.status} Clicks:${i.clicks?.length || 0} AcademyId:${i.academyId || 'N/A'} TournamentId:${i.tournamentId || 'N/A'}`
+                     text: `[Database][${type}] Email:${i.email} Name:${i.name || i.firstName || 'N/A'} Status:${i.status} Clicks:${i.clicks?.length || 0} Academy:${acName} Tournament:${trName}`
                   };
                };
                
-               combinedLogsArr.push(...cInvites.map(i => formatInvite(i, 'CoachInvite')));
-               combinedLogsArr.push(...sInvites.map(i => formatInvite(i, 'SupportInvite')));
+               for (const i of cInvites) combinedLogsArr.push(await formatInvite(i, 'CoachInvite'));
+               for (const i of sInvites) combinedLogsArr.push(await formatInvite(i, 'SupportInvite'));
             } catch (err) {
                console.error("Invite Query Error:", err.message);
             }
@@ -1443,12 +1454,23 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
                const cInvites = await CoachInvite.find(sanitizedInviteFilter).limit(50).lean();
                const sInvites = await SupportInvite.find(sanitizedInviteFilter).limit(50).lean();
                
-               const formatInvite = (i, type) => {
-                  return `[Database][${type}] Email:${i.email} Name:${i.name || i.firstName || 'N/A'} Status:${i.status} Clicks:${i.clicks?.length || 0} AcademyId:${i.academyId || 'N/A'} TournamentId:${i.tournamentId || 'N/A'}`;
+               const { Tournament, Player } = await import('../models/index.mjs');
+               const formatInvite = async (i, type) => {
+                  let acName = i.academyId || 'N/A';
+                  let trName = i.tournamentId || 'N/A';
+                  if (i.academyId) {
+                     const ac = await Player.findOne({ id: i.academyId }).lean();
+                     if (ac && ac.data && ac.data.name) acName = `${ac.data.name} (${i.academyId})`;
+                  }
+                  if (i.tournamentId) {
+                     const tr = await Tournament.findOne({ id: i.tournamentId }).lean();
+                     if (tr && tr.data && tr.data.title) trName = `${tr.data.title} (${i.tournamentId})`;
+                  }
+                  return `[Database][${type}] Email:${i.email} Name:${i.name || i.firstName || 'N/A'} Status:${i.status} Clicks:${i.clicks?.length || 0} Academy:${acName} Tournament:${trName}`;
                };
                
-               combinedLogsArr.push(...cInvites.map(i => formatInvite(i, 'CoachInvite')));
-               combinedLogsArr.push(...sInvites.map(i => formatInvite(i, 'SupportInvite')));
+               for (const i of cInvites) combinedLogsArr.push(await formatInvite(i, 'CoachInvite'));
+               for (const i of sInvites) combinedLogsArr.push(await formatInvite(i, 'SupportInvite'));
             } catch (err) {
                console.error("Ephemeral Invite Query Error:", err.message);
             }
