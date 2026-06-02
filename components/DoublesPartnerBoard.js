@@ -20,6 +20,7 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
   const [newSkill, setNewSkill] = useState(SkillLevel.INTERMEDIATE);
   const [newComment, setNewComment] = useState('');
   const [newLinkedTournament, setNewLinkedTournament] = useState(null);
+  const [isLocked, setIsLocked] = useState(false);
   
   const navigation = useNavigation();
 
@@ -29,6 +30,7 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
       if (routeParams.prefilledMessage) {
         setNewComment(routeParams.prefilledMessage);
       }
+      setIsLocked(true);
       setIsModalVisible(true);
       
       // Clear params to prevent modal from re-opening if user switches tabs and returns
@@ -127,6 +129,14 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
       Alert.alert('Error', 'Please enter a city.');
       return;
     }
+    
+    if (newLinkedTournament) {
+      const existingRequest = requests.find(r => r.creatorId === user.id && r.linkedTournamentId === newLinkedTournament && r.status === 'active');
+      if (existingRequest) {
+        Alert.alert('Duplicate Request', 'You have already posted a request for a partner for this tournament.');
+        return;
+      }
+    }
 
     let targetGender = 'All';
     if (newLinkedTournament) {
@@ -144,6 +154,7 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
       setNewCity('');
       setNewComment('');
       setNewLinkedTournament(null);
+      setIsLocked(false);
       Alert.alert('Success', 'Partner request posted!');
     }
   };
@@ -166,37 +177,30 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
 
   const renderItem = ({ item }) => {
     const isMine = item.creatorId === user.id;
-    const creatorPlayer = players?.find(p => p.id === item.creatorId);
-    const creatorStats = creatorPlayer?.stats || { matchesPlayed: 0, wins: 0, losses: 0 };
-    const trueSkillRating = creatorPlayer?.trueSkillRating ? Math.round(creatorPlayer.trueSkillRating) : 1200;
+    const isAcademyUser = item.creatorRole === 'academy';
+    const trueSkillRating = item.creatorRating || 1200;
+    const creatorStats = item.creatorStats || { wins: 0, losses: 0 };
 
     return (
       <View style={styles.card}>
         <View style={styles.cardHeader}>
-          <View style={styles.userInfo}>
-            <SafeAvatar url={item.creatorImage} name={item.creatorName} size={40} />
-            <View style={styles.userNameContainer}>
-              <Text style={styles.userName}>{item.creatorName}</Text>
-              <Text style={styles.timeAgo}>{new Date(item.createdAt).toLocaleDateString()}</Text>
-            </View>
+          <Image source={{ uri: item.creatorImage || 'https://via.placeholder.com/50' }} style={styles.avatar} />
+          <View style={styles.headerInfo}>
+            <Text style={styles.creatorName}>
+              {item.creatorName} {isAcademyUser && <Ionicons name="school" size={14} color="#3B82F6" />}
+            </Text>
+            <Text style={styles.metaText}>{item.sport} • {item.city} • {item.skillLevel}</Text>
           </View>
           {isMine && (
             <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteBtn}>
-              <Ionicons name="trash-outline" size={16} color="#EF4444" />
+              <Ionicons name="trash-outline" size={18} color="#EF4444" />
             </TouchableOpacity>
           )}
         </View>
-        <View style={styles.detailsRow}>
-          <View style={styles.badge}>
-            <Ionicons name="tennisball-outline" size={12} color="#475569" />
-            <Text style={styles.badgeText}>{item.sport}</Text>
-          </View>
-          <View style={styles.badge}>
-            <Ionicons name="location-outline" size={12} color="#475569" />
-            <Text style={styles.badgeText}>{item.city}</Text>
-          </View>
-          <View style={[styles.badge, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0', borderWidth: 1 }]}>
-            <Ionicons name="stats-chart" size={12} color="#16A34A" />
+
+        <View style={styles.badgesRow}>
+          <View style={[styles.badge, { backgroundColor: '#DCFCE7', borderColor: '#86EFAC', borderWidth: 1 }]}>
+            <Ionicons name="star" size={12} color="#16A34A" />
             <Text style={[styles.badgeText, { color: '#16A34A' }]}>Rating: {trueSkillRating}</Text>
           </View>
           <View style={[styles.badge, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE', borderWidth: 1 }]}>
@@ -204,27 +208,15 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
             <Text style={[styles.badgeText, { color: '#3B82F6' }]}>{creatorStats.wins}W - {creatorStats.losses}L</Text>
           </View>
         </View>
-        {item.comment ? (
-          <Text style={styles.commentText}>"{item.comment}"</Text>
-        ) : null}
+        {item.comment ? <Text style={styles.commentText}>"{item.comment}"</Text> : null}
 
         {item.linkedTournamentId && (
           <TouchableOpacity 
             style={styles.tournamentLinkBadge}
-            onPress={() => {
-              navigation.navigate('ExploreTab', { 
-                screen: 'Explore', 
-                params: { 
-                  openTournamentId: item.linkedTournamentId
-                } 
-              });
-            }}
+            onPress={() => navigation.navigate('ExploreTab', { screen: 'Explore', params: { openTournamentId: item.linkedTournamentId } })}
           >
             <Ionicons name="trophy-outline" size={14} color="#D97706" />
-            <Text style={styles.tournamentLinkText} numberOfLines={1}>
-              For: {tournaments?.find(t => t.id === item.linkedTournamentId)?.name || 'Tournament'}
-            </Text>
-            <Ionicons name="chevron-forward" size={12} color="#D97706" style={{ marginLeft: 'auto' }} />
+            <Text style={styles.tournamentLinkText} numberOfLines={1}>For: {tournaments?.find(t => t.id === item.linkedTournamentId)?.name || 'Tournament'}</Text>
           </TouchableOpacity>
         )}
         
@@ -236,67 +228,52 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
                 const t = tournaments?.find(tx => tx.id === item.linkedTournamentId);
                 const isUserRegistered = t?.registeredPlayerIds?.includes(user.id) || t?.pendingPaymentPlayerIds?.includes(user.id);
                 
-                // Get the creator's team from the tournament
-                let teamCode = null;
-                if (t && t.doublesTeams) {
-                  const creatorTeam = t.doublesTeams.find(team => team.player1Id === item.creatorId || team.player2Id === item.creatorId);
-                  if (creatorTeam) {
-                    teamCode = creatorTeam.teamCode;
-                  }
-                }
-                
                 if (isUserRegistered) {
                   Alert.alert(
                     'Join Team', 
-                    `Do you want to join this player's team for ${t?.name || 'this tournament'}? (No additional cost since you are already registered)`,
+                    `Enter Team Code to join this team. Navigate to the tournament details and use the code.`,
                     [
                       { text: 'Cancel', style: 'cancel' },
                       { 
-                        text: 'Join Team', 
-                        onPress: async () => {
-                           const res = await onRegister(t, 'credits', 0, false, null, item.creatorId, teamCode, null);
-                           if (res?.success) {
-                             PartnerService.deleteRequest(item.id);
-                             Alert.alert('Success', 'You are now joined as a team!');
-                           }
+                        text: 'Go to Tournament', 
+                        onPress: () => {
+                          navigation.navigate('ExploreTab', { 
+                            screen: 'Explore', 
+                            params: { openTournamentId: item.linkedTournamentId } 
+                          });
                         }
                       }
                     ]
                   );
                 } else {
                   Alert.alert(
-                    'Accept & Register', 
-                    `Do you want to accept this request and register together as a doubles team for ${t?.name || 'this tournament'}?\n\nYou will be redirected to the tournament page to pay your half of the entry fee (₹${(t?.entryFee || 0) / 2}).`,
+                    'Tournament Registration', 
+                    'You must register for this tournament first and use their Team Code during registration to pair up.',
                     [
                       { text: 'Cancel', style: 'cancel' },
                       { 
-                        text: 'Proceed to Pay', 
+                        text: 'Register Now', 
                         onPress: () => {
-                           // Navigate to Explore page with prefilled params
-                           navigation.navigate('ExploreTab', { 
-                             screen: 'Explore', 
-                             params: { 
-                               openTournamentId: t.id, 
-                               teamCode: teamCode,
-                               removePartnerRequestId: item.id
-                             } 
-                           });
+                          navigation.navigate('ExploreTab', { 
+                            screen: 'Explore', 
+                            params: { openTournamentId: item.linkedTournamentId } 
+                          });
                         }
                       }
                     ]
                   );
                 }
               } else {
-                // Future messaging logic
-                Alert.alert('Message', `Starting chat with ${item.creatorName.split(' ')[0]}...`);
+                onConnect(item);
               }
             }}
           >
-            <Text style={item.linkedTournamentId ? styles.registerTeamBtnText : styles.connectBtnText}>
+            <Ionicons name={item.linkedTournamentId ? "link" : "chatbubble-outline"} size={16} color="#FFF" />
+            <Text style={styles.connectBtnText}>
                {item.linkedTournamentId ? (() => {
                  const t = tournaments?.find(tx => tx.id === item.linkedTournamentId);
-                 const isUserRegistered = t?.registeredPlayerIds?.includes(user.id) || t?.pendingPaymentPlayerIds?.includes(user.id);
-                 return isUserRegistered ? 'Join Team' : 'Accept & Register';
+                 const isReg = t?.registeredPlayerIds?.includes(user.id) || t?.pendingPaymentPlayerIds?.includes(user.id);
+                 return isReg ? 'Join Team' : 'Register to Join Team';
                })() : `Message ${item.creatorName.split(' ')[0]}`}
             </Text>
           </TouchableOpacity>
@@ -310,13 +287,7 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
       <View style={styles.header}>
         <View style={styles.searchBar}>
           <Ionicons name="search" size={18} color="#94A3B8" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by city or area..."
-            placeholderTextColor="#94A3B8"
-            value={filterCity}
-            onChangeText={setFilterCity}
-          />
+          <TextInput style={styles.searchInput} placeholder="Search by city or area..." placeholderTextColor="#94A3B8" value={filterCity} onChangeText={setFilterCity} />
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sportsScroll}>
@@ -331,7 +302,7 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
           ))}
         </ScrollView>
 
-        <TouchableOpacity style={styles.addBtn} onPress={() => setIsModalVisible(true)}>
+        <TouchableOpacity style={styles.addBtn} onPress={() => { setIsLocked(false); setIsModalVisible(true); }}>
           <Ionicons name="add" size={20} color="#FFF" />
           <Text style={styles.addBtnText}>Post a Request</Text>
         </TouchableOpacity>
@@ -355,7 +326,7 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Find a Doubles Partner</Text>
-            <TouchableOpacity onPress={() => setIsModalVisible(false)} style={styles.closeBtn}>
+            <TouchableOpacity onPress={() => { setIsModalVisible(false); setIsLocked(false); }} style={styles.closeBtn}>
               <Ionicons name="close" size={24} color="#64748B" />
             </TouchableOpacity>
           </View>
@@ -367,8 +338,9 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
                   {['Badminton', 'Table Tennis', 'Cricket', 'Football'].map(s => (
                     <TouchableOpacity 
                       key={s} 
-                      style={[styles.modalChip, newSport === s && styles.modalChipActive]}
-                      onPress={() => setNewSport(s)}
+                      style={[styles.modalChip, newSport === s && styles.modalChipActive, isLocked && { opacity: 0.5 }]}
+                      onPress={() => { if (!isLocked) setNewSport(s); }}
+                      disabled={isLocked}
                     >
                       <Text style={[styles.modalChipText, newSport === s && styles.modalChipTextActive]}>{s}</Text>
                     </TouchableOpacity>
@@ -378,13 +350,15 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
 
             <View style={styles.formGroup}>
               <Text style={styles.label}>Linked Tournament (Optional)</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipGroup}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tournamentScroll}>
                   <TouchableOpacity 
-                    style={[styles.modalChip, newLinkedTournament === null && styles.modalChipActive]}
-                    onPress={() => setNewLinkedTournament(null)}
+                    style={[styles.modalChip, !newLinkedTournament && styles.modalChipActive, isLocked && { opacity: 0.5 }]}
+                    onPress={() => { if (!isLocked) setNewLinkedTournament(null); }}
+                    disabled={isLocked}
                   >
-                    <Text style={[styles.modalChipText, newLinkedTournament === null && styles.modalChipTextActive]}>None</Text>
+                    <Text style={[styles.modalChipText, !newLinkedTournament && styles.modalChipTextActive]}>None</Text>
                   </TouchableOpacity>
+                  
                   {eligibleTournaments.map(t => {
                     let hasFullTeam = false;
                     if (t.doublesTeams) {
@@ -397,11 +371,13 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
                     return (
                       <TouchableOpacity 
                         key={t.id} 
-                        style={[styles.modalChip, newLinkedTournament === t.id && styles.modalChipActive, hasFullTeam && { opacity: 0.5 }]}
+                        style={[styles.modalChip, newLinkedTournament === t.id && styles.modalChipActive, (hasFullTeam || isLocked) && { opacity: 0.5 }]}
                         onPress={() => {
+                          if (isLocked) return;
                           if (!hasFullTeam) setNewLinkedTournament(t.id);
                           else Alert.alert('Team Full', 'You already have a full team for this tournament.');
                         }}
+                        disabled={isLocked}
                       >
                         <Text style={[styles.modalChipText, newLinkedTournament === t.id && styles.modalChipTextActive]}>{t.title || t.name} ({t.format})</Text>
                       </TouchableOpacity>

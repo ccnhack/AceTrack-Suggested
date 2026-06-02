@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useCallback, useMemo } from 'react';
+import storage from '../utils/storage';
 import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 import MatchService from '../services/MatchService';
 import { useSync } from './SyncContext';
@@ -96,25 +97,26 @@ export const MatchmakingProvider = ({ children }) => {
     }
   }, [syncAndSaveData]);
 
-  const onUpdatePartnerRequests = useCallback((updatedData) => {
+  const onUpdatePartnerRequests = useCallback(async (updatedData) => {
     if (Array.isArray(updatedData)) {
       syncAndSaveData({ partnerRequests: updatedData }, true);
     } else {
-      syncAndSaveData({
-        partnerRequests: (prev) => {
-          const reqs = Array.isArray(prev) ? prev : [];
-          if (updatedData.status === 'expired' || updatedData.status === 'deleted') {
-             return reqs.filter(r => r.id !== updatedData.id);
-          }
-          const idx = reqs.findIndex(r => r.id === updatedData.id);
-          if (idx !== -1) {
-             const newReqs = [...reqs];
-             newReqs[idx] = updatedData;
-             return newReqs;
-          }
-          return [...reqs, updatedData];
-        }
-      }, true);
+      const prev = await storage.getItem('partnerRequests');
+      const reqs = Array.isArray(prev) ? prev : [];
+      let newReqs;
+      
+      if (updatedData.status === 'expired' || updatedData.status === 'deleted') {
+         newReqs = reqs.filter(r => r.id !== updatedData.id);
+      } else {
+         const idx = reqs.findIndex(r => r.id === updatedData.id);
+         if (idx !== -1) {
+            newReqs = [...reqs];
+            newReqs[idx] = updatedData;
+         } else {
+            newReqs = [...reqs, updatedData];
+         }
+      }
+      syncAndSaveData({ partnerRequests: newReqs }, true);
     }
   }, [syncAndSaveData]);
 
