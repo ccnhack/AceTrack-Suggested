@@ -21,6 +21,8 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
   const [newComment, setNewComment] = useState('');
   const [newLinkedTournament, setNewLinkedTournament] = useState(null);
   
+  const navigation = useNavigation();
+
   React.useEffect(() => {
     if (routeParams?.createPartnerRequest && routeParams?.tournamentId) {
       setNewLinkedTournament(routeParams.tournamentId);
@@ -28,8 +30,15 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
         setNewComment(routeParams.prefilledMessage);
       }
       setIsModalVisible(true);
+      
+      // Clear params to prevent modal from re-opening if user switches tabs and returns
+      navigation.setParams({ 
+        createPartnerRequest: undefined, 
+        tournamentId: undefined, 
+        prefilledMessage: undefined 
+      });
     }
-  }, [routeParams]);
+  }, [routeParams, navigation]);
 
   const eligibleTournaments = useMemo(() => {
     if (!tournaments || !user) return [];
@@ -91,7 +100,7 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
       if (req.status !== 'active') return false;
       if (filterSport !== 'All' && req.sport !== filterSport) return false;
       if (filterCity && !req.city.toLowerCase().includes(filterCity.toLowerCase())) return false;
-      if (req.targetGender && req.targetGender !== 'All' && user.gender && req.targetGender !== user.gender) return false;
+      if (req.targetGender && req.targetGender !== 'All' && user.gender && req.targetGender.toLowerCase() !== user.gender.toLowerCase()) return false;
       
       if (req.linkedTournamentId) {
         const linkedT = tournaments?.find(t => t.id === req.linkedTournamentId);
