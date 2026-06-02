@@ -836,9 +836,9 @@ const infrastructureRoutes = createInfrastructureRoutes({
 app.use('/', infrastructureRoutes);
 app.use('/api/v1', infrastructureRoutes); // 🛡️ COMPATIBILITY FIX (v2.6.174): Support versioned API calls from web/mobile clients
 
-app.use('/api/v1/tournaments', tournamentsRoutes({ io }));
-app.use('/api/v1/evaluations', evaluationsRoutes({ io }));
-app.use('/api/v1/bookings', bookingsRoutes);
+app.use('/api/v1/tournaments', apiKeyGuard, tournamentsRoutes({ io }));
+app.use('/api/v1/evaluations', apiKeyGuard, evaluationsRoutes({ io }));
+app.use('/api/v1/bookings', apiKeyGuard, authGuard, bookingsRoutes);
 
 
 // [Consolidated with primary /health guard at /api/v1/health]
