@@ -318,7 +318,19 @@ export default function({ io }) {
       const isPending = (tData.pendingPaymentPlayerIds || []).includes(userId);
 
       if (!wasRegistered && !isWaitlisted && !isPending) {
-        return res.status(400).json({ success: false, message: 'User is not participating in this tournament' });
+        // ZOMBIE STATE RECOVERY: The user thinks they are registered, but the tournament doesn't.
+        // Clean up the user's document so it stops showing in the Matches tab.
+        const updatedUser = await Player.findOneAndUpdate(
+          { id: userId },
+          { $pull: { 'data.registeredTournamentIds': tid }, $set: { lastUpdated: new Date() } },
+          { new: true }
+        );
+        return res.status(200).json({ 
+          success: true, 
+          message: 'Cleaned up desynced tournament state.',
+          tournament: tData,
+          currentUser: updatedUser.data 
+        });
       }
 
       // 1. Calculate Refund (if applicable)
@@ -368,6 +380,15 @@ export default function({ io }) {
           lastUpdated: new Date()
         }
       };
+
+      if (tData.doublesTeams && tData.doublesTeams.length > 0) {
+        const newTeams = tData.doublesTeams.map(team => {
+          if (team.player1Id === userId) return { ...team, player1Id: null };
+          if (team.player2Id === userId) return { ...team, player2Id: null };
+          return team;
+        }).filter(team => team.player1Id !== null || team.player2Id !== null);
+        tUpdate.$set['data.doublesTeams'] = newTeams;
+      }
 
       if (refundInfo) {
         tUpdate.$push = { 'data.refundHistory': refundInfo };
