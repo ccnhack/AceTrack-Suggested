@@ -53,6 +53,39 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
     });
   }, [tournaments, user]);
 
+  React.useEffect(() => {
+    if (isModalVisible && !newLinkedTournament && eligibleTournaments.length > 0 && !routeParams?.createPartnerRequest) {
+      setNewLinkedTournament(eligibleTournaments[0].id);
+    }
+  }, [isModalVisible, eligibleTournaments, newLinkedTournament, routeParams]);
+
+  React.useEffect(() => {
+    if (isModalVisible && newLinkedTournament) {
+      const t = eligibleTournaments.find(x => x.id === newLinkedTournament);
+      if (t) {
+        if (!newCity || newCity === '') {
+          const parts = t.location ? t.location.split(',') : [];
+          if (parts.length > 1) setNewCity(parts[1].trim());
+          else if (parts.length > 0) setNewCity(parts[0].trim());
+        }
+
+        const myTeam = t.doublesTeams?.find(team => String(team.player1Id).toLowerCase() === String(user.id).toLowerCase() || String(team.player2Id).toLowerCase() === String(user.id).toLowerCase());
+        const myTeamCode = myTeam ? myTeam.teamCode : null;
+
+        if (!routeParams?.prefilledMessage) {
+           const dynamicMessage = myTeamCode 
+             ? `I have already registered for the tournament!\nMy Team code is: ${myTeamCode} (Use it directly to join my team)\nIf you register for the tournament using my team code and pay your share of fee, we will be successfully matched.`
+             : `Looking for a partner for ${t.name}.`;
+           
+           // Replace if empty or if it was the old generic one
+           if (!newComment || newComment.startsWith('Looking for a partner for') || newComment.startsWith('I have already registered for the tournament!')) {
+             setNewComment(dynamicMessage);
+           }
+        }
+      }
+    }
+  }, [newLinkedTournament, eligibleTournaments, isModalVisible, routeParams]);
+
   const filteredRequests = useMemo(() => {
     return requests.filter(req => {
       if (req.status !== 'active') return false;

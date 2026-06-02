@@ -72,7 +72,14 @@ const TournamentDetailModal = ({
   const isRegularUser = role === 'user';
 
   const isRegistered = user && (tournament.registeredPlayerIds || []).includes(user.id);
-  const isPendingPayment = user && (tournament.pendingPaymentPlayerIds || []).includes(user.id);
+  const rawPendingPayment = user && (tournament.pendingPaymentPlayerIds || []).includes(user.id);
+  const isDoublesFormat = tournament.format === "Men's Doubles" || tournament.format === "Women's Doubles" || tournament.format === "Mixed Doubles";
+  const userLower = user?.id ? String(user.id).toLowerCase() : '';
+  const hasAlreadyPaid = userLower && tournament.playerPaymentMethods && (
+    tournament.playerPaymentMethods[user.id] || tournament.playerPaymentMethods[userLower]
+  );
+  const isDoublesSoloPaid = isDoublesFormat && rawPendingPayment && hasAlreadyPaid;
+  const isPendingPayment = isDoublesSoloPaid ? false : rawPendingPayment;
   const isWaitlisted = user && (tournament.waitlistedPlayerIds || []).includes(user.id);
   const isInterested = user && (tournament.interestedPlayerIds || []).includes(user.id);
   const isRejected = user && (tournament.rejectedPlayerIds || []).includes(user.id);
@@ -101,7 +108,7 @@ const TournamentDetailModal = ({
     }
   };
 
-  const isAlreadyRegistered = user && (tournament.registeredPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
+  const isAlreadyRegistered = user && ((tournament.registeredPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase()) || isDoublesSoloPaid);
   
   const myTeam = isAlreadyRegistered && tournament.format && tournament.format.includes('Doubles') 
     ? (tournament.doublesTeams || []).find(t => 
