@@ -45,7 +45,8 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
        if (!isMensDoubles && !isWomensDoubles && !isMixedDoubles) return false;
        
        // NEW RULE: Only show doubles tournaments if the user is ALREADY registered
-       const isRegistered = t.registeredPlayerIds?.includes(user.id) || t.pendingPaymentPlayerIds?.includes(user.id);
+       const isRegistered = (t.registeredPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase()) || 
+                            (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
        if (!isRegistered) return false;
 
        return true;

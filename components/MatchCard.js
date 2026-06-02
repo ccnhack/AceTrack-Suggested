@@ -299,10 +299,13 @@ const MatchCard = ({
           <>
             {isDoublesSoloPaid ? (
               <>
-                <View style={[styles.actionButton, { backgroundColor: '#EEF2FF', borderWidth: 1, borderColor: '#C7D2FE' }]}>
+                <TouchableOpacity 
+                  onPress={() => navigation.navigate('Matchmaking', { initialTab: 'Partners', createPartnerRequest: true, tournamentId: t.id })}
+                  style={[styles.actionButton, { backgroundColor: '#EEF2FF', borderWidth: 1, borderColor: '#C7D2FE' }]}
+                >
                   <Ionicons name="people-outline" size={14} color="#4F46E5" />
-                  <Text style={[styles.buttonText, { color: '#4F46E5' }]}>Waiting for Partner</Text>
-                </View>
+                  <Text style={[styles.buttonText, { color: '#4F46E5' }]}>Find Partner in Hub</Text>
+                </TouchableOpacity>
                 <TouchableOpacity onPress={handleOptOut} style={[styles.actionButton, styles.buttonWhite]}>
                   <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Opt-out</Text>
                 </TouchableOpacity>
