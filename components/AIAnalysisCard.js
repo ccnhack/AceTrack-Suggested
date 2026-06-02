@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { aiAnalysisService } from '../services/aiAnalysisService';
@@ -32,8 +32,14 @@ const AIAnalysisCard = ({ evaluationScores, playerName, playerSkillLevel, isPro,
     }
   };
 
-  const handleShare = () => {
-    Alert.alert("Share", "This would open the native sharing dialog to share your AI coach's feedback!");
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `Check out my Deep AI Match Analysis from AceTrack:\n\n"${analysis}"\n\n- Powered by AceTrack Pro`,
+      });
+    } catch (error) {
+      Alert.alert("Share Error", "Could not open sharing dialog.");
+    }
   };
 
   if (!isPro) {
@@ -100,18 +106,18 @@ const AIAnalysisCard = ({ evaluationScores, playerName, playerSkillLevel, isPro,
       style={[styles.container, { borderColor: '#4F46E5', borderWidth: 1 }]}
     >
       <View style={styles.headerRow}>
-        <View style={styles.titleRow}>
+        <View style={[styles.titleRow, { flex: 1, marginRight: 8 }]}>
           <LinearGradient 
             colors={['#F59E0B', '#D97706']}
             style={styles.iconContainer}
           >
             <Ionicons name="sparkles" size={18} color="#FFFFFF" />
           </LinearGradient>
-          <Text style={[styles.title, { color: '#FFFFFF' }]}>Deep AI Match Analysis</Text>
+          <Text style={[styles.title, { color: '#FFFFFF', flexShrink: 1 }]} numberOfLines={1} ellipsizeMode="tail">Deep AI Match Analysis</Text>
         </View>
         <TouchableOpacity style={styles.shareBtn} onPress={handleShare}>
           <Ionicons name="share-social" size={18} color="#818CF8" />
-          <Text style={[styles.shareText, { color: '#818CF8' }]}>Share Insights</Text>
+          <Text style={[styles.shareText, { color: '#818CF8' }]} numberOfLines={1}>Share</Text>
         </TouchableOpacity>
       </View>
       
