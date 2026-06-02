@@ -20,11 +20,21 @@ const MatchCard = ({
   navigation
 }) => {
   const { serverClockOffset } = useSync();
-  const isPendingPayment = user?.id && (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
+  const rawPendingPayment = user?.id && (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
   const isWaitlisted = user?.id && (t.waitlistedPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
   const [timeLeft, setTimeLeft] = useState('');
 
   const isDoubles = t.format && ["Men's Doubles", "Women's Doubles", "Mixed Doubles"].includes(t.format);
+
+  // 🛡️ v2.6.583: Check if this is a doubles solo player who already paid their half
+  const userLower = user?.id ? String(user.id).toLowerCase() : '';
+  const hasAlreadyPaid = userLower && t.playerPaymentMethods && (
+    t.playerPaymentMethods[user.id] || t.playerPaymentMethods[userLower]
+  );
+  const isDoublesSoloPaid = isDoubles && rawPendingPayment && hasAlreadyPaid;
+  // If doubles solo and already paid half, don't treat as pending payment
+  const isPendingPayment = isDoublesSoloPaid ? false : rawPendingPayment;
+
   let userTeamCode = null;
   if (isDoubles && user?.id && t.doublesTeams) {
     const userTeam = t.doublesTeams.find(team => team.player1Id === user.id && !team.player2Id);
@@ -147,6 +157,7 @@ const MatchCard = ({
           <View style={[
             styles.statusBadge,
             viewMode === 'requests' ? styles.statusYellow :
+              isDoublesSoloPaid ? styles.statusIndigo :
               isPendingPayment ? styles.statusOrange :
                 isWaitlisted ? styles.statusSlate :
                   viewMode === 'upcoming' ? styles.statusRed : styles.statusSlate
@@ -154,11 +165,13 @@ const MatchCard = ({
             <Text style={[
               styles.statusText,
               viewMode === 'requests' ? styles.textYellow :
+                isDoublesSoloPaid ? styles.textIndigo :
                 isPendingPayment ? styles.textOrange :
                   isWaitlisted ? styles.textSlate :
                     viewMode === 'upcoming' ? styles.textRed : styles.textSlate
             ]}>
               {viewMode === 'requests' ? 'Requested' : 
+               isDoublesSoloPaid ? 'Paid — Awaiting Partner' :
                isPendingPayment ? 'Pending Payment' : 
                isWaitlisted ? 'Waitlisted' :
                viewMode === 'upcoming' ? 'Confirmed' : 'Completed'}
@@ -277,13 +290,22 @@ const MatchCard = ({
           </>
         ) : viewMode === 'upcoming' ? (
           <>
-            {isPendingPayment ? (
+            {isDoublesSoloPaid ? (
+              <>
+                <View style={[styles.actionButton, { backgroundColor: '#EEF2FF', borderWidth: 1, borderColor: '#C7D2FE' }]}>
+                  <Ionicons name="people-outline" size={14} color="#4F46E5" />
+                  <Text style={[styles.buttonText, { color: '#4F46E5' }]}>Waiting for Partner</Text>
+                </View>
+                <TouchableOpacity onPress={handleOptOut} style={[styles.actionButton, styles.buttonWhite]}>
+                  <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Opt-out</Text>
+                </TouchableOpacity>
+              </>
+            ) : isPendingPayment ? (
               <>
                 <TouchableOpacity testID={`match.card.payBtn.${t.title}`} onPress={() => setRegPaymentTarget(t)} style={[styles.actionButton, styles.buttonOrange]}>
                   <Text style={styles.buttonText}>Pay Now</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleOptOut} style={[styles.actionButton, styles.buttonWhite]}>
-
                   <Text style={[styles.buttonText, { color: '#94A3B8' }]}>Opt-out</Text>
                 </TouchableOpacity>
               </>
@@ -363,6 +385,7 @@ const styles = StyleSheet.create({
   statusOrange: { backgroundColor: '#FFEDD5' },
   statusRed: { backgroundColor: '#FEF2F2' },
   statusSlate: { backgroundColor: '#F1F5F9' },
+  statusIndigo: { backgroundColor: '#EEF2FF' },
   statusText: {
     fontSize: 9,
     fontWeight: '900',
@@ -374,6 +397,7 @@ const styles = StyleSheet.create({
   textOrange: { color: '#C2410C' },
   textRed: { color: '#EF4444' },
   textSlate: { color: '#64748B' },
+  textIndigo: { color: '#4F46E5' },
   matchDetails: {
     flexDirection: 'row',
     gap: 12,
