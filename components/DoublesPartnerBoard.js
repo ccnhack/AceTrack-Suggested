@@ -184,12 +184,14 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
     return (
       <View style={styles.card}>
         <View style={styles.cardHeader}>
-          <Image source={{ uri: item.creatorImage || 'https://via.placeholder.com/50' }} style={styles.avatar} />
-          <View style={styles.headerInfo}>
-            <Text style={styles.creatorName}>
-              {item.creatorName} {isAcademyUser && <Ionicons name="school" size={14} color="#3B82F6" />}
-            </Text>
-            <Text style={styles.metaText}>{item.sport} • {item.city} • {item.skillLevel}</Text>
+          <View style={styles.userInfo}>
+            <Image source={{ uri: item.creatorImage || 'https://via.placeholder.com/50' }} style={styles.avatar} />
+            <View style={styles.userNameContainer}>
+              <Text style={styles.creatorName}>
+                {item.creatorName} {isAcademyUser && <Ionicons name="school" size={14} color="#3B82F6" />}
+              </Text>
+              <Text style={styles.timeAgo}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+            </View>
           </View>
           {isMine && (
             <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteBtn}>
@@ -198,8 +200,16 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
           )}
         </View>
 
-        <View style={styles.badgesRow}>
-          <View style={[styles.badge, { backgroundColor: '#DCFCE7', borderColor: '#86EFAC', borderWidth: 1 }]}>
+        <View style={styles.detailsRow}>
+          <View style={styles.badge}>
+            <Ionicons name="tennisball-outline" size={12} color="#475569" />
+            <Text style={styles.badgeText}>{item.sport}</Text>
+          </View>
+          <View style={styles.badge}>
+            <Ionicons name="location-outline" size={12} color="#475569" />
+            <Text style={styles.badgeText}>{item.city}</Text>
+          </View>
+          <View style={[styles.badge, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0', borderWidth: 1 }]}>
             <Ionicons name="star" size={12} color="#16A34A" />
             <Text style={[styles.badgeText, { color: '#16A34A' }]}>Rating: {trueSkillRating}</Text>
           </View>
@@ -514,8 +524,13 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 12,
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
   },
   avatar: {
@@ -524,26 +539,25 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     backgroundColor: '#E2E8F0',
   },
-  headerInfo: {
-    flex: 1,
+  userNameContainer: {
     justifyContent: 'center',
   },
   creatorName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
-    marginBottom: 2,
   },
-  metaText: {
-    fontSize: 13,
-    color: '#64748B',
+  timeAgo: {
+    fontSize: 12,
+    color: '#94A3B8',
+    marginTop: 2,
   },
   deleteBtn: {
     padding: 8,
     backgroundColor: '#FEF2F2',
     borderRadius: 8,
   },
-  badgesRow: {
+  detailsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
