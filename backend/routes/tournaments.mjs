@@ -391,10 +391,13 @@ export default function({ io }) {
           [`data.pendingPaymentTimestamps.${userId}`]: "",
           [`data.pendingPaymentTimestamps.${lowerUserId}`]: "",
           [`data.playerPaymentMethods.${userId}`]: "",
-          [`data.playerPaymentMethods.${lowerUserId}`]: "",
-          [`data.playerStatuses.${userId}`]: ""
+          [`data.playerPaymentMethods.${lowerUserId}`]: ""
         }
       };
+
+      if (userId !== lowerUserId) {
+        tUpdate.$unset[`data.playerStatuses.${userId}`] = "";
+      }
 
       if (tData.doublesTeams && tData.doublesTeams.length > 0) {
         const newTeams = tData.doublesTeams.map(team => {
