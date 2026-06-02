@@ -1,4 +1,5 @@
 
+import storage from '../utils/storage';
 import config from '../config';
 
 /**
@@ -21,12 +22,19 @@ export const generateAIResponse = async (messages: ChatMessage[]): Promise<strin
     }));
 
     console.log("AI Service: Requesting summary from backend proxy...");
+    const userToken = await storage.getItem('userToken');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-ace-api-key': config.PUBLIC_APP_ID
+    };
+    
+    if (userToken) {
+      headers['Authorization'] = `Bearer ${userToken}`;
+    }
+
     const response = await fetch(`${config.API_BASE_URL}/api/support/ai-summary`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-ace-api-key': config.PUBLIC_APP_ID
-      },
+      headers,
       credentials: 'include',
       body: JSON.stringify({ messages: groqMessages })
     });
