@@ -112,7 +112,7 @@ initFirebase();
 
 // 🚀 ACE TRACK STABILITY// EXPO OTA SYNC TARGET
 // 🚀 EXPO OTA SYNC HUB (v2.6.569)
-const APP_VERSION = '2.6.579'; // Critical for Update prompts
+const APP_VERSION = '2.6.580'; // Critical for Update prompts
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
@@ -160,7 +160,7 @@ const signToken = (user, jti = null) => {
 
 // 🏗️ [PHASE 1b] Initialize security middleware with runtime dependencies
 initSecurity({ aceApiKey: ACE_API_KEY, jwtSecret: JWT_SECRET, appVersion: APP_VERSION, logAudit });
-const { globalApiLimiter, loginLimiter, otpLimiter, passwordResetLimiter } = createRateLimiters(APP_VERSION);
+const { globalApiLimiter, loginLimiter, otpLimiter, passwordResetLimiter, phoneLookupLimiter } = createRateLimiters(APP_VERSION);
 
 
 // Cumulative Security Summary moved to services/scheduler.mjs
@@ -763,6 +763,7 @@ const authRoutes = createAuthRoutes({
   ACE_API_KEY,
   loginLimiter,
   passwordResetLimiter,
+  phoneLookupLimiter,
   trackLoginAttempt,
   logServerEvent,
   logAudit,

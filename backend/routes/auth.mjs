@@ -23,6 +23,7 @@ export default function createAuthRoutes({
   ACE_API_KEY,
   loginLimiter,
   passwordResetLimiter,
+  phoneLookupLimiter,
   trackLoginAttempt,
   logServerEvent,
   logAudit,
@@ -796,7 +797,7 @@ export default function createAuthRoutes({
   // ═══════════════════════════════════════════════════════════════
   // 👥 PARTNER LOOKUP BY PHONE (Doubles Registration)
   // ═══════════════════════════════════════════════════════════════
-  router.get('/user/lookupByPhone', apiKeyGuard, asyncHandler(async (req, res) => {
+  router.get('/user/lookupByPhone', apiKeyGuard, phoneLookupLimiter, asyncHandler(async (req, res) => {
     const { phone } = req.query;
     if (!phone) return res.status(400).json({ error: 'Phone number required' });
     

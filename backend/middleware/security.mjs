@@ -268,7 +268,17 @@ export const createRateLimiters = (appVersion) => {
     legacyHeaders: false,
   });
 
-  return { globalApiLimiter, loginLimiter, otpLimiter, passwordResetLimiter };
+  const phoneLookupLimiter = rateLimit({
+    store: new CustomMongoStore(),
+    windowMs: 5 * 60 * 1000,
+    max: 10,
+    skip: skipTestRequests,
+    message: { success: false, error: 'Too many phone lookups. Please try again after 5 minutes to prevent abuse.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  return { globalApiLimiter, loginLimiter, otpLimiter, passwordResetLimiter, phoneLookupLimiter };
 };
 
 // ═══════════════════════════════════════════════════════════════
