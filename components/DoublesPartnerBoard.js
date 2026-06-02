@@ -68,11 +68,8 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
     });
   }, [tournaments, user]);
 
-  React.useEffect(() => {
-    if (isModalVisible && !newLinkedTournament && eligibleTournaments.length > 0 && !routeParams?.createPartnerRequest) {
-      setNewLinkedTournament(eligibleTournaments[0].id);
-    }
-  }, [isModalVisible, eligibleTournaments, newLinkedTournament, routeParams]);
+  // Auto-select tournament ONLY when navigating from route params (handled in the routeParams effect above).
+  // When user clicks "Post a Request" manually, tournament defaults to "None" — they can pick one if they want.
 
   React.useEffect(() => {
     if (isModalVisible && newLinkedTournament) {
@@ -325,7 +322,15 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
           ))}
         </ScrollView>
 
-        <TouchableOpacity style={styles.addBtn} onPress={() => { setIsLocked(false); setIsModalVisible(true); }}>
+        <TouchableOpacity style={styles.addBtn} onPress={() => { 
+          setNewSport(Sport.BADMINTON);
+          setNewCity('');
+          setNewSkill(SkillLevel.INTERMEDIATE);
+          setNewComment('');
+          setNewLinkedTournament(null);
+          setIsLocked(false); 
+          setIsModalVisible(true); 
+        }}>
           <Ionicons name="add" size={20} color="#FFF" />
           <Text style={styles.addBtnText}>Post a Request</Text>
         </TouchableOpacity>

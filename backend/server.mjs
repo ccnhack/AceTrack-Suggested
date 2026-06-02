@@ -112,7 +112,7 @@ initFirebase();
 
 // 🚀 ACE TRACK STABILITY// EXPO OTA SYNC TARGET
 // 🚀 EXPO OTA SYNC HUB (v2.6.569)
-const APP_VERSION = '2.6.600'; // Critical for Update prompts
+const APP_VERSION = '2.6.601'; // Critical for Update prompts
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';
