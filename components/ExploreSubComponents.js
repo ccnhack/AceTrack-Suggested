@@ -49,8 +49,16 @@ export const PaymentModal = memo(({
       setIsLookingUp(true);
       const res = await useTournamentsStore.getState().lookupPartnerByPhone(partnerPhone);
       if (res && res.success && res.user) {
-        setPartnerName(res.user.name);
-        setPartnerId(res.user.id);
+        if (regPaymentTarget?.format === "Men's Doubles" && res.user.gender !== 'Male') {
+          setPartnerName('Only male players allowed');
+          setPartnerId(null);
+        } else if (regPaymentTarget?.format === "Women's Doubles" && res.user.gender !== 'Female') {
+          setPartnerName('Only female players allowed');
+          setPartnerId(null);
+        } else {
+          setPartnerName(res.user.name);
+          setPartnerId(res.user.id);
+        }
       } else {
         setPartnerName('Not found');
         setPartnerId(null);
@@ -177,20 +185,20 @@ export const PaymentModal = memo(({
                                           />
                                           {isLookingUp ? (
                                               <Ionicons name="sync-outline" size={18} color="#94A3B8" />
-                                          ) : partnerName === 'Not found' ? (
+                                          ) : (partnerName === 'Not found' || partnerName === 'Only male players allowed' || partnerName === 'Only female players allowed') ? (
                                               <Ionicons name="close-circle" size={18} color="#EF4444" />
                                           ) : partnerId ? (
                                               <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
                                           ) : null}
                                       </View>
-                                      {partnerName && partnerName !== 'Not found' && (
+                                      {partnerName && partnerName !== 'Not found' && partnerName !== 'Only male players allowed' && partnerName !== 'Only female players allowed' && (
                                           <Text style={{ color: '#16A34A', fontSize: 12, marginTop: 4, fontFamily: 'Inter-Medium' }}>
                                               ✅ {partnerName}
                                           </Text>
                                       )}
-                                      {partnerName === 'Not found' && (
+                                      {(partnerName === 'Not found' || partnerName === 'Only male players allowed' || partnerName === 'Only female players allowed') && (
                                           <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 4, fontFamily: 'Inter-Medium' }}>
-                                              Partner not found
+                                              {partnerName === 'Not found' ? 'Partner not found' : partnerName}
                                           </Text>
                                       )}
                                   </View>

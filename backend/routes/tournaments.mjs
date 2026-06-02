@@ -48,6 +48,14 @@ export default function({ io }) {
           if (!partnerDoc) {
             return res.status(404).json({ success: false, message: 'Partner user not found.' });
           }
+          
+          const partnerGender = partnerDoc.data?.gender;
+          if (tData.format === "Men's Doubles" && partnerGender !== 'Male') {
+            return res.status(400).json({ success: false, message: "Only male players are allowed in Men's Doubles." });
+          }
+          if (tData.format === "Women's Doubles" && partnerGender !== 'Female') {
+            return res.status(400).json({ success: false, message: "Only female players are allowed in Women's Doubles." });
+          }
         } else {
           const teams = tData.doublesTeams || [];
           if (teamCode) {

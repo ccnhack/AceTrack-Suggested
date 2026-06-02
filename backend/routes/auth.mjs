@@ -815,7 +815,8 @@ export default function createAuthRoutes({
       success: true, 
       user: { 
         id: userDoc.data.id, 
-        name: userDoc.data.name || userDoc.data.username 
+        name: userDoc.data.name || userDoc.data.username,
+        gender: userDoc.data.gender
       } 
     });
   }));
