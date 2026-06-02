@@ -216,7 +216,7 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
             onPress={() => navigation.navigate('ExploreTab', { screen: 'Explore', params: { openTournamentId: item.linkedTournamentId } })}
           >
             <Ionicons name="trophy-outline" size={14} color="#D97706" />
-            <Text style={styles.tournamentLinkText} numberOfLines={1}>For: {tournaments?.find(t => t.id === item.linkedTournamentId)?.name || 'Tournament'}</Text>
+            <Text style={styles.tournamentLinkText} numberOfLines={1}>For: {tournaments?.find(t => t.id === item.linkedTournamentId)?.title || tournaments?.find(t => t.id === item.linkedTournamentId)?.name || 'Tournament'}</Text>
           </TouchableOpacity>
         )}
         
@@ -514,34 +514,36 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 12,
-  },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 12,
   },
-  userNameContainer: {
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#E2E8F0',
+  },
+  headerInfo: {
+    flex: 1,
     justifyContent: 'center',
   },
-  userName: {
-    fontSize: 15,
+  creatorName: {
+    fontSize: 16,
     fontWeight: '700',
     color: '#0F172A',
+    marginBottom: 2,
   },
-  timeAgo: {
-    fontSize: 12,
-    color: '#94A3B8',
-    marginTop: 2,
+  metaText: {
+    fontSize: 13,
+    color: '#64748B',
   },
   deleteBtn: {
     padding: 8,
     backgroundColor: '#FEF2F2',
     borderRadius: 8,
   },
-  detailsRow: {
+  badgesRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
