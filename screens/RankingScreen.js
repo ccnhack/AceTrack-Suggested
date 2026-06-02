@@ -19,7 +19,17 @@ const RankingScreen = () => {
   const { tournaments } = useTournamentsStore();
   const insets = useSafeAreaInsets();
   const rankingPlayers = useMemo(() => {
-    let list = [...(players || [])].filter(p => p && p.id !== 'admin_sys' && p.id !== 'admin' && p.role !== 'admin' && p.role !== 'academy' && p.role !== 'coach' && p.role !== 'support');
+    let list = [...(players || [])];
+    
+    // Ensure current user is in the list if they are a regular user (v2.6.576)
+    if (user && user.role !== 'admin' && user.role !== 'academy' && user.role !== 'coach' && user.role !== 'support') {
+      const userExists = list.some(p => p.id === user.id);
+      if (!userExists) {
+        list.push(user);
+      }
+    }
+
+    list = list.filter(p => p && p.id !== 'admin_sys' && p.id !== 'admin' && p.role !== 'admin' && p.role !== 'academy' && p.role !== 'coach' && p.role !== 'support');
     
     if (role === 'academy' && user) {
       const myParticipantIds = new Set(

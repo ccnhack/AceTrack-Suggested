@@ -2,8 +2,7 @@ import React, { memo } from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import SafeAvatar from './SafeAvatar';
-
-// SafeAvatar handles these fallbacks internally now
+import { LinearGradient } from 'expo-linear-gradient';
 
 const ProfileHeader = memo(({ 
   user, 
@@ -52,10 +51,15 @@ const ProfileHeader = memo(({
         <View style={styles.nameRow}>
           <Text testID="profile.header.name" style={styles.userName}>{user?.name}</Text>
           {user?.isPro && (
-            <View style={styles.proBadge}>
+            <LinearGradient
+              colors={['#F59E0B', '#D97706']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.proBadge}
+            >
               <Ionicons name="star" size={10} color="#FFFFFF" />
               <Text style={styles.proBadgeText}>PRO</Text>
-            </View>
+            </LinearGradient>
           )}
         </View>
         {academyTier && (

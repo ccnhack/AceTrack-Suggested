@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { aiAnalysisService } from '../services/aiAnalysisService';
 import ProUpgradeModal from './ProUpgradeModal';
 
@@ -89,24 +90,32 @@ const AIAnalysisCard = ({ evaluationScores, playerName, playerSkillLevel, isPro,
   }
 
   return (
-    <View style={styles.container}>
+    <LinearGradient 
+      colors={['#1E1B4B', '#312E81']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[styles.container, { borderColor: '#4F46E5', borderWidth: 1 }]}
+    >
       <View style={styles.headerRow}>
         <View style={styles.titleRow}>
-          <View style={styles.iconContainer}>
+          <LinearGradient 
+            colors={['#F59E0B', '#D97706']}
+            style={styles.iconContainer}
+          >
             <Ionicons name="sparkles" size={18} color="#FFFFFF" />
-          </View>
-          <Text style={styles.title}>AI Coach Analysis</Text>
+          </LinearGradient>
+          <Text style={[styles.title, { color: '#FFFFFF' }]}>Deep AI Match Analysis</Text>
         </View>
         <TouchableOpacity style={styles.shareBtn} onPress={handleShare}>
-          <Ionicons name="share-social" size={18} color="#6366F1" />
-          <Text style={styles.shareText}>Brag</Text>
+          <Ionicons name="share-social" size={18} color="#818CF8" />
+          <Text style={[styles.shareText, { color: '#818CF8' }]}>Share Insights</Text>
         </TouchableOpacity>
       </View>
       
-      <View style={styles.contentBox}>
-        <Text style={styles.analysisText}>{analysis}</Text>
+      <View style={[styles.contentBox, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255,255,255,0.2)' }]}>
+        <Text style={[styles.analysisText, { color: '#E0E7FF' }]}>{analysis}</Text>
       </View>
-    </View>
+    </LinearGradient>
   );
 };
 
