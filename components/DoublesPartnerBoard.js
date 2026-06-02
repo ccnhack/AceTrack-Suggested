@@ -75,7 +75,7 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
         if (!routeParams?.prefilledMessage) {
            const dynamicMessage = myTeamCode 
              ? `I have already registered for the tournament!\nMy Team code is: ${myTeamCode} (Use it directly to join my team)\nIf you register for the tournament using my team code and pay your share of fee, we will be successfully matched.`
-             : `Looking for a partner for ${t.name}.`;
+             : `Looking for a partner for ${t.title || t.name}.`;
            
            // Replace if empty or if it was the old generic one
            if (!newComment || newComment.startsWith('Looking for a partner for') || newComment.startsWith('I have already registered for the tournament!')) {
@@ -394,7 +394,7 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
                           else Alert.alert('Team Full', 'You already have a full team for this tournament.');
                         }}
                       >
-                        <Text style={[styles.modalChipText, newLinkedTournament === t.id && styles.modalChipTextActive]}>{t.name} ({t.format})</Text>
+                        <Text style={[styles.modalChipText, newLinkedTournament === t.id && styles.modalChipTextActive]}>{t.title || t.name} ({t.format})</Text>
                       </TouchableOpacity>
                     );
                   })}
