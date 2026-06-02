@@ -374,7 +374,6 @@ export default function({ io }) {
 
       // 2. Prepare Tournament Updates
       // Fix: Case-insensitive removal for arrays and proper cleanup of timestamps
-      const lowerUserId = String(userId).toLowerCase();
       const tUpdate = {
         $pull: {
           'data.registeredPlayerIds': { $in: [userId, lowerUserId, new RegExp(`^${userId}$`, 'i')] },
