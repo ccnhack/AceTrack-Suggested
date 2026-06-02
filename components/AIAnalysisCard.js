@@ -10,12 +10,15 @@ const AIAnalysisCard = ({ evaluationScores, playerName, playerSkillLevel, isPro,
   const [loading, setLoading] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
+  // Stringify the scores to prevent object reference changes from triggering re-fetches
+  const scoresString = JSON.stringify(evaluationScores);
+
   useEffect(() => {
     // Only generate analysis if Pro and scores are present
     if (isPro && evaluationScores && Object.keys(evaluationScores).length > 0) {
       generateAnalysis();
     }
-  }, [evaluationScores, isPro]);
+  }, [scoresString, isPro]);
 
   const generateAnalysis = async () => {
     setLoading(true);
