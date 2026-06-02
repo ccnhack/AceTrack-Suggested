@@ -5,8 +5,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import config from '../config';
 import storage from '../utils/storage';
 import { useAuthStore, usePlayersStore } from '../stores';
+import { useAuth } from '../context/AuthContext';
 
 const ProUpgradeModal = ({ visible, onClose, user }) => {
+  const { onUpdateUser } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [selectedTier, setSelectedTier] = useState('monthly'); // 'monthly' | 'annual'
 
@@ -27,10 +29,12 @@ const ProUpgradeModal = ({ visible, onClose, user }) => {
       
       const result = await response.json();
       if (response.ok && result.success) {
-        // Update local stores
-        useAuthStore.getState().setCurrentUser(result.user);
+        // Guarantee UI updates immediately by merging local state with response and explicitly setting isPro
+        const updatedUser = { ...user, ...result.user, id: user.id, isPro: true, proTier: selectedTier };
+        onUpdateUser(updatedUser);
+        
         const players = usePlayersStore.getState().players;
-        usePlayersStore.getState().setPlayers(players.map(p => p.id === user.id ? result.user : p));
+        usePlayersStore.getState().setPlayers(players.map(p => p.id === user.id ? updatedUser : p));
         
         Alert.alert('Welcome to Pro!', 'Your subscription is active.');
         onClose();
