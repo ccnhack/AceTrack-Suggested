@@ -108,9 +108,12 @@ const ExploreScreen = ({ navigation, route }) => {
     return null;
   });
 
+  const [prefillTeamCode, setPrefillTeamCode] = useState('');
+  const [removePartnerRequestId, setRemovePartnerRequestId] = useState(null);
+
   // Handle Deep Linking & Hydration (v2.6.460)
   useEffect(() => {
-    const routeTid = route?.params?.selectedTournamentId;
+    const routeTid = route?.params?.selectedTournamentId || route?.params?.openTournamentId;
     const tid = routeTid || initialTournamentId;
     
     if (tid && !selectedTournament) {
@@ -118,10 +121,19 @@ const ExploreScreen = ({ navigation, route }) => {
       if (t) {
         console.log(`[Explore] Restoring tournament ${tid} from URL/Params`);
         setSelectedTournament(t);
-        if (routeTid) navigation.setParams({ selectedTournamentId: null });
+        
+        if (route?.params?.teamCode) {
+           setRegPaymentTarget(t);
+           setPrefillTeamCode(route.params.teamCode);
+           if (route?.params?.removePartnerRequestId) {
+             setRemovePartnerRequestId(route.params.removePartnerRequestId);
+           }
+        }
+        
+        if (routeTid) navigation.setParams({ selectedTournamentId: null, openTournamentId: null, teamCode: null });
       }
     }
-  }, [route?.params?.selectedTournamentId, tournaments?.length, initialTournamentId]);
+  }, [route?.params?.selectedTournamentId, route?.params?.openTournamentId, route?.params?.teamCode, tournaments?.length, initialTournamentId]);
 
   // Sync URL when tournament selection changes
   useEffect(() => {
@@ -595,6 +607,8 @@ const ExploreScreen = ({ navigation, route }) => {
         setRegPaymentTarget={setRegPaymentTarget}
         setSelectedTournament={setSelectedTournament}
         styles={styles}
+        prefillTeamCode={prefillTeamCode}
+        removePartnerRequestId={removePartnerRequestId}
       />
     </View>
   );

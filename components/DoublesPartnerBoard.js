@@ -2,13 +2,15 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Alert, ScrollView } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import SafeAvatar from './SafeAvatar';
 import PartnerService from '../services/PartnerService';
 import { Sport, SkillLevel } from '../types';
-import { useTournamentsStore } from '../stores';
+import { useTournamentsStore, usePlayersStore } from '../stores';
 
-const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest }) => {
+const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, routeParams }) => {
   const { tournaments, onRegister } = useTournamentsStore();
+  const { players } = usePlayersStore();
   const [filterSport, setFilterSport] = useState('All');
   const [filterCity, setFilterCity] = useState('');
   
@@ -18,6 +20,16 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest }) 
   const [newSkill, setNewSkill] = useState(SkillLevel.INTERMEDIATE);
   const [newComment, setNewComment] = useState('');
   const [newLinkedTournament, setNewLinkedTournament] = useState(null);
+  
+  React.useEffect(() => {
+    if (routeParams?.createPartnerRequest && routeParams?.tournamentId) {
+      setNewLinkedTournament(routeParams.tournamentId);
+      if (routeParams.prefilledMessage) {
+        setNewComment(routeParams.prefilledMessage);
+      }
+      setIsModalVisible(true);
+    }
+  }, [routeParams]);
 
   const eligibleTournaments = useMemo(() => {
     if (!tournaments || !user) return [];
@@ -111,6 +123,9 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest }) 
 
   const renderItem = ({ item }) => {
     const isMine = item.creatorId === user.id;
+    const creatorPlayer = players?.find(p => p.id === item.creatorId);
+    const creatorStats = creatorPlayer?.stats || { matchesPlayed: 0, wins: 0, losses: 0 };
+    const trueSkillRating = creatorPlayer?.trueSkillRating ? Math.round(creatorPlayer.trueSkillRating) : 1200;
 
     return (
       <View style={styles.card}>
@@ -137,9 +152,13 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest }) 
             <Ionicons name="location-outline" size={12} color="#475569" />
             <Text style={styles.badgeText}>{item.city}</Text>
           </View>
-          <View style={styles.badge}>
-            <Ionicons name="star-outline" size={12} color="#475569" />
-            <Text style={styles.badgeText}>{item.skillLevel}</Text>
+          <View style={[styles.badge, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0', borderWidth: 1 }]}>
+            <Ionicons name="stats-chart" size={12} color="#16A34A" />
+            <Text style={[styles.badgeText, { color: '#16A34A' }]}>Rating: {trueSkillRating}</Text>
+          </View>
+          <View style={[styles.badge, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE', borderWidth: 1 }]}>
+            <Ionicons name="trophy" size={12} color="#3B82F6" />
+            <Text style={[styles.badgeText, { color: '#3B82F6' }]}>{creatorStats.wins}W - {creatorStats.losses}L</Text>
           </View>
         </View>
         {item.comment ? (
@@ -163,6 +182,15 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest }) 
                 const t = tournaments?.find(tx => tx.id === item.linkedTournamentId);
                 const isUserRegistered = t?.registeredPlayerIds?.includes(user.id) || t?.pendingPaymentPlayerIds?.includes(user.id);
                 
+                // Get the creator's team from the tournament
+                let teamCode = null;
+                if (t && t.doublesTeams) {
+                  const creatorTeam = t.doublesTeams.find(team => team.player1Id === item.creatorId || team.player2Id === item.creatorId);
+                  if (creatorTeam) {
+                    teamCode = creatorTeam.teamCode;
+                  }
+                }
+                
                 if (isUserRegistered) {
                   Alert.alert(
                     'Join Team', 
@@ -172,7 +200,7 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest }) 
                       { 
                         text: 'Join Team', 
                         onPress: async () => {
-                           const res = await onRegister(t, 'credits', 0, false, null, item.creatorId);
+                           const res = await onRegister(t, 'credits', 0, false, null, item.creatorId, teamCode, null);
                            if (res?.success) {
                              PartnerService.deleteRequest(item.id);
                              Alert.alert('Success', 'You are now joined as a team!');
@@ -184,24 +212,21 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest }) 
                 } else {
                   Alert.alert(
                     'Accept & Register', 
-                    `Do you want to accept this request and register together as a doubles team for ${t?.name || 'this tournament'}?\n\nYou will need to pay your half of the entry fee now (₹${(t?.entryFee || 0) / 2}).`,
+                    `Do you want to accept this request and register together as a doubles team for ${t?.name || 'this tournament'}?\n\nYou will be redirected to the tournament page to pay your half of the entry fee (₹${(t?.entryFee || 0) / 2}).`,
                     [
                       { text: 'Cancel', style: 'cancel' },
                       { 
-                        text: 'Pay & Register', 
-                        onPress: async () => {
-                           const res = await onRegister(t, 'credits', (t?.entryFee || 0) / 2, false, null, item.creatorId);
-                           if (res?.success) {
-                             PartnerService.deleteRequest(item.id);
-                             Alert.alert('Success', 'You are now registered as a team! Your half of the fee was paid via credits.');
-                           } else if (res?.message === 'Insufficient credits') {
-                             Alert.alert(
-                               'Insufficient Credits',
-                               'You have been added to pending payment. Please complete your payment from the bookings tab within 5 minutes, or your team registration will lapse.'
-                             );
-                             const fallbackRes = await onRegister(t, 'upi', (t?.entryFee || 0) / 2, false, null, item.creatorId);
-                             if (fallbackRes?.success) PartnerService.deleteRequest(item.id);
-                           }
+                        text: 'Proceed to Pay', 
+                        onPress: () => {
+                           // Navigate to Explore page with prefilled params
+                           navigation.navigate('ExploreTab', { 
+                             screen: 'Explore', 
+                             params: { 
+                               openTournamentId: t.id, 
+                               teamCode: teamCode,
+                               removePartnerRequestId: item.id
+                             } 
+                           });
                         }
                       }
                     ]

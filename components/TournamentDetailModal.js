@@ -4,6 +4,7 @@ import {
   StyleSheet, Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { useSync } from '../context/SyncContext';
 import { formatDateIST } from '../utils/tournamentUtils';
 import TournamentService from '../services/TournamentService';
@@ -22,6 +23,7 @@ const TournamentDetailModal = ({
   onCoachOptIn,
   onUpdateTournament,
 }) => {
+  const navigation = useNavigation();
   const { serverClockOffset } = useSync();
   const [showAcademyDetails, setShowAcademyDetails] = useState(false);
   const [timeLeft, setTimeLeft] = useState('');
@@ -100,6 +102,17 @@ const TournamentDetailModal = ({
   };
 
   const isAlreadyRegistered = user && (tournament.registeredPlayerIds || []).some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
+  
+  const myTeam = isAlreadyRegistered && tournament.format && tournament.format.includes('Doubles') 
+    ? (tournament.doublesTeams || []).find(t => 
+        (String(t.player1Id).toLowerCase() === String(user?.id).toLowerCase() || 
+         String(t.player2Id).toLowerCase() === String(user?.id).toLowerCase())
+      ) 
+    : null;
+    
+  const isIncompleteTeam = myTeam && (!myTeam.player1Id || !myTeam.player2Id);
+  const myTeamCode = myTeam ? myTeam.teamCode : null;
+
   const isAssignedCoach = user && String(tournament.assignedCoachId).toLowerCase() === String(user.id).toLowerCase();
   const registeredCount = (tournament.registeredPlayerIds || []).length;
   const pendingCount = (tournament.pendingPaymentPlayerIds || []).length;
@@ -318,7 +331,30 @@ const TournamentDetailModal = ({
                 ) : (
                   <>
                     {isAlreadyRegistered && !isPendingPayment && (
-                      <Text style={styles.alreadyRegistered}>You are already registered</Text>
+                      <View style={{ alignItems: 'center', marginBottom: 12 }}>
+                        <Text style={[styles.alreadyRegistered, { color: '#16A34A', marginBottom: isIncompleteTeam ? 4 : 8 }]}>
+                          ✅ Confirmed
+                        </Text>
+                        {isIncompleteTeam && (
+                          <TouchableOpacity 
+                            style={styles.findPartnerBtn}
+                            onPress={() => {
+                              onClose();
+                              navigation.navigate('Matchmaking', { 
+                                createPartnerRequest: true, 
+                                tournamentId: tournament.id,
+                                tournamentName: tournament.title,
+                                teamCode: myTeamCode,
+                                genderRequirement: tournament.format.includes('Men') ? 'Male' : tournament.format.includes('Women') ? 'Female' : 'Any',
+                                prefilledMessage: `Hey, I am looking for a partner for the ${tournament.title} tournament. Please accept if you're interested!`
+                              });
+                            }}
+                          >
+                            <Ionicons name="search" size={14} color="#3B82F6" />
+                            <Text style={styles.findPartnerBtnText}>Looking for a partner?</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     )}
                     {isWaitlisted && !isPendingPayment && (
                       <Text style={styles.alreadyRegistered}>You are in the waitlist</Text>
@@ -610,6 +646,26 @@ const styles = StyleSheet.create({
   actionArea: {
     marginTop: 8,
     gap: 12,
+  },
+  findPartnerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    marginTop: 4,
+  },
+  findPartnerBtnText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#3B82F6',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   alreadyRegistered: {
     textAlign: 'center',

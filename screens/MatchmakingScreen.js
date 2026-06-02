@@ -1241,6 +1241,7 @@ export default function MatchmakingScreen({ route }) {
             user={user}
             onAddRequest={(req) => onUpdatePartnerRequests(req)}
             onRemoveRequest={(id) => onUpdatePartnerRequests({ id, status: 'deleted' })}
+            routeParams={route?.params}
           />
         </View>
       )}

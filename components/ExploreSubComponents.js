@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, Modal, Alert, TextInput } from 'react-nat
 import { Ionicons } from '@expo/vector-icons';
 import { useTournamentsStore } from '../stores/useTournamentsStore';
 import logger from '../utils/logger';
+import PartnerService from '../services/PartnerService';
 
 export const PaymentModal = memo(({
   regPaymentTarget,
@@ -12,7 +13,9 @@ export const PaymentModal = memo(({
   onRegister,
   setRegPaymentTarget,
   setSelectedTournament,
-  styles
+  styles,
+  prefillTeamCode,
+  removePartnerRequestId
 }) => {
   if (!regPaymentTarget) return null;
 
@@ -20,7 +23,7 @@ export const PaymentModal = memo(({
   const oldT = isRescheduling ? tournaments.find(i => i.id === reschedulingFrom) : null;
   const isDoubles = regPaymentTarget?.format && ["Men's Doubles", "Women's Doubles", "Mixed Doubles"].includes(regPaymentTarget.format);
   
-  const [teamCode, setTeamCode] = useState('');
+  const [teamCode, setTeamCode] = useState(prefillTeamCode || '');
   const [registerPartner, setRegisterPartner] = useState(false);
   const [partnerPhone, setPartnerPhone] = useState('');
   const [partnerName, setPartnerName] = useState(null);
@@ -35,8 +38,10 @@ export const PaymentModal = memo(({
       setPartnerName(null);
       setPartnerId(null);
       setIsLookingUp(false);
+    } else {
+      setTeamCode(prefillTeamCode || '');
     }
-  }, [regPaymentTarget]);
+  }, [regPaymentTarget, prefillTeamCode]);
 
   useEffect(() => {
     if (!registerPartner || partnerPhone.length < 10) {
@@ -101,6 +106,10 @@ export const PaymentModal = memo(({
           );
           
           if (result && result.success) {
+              // Automatically delete the matchmaking partner request if we successfully joined it
+              if (removePartnerRequestId) {
+                  PartnerService.deleteRequest(removePartnerRequestId);
+              }
               setRegPaymentTarget(null);
               setSelectedTournament(null);
               setTeamCode('');
