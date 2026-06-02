@@ -154,11 +154,27 @@ export default function({ io }) {
          }
       }
 
+      // 7. Concurrency Guard & Atomic Update
+      const query = { id: tid };
+      if (isDoubles && joiningTeam) {
+        const teamIndex = tData.doublesTeams.findIndex(t => t.id === joiningTeam.id);
+        if (teamIndex !== -1) {
+          query[`data.doublesTeams.${teamIndex}.player2Id`] = null;
+        }
+      }
+
       const updatedTournament = await Tournament.findOneAndUpdate(
-        { id: tid },
+        query,
         tUpdate,
         { new: true }
       );
+
+      if (!updatedTournament) {
+        return res.status(409).json({ 
+          success: false, 
+          message: 'The slot you are trying to book was just taken by someone else. Please try another team or refresh.' 
+        });
+      }
 
       // B. Update Current User
       const pUpdate = {

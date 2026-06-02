@@ -166,12 +166,23 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
         ) : null}
 
         {item.linkedTournamentId && (
-          <View style={styles.tournamentLinkBadge}>
+          <TouchableOpacity 
+            style={styles.tournamentLinkBadge}
+            onPress={() => {
+              navigation.navigate('ExploreTab', { 
+                screen: 'Explore', 
+                params: { 
+                  openTournamentId: item.linkedTournamentId
+                } 
+              });
+            }}
+          >
             <Ionicons name="trophy-outline" size={14} color="#D97706" />
             <Text style={styles.tournamentLinkText} numberOfLines={1}>
               For: {tournaments?.find(t => t.id === item.linkedTournamentId)?.name || 'Tournament'}
             </Text>
-          </View>
+            <Ionicons name="chevron-forward" size={12} color="#D97706" style={{ marginLeft: 'auto' }} />
+          </TouchableOpacity>
         )}
         
         {!isMine && (
