@@ -304,7 +304,7 @@ const MatchCard = ({
                     initialTab: 'Partners', 
                     createPartnerRequest: true, 
                     tournamentId: t.id,
-                    prefilledMessage: userTeamCode ? `Looking for a partner for ${t.title}. My Team Code is ${userTeamCode}` : `Looking for a partner for ${t.title}`
+                    prefilledMessage: userTeamCode ? `I have already registered for the tournament!\nMy Team code is: ${userTeamCode} (Use it directly to join my team)\nIf you register for the tournament using my team code and pay your share of fee, we will be successfully matched.` : `Looking for a partner for ${t.title}`
                   })}
                   style={[styles.actionButton, { backgroundColor: '#EEF2FF', borderWidth: 1, borderColor: '#C7D2FE' }]}
                 >
