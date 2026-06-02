@@ -1036,6 +1036,7 @@ We have four data sources:
 4. 'CoachInvite' & 'SupportInvite' (MongoDB): Contains registration invites for coaches and support staff.
    Schema: { email: String, name: String, status: String (Pending|Clicked|Used|Expired), academyId: String, tournamentId: String }
    - ⚠️ IMPORTANT: If the user asks about a coach or support staff's registration status, invite link, or if they completed registration, you MUST provide an "inviteFilter"!
+   - ⚠️ CRITICAL: Do NOT filter by 'status' (e.g. 'Used', 'Pending') in inviteFilter. ONLY filter by 'name' or 'email' using $regex so we can see all invites regardless of status.
 
 User query: "${userQuery}"
 
@@ -1399,6 +1400,7 @@ We have four data sources:
 4. 'CoachInvite' & 'SupportInvite' (MongoDB): Contains registration invites for coaches and support staff.
    Schema: { email: String, name: String, status: String (Pending|Clicked|Used|Expired), academyId: String, tournamentId: String }
    - ⚠️ IMPORTANT: If the user asks about a coach or support staff's registration status, invite link, or if they completed registration, you MUST provide an "inviteFilter"!
+   - ⚠️ CRITICAL: Do NOT filter by 'status' (e.g. 'Used', 'Pending') in inviteFilter. ONLY filter by 'name' or 'email' using $regex so we can see all invites regardless of status.
 
 User query: "${userQuery}"
 
