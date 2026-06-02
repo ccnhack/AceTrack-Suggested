@@ -25,7 +25,14 @@ const TournamentCard = ({
 }) => {
   const { serverClockOffset } = useSync();
   const isRegistered = userId && (t.registeredPlayerIds || []).some(id => String(id).toLowerCase() === String(userId).toLowerCase());
-  const isPendingPayment = userId && (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(userId).toLowerCase());
+  const rawPendingPayment = userId && (t.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === String(userId).toLowerCase());
+  const isDoublesFormat = t.format === "Men's Doubles" || t.format === "Women's Doubles" || t.format === "Mixed Doubles";
+  const userLower = userId ? String(userId).toLowerCase() : '';
+  const hasAlreadyPaid = userLower && t.playerPaymentMethods && (
+    t.playerPaymentMethods[userId] || t.playerPaymentMethods[userLower]
+  );
+  const isDoublesSoloPaid = isDoublesFormat && rawPendingPayment && hasAlreadyPaid;
+  const isPendingPayment = isDoublesSoloPaid ? false : rawPendingPayment;
   const isAssignedCoach = userId && (t.assignedCoachIds || []).includes(userId);
   const isWaitlisted = userId && (t.waitlistedPlayerIds || []).some(id => String(id).toLowerCase() === String(userId).toLowerCase());
   
@@ -55,8 +62,10 @@ const TournamentCard = ({
 
   let registrationMessage = '';
   // 🛡️ [RegEngine] Status-Specific Messages for Participants
-  if (isRegistered || isPendingPayment || isWaitlisted) {
-    if (isPendingPayment) {
+  if (isRegistered || isPendingPayment || isWaitlisted || isDoublesSoloPaid) {
+    if (isDoublesSoloPaid) {
+      registrationMessage = 'Paid — Awaiting Partner (Check Match tab to share Code)';
+    } else if (isPendingPayment) {
       registrationMessage = 'Action Required: Complete payment to secure your spot!';
     } else if (isWaitlisted) {
       registrationMessage = 'Hold tight! We\'ll notify you if a slot opens up.';
@@ -146,6 +155,11 @@ const TournamentCard = ({
                 <Text style={styles.statusBadgeText}>Registered</Text>
               </View>
             )}
+            {isDoublesSoloPaid && userRole !== 'coach' && (
+              <View style={[styles.statusBadge, { backgroundColor: '#EEF2FF' }]}>
+                <Text style={[styles.statusBadgeText, { color: '#4F46E5' }]}>Awaiting Partner</Text>
+              </View>
+            )}
             {isPendingPayment && userRole !== 'coach' && (
               <View style={[styles.statusBadge, { backgroundColor: '#F97316' }]}>
                 <Text style={styles.statusBadgeText}>Pending Payment</Text>
@@ -224,6 +238,7 @@ const TournamentCard = ({
             {userRole !== 'coach' ? (
               <Text style={[
                 styles.regMessage, 
+                isDoublesSoloPaid ? { color: '#4F46E5' } :
                 isRegistered ? { color: '#0EA5E9' } :
                 isPendingPayment ? { color: '#F97316' } :
                 isWaitlisted ? { color: '#D97706' } :

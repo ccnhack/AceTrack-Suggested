@@ -211,7 +211,14 @@ const MatchCard = ({
           style={[styles.detailBox, { borderRightWidth: 0 }]}
         >
           <Text style={[styles.detailLabel, isCoach && { color: '#3B82F6' }]}>Players</Text>
-          <Text style={[styles.detailValue, isCoach && { color: '#3B82F6' }]}>{(t.registeredPlayerIds || []).length}/{t.maxPlayers}</Text>
+          <Text style={[styles.detailValue, isCoach && { color: '#3B82F6' }]}>
+            {(() => {
+              const reg = (t.registeredPlayerIds || []).filter(Boolean).length;
+              const pen = (t.pendingPaymentPlayerIds || []).filter(Boolean).length;
+              const combined = reg + pen;
+              return `${combined}/${t.maxPlayers || 16}`;
+            })()}
+          </Text>
         </TouchableOpacity>
       </View>
 

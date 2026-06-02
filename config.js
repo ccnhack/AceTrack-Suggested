@@ -35,10 +35,10 @@ const ACE_API_KEY = Constants.expoConfig?.extra?.aceApiKey
   || process.env.EXPO_PUBLIC_ACE_API_KEY
   || 'AceTrack_Client_v2_Production';
 
-export const APP_VERSION = "2.6.585";
+export const APP_VERSION = "2.6.586";
 
 export default {
-  APP_VERSION: '2.6.585',
+  APP_VERSION: '2.6.586',
   get API_BASE_URL() { return _API_BASE_URL; },
   set API_BASE_URL(val) { _API_BASE_URL = val; },
   CLOUD_API_URL,
