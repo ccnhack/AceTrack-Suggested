@@ -30,6 +30,9 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
       if (routeParams.prefilledMessage) {
         setNewComment(routeParams.prefilledMessage);
       }
+      if (routeParams.sport) {
+        setNewSport(routeParams.sport);
+      }
       setIsLocked(true);
       setIsModalVisible(true);
       
@@ -37,7 +40,8 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
       navigation.setParams({ 
         createPartnerRequest: undefined, 
         tournamentId: undefined, 
-        prefilledMessage: undefined 
+        prefilledMessage: undefined,
+        sport: undefined
       });
     }
   }, [routeParams, navigation]);
