@@ -111,7 +111,8 @@ const initFirebase = async () => {
 initFirebase();
 
 // 🚀 ACE TRACK STABILITY// EXPO OTA SYNC TARGET
-const APP_VERSION = '2.6.576'; // Critical for Update prompts 
+// 🚀 EXPO OTA SYNC HUB (v2.6.569)
+const APP_VERSION = '2.6.577'; // Critical for Update prompts
 
 // 🛡️ SECURITY: JWT & Secrets (v2.6.192)
 import jwt from 'jsonwebtoken';

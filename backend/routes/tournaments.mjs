@@ -1,9 +1,10 @@
 import express from 'express';
 import { Tournament, Player } from '../models/index.mjs';
 import { authGuard } from '../middleware/security.mjs';
+import { addInAppNotification } from '../helpers/utils.mjs';
+import { sendPushNotification } from '../notifications.js';
 
 export default function({ io }) {
-  const router = express.Router();
 
   // POST /api/v1/tournaments/:id/register
   router.post('/:id/register', authGuard, async (req, res) => {
@@ -24,33 +25,48 @@ export default function({ io }) {
       const serverCost = Number(tData.entryFee || tData.cost || tData.registrationFee || 0);
       const isDoubles = ["Men's Doubles", "Women's Doubles", "Mixed Doubles"].includes(tData.format);
       
-      const { method = 'credits', partnerId, teamCode } = req.body;
+      const { method = 'credits', partnerId, teamCode, registeringPartnerId } = req.body;
       const wasAlreadyRegistered = (tData.registeredPlayerIds || []).includes(userId);
       const wasPending = (tData.pendingPaymentPlayerIds || []).includes(userId);
-      const baseCost = isDoubles ? serverCost / 2 : serverCost;
+      
+      // If we are registering a partner, we pay the FULL serverCost. Otherwise, we pay half for doubles.
+      const baseCost = (isDoubles && !registeringPartnerId) ? serverCost / 2 : serverCost;
       const cost = (wasAlreadyRegistered || wasPending) ? 0 : baseCost;
 
       // Find if we are joining an existing team
       let joiningTeam = null;
+      let partnerDoc = null;
       if (isDoubles) {
-        const teams = tData.doublesTeams || [];
-        if (teamCode) {
-           joiningTeam = teams.find(t => t.teamCode === teamCode && !t.player2Id);
-           if (!joiningTeam) return res.status(404).json({ success: false, message: 'Invalid or full team code.' });
-        } else if (partnerId) {
-           joiningTeam = teams.find(t => t.player1Id === partnerId && !t.player2Id);
-           if (!joiningTeam) return res.status(404).json({ success: false, message: 'Partner already has a full team or is not registered.' });
+        if (registeringPartnerId) {
+          // Verify partner is valid and not already registered
+          if ((tData.registeredPlayerIds || []).includes(registeringPartnerId) || 
+              (tData.pendingPaymentPlayerIds || []).includes(registeringPartnerId)) {
+            return res.status(400).json({ success: false, message: 'Partner is already registered or pending payment.' });
+          }
+          partnerDoc = await Player.findOne({ id: registeringPartnerId });
+          if (!partnerDoc) {
+            return res.status(404).json({ success: false, message: 'Partner user not found.' });
+          }
+        } else {
+          const teams = tData.doublesTeams || [];
+          if (teamCode) {
+             joiningTeam = teams.find(t => t.teamCode === teamCode && !t.player2Id);
+             if (!joiningTeam) return res.status(404).json({ success: false, message: 'Invalid or full team code.' });
+          } else if (partnerId) {
+             joiningTeam = teams.find(t => t.player1Id === partnerId && !t.player2Id);
+             if (!joiningTeam) return res.status(404).json({ success: false, message: 'Partner already has a full team or is not registered.' });
+          }
         }
       }
 
       // 2. Capacity Guard (Server-Side)
       const registeredCount = (tData.registeredPlayerIds || []).length;
-      const pendingCount = (tData.pendingPaymentPlayerIds || []).filter(pid => pid !== userId).length;
+      const pendingCount = (tData.pendingPaymentPlayerIds || []).filter(pid => pid !== userId && pid !== registeringPartnerId).length;
       const max = tData.maxPlayers || Infinity;
 
-      // If joining an existing team, they take up the remaining half slot (which was technically already reserved by player1, but for simplicity let's just count them as a slot).
-      // Actually, if player1 is already registered, that's 1 slot. Player2 adds 1 slot.
-      if (registeredCount + pendingCount + 1 > max && !wasAlreadyRegistered && !wasPending) {
+      const slotsNeeded = (registeringPartnerId && !wasAlreadyRegistered && !wasPending) ? 2 : 1;
+      
+      if (registeredCount + pendingCount + slotsNeeded > max && !wasAlreadyRegistered && !wasPending) {
         return res.status(400).json({ success: false, message: 'Slots Full', type: 'FULL' });
       }
 
@@ -73,7 +89,7 @@ export default function({ io }) {
       const referralBonus = (isFirstRegistration && pData.referredBy) ? 100 : 0;
 
       // 6. Execute Atomic Updates
-      const usersToRegister = [userId];
+      const usersToRegister = registeringPartnerId ? [userId, registeringPartnerId] : [userId];
 
       // A. Update Tournament
       const tUpdate = {
@@ -105,7 +121,7 @@ export default function({ io }) {
               id: teamId,
               teamCode: newTeamCode,
               player1Id: userId,
-              player2Id: null,
+              player2Id: registeringPartnerId || null,
               createdAt: new Date().toISOString()
             }
           };
@@ -184,6 +200,29 @@ export default function({ io }) {
         pUpdate,
         { new: true }
       );
+
+      // C. Update Partner if applicable
+      if (registeringPartnerId && partnerDoc) {
+        const partnerUpdate = {
+          $addToSet: { 'data.registeredTournamentIds': tid },
+          $set: { lastUpdated: new Date() }
+        };
+        
+        // Notifications for partner
+        const notifTitle = `Tournament Registration`;
+        const notifBody = `${pData.name || 'Your partner'} has registered you for "${tData.title}"!`;
+        
+        let pDataMut = partnerDoc.data || {};
+        pDataMut.notifications = pDataMut.notifications || [];
+        addInAppNotification(pDataMut, notifTitle, notifBody, { tournamentId: tid, type: 'TOURNAMENT_PARTNER_REG' });
+        partnerUpdate.$set['data.notifications'] = pDataMut.notifications;
+        
+        if (pDataMut.pushTokens && pDataMut.pushTokens.length > 0) {
+          await sendPushNotification(pDataMut.pushTokens, notifTitle, notifBody, { tournamentId: tid, type: 'TOURNAMENT_PARTNER_REG' });
+        }
+        
+        await Player.updateOne({ id: registeringPartnerId }, partnerUpdate);
+      }
 
       // C. Update Referrer (if applicable)
       let updatedReferrer = null;

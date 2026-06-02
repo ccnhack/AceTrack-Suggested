@@ -1,6 +1,7 @@
 import React, { memo, useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, Alert, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTournamentsStore } from '../stores/useTournamentsStore';
 import logger from '../utils/logger';
 
 export const PaymentModal = memo(({
@@ -20,28 +21,78 @@ export const PaymentModal = memo(({
   const isDoubles = regPaymentTarget?.format && ["Men's Doubles", "Women's Doubles", "Mixed Doubles"].includes(regPaymentTarget.format);
   
   const [teamCode, setTeamCode] = useState('');
+  const [registerPartner, setRegisterPartner] = useState(false);
+  const [partnerPhone, setPartnerPhone] = useState('');
+  const [partnerName, setPartnerName] = useState(null);
+  const [partnerId, setPartnerId] = useState(null);
+  const [isLookingUp, setIsLookingUp] = useState(false);
+
   useEffect(() => {
-    if (!regPaymentTarget) setTeamCode('');
+    if (!regPaymentTarget) {
+      setTeamCode('');
+      setRegisterPartner(false);
+      setPartnerPhone('');
+      setPartnerName(null);
+      setPartnerId(null);
+      setIsLookingUp(false);
+    }
   }, [regPaymentTarget]);
+
+  useEffect(() => {
+    if (!registerPartner || partnerPhone.length < 10) {
+      setPartnerName(null);
+      setPartnerId(null);
+      return;
+    }
+    
+    const delayDebounceFn = setTimeout(async () => {
+      setIsLookingUp(true);
+      const res = await useTournamentsStore.getState().lookupPartnerByPhone(partnerPhone);
+      if (res && res.success && res.user) {
+        setPartnerName(res.user.name);
+        setPartnerId(res.user.id);
+      } else {
+        setPartnerName('Not found');
+        setPartnerId(null);
+      }
+      setIsLookingUp(false);
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [partnerPhone, registerPartner]);
 
   const rescheduleCount = isRescheduling ? (user?.rescheduleCounts?.[reschedulingFrom] || 0) : 0;
   const rescheduleFee = (isRescheduling && rescheduleCount > 0) ? 20 : 0;
   
   const baseEntryFee = isDoubles ? (regPaymentTarget.entryFee / 2) : regPaymentTarget.entryFee;
+  const isRegisteringPartner = isDoubles && registerPartner && partnerId;
+  const effectiveBaseFee = isRegisteringPartner ? (baseEntryFee * 2) : baseEntryFee;
+
   const oldBaseFee = (oldT && oldT.format && ["Men's Doubles", "Women's Doubles", "Mixed Doubles"].includes(oldT.format)) ? (oldT.entryFee / 2) : (oldT ? oldT.entryFee : 0);
 
-  const priceDiff = (isRescheduling && oldT) ? (baseEntryFee - oldBaseFee) : 0;
-  const totalAdjustedCost = isRescheduling ? (priceDiff + rescheduleFee) : baseEntryFee;
+  const priceDiff = (isRescheduling && oldT) ? (effectiveBaseFee - oldBaseFee) : 0;
+  const totalAdjustedCost = isRescheduling ? (priceDiff + rescheduleFee) : effectiveBaseFee;
   const canPayWithCredits = (user?.credits || 0) >= totalAdjustedCost;
 
   const finalize = async (method) => {
       try {
-          const result = await onRegister(regPaymentTarget, method, totalAdjustedCost, isRescheduling, reschedulingFrom, null, teamCode.trim() ? teamCode.trim() : null);
+          const result = await onRegister(
+            regPaymentTarget, 
+            method, 
+            totalAdjustedCost, 
+            isRescheduling, 
+            reschedulingFrom, 
+            null, 
+            teamCode.trim() ? teamCode.trim() : null,
+            isRegisteringPartner ? partnerId : null
+          );
           
           if (result && result.success) {
               setRegPaymentTarget(null);
               setSelectedTournament(null);
               setTeamCode('');
+              setRegisterPartner(false);
+              setPartnerPhone('');
               
               setTimeout(() => {
                   if (isRescheduling) {
@@ -103,25 +154,71 @@ export const PaymentModal = memo(({
 
                       {isDoubles && !isRescheduling && (
                           <View style={{ marginTop: 12 }}>
-                              <Text style={[styles.summaryLabel, { marginBottom: 6 }]}>Join Existing Team (Optional)</Text>
-                              <TextInput
-                                  style={{
-                                      backgroundColor: '#F8FAFC',
-                                      borderWidth: 1,
-                                      borderColor: '#E2E8F0',
-                                      borderRadius: 8,
-                                      padding: 10,
-                                      color: '#0F172A',
-                                      fontSize: 14,
-                                      fontFamily: 'Inter-Medium'
-                                  }}
-                                  placeholder="Enter 6-digit Team Code"
-                                  placeholderTextColor="#94A3B8"
-                                  value={teamCode}
-                                  onChangeText={(text) => setTeamCode(text.toUpperCase())}
-                                  maxLength={6}
-                                  autoCapitalize="characters"
-                              />
+                              <TouchableOpacity 
+                                  style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}
+                                  onPress={() => setRegisterPartner(!registerPartner)}
+                              >
+                                  <Ionicons name={registerPartner ? "checkbox" : "square-outline"} size={20} color="#0F172A" />
+                                  <Text style={[styles.summaryLabel, { marginLeft: 8, marginBottom: 0 }]}>Register your partner too?</Text>
+                              </TouchableOpacity>
+
+                              {registerPartner && (
+                                  <View style={{ marginBottom: 12 }}>
+                                      <Text style={[styles.summaryLabel, { marginBottom: 6 }]}>Partner's Phone Number</Text>
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 10 }}>
+                                          <TextInput
+                                              style={{ flex: 1, color: '#0F172A', fontSize: 14, fontFamily: 'Inter-Medium', paddingVertical: 10 }}
+                                              placeholder="Enter 10-digit number"
+                                              placeholderTextColor="#94A3B8"
+                                              keyboardType="phone-pad"
+                                              value={partnerPhone}
+                                              onChangeText={setPartnerPhone}
+                                              maxLength={10}
+                                          />
+                                          {isLookingUp ? (
+                                              <Ionicons name="sync-outline" size={18} color="#94A3B8" />
+                                          ) : partnerName === 'Not found' ? (
+                                              <Ionicons name="close-circle" size={18} color="#EF4444" />
+                                          ) : partnerId ? (
+                                              <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
+                                          ) : null}
+                                      </View>
+                                      {partnerName && partnerName !== 'Not found' && (
+                                          <Text style={{ color: '#16A34A', fontSize: 12, marginTop: 4, fontFamily: 'Inter-Medium' }}>
+                                              ✅ {partnerName}
+                                          </Text>
+                                      )}
+                                      {partnerName === 'Not found' && (
+                                          <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 4, fontFamily: 'Inter-Medium' }}>
+                                              Partner not found
+                                          </Text>
+                                      )}
+                                  </View>
+                              )}
+
+                              {!registerPartner && (
+                                  <>
+                                      <Text style={[styles.summaryLabel, { marginBottom: 6 }]}>Join Existing Team (Optional)</Text>
+                                      <TextInput
+                                          style={{
+                                              backgroundColor: '#F8FAFC',
+                                              borderWidth: 1,
+                                              borderColor: '#E2E8F0',
+                                              borderRadius: 8,
+                                              padding: 10,
+                                              color: '#0F172A',
+                                              fontSize: 14,
+                                              fontFamily: 'Inter-Medium'
+                                          }}
+                                          placeholder="Enter 6-digit Team Code"
+                                          placeholderTextColor="#94A3B8"
+                                          value={teamCode}
+                                          onChangeText={(text) => setTeamCode(text.toUpperCase())}
+                                          maxLength={6}
+                                          autoCapitalize="characters"
+                                      />
+                                  </>
+                              )}
                           </View>
                       )}
                   </View>

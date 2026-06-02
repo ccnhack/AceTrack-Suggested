@@ -36,7 +36,24 @@ export const useTournamentsStore = create((set, get) => {
 
     // ─── Actions migrated from TournamentContext ───
 
-    onRegister: async (t, method, cost, isResched, fromTid, partnerId = null, teamCode = null) => {
+    lookupPartnerByPhone: async (phone) => {
+      try {
+        const token = await storage.getItem('userToken');
+        const response = await fetch(`${config.API_BASE_URL}/api/v1/user/lookupByPhone?phone=${encodeURIComponent(phone)}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        const result = await response.json();
+        return result;
+      } catch (e) {
+        console.error('lookupPartnerByPhone Error:', e);
+        return { success: false, error: 'Network error' };
+      }
+    },
+
+    onRegister: async (t, method, cost, isResched, fromTid, partnerId = null, teamCode = null, registeringPartnerId = null) => {
       try {
         const currentUser = useAuthStore.getState().currentUser;
         if (!currentUser || !t) {
@@ -56,7 +73,7 @@ export const useTournamentsStore = create((set, get) => {
             'X-User-Id': currentUser.id
           },
           credentials: 'include',
-          body: JSON.stringify({ method, cost, partnerId, teamCode })
+          body: JSON.stringify({ method, cost, partnerId, teamCode, registeringPartnerId })
         });
 
         const result = await response.json();

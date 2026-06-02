@@ -49,7 +49,7 @@ if (Platform.OS === 'web') {
 
       // 🛡️ [MALFORMED_AUTH_STRIP] (v2.6.259)
       // If a component sends "Bearer null" (common on web where localStorage is empty),
-      // we strip it to let the server fall back to the HttpOnly cookie.
+      // ✅ [v2.6.577] Added debounced doubles partner lookup, unified 1-slot vs 2-slot cost calculations, and integrated dynamic team construction along with direct dashboard rendering via updated Player doc fields in the backend.
       const auth = options.headers['Authorization'] || options.headers['authorization'];
       if (auth === 'Bearer null' || auth === 'Bearer undefined') {
         console.log(`[FetchInterceptor] Stripping malformed Authorization header from ${url}`);
@@ -73,7 +73,7 @@ import { useSupportStore } from './stores';
 
 // 🔄 Centralized Versioning// 🚀 EXPO OTA SYNC HUB (v2.6.569)
 // ALWAYS BUMP THIS VERSION TO TRIGGER CLIENT-SIDE CACHE INVALIDATION
-const APP_VERSION = '2.6.576';
+const APP_VERSION = '2.6.577';
 const linking = {
   prefixes: [config.API_BASE_URL || 'https://acetrack-suggested.onrender.com', 'acetrack://'],
   config: {

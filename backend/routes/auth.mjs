@@ -794,6 +794,33 @@ export default function createAuthRoutes({
   }));
 
   // ═══════════════════════════════════════════════════════════════
+  // 👥 PARTNER LOOKUP BY PHONE (Doubles Registration)
+  // ═══════════════════════════════════════════════════════════════
+  router.get('/user/lookupByPhone', apiKeyGuard, asyncHandler(async (req, res) => {
+    const { phone } = req.query;
+    if (!phone) return res.status(400).json({ error: 'Phone number required' });
+    
+    const searchPhone = String(phone).trim();
+    const escapedSearch = searchPhone.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const searchReg = new RegExp(`^${escapedSearch}$`, 'i');
+    
+    const userDoc = await Player.findOne({ "data.phone": searchReg, "data.role": { $ne: "admin" } }).lean();
+    
+    if (!userDoc || !userDoc.data) {
+      return res.status(404).json({ error: 'No user found with this phone number' });
+    }
+    
+    // Only return safe, necessary details
+    res.json({ 
+      success: true, 
+      user: { 
+        id: userDoc.data.id, 
+        name: userDoc.data.name || userDoc.data.username 
+      } 
+    });
+  }));
+
+  // ═══════════════════════════════════════════════════════════════
   // 🏆 PRO SUBSCRIPTION API (Phase 2.2)
   // ═══════════════════════════════════════════════════════════════
   router.post('/user/subscribe', apiKeyGuard, asyncHandler(async (req, res) => {
