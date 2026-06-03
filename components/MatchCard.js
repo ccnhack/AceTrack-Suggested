@@ -26,22 +26,37 @@ const MatchCard = ({
 
   const isDoubles = t.format && ["Men's Doubles", "Women's Doubles", "Mixed Doubles"].includes(t.format);
 
-  // 🛡️ v2.6.583: Check if this is a doubles solo player who already paid their half
   const userLower = user?.id ? String(user.id).toLowerCase() : '';
-  const hasAlreadyPaid = userLower && t.playerPaymentMethods && (
+  const myPayment = userLower && t.playerPaymentMethods && (
     t.playerPaymentMethods[user.id] || t.playerPaymentMethods[userLower]
   );
-  const isDoublesSoloPaid = isDoubles && rawPendingPayment && hasAlreadyPaid;
-  // If doubles solo and already paid half, don't treat as pending payment
-  const isPendingPayment = isDoublesSoloPaid ? false : rawPendingPayment;
 
+  let myTeam = null;
+  let isPartnerInTeam = false;
+  let isLeadInTeam = false;
   let userTeamCode = null;
+
   if (isDoubles && user?.id && t.doublesTeams) {
-    const userTeam = t.doublesTeams.find(team => team.player1Id === user.id && !team.player2Id);
-    if (userTeam) {
-      userTeamCode = userTeam.teamCode;
+    myTeam = t.doublesTeams.find(team => team.player1Id === user.id || team.player2Id === user.id);
+    if (myTeam) {
+      if (myTeam.player2Id === user.id) isPartnerInTeam = true;
+      if (myTeam.player1Id === user.id && myTeam.player2Id) isLeadInTeam = true;
+      if (myTeam.player1Id === user.id && !myTeam.player2Id) {
+        userTeamCode = myTeam.teamCode;
+      }
     }
   }
+
+  // 🛡️ v2.6.583: Check if this is a doubles solo player who already paid their half
+  const isDoublesSoloPaid = isDoubles && rawPendingPayment && myPayment && !myTeam?.player2Id;
+  
+  // If the user was added and funded by someone else (i.e. they are the partner)
+  const isFundedByLead = myPayment && myPayment.paidBy && myPayment.paidBy !== user?.id;
+
+  // If doubles solo and already paid half, don't treat as pending payment
+  // If funded by lead, they also shouldn't see the individual "Pay Now" button
+  const isPendingPayment = (isDoublesSoloPaid || isFundedByLead) ? false : rawPendingPayment;
+  const isPendingLeadPayment = isFundedByLead && rawPendingPayment;
 
 
   // 🕒 [RegEngine] Timer Logic: 30-minute reservation countdown (v2.6.103)
@@ -113,6 +128,32 @@ const MatchCard = ({
     // Partial (25-50%): Both "Opt Out & Refund" and "Opt Out (No Refund)"
     // 0% (5+ days): Only "Opt Out & Refund" — full refund, no reason to skip
 
+    if (isLeadInTeam) {
+       // Advanced Doubles Opt-Out for Lead
+       Alert.alert(
+         "Confirm Opt-Out",
+         `You are the lead player of a team.\n\nDo you want to opt out individually (refund half fee, partner remains) or opt out the whole team (refund full fee)?`,
+         [
+           { text: "Cancel", style: "cancel" },
+           { text: "Opt Out Individually", onPress: () => onOptOut(t.id, true, 'individual') },
+           { text: "Opt Out Team", style: "destructive", onPress: () => onOptOut(t.id, true, 'team') }
+         ]
+       );
+       return;
+    }
+
+    if (isPartnerInTeam && isFundedByLead) {
+       Alert.alert(
+         "Confirm Opt-Out",
+         `You were registered by your partner.\nIf you opt out, any applicable refund will be credited to your partner's wallet.`,
+         [
+           { text: "Cancel", style: "cancel" },
+           { text: "Opt Out", style: "destructive", onPress: () => onOptOut(t.id, true, 'individual') }
+         ]
+       );
+       return;
+    }
+
     if (chargeInfo.percent >= 100) {
       // 100% cancellation — no refund possible
       Alert.alert(
@@ -120,7 +161,7 @@ const MatchCard = ({
         `Are you sure you want to opt out of "${t.title}"?\n\n⚠️ ${chargeInfo.label}\n• Entry Fee: ₹${entryFee}\n• No refund will be issued.`,
         [
           { text: "Cancel", style: "cancel" },
-          { text: "Opt Out (No Refund)", style: "destructive", onPress: () => onOptOut(t.id, false) }
+          { text: "Opt Out (No Refund)", style: "destructive", onPress: () => onOptOut(t.id, false, 'individual') }
         ]
       );
     } else if (chargeInfo.percent > 0) {
@@ -130,7 +171,7 @@ const MatchCard = ({
         `Are you sure you want to opt out of "${t.title}"?\n\n📋 ${chargeInfo.label}\n• Entry Fee: ₹${entryFee}\n• Cancellation Fee: ₹${cancellationCharge}\n• Refund to Wallet: ₹${refundAmount}`,
         [
           { text: "Cancel", style: "cancel" },
-          { text: "Opt Out & Refund", style: "destructive", onPress: () => onOptOut(t.id, true) }
+          { text: "Opt Out & Refund", style: "destructive", onPress: () => onOptOut(t.id, true, 'individual') }
         ]
       );
     } else {
@@ -140,7 +181,7 @@ const MatchCard = ({
         `Are you sure you want to opt out of "${t.title}"?\n\n✅ Full refund of ₹${entryFee} will be credited to your wallet.`,
         [
           { text: "Cancel", style: "cancel" },
-          { text: "Opt Out & Refund", style: "destructive", onPress: () => onOptOut(t.id, true) }
+          { text: "Opt Out & Refund", style: "destructive", onPress: () => onOptOut(t.id, true, 'individual') }
         ]
       );
     }
@@ -167,12 +208,14 @@ const MatchCard = ({
               viewMode === 'requests' ? styles.textYellow :
                 isDoublesSoloPaid ? styles.textIndigo :
                 isPendingPayment ? styles.textOrange :
+                isPendingLeadPayment ? styles.textOrange :
                   isWaitlisted ? styles.textSlate :
                     viewMode === 'upcoming' ? styles.textRed : styles.textSlate
             ]}>
               {viewMode === 'requests' ? 'Requested' : 
                isDoublesSoloPaid ? 'Paid — Awaiting Partner' :
                isPendingPayment ? 'Pending Payment' : 
+               isPendingLeadPayment ? 'Pending Lead Payment' :
                isWaitlisted ? 'Waitlisted' :
                viewMode === 'upcoming' ? 'Confirmed' : 'Completed'}
             </Text>

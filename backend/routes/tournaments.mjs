@@ -144,7 +144,7 @@ export default function({ io }) {
          tUpdate.$pull['data.registeredPlayerIds'] = { $in: caseInsensitiveUsers };
          for (const uId of lowerUsersToRegister) {
            tUpdate.$set[`data.pendingPaymentTimestamps.${uId}`] = Date.now();
-           tUpdate.$set[`data.playerPaymentMethods.${uId}`] = { method, cost, timestamp: new Date().toISOString() };
+           tUpdate.$set[`data.playerPaymentMethods.${uId}`] = { method, cost, timestamp: new Date().toISOString(), paidBy: userId };
          }
       } else {
          tUpdate.$addToSet['data.registeredPlayerIds'] = { $each: lowerUsersToRegister };
@@ -156,7 +156,7 @@ export default function({ io }) {
            tUpdate.$unset[`data.playerStatuses.${lowerUId}`] = "";
            tUpdate.$unset[`data.pendingPaymentTimestamps.${uId}`] = "";
            tUpdate.$unset[`data.pendingPaymentTimestamps.${lowerUId}`] = "";
-           tUpdate.$set[`data.playerPaymentMethods.${lowerUId}`] = { method, cost, timestamp: new Date().toISOString() };
+           tUpdate.$set[`data.playerPaymentMethods.${lowerUId}`] = { method, cost, timestamp: new Date().toISOString(), paidBy: userId };
          }
       }
 
@@ -309,7 +309,7 @@ export default function({ io }) {
   router.post('/:id/optout', authGuard, async (req, res) => {
     const tid = req.params.id;
     const userId = req.user.id;
-    const { refundToWallet = true } = req.body;
+    const { refundToWallet = true, optOutMode = 'individual' } = req.body;
 
     try {
       const tournamentDoc = await Tournament.findOne({ id: tid });
@@ -318,7 +318,6 @@ export default function({ io }) {
       }
 
       const tData = tournamentDoc.data || {};
-      const entryFee = tData.entryFee || 0;
       const lowerUserId = String(userId).toLowerCase();
       const wasRegistered = (tData.registeredPlayerIds || []).some(id => String(id).toLowerCase() === lowerUserId);
       const isWaitlisted = (tData.waitlistedPlayerIds || []).some(id => String(id).toLowerCase() === lowerUserId);
@@ -340,13 +339,51 @@ export default function({ io }) {
         });
       }
 
+      // Determine who actually paid for this slot
+      const paymentInfo = tData.playerPaymentMethods ? tData.playerPaymentMethods[lowerUserId] : null;
+      let originalPayerId = userId;
+      let userPaidCost = tData.entryFee || 0;
+      
+      if (paymentInfo) {
+        if (paymentInfo.paidBy) {
+          originalPayerId = paymentInfo.paidBy;
+        }
+        if (paymentInfo.cost !== undefined) {
+          userPaidCost = paymentInfo.cost;
+        }
+      }
+
+      // Identify team context for doubles
+      let teamToOptOut = null;
+      let usersToRemove = [userId];
+      let lowerUsersToRemove = [lowerUserId];
+      let amountToCalculateRefundOn = userPaidCost;
+
+      if (tData.doublesTeams) {
+        const team = tData.doublesTeams.find(t => t.player1Id === userId || t.player2Id === userId);
+        if (team) {
+          if (optOutMode === 'team' && team.player1Id === userId && team.player2Id) {
+            // Opting out both players
+            usersToRemove = [team.player1Id, team.player2Id];
+            lowerUsersToRemove = usersToRemove.map(id => String(id).toLowerCase());
+            amountToCalculateRefundOn = tData.entryFee || 0;
+            teamToOptOut = team;
+          } else {
+            // Opting out individually (could be lead or partner)
+            amountToCalculateRefundOn = (tData.entryFee || 0) / 2;
+          }
+        }
+      } else {
+        amountToCalculateRefundOn = tData.entryFee || 0;
+      }
+
       // 1. Calculate Refund (if applicable)
       let refundAmount = 0;
       let cancellationCharge = 0;
       let cancellationPercent = 0;
       let refundInfo = null;
 
-      if (refundToWallet && entryFee > 0 && wasRegistered) {
+      if (refundToWallet && amountToCalculateRefundOn > 0 && wasRegistered) {
         // Backend equivalent of getCancellationChargePercent
         const now = Date.now();
         const tournamentTime = new Date(tData.date).getTime();
@@ -358,54 +395,70 @@ export default function({ io }) {
         else if (daysRemaining >= 1) { cancellationPercent = 50; }
         else { cancellationPercent = 100; }
 
-        cancellationCharge = Math.round(entryFee * (cancellationPercent / 100));
-        refundAmount = entryFee - cancellationCharge;
+        cancellationCharge = Math.round(amountToCalculateRefundOn * (cancellationPercent / 100));
+        refundAmount = amountToCalculateRefundOn - cancellationCharge;
 
         refundInfo = {
-          entryFee,
+          entryFee: amountToCalculateRefundOn,
           cancellationPercent,
           cancellationCharge,
           refundAmount,
           daysRemaining: Math.max(0, Math.floor(daysRemaining)),
           timestamp: new Date().toISOString(),
-          playerId: userId
+          playerId: userId,
+          refundedTo: originalPayerId,
+          isTeamOptOut: optOutMode === 'team'
         };
       }
 
       // 2. Prepare Tournament Updates
-      // Fix: Case-insensitive removal for arrays and proper cleanup of timestamps
+      const caseInsensitiveUsers = usersToRemove.flatMap(u => [u, String(u).toLowerCase(), new RegExp(`^${u}$`, 'i')]);
+      
       const tUpdate = {
         $pull: {
-          'data.registeredPlayerIds': { $in: [userId, lowerUserId, new RegExp(`^${userId}$`, 'i')] },
-          'data.pendingPaymentPlayerIds': { $in: [userId, lowerUserId, new RegExp(`^${userId}$`, 'i')] },
-          'data.waitlistedPlayerIds': { $in: [userId, lowerUserId, new RegExp(`^${userId}$`, 'i')] }
+          'data.registeredPlayerIds': { $in: caseInsensitiveUsers },
+          'data.pendingPaymentPlayerIds': { $in: caseInsensitiveUsers },
+          'data.waitlistedPlayerIds': { $in: caseInsensitiveUsers }
         },
         $addToSet: {
-          'data.optedOutPlayerIds': lowerUserId
+          'data.optedOutPlayerIds': { $each: lowerUsersToRemove }
         },
         $set: {
-          [`data.playerStatuses.${lowerUserId}`]: 'Opted-Out',
           lastUpdated: new Date()
         },
-        $unset: {
-          [`data.pendingPaymentTimestamps.${userId}`]: "",
-          [`data.pendingPaymentTimestamps.${lowerUserId}`]: "",
-          [`data.playerPaymentMethods.${userId}`]: "",
-          [`data.playerPaymentMethods.${lowerUserId}`]: ""
-        }
+        $unset: {}
       };
 
-      if (userId !== lowerUserId) {
-        tUpdate.$unset[`data.playerStatuses.${userId}`] = "";
+      for (const uId of usersToRemove) {
+        const lId = String(uId).toLowerCase();
+        tUpdate.$set[`data.playerStatuses.${lId}`] = 'Opted-Out';
+        tUpdate.$unset[`data.pendingPaymentTimestamps.${uId}`] = "";
+        tUpdate.$unset[`data.pendingPaymentTimestamps.${lId}`] = "";
+        tUpdate.$unset[`data.playerPaymentMethods.${uId}`] = "";
+        tUpdate.$unset[`data.playerPaymentMethods.${lId}`] = "";
+        if (uId !== lId) {
+          tUpdate.$unset[`data.playerStatuses.${uId}`] = "";
+        }
+      }
+
+      if (Object.keys(tUpdate.$unset).length === 0) {
+        delete tUpdate.$unset;
       }
 
       if (tData.doublesTeams && tData.doublesTeams.length > 0) {
-        const newTeams = tData.doublesTeams.map(team => {
-          if (team.player1Id === userId) return { ...team, player1Id: null };
-          if (team.player2Id === userId) return { ...team, player2Id: null };
-          return team;
-        }).filter(team => team.player1Id !== null || team.player2Id !== null);
-        tUpdate.$set['data.doublesTeams'] = newTeams;
+        if (optOutMode === 'team' && teamToOptOut) {
+          // Remove the team entirely
+          const newTeams = tData.doublesTeams.filter(t => t.id !== teamToOptOut.id);
+          tUpdate.$set['data.doublesTeams'] = newTeams;
+        } else {
+          // Individual opt-out: remove just the opting-out user from their team
+          const newTeams = tData.doublesTeams.map(team => {
+            if (team.player1Id === userId) return { ...team, player1Id: null };
+            if (team.player2Id === userId) return { ...team, player2Id: null };
+            return team;
+          }).filter(team => team.player1Id !== null || team.player2Id !== null);
+          tUpdate.$set['data.doublesTeams'] = newTeams;
+        }
       }
 
       if (refundInfo) {
@@ -414,24 +467,31 @@ export default function({ io }) {
 
       // 3. Handle Auto-Promotion from Waitlist
       let promotedId = null;
-      let isPaid = entryFee > 0;
+      let isPaid = amountToCalculateRefundOn > 0;
       
       if (wasRegistered && (tData.waitlistedPlayerIds || []).length > 0) {
-        // The first person in the waitlist gets promoted
-        const waitlist = (tData.waitlistedPlayerIds || []).filter(pid => pid !== userId);
-        if (waitlist.length > 0) {
-          promotedId = waitlist[0];
+        // We might need to promote multiple people if optOutMode === 'team'
+        const waitlist = (tData.waitlistedPlayerIds || []).filter(pid => !usersToRemove.includes(pid));
+        const numToPromote = Math.min(waitlist.length, usersToRemove.length);
+        
+        if (numToPromote > 0) {
+          const promotedIds = waitlist.slice(0, numToPromote);
+          promotedId = promotedIds[0]; // (Returning first one for legacy compatibility in response)
           
-          tUpdate.$pull['data.waitlistedPlayerIds'] = { $in: [userId, promotedId] };
+          tUpdate.$pull['data.waitlistedPlayerIds'] = { $in: [...usersToRemove, ...promotedIds] };
           
           if (isPaid) {
-            tUpdate.$addToSet['data.pendingPaymentPlayerIds'] = promotedId;
-            tUpdate.$set[`data.pendingPaymentTimestamps.${promotedId}`] = Date.now();
+            tUpdate.$addToSet['data.pendingPaymentPlayerIds'] = { $each: promotedIds };
+            promotedIds.forEach(pid => {
+              tUpdate.$set[`data.pendingPaymentTimestamps.${pid}`] = Date.now();
+            });
           } else {
-            tUpdate.$addToSet['data.registeredPlayerIds'] = promotedId;
+            tUpdate.$addToSet['data.registeredPlayerIds'] = { $each: promotedIds };
           }
           tUpdate.$unset = tUpdate.$unset || {};
-          tUpdate.$unset[`data.playerStatuses.${promotedId}`] = "";
+          promotedIds.forEach(pid => {
+            tUpdate.$unset[`data.playerStatuses.${pid}`] = "";
+          });
         }
       }
 
@@ -441,8 +501,9 @@ export default function({ io }) {
         { new: true }
       );
 
-      // 4. Refund Current User
+      // 4. Refund Logic (routing to originalPayerId)
       let updatedUser = null;
+
       if (refundAmount > 0) {
         const historyEntry = {
           id: `refund-${Date.now()}`,
@@ -450,29 +511,33 @@ export default function({ io }) {
           type: 'credit',
           description: `Refund for ${tData.title}${cancellationCharge > 0 ? ` (₹${cancellationCharge} cancellation fee deducted)` : ''}`,
           date: new Date().toISOString(),
-          refundMeta: { tournamentId: tid, entryFee, cancellationPercent, cancellationCharge }
+          refundMeta: { tournamentId: tid, entryFee: amountToCalculateRefundOn, cancellationPercent, cancellationCharge }
         };
 
-        updatedUser = await Player.findOneAndUpdate(
-          { id: userId },
+        // Credit the original payer
+        await Player.findOneAndUpdate(
+          { id: originalPayerId },
           {
             $inc: { 'data.credits': refundAmount },
-            $pull: { 'data.registeredTournamentIds': tid },
             $push: { 'data.walletHistory': { $each: [historyEntry], $position: 0 } },
             $set: { lastUpdated: new Date() }
-          },
-          { new: true }
+          }
         );
-      } else {
-        // Just remove from registeredTournamentIds
-        updatedUser = await Player.findOneAndUpdate(
-          { id: userId },
+      }
+      
+      // Cleanup registeredTournamentIds for all removed users
+      for (const uId of usersToRemove) {
+        const pUpdateDoc = await Player.findOneAndUpdate(
+          { id: uId },
           {
             $pull: { 'data.registeredTournamentIds': tid },
             $set: { lastUpdated: new Date() }
           },
           { new: true }
         );
+        if (uId === userId) {
+          updatedUser = pUpdateDoc;
+        }
       }
 
       // 5. Update Promoted Player

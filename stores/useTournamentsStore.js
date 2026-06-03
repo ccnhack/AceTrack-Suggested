@@ -376,12 +376,12 @@ export const useTournamentsStore = create((set, get) => {
       set({ reschedulingFrom: null });
     },
 
-    onOptOut: async (tid, refundToWallet = true) => {
+    onOptOut: async (tid, refundToWallet = true, optOutMode = 'individual') => {
       try {
         const currentUser = useAuthStore.getState().currentUser;
         if (!currentUser) return;
         
-        console.log(`[TournamentsStore] Starting API opt-out for ${tid}`);
+        console.log(`[TournamentsStore] Starting API opt-out for ${tid} with mode: ${optOutMode}`);
         const token = await storage.getItem('userToken');
 
         const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}/optout`, {
@@ -392,7 +392,7 @@ export const useTournamentsStore = create((set, get) => {
             'X-User-Id': currentUser.id
           },
           credentials: 'include',
-          body: JSON.stringify({ refundToWallet })
+          body: JSON.stringify({ refundToWallet, optOutMode })
         });
 
         const result = await response.json();

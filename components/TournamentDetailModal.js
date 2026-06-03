@@ -230,6 +230,7 @@ const TournamentDetailModal = ({
     if (isWaitlisted) return `Already Waitlisted (#${waitlistedCount})`;
     if (isClosed) return 'Registration Closed';
     if (isFull && !isAlreadyRegistered) return `Join Waitlist (${waitlistedCount} in line)`;
+    if (isDoublesFormat) return `Register (Solo / Team)`;
     return `Register for ₹${tournament.entryFee}`;
   };
 
@@ -272,6 +273,23 @@ const TournamentDetailModal = ({
 
             {/* Info Grid */}
             <View style={styles.grid}>
+              {isDoublesFormat ? (
+                <>
+                  <View style={[styles.gridItem, { width: '100%', backgroundColor: '#EFF6FF' }]}>
+                    <Text style={[styles.gridLabel, { color: '#3B82F6' }]}>Entry Fee (Single)</Text>
+                    <Text style={[styles.gridValue, { color: '#1D4ED8' }]}>₹{(tournament.entryFee || 0) / 2}</Text>
+                  </View>
+                  <View style={[styles.gridItem, { width: '100%', backgroundColor: '#EEF2FF', marginTop: -8 }]}>
+                    <Text style={[styles.gridLabel, { color: '#6366F1' }]}>Entry Fee (Team)</Text>
+                    <Text style={[styles.gridValue, { color: '#4338CA' }]}>₹{tournament.entryFee || 0}</Text>
+                  </View>
+                </>
+              ) : (
+                <View style={[styles.gridItem, { width: '100%', backgroundColor: '#EFF6FF' }]}>
+                  <Text style={[styles.gridLabel, { color: '#3B82F6' }]}>Entry Fee</Text>
+                  <Text style={[styles.gridValue, { color: '#1D4ED8' }]}>₹{tournament.entryFee || 0}</Text>
+                </View>
+              )}
               <View style={styles.gridItem}>
                 <Text style={styles.gridLabel}>Prize Pool</Text>
                 <Text style={[styles.gridValue, { color: '#EF4444' }]}>{tournament.prizePool ? (String(tournament.prizePool).includes('₹') ? tournament.prizePool : `₹${tournament.prizePool}`) : 'N/A'}</Text>
