@@ -375,7 +375,7 @@ class SyncOrchestrator {
       if (!isInternal) {
         // Enqueue for Cloud Sync
         // 🛡️ SECURITY HARDENING (v2.6.164): Removed 'currentUser' from syncableKeys.
-        const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'matchmaking', 'seenAdminActionIds', 'visitedAdminSubTabs'];
+        const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'matchmaking', 'seenAdminActionIds', 'visitedAdminSubTabs', 'partnerRequests'];
         const syncUpdates: Record<string, any> = {};
         let hasSyncable = false;
 

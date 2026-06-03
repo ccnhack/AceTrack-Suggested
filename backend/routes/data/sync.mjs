@@ -314,7 +314,7 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
 
     // 🛡️ SECURITY HARDENING (v2.6.164): Removed 'currentUser' from syncableKeys.
     // User profile updates now happen exclusively via the 'players' collection to maintain isolation.
-    const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'matchmaking', 'seenAdminActionIds', 'visitedAdminSubTabs'];
+    const syncableKeys = ['players', 'tournaments', 'matchVideos', 'matches', 'supportTickets', 'evaluations', 'auditLogs', 'chatbotMessages', 'matchmaking', 'seenAdminActionIds', 'visitedAdminSubTabs', 'partnerRequests'];
     
     const now = Date.now();
     const clientVersion = req.body.version;
@@ -522,12 +522,8 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
               if (key === 'tournaments' && !bolaIsAdmin) {
                 const tCreator = String(existing?.creatorId || p.creatorId || '').toLowerCase();
                 const tCoach = String(existing?.assignedCoachId || p.assignedCoachId || '').toLowerCase();
-                const tParticipants = [
-                  ...(existing?.registeredPlayerIds || []),
-                  ...(existing?.waitlistedPlayerIds || []),
-                  ...(existing?.pendingPaymentPlayerIds || [])
-                ].map(pid => String(pid).toLowerCase());
-                if (tCreator !== bolaActorId && tCoach !== bolaActorId && !tParticipants.includes(bolaActorId)) {
+                
+                if (tCreator !== bolaActorId && tCoach !== bolaActorId) {
                   console.warn(`🛑 [BOLA_GUARD] Blocked ${bolaActorId} from modifying tournament ${id}`);
                   logAudit(req, 'BOLA_TOURNAMENT_BLOCKED', [key], { targetId: id, actorId: bolaActorId }).catch(() => {});
                   return;

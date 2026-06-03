@@ -592,7 +592,12 @@ const ExploreScreen = ({ navigation, route }) => {
         user={user}
         role={userRole}
         players={players}
-        onRegister={(t) => setRegPaymentTarget(t)}
+        onRegister={(t) => {
+          setSelectedTournament(null);
+          setTimeout(() => {
+            setRegPaymentTarget(t);
+          }, 350); // Delay allows the native Modal to fully dismiss before presenting the next one
+        }}
         onJoinWaitlist={onJoinWaitlist}
         onCoachOptIn={(t) => onAssignCoach(t.id, userId)}
         onUpdateTournament={onUpdateTournament}

@@ -27,23 +27,44 @@ export default function({ io }) {
       const isDoubles = ["Men's Doubles", "Women's Doubles", "Mixed Doubles"].includes(tData.format);
       
       const { method = 'credits', partnerId, teamCode, registeringPartnerId } = req.body;
+      
+      // 🛡️ [VAPT-BL4]: Block partner registration in singles tournaments
+      if (!isDoubles && (registeringPartnerId || partnerId || teamCode)) {
+        return res.status(400).json({ success: false, message: 'Partner registration is only available for Doubles formats.' });
+      }
+
       const wasAlreadyRegistered = (tData.registeredPlayerIds || []).includes(userId);
       const wasPending = (tData.pendingPaymentPlayerIds || []).includes(userId);
       
-      // If we are registering a partner, we pay the FULL serverCost. Otherwise, we pay half for doubles.
-      const baseCost = (isDoubles && !registeringPartnerId) ? serverCost / 2 : serverCost;
-      const cost = (wasAlreadyRegistered || wasPending) ? 0 : baseCost;
+      // 🛡️ [VAPT-BL3]: Prevent capacity bypass and free registration loopholes
+      if (wasAlreadyRegistered || wasPending) {
+        return res.status(400).json({ success: false, message: 'You are already registered or have a pending payment for this tournament.' });
+      }
+
+      const partnerAlreadyRegistered = registeringPartnerId && ((tData.registeredPlayerIds || []).includes(registeringPartnerId) || (tData.pendingPaymentPlayerIds || []).includes(registeringPartnerId));
+
+      // Calculate strictly needed slots and individual costs
+      const individualCost = isDoubles ? serverCost / 2 : serverCost;
+      let totalCost = 0;
+      let slotsNeeded = 0;
+      const usersToRegister = [];
+
+      totalCost += individualCost;
+      slotsNeeded += 1;
+      usersToRegister.push(userId);
+
+      if (registeringPartnerId && !partnerAlreadyRegistered) {
+        totalCost += individualCost;
+        slotsNeeded += 1;
+        usersToRegister.push(registeringPartnerId);
+      }
 
       // Find if we are joining an existing team
       let joiningTeam = null;
       let partnerDoc = null;
       if (isDoubles) {
         if (registeringPartnerId) {
-          // Verify partner is valid and not already registered
-          if ((tData.registeredPlayerIds || []).includes(registeringPartnerId) || 
-              (tData.pendingPaymentPlayerIds || []).includes(registeringPartnerId)) {
-            return res.status(400).json({ success: false, message: 'Partner is already registered or pending payment.' });
-          }
+          // Verify partner is valid
           partnerDoc = await Player.findOne({ id: registeringPartnerId });
           if (!partnerDoc) {
             return res.status(404).json({ success: false, message: 'Partner user not found.' });
@@ -72,10 +93,8 @@ export default function({ io }) {
       const registeredCount = (tData.registeredPlayerIds || []).length;
       const pendingCount = (tData.pendingPaymentPlayerIds || []).filter(pid => pid !== userId && pid !== registeringPartnerId).length;
       const max = tData.maxPlayers || Infinity;
-
-      const slotsNeeded = (registeringPartnerId && !wasAlreadyRegistered && !wasPending) ? 2 : 1;
       
-      if (registeredCount + pendingCount + slotsNeeded > max && !wasAlreadyRegistered && !wasPending) {
+      if (registeredCount + pendingCount + slotsNeeded > max) {
         return res.status(400).json({ success: false, message: 'Slots Full', type: 'FULL' });
       }
 
@@ -89,7 +108,7 @@ export default function({ io }) {
       const currentCredits = pData.credits || 0;
 
       // 4. Validate Funds
-      if (method === 'credits' && cost > 0 && currentCredits < cost) {
+      if (method === 'credits' && totalCost > 0 && currentCredits < totalCost) {
         return res.status(400).json({ success: false, message: 'Insufficient credits' });
       }
 
@@ -98,7 +117,6 @@ export default function({ io }) {
       const referralBonus = (isFirstRegistration && pData.referredBy) ? 100 : 0;
 
       // 6. Execute Atomic Updates
-      const usersToRegister = registeringPartnerId ? [userId, registeringPartnerId] : [userId];
       const lowerUsersToRegister = usersToRegister.map(u => String(u).toLowerCase());
       const caseInsensitiveUsers = usersToRegister.flatMap(u => [u, String(u).toLowerCase(), new RegExp(`^${u}$`, 'i')]);
 
@@ -144,7 +162,7 @@ export default function({ io }) {
          tUpdate.$pull['data.registeredPlayerIds'] = { $in: caseInsensitiveUsers };
          for (const uId of lowerUsersToRegister) {
            tUpdate.$set[`data.pendingPaymentTimestamps.${uId}`] = Date.now();
-           tUpdate.$set[`data.playerPaymentMethods.${uId}`] = { method, cost, timestamp: new Date().toISOString(), paidBy: userId };
+           tUpdate.$set[`data.playerPaymentMethods.${uId}`] = { method, cost: individualCost, timestamp: new Date().toISOString(), paidBy: userId };
          }
       } else {
          tUpdate.$addToSet['data.registeredPlayerIds'] = { $each: lowerUsersToRegister };
@@ -156,7 +174,8 @@ export default function({ io }) {
            tUpdate.$unset[`data.playerStatuses.${lowerUId}`] = "";
            tUpdate.$unset[`data.pendingPaymentTimestamps.${uId}`] = "";
            tUpdate.$unset[`data.pendingPaymentTimestamps.${lowerUId}`] = "";
-           tUpdate.$set[`data.playerPaymentMethods.${lowerUId}`] = { method, cost, timestamp: new Date().toISOString(), paidBy: userId };
+           // 🛡️ Ensure individualCost is recorded to prevent double refunds
+           tUpdate.$set[`data.playerPaymentMethods.${lowerUId}`] = { method, cost: individualCost, timestamp: new Date().toISOString(), paidBy: userId };
          }
       }
 
@@ -192,11 +211,11 @@ export default function({ io }) {
       let netCreditChange = 0;
       let walletEntries = [];
 
-      if (method === 'credits' && cost > 0) {
-        netCreditChange -= cost;
+      if (method === 'credits' && totalCost > 0) {
+        netCreditChange -= totalCost;
         walletEntries.push({
           id: `reg-deduct-${Date.now()}`,
-          amount: -cost,
+          amount: -totalCost,
           type: 'debit',
           description: `Registration for ${tData.title}`,
           date: new Date().toISOString()
