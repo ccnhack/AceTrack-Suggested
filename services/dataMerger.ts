@@ -28,7 +28,7 @@ export const dataMerger = {
     const mergedResult: any = { ...cloudData }; // Start with cloud as priority
 
     // 1. Merge Collections (ID-based, Cloud priority)
-    const collections = ['tournaments', 'matchVideos', 'matches', 'evaluations', 'auditLogs', 'matchmaking'];
+    const collections = ['tournaments', 'matchVideos', 'matches', 'evaluations', 'auditLogs', 'matchmaking', 'partnerRequests'];
     collections.forEach(key => {
       if (localData[key] || cloudData[key]) {
         mergedResult[key] = this.mergeCollection(localData[key] || [], cloudData[key] || []);

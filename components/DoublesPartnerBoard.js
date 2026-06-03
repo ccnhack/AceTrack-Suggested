@@ -120,11 +120,16 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
   }, [newLinkedTournament, eligibleTournaments, isModalVisible, routeParams]);
 
   const filteredRequests = useMemo(() => {
+    console.log("[DEBUG] Raw partner requests in DoublesPartnerBoard:", JSON.stringify(requests));
     return requests.filter(req => {
       if (req.status !== 'active') return false;
       if (filterSport !== 'All' && req.sport !== filterSport) return false;
       if (filterCity && !req.city.toLowerCase().includes(filterCity.toLowerCase())) return false;
-      if (req.targetGender && req.targetGender !== 'All' && user.gender && req.targetGender.toLowerCase() !== user.gender.toLowerCase()) return false;
+      if (req.targetGender && req.targetGender !== 'All') {
+        if (!user.gender || req.targetGender.toLowerCase() !== user.gender.toLowerCase()) {
+          return false;
+        }
+      }
       
       if (req.linkedTournamentId) {
         const linkedT = tournaments?.find(t => t.id === req.linkedTournamentId);
