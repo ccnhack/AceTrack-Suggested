@@ -114,6 +114,7 @@ export const AdminGrievancesPanel = ({
         // Only update if something meaningful changed (e.g. status, messages, assignedTo)
         const hasChanged = updated.status !== selectedTicket.status || 
                            updated.assignedTo !== selectedTicket.assignedTo ||
+                           updated.closureSummary !== selectedTicket.closureSummary ||
                            (updated.messages?.length !== selectedTicket.messages?.length);
         
         if (hasChanged) {
@@ -312,12 +313,6 @@ export const AdminGrievancesPanel = ({
   }, [tickets]);
 
   const handleStatusChangeRequest = (status) => {
-    // ⚡ Resolved -> Closed shortcut: bypassing confirmation if it's already resolved.
-    if (selectedTicket?.status === 'Resolved' && status === 'Closed') {
-      onUpdateStatus(selectedTicket.id, status);
-      return;
-    }
-
     // 🛡️ Justification Prompt: Moving from Resolved/Closed back to Active status
     const activeStates = ['Open', 'In Progress', 'Awaiting Response'];
     const isInactive = selectedTicket?.status === 'Resolved' || selectedTicket?.status === 'Closed';
@@ -336,12 +331,13 @@ export const AdminGrievancesPanel = ({
       return;
     }
 
-    // ⚡ Closed -> Resolved shortcut: bypassing AI summary if it's already closed.
+    // ⚡ Closed → Resolved shortcut: preserve existing summary, no re-generation needed
     if (selectedTicket?.status === 'Closed' && status === 'Resolved') {
-      onUpdateStatus(selectedTicket.id, status);
+      onUpdateStatus(selectedTicket.id, status, selectedTicket.closureSummary || null);
       return;
     }
 
+    // 🛡️ For ANY transition to Resolved or Closed: trigger AI summary generation
     if (status === 'Resolved' || status === 'Closed') {
       setPendingStatus(status);
       setShowStatusConfirm(true);
