@@ -131,30 +131,30 @@ class PlayerService {
   /**
    * Adds credits to a user's wallet.
    */
-  static topUpWallet(amount, userId, players) {
-    let updatedUser = null;
+  static topUpWallet(amount, currentUser, players) {
+    if (!currentUser) return { success: false, message: 'User not found' };
+
+    const updatedUser = {
+      ...currentUser,
+      credits: (currentUser.credits || 0) + amount,
+      walletHistory: [
+        { 
+          id: Date.now().toString(), 
+          type: 'credit', 
+          amount, 
+          description: 'Wallet Top Up', 
+          date: new Date().toISOString() 
+        }, 
+        ...(currentUser.walletHistory || [])
+      ]
+    };
+
     const updatedPlayers = (players || []).map(p => {
-      if (String(p.id).toLowerCase() === String(userId).toLowerCase()) {
-        updatedUser = {
-          ...p,
-          credits: (p.credits || 0) + amount,
-          walletHistory: [
-            { 
-              id: Date.now().toString(), 
-              type: 'credit', 
-              amount, 
-              description: 'Wallet Top Up', 
-              date: new Date().toISOString() 
-            }, 
-            ...(p.walletHistory || [])
-          ]
-        };
+      if (String(p.id).toLowerCase() === String(currentUser.id).toLowerCase()) {
         return updatedUser;
       }
       return p;
     });
-
-    if (!updatedUser) return { success: false, message: 'User not found' };
 
     return {
       success: true,

@@ -339,7 +339,7 @@ export const AuthProvider = ({ children }) => {
 
   const onTopUp = useCallback((amount, players) => {
     if (!currentUserRef.current) return;
-    const result = PlayerService.topUpWallet(amount, currentUserRef.current.id, players);
+    const result = PlayerService.topUpWallet(amount, currentUserRef.current, players);
     if (result.success) {
       setCurrentUser(result.user);
       syncAndSaveData({ players: result.players, currentUser: result.user });
