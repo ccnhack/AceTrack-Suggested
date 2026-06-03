@@ -253,7 +253,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
           };
           if (token) headers['Authorization'] = `Bearer ${token}`;
 
-          const sessionRes = await fetch(`${activeApiUrl}/api/support/session-status/${p.id}`, {
+          const sessionRes = await fetch(`${activeApiUrl}/api/v1/support/session-status/${p.id}`, {
             headers,
             credentials: 'include'
           });

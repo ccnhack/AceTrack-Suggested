@@ -63,8 +63,8 @@ export default {
       'DATA_SYNC': '/api/data',
       'DATA_SAVE': '/api/save',
       'STATUS': '/api/status',
-      'CLAIM_TICKET': '/api/support/claim-ticket',
-      'REASSIGN_TICKET': '/api/support/reassign-ticket',
+      'CLAIM_TICKET': '/api/v1/support/claim-ticket',
+      'REASSIGN_TICKET': '/api/v1/support/reassign-ticket',
       'OTP_SEND': '/api/otp/send',
       'OTP_VERIFY': '/api/otp/verify',
       'SUBSCRIBE_PRO': '/api/v1/user/subscribe'

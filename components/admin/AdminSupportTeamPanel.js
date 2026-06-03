@@ -126,7 +126,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
 
   const handleExportCSV = async () => {
     const token = await storage.getItem('userToken');
-    const url = `${config.API_BASE_URL}/api/support/export?token=${token}&userId=admin`;
+    const url = `${config.API_BASE_URL}/api/v1/support/export?token=${token}&userId=admin`;
     const confirmed = await showDialog({ title: 'Export Data', message: 'This will download a CSV containing all ticket data and metrics.', type: 'warning', confirmText: 'Download', cancelText: 'Cancel' });
     if (confirmed) Linking.openURL(url);
   };
@@ -151,7 +151,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       };
        if (token) headers['Authorization'] = `Bearer ${token}`;
 
-       const res = await fetch(`${config.API_BASE_URL}/api/support/analytics${queryParams}`, {
+       const res = await fetch(`${config.API_BASE_URL}/api/v1/support/analytics${queryParams}`, {
          headers,
          credentials: 'include'
        });
@@ -181,7 +181,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${config.API_BASE_URL}/api/support/attendance`, {
+      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/attendance`, {
         headers,
         credentials: 'include'
       });
@@ -243,7 +243,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${config.API_BASE_URL}/api/support/manage-user`, {
+      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/manage-user`, {
         method: 'POST',
         headers,
         credentials: 'include',
@@ -285,7 +285,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${config.API_BASE_URL}/api/support/force-reset`, {
+      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/force-reset`, {
         method: 'POST',
         headers,
         credentials: 'include',
@@ -399,7 +399,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${config.API_BASE_URL}/api/support/transfer-tickets`, {
+      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/transfer-tickets`, {
         method: 'POST',
         headers,
         credentials: 'include',

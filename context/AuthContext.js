@@ -378,7 +378,7 @@ export const AuthProvider = ({ children }) => {
     
     try {
       const token = await storage.getItem('userToken');
-      await fetch(`${config.API_BASE_URL}/api/v1/data/notifications/mark-read`, {
+      await fetch(`${config.API_BASE_URL}/api/v1/mark-read`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -409,7 +409,7 @@ export const AuthProvider = ({ children }) => {
       // Actually, since backend `/mark-read` currently marks ALL as read, let's keep it simple
       // and just call it. It will mark all as read on backend, which is acceptable or we can modify it.
       // Let's modify the backend to accept an optional notifId.
-      await fetch(`${config.API_BASE_URL}/api/v1/data/notifications/mark-read`, {
+      await fetch(`${config.API_BASE_URL}/api/v1/mark-read`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

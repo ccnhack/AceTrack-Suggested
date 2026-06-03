@@ -31,7 +31,7 @@ const SupportSetupScreen = ({ route, navigation }) => {
 
   const verifyToken = async () => {
     try {
-      const res = await fetch(`${config.API_BASE_URL}/api/support/invite/click`, {
+      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/invite/click`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -66,7 +66,7 @@ const SupportSetupScreen = ({ route, navigation }) => {
     setError('');
 
     try {
-      const res = await fetch(`${config.API_BASE_URL}/api/support/invite/setup`, {
+      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/invite/setup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

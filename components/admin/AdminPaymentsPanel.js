@@ -83,14 +83,22 @@ const AdminPaymentsPanel = memo(({ search }) => {
             const tournament = tournaments.find(t => t.id === item.tournamentId);
             if (!tournament) return;
 
+            let playersToConfirm = [item.playerId];
+            if (tournament.format && ["Men's Doubles", "Women's Doubles", "Mixed Doubles"].includes(tournament.format) && tournament.doublesTeams) {
+                const team = tournament.doublesTeams.find(t => t.player1Id === item.playerId || t.player2Id === item.playerId);
+                if (team && team.player1Id && team.player2Id) {
+                    playersToConfirm = [team.player1Id, team.player2Id];
+                }
+            }
+
             const updatedT = {
               ...tournament,
-              pendingPaymentPlayerIds: (tournament.pendingPaymentPlayerIds || []).filter(id => id !== item.playerId),
-              registeredPlayerIds: [...(tournament.registeredPlayerIds || []), item.playerId]
+              pendingPaymentPlayerIds: (tournament.pendingPaymentPlayerIds || []).filter(id => !playersToConfirm.includes(id)),
+              registeredPlayerIds: [...new Set([...(tournament.registeredPlayerIds || []), ...playersToConfirm])]
             };
             
             onUpdateTournament(updatedT);
-            Alert.alert("Success", "Player moved to registered list.");
+            Alert.alert("Success", playersToConfirm.length > 1 ? "Team moved to registered list." : "Player moved to registered list.");
           }
         }
       ]

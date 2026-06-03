@@ -263,15 +263,27 @@ export const SupportTicketSystem = ({
     setIsSubmittingRating(true);
     setCsatRating(rating);
     try {
-      const res = await fetch(`${config.API_BASE_URL}/api/support/rate-ticket`, {
+      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/rate-ticket`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID, 'x-user-id': userId },
         credentials: 'include',
         body: JSON.stringify({ ticketId: selectedTicket.id, rating, feedback: csatFeedback })
       });
       if (res.ok) {
+        const data = await res.json();
         notify("Thank you for your feedback!");
-        setSelectedTicket(prev => ({ ...prev, rating }));
+        
+        // 🛡️ [SYNC_FIX]: Update both local state AND global store to survive re-renders and delta syncs
+        if (data.ticket) {
+          const { useSupportStore } = require('../stores/useSupportStore');
+          const tickets = useSupportStore.getState().supportTickets;
+          useSupportStore.getState().setSupportTickets(
+            tickets.map(t => t.id === selectedTicket.id ? data.ticket : t)
+          );
+          setSelectedTicket(data.ticket);
+        } else {
+          setSelectedTicket(prev => ({ ...prev, rating }));
+        }
       } else {
         const data = await res.json();
         notify("Error", data.error || "Failed to submit rating");
@@ -488,9 +500,13 @@ export const SupportTicketSystem = ({
         await SupportService.replyToTicket(selectedTicket.id, userId, `CLOSURE_REQUEST_EVENT: ${closureReason.trim()}`);
       }
 
-      const history = (selectedTicket.messages || []).map(m => 
+      let history = (selectedTicket.messages || []).map(m => 
         `${m.senderId === 'admin' ? 'Admin' : (m.senderId === userId ? 'User' : 'Other')}: ${m.text || ''}`
       ).join('\n');
+
+      if (!history.trim()) {
+         history = "No messages were exchanged in this ticket.";
+      }
 
       const prompt = [
         { role: 'system', text: "You are a professional support analyst. Read the conversation history and summarize it into exactly 3 concise sentences. 1) The original issue. 2) The actions taken. 3) The resolution summary. Be clear and objective." },
@@ -499,11 +515,11 @@ export const SupportTicketSystem = ({
 
       const aiSummary = await generateAIResponse(prompt);
       
-      const res = await onUpdateStatus(selectedTicket.id, 'Closed', aiSummary);
+      const res = await onUpdateStatus(selectedTicket.id, 'Closed', aiSummary || "Closure summary was successfully resolved, but AI was unable to generate a summary.");
       if (res?.success) notify(res);
     } catch (e) {
       console.error("User-initiated closure failed:", e);
-      await onUpdateStatus(selectedTicket.id, 'Closed');
+      await onUpdateStatus(selectedTicket.id, 'Closed', "Closure summary was successfully resolved, but AI was unable to generate a summary due to an error.");
     } finally {
       setShowClosureModal(false);
       setClosureReason('');

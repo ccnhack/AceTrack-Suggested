@@ -100,7 +100,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
  */
 export async function sendTokenToBackend(userId: string, token: string) {
   try {
-    const response = await fetch(`${config.API_BASE_URL}/api/register-push-token`, {
+    const response = await fetch(`${config.API_BASE_URL}/api/v1/register-push-token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

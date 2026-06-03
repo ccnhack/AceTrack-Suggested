@@ -98,8 +98,13 @@ export const useTournamentsStore = create((set, get) => {
           
           console.log(`[TournamentsStore] API Registration successful for ${tid}. Local state synced.`);
           
-          // Trigger a background pull to grab any other missing data
-          syncOrchestrator.forcePullData();
+          if (syncOrchestrator) {
+            syncOrchestrator.syncAndSaveData({ 
+              tournaments: updatedTournaments,
+              players: updatedPlayers,
+              currentUser: result.currentUser 
+            }, false, true).catch(console.error);
+          }
           
           return result;
         } else {
@@ -428,7 +433,13 @@ export const useTournamentsStore = create((set, get) => {
              Alert.alert('Opt-out Successful', 'You have been removed from the tournament.');
           }
           
-          syncOrchestrator.forcePullData();
+          if (syncOrchestrator) {
+            syncOrchestrator.syncAndSaveData({ 
+              tournaments: updatedTournaments,
+              players: updatedPlayers,
+              currentUser: result.currentUser 
+            }, false, true).catch(console.error);
+          }
         } else {
           Alert.alert('Opt-out Failed', result?.message || result?.error || 'Could not process request.');
         }

@@ -360,9 +360,9 @@ export default function({ io }) {
       let amountToCalculateRefundOn = userPaidCost;
 
       if (tData.doublesTeams) {
-        const team = tData.doublesTeams.find(t => t.player1Id === userId || t.player2Id === userId);
+        const team = tData.doublesTeams.find(t => String(t.player1Id).toLowerCase() === lowerUserId || String(t.player2Id).toLowerCase() === lowerUserId);
         if (team) {
-          if (optOutMode === 'team' && team.player1Id === userId && team.player2Id) {
+          if (optOutMode === 'team' && String(team.player1Id).toLowerCase() === lowerUserId && team.player2Id) {
             // Opting out both players
             usersToRemove = [team.player1Id, team.player2Id];
             lowerUsersToRemove = usersToRemove.map(id => String(id).toLowerCase());
@@ -412,14 +412,11 @@ export default function({ io }) {
       }
 
       // 2. Prepare Tournament Updates
-      const caseInsensitiveUsers = usersToRemove.flatMap(u => [u, String(u).toLowerCase(), new RegExp(`^${u}$`, 'i')]);
-      
+      let updatedRegistered = (tData.registeredPlayerIds || []).filter(id => !lowerUsersToRemove.includes(String(id).toLowerCase()));
+      let updatedPending = (tData.pendingPaymentPlayerIds || []).filter(id => !lowerUsersToRemove.includes(String(id).toLowerCase()));
+      let updatedWaitlisted = (tData.waitlistedPlayerIds || []).filter(id => !lowerUsersToRemove.includes(String(id).toLowerCase()));
+
       const tUpdate = {
-        $pull: {
-          'data.registeredPlayerIds': { $in: caseInsensitiveUsers },
-          'data.pendingPaymentPlayerIds': { $in: caseInsensitiveUsers },
-          'data.waitlistedPlayerIds': { $in: caseInsensitiveUsers }
-        },
         $addToSet: {
           'data.optedOutPlayerIds': { $each: lowerUsersToRemove }
         },
@@ -469,24 +466,23 @@ export default function({ io }) {
       let promotedId = null;
       let isPaid = amountToCalculateRefundOn > 0;
       
-      if (wasRegistered && (tData.waitlistedPlayerIds || []).length > 0) {
+      if (wasRegistered && updatedWaitlisted.length > 0) {
         // We might need to promote multiple people if optOutMode === 'team'
-        const waitlist = (tData.waitlistedPlayerIds || []).filter(pid => !usersToRemove.includes(pid));
-        const numToPromote = Math.min(waitlist.length, usersToRemove.length);
+        const numToPromote = Math.min(updatedWaitlisted.length, usersToRemove.length);
         
         if (numToPromote > 0) {
-          const promotedIds = waitlist.slice(0, numToPromote);
+          const promotedIds = updatedWaitlisted.slice(0, numToPromote);
           promotedId = promotedIds[0]; // (Returning first one for legacy compatibility in response)
           
-          tUpdate.$pull['data.waitlistedPlayerIds'] = { $in: [...usersToRemove, ...promotedIds] };
+          updatedWaitlisted = updatedWaitlisted.filter(id => !promotedIds.includes(id));
           
           if (isPaid) {
-            tUpdate.$addToSet['data.pendingPaymentPlayerIds'] = { $each: promotedIds };
+            updatedPending = [...new Set([...updatedPending, ...promotedIds])];
             promotedIds.forEach(pid => {
               tUpdate.$set[`data.pendingPaymentTimestamps.${pid}`] = Date.now();
             });
           } else {
-            tUpdate.$addToSet['data.registeredPlayerIds'] = { $each: promotedIds };
+            updatedRegistered = [...new Set([...updatedRegistered, ...promotedIds])];
           }
           tUpdate.$unset = tUpdate.$unset || {};
           promotedIds.forEach(pid => {
@@ -494,6 +490,10 @@ export default function({ io }) {
           });
         }
       }
+
+      tUpdate.$set['data.registeredPlayerIds'] = updatedRegistered;
+      tUpdate.$set['data.pendingPaymentPlayerIds'] = updatedPending;
+      tUpdate.$set['data.waitlistedPlayerIds'] = updatedWaitlisted;
 
       const updatedTournament = await Tournament.findOneAndUpdate(
         { id: tid },
@@ -527,16 +527,39 @@ export default function({ io }) {
       
       // Cleanup registeredTournamentIds for all removed users
       for (const uId of usersToRemove) {
+        const updatePayload = {
+          $pull: { 'data.registeredTournamentIds': tid },
+          $set: { lastUpdated: new Date() }
+        };
+
+        let notifTitle = null;
+        let notifBody = null;
+
+        if (uId !== userId) {
+          notifTitle = 'Tournament Opt-Out';
+          notifBody = `Your partner has opted your team out of "${tData.title}".`;
+          const notif = {
+            id: `notif_optout_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
+            title: notifTitle,
+            message: notifBody,
+            date: new Date().toISOString(),
+            read: false,
+            type: 'tournament_optout',
+            tournamentId: tid
+          };
+          updatePayload.$push = { 'data.notifications': { $each: [notif], $position: 0 } };
+        }
+
         const pUpdateDoc = await Player.findOneAndUpdate(
           { id: uId },
-          {
-            $pull: { 'data.registeredTournamentIds': tid },
-            $set: { lastUpdated: new Date() }
-          },
+          updatePayload,
           { new: true }
         );
+        
         if (uId === userId) {
           updatedUser = pUpdateDoc;
+        } else if (pUpdateDoc && pUpdateDoc.data && pUpdateDoc.data.pushTokens && pUpdateDoc.data.pushTokens.length > 0) {
+          sendPushNotification(pUpdateDoc.data.pushTokens, notifTitle, notifBody, { tournamentId: tid, type: 'TOURNAMENT_OPTOUT' }).catch(console.error);
         }
       }
 

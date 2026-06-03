@@ -31,7 +31,11 @@ const TournamentCard = ({
   const hasAlreadyPaid = userLower && t.playerPaymentMethods && (
     t.playerPaymentMethods[userId] || t.playerPaymentMethods[userLower]
   );
-  const isDoublesSoloPaid = isDoublesFormat && rawPendingPayment && hasAlreadyPaid;
+  let myTeam = null;
+  if (isDoublesFormat && userId && t.doublesTeams) {
+    myTeam = t.doublesTeams.find(team => team.player1Id === userId || team.player2Id === userId);
+  }
+  const isDoublesSoloPaid = isDoublesFormat && rawPendingPayment && hasAlreadyPaid && !myTeam?.player2Id;
   const isPendingPayment = isDoublesSoloPaid ? false : rawPendingPayment;
   const isAssignedCoach = userId && (t.assignedCoachIds || []).includes(userId);
   const isWaitlisted = userId && (t.waitlistedPlayerIds || []).some(id => String(id).toLowerCase() === String(userId).toLowerCase());

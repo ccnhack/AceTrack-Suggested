@@ -32,7 +32,7 @@ export const generateAIResponse = async (messages: ChatMessage[]): Promise<strin
       headers['Authorization'] = `Bearer ${userToken}`;
     }
 
-    const response = await fetch(`${config.API_BASE_URL}/api/support/ai-summary`, {
+    const response = await fetch(`${config.API_BASE_URL}/api/v1/support/ai-summary`, {
       method: 'POST',
       headers,
       credentials: 'include',

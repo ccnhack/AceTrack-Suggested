@@ -122,9 +122,11 @@ export const PaymentModal = memo(({
                   } else {
                       Alert.alert(
                         "Registration successful!", 
-                        result.teamCode 
-                          ? `You have paid half the entry fee. Your Team Code is: ${result.teamCode}. Share this with your partner so they can join your team!`
-                          : "You are successfully registered!"
+                        isRegisteringPartner 
+                          ? (method === 'upi' ? "Your team registration is initiated. Your payment is pending verification." : "Your team is successfully registered!")
+                          : (result.teamCode 
+                              ? `You have paid half the entry fee. Your Team Code is: ${result.teamCode}. Share this with your partner so they can join your team!`
+                              : "You are successfully registered!")
                       );
                   }
               }, 300);

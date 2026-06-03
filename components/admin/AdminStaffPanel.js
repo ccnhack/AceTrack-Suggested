@@ -62,7 +62,7 @@ const AdminStaffPanel = () => {
       const headers = { 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${config.API_BASE_URL}/api/support/invites`, {
+      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/invites`, {
         headers,
         credentials: 'include'
       });
@@ -86,7 +86,7 @@ const AdminStaffPanel = () => {
       const headers = { 'Content-Type': 'application/json', 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${config.API_BASE_URL}/api/support/invite`, {
+      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/invite`, {
         method: 'POST',
         headers,
         credentials: 'include',
@@ -123,7 +123,7 @@ const AdminStaffPanel = () => {
       const headers = { 'Content-Type': 'application/json', 'x-user-id': 'admin' };
       if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
 
-      const res = await fetch(`${config.API_BASE_URL}/api/support/invite/resend`, {
+      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/invite/resend`, {
         method: 'POST',
         headers,
         credentials: 'include',
@@ -158,7 +158,7 @@ const AdminStaffPanel = () => {
               const headers = { 'Content-Type': 'application/json', 'x-user-id': 'admin' };
               if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
 
-              const res = await fetch(`${config.API_BASE_URL}/api/support/invite/expire`, {
+              const res = await fetch(`${config.API_BASE_URL}/api/v1/support/invite/expire`, {
                 method: 'POST',
                 headers,
                 credentials: 'include',

@@ -92,7 +92,7 @@ export const AdminGrievancesPanel = ({
           const token = await storage.getItem('userToken');
           const headers = { 'x-ace-api-key': config.ACE_API_KEY || config.PUBLIC_APP_ID };
           if (token) headers['Authorization'] = `Bearer ${token}`;
-          const res = await fetch(`${config.API_BASE_URL}/api/support/attendance`, { headers });
+          const res = await fetch(`${config.API_BASE_URL}/api/v1/support/attendance`, { headers });
           if (res.ok) {
             const data = await res.json();
             setLiveAttendanceData(data.attendance || []);
@@ -381,24 +381,28 @@ export const AdminGrievancesPanel = ({
     try {
       // 🛡️ [OPTIMIZATION] (v2.6.291): Limit history to last 20 messages to prevent token overflow
       const recentMessages = (selectedTicket.messages || []).slice(-20);
-      const history = recentMessages.map(m => {
+      let history = recentMessages.map(m => {
         const sender = m.senderId === 'admin' ? 'Admin' : (players.find(p => p.id === m.senderId)?.name || 'User');
         const text = (m.text || '').trim();
         return `${sender}: ${text}`;
       }).filter(line => line.split(': ')[1]).join('\n');
     
+      if (!history.trim()) {
+         history = "No messages were exchanged in this ticket.";
+      }
+
       const prompt = [
         { role: 'system', text: "You are a professional support analyst. Read the conversation history and summarize it into exactly 3 concise sentences. 1) The original issue. 2) The troubleshooting steps taken. 3) The final fix/resolution. Be clear and objective." },
         { role: 'user', text: `History:\n${history}` }
       ];
     
       const rawAiSummary = await generateAIResponse(prompt);
-      const aiSummary = rawAiSummary ? rawAiSummary.trim() : null;
+      const aiSummary = rawAiSummary ? rawAiSummary.trim() : "Closure summary was successfully resolved, but AI was unable to generate a summary.";
       const res = await onUpdateStatus(selectedTicket.id, pendingStatus, aiSummary);
       notify(res);
     } catch (e) {
       console.error("AI Resolution Summary Failed:", e);
-      const res = await onUpdateStatus(selectedTicket.id, pendingStatus);
+      const res = await onUpdateStatus(selectedTicket.id, pendingStatus, "Closure summary was successfully resolved, but AI was unable to generate a summary due to an error.");
       notify(res);
     } finally {
       setIsGeneratingSummary(false);
