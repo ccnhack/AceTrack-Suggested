@@ -368,13 +368,60 @@ export const AuthProvider = ({ children }) => {
 
   }, [onUpdateUser]);
 
-  const onMarkNotificationsRead = useCallback(() => {
+  const onMarkNotificationsRead = useCallback(async () => {
     if (!currentUserRef.current) return;
     const updated = {
       ...currentUserRef.current,
       notifications: (currentUserRef.current.notifications || []).map(n => ({ ...n, read: true }))
     };
     onUpdateUser(updated);
+    
+    try {
+      const token = await storage.getItem('userToken');
+      await fetch(`${config.API_BASE_URL}/api/v1/data/notifications/mark-read`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-ace-api-key': config.ACE_API_KEY,
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        credentials: 'include'
+      });
+    } catch (e) {
+      console.warn("[AuthContext] Failed to mark notifications as read on backend", e);
+    }
+  }, [onUpdateUser]);
+
+  const onMarkSingleNotificationRead = useCallback(async (notifId) => {
+    if (!currentUserRef.current) return;
+    const updated = {
+      ...currentUserRef.current,
+      notifications: (currentUserRef.current.notifications || []).map(n => 
+        n.id === notifId ? { ...n, read: true } : n
+      )
+    };
+    onUpdateUser(updated);
+
+    try {
+      const token = await storage.getItem('userToken');
+      // Re-using the mark-read endpoint which marks all, or we could just mark all since 
+      // the backend currently marks all in that endpoint.
+      // Actually, since backend `/mark-read` currently marks ALL as read, let's keep it simple
+      // and just call it. It will mark all as read on backend, which is acceptable or we can modify it.
+      // Let's modify the backend to accept an optional notifId.
+      await fetch(`${config.API_BASE_URL}/api/v1/data/notifications/mark-read`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-ace-api-key': config.ACE_API_KEY,
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ notifId }),
+        credentials: 'include'
+      });
+    } catch (e) {
+      console.warn("[AuthContext] Failed to mark single notification as read on backend", e);
+    }
   }, [onUpdateUser]);
 
   // 🛡️ [AUDIT FIX] (v2.6.327): Memoize value to prevent unnecessary re-renders
@@ -398,11 +445,13 @@ export const AuthProvider = ({ children }) => {
     onResetPassword,
     onTopUp,
     onMarkNotificationsRead,
+    onMarkSingleNotificationRead,
     isAuthReady
   }), [
     currentUser, userRole, verificationLatch, viewingLanding, showSignup,
     isAuthReady, onLogin, onLogout, onUpdateUser, onVerifyAccount,
-    onRegisterUser, onResetPassword, onTopUp, onMarkNotificationsRead
+    onRegisterUser, onResetPassword, onTopUp, onMarkNotificationsRead,
+    onMarkSingleNotificationRead
   ]);
 
   return (

@@ -62,6 +62,56 @@ router.post('/register-push-token', apiKeyGuard, async (req, res) => {
   }
 });
 
+router.post('/mark-read', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
+  const userId = req.userId;
+  const { notifId } = req.body || {};
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+  const playerDoc = await Player.findOne({ id: userId });
+  if (!playerDoc || !playerDoc.data) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  const notifications = playerDoc.data.notifications || [];
+  let updated = false;
+  
+  notifications.forEach(n => {
+    if (!n.read) {
+      if (!notifId || n.id === notifId) {
+        n.read = true;
+        updated = true;
+      }
+    }
+  });
+
+  if (updated) {
+    await Player.updateOne(
+      { id: userId }, 
+      { $set: { "data.notifications": notifications }, lastUpdated: new Date() }
+    );
+    
+    // Update AppState for real-time clients syncing
+    const state = await AppState.findOne().sort({ version: -1 });
+    if (state && state.data && state.data.players) {
+      const idx = state.data.players.findIndex(p => p.id === userId);
+      if (idx !== -1) {
+        state.data.players[idx].notifications = notifications;
+        const now = new Date().toISOString();
+        const updatedState = await AppState.findOneAndUpdate(
+          { _id: state._id },
+          { $inc: { version: 1 }, $set: { lastUpdated: now, "data.players": state.data.players } },
+          { new: true }
+        );
+        if (io) {
+          io.emit('data_updated', { lastUpdated: updatedState.lastUpdated, version: updatedState.version, keys: ['players'] });
+        }
+      }
+    }
+  }
+
+  res.json({ success: true });
+}));
+
 router.post('/ping-coach', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
   const { tournamentId, coachId } = req.body;
   if (!tournamentId || !coachId) return res.status(400).json({ error: 'Missing parameters' });

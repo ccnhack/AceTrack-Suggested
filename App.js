@@ -73,7 +73,7 @@ import { useSupportStore } from './stores';
 
 // 🔄 Centralized Versioning// 🚀 EXPO OTA SYNC HUB (v2.6.569)
 // ALWAYS BUMP THIS VERSION TO TRIGGER CLIENT-SIDE CACHE INVALIDATION
-const APP_VERSION = '2.6.604';
+const APP_VERSION = '2.6.605';
 const linking = {
   prefixes: [config.API_BASE_URL || 'https://acetrack-suggested.onrender.com', 'acetrack://'],
   config: {
@@ -104,7 +104,7 @@ function Root() {
   const [isUpdating, setIsUpdating] = useState(false);
   
   const { isFullyConnected, isSyncing } = useSync();
-  const { currentUser, userRole, userId, onMarkNotificationsRead, isAuthReady } = useAuth();
+  const { currentUser, userRole, userId, onMarkNotificationsRead, onMarkSingleNotificationRead, isAuthReady } = useAuth();
   
   const { showDemo, hasChecked, markDemoSeen } = useInteractiveDemo(currentUser);
   const { showDemo: showAcademyDemo, hasChecked: academyHasChecked, markDemoSeen: markAcademyDemoSeen } = useAcademyInteractiveDemo(currentUser);
@@ -172,10 +172,16 @@ function Root() {
         onClear={onMarkNotificationsRead}
         onNotificationClick={(notif) => {
           setShowNotifications(false);
+          if (notif.id && onMarkSingleNotificationRead) {
+            onMarkSingleNotificationRead(notif.id);
+          }
           if (navigationRef.current) {
-            if (notif.type === 'support') navigationRef.current.navigate('Profile');
-            else if (notif.type === 'video') navigationRef.current.navigate('Recordings');
-            else if (notif.type === 'challenge') navigationRef.current.navigate('Matches');
+            if (notif.type === 'support') navigationRef.current.navigate('Main', { screen: 'Profile' });
+            else if (notif.type === 'video') navigationRef.current.navigate('Main', { screen: 'Recordings' });
+            else if (notif.type === 'challenge') navigationRef.current.navigate('Main', { screen: 'Matches' });
+            else if (notif.type && notif.type.startsWith('TOURNAMENT')) navigationRef.current.navigate('Main', { screen: 'Explore' });
+            else if (notif.type === 'COACH_INDIVIDUAL_PING') navigationRef.current.navigate('Main', { screen: 'Explore' });
+            else navigationRef.current.navigate('Main', { screen: 'Profile' });
           }
         }}
       />
