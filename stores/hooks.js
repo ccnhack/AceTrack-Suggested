@@ -53,7 +53,7 @@ export function usePlayersQuery() {
     staleTime: 60 * 1000, // Players change less frequently
   });
   
-  return { ...query, data: players?.length > 0 ? players : query.data };
+  return { ...query, data: players };
 }
 
 /**
@@ -72,7 +72,7 @@ export function useTournamentsQuery() {
     staleTime: 30 * 1000,
   });
   
-  return { ...query, data: tournaments?.length > 0 ? tournaments : query.data };
+  return { ...query, data: tournaments };
 }
 
 /**
@@ -92,7 +92,7 @@ export function useSupportTicketsQuery() {
     refetchOnWindowFocus: true
   });
   
-  return { ...query, data: supportTickets?.length > 0 ? supportTickets : query.data };
+  return { ...query, data: supportTickets };
 }
 
 /**
@@ -111,7 +111,7 @@ export function useMatchmakingQuery() {
     staleTime: 30 * 1000,
   });
   
-  return { ...query, data: matchmaking?.length > 0 ? matchmaking : query.data };
+  return { ...query, data: matchmaking };
 }
 
 /**
@@ -130,7 +130,7 @@ export function usePartnerRequestsQuery() {
     staleTime: 30 * 1000,
   });
   
-  return { ...query, data: partnerRequests?.length > 0 ? partnerRequests : query.data };
+  return { ...query, data: partnerRequests };
 }
 
 /**
@@ -149,7 +149,7 @@ export function useEvaluationsQuery() {
     staleTime: 60 * 1000,
   });
   
-  return { ...query, data: evaluations?.length > 0 ? evaluations : query.data };
+  return { ...query, data: evaluations };
 }
 
 // ═══════════════════════════════════════════════════════════════
