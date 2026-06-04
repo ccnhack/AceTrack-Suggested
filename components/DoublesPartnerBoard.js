@@ -280,16 +280,24 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
                 const t = tournaments?.find(tx => tx.id === item.linkedTournamentId);
                 const isUserRegistered = t?.registeredPlayerIds?.includes(user.id) || t?.pendingPaymentPlayerIds?.includes(user.id);
                 
+                let targetTeamCode = null;
+                if (t?.doublesTeams) {
+                  const creatorTeam = t.doublesTeams.find(team => String(team.player1Id) === String(item.creatorId) || String(team.player2Id) === String(item.creatorId));
+                  if (creatorTeam) {
+                    targetTeamCode = creatorTeam.teamCode;
+                  }
+                }
+                
                 if (isUserRegistered) {
                   Alert.alert(
                     'Join Team', 
-                    `Enter Team Code to join this team. Navigate to the tournament details and use the code.`,
+                    `You are already registered. Go to the tournament details to join this team using their code.`,
                     [
                       { text: 'Cancel', style: 'cancel' },
                       { 
                         text: 'Go to Tournament', 
                         onPress: () => {
-                          navigation.navigate('Explore', { openTournamentId: item.linkedTournamentId });
+                          navigation.navigate('Explore', { openTournamentId: item.linkedTournamentId, teamCode: targetTeamCode });
                         }
                       }
                     ]
@@ -297,13 +305,13 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
                 } else {
                   Alert.alert(
                     'Tournament Registration', 
-                    'You must register for this tournament first and use their Team Code during registration to pair up.',
+                    'Registering will automatically pair you with this team.',
                     [
                       { text: 'Cancel', style: 'cancel' },
                       { 
-                        text: 'Register Now', 
+                        text: 'Register & Pay', 
                         onPress: () => {
-                          navigation.navigate('Explore', { openTournamentId: item.linkedTournamentId });
+                          navigation.navigate('Explore', { openTournamentId: item.linkedTournamentId, teamCode: targetTeamCode, removePartnerRequestId: item.id });
                         }
                       }
                     ]

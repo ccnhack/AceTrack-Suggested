@@ -120,7 +120,6 @@ const ExploreScreen = ({ navigation, route }) => {
       const t = (tournaments || []).find(it => String(it.id) === String(tid));
       if (t) {
         console.log(`[Explore] Restoring tournament ${tid} from URL/Params`);
-        setSelectedTournament(t);
         
         if (route?.params?.teamCode) {
            setRegPaymentTarget(t);
@@ -128,6 +127,8 @@ const ExploreScreen = ({ navigation, route }) => {
            if (route?.params?.removePartnerRequestId) {
              setRemovePartnerRequestId(route.params.removePartnerRequestId);
            }
+        } else {
+           setSelectedTournament(t);
         }
         
         if (routeTid) navigation.setParams({ selectedTournamentId: null, openTournamentId: null, teamCode: null });
