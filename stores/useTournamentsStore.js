@@ -519,9 +519,22 @@ export const useTournamentsStore = create((set, get) => {
           );
           set({ tournaments: updatedTournaments });
 
+          // 🛡️ [v2.6.615] Also update currentUser and players stores
+          if (result.currentUser) {
+            const currentPlayers = usePlayersStore.getState().players;
+            const updatedPlayers = currentPlayers.map(p =>
+              p.id === currentUser.id ? result.currentUser : p
+            );
+            usePlayersStore.getState().setPlayers(updatedPlayers);
+            useAuthStore.getState().setCurrentUser(result.currentUser);
+          }
+
           // Sync
           if (syncOrchestrator) {
-            syncOrchestrator.syncAndSaveData({ tournaments: updatedTournaments }, false, true).catch(console.error);
+            syncOrchestrator.syncAndSaveData({ 
+              tournaments: updatedTournaments,
+              ...(result.currentUser ? { currentUser: result.currentUser } : {})
+            }, false, true).catch(console.error);
           }
 
           return result;

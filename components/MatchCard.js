@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSync } from '../context/SyncContext';
 import { formatDateIST } from '../utils/tournamentUtils';
+import PartnerChatModal from './PartnerChatModal';
 
 
 const MatchCard = ({
@@ -10,6 +11,7 @@ const MatchCard = ({
   user,
   viewMode,
   isCoach,
+  players,
   onConfirmCoachRequest,
   onDeclineCoachRequest,
   setShowOtpModal,
@@ -17,6 +19,7 @@ const MatchCard = ({
   onReschedule,
   onOptOut,
   setViewingPlayersFor,
+  setRosterTab,
   navigation
 }) => {
   const { serverClockOffset } = useSync();
@@ -36,16 +39,34 @@ const MatchCard = ({
   let isLeadInTeam = false;
   let userTeamCode = null;
 
+  // 🛡️ [v2.6.615] Case-insensitive team lookup to handle mixed-case IDs
   if (isDoubles && user?.id && t.doublesTeams) {
-    myTeam = t.doublesTeams.find(team => team.player1Id === user.id || team.player2Id === user.id);
+    myTeam = t.doublesTeams.find(team => 
+      String(team.player1Id).toLowerCase() === userLower || 
+      String(team.player2Id).toLowerCase() === userLower
+    );
     if (myTeam) {
-      if (myTeam.player2Id === user.id) isPartnerInTeam = true;
-      if (myTeam.player1Id === user.id && myTeam.player2Id) isLeadInTeam = true;
-      if (myTeam.player1Id === user.id && !myTeam.player2Id) {
+      if (String(myTeam.player2Id).toLowerCase() === userLower) isPartnerInTeam = true;
+      if (String(myTeam.player1Id).toLowerCase() === userLower && myTeam.player2Id) isLeadInTeam = true;
+      if (String(myTeam.player1Id).toLowerCase() === userLower && !myTeam.player2Id) {
         userTeamCode = myTeam.teamCode;
       }
     }
   }
+
+  // 🤝 [v2.6.615] Resolve partner name for display
+  let partnerName = null;
+  let partnerId = null;
+  if (myTeam) {
+    const isP1 = String(myTeam.player1Id).toLowerCase() === userLower;
+    partnerId = isP1 ? myTeam.player2Id : myTeam.player1Id;
+    if (partnerId && players) {
+      const partnerPlayer = players.find(p => String(p.id).toLowerCase() === String(partnerId).toLowerCase());
+      partnerName = partnerPlayer?.name || null;
+    }
+  }
+
+  const [showPartnerChat, setShowPartnerChat] = useState(false);
 
   // 🛡️ v2.6.583: Check if this is a doubles solo player who already paid their half
   const isDoublesSoloPaid = isDoubles && rawPendingPayment && myPayment && !myTeam?.player2Id;
@@ -271,6 +292,40 @@ const MatchCard = ({
           <Text style={{ fontSize: 24, fontWeight: '900', color: '#312E81', letterSpacing: 4 }}>{userTeamCode}</Text>
           <Text style={{ fontSize: 10, color: '#6366F1', textAlign: 'center', marginTop: 4 }}>Share this with your partner or wait for matchmaking</Text>
         </View>
+      )}
+
+      {/* 🤝 [v2.6.615] Partner Info Row */}
+      {isDoubles && myTeam && partnerName && viewMode === 'upcoming' && (
+        <View style={styles.partnerRow}>
+          <View style={styles.partnerInfo}>
+            <Ionicons name="people" size={16} color="#4F46E5" />
+            <View style={{ marginLeft: 8, flex: 1 }}>
+              <Text style={styles.partnerLabel}>Your Partner</Text>
+              <Text style={styles.partnerName} numberOfLines={1}>{partnerName}</Text>
+            </View>
+          </View>
+          <TouchableOpacity 
+            style={styles.chatButton}
+            onPress={() => setShowPartnerChat(true)}
+          >
+            <Ionicons name="chatbubble-ellipses" size={14} color="#FFFFFF" />
+            <Text style={styles.chatButtonText}>Chat</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* 🤝 [v2.6.615] Partner Chat Modal */}
+      {showPartnerChat && partnerId && (
+        <PartnerChatModal
+          visible={showPartnerChat}
+          onClose={() => setShowPartnerChat(false)}
+          user={user}
+          partnerId={partnerId}
+          partnerName={partnerName}
+          tournamentId={t.id}
+          tournamentTitle={t.title}
+          tournamentDate={t.date}
+        />
       )}
 
       <View style={styles.matchActions}>
@@ -504,6 +559,51 @@ const styles = StyleSheet.create({
   buttonSlate: { backgroundColor: '#0F172A' },
   buttonWhite: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#F1F5F9' },
   buttonDisabled: { backgroundColor: '#F1F5F9' },
+  partnerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F0F0FF',
+    padding: 12,
+    borderRadius: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E0E0FF',
+  },
+  partnerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  partnerLabel: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#6366F1',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  partnerName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#312E81',
+    marginTop: 1,
+  },
+  chatButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4F46E5',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    gap: 5,
+  },
+  chatButtonText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
   buttonText: {
     fontSize: 10,
     fontWeight: '900',

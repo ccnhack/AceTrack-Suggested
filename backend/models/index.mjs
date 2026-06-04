@@ -340,3 +340,19 @@ const RateLimitSchema = new mongoose.Schema({
   expireAt: { type: Date, required: true, index: { expires: 0 } }
 });
 export const RateLimit = mongoose.model('RateLimit', RateLimitSchema);
+
+// ═══════════════════════════════════════════════════════════════
+// 💬 PARTNER CHAT MESSAGE (v2.6.615)
+// Lightweight P2P chat for doubles partners within a tournament
+// ═══════════════════════════════════════════════════════════════
+const PartnerChatMessageSchema = new mongoose.Schema({
+  tournamentId: { type: String, required: true, index: true },
+  senderId: { type: String, required: true },
+  senderName: { type: String, required: true },
+  receiverId: { type: String, required: true },
+  content: { type: String, required: true },
+  timestamp: { type: Date, default: Date.now },
+  createdAt: { type: Date, default: Date.now, index: { expires: '90d' } }
+});
+PartnerChatMessageSchema.index({ tournamentId: 1, senderId: 1, receiverId: 1 });
+export const PartnerChatMessage = mongoose.model('PartnerChatMessage', PartnerChatMessageSchema);

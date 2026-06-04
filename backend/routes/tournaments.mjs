@@ -133,12 +133,14 @@ export default function({ io }) {
 
       let newTeamCode = null;
 
+      // 🛡️ [v2.6.615] Lowercase all player IDs in doublesTeams for consistency
+      const lowerUserId = String(userId).toLowerCase();
       if (isDoubles) {
         if (joiningTeam) {
           // Update the existing team to add player2Id
           const teamIndex = tData.doublesTeams.findIndex(t => t.id === joiningTeam.id);
           if (teamIndex !== -1) {
-            tUpdate.$set[`data.doublesTeams.${teamIndex}.player2Id`] = userId;
+            tUpdate.$set[`data.doublesTeams.${teamIndex}.player2Id`] = lowerUserId;
             tUpdate.$set[`data.doublesTeams.${teamIndex}.updatedAt`] = new Date().toISOString();
           }
         } else {
@@ -149,15 +151,17 @@ export default function({ io }) {
             'data.doublesTeams': {
               id: teamId,
               teamCode: newTeamCode,
-              player1Id: userId,
-              player2Id: registeringPartnerId || null,
+              player1Id: lowerUserId,
+              player2Id: registeringPartnerId ? String(registeringPartnerId).toLowerCase() : null,
               createdAt: new Date().toISOString()
             }
           };
         }
       }
 
-      if (method === 'pending' || method === 'upi') {
+      // 🛡️ [v2.6.615] Per user request: UPI now registers directly (no pending).
+      // Only 'pending' method goes to pendingPaymentPlayerIds.
+      if (method === 'pending') {
          tUpdate.$addToSet['data.pendingPaymentPlayerIds'] = { $each: lowerUsersToRegister };
          tUpdate.$pull['data.registeredPlayerIds'] = { $in: caseInsensitiveUsers };
          for (const uId of lowerUsersToRegister) {
@@ -469,8 +473,20 @@ export default function({ io }) {
         } else {
           // Individual opt-out: remove just the opting-out user from their team
           const newTeams = tData.doublesTeams.map(team => {
-            if (team.player1Id === userId) return { ...team, player1Id: null };
-            if (team.player2Id === userId) return { ...team, player2Id: null };
+            const lowerUserIdOptingOut = String(userId).toLowerCase();
+            const lowerP1 = team.player1Id ? String(team.player1Id).toLowerCase() : null;
+            const lowerP2 = team.player2Id ? String(team.player2Id).toLowerCase() : null;
+
+            if (lowerP1 === lowerUserIdOptingOut) {
+              if (team.player2Id) {
+                // Shift player2 to player1 to keep the team alive and waiting for a new partner
+                return { ...team, player1Id: team.player2Id, player2Id: null };
+              }
+              return { ...team, player1Id: null };
+            }
+            if (lowerP2 === lowerUserIdOptingOut) {
+              return { ...team, player2Id: null };
+            }
             return team;
           }).filter(team => team.player1Id !== null || team.player2Id !== null);
           tUpdate.$set['data.doublesTeams'] = newTeams;
@@ -1070,7 +1086,7 @@ export default function({ io }) {
       const teamIndex = teams.findIndex(t => t.teamCode === teamCode && !t.player2Id);
       const updateOps = {
         $set: {
-          [`data.doublesTeams.${teamIndex}.player2Id`]: userId,
+          [`data.doublesTeams.${teamIndex}.player2Id`]: lowerUserId,
           [`data.doublesTeams.${teamIndex}.updatedAt`]: new Date().toISOString(),
           lastUpdated: new Date()
         }
@@ -1097,7 +1113,7 @@ export default function({ io }) {
           { id: tid, [`data.doublesTeams.${newIndex}.player2Id`]: null },
           {
             $set: {
-              [`data.doublesTeams.${newIndex}.player2Id`]: userId,
+              [`data.doublesTeams.${newIndex}.player2Id`]: lowerUserId,
               [`data.doublesTeams.${newIndex}.updatedAt`]: new Date().toISOString(),
               lastUpdated: new Date()
             }
@@ -1178,6 +1194,124 @@ export default function({ io }) {
 
     } catch (err) {
       console.error('[Join-Team API] Error:', err);
+      return res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // 💬 PARTNER CHAT (v2.6.615)
+  // GET  /api/v1/tournaments/:id/partner-chat — fetch messages
+  // POST /api/v1/tournaments/:id/partner-chat — send a message
+  // ═══════════════════════════════════════════════════════════════
+  router.get('/:id/partner-chat', authGuard, async (req, res) => {
+    const tid = req.params.id;
+    const userId = req.user.id;
+    const lowerUserId = String(userId).toLowerCase();
+
+    try {
+      const tournamentDoc = await Tournament.findOne({ id: tid });
+      if (!tournamentDoc) return res.status(404).json({ success: false, message: 'Tournament not found.' });
+
+      const tData = tournamentDoc.data || {};
+      const teams = tData.doublesTeams || [];
+
+      // Find the user's team and verify they have a partner
+      const myTeam = teams.find(t =>
+        String(t.player1Id).toLowerCase() === lowerUserId ||
+        String(t.player2Id).toLowerCase() === lowerUserId
+      );
+
+      if (!myTeam || !myTeam.player1Id || !myTeam.player2Id) {
+        return res.status(403).json({ success: false, message: 'You do not have a partner in this tournament.' });
+      }
+
+      const partnerId = String(myTeam.player1Id).toLowerCase() === lowerUserId
+        ? String(myTeam.player2Id).toLowerCase()
+        : String(myTeam.player1Id).toLowerCase();
+
+      // Fetch messages between these two players for this tournament
+      const { PartnerChatMessage } = await import('../models/index.mjs');
+      const messages = await PartnerChatMessage.find({
+        tournamentId: tid,
+        $or: [
+          { senderId: lowerUserId, receiverId: partnerId },
+          { senderId: partnerId, receiverId: lowerUserId }
+        ]
+      }).sort({ timestamp: 1 }).limit(200).lean();
+
+      return res.json({ success: true, messages, partnerId });
+
+    } catch (err) {
+      console.error('[Partner-Chat GET] Error:', err);
+      return res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  router.post('/:id/partner-chat', authGuard, async (req, res) => {
+    const tid = req.params.id;
+    const userId = req.user.id;
+    const lowerUserId = String(userId).toLowerCase();
+    const { content } = req.body;
+
+    if (!content || !content.trim()) {
+      return res.status(400).json({ success: false, message: 'Message content is required.' });
+    }
+
+    try {
+      const tournamentDoc = await Tournament.findOne({ id: tid });
+      if (!tournamentDoc) return res.status(404).json({ success: false, message: 'Tournament not found.' });
+
+      const tData = tournamentDoc.data || {};
+
+      // Check tournament date hasn't elapsed (allow chat until tournament day + 1 day buffer)
+      if (tData.date) {
+        const tournamentDate = new Date(tData.date);
+        const bufferDate = new Date(tournamentDate);
+        bufferDate.setDate(bufferDate.getDate() + 1);
+        if (new Date() > bufferDate) {
+          return res.status(403).json({ success: false, message: 'Chat is no longer available for past tournaments.' });
+        }
+      }
+
+      const teams = tData.doublesTeams || [];
+      const myTeam = teams.find(t =>
+        String(t.player1Id).toLowerCase() === lowerUserId ||
+        String(t.player2Id).toLowerCase() === lowerUserId
+      );
+
+      if (!myTeam || !myTeam.player1Id || !myTeam.player2Id) {
+        return res.status(403).json({ success: false, message: 'You do not have a partner in this tournament.' });
+      }
+
+      const partnerId = String(myTeam.player1Id).toLowerCase() === lowerUserId
+        ? String(myTeam.player2Id).toLowerCase()
+        : String(myTeam.player1Id).toLowerCase();
+
+      // Get sender name
+      const senderDoc = await Player.findOne({ id: userId });
+      const senderName = senderDoc?.data?.name || 'Unknown';
+
+      const { PartnerChatMessage } = await import('../models/index.mjs');
+      const msg = await PartnerChatMessage.create({
+        tournamentId: tid,
+        senderId: lowerUserId,
+        senderName,
+        receiverId: partnerId,
+        content: content.trim()
+      });
+
+      // Broadcast via Socket.io
+      if (io) {
+        io.to(`user:${partnerId}`).emit('partner_chat_message', {
+          tournamentId: tid,
+          message: msg.toObject()
+        });
+      }
+
+      return res.json({ success: true, message: msg.toObject() });
+
+    } catch (err) {
+      console.error('[Partner-Chat POST] Error:', err);
       return res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });

@@ -159,15 +159,26 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
         const linkedT = tournaments?.find(t => t.id === req.linkedTournamentId);
         if (linkedT) {
           const isUserRegistered = linkedT.registeredPlayerIds?.includes(user.id) || linkedT.pendingPaymentPlayerIds?.includes(user.id);
-          // Only hide if we are NOT in a mixed doubles or if we already have a full team
+          
+          // 1. Hide if the CURRENT USER viewing the board already has a full team
           let hasFullTeam = false;
           if (isUserRegistered && linkedT.doublesTeams) {
-             const userTeam = linkedT.doublesTeams.find(team => team.player1Id === user.id || team.player2Id === user.id);
+             const userTeam = linkedT.doublesTeams.find(team => String(team.player1Id) === String(user.id) || String(team.player2Id) === String(user.id));
              if (userTeam && userTeam.player1Id && userTeam.player2Id) {
                hasFullTeam = true;
              }
           }
           if (hasFullTeam) return false;
+
+          // 2. Hide if the CREATOR of the request already has a full team
+          let creatorHasFullTeam = false;
+          if (linkedT.doublesTeams) {
+             const creatorTeam = linkedT.doublesTeams.find(team => String(team.player1Id) === String(req.creatorId) || String(team.player2Id) === String(req.creatorId));
+             if (creatorTeam && creatorTeam.player1Id && creatorTeam.player2Id) {
+               creatorHasFullTeam = true;
+             }
+          }
+          if (creatorHasFullTeam) return false;
         }
       }
 
@@ -325,11 +336,6 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
                         onPress: async () => {
                           const result = await onJoinTeam(item.linkedTournamentId, targetTeamCode);
                           if (result && result.success) {
-                            // Auto-delete the partner request since they're now matched
-                            if (item.id) {
-                              PartnerService.deleteRequest(item.id);
-                              onRemoveRequest(item.id);
-                            }
                             Alert.alert('Team Matched! 🎉', result.message || 'You have been paired with your partner!');
                           }
                         }
@@ -649,10 +655,6 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
                       null
                     );
                     if (result && result.success) {
-                      if (paymentPartnerRequestId) {
-                        PartnerService.deleteRequest(paymentPartnerRequestId);
-                        onRemoveRequest(paymentPartnerRequestId);
-                      }
                       setRegPaymentTarget(null);
                       setTimeout(() => {
                         Alert.alert(
@@ -702,10 +704,6 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
                       null
                     );
                     if (result && result.success) {
-                      if (paymentPartnerRequestId) {
-                        PartnerService.deleteRequest(paymentPartnerRequestId);
-                        onRemoveRequest(paymentPartnerRequestId);
-                      }
                       setRegPaymentTarget(null);
                       setTimeout(() => {
                         Alert.alert(

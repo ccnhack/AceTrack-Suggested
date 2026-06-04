@@ -97,6 +97,7 @@ const MatchesScreen = ({ route, navigation }) => {
       user={user}
       viewMode={viewMode}
       isCoach={isCoach}
+      players={players}
       onConfirmCoachRequest={onConfirmCoachRequest}
       onDeclineCoachRequest={onDeclineCoachRequest}
       setShowOtpModal={setShowOtpModal}
@@ -107,7 +108,7 @@ const MatchesScreen = ({ route, navigation }) => {
       setRosterTab={setRosterTab}
       navigation={navigation}
     />
-  ), [user, viewMode, isCoach, onConfirmCoachRequest, onDeclineCoachRequest, onReschedule, onOptOut, navigation]);
+  ), [user, viewMode, isCoach, players, onConfirmCoachRequest, onDeclineCoachRequest, onReschedule, onOptOut, navigation]);
 
   useEffect(() => {
     if (isCoach) {
