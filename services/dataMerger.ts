@@ -28,7 +28,12 @@ export const dataMerger = {
     const mergedResult: any = { ...cloudData }; // Start with cloud as priority
 
     // 1. Merge Collections (ID-based, Cloud priority)
-    const collections = ['tournaments', 'matchVideos', 'matches', 'evaluations', 'auditLogs', 'matchmaking', 'partnerRequests'];
+    // 🛡️ [RESURRECTION_FIX] (v2.6.613): Removed 'partnerRequests' from union-merge.
+    // Union merge (mergeCollection) can NEVER propagate deletions: if an item exists in
+    // cloud but not local (because user deleted it), union adds it back. partnerRequests
+    // now uses cloud-wins strategy (from the `{ ...cloudData }` spread above), which
+    // correctly reflects server state after atomic pushes.
+    const collections = ['tournaments', 'matchVideos', 'matches', 'evaluations', 'auditLogs', 'matchmaking'];
     collections.forEach(key => {
       if (localData[key] || cloudData[key]) {
         mergedResult[key] = this.mergeCollection(localData[key] || [], cloudData[key] || []);

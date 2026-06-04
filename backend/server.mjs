@@ -870,7 +870,7 @@ app.use((err, req, res, next) => {
   const status = err.status || 500;
   const message = err.message || 'Internal Server Error';
   
-  // 🛡️ SYNC HARDENING (v2.6.74): Only log "CRITICAL" for actual 500s or unexpected crashes.
+  // 🛡️ SYNC HARDENING (v2.6.75): Only log "CRITICAL" for actual 500s or unexpected crashes.
   // 401, 403, and 404 are "expected" security rejections and shouldn't trigger heavy disk I/O logging.
   if (status >= 500) {
     console.error(`❌ [SERVER_ERROR] ${req.method} ${req.url}:`, err.stack);

@@ -1,11 +1,12 @@
-import { MongoClient } from 'mongodb';
-async function run() {
-  const uri = "mongodb+srv://acetrack:AcetracK123@cluster0.abc.mongodb.net/acetrack?retryWrites=true&w=majority";
-  const client = new MongoClient(uri);
-  await client.connect();
-  const db = client.db('acetrack');
-  const msgs = await db.collection('orgmessages').find().sort({ timestamp: -1 }).limit(5).toArray();
-  console.log(JSON.stringify(msgs.map(m => ({ content: m.content, replyTo: m.replyTo })), null, 2));
-  await client.close();
+import mongoose from 'mongoose';
+
+async function test() {
+  await mongoose.connect('mongodb+srv://admin:LhZ1uY23p26p20R8@acetrack-cluster.3s5i5.mongodb.net/acetrack_db?retryWrites=true&w=majority');
+  console.log("Connected");
+  const appState = await mongoose.connection.db.collection('appstates').findOne();
+  console.log("partnerRequests length:", appState?.data?.partnerRequests?.length);
+  console.log("partnerRequests:", JSON.stringify(appState?.data?.partnerRequests, null, 2));
+  process.exit(0);
 }
-run();
+
+test();

@@ -485,6 +485,56 @@ export const useTournamentsStore = create((set, get) => {
         return false;
       }
     },
+    // ═══════════════════════════════════════════════════════════════
+    // 🤝 JOIN TEAM (v2.6.613): For already-registered doubles players
+    // Calls the lightweight /join-team endpoint — no payment required.
+    // ═══════════════════════════════════════════════════════════════
+    onJoinTeam: async (tournamentId, teamCode) => {
+      try {
+        const currentUser = useAuthStore.getState().currentUser;
+        if (!currentUser) {
+          Alert.alert('Error', 'You must be logged in.');
+          return { success: false };
+        }
+
+        const token = await storage.getItem('userToken');
+        const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tournamentId}/join-team`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'X-User-Id': currentUser.id
+          },
+          credentials: 'include',
+          body: JSON.stringify({ teamCode })
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+          // Update local tournament state
+          const currentTournaments = get().tournaments;
+          const updatedTournaments = currentTournaments.map(t =>
+            t.id === tournamentId ? result.tournament : t
+          );
+          set({ tournaments: updatedTournaments });
+
+          // Sync
+          if (syncOrchestrator) {
+            syncOrchestrator.syncAndSaveData({ tournaments: updatedTournaments }, false, true).catch(console.error);
+          }
+
+          return result;
+        } else {
+          Alert.alert('Could not join team', result?.message || 'Please try again.');
+          return { success: false, message: result?.message };
+        }
+      } catch (e) {
+        console.error('[TournamentsStore] FATAL_ON_JOIN_TEAM_ERROR:', e);
+        Alert.alert('Error', 'Could not join team. Please try again.');
+        return { success: false };
+      }
+    },
   };
 });
 

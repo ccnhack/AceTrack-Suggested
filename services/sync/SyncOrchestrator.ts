@@ -32,6 +32,7 @@ class SyncOrchestrator {
   private lastServerUpdate: number = 0;
   private lastDeviceStamp: number = 0;  // Throttle device heartbeats (1 per 20min)
   private lastSuccessfulPullTimestamp: string | null = null; // 📡 [DELTA SYNC] (v2.6.431)
+  private inFlightPushKeys: Set<string> = new Set(); // 🛡️ [IN_FLIGHT_GUARD] (v2.6.612)
   
   private actionSequences: Map<string, any[]> = new Map();
   private throttleTimeouts: Map<string, any> = new Map();
@@ -526,10 +527,15 @@ class SyncOrchestrator {
 
         // 🛡️ [HEAL_GUARD_v2] (v2.6.511): Smart merge for pending local updates.
         // Same fix as PULL_GUARD_v2: collections get cloud-wins merged, non-collections keep local.
+        // 🛡️ [RESURRECTION_FIX] (v2.6.613): Atomic-only keys keep local to prevent resurrection.
+        const atomicOnlyKeys = ['partnerRequests'];
         const pendingUpdates = queueService.getPendingUpdates();
         for (const key in pendingUpdates) {
           if (serverData[key]) {
-            if (Array.isArray(serverData[key]) && Array.isArray(pendingUpdates[key])) {
+            if (atomicOnlyKeys.includes(key)) {
+              console.warn(`[SyncOrchestrator] [HEAL_GUARD_v2] Keeping local pending '${key}' (atomic-only, union would resurrect deletions).`);
+              delete serverData[key];
+            } else if (Array.isArray(serverData[key]) && Array.isArray(pendingUpdates[key])) {
               console.warn(`[SyncOrchestrator] [HEAL_GUARD_v2] Merging pending '${key}' with server data.`);
               serverData[key] = dataMerger.mergeCollection(pendingUpdates[key], serverData[key]);
             } else {
@@ -584,6 +590,11 @@ class SyncOrchestrator {
     await queueService.clearPending();
     if (this.syncTimeout) clearTimeout(this.syncTimeout);
     this.syncTimeout = null;
+
+    // 🛡️ [IN_FLIGHT_GUARD] (v2.6.612): Track which keys are being pushed so
+    // concurrent pulls/broadcasts don't overwrite them with stale server data.
+    const pushKeys = Object.keys(updates).filter(k => k !== 'atomicKeys' && k !== 'version');
+    pushKeys.forEach(k => this.inFlightPushKeys.add(k));
 
     // 🛡️ [GHOST PUSH PROTECTION] (v2.6.159)
     // Prevent initiating cloud push if there is actually nothing to sync.
@@ -643,8 +654,12 @@ class SyncOrchestrator {
         }
       });
 
-      if (status === 'SUCCESS') return;
+      if (status === 'SUCCESS') {
+        pushKeys.forEach(k => this.inFlightPushKeys.delete(k));
+        return;
+      }
       if (status === 'FAILURE') {
+        pushKeys.forEach(k => this.inFlightPushKeys.delete(k));
         await queueService.restorePending(savedPendingSync, updates);
         return; 
       }
@@ -687,6 +702,16 @@ class SyncOrchestrator {
     for (const key in pendingUpdates) {
       if (remoteUpdates[key]) {
         console.warn(`[SyncOrchestrator] [SYNC_GUARD] Skipping remote update for '${key}' because local changes are pending push.`);
+        delete remoteUpdates[key];
+      }
+    }
+
+    // 2b. 🛡️ [IN_FLIGHT_GUARD] (v2.6.612): Also skip keys that are currently being
+    // pushed to the server. pendingUpdates are cleared when a push starts, but the push
+    // may not have completed yet, so the server still has stale data for these keys.
+    for (const key of this.inFlightPushKeys) {
+      if (remoteUpdates[key]) {
+        console.warn(`[SyncOrchestrator] [IN_FLIGHT_GUARD] Skipping remote update for '${key}' because push is in-flight.`);
         delete remoteUpdates[key];
       }
     }
@@ -791,16 +816,32 @@ class SyncOrchestrator {
        // 🛡️ [PULL_GUARD_v2] (v2.6.511): Smart merge for pending local updates.
        // v2.6.510 deleted the entire key, blocking new registrations from other users.
        // Now: collections get cloud-wins merged, non-collections keep local pending.
+       // 🛡️ [RESURRECTION_FIX] (v2.6.613): Atomic-only keys (partnerRequests) MUST keep
+       // local version when pending. Union-merging them re-adds deleted items from server.
+       const atomicOnlyKeys = ['partnerRequests'];
        const pendingUpdates = queueService.getPendingUpdates();
        for (const key in pendingUpdates) {
          if (data[key]) {
-           if (Array.isArray(data[key]) && Array.isArray(pendingUpdates[key])) {
+           if (atomicOnlyKeys.includes(key)) {
+             console.warn(`[SyncOrchestrator] [PULL_GUARD_v2] Keeping local pending '${key}' (atomic-only, union would resurrect deletions).`);
+             delete data[key];
+           } else if (Array.isArray(data[key]) && Array.isArray(pendingUpdates[key])) {
              console.warn(`[SyncOrchestrator] [PULL_GUARD_v2] Merging pending '${key}' with server data.`);
              data[key] = dataMerger.mergeCollection(pendingUpdates[key], data[key]);
            } else {
              console.warn(`[SyncOrchestrator] [PULL_GUARD_v2] Keeping local pending '${key}'.`);
              delete data[key];
            }
+         }
+       }
+
+       // 🛡️ [IN_FLIGHT_GUARD] (v2.6.612): Skip keys with an active push in progress.
+       // This closes the window where pendingUpdates are cleared (push started) but the
+       // server hasn't processed the push yet, causing stale data to overwrite deletions.
+       for (const key of this.inFlightPushKeys) {
+         if (data[key]) {
+           console.warn(`[SyncOrchestrator] [IN_FLIGHT_GUARD] Skipping pull for '${key}' (push in-flight, server may have stale data).`);
+           delete data[key];
          }
        }
 

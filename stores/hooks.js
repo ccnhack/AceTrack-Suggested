@@ -130,7 +130,13 @@ export function usePartnerRequestsQuery() {
     staleTime: 30 * 1000,
   });
   
-  return { ...query, data: partnerRequests };
+  // 🛡️ [RESURRECTION_FIX] (v2.6.613): Safety filter at the UI boundary to strip
+  // any tombstone items (status: 'deleted'/'expired') that leaked through sync layers.
+  const cleanPartnerRequests = Array.isArray(partnerRequests) 
+    ? partnerRequests.filter(r => r && r.id && r.status !== 'deleted' && r.status !== 'expired')
+    : [];
+  
+  return { ...query, data: cleanPartnerRequests };
 }
 
 /**

@@ -985,5 +985,202 @@ export default function({ io }) {
     } catch (e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
+  // ═══════════════════════════════════════════════════════════════
+  // 🤝 POST /api/v1/tournaments/:id/join-team (v2.6.613)
+  // Lightweight team-join for ALREADY-REGISTERED doubles players.
+  // No payment logic — just assigns player2Id on the target team.
+  // ═══════════════════════════════════════════════════════════════
+  router.post('/:id/join-team', authGuard, async (req, res) => {
+    const tid = req.params.id;
+    const userId = req.user.id;
+    const { teamCode } = req.body;
+
+    if (!teamCode) {
+      return res.status(400).json({ success: false, message: 'Team code is required.' });
+    }
+
+    try {
+      const tournamentDoc = await Tournament.findOne({ id: tid });
+      if (!tournamentDoc) {
+        return res.status(404).json({ success: false, message: 'Tournament not found.' });
+      }
+
+      const tData = tournamentDoc.data || {};
+      const isDoubles = ["Men's Doubles", "Women's Doubles", "Mixed Doubles"].includes(tData.format);
+
+      if (!isDoubles) {
+        return res.status(400).json({ success: false, message: 'Team joining is only available for Doubles formats.' });
+      }
+
+      // 1. Verify user is already registered (paid their half)
+      const lowerUserId = String(userId).toLowerCase();
+      const isRegistered = (tData.registeredPlayerIds || []).some(id => String(id).toLowerCase() === lowerUserId);
+      const isPending = (tData.pendingPaymentPlayerIds || []).some(id => String(id).toLowerCase() === lowerUserId);
+
+      if (!isRegistered && !isPending) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'You must be registered for this tournament before joining a team.' 
+        });
+      }
+
+      // 2. Check user doesn't already have a complete team
+      const teams = tData.doublesTeams || [];
+      const existingTeam = teams.find(t => 
+        String(t.player1Id).toLowerCase() === lowerUserId || 
+        String(t.player2Id).toLowerCase() === lowerUserId
+      );
+
+      if (existingTeam && existingTeam.player1Id && existingTeam.player2Id) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'You already have a complete team for this tournament.' 
+        });
+      }
+
+      // 3. Find the target team by code
+      const targetTeam = teams.find(t => t.teamCode === teamCode && !t.player2Id);
+      if (!targetTeam) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Invalid team code, or the team is already full.' 
+        });
+      }
+
+      // 4. Prevent joining your own team
+      if (String(targetTeam.player1Id).toLowerCase() === lowerUserId) {
+        return res.status(400).json({ success: false, message: 'You cannot join your own team.' });
+      }
+
+      // 5. Gender validation
+      const userDoc = await Player.findOne({ id: userId });
+      if (!userDoc) {
+        return res.status(404).json({ success: false, message: 'User not found.' });
+      }
+      const userGender = userDoc.data?.gender;
+
+      if (tData.format === "Men's Doubles" && userGender !== 'Male') {
+        return res.status(400).json({ success: false, message: "Only male players are allowed in Men's Doubles." });
+      }
+      if (tData.format === "Women's Doubles" && userGender !== 'Female') {
+        return res.status(400).json({ success: false, message: "Only female players are allowed in Women's Doubles." });
+      }
+
+      // 6. If user had their own incomplete team, dissolve it first
+      const teamIndex = teams.findIndex(t => t.teamCode === teamCode && !t.player2Id);
+      const updateOps = {
+        $set: {
+          [`data.doublesTeams.${teamIndex}.player2Id`]: userId,
+          [`data.doublesTeams.${teamIndex}.updatedAt`]: new Date().toISOString(),
+          lastUpdated: new Date()
+        }
+      };
+
+      if (existingTeam && existingTeam.id !== targetTeam.id) {
+        // Remove user's old incomplete team
+        // We need to do this as a separate step since $pull and positional $set conflict
+        await Tournament.updateOne(
+          { id: tid },
+          { $pull: { 'data.doublesTeams': { id: existingTeam.id } } }
+        );
+        // Re-fetch to get correct indices after pull
+        const refreshedDoc = await Tournament.findOne({ id: tid });
+        const refreshedTeams = refreshedDoc.data?.doublesTeams || [];
+        const newIndex = refreshedTeams.findIndex(t => t.teamCode === teamCode && !t.player2Id);
+        
+        if (newIndex === -1) {
+          return res.status(409).json({ success: false, message: 'Team was filled by another player. Please try again.' });
+        }
+
+        // Atomic update with concurrency guard
+        const updatedTournament = await Tournament.findOneAndUpdate(
+          { id: tid, [`data.doublesTeams.${newIndex}.player2Id`]: null },
+          {
+            $set: {
+              [`data.doublesTeams.${newIndex}.player2Id`]: userId,
+              [`data.doublesTeams.${newIndex}.updatedAt`]: new Date().toISOString(),
+              lastUpdated: new Date()
+            }
+          },
+          { new: true }
+        );
+
+        if (!updatedTournament) {
+          return res.status(409).json({ success: false, message: 'Team was just filled by another player. Please try again.' });
+        }
+
+        // Notify partner
+        const partnerId = targetTeam.player1Id;
+        const partnerDoc = await Player.findOne({ id: partnerId });
+        if (partnerDoc) {
+          const notifTitle = 'Team Matched! 🎉';
+          const notifBody = `${userDoc.data?.name || 'A player'} has joined your team for "${tData.title}"!`;
+          let pDataMut = partnerDoc.data || {};
+          pDataMut.notifications = pDataMut.notifications || [];
+          addInAppNotification(pDataMut, notifTitle, notifBody, { tournamentId: tid, type: 'TEAM_JOINED' });
+          await Player.updateOne({ id: partnerId }, { $set: { 'data.notifications': pDataMut.notifications } });
+
+          if (pDataMut.pushTokens && pDataMut.pushTokens.length > 0) {
+            sendPushNotification(pDataMut.pushTokens, notifTitle, notifBody, { tournamentId: tid, type: 'TEAM_JOINED' }).catch(console.error);
+          }
+        }
+
+        if (io) {
+          io.emit('entity_updated', { entity: 'tournaments', data: updatedTournament.data, source: 'api', timestamp: Date.now() });
+        }
+
+        return res.status(200).json({
+          success: true,
+          tournament: updatedTournament.data,
+          currentUser: userDoc.data,
+          message: `You have been matched with ${partnerDoc?.data?.name || 'your partner'}!`
+        });
+
+      } else {
+        // Simple case: no old team to dissolve, just fill player2Id
+        const updatedTournament = await Tournament.findOneAndUpdate(
+          { id: tid, [`data.doublesTeams.${teamIndex}.player2Id`]: null },
+          updateOps,
+          { new: true }
+        );
+
+        if (!updatedTournament) {
+          return res.status(409).json({ success: false, message: 'Team was just filled by another player. Please try again.' });
+        }
+
+        // Notify partner
+        const partnerId = targetTeam.player1Id;
+        const partnerDoc = await Player.findOne({ id: partnerId });
+        if (partnerDoc) {
+          const notifTitle = 'Team Matched! 🎉';
+          const notifBody = `${userDoc.data?.name || 'A player'} has joined your team for "${tData.title}"!`;
+          let pDataMut = partnerDoc.data || {};
+          pDataMut.notifications = pDataMut.notifications || [];
+          addInAppNotification(pDataMut, notifTitle, notifBody, { tournamentId: tid, type: 'TEAM_JOINED' });
+          await Player.updateOne({ id: partnerId }, { $set: { 'data.notifications': pDataMut.notifications } });
+
+          if (pDataMut.pushTokens && pDataMut.pushTokens.length > 0) {
+            sendPushNotification(pDataMut.pushTokens, notifTitle, notifBody, { tournamentId: tid, type: 'TEAM_JOINED' }).catch(console.error);
+          }
+        }
+
+        if (io) {
+          io.emit('entity_updated', { entity: 'tournaments', data: updatedTournament.data, source: 'api', timestamp: Date.now() });
+        }
+
+        return res.status(200).json({
+          success: true,
+          tournament: updatedTournament.data,
+          currentUser: userDoc.data,
+          message: `You have been matched with ${partnerDoc?.data?.name || 'your partner'}!`
+        });
+      }
+
+    } catch (err) {
+      console.error('[Join-Team API] Error:', err);
+      return res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
   return router;
 }

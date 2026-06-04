@@ -1,15 +1,17 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Alert, ScrollView, Image } from 'react-native';
+import React, { useState, useMemo, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Alert, ScrollView, Image, ActivityIndicator, Dimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import SafeAvatar from './SafeAvatar';
 import PartnerService from '../services/PartnerService';
 import { Sport, SkillLevel } from '../types';
 import { useTournamentsStore, usePlayersStore } from '../stores';
+import logger from '../utils/logger';
 
 const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, routeParams }) => {
-  const { tournaments, onRegister } = useTournamentsStore();
+  const { tournaments, onRegister, onJoinTeam } = useTournamentsStore();
   const { players } = usePlayersStore();
   const [filterSport, setFilterSport] = useState('All');
   const [filterCity, setFilterCity] = useState('');
@@ -23,6 +25,28 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
   const [isLocked, setIsLocked] = useState(false);
   
   const navigation = useNavigation();
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🎫 IN-SCREEN PAYMENT MODAL STATE (v2.6.614)
+  // For unregistered users joining a partner's team directly from
+  // the Partners tab — no navigation away.
+  // ═══════════════════════════════════════════════════════════════
+  const [regPaymentTarget, setRegPaymentTarget] = useState(null);
+  const [paymentTeamCode, setPaymentTeamCode] = useState('');
+  const [paymentPartnerRequestId, setPaymentPartnerRequestId] = useState(null);
+  const [paymentPartnerName, setPaymentPartnerName] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Reset payment modal state when target clears
+  useEffect(() => {
+    if (!regPaymentTarget) {
+      setPaymentTeamCode('');
+      setPaymentPartnerRequestId(null);
+      setPaymentPartnerName('');
+      setIsProcessing(false);
+    }
+  }, [regPaymentTarget]);
+
 
   React.useEffect(() => {
     if (routeParams?.createPartnerRequest && routeParams?.tournamentId) {
@@ -275,10 +299,11 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
         {!isMine && (
           <TouchableOpacity 
             style={item.linkedTournamentId ? styles.registerTeamBtn : styles.connectBtn}
-            onPress={() => {
+            onPress={async () => {
               if (item.linkedTournamentId) {
                 const t = tournaments?.find(tx => tx.id === item.linkedTournamentId);
-                const isUserRegistered = t?.registeredPlayerIds?.includes(user.id) || t?.pendingPaymentPlayerIds?.includes(user.id);
+                const isUserRegistered = t?.registeredPlayerIds?.some(id => String(id).toLowerCase() === String(user.id).toLowerCase()) 
+                  || t?.pendingPaymentPlayerIds?.some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
                 
                 let targetTeamCode = null;
                 if (t?.doublesTeams) {
@@ -288,7 +313,31 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
                   }
                 }
                 
-                if (isUserRegistered) {
+                if (isUserRegistered && targetTeamCode) {
+                  // 🤝 [DIRECT_JOIN] (v2.6.613): Both players already paid — join team directly, no payment needed.
+                  Alert.alert(
+                    'Join Team', 
+                    `You're already registered. Join this team directly — no extra payment needed!`,
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { 
+                        text: 'Join Team Now', 
+                        onPress: async () => {
+                          const result = await onJoinTeam(item.linkedTournamentId, targetTeamCode);
+                          if (result && result.success) {
+                            // Auto-delete the partner request since they're now matched
+                            if (item.id) {
+                              PartnerService.deleteRequest(item.id);
+                              onRemoveRequest(item.id);
+                            }
+                            Alert.alert('Team Matched! 🎉', result.message || 'You have been paired with your partner!');
+                          }
+                        }
+                      }
+                    ]
+                  );
+                } else if (isUserRegistered) {
+                  // Registered but no team code available — fall back to tournament page
                   Alert.alert(
                     'Join Team', 
                     `You are already registered. Go to the tournament details to join this team using their code.`,
@@ -303,19 +352,12 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
                     ]
                   );
                 } else {
-                  Alert.alert(
-                    'Tournament Registration', 
-                    'Registering will automatically pair you with this team.',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      { 
-                        text: 'Register & Pay', 
-                        onPress: () => {
-                          navigation.navigate('Explore', { openTournamentId: item.linkedTournamentId, teamCode: targetTeamCode, removePartnerRequestId: item.id });
-                        }
-                      }
-                    ]
-                  );
+                  // 🎫 [IN_SCREEN_PAY] (v2.6.614): Open premium center-screen modal
+                  // instead of navigating away to Explore.
+                  setPaymentTeamCode(targetTeamCode || '');
+                  setPaymentPartnerRequestId(item.id);
+                  setPaymentPartnerName(item.creatorName || 'Partner');
+                  setRegPaymentTarget(t);
                 }
               } else {
                 onConnect(item);
@@ -326,7 +368,8 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
             <Text style={styles.connectBtnText}>
                {item.linkedTournamentId ? (() => {
                  const t = tournaments?.find(tx => tx.id === item.linkedTournamentId);
-                 const isReg = t?.registeredPlayerIds?.includes(user.id) || t?.pendingPaymentPlayerIds?.includes(user.id);
+                 const isReg = t?.registeredPlayerIds?.some(id => String(id).toLowerCase() === String(user.id).toLowerCase()) 
+                   || t?.pendingPaymentPlayerIds?.some(id => String(id).toLowerCase() === String(user.id).toLowerCase());
                  return isReg ? 'Join Team' : 'Register to Join Team';
                })() : `Message ${item.creatorName.split(' ')[0]}`}
             </Text>
@@ -490,6 +533,208 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
               <Text style={styles.submitBtnText}>Post Request</Text>
             </TouchableOpacity>
           </ScrollView>
+        </View>
+      </Modal>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          🎫 PREMIUM IN-SCREEN PAYMENT MODAL (v2.6.614)
+          Opens center-screen with team code pre-filled for unregistered
+          users joining a partner's team directly from Partners tab.
+         ═══════════════════════════════════════════════════════════════ */}
+      <Modal transparent animationType="fade" visible={!!regPaymentTarget}>
+        <View style={pmStyles.overlay}>
+          <View style={pmStyles.container}>
+            {/* Header Gradient */}
+            <LinearGradient
+              colors={['#0F172A', '#1E293B']}
+              style={pmStyles.header}
+            >
+              <View style={pmStyles.headerTop}>
+                <View style={pmStyles.headerBadge}>
+                  <Ionicons name="people" size={14} color="#F59E0B" />
+                  <Text style={pmStyles.headerBadgeText}>TEAM REGISTRATION</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setRegPaymentTarget(null)}
+                  style={pmStyles.closeBtn}
+                >
+                  <Ionicons name="close" size={20} color="#94A3B8" />
+                </TouchableOpacity>
+              </View>
+              <Text style={pmStyles.tournamentTitle} numberOfLines={2}>
+                {regPaymentTarget?.title || regPaymentTarget?.name || 'Tournament'}
+              </Text>
+              <View style={pmStyles.headerMeta}>
+                <View style={pmStyles.metaChip}>
+                  <Ionicons name="calendar-outline" size={12} color="#94A3B8" />
+                  <Text style={pmStyles.metaText}>{regPaymentTarget?.date || '—'}</Text>
+                </View>
+                <View style={pmStyles.metaChip}>
+                  <Ionicons name="trophy-outline" size={12} color="#94A3B8" />
+                  <Text style={pmStyles.metaText}>{regPaymentTarget?.format || 'Doubles'}</Text>
+                </View>
+              </View>
+              {/* Partner Info Row */}
+              <View style={pmStyles.partnerRow}>
+                <Ionicons name="link" size={14} color="#22D3EE" />
+                <Text style={pmStyles.partnerText}>
+                  Joining <Text style={pmStyles.partnerName}>{paymentPartnerName}</Text>'s team
+                </Text>
+              </View>
+            </LinearGradient>
+
+            <ScrollView style={pmStyles.body} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 8 }}>
+              {/* Team Code (Pre-filled & Locked) */}
+              {paymentTeamCode ? (
+                <View style={pmStyles.teamCodeSection}>
+                  <Text style={pmStyles.sectionLabel}>TEAM CODE</Text>
+                  <View style={pmStyles.teamCodeDisplay}>
+                    <Ionicons name="key" size={16} color="#6366F1" />
+                    <Text style={pmStyles.teamCodeValue}>{paymentTeamCode}</Text>
+                    <View style={pmStyles.autoFilledBadge}>
+                      <Ionicons name="checkmark-circle" size={12} color="#16A34A" />
+                      <Text style={pmStyles.autoFilledText}>Auto-filled</Text>
+                    </View>
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Payment Summary */}
+              <View style={pmStyles.summaryCard}>
+                <View style={pmStyles.summaryRow}>
+                  <View style={pmStyles.summaryCol}>
+                    <Text style={pmStyles.sectionLabel}>YOUR SHARE</Text>
+                    <Text style={pmStyles.priceValue}>
+                      ₹{regPaymentTarget ? Math.round(regPaymentTarget.entryFee / 2) : 0}
+                    </Text>
+                    <Text style={pmStyles.priceSubtext}>Half of ₹{regPaymentTarget?.entryFee || 0} entry</Text>
+                  </View>
+                  <View style={pmStyles.summaryDivider} />
+                  <View style={[pmStyles.summaryCol, { alignItems: 'flex-end' }]}>
+                    <Text style={pmStyles.sectionLabel}>WALLET BALANCE</Text>
+                    <Text style={[
+                      pmStyles.priceValue,
+                      { color: (user?.credits || 0) >= Math.round((regPaymentTarget?.entryFee || 0) / 2) ? '#16A34A' : '#EF4444' }
+                    ]}>
+                      ₹{user?.credits || 0}
+                    </Text>
+                    {(user?.credits || 0) < Math.round((regPaymentTarget?.entryFee || 0) / 2) && (
+                      <Text style={pmStyles.insufficientText}>Insufficient</Text>
+                    )}
+                  </View>
+                </View>
+              </View>
+
+              {/* NOTE: No "Register partner too" option here — this modal is specifically
+                 for joining an EXISTING team (filling the player2 slot). The team already
+                 has player1 (the request creator). */}
+            </ScrollView>
+
+            {/* Payment Actions */}
+            <View style={pmStyles.actions}>
+              <TouchableOpacity
+                disabled={(user?.credits || 0) < Math.round((regPaymentTarget?.entryFee || 0) / 2) || isProcessing}
+                onPress={async () => {
+                  setIsProcessing(true);
+                  try {
+                    const cost = Math.round(regPaymentTarget.entryFee / 2);
+                    const result = await onRegister(
+                      regPaymentTarget,
+                      'credits',
+                      cost,
+                      false,
+                      null,
+                      null,
+                      paymentTeamCode.trim() || null,
+                      null
+                    );
+                    if (result && result.success) {
+                      if (paymentPartnerRequestId) {
+                        PartnerService.deleteRequest(paymentPartnerRequestId);
+                        onRemoveRequest(paymentPartnerRequestId);
+                      }
+                      setRegPaymentTarget(null);
+                      setTimeout(() => {
+                        Alert.alert(
+                          'Team Matched! 🎉',
+                          `You've joined ${paymentPartnerName}'s team! You're now paired up and ready to compete.`
+                        );
+                      }, 300);
+                    }
+                  } catch (e) {
+                    console.error('[DoublesPartnerBoard] Payment Error:', e);
+                    Alert.alert('Error', `Could not complete registration: ${e.message || 'Please try again.'}`);
+                  } finally {
+                    setIsProcessing(false);
+                  }
+                }}
+                style={[
+                  pmStyles.payBtn,
+                  ((user?.credits || 0) < Math.round((regPaymentTarget?.entryFee || 0) / 2) || isProcessing) && pmStyles.payBtnDisabled
+                ]}
+              >
+                {isProcessing ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <Ionicons name="wallet" size={18} color="#FFF" />
+                    <Text style={pmStyles.payBtnText}>
+                      Pay ₹{Math.round((regPaymentTarget?.entryFee || 0) / 2)} with Wallet
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                disabled={isProcessing}
+                onPress={async () => {
+                  setIsProcessing(true);
+                  try {
+                    const cost = Math.round(regPaymentTarget.entryFee / 2);
+                    const result = await onRegister(
+                      regPaymentTarget,
+                      'upi',
+                      cost,
+                      false,
+                      null,
+                      null,
+                      paymentTeamCode.trim() || null,
+                      null
+                    );
+                    if (result && result.success) {
+                      if (paymentPartnerRequestId) {
+                        PartnerService.deleteRequest(paymentPartnerRequestId);
+                        onRemoveRequest(paymentPartnerRequestId);
+                      }
+                      setRegPaymentTarget(null);
+                      setTimeout(() => {
+                        Alert.alert(
+                          'Registration Initiated! 🎉',
+                          `Your UPI payment is pending verification. Once confirmed, you'll be paired with ${paymentPartnerName}.`
+                        );
+                      }, 300);
+                    }
+                  } catch (e) {
+                    console.error('[DoublesPartnerBoard] UPI Payment Error:', e);
+                    Alert.alert('Error', `Could not complete registration: ${e.message || 'Please try again.'}`);
+                  } finally {
+                    setIsProcessing(false);
+                  }
+                }}
+                style={[pmStyles.upiBtn, isProcessing && pmStyles.payBtnDisabled]}
+              >
+                <Ionicons name="card" size={18} color="#FFF" />
+                <Text style={pmStyles.payBtnText}>Pay with UPI</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setRegPaymentTarget(null)}
+                style={pmStyles.cancelLink}
+              >
+                <Text style={pmStyles.cancelLinkText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
     </View>
@@ -780,6 +1025,316 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: '800',
     fontSize: 16,
+  },
+});
+
+// ═══════════════════════════════════════════════════════════════
+// 🎫 PREMIUM PAYMENT MODAL STYLES (v2.6.614)
+// Center-screen glassmorphism modal for inline team registration
+// ═══════════════════════════════════════════════════════════════
+const { width: screenWidth } = Dimensions.get('window');
+const pmStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  container: {
+    width: Math.min(screenWidth - 40, 420),
+    maxHeight: '85%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 28,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.3,
+    shadowRadius: 30,
+    elevation: 25,
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  headerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    gap: 6,
+  },
+  headerBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#F59E0B',
+    letterSpacing: 1.5,
+  },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tournamentTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 10,
+    letterSpacing: -0.3,
+  },
+  headerMeta: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metaText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  partnerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(34, 211, 238, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 211, 238, 0.2)',
+  },
+  partnerText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  partnerName: {
+    fontWeight: '800',
+    color: '#22D3EE',
+  },
+  body: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  teamCodeSection: {
+    marginBottom: 16,
+  },
+  sectionLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#94A3B8',
+    letterSpacing: 1.5,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  teamCodeDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  teamCodeValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#4F46E5',
+    letterSpacing: 3,
+    flex: 1,
+  },
+  autoFilledBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+  },
+  autoFilledText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#16A34A',
+  },
+  summaryCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    marginBottom: 16,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  summaryCol: {
+    flex: 1,
+  },
+  summaryDivider: {
+    width: 1,
+    backgroundColor: '#E2E8F0',
+    marginHorizontal: 16,
+    alignSelf: 'stretch',
+  },
+  priceValue: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#EF4444',
+    letterSpacing: -1,
+    marginBottom: 2,
+  },
+  priceSubtext: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  insufficientText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#EF4444',
+    marginTop: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  optionSection: {
+    marginBottom: 8,
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxActive: {
+    backgroundColor: '#6366F1',
+    borderColor: '#6366F1',
+  },
+  checkboxLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+    flex: 1,
+  },
+  partnerInput: {
+    marginBottom: 8,
+  },
+  phoneInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 2,
+  },
+  phoneInput: {
+    flex: 1,
+    color: '#0F172A',
+    fontSize: 14,
+    paddingVertical: 10,
+  },
+  partnerFound: {
+    color: '#16A34A',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 6,
+  },
+  partnerError: {
+    color: '#EF4444',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 6,
+  },
+  actions: {
+    padding: 20,
+    paddingTop: 12,
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  payBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0F172A',
+    paddingVertical: 16,
+    borderRadius: 16,
+    gap: 8,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  payBtnDisabled: {
+    backgroundColor: '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  payBtnText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  upiBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EF4444',
+    paddingVertical: 16,
+    borderRadius: 16,
+    gap: 8,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  cancelLink: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  cancelLinkText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
 });
 
