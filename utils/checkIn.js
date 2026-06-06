@@ -1,10 +1,16 @@
 /**
- * 📱 QR Check-In Scaffolding (STUB)
- * OWNER Fix: Tournament day player verification via QR codes
+ * 📱 QR Check-In Module (v2.6.618)
  * 
- * TODO: Install:
- *   npx expo install expo-barcode-scanner
+ * Supports two flows:
+ *   1. Admin/Coach QR Scan → POST /api/v1/tournaments/:id/check-in { playerId }
+ *   2. Player Self Check-In → POST /api/v1/tournaments/:id/check-in (no body)
+ * 
+ * The local processCheckIn function is retained for optimistic UI updates.
+ * processCheckInRemote handles the actual server call.
  */
+
+import config from '../config';
+import storage from './storage';
 
 /**
  * Generate QR code data for a player-tournament pair
@@ -52,7 +58,8 @@ export const validateCheckInQR = (scannedData, expectedTournamentId) => {
 };
 
 /**
- * Process check-in for a player
+ * Local (optimistic) check-in — updates in-memory tournament object.
+ * Use this for immediate UI feedback before the server confirms.
  * @param {Object} tournament
  * @param {string} playerId
  * @returns {{ success: boolean, tournament: Object, error: string|null }}
@@ -80,6 +87,50 @@ export const processCheckIn = (tournament, playerId) => {
 };
 
 /**
+ * 📡 [REMOTE_CHECKIN] (v2.6.618): Server-side atomic check-in via REST.
+ * 
+ * Call this AFTER processCheckIn for optimistic UI, or standalone for
+ * guaranteed atomic check-in without local state dependency.
+ * 
+ * @param {string} tournamentId - Tournament to check into
+ * @param {string|null} playerId - Target player (null = self check-in)
+ * @returns {Promise<{ success: boolean, tournament?: Object, message: string, type?: string }>}
+ */
+export const processCheckInRemote = async (tournamentId, playerId = null) => {
+  try {
+    const token = await storage.getItem('userToken');
+    const body = playerId ? { playerId } : {};
+
+    const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tournamentId}/check-in`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        'x-ace-api-key': config.PUBLIC_APP_ID || config.ACE_API_KEY
+      },
+      credentials: 'include',
+      body: JSON.stringify(body)
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      return { success: false, message: result.message || 'Check-in failed', tournament: null };
+    }
+
+    return {
+      success: true,
+      tournament: result.tournament || null,
+      message: result.message || 'Check-in confirmed',
+      type: result.type || 'SUCCESS'
+    };
+  } catch (err) {
+    console.error('[processCheckInRemote] Network error:', err);
+    return { success: false, message: 'Network error — please try again', tournament: null };
+  }
+};
+
+/**
  * Get check-in stats for a tournament
  * @param {Object} tournament
  * @returns {Object}
@@ -98,19 +149,10 @@ export const getCheckInStats = (tournament) => {
   };
 };
 
-// Note: The actual QR scanner UI component would use expo-barcode-scanner
-// which requires camera permissions. The UI is stubbed for now.
-// 
-// Usage example:
-// import { BarCodeScanner } from 'expo-barcode-scanner';
-// const handleBarCodeScanned = ({ type, data }) => {
-//   const result = validateCheckInQR(data, tournamentId);
-//   if (result.valid) processCheckIn(tournament, result.playerId);
-// };
-
 export default {
   generateCheckInQRData,
   validateCheckInQR,
   processCheckIn,
+  processCheckInRemote,
   getCheckInStats,
 };

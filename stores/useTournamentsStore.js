@@ -65,6 +65,13 @@ export const useTournamentsStore = create((set, get) => {
         console.log(`[TournamentsStore] Starting API registration for ${tid} via ${method}`);
         const token = await storage.getItem('userToken');
 
+        // 🛡️ [IDEMPOTENCY] (v2.6.618): Generate a unique key per registration attempt
+        // to prevent double-charges when network retries or users double-tap Register.
+        const idempotencyKey = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+          const r = Math.random() * 16 | 0;
+          return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+        });
+
         const response = await fetch(`${config.API_BASE_URL}/api/v1/tournaments/${tid}/register`, {
           method: 'POST',
           headers: {
@@ -73,7 +80,7 @@ export const useTournamentsStore = create((set, get) => {
             'X-User-Id': currentUser.id
           },
           credentials: 'include',
-          body: JSON.stringify({ method, cost, partnerId, teamCode, registeringPartnerId })
+          body: JSON.stringify({ method, cost, partnerId, teamCode, registeringPartnerId, idempotencyKey })
         });
 
         const result = await response.json();

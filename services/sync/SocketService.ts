@@ -32,7 +32,8 @@ class SocketService {
     role: string | undefined, 
     userToken: string | null,
     hardwareId: string | null,
-    onRemoteUpdate: (updates: Record<string, any>) => Promise<void>
+    onRemoteUpdate: (updates: Record<string, any>) => Promise<void>,
+    lastSyncTimestamp: string | null = null  // 📡 [CATCH_UP] (v2.6.618)
   ) {
     if (this.socket) {
         this.socket.disconnect();
@@ -54,7 +55,13 @@ class SocketService {
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
-      query: { userId, role: role || 'user', deviceName: getDeviceName() },
+      query: { 
+        userId, 
+        role: role || 'user', 
+        deviceName: getDeviceName(),
+        // 📡 [CATCH_UP] (v2.6.618): Send last sync timestamp so backend can replay missed events
+        ...(lastSyncTimestamp ? { lastSyncTimestamp: String(new Date(lastSyncTimestamp).getTime()) } : {})
+      },
       auth: { 
         token: userToken || config.PUBLIC_APP_ID,
         apiKey: config.PUBLIC_APP_ID 
@@ -168,6 +175,45 @@ class SocketService {
           await onRemoteUpdate(data);
         } catch (e: any) {
           console.error('[SocketService] socket:data_updated error:', e);
+        }
+      });
+
+      // 🛡️ [ENTITY_BRIDGE] (v2.6.620): Bridge entity_updated events to the sync pipeline
+      // The backend emits 'entity_updated' from REST endpoints (tournaments, evaluations,
+      // support operations, media) with payload { entity, data, deletedId, source, timestamp }.
+      // Previously these 33+ emitters were broadcasting into the void because the frontend
+      // only listened for 'data_updated'. This listener translates the granular payload and
+      // triggers a sync pull so clients see real-time updates from REST mutations.
+      this.socket.on('entity_updated', async (data: any) => {
+        try {
+          if (!data?.entity) return;
+          console.log(`📡 [SocketService] Received entity_updated: ${data.entity}${data.deletedId ? ' (delete)' : ''}`);
+          
+          // Translate to data_updated-compatible format and trigger sync pull
+          // The onRemoteUpdate handler will see the 'keys' array and know which
+          // entities to re-fetch from the server.
+          await onRemoteUpdate({
+            keys: [data.entity],
+            timestamp: data.timestamp || Date.now(),
+            source: 'entity_updated'
+          });
+        } catch (e: any) {
+          console.error('[SocketService] socket:entity_updated error:', e);
+        }
+      });
+
+      // 📡 [CATCH_UP] (v2.6.618): Handle missed events replayed by backend on reconnect
+      // The server sends { supportTickets, tournaments, timestamp } for entities changed
+      // since lastSyncTimestamp. Route through the same merge pipeline as data_updated.
+      this.socket.on('catch_up', async (data: any) => {
+        try {
+          const totalKeys = Object.keys(data).filter(k => k !== 'timestamp').length;
+          console.log(`📡 [SocketService] Received catch_up with ${totalKeys} entity types`);
+          if (totalKeys > 0) {
+            await onRemoteUpdate(data);
+          }
+        } catch (e: any) {
+          console.error('[SocketService] socket:catch_up error:', e);
         }
       });
 

@@ -200,7 +200,8 @@ export function createSecurityAlertSender() {
             { title: "Source IP", value: `\`${data.IP}\``, short: true },
             { title: "Total Attempts", value: String(data.TotalAttempts), short: true },
             { title: "Failures (5m)", value: String(data.FailureCount), short: true },
-            { title: "Passwords Sample", value: `\`${data.SamplePasswords}\``, short: false },
+            // 🛡️ [CREDENTIAL_PURGE] (v2.6.620): Show count instead of actual passwords
+            { title: "Unique Passwords Tried", value: String(data.UniquePasswordsTried || 'N/A'), short: true },
             { title: "Status", value: "⚠️ Throttling Active", short: true }
           ];
         }

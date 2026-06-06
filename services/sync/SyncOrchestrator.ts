@@ -94,7 +94,7 @@ class SyncOrchestrator {
     if (this.userId) {
       socketService.setupSocket(this.userId, this.userRole || 'user', this.userToken, this.hardwareId, async (updates) => {
         await this.handleRemoteUpdate(updates);
-      });
+      }, this.lastSuccessfulPullTimestamp);
     }
   }
 
@@ -108,7 +108,7 @@ class SyncOrchestrator {
       console.log(`[SyncOrchestrator] Reconnecting to: ${config.API_BASE_URL}`);
       socketService.setupSocket(this.userId, this.userRole || 'user', this.userToken, this.hardwareId, async (updates) => {
         await this.handleRemoteUpdate(updates);
-      });
+      }, this.lastSuccessfulPullTimestamp);
     }
   }
 
@@ -179,7 +179,7 @@ class SyncOrchestrator {
         // 2. Setup Socket.io
         socketService.setupSocket(this.userId, role, this.userToken, this.hardwareId, async (updates) => {
           await this.handleRemoteUpdate(updates);
-        });
+        }, this.lastSuccessfulPullTimestamp);
 
         // 3. Inform system that initialization is complete
         // 🛡️ [JWT HYDRATION] (v2.6.192) Ensure token is available for immediate polling

@@ -553,20 +553,15 @@ router.post('/support/manage-user', apiKeyGuard, authGuard, async (req, res) => 
       playerDoc.markModified('data');
       await playerDoc.save();
 
-      // 📡 [REAL-TIME SYNC FIX] Bump AppState version so clients pull the new Player status
-      const latestState = await AppState.findOne().sort({ version: -1 });
-      if (latestState) {
-          latestState.version += 1;
-          await latestState.save();
-          finalVersion = latestState.version;
-          console.log(`[SYNC] User ${targetUserId} status updated. Global version bumped to v${latestState.version}`);
-      }
+      // 🛡️ [v2.6.617] Removed AppState dual-write — player data lives in Player collection
     } finally {
       if (releaseUser) releaseUser();
     }
     
+    // 📡 Notify clients via targeted entity_updated events
     if (io) {
-       io.emit('data_updated', { keys: ['players', 'supportTickets'], version: finalVersion });
+       io.emit('entity_updated', { entity: 'players', data: user, source: 'api', timestamp: Date.now() });
+       io.emit('entity_updated', { entity: 'supportTickets', source: 'api', timestamp: Date.now() });
     }
 
     logServerEvent('SUPPORT_USER_MANAGED', { admin: req.headers['x-user-id'] || 'admin', targetUserId, status, level });
@@ -617,29 +612,15 @@ router.post('/support/force-reset', apiKeyGuard, authGuard, async (req, res) => 
       await playerDoc.save();
       console.log(`[FORCE-RESET] Database updated for ${user.email}`);
 
-      // 📡 [REAL-TIME SYNC FIX] Sync user lockouts back to AppState
-      const latestState = await AppState.findOne().sort({ version: -1 });
-      if (latestState && latestState.data && Array.isArray(latestState.data.players)) {
-        const pIdx = latestState.data.players.findIndex(p => p.id === targetUserId);
-        if (pIdx !== -1) {
-          latestState.data.players[pIdx] = user;
-          latestState.version += 1;
-          latestState.markModified('data');
-          await latestState.save();
-          finalVersion = latestState.version;
-          console.log(`[SYNC] User ${targetUserId} force-reset synced to AppState v${latestState.version}`);
-        }
-      }
+      // 🛡️ [v2.6.617] Removed AppState dual-write — player data lives in Player collection
     } finally {
       if (releaseReset) releaseReset();
     }
 
+    // 📡 Notify clients via targeted entity_updated event
     const io = req.app.get('io');
-    if (io && finalVersion !== null) {
-      io.emit('data_updated', {
-        version: finalVersion,
-        keys: ['players']
-      });
+    if (io) {
+      io.emit('entity_updated', { entity: 'players', data: user, source: 'api', timestamp: Date.now() });
     }
 
     // Log Event

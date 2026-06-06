@@ -8,14 +8,16 @@ export async function runBruteForceSummary(loginAttempts, sendSecurityAlert) {
     const failures = state.attempts.filter(a => !a.success);
     if (failures.length >= 10 && (now - state.lastSummaryAt >= 300000)) {
       const [identifier, ip] = key.split('_');
-      const uniquePasswords = [...new Set(failures.map(f => f.password))].slice(0, 10).join(', ');
+      // 🛡️ [CREDENTIAL_PURGE] (v2.6.620): Replaced plaintext SamplePasswords with count.
+      // Even failed passwords could be typos of real ones — never log them.
+      const uniquePasswordCount = new Set(failures.map(f => f.password)).size;
       await sendSecurityAlert('BRUTE_FORCE_CUMULATIVE_SUMMARY', {
           IP: ip,
           Actor: identifier,
           TargetUser: identifier,
           TotalAttempts: state.attempts.length,
           FailureCount: failures.length,
-          SamplePasswords: uniquePasswords,
+          UniquePasswordsTried: uniquePasswordCount,
           Timeframe: 'Last 5 minutes'
       });
       state.lastSummaryAt = now;
@@ -259,19 +261,37 @@ export async function processUnseenMessageReminders() {
 }
 
 export default function initScheduler(loginAttempts, sendSecurityAlert) {
+  // 🛡️ [OBSERVABILITY] (v2.6.620): Track last successful run for each job
+  const jobHealth = { chatWatchdog: null, securityDaily: null, aiAggregator: null, dataPurge: null, attachmentCleanup: null };
+
   // 🕒 [CHAT_WATCHDOG] (v2.6.383): Run hourly
   setInterval(async () => {
-    try { await processUnseenMessageReminders(); } catch (e) {}
+    try {
+      await processUnseenMessageReminders();
+      jobHealth.chatWatchdog = new Date().toISOString();
+    } catch (e) {
+      console.error('❌ [SCHEDULER] Chat Watchdog failed:', e.message);
+    }
   }, 60 * 60 * 1000);
 
   // 🛡️ [SECURITY_DAILY]
   setInterval(async () => {
-    try { await runBruteForceSummary(loginAttempts, sendSecurityAlert); } catch (e) {}
+    try {
+      await runBruteForceSummary(loginAttempts, sendSecurityAlert);
+      jobHealth.securityDaily = new Date().toISOString();
+    } catch (e) {
+      console.error('❌ [SCHEDULER] Security Daily failed:', e.message);
+    }
   }, 24 * 60 * 60 * 1000);
 
   // 🤖 [AI_AGGREGATOR]
   setInterval(async () => {
-    try { await runAISecurityAggregator(); } catch (e) {}
+    try {
+      await runAISecurityAggregator();
+      jobHealth.aiAggregator = new Date().toISOString();
+    } catch (e) {
+      console.error('❌ [SCHEDULER] AI Aggregator failed:', e.message);
+    }
   }, 24 * 60 * 60 * 1000);
 
   // 🧹 [DATA_PURGE]
@@ -282,7 +302,10 @@ export default function initScheduler(loginAttempts, sendSecurityAlert) {
       await Matchmaking.deleteMany({ lastUpdated: { $lt: matchmakingPruneDate } });
       const chatbotPruneDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       await ChatbotThread.deleteMany({ lastUpdated: { $lt: chatbotPruneDate } });
-    } catch (err) {}
+      jobHealth.dataPurge = new Date().toISOString();
+    } catch (e) {
+      console.error('❌ [SCHEDULER] Data Purge failed:', e.message);
+    }
   }, 24 * 60 * 60 * 1000);
 
   // 📎 [ATTACHMENT_CLEANUP] (v2.6.395): Daily purge of expired chat attachments

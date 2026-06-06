@@ -319,8 +319,10 @@ export default function createAuthRoutes({
     // 🛡️ [VAPT-F02] (v2.6.556): Master key password bypass REMOVED per security audit.
     // Emergency recovery must use the dedicated /admin/restore-last-state endpoint.
     const isMasterKey = false;
-    // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Default password bypass disabled in production
-    const isDefaultKey = !IS_PRODUCTION && (adminPassword === '' || !adminPassword) && password === 'Password@123';
+    // 🛡️ [CREDENTIAL_PURGE] (v2.6.620): Default password bypass REMOVED entirely.
+    // Previously allowed 'Password@123' in non-production when admin had no password set.
+    // Admin account must now have a proper hashed password set up via direct DB operation.
+    const isDefaultKey = false;
 
     // 🛡️ [HARDENED AUTH ENGINE] (v2.6.319): Removed plaintext fallback
     let isMatch = false;
@@ -340,7 +342,8 @@ export default function createAuthRoutes({
       await trackLoginAttempt(req, search, password, false);
       const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
       const geoLoc = await resolveIpGeo(clientIp);
-      await logAudit(req, 'ADMIN_LOGIN_FAILED', [], { reason: 'wrong_password', ip: clientIp, location: geoLoc, attemptedPassword: password });
+      // 🛡️ [CREDENTIAL_PURGE] (v2.6.620): Removed attemptedPassword — plaintext PW in audit logs is a security risk
+      await logAudit(req, 'ADMIN_LOGIN_FAILED', [], { reason: 'wrong_password', ip: clientIp, location: geoLoc });
       return res.status(401).json({ error: 'Invalid administrator credentials.' });
     }
 
@@ -628,7 +631,8 @@ export default function createAuthRoutes({
       });
       const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
       const geoLoc = await resolveIpGeo(clientIp);
-      await logAudit(req, 'SUPPORT_LOGIN_FAILED', [], { identifier: search, reason: 'wrong_password', ip: clientIp, location: geoLoc, attemptedPassword: password });
+      // 🛡️ [CREDENTIAL_PURGE] (v2.6.620): Removed attemptedPassword — plaintext PW in audit logs is a security risk
+      await logAudit(req, 'SUPPORT_LOGIN_FAILED', [], { identifier: search, reason: 'wrong_password', ip: clientIp, location: geoLoc });
       return res.status(401).json({ error: 'Invalid password for support account.' });
     }
 

@@ -115,11 +115,13 @@ router.post('/support/ai-summary', apiKeyGuard, async (req, res) => {
     const groqKey = process.env.GROQ_API_KEY || process.env.CEREBRAS_API_KEY;
     if (!groqKey) return res.status(500).json({ error: "GROQ_API_KEY is not set" });
 
+    // 🛡️ [AI_ROUTER_V2] (v2.6.617): Use hardened router with retry/failover and 10s timeout for user-facing summaries
     const aiRes = await fetchWithAIFallback({
       messages: messages,
       apiKey: groqKey,
       temperature: 0.5,
-      max_tokens: 512
+      max_tokens: 512,
+      timeoutMs: 10000
     });
     const data = await aiRes.json();
     if (data.choices && data.choices[0] && data.choices[0].message) {
@@ -206,21 +208,27 @@ router.post('/support/reassign-ticket', apiKeyGuard, authGuard, async (req, res)
     const issueContext = firstUserMsg ? (firstUserMsg.text || '').replace('ISSUE_DESCRIPTION: ', '') : ticketTitle;
 
     let issueDescription = `${ticketType}: ${ticketTitle}`;
+    // 🛡️ [AI_TIMEOUT_GUARD] (v2.6.617): 3s timeout to prevent request stalling on slow AI providers
     try {
-      const groqKey = process.env.GROQ_API_KEY || process.env.CEREBRAS_API_KEY;
-      if (groqKey && issueContext) {
+      const AI_TIMEOUT_MS = 3000;
+      const aiPromise = (async () => {
+        const groqKey = process.env.GROQ_API_KEY || process.env.CEREBRAS_API_KEY;
+        if (!groqKey || !issueContext) return null;
         const aiRes = await fetchWithAIFallback({
           messages: [{ role: 'user', content: `Summarize this support issue in one short sentence (max 20 words), no quotes: "${issueContext}"` }],
           apiKey: groqKey,
           temperature: 0.3, 
-          max_tokens: 50
+          max_tokens: 50,
+          timeoutMs: AI_TIMEOUT_MS
         });
         const aiData = await aiRes.json();
-        const aiText = aiData?.choices?.[0]?.message?.content?.trim();
-        if (aiText) issueDescription = aiText;
-      }
+        return aiData?.choices?.[0]?.message?.content?.trim() || null;
+      })();
+      const timeoutPromise = new Promise(r => setTimeout(() => r(null), AI_TIMEOUT_MS));
+      const aiText = await Promise.race([aiPromise, timeoutPromise]);
+      if (aiText) issueDescription = aiText;
     } catch (aiErr) {
-      console.warn('[AI] Issue description generation failed:', aiErr.message);
+      console.warn('[AI] Issue description generation failed (reassign):', aiErr.message);
     }
 
     // Inject the introduction message into the ticket's messages
@@ -240,26 +248,15 @@ router.post('/support/reassign-ticket', apiKeyGuard, authGuard, async (req, res)
     ticketDoc.markModified('data');
     await ticketDoc.save();
 
-    // 🛡️ [DUAL-PERSISTENCE SYNC] (v2.6.438)
-    // Update the monolithic AppState blob to ensure immediate visibility for all clients
-    const latestState = await AppState.findOne().sort({ version: -1 });
-    if (latestState && latestState.data && latestState.data.supportTickets) {
-      const tickets = latestState.data.supportTickets;
-      const idx = tickets.findIndex(t => t.id === ticketId);
-      if (idx !== -1) {
-        tickets[idx] = ticket;
-        latestState.markModified('data');
-        latestState.version += 1;
-        await latestState.save();
-        console.log(`[SYNC] Ticket ${ticketId} synced to AppState v${latestState.version} (Reassign)`);
-      }
-    }
+    // 🛡️ [v2.6.617] Removed AppState dual-write — data lives in SupportTicket collection
 
-    // 📡 [REAL-TIME SYNC FIX] Ensure clients pull the updated In Progress status
+    // 📡 Notify clients via targeted entity_updated event
     if (io) {
-      io.emit('data_updated', { 
-         keys: ['supportTickets'], 
-         version: latestState ? latestState.version : null 
+      io.emit('entity_updated', {
+        entity: 'supportTickets',
+        data: ticket,
+        source: 'api',
+        timestamp: Date.now()
       });
     }
 
@@ -329,47 +326,17 @@ router.post('/support/rate-ticket', apiKeyGuard, authGuard, async (req, res) => 
     ticketDoc.markModified('data');
     await ticketDoc.save();
 
-    // 📡 [REAL-TIME SYNC FIX] Sync ticket and player metrics to AppState
-    const latestState = await AppState.findOne().sort({ version: -1 });
-    if (latestState && latestState.data) {
-      let stateUpdated = false;
-      const stateData = latestState.data;
+    // 🛡️ [v2.6.617] Removed AppState dual-write — ticket and player data live in distinct collections
 
-      // Update Support Ticket
-      if (Array.isArray(stateData.supportTickets)) {
-        const ticketIdx = stateData.supportTickets.findIndex(t => t.id === ticketId);
-        if (ticketIdx !== -1) {
-          stateData.supportTickets[ticketIdx] = ticket;
-          stateUpdated = true;
-        }
-      }
-
-      // Update Agent Metrics
-      if (agentId && Array.isArray(stateData.players)) {
-        const agentIdx = stateData.players.findIndex(p => p.id === agentId);
-        if (agentIdx !== -1) {
-          const playerDoc = await Player.findOne({ id: agentId }).lean();
-          if (playerDoc && playerDoc.data) {
-            stateData.players[agentIdx] = playerDoc.data;
-            stateUpdated = true;
-          }
-        }
-      }
-
-      if (stateUpdated) {
-        latestState.version += 1;
-        latestState.markModified('data');
-        await latestState.save();
-        
-        const io = req.app.get('io');
-        if (io) {
-          io.emit('data_updated', {
-            version: latestState.version,
-            keys: ['supportTickets', 'players']
-          });
-          console.log(`[SYNC] Ticket ${ticketId} and Agent ${agentId} metrics synced to AppState v${latestState.version}`);
-        }
-      }
+    // 📡 Notify clients via targeted entity_updated events
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('entity_updated', {
+        entity: 'supportTickets',
+        data: ticket,
+        source: 'api',
+        timestamp: Date.now()
+      });
     }
 
     logServerEvent('TICKET_RATED', { ticketId, rating, agentId });
@@ -420,21 +387,27 @@ router.post('/support/claim-ticket', apiKeyGuard, authGuard, async (req, res) =>
     const issueContext = firstUserMsg ? (firstUserMsg.text || '').replace('ISSUE_DESCRIPTION: ', '') : ticketTitle;
 
     let issueDescription = `${ticketType}: ${ticketTitle}`;
+    // 🛡️ [AI_TIMEOUT_GUARD] (v2.6.617): 3s timeout to prevent request stalling on slow AI providers
     try {
-      const groqKey = process.env.GROQ_API_KEY || process.env.CEREBRAS_API_KEY;
-      if (groqKey && issueContext) {
+      const AI_TIMEOUT_MS = 3000;
+      const aiPromise = (async () => {
+        const groqKey = process.env.GROQ_API_KEY || process.env.CEREBRAS_API_KEY;
+        if (!groqKey || !issueContext) return null;
         const aiRes = await fetchWithAIFallback({
           messages: [{ role: 'user', content: `Summarize this support issue in one short sentence (max 20 words), no quotes: "${issueContext}"` }],
           apiKey: groqKey,
           temperature: 0.3,
-          max_tokens: 50
+          max_tokens: 50,
+          timeoutMs: AI_TIMEOUT_MS
         });
         const aiData = await aiRes.json();
-        const aiText = aiData?.choices?.[0]?.message?.content?.trim();
-        if (aiText) issueDescription = aiText;
-      }
+        return aiData?.choices?.[0]?.message?.content?.trim() || null;
+      })();
+      const timeoutPromise = new Promise(r => setTimeout(() => r(null), AI_TIMEOUT_MS));
+      const aiText = await Promise.race([aiPromise, timeoutPromise]);
+      if (aiText) issueDescription = aiText;
     } catch (aiErr) {
-      console.warn('[AI] Issue description generation failed:', aiErr.message);
+      console.warn('[AI] Issue description generation failed (claim):', aiErr.message);
     }
 
     // Inject the introduction message into the ticket's messages
@@ -461,26 +434,15 @@ router.post('/support/claim-ticket', apiKeyGuard, authGuard, async (req, res) =>
     ticketDoc.markModified('data');
     await ticketDoc.save();
 
-    // 🛡️ [DUAL-PERSISTENCE SYNC] (v2.6.438)
-    // Update the monolithic AppState blob to ensure immediate visibility for all clients
-    const latestState = await AppState.findOne().sort({ version: -1 });
-    if (latestState && latestState.data && latestState.data.supportTickets) {
-      const tickets = latestState.data.supportTickets;
-      const idx = tickets.findIndex(t => t.id === ticketId);
-      if (idx !== -1) {
-        tickets[idx] = ticket;
-        latestState.markModified('data');
-        latestState.version += 1;
-        await latestState.save();
-        console.log(`[SYNC] Ticket ${ticketId} synced to AppState v${latestState.version} (Claim)`);
-      }
-    }
+    // 🛡️ [v2.6.617] Removed AppState dual-write — data lives in SupportTicket collection
 
-    // 📡 [REAL-TIME SYNC FIX] Ensure clients pull the updated In Progress status
+    // 📡 Notify clients via targeted entity_updated event
     if (io) {
-      io.emit('data_updated', { 
-         keys: ['supportTickets'], 
-         version: latestState ? latestState.version : null 
+      io.emit('entity_updated', {
+        entity: 'supportTickets',
+        data: ticket,
+        source: 'api',
+        timestamp: Date.now()
       });
     }
 
@@ -564,31 +526,10 @@ router.post('/support/reply-ticket', apiKeyGuard, authGuard, async (req, res) =>
   }
 
   try {
-    const ticketDoc = await SupportTicket.findOne({ id: ticketId });
-    if (!ticketDoc || !ticketDoc.data) {
-      return res.status(404).json({ error: 'Ticket not found' });
-    }
+    // 🛡️ [RACE_CONDITION_FIX] (v2.6.617): Use atomic $push instead of read-modify-write
+    // This prevents two simultaneous replies from overwriting each other.
 
-    const ticket = ticketDoc.data;
-    
-    // Fetch sender role to determine if admin/staff
-    const userDoc = await Player.findOne({ id: userId }).lean();
-    const currentUser = userDoc ? userDoc.data : null;
-    const isStaff = currentUser && (currentUser.role === 'support' || currentUser.role === 'admin');
-
-    // 1. Mark existing messages as seen if staff is replying (or user is replying)
-    let changedStatus = false;
-    if (ticket.messages) {
-      ticket.messages = ticket.messages.map(m => {
-        if (m.senderId !== userId && m.status !== 'seen') {
-          changedStatus = true;
-          return { ...m, status: 'seen' };
-        }
-        return m;
-      });
-    }
-
-    // 2. Add new message
+    // 1. Build the new message object
     const msgText = typeof text === 'string' ? text : (text?.text || String(text || ''));
     const msg = { 
       id: `m-${Date.now()}`, 
@@ -607,40 +548,74 @@ router.post('/support/reply-ticket', apiKeyGuard, authGuard, async (req, res) =>
       };
     }
 
-    ticket.messages = [...(ticket.messages || []), msg];
-    ticket.updatedAt = new Date().toISOString();
+    // 2. Determine role for status/assignment logic
+    const userDoc = await Player.findOne({ id: userId }).lean();
+    const currentUser = userDoc ? userDoc.data : null;
+    const isStaff = currentUser && (currentUser.role === 'support' || currentUser.role === 'admin');
 
-    // 3. Status/Assignment updates
-    if (!isStaff && ticket.status === 'Awaiting Response') {
-      ticket.status = 'In Progress';
+    // 3. Read current ticket state for conditional logic
+    const ticketDoc = await SupportTicket.findOne({ id: ticketId });
+    if (!ticketDoc || !ticketDoc.data) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+    const currentTicket = ticketDoc.data;
+
+    // 4. Build atomic update
+    const updateOps = {
+      $push: { 'data.messages': msg },
+      $set: {
+        'data.updatedAt': new Date().toISOString(),
+        lastUpdated: new Date()
+      }
+    };
+
+    // Status transitions
+    if (!isStaff && currentTicket.status === 'Awaiting Response') {
+      updateOps.$set['data.status'] = 'In Progress';
     }
 
-    if (isStaff && (!ticket.assignedTo || ticket.assignedTo === 'Unassigned')) {
-      ticket.assignedTo = userId;
-      ticket.assignedAt = new Date().toISOString();
+    // Auto-assign if staff replies to unassigned ticket
+    if (isStaff && (!currentTicket.assignedTo || currentTicket.assignedTo === 'Unassigned')) {
+      updateOps.$set['data.assignedTo'] = userId;
+      updateOps.$set['data.assignedAt'] = new Date().toISOString();
     }
 
-    ticketDoc.data = ticket;
-    ticketDoc.lastUpdated = new Date();
-    ticketDoc.markModified('data');
-    await ticketDoc.save();
+    // 5. Atomic update — message is appended without race condition risk
+    const updatedDoc = await SupportTicket.findOneAndUpdate(
+      { id: ticketId },
+      updateOps,
+      { new: true }
+    );
+
+    if (!updatedDoc) {
+      return res.status(404).json({ error: 'Ticket not found during update' });
+    }
+
+    // 6. Mark prior messages as seen (best-effort, non-critical)
+    // Done as a separate update to avoid complex arrayFilters in the critical path
+    await SupportTicket.updateOne(
+      { id: ticketId },
+      { $set: { 'data.messages.$[elem].status': 'seen' } },
+      { arrayFilters: [{ 'elem.senderId': { $ne: userId }, 'elem.status': { $ne: 'seen' }, 'elem.type': { $ne: 'event' }, 'elem.senderId': { $ne: 'system' } }] }
+    ).catch(err => console.warn('[REPLY] Mark-seen update failed (non-critical):', err.message));
 
     // Broadcast
     if (io) {
       io.emit('entity_updated', {
         entity: 'supportTickets',
-        data: ticketDoc.data,
+        data: updatedDoc.data,
         source: 'api',
         timestamp: Date.now()
       });
     }
 
-    res.json({ success: true, ticket: ticketDoc.data });
+    res.json({ success: true, ticket: updatedDoc.data });
   } catch (e) {
     console.error('[API] /support/reply-ticket error:', e);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 router.post('/support/update-ticket-status', apiKeyGuard, authGuard, async (req, res) => {
   const { ticketId, status, summary, justification } = req.body;

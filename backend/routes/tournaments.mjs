@@ -26,7 +26,17 @@ export default function({ io }) {
       const serverCost = Number(tData.entryFee || tData.cost || tData.registrationFee || 0);
       const isDoubles = ["Men's Doubles", "Women's Doubles", "Mixed Doubles"].includes(tData.format);
       
-      const { method = 'credits', partnerId, teamCode, registeringPartnerId } = req.body;
+      const { method = 'credits', partnerId, teamCode, registeringPartnerId, idempotencyKey } = req.body;
+      
+      // 🛡️ [IDEMPOTENCY_GUARD] (v2.6.617): Prevent double-charging on network retries
+      const lowerUserIdCheck = String(userId).toLowerCase();
+      if (idempotencyKey) {
+        const existingPayment = tData.playerPaymentMethods?.[lowerUserIdCheck];
+        if (existingPayment?.idempotencyKey === idempotencyKey) {
+          console.log(`[IDEMPOTENCY] Duplicate registration blocked for user=${userId}, key=${idempotencyKey}`);
+          return res.status(200).json({ success: true, type: 'IDEMPOTENT_REPLAY', message: 'Already registered (duplicate request detected)' });
+        }
+      }
       
       // 🛡️ [VAPT-BL4]: Block partner registration in singles tournaments
       if (!isDoubles && (registeringPartnerId || partnerId || teamCode)) {
@@ -162,8 +172,8 @@ export default function({ io }) {
          tUpdate.$addToSet['data.pendingPaymentPlayerIds'] = { $each: lowerUsersToRegister };
          tUpdate.$pull['data.registeredPlayerIds'] = { $in: caseInsensitiveUsers };
          for (const uId of lowerUsersToRegister) {
-           tUpdate.$set[`data.pendingPaymentTimestamps.${uId}`] = Date.now();
-           tUpdate.$set[`data.playerPaymentMethods.${uId}`] = { method, cost: individualCost, timestamp: new Date().toISOString(), paidBy: userId };
+            tUpdate.$set[`data.pendingPaymentTimestamps.${uId}`] = Date.now();
+            tUpdate.$set[`data.playerPaymentMethods.${uId}`] = { method, cost: individualCost, timestamp: new Date().toISOString(), paidBy: userId, idempotencyKey: idempotencyKey || null };
          }
       } else {
          tUpdate.$addToSet['data.registeredPlayerIds'] = { $each: lowerUsersToRegister };
@@ -175,8 +185,8 @@ export default function({ io }) {
            tUpdate.$unset[`data.playerStatuses.${lowerUId}`] = "";
            tUpdate.$unset[`data.pendingPaymentTimestamps.${uId}`] = "";
            tUpdate.$unset[`data.pendingPaymentTimestamps.${lowerUId}`] = "";
-           // 🛡️ Ensure individualCost is recorded to prevent double refunds
-           tUpdate.$set[`data.playerPaymentMethods.${lowerUId}`] = { method, cost: individualCost, timestamp: new Date().toISOString(), paidBy: userId };
+            // 🛡️ Ensure individualCost is recorded to prevent double refunds
+            tUpdate.$set[`data.playerPaymentMethods.${lowerUId}`] = { method, cost: individualCost, timestamp: new Date().toISOString(), paidBy: userId, idempotencyKey: idempotencyKey || null };
          }
       }
 
@@ -459,31 +469,47 @@ export default function({ io }) {
         delete tUpdate.$unset;
       }
 
+      // 🛡️ [ATOMIC_OPTOUT] (v2.6.617): Use atomic operators instead of in-memory array manipulation
+      // This prevents concurrent opt-outs from overwriting each other's team changes.
+      let doublesTeamAtomicUpdate = null; // Deferred atomic update for individual opt-out
+
       if (tData.doublesTeams && tData.doublesTeams.length > 0) {
         if (optOutMode === 'team' && teamToOptOut) {
-          // Remove the team entirely
-          const newTeams = tData.doublesTeams.filter(t => t.id !== teamToOptOut.id);
-          tUpdate.$set['data.doublesTeams'] = newTeams;
+          // Remove the team entirely using atomic $pull
+          tUpdate.$pull = tUpdate.$pull || {};
+          tUpdate.$pull['data.doublesTeams'] = { id: teamToOptOut.id };
         } else {
-          // Individual opt-out: remove just the opting-out user from their team
-          const newTeams = tData.doublesTeams.map(team => {
-            const lowerUserIdOptingOut = String(userId).toLowerCase();
-            const lowerP1 = team.player1Id ? String(team.player1Id).toLowerCase() : null;
-            const lowerP2 = team.player2Id ? String(team.player2Id).toLowerCase() : null;
+          // Individual opt-out: handled as a separate atomic update after the main one
+          // to avoid conflicts between $set and positional operators on the same path
+          const lowerUserIdOptingOut = String(userId).toLowerCase();
+          const team = tData.doublesTeams.find(t =>
+            String(t.player1Id).toLowerCase() === lowerUserIdOptingOut ||
+            (t.player2Id && String(t.player2Id).toLowerCase() === lowerUserIdOptingOut)
+          );
 
-            if (lowerP1 === lowerUserIdOptingOut) {
-              if (team.player2Id) {
-                // Shift player2 to player1 to keep the team alive and waiting for a new partner
-                return { ...team, player1Id: team.player2Id, player2Id: null };
-              }
-              return { ...team, player1Id: null };
+          if (team) {
+            const isPlayer1 = String(team.player1Id).toLowerCase() === lowerUserIdOptingOut;
+
+            if (isPlayer1 && team.player2Id) {
+              // Player1 leaving with a partner: shift player2 → player1 (keep team alive)
+              doublesTeamAtomicUpdate = {
+                query: { id: tid, 'data.doublesTeams.id': team.id },
+                update: { $set: { 'data.doublesTeams.$.player1Id': team.player2Id, 'data.doublesTeams.$.player2Id': null } }
+              };
+            } else if (isPlayer1 && !team.player2Id) {
+              // Solo player1 leaving: remove the empty team
+              doublesTeamAtomicUpdate = {
+                query: { id: tid },
+                update: { $pull: { 'data.doublesTeams': { id: team.id } } }
+              };
+            } else {
+              // Player2 leaving: just null out player2Id
+              doublesTeamAtomicUpdate = {
+                query: { id: tid, 'data.doublesTeams.id': team.id },
+                update: { $set: { 'data.doublesTeams.$.player2Id': null } }
+              };
             }
-            if (lowerP2 === lowerUserIdOptingOut) {
-              return { ...team, player2Id: null };
-            }
-            return team;
-          }).filter(team => team.player1Id !== null || team.player2Id !== null);
-          tUpdate.$set['data.doublesTeams'] = newTeams;
+          }
         }
       }
 
@@ -524,11 +550,20 @@ export default function({ io }) {
       tUpdate.$set['data.pendingPaymentPlayerIds'] = updatedPending;
       tUpdate.$set['data.waitlistedPlayerIds'] = updatedWaitlisted;
 
-      const updatedTournament = await Tournament.findOneAndUpdate(
+      let updatedTournament = await Tournament.findOneAndUpdate(
         { id: tid },
         tUpdate,
         { new: true }
       );
+
+      // 🛡️ [ATOMIC_OPTOUT] (v2.6.617): Execute deferred team modification atomically
+      if (doublesTeamAtomicUpdate && updatedTournament) {
+        updatedTournament = await Tournament.findOneAndUpdate(
+          doublesTeamAtomicUpdate.query,
+          doublesTeamAtomicUpdate.update,
+          { new: true }
+        ) || updatedTournament; // Fallback if team was already removed by a concurrent operation
+      }
 
       // 4. Refund Logic (routing to originalPayerId)
       let updatedUser = null;
@@ -1307,6 +1342,130 @@ export default function({ io }) {
 
     } catch (err) {
       console.error('[Partner-Chat POST] Error:', err);
+      return res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // 📡 [REMOTE_CHECKIN] (v2.6.618): Dedicated atomic check-in endpoint
+  // Replaces the fragile sync-layer check-in with a direct REST call.
+  // Supports:
+  //   - Admin/Coach QR scan: POST body { playerId: "..." }
+  //   - Player self-check-in: No playerId in body, uses authenticated user
+  router.post('/:id/check-in', authGuard, async (req, res) => {
+    const tid = req.params.id;
+    const requesterId = req.user.id;
+    const requesterRole = req.user.role;
+
+    try {
+      // Determine target player — admin can check in anyone, players check themselves in
+      let targetPlayerId;
+      if (req.body.playerId) {
+        // Admin/Coach mode — checking in a specific player
+        if (requesterRole !== 'admin' && requesterRole !== 'coach') {
+          return res.status(403).json({ success: false, message: 'Only admins and coaches can check in other players.' });
+        }
+        targetPlayerId = String(req.body.playerId).toLowerCase();
+      } else {
+        // Self check-in mode
+        targetPlayerId = String(requesterId).toLowerCase();
+      }
+
+      // 1. Fetch tournament
+      const tournamentDoc = await Tournament.findOne({ id: tid });
+      if (!tournamentDoc) {
+        return res.status(404).json({ success: false, message: 'Tournament not found.' });
+      }
+
+      const tData = tournamentDoc.data || {};
+
+      // 2. Validate player is registered
+      const registeredIds = (tData.registeredPlayerIds || []).map(id => String(id).toLowerCase());
+      if (!registeredIds.includes(targetPlayerId)) {
+        return res.status(400).json({ success: false, message: 'Player is not registered for this tournament.' });
+      }
+
+      // 3. Check if already checked in (idempotent)
+      const currentStatuses = tData.playerStatuses || {};
+      if (currentStatuses[targetPlayerId] === 'Checked-In') {
+        return res.status(200).json({ success: true, type: 'ALREADY_CHECKED_IN', message: 'Player is already checked in.' });
+      }
+
+      // 4. Atomic update — only set check-in status, don't touch anything else
+      const updatedTournament = await Tournament.findOneAndUpdate(
+        { id: tid },
+        {
+          $set: {
+            [`data.playerStatuses.${targetPlayerId}`]: 'Checked-In',
+            lastUpdated: new Date()
+          }
+        },
+        { new: true }
+      );
+
+      if (!updatedTournament) {
+        return res.status(500).json({ success: false, message: 'Failed to update check-in status.' });
+      }
+
+      // 5. Notifications
+      const playerDoc = await Player.findOne({ id: targetPlayerId });
+      const playerData = playerDoc?.data || {};
+      const tournamentTitle = tData.title || 'Tournament';
+
+      // 5a. Notify the checked-in player
+      const notifTitle = 'Check-In Confirmed! ✅';
+      const notifBody = `You have successfully checked in for ${tournamentTitle}.`;
+      const notifPayload = { tournamentId: tid, type: 'TOURNAMENT_CHECKIN' };
+
+      if (playerDoc) {
+        addInAppNotification(playerData, notifTitle, notifBody, notifPayload);
+        await Player.updateOne(
+          { id: targetPlayerId },
+          { $set: { 'data.notifications': playerData.notifications, lastUpdated: new Date() } }
+        );
+
+        if (playerData.pushTokens?.length > 0) {
+          sendPushNotification(playerData.pushTokens, notifTitle, notifBody, notifPayload).catch(console.error);
+        }
+      }
+
+      // 5b. Notify assigned coach
+      if (tData.assignedCoachId) {
+        const coachDoc = await Player.findOne({ id: tData.assignedCoachId });
+        if (coachDoc?.data) {
+          const coachData = coachDoc.data;
+          const coachNotifTitle = 'Player Checked-In ✅';
+          const coachNotifBody = `${playerData.name || targetPlayerId} has checked in for ${tournamentTitle}.`;
+          addInAppNotification(coachData, coachNotifTitle, coachNotifBody, { tournamentId: tid, type: 'COACH_PLAYER_CHECKIN' });
+          await Player.updateOne(
+            { id: tData.assignedCoachId },
+            { $set: { 'data.notifications': coachData.notifications, lastUpdated: new Date() } }
+          );
+          if (coachData.pushTokens?.length > 0) {
+            sendPushNotification(coachData.pushTokens, coachNotifTitle, coachNotifBody, { tournamentId: tid, type: 'COACH_PLAYER_CHECKIN' }).catch(console.error);
+          }
+        }
+      }
+
+      // 6. Broadcast to active clients
+      if (io) {
+        io.emit('entity_updated', {
+          entity: 'tournaments',
+          data: updatedTournament.data,
+          source: 'api',
+          timestamp: Date.now()
+        });
+      }
+
+      console.log(`✅ [CheckIn] Player ${targetPlayerId} checked into tournament ${tid} by ${requesterId}`);
+
+      return res.status(200).json({
+        success: true,
+        message: `${playerData.name || targetPlayerId} checked in successfully.`,
+        tournament: updatedTournament.data
+      });
+
+    } catch (err) {
+      console.error('[CheckIn API] Error:', err);
       return res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });

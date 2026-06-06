@@ -70,10 +70,33 @@ render_services.json
 dump_*.xml
 mockData.ts
 
-# Scratch/debug scripts in root
+# Scratch/debug scripts
 scratch/
+backend/scratch/
+backend/check_*.cjs
 
 # 🛡️ [SECURITY] (v2.6.327): Firebase credentials must never be committed
 backend/firebase-service-account.json
 backend/test_sync.mjs
 backend/test_users.mjs
+
+# 🛡️ [CREDENTIAL_PURGE] (v2.6.620): Block ALL debug/test scripts with hardcoded MongoDB URIs
+# These files were found with plain-text production credentials in the repo.
+backend/query_db.js
+backend/scratch.mjs
+backend/check_*.mjs
+backend/final_check.mjs
+backend/inspect_db.mjs
+backend/deep_search.mjs
+backend/fetch_logs*.mjs
+backend/find_players.mjs
+backend/list_dbs.mjs
+backend/simulate_filter.mjs
+backend/debug_diag.mjs
+backend/test_mongo*.mjs
+backend/test_user_doc.js
+backend/test_appentry.js
+query_test*.mjs
+test_db*.mjs
+test_reply.mjs
+test_populate.mjs

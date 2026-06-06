@@ -1,4 +1,4 @@
-import { AppState, Player } from '../models/index.mjs';
+import { AppState, Player, SupportTicket, Tournament } from '../models/index.mjs';
 
 /**
  * Initializes and registers all WebSocket handlers.
@@ -23,6 +23,37 @@ io.on('connection', async (socket) => {
     socket.join('authenticated');
   } else {
     console.warn(`⚠️ [WS_WARN] socket=${socket.id} connected without userId! Waiting for manual join...`);
+  }
+
+  // 🛡️ [CATCH_UP] (v2.6.617): Send missed events to reconnecting clients
+  // When a mobile app comes back from background, it may have missed entity_updated events.
+  // The client sends lastSyncTimestamp in the handshake query; we replay changes since then.
+  const lastSyncTs = socket.handshake?.query?.lastSyncTimestamp;
+  if (lastSyncTs && !isNaN(Number(lastSyncTs))) {
+    const sinceDate = new Date(Number(lastSyncTs));
+    const maxCatchupWindow = 10 * 60 * 1000; // 10 minutes max to prevent abuse
+    const now = Date.now();
+    
+    if (now - sinceDate.getTime() <= maxCatchupWindow) {
+      try {
+        const [changedTickets, changedTournaments] = await Promise.all([
+          SupportTicket.find({ lastUpdated: { $gt: sinceDate } }).select('data').lean().limit(50),
+          Tournament.find({ lastUpdated: { $gt: sinceDate } }).select('data').lean().limit(50),
+        ]);
+
+        const totalChanges = changedTickets.length + changedTournaments.length;
+        if (totalChanges > 0) {
+          socket.emit('catch_up', {
+            supportTickets: changedTickets.map(d => d.data),
+            tournaments: changedTournaments.map(d => d.data),
+            timestamp: now
+          });
+          console.log(`🔄 [CATCH_UP] Sent ${totalChanges} missed entities to ${connUserId || socket.id} (window: ${Math.round((now - sinceDate.getTime()) / 1000)}s)`);
+        }
+      } catch (e) {
+        console.warn(`[CATCH_UP] Failed for ${connUserId || socket.id}:`, e.message);
+      }
+    }
   }
 
   // 🛡️ [VAPT-F10] (v2.6.556): Validate room joins against authenticated identity
