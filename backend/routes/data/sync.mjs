@@ -321,7 +321,7 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
 
     // 🛡️ SCALABILITY FIX (v2.6.316): O(N) -> O(K) Scoped Hydration
     // Collect the exact IDs of the incoming documents to prevent loading the entire DB into memory.
-    const reqIds = { players: new Set(), tournaments: new Set(), matches: new Set(), matchVideos: new Set(), supportTickets: new Set(), evaluations: new Set(), matchmaking: new Set(), chatbotMessages: new Set(), partnerRequests: new Set() };
+    const reqIds = { players: new Set(), tournaments: new Set(), matches: new Set(), matchVideos: new Set(), supportTickets: new Set(), evaluations: new Set(), matchmaking: new Set(), chatbotMessages: new Set(), partnerRequests: new Set(), auditLogs: new Set(), seenAdminActionIds: new Set(), visitedAdminSubTabs: new Set() };
     
     for (const key of syncableKeys) {
       if (req.body[key]) {
