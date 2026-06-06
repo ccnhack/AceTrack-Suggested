@@ -436,6 +436,10 @@ export const AdminGrievancesPanel = ({
     const seenSet = restProps.seenAdminActionIds;
     const wasOpenedThisSession = seenSet?.has ? seenSet.has(String(ticket.id)) : false;
     if (wasOpenedThisSession) return false;
+
+    // 🛡️ [CLOSED STATE GUARD] (v2.6.571): Closed or Resolved tickets are never unread.
+    const status = ticket.status || 'Open';
+    if (status === 'Closed' || status === 'Resolved') return false;
     
     // 🛡️ [PER-AGENT READ STATE] (v2.6.558)
     const myLastRead = ticket.lastReadBy?.[myId] || (myId === 'admin' && ticket.lastReadBy?.['admin']);
@@ -452,14 +456,13 @@ export const AdminGrievancesPanel = ({
         }
       }
       
-      // Legacy fallback
+      // Legacy fallback for old tickets before per-agent read tracking
       return m.status !== 'seen';
     });
     
     // 🛡️ [FIX v2.6.570] Only consider a ticket "new/unseen" if the agent has NEVER opened it.
     // Previously, ALL Open/Awaiting tickets were forced unread regardless of read state.
     const neverReadByMe = !myLastRead;
-    const status = ticket.status || 'Open';
     const isNewTicket = neverReadByMe && (status === 'Open' || status === 'Awaiting Response');
     
     return hasUnreadMessages || isNewTicket;
