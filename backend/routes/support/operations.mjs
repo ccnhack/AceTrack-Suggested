@@ -459,7 +459,7 @@ router.post('/support/claim-ticket', apiKeyGuard, authGuard, async (req, res) =>
 // the 'seen' status and cause the blue unread highlight to reappear permanently.
 router.post('/support/mark-seen', apiKeyGuard, authGuard, async (req, res) => {
   const { ticketId } = req.body;
-  const viewerId = req.user?.id;
+  const viewerId = req.user?.id || req.headers['x-user-id'];
 
   if (!ticketId) return res.status(400).json({ error: 'ticketId is required' });
   if (!viewerId) return res.status(401).json({ error: 'Authentication required' });

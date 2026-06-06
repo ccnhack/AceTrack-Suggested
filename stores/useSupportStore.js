@@ -254,7 +254,8 @@ export const useSupportStore = create((set, get) => {
           const token = await storageUtil.getItem('userToken');
           const headers = {
             'Content-Type': 'application/json',
-            'x-ace-api-key': config.PUBLIC_APP_ID
+            'x-ace-api-key': config.PUBLIC_APP_ID,
+            'x-user-id': currentUser.id
           };
           if (token) headers['Authorization'] = `Bearer ${token}`;
           
