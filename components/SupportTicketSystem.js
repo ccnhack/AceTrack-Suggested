@@ -378,13 +378,18 @@ export const SupportTicketSystem = ({
     
     // 🛡️ Format internal system/event messages for the user
     if (msg.type === 'event' || senderId === 'system') {
+      const cleanText = text ? text.replace(/\n?\(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)\)\s*$/i, '') : '';
+      const eventTime = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       return (
         <View 
           key={msg.id || msg.timestamp || index} 
           style={styles.eventCard}
           onLayout={(e) => { messageYOffsets.current[msg.id || msg.timestamp] = e.nativeEvent.layout.y; }}
         >
-          <Text style={styles.eventText}>{text}</Text>
+          <Text style={styles.eventText}>{cleanText}</Text>
+          <Text style={[styles.eventText, { fontSize: 9, marginTop: 2, color: '#94A3B8', textTransform: 'none' }]}>
+            {eventTime}
+          </Text>
         </View>
       );
     }

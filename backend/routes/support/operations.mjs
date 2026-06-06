@@ -660,14 +660,15 @@ router.post('/support/update-ticket-status', apiKeyGuard, authGuard, async (req,
       });
     }
 
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    messages.push({
-      id: `system-${Date.now()}`,
-      senderId: 'system',
-      text: `-------- ${status.toUpperCase()} WAS ${oldStatus.toUpperCase()} --------\n(${time})`,
-      timestamp: new Date().toISOString(),
-      type: 'event'
-    });
+    if (status !== oldStatus) {
+      messages.push({
+        id: `system-${Date.now()}`,
+        senderId: 'system',
+        text: `-------- ${status.toUpperCase()} WAS ${oldStatus.toUpperCase()} --------`,
+        timestamp: new Date().toISOString(),
+        type: 'event'
+      });
+    }
     
     ticket.messages = messages;
 
