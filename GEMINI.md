@@ -15,8 +15,8 @@ This document tracks critical rules and workflows to ensure stability across mob
 ## 📦 Pre-Built Asset Synchronization Rule
 **CRITICAL**: Since the web deployment serves minified bundles from `backend/public/`, updating source constants is NOT enough. Every version bump **MUST** include a global string replacement in build artifacts:
 1.  **Scope**: Target all `.js`, `.json`, and `.html` files in `backend/public/` and `dist/`.
-2.  **Procedure**: Use a recursive `sed` or `grep|xargs` command to replace the OLD_VERSION with the NEW_VERSION.
-3.  **Command Template**: `grep -Irl "OLD_VERSION" backend/public dist | xargs sed -i '' 's/OLD_VERSION/NEW_VERSION/g'`
+2.  **Procedure**: Use a recursive `sed` or `grep|xargs` command to replace the OLD_VERSION with the NEW_VERSION. **CRITICAL**: You MUST escape the periods in the OLD_VERSION string (e.g., `2\.6\.625`) to prevent `sed` from treating them as wildcards and destroying minified CSS hex codes.
+3.  **Command Template**: `grep -Irl "OLD_VERSION" backend/public dist | xargs sed -i '' 's/OLD_VERSION_ESCAPED/NEW_VERSION/g'` (e.g., `s/2\.6\.625/2.6.626/g`)
 4.  **Validation**: Run `grep -r "OLD_VERSION" .` after the sync.
 
 ## 🌐 Web Build Rebuild Rule
@@ -24,7 +24,7 @@ This document tracks critical rules and workflows to ensure stability across mob
 
 1.  **Rebuild**: `npx expo export -p web`
 2.  **Deploy**: `rm -rf backend/public && cp -R dist backend/public`
-3.  **Purge Old Versions**: `grep -Irl "OLD_VERSION" backend/public dist | xargs sed -i '' 's/OLD_VERSION/NEW_VERSION/g'`
+3.  **Purge Old Versions**: `grep -Irl "OLD_VERSION" backend/public dist | xargs sed -i '' 's/OLD_VERSION_ESCAPED/NEW_VERSION/g'`
 4.  **Validate**: `grep -r "OLD_VERSION" backend/public dist | wc -l` → must be **0**
 
 **Failure to rebuild will cause the live web app to serve stale JavaScript, making ALL frontend fixes invisible to users. This has caused production incidents.**
@@ -36,7 +36,7 @@ This document tracks critical rules and workflows to ensure stability across mob
 - [ ] Update `backend/server.mjs` `APP_VERSION`.
 - [ ] **Rebuild Web**: `npx expo export -p web`
 - [ ] **Deploy Web**: `rm -rf backend/public && cp -R dist backend/public`
-- [ ] **Run Global Asset Purge**: `grep -Irl "OLD" backend/public dist | xargs sed -i '' 's/OLD/NEW/g'`
+- [ ] **Run Global Asset Purge**: `grep -Irl "OLD_VERSION" backend/public dist | xargs sed -i '' 's/OLD_VERSION_ESCAPED/NEW_VERSION/g'` (Ensure dots are escaped!)
 - [ ] **Validate**: Confirm zero references to old version in `backend/public/` and `dist/`.
 - [ ] Commit changes with the version tag in the message.
 - [ ] Push to GitHub (triggers Render backend/web deploy).
