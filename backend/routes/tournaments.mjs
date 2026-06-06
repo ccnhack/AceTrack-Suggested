@@ -137,12 +137,9 @@ export default function({ io }) {
       const lowerUserId = String(userId).toLowerCase();
       if (isDoubles) {
         if (joiningTeam) {
-          // Update the existing team to add player2Id
-          const teamIndex = tData.doublesTeams.findIndex(t => t.id === joiningTeam.id);
-          if (teamIndex !== -1) {
-            tUpdate.$set[`data.doublesTeams.${teamIndex}.player2Id`] = lowerUserId;
-            tUpdate.$set[`data.doublesTeams.${teamIndex}.updatedAt`] = new Date().toISOString();
-          }
+          // Update the existing team to add player2Id using the positional operator for atomic safety
+          tUpdate.$set['data.doublesTeams.$.player2Id'] = lowerUserId;
+          tUpdate.$set['data.doublesTeams.$.updatedAt'] = new Date().toISOString();
         } else {
           // Create a new team
           const teamId = `team_${Date.now()}`;
@@ -186,10 +183,7 @@ export default function({ io }) {
       // 7. Concurrency Guard & Atomic Update
       const query = { id: tid };
       if (isDoubles && joiningTeam) {
-        const teamIndex = tData.doublesTeams.findIndex(t => t.id === joiningTeam.id);
-        if (teamIndex !== -1) {
-          query[`data.doublesTeams.${teamIndex}.player2Id`] = null;
-        }
+        query['data.doublesTeams'] = { $elemMatch: { id: joiningTeam.id, player2Id: null } };
       }
 
       const updatedTournament = await Tournament.findOneAndUpdate(
@@ -740,23 +734,28 @@ export default function({ io }) {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
 
     try {
-      const doc = await Tournament.findOne({ id: tid });
-      if (!doc || !doc.data) return res.status(404).json({ error: 'Tournament not found' });
+      // 🛡️ Use atomic findOneAndUpdate for thread safety
+      const updateQuery = {
+        $set: { lastUpdated: new Date() }
+      };
       
-      const tData = doc.data;
+      const caseInsensitiveIds = [pid, String(pid).toLowerCase(), new RegExp(`^${pid}$`, 'i')];
+      updateQuery.$pull = { 'data.interestedPlayerIds': { $in: caseInsensitiveIds } };
+      
       if (action === 'accept') {
-        tData.interestedPlayerIds = (tData.interestedPlayerIds || []).filter(id => id !== pid);
-        tData.registeredPlayerIds = [...(tData.registeredPlayerIds || []), pid];
-      } else if (action === 'reject') {
-        tData.interestedPlayerIds = (tData.interestedPlayerIds || []).filter(id => id !== pid);
+        updateQuery.$addToSet = { 'data.registeredPlayerIds': String(pid).toLowerCase() };
       }
-      
-      doc.lastUpdated = new Date();
-      doc.markModified('data');
-      await doc.save();
 
-      if (io) io.emit('entity_updated', { entity: 'tournaments', data: doc.data, source: 'api', timestamp: Date.now() });
-      res.json({ success: true, tournament: doc.data });
+      const updatedTournament = await Tournament.findOneAndUpdate(
+        { id: tid },
+        updateQuery,
+        { new: true }
+      );
+
+      if (!updatedTournament) return res.status(404).json({ error: 'Tournament not found' });
+
+      if (io) io.emit('entity_updated', { entity: 'tournaments', data: updatedTournament.data, source: 'api', timestamp: Date.now() });
+      res.json({ success: true, tournament: updatedTournament.data });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -771,8 +770,12 @@ export default function({ io }) {
       if (!doc || !doc.data) return res.status(404).json({ error: 'Tournament not found' });
       
       const tData = doc.data;
-      tData.pendingPaymentPlayerIds = (tData.pendingPaymentPlayerIds || []).filter(id => id !== pid);
-      if (tData.pendingPaymentTimestamps) delete tData.pendingPaymentTimestamps[pid];
+      const lowerPid = String(pid).toLowerCase();
+      tData.pendingPaymentPlayerIds = (tData.pendingPaymentPlayerIds || []).filter(id => String(id).toLowerCase() !== lowerPid);
+      if (tData.pendingPaymentTimestamps) {
+        delete tData.pendingPaymentTimestamps[pid];
+        delete tData.pendingPaymentTimestamps[lowerPid];
+      }
       
       doc.lastUpdated = new Date();
       doc.markModified('data');
@@ -874,8 +877,9 @@ export default function({ io }) {
       const waitlisted = tData.waitlistedPlayerIds || [];
       const registered = tData.registeredPlayerIds || [];
       
-      if (registered.includes(userId)) return res.status(400).json({ success: false, message: 'Already registered' });
-      if (waitlisted.includes(userId)) return res.status(400).json({ success: false, message: 'Already on waitlist' });
+      const lowerUserId = String(userId).toLowerCase();
+      if (registered.some(id => String(id).toLowerCase() === lowerUserId)) return res.status(400).json({ success: false, message: 'Already registered' });
+      if (waitlisted.some(id => String(id).toLowerCase() === lowerUserId)) return res.status(400).json({ success: false, message: 'Already on waitlist' });
       
       await Tournament.updateOne({ id: tid }, {
         $addToSet: { 'data.waitlistedPlayerIds': userId },
@@ -1083,11 +1087,10 @@ export default function({ io }) {
       }
 
       // 6. If user had their own incomplete team, dissolve it first
-      const teamIndex = teams.findIndex(t => t.teamCode === teamCode && !t.player2Id);
       const updateOps = {
         $set: {
-          [`data.doublesTeams.${teamIndex}.player2Id`]: lowerUserId,
-          [`data.doublesTeams.${teamIndex}.updatedAt`]: new Date().toISOString(),
+          'data.doublesTeams.$.player2Id': lowerUserId,
+          'data.doublesTeams.$.updatedAt': new Date().toISOString(),
           lastUpdated: new Date()
         }
       };
@@ -1099,25 +1102,14 @@ export default function({ io }) {
           { id: tid },
           { $pull: { 'data.doublesTeams': { id: existingTeam.id } } }
         );
-        // Re-fetch to get correct indices after pull
-        const refreshedDoc = await Tournament.findOne({ id: tid });
-        const refreshedTeams = refreshedDoc.data?.doublesTeams || [];
-        const newIndex = refreshedTeams.findIndex(t => t.teamCode === teamCode && !t.player2Id);
-        
-        if (newIndex === -1) {
-          return res.status(409).json({ success: false, message: 'Team was filled by another player. Please try again.' });
-        }
 
         // Atomic update with concurrency guard
         const updatedTournament = await Tournament.findOneAndUpdate(
-          { id: tid, [`data.doublesTeams.${newIndex}.player2Id`]: null },
-          {
-            $set: {
-              [`data.doublesTeams.${newIndex}.player2Id`]: lowerUserId,
-              [`data.doublesTeams.${newIndex}.updatedAt`]: new Date().toISOString(),
-              lastUpdated: new Date()
-            }
+          { 
+            id: tid, 
+            'data.doublesTeams': { $elemMatch: { teamCode: teamCode, player2Id: null } }
           },
+          updateOps,
           { new: true }
         );
 
@@ -1155,7 +1147,10 @@ export default function({ io }) {
       } else {
         // Simple case: no old team to dissolve, just fill player2Id
         const updatedTournament = await Tournament.findOneAndUpdate(
-          { id: tid, [`data.doublesTeams.${teamIndex}.player2Id`]: null },
+          { 
+            id: tid, 
+            'data.doublesTeams': { $elemMatch: { teamCode: teamCode, player2Id: null } }
+          },
           updateOps,
           { new: true }
         );
