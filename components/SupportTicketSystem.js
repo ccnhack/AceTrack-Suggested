@@ -379,7 +379,7 @@ export const SupportTicketSystem = ({
     // 🛡️ Format internal system/event messages for the user
     if (msg.type === 'event' || senderId === 'system') {
       const cleanText = text ? text.replace(/\n?\(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)\)\s*$/i, '') : '';
-      const eventTime = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const eventTime = new Date(timestamp).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' });
       return (
         <View 
           key={msg.id || msg.timestamp || index} 
@@ -471,7 +471,7 @@ export const SupportTicketSystem = ({
               </Text>
               <View style={styles.msgFooter}>
                 <Text style={[styles.timestamp, isMe ? styles.myTimestamp : styles.otherTimestamp]}>
-                  {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {new Date(timestamp).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })}
                 </Text>
                 {isMe && (
                   <View style={styles.statusContainer}>
@@ -751,7 +751,7 @@ export const SupportTicketSystem = ({
                   >
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <Text style={styles.ticketDatePrefix}>
-                        Date:- {new Date(ticket.createdAt).toLocaleDateString()}
+                        Date:- {new Date(ticket.createdAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
                       </Text>
                       <Text style={[styles.ticketDatePrefix, { fontWeight: '900', color: '#0F172A' }]}>
                         ID: {ticket.id}
@@ -959,7 +959,7 @@ export const SupportTicketSystem = ({
       const yesterday = new Date();
       yesterday.setDate(today.getDate() - 1);
 
-      let label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      let label = date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', year: 'numeric' });
       if (date.toDateString() === today.toDateString()) label = 'Today';
       else if (date.toDateString() === yesterday.toDateString()) label = 'Yesterday';
 

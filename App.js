@@ -5,6 +5,25 @@ import {
 
 // 🛡️ Disable all yellow warning overlays during E2E tests
 LogBox.ignoreAllLogs();
+
+// 🌐 [v2.6.628] FORCE GLOBAL TIMEZONE TO IST (Indian Standard Time)
+const originalToLocaleTimeString = Date.prototype.toLocaleTimeString;
+Date.prototype.toLocaleTimeString = function(locales, options) {
+  const finalOptions = { ...(options || {}), timeZone: 'Asia/Kolkata' };
+  return originalToLocaleTimeString.call(this, 'en-IN', finalOptions);
+};
+
+const originalToLocaleDateString = Date.prototype.toLocaleDateString;
+Date.prototype.toLocaleDateString = function(locales, options) {
+  const finalOptions = { ...(options || {}), timeZone: 'Asia/Kolkata' };
+  return originalToLocaleDateString.call(this, 'en-IN', finalOptions);
+};
+
+const originalToLocaleString = Date.prototype.toLocaleString;
+Date.prototype.toLocaleString = function(locales, options) {
+  const finalOptions = { ...(options || {}), timeZone: 'Asia/Kolkata' };
+  return originalToLocaleString.call(this, 'en-IN', finalOptions);
+};
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
