@@ -56,6 +56,7 @@ export const SupportTicketSystem = ({
   const [assignmentScope, setAssignmentScope] = useState(userRole === 'support' || userRole === 'admin' ? 'me' : 'all');
   const [filterAgentId, setFilterAgentId] = useState(null); // null = All Agents in scope
   const [showAgentPicker, setShowAgentPicker] = useState(false);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
   // CSAT Rating State
   const [csatRating, setCsatRating] = useState(0);
@@ -530,6 +531,42 @@ export const SupportTicketSystem = ({
   const handleReopen = () => {
     if (!selectedTicket) return;
     onUpdateStatus(selectedTicket.id, 'In Progress');
+  };
+
+  const handleGenerateMissingSummary = async () => {
+    if (!selectedTicket) return;
+    setIsGeneratingSummary(true);
+    
+    try {
+      let history = (selectedTicket.messages || []).map(m => 
+        `${m.senderId === 'admin' ? 'Admin' : (m.senderId === userId ? 'User' : 'Other')}: ${m.text || ''}`
+      ).join('\n');
+
+      if (!history.trim()) {
+         history = "No messages were exchanged in this ticket.";
+      }
+
+      const prompt = [
+        { role: 'system', text: "You are a professional support analyst. Read the conversation history and summarize it into exactly 3 concise sentences. 1) The original issue. 2) The actions taken. 3) The resolution summary. Be clear and objective." },
+        { role: 'user', text: `History:\n${history}\n\nThe ticket was closed without a summary. Please generate one based on the history.` }
+      ];
+
+      const aiSummary = await generateAIResponse(prompt);
+      const finalSummary = aiSummary || "Closure summary was successfully resolved, but AI was unable to generate a summary.";
+      
+      const res = await onUpdateStatus(selectedTicket.id, selectedTicket.status, finalSummary);
+      if (res?.success) {
+        notify({ success: true, message: "Closure summary generated successfully" });
+        setSelectedTicket(prev => ({ ...prev, closureSummary: finalSummary }));
+      } else {
+        notify({ success: false, message: "Failed to update ticket status with summary" });
+      }
+    } catch (e) {
+      console.error("Missing summary generation failed:", e);
+      notify({ success: false, message: "Failed to generate summary" });
+    } finally {
+      setIsGeneratingSummary(false);
+    }
   };
 
   if (view === 'list') {
@@ -1039,6 +1076,23 @@ export const SupportTicketSystem = ({
                 </View>
                 <Text style={styles.resText}>{selectedTicket.closureSummary}</Text>
               </View>
+            )}
+
+            {(selectedTicket.status === 'Resolved' || selectedTicket.status === 'Closed') && !selectedTicket.closureSummary && (
+              <TouchableOpacity 
+                style={{ backgroundColor: '#F0FDF4', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#16A34A', borderStyle: 'dashed', marginBottom: 16, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' }}
+                onPress={handleGenerateMissingSummary}
+                disabled={isGeneratingSummary}
+              >
+                {isGeneratingSummary ? (
+                  <ActivityIndicator color="#16A34A" size="small" style={{ marginRight: 8 }} />
+                ) : (
+                  <Ionicons name="sparkles" size={16} color="#16A34A" style={{ marginRight: 8 }} />
+                )}
+                <Text style={{ color: '#16A34A', fontWeight: '600', fontSize: 13 }}>
+                  {isGeneratingSummary ? 'Generating Summary...' : 'Generate Missing Closure Summary'}
+                </Text>
+              </TouchableOpacity>
             )}
             
             {(selectedTicket.messages || []).map((msg, idx) => {

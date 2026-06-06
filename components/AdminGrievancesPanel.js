@@ -585,6 +585,42 @@ export const AdminGrievancesPanel = ({
     }
   };
 
+  const handleGenerateMissingSummary = async () => {
+    if (!selectedTicket) return;
+    setIsGeneratingSummary(true);
+    
+    try {
+      let history = (selectedTicket.messages || []).map(m => 
+        `${m.senderId === 'admin' ? 'Admin' : 'User'}: ${m.text || ''}`
+      ).join('\n');
+
+      if (!history.trim()) {
+         history = "No messages were exchanged in this ticket.";
+      }
+
+      const prompt = [
+        { role: 'system', text: "You are a professional support analyst. Read the conversation history and summarize it into exactly 3 concise sentences. 1) The original issue. 2) The actions taken. 3) The resolution summary. Be clear and objective." },
+        { role: 'user', text: `History:\n${history}\n\nThe ticket was closed without a summary. Please generate one based on the history.` }
+      ];
+
+      const rawAiSummary = await generateAIResponse(prompt);
+      const aiSummary = rawAiSummary ? rawAiSummary.trim() : "Closure summary was successfully resolved, but AI was unable to generate a summary.";
+      
+      const res = await onUpdateStatus(selectedTicket.id, selectedTicket.status, aiSummary);
+      if (res?.success) {
+        Alert.alert("Success", "Closure summary generated successfully");
+        setSelectedTicket(prev => ({ ...prev, closureSummary: aiSummary }));
+      } else {
+        Alert.alert("Error", "Failed to update ticket status with summary");
+      }
+    } catch (e) {
+      console.error("Missing summary generation failed:", e);
+      Alert.alert("Error", "Failed to generate summary");
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
+
   const renderMessageReply = (reply) => {
     if (!reply) return null;
     const targetY = messageYOffsets.current[reply.id || reply.timestamp];
@@ -1021,6 +1057,23 @@ export const AdminGrievancesPanel = ({
                         </View>
                         <Text style={styles.resText}>{selectedTicket.closureSummary}</Text>
                       </View>
+                    )}
+
+                    {(selectedTicket.status === 'Resolved' || selectedTicket.status === 'Closed') && !selectedTicket.closureSummary && (
+                      <TouchableOpacity 
+                        style={{ backgroundColor: '#F0FDF4', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#16A34A', borderStyle: 'dashed', marginBottom: 16, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' }}
+                        onPress={handleGenerateMissingSummary}
+                        disabled={isGeneratingSummary}
+                      >
+                        {isGeneratingSummary ? (
+                          <ActivityIndicator color="#16A34A" size="small" style={{ marginRight: 8 }} />
+                        ) : (
+                          <Ionicons name="sparkles" size={16} color="#16A34A" style={{ marginRight: 8 }} />
+                        )}
+                        <Text style={{ color: '#16A34A', fontWeight: '600', fontSize: 13 }}>
+                          {isGeneratingSummary ? 'Generating Summary...' : 'Generate Missing Closure Summary'}
+                        </Text>
+                      </TouchableOpacity>
                     )}
                   </ScrollView>
                 </View>
