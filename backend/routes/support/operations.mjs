@@ -717,21 +717,126 @@ router.post('/support/save-ticket', apiKeyGuard, authGuard, async (req, res) => 
 
     if (isNew) {
       // 🛡️ [AUTO-ASSIGN] (v2.6.569): If the ticket is raised by a support agent, assign it to admin automatically
-      const userDoc = await Player.findOne({ id: ticket.userId }).lean();
       if (userDoc && userDoc.data && userDoc.data.role === 'support') {
         enrichmentTicket.assignedTo = 'admin';
         enrichmentTicket.assignedAt = new Date().toISOString();
         enrichmentTicket.assignmentSource = 'auto_assign_support_staff';
-      }
+        
+        const autoResponse = {
+          id: `auto-${Date.now()}`,
+          senderId: 'admin',
+          text: 'Thanks for reaching out to AceTrack Support Team, Our team will look into the issue and provide an update shortly',
+          timestamp: new Date(Date.now() + 1000).toISOString(),
+          status: 'delivered'
+        };
+        enrichmentTicket.messages = [...(enrichmentTicket.messages || []), autoResponse];
+      } else {
+        // 🚀 NEW: Automatic Load Balancing for User Tickets (Attendance-Based)
+        try {
+          const { Attendance } = await import('../../models/HRModels.mjs');
+          
+          // 1. Get all active support agents
+          const agentsDoc = await Player.find({ 
+            "data.role": "support", 
+            "data.supportStatus": { $nin: ['leave', 'on_leave', 'terminated', 'suspended', 'inactive', 'ex-employee'] } 
+          }).lean();
+          
+          // 2. Query today's attendance to see who is formally checked-in
+          const today = new Date().toISOString().split('T')[0];
+          const activeAttendance = await Attendance.find({
+            date: today,
+            checkIn: { $exists: true, $ne: null },
+            $or: [
+              { checkOut: { $exists: false } },
+              { checkOut: null }
+            ]
+          }).lean();
+          
+          const checkedInAgentIds = new Set(activeAttendance.map(a => String(a.userId)));
+          const availableAgents = agentsDoc.filter(d => d.data && checkedInAgentIds.has(String(d.data.id))).map(d => d.data);
 
-      const autoResponse = {
-        id: `auto-${Date.now()}`,
-        senderId: 'admin',
-        text: 'Thanks for reaching out to AceTrack Support Team, Our team will look into the issue and provide an update shortly',
-        timestamp: new Date(Date.now() + 1000).toISOString(),
-        status: 'delivered'
-      };
-      enrichmentTicket.messages = [...(enrichmentTicket.messages || []), autoResponse];
+          if (availableAgents.length > 0) {
+            // 3. Find active ticket counts for these agents
+            const agentIds = availableAgents.map(a => a.id);
+            const activeTickets = await SupportTicket.aggregate([
+              { $match: { "data.assignedTo": { $in: agentIds }, "data.status": { $in: ['Open', 'In Progress', 'Awaiting Response'] } } },
+              { $group: { _id: "$data.assignedTo", count: { $sum: 1 } } }
+            ]);
+            
+            const loadMap = {};
+            agentIds.forEach(id => loadMap[id] = 0);
+            activeTickets.forEach(t => loadMap[t._id] = t.count);
+
+            // 4. Pick agent with lowest load
+            let selectedAgent = availableAgents[0];
+            let minLoad = loadMap[selectedAgent.id];
+
+            for (let i = 1; i < availableAgents.length; i++) {
+              const agent = availableAgents[i];
+              const load = loadMap[agent.id];
+              if (load < minLoad) {
+                minLoad = load;
+                selectedAgent = agent;
+              }
+            }
+
+            // 5. Assign ticket
+            enrichmentTicket.assignedTo = selectedAgent.id;
+            enrichmentTicket.assignedAt = new Date().toISOString();
+            enrichmentTicket.assignmentSource = 'auto_load_balancer';
+            enrichmentTicket.assignedAgentName = selectedAgent.name || 'Support Agent';
+
+            const ticketTitle = enrichmentTicket.title || '';
+            const ticketType = enrichmentTicket.type || '';
+            const issueDescription = `${ticketType}: ${ticketTitle}`;
+            const userName = (userDoc && userDoc.data && userDoc.data.name) ? userDoc.data.name : 'User';
+
+            const autoResponse = {
+              id: `auto-${Date.now()}`,
+              senderId: 'system',
+              text: 'Thanks for reaching out to AceTrack Support Team, Our team will look into the issue and provide an update shortly',
+              timestamp: new Date(Date.now() + 500).toISOString(),
+              status: 'delivered'
+            };
+            const introMsg = {
+              id: `intro-${Date.now()}`,
+              senderId: selectedAgent.id,
+              text: `Hi ${userName}, I am ${selectedAgent.name} and I will be working on resolving your issue.`,
+              timestamp: new Date(Date.now() + 1000).toISOString(),
+              status: 'delivered'
+            };
+            
+            enrichmentTicket.messages = [...(enrichmentTicket.messages || []), autoResponse, introMsg];
+            
+            // Update agent metrics
+            await Player.updateOne(
+              { id: selectedAgent.id },
+              { $inc: { "data.metrics.autoAssigned": 1, "data.metrics.totalHandled": 1 }, lastUpdated: new Date() }
+            );
+          } else {
+             // Fallback: No one is checked in
+             const autoResponse = {
+              id: `auto-${Date.now()}`,
+              senderId: 'admin',
+              text: 'Thanks for reaching out to AceTrack Support Team, Our team will look into the issue and provide an update shortly',
+              timestamp: new Date(Date.now() + 1000).toISOString(),
+              status: 'delivered'
+            };
+            enrichmentTicket.messages = [...(enrichmentTicket.messages || []), autoResponse];
+          }
+        } catch (assignError) {
+          console.error('[API] Auto-assign failed:', assignError);
+          // Fallback if load balancer crashes
+          const autoResponse = {
+            id: `auto-${Date.now()}`,
+            senderId: 'admin',
+            text: 'Thanks for reaching out to AceTrack Support Team, Our team will look into the issue and provide an update shortly',
+            timestamp: new Date(Date.now() + 1000).toISOString(),
+            status: 'delivered'
+          };
+          enrichmentTicket.messages = [...(enrichmentTicket.messages || []), autoResponse];
+        }
+      }
     }
 
     ticketDoc.data = enrichmentTicket;
