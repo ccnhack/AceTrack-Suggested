@@ -54,7 +54,7 @@ const ProfileScreen = ({ navigation, route }) => {
   const { tournaments } = useTournamentsStore();
   const { players } = usePlayersStore();
   const { 
-    supportTickets, onSaveTicket, onUpdateTicketStatus, onReplyTicket, onRetryMessage, onMarkSeen, onClaimTicket 
+    supportTickets, onSaveTicket, onUpdateTicketStatus, onReplyTicket, onRetryMessage, onMarkSeen 
   } = useSupportStore();
   const { evaluations } = useEvaluationsStore();
   const { 
@@ -847,8 +847,6 @@ const ProfileScreen = ({ navigation, route }) => {
                   onUpdateStatus={onUpdateTicketStatus}
                   onRetryMessage={onRetryMessage}
                   onMarkSeen={onMarkSeen}
-                  onClaimTicket={onClaimTicket}
-                  userRole={user.role}
                   autoSelectTicketId={urlTicketId}
                   onConsumeTicketId={() => setUrlTicketId(null)}
                 />
