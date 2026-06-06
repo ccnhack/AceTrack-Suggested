@@ -456,10 +456,13 @@ export const AdminGrievancesPanel = ({
       return m.status !== 'seen';
     });
     
+    // 🛡️ [FIX v2.6.570] Only consider a ticket "new/unseen" if the agent has NEVER opened it.
+    // Previously, ALL Open/Awaiting tickets were forced unread regardless of read state.
+    const neverReadByMe = !myLastRead;
     const status = ticket.status || 'Open';
-    const isUnseenStatus = (status === 'Open' || status === 'Awaiting Response');
+    const isNewTicket = neverReadByMe && (status === 'Open' || status === 'Awaiting Response');
     
-    return hasUnreadMessages || isUnseenStatus;
+    return hasUnreadMessages || isNewTicket;
   };
 
   const scopedTickets = useMemo(() => {

@@ -69,6 +69,8 @@ const SupportDashboardScreen = ({ navigation, route }) => {
     };
   }, [supportTickets, currentUser]);
 
+  const [seenAdminActionIds, setSeenAdminActionIds] = useState(new Set());
+
   const { messages } = useCommsStore();
   const totalUnreadChat = useMemo(() => {
     const unreadSenders = new Set(
@@ -337,7 +339,8 @@ const SupportDashboardScreen = ({ navigation, route }) => {
           onMarkSeen={onMarkSeen}
           onReassignTicket={onReassignTicket}
           currentUser={currentUser}
-          seenAdminActionIds={new Set()}
+          seenAdminActionIds={seenAdminActionIds}
+          setSeenAdminActionIds={setSeenAdminActionIds}
           search={search}
           autoSelectTicketId={urlTicketId}
           onSelect={handleTicketSelect}

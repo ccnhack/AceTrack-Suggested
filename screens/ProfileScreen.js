@@ -840,7 +840,6 @@ const ProfileScreen = ({ navigation, route }) => {
                 <SupportTicketSystem 
                   userId={user.id}
                   userName={user.name}
-                  userRole={user.role}
                   tickets={supportTickets || []}
                   onCreateTicket={onSaveTicket}
                   onSendMessage={(tid, m) => onReplyTicket(tid, user.id, m)}
