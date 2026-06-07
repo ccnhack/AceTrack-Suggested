@@ -168,7 +168,11 @@ const PlayerDataSchema = new mongoose.Schema({
   supportStatus: String,
   supportLevel: String,
   suspendedAt: String,
-  terminatedAt: String
+  terminatedAt: String,
+  reOnboardedAt: String,
+  designation: String,
+  lastForceLogoutAt: Number,
+  activeSessions: [mongoose.Schema.Types.Mixed]
 }, { _id: false, strict: false });
 
 const PlayerSchema = new mongoose.Schema({
@@ -239,9 +243,19 @@ export const MatchVideo = mongoose.model('MatchVideo', MatchVideoSchema);
 const SupportTicketDataSchema = new mongoose.Schema({
   userId: String,
   assignedTo: String,
+  assignedAt: String,
+  reassignedFrom: String,
+  assignedAgentName: String,
+  assignmentSource: String,
   status: String,
   subject: String,
   category: String,
+  closureSummary: String,
+  closedAt: String,
+  rating: Number,
+  ratingFeedback: String,
+  ratedAt: String,
+  lastReadBy: mongoose.Schema.Types.Mixed,
   messages: [mongoose.Schema.Types.Mixed]
 }, { _id: false, strict: false });
 
