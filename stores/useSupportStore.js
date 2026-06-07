@@ -124,9 +124,11 @@ export const useSupportStore = create((set, get) => {
         const data = await res.json();
         if (res.ok && data.success) {
           const currentTickets = get().supportTickets;
-          set({ supportTickets: currentTickets.map(t => t.id === id ? data.ticket : t) });
+          const updatedTickets = currentTickets.map(t => t.id === id ? data.ticket : t);
+          set({ supportTickets: updatedTickets });
+          syncOrchestrator.syncAndSaveData({ supportTickets: updatedTickets }, false, true);
           get().logSupportActivity('TICKET_REPLY', id, `Replied to ticket ${id}`);
-          return { success: true, tickets: get().supportTickets };
+          return { success: true, tickets: updatedTickets };
         }
         return { success: false, error: data.error || 'Failed to reply' };
       } catch (e) {
@@ -157,9 +159,11 @@ export const useSupportStore = create((set, get) => {
         const data = await res.json();
         if (res.ok && data.success) {
           const currentTickets = get().supportTickets;
-          set({ supportTickets: currentTickets.map(t => t.id === id ? data.ticket : t) });
+          const updatedTickets = currentTickets.map(t => t.id === id ? data.ticket : t);
+          set({ supportTickets: updatedTickets });
+          syncOrchestrator.syncAndSaveData({ supportTickets: updatedTickets }, false, true);
           get().logSupportActivity('TICKET_STATUS_CHANGE', id, `Changed status to ${status}`);
-          return { success: true, tickets: get().supportTickets };
+          return { success: true, tickets: updatedTickets };
         }
         return { success: false, error: data.error || 'Failed to update status' };
       } catch (e) {
@@ -200,6 +204,7 @@ export const useSupportStore = create((set, get) => {
             : [data.ticket, ...currentTickets];
           
           set({ supportTickets: updatedTickets });
+          syncOrchestrator.syncAndSaveData({ supportTickets: updatedTickets }, false, true);
           get().logSupportActivity('TICKET_SAVE', data.ticket.id, `Saved/Created ticket`);
           return { success: true, tickets: updatedTickets };
         }
@@ -245,6 +250,7 @@ export const useSupportStore = create((set, get) => {
       if (changed) {
         // 🛡️ [v2.6.557] Optimistic local update for instant UI feedback
         set({ supportTickets: updated });
+        syncOrchestrator.syncAndSaveData({ supportTickets: updated }, false, true);
         
         // 🛡️ [v2.6.557] Persist to server so 'seen' status survives sync events
         // Fire-and-forget to avoid blocking the UI
@@ -270,7 +276,9 @@ export const useSupportStore = create((set, get) => {
             // If the server returned the updated ticket, use it to stay in sync
             if (data.ticket) {
               const freshTickets = get().supportTickets;
-              set({ supportTickets: freshTickets.map(t => t.id === ticketId ? data.ticket : t) });
+              const updatedTickets = freshTickets.map(t => t.id === ticketId ? data.ticket : t);
+              set({ supportTickets: updatedTickets });
+              syncOrchestrator.syncAndSaveData({ supportTickets: updatedTickets }, false, true);
             }
           }
         } catch (e) {
@@ -309,7 +317,9 @@ export const useSupportStore = create((set, get) => {
           get().logSupportActivity('TICKET_CLAIMED', ticketId, `Claimed ticket from pool`);
           if (data && data.ticket) {
              const currentTickets = get().supportTickets;
-             set({ supportTickets: currentTickets.map(t => t.id === ticketId ? data.ticket : t) });
+             const updatedTickets = currentTickets.map(t => t.id === ticketId ? data.ticket : t);
+             set({ supportTickets: updatedTickets });
+             syncOrchestrator.syncAndSaveData({ supportTickets: updatedTickets }, false, true);
           }
           return { success: true };
         }
@@ -344,7 +354,9 @@ export const useSupportStore = create((set, get) => {
           get().logSupportActivity('TICKET_ASSIGNED', ticketId, `Assigned ticket to agent ${targetAgentId}`);
           if (data && data.ticket) {
              const currentTickets = get().supportTickets;
-             set({ supportTickets: currentTickets.map(t => t.id === ticketId ? data.ticket : t) });
+             const updatedTickets = currentTickets.map(t => t.id === ticketId ? data.ticket : t);
+             set({ supportTickets: updatedTickets });
+             syncOrchestrator.syncAndSaveData({ supportTickets: updatedTickets }, false, true);
           }
           return { success: true, message: data.message };
         }

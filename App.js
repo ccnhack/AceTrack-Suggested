@@ -10,7 +10,11 @@ LogBox.ignoreAllLogs();
 const originalToLocaleTimeString = Date.prototype.toLocaleTimeString;
 Date.prototype.toLocaleTimeString = function(locales, options) {
   const finalOptions = { ...(options || {}), timeZone: 'Asia/Kolkata' };
-  return originalToLocaleTimeString.call(this, 'en-IN', finalOptions);
+  let str = originalToLocaleTimeString.call(this, 'en-IN', finalOptions);
+  if (typeof str === 'string' && !str.includes('IST')) {
+    str += ' IST';
+  }
+  return str;
 };
 
 const originalToLocaleDateString = Date.prototype.toLocaleDateString;
@@ -22,7 +26,11 @@ Date.prototype.toLocaleDateString = function(locales, options) {
 const originalToLocaleString = Date.prototype.toLocaleString;
 Date.prototype.toLocaleString = function(locales, options) {
   const finalOptions = { ...(options || {}), timeZone: 'Asia/Kolkata' };
-  return originalToLocaleString.call(this, 'en-IN', finalOptions);
+  let str = originalToLocaleString.call(this, 'en-IN', finalOptions);
+  if (typeof str === 'string' && !str.includes('IST')) {
+    str += ' IST';
+  }
+  return str;
 };
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -92,7 +100,7 @@ import { useSupportStore } from './stores';
 
 // 🔄 Centralized Versioning// 🚀 EXPO OTA SYNC HUB (v2.6.569)
 // ALWAYS BUMP THIS VERSION TO TRIGGER CLIENT-SIDE CACHE INVALIDATION
-const APP_VERSION = '2.6.626';
+const APP_VERSION = '2.6.627';
 const linking = {
   prefixes: [config.API_BASE_URL || 'https://acetrack-suggested.onrender.com', 'acetrack://'],
   config: {
