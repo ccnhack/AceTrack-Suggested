@@ -1022,7 +1022,7 @@ Provide a highly structured, visually clean summary of these results.
          const filterPrompt = `You are an AI Log Router. A user is asking to search logs.
 Current Server Time (ISO): ${new Date().toISOString()}
 
-We have four data sources:
+We have five data sources:
 1. 'AuditLog' (MongoDB): Contains user actions, authentication events, and security logs.
    Schema: { userId: String, ipAddress: String, userAgent: String, action: String, details: Mixed, timestamp: Date }
    - Common actions: 'SUPPORT_LOGIN_SUCCESS', 'SUPPORT_LOGIN_FAILED', 'ADMIN_LOGIN_SUCCESS', 'ADMIN_LOGIN_FAILED', 'PASSWORD_CHANGED', 'BRUTE_FORCE_DETECTED', 'UNAUTHORIZED_ACCESS_BLOCKED', etc.
@@ -1037,14 +1037,18 @@ We have four data sources:
    Schema: { email: String, name: String, status: String (Pending|Clicked|Used|Expired), academyId: String, tournamentId: String }
    - ⚠️ IMPORTANT: If the user asks about a coach or support staff's registration status, invite link, or if they completed registration, you MUST provide an "inviteFilter"!
    - ⚠️ CRITICAL: Do NOT filter by 'status' (e.g. 'Used', 'Pending') in inviteFilter. ONLY filter by 'name' or 'email' using $regex so we can see all invites regardless of status.
+5. 'SupportTicket' (MongoDB): Contains support tickets, bug reports, and user cases.
+   Schema: { id: String, data: { status: String, subject: String, type: String, closureSummary: String, assignedTo: String } }
+   - ⚠️ IMPORTANT: If the user asks about cases, tickets, bugs, or closure summaries, use a "ticketFilter" against 'data' fields! Example for missing summary: {"data.closureSummary": { $exists: false }} or {"data.closureSummary": null}.
 
 User query: "${userQuery}"
 
-Based on this query, generate a JSON object with four fields:
+Based on this query, generate a JSON object with five fields:
 1. "mongoFilter": A valid MongoDB query object for the AuditLog collection. Use {} if broad.
 2. "playerFilter": A valid MongoDB query object for the Player collection. Use {} if not asking about users.
 3. "inviteFilter": A valid MongoDB query object for CoachInvite/SupportInvite collections. Use {} if not asking about invites/registration.
-4. "checkServerEventsFile": A boolean.
+4. "ticketFilter": A valid MongoDB query object for the SupportTicket collection. Use {} if not asking about tickets or cases.
+5. "checkServerEventsFile": A boolean.
 
 DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. No explanations.`;
 
@@ -1056,7 +1060,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
                apiKey
          });
 
-         let routingIntent = { mongoFilter: {}, playerFilter: {}, inviteFilter: {}, checkServerEventsFile: false };
+         let routingIntent = { mongoFilter: {}, playerFilter: {}, inviteFilter: {}, ticketFilter: {}, checkServerEventsFile: false };
          if (filterReq.ok) {
             const filterJson = await filterReq.json();
             let rawJson = filterJson.choices?.[0]?.message?.content || "{}";
@@ -1073,6 +1077,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
          const hasMongoFilter = Object.keys(routingIntent.mongoFilter || {}).length > 0;
          const hasPlayerFilter = Object.keys(routingIntent.playerFilter || {}).length > 0;
          const hasInviteFilter = Object.keys(routingIntent.inviteFilter || {}).length > 0;
+         const hasTicketFilter = Object.keys(routingIntent.ticketFilter || {}).length > 0;
 
          if (hasInviteFilter) {
             const { CoachInvite, SupportInvite } = await import('../models/index.mjs');
@@ -1124,7 +1129,25 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
             }
          }
 
-         if (hasMongoFilter || (!routingIntent.checkServerEventsFile && !hasPlayerFilter)) {
+         if (hasTicketFilter) {
+            const { SupportTicket } = await import('../models/index.mjs');
+            const sanitizedTicketFilter = sanitizeMongoFilter(routingIntent.ticketFilter);
+            try {
+               const tickets = await SupportTicket.find(sanitizedTicketFilter).limit(100).lean();
+               const compactTickets = tickets.map(t => {
+                  const td = t.data || {};
+                  return {
+                     timeMs: new Date(t.lastUpdated || td.createdAt).getTime() || 0,
+                     text: `[Database][Support Ticket] ID:${t.id} Subject:${td.subject || 'N/A'} Status:${td.status || 'N/A'} Type:${td.type || 'N/A'} AssignedTo:${td.assignedTo || 'Unassigned'} ClosureSummary:${td.closureSummary || 'N/A'}`
+                  };
+               });
+               combinedLogsArr.push(...compactTickets);
+            } catch (err) {
+               console.error("Ticket Query Error:", err.message);
+            }
+         }
+
+         if (hasMongoFilter || (!routingIntent.checkServerEventsFile && !hasPlayerFilter && !hasTicketFilter && !hasInviteFilter)) {
             const { AuditLog } = await import('../models/index.mjs');
             const sanitizedFilter = sanitizeMongoFilter(routingIntent.mongoFilter);
             let mongoLogs = [];
@@ -1397,7 +1420,7 @@ ${securityInstruction}`;
             const filterPrompt = `You are an AI Log Router. A user is asking to search logs.
 Current Server Time (ISO): ${new Date().toISOString()}
 
-We have four data sources:
+We have five data sources:
 1. 'AuditLog' (MongoDB): Contains user actions, authentication events, and security logs.
    Schema: { userId: String, ipAddress: String, userAgent: String, action: String, details: Mixed, timestamp: Date }
    - Common actions: 'SUPPORT_LOGIN_SUCCESS', 'SUPPORT_LOGIN_FAILED', 'ADMIN_LOGIN_SUCCESS', 'ADMIN_LOGIN_FAILED', 'PASSWORD_CHANGED', 'BRUTE_FORCE_DETECTED', 'UNAUTHORIZED_ACCESS_BLOCKED', etc.
@@ -1412,14 +1435,18 @@ We have four data sources:
    Schema: { email: String, name: String, status: String (Pending|Clicked|Used|Expired), academyId: String, tournamentId: String }
    - ⚠️ IMPORTANT: If the user asks about a coach or support staff's registration status, invite link, or if they completed registration, you MUST provide an "inviteFilter"!
    - ⚠️ CRITICAL: Do NOT filter by 'status' (e.g. 'Used', 'Pending') in inviteFilter. ONLY filter by 'name' or 'email' using $regex so we can see all invites regardless of status.
+5. 'SupportTicket' (MongoDB): Contains support tickets, bug reports, and user cases.
+   Schema: { id: String, data: { status: String, subject: String, type: String, closureSummary: String, assignedTo: String } }
+   - ⚠️ IMPORTANT: If the user asks about cases, tickets, bugs, or closure summaries, use a "ticketFilter" against 'data' fields! Example for missing summary: {"data.closureSummary": { $exists: false }} or {"data.closureSummary": null}.
 
 User query: "${userQuery}"
 
-Based on this query, generate a JSON object with four fields:
+Based on this query, generate a JSON object with five fields:
 1. "mongoFilter": A valid MongoDB query object for the AuditLog collection. Use {} if broad.
 2. "playerFilter": A valid MongoDB query object for the Player collection. Use {} if not asking about users.
 3. "inviteFilter": A valid MongoDB query object for CoachInvite/SupportInvite collections. Use {} if not asking about invites/registration.
-4. "checkServerEventsFile": A boolean.
+4. "ticketFilter": A valid MongoDB query object for the SupportTicket collection. Use {} if not asking about tickets or cases.
+5. "checkServerEventsFile": A boolean.
 
 DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. No explanations.`;
 
@@ -1431,7 +1458,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
                   apiKey
             });
 
-            routingIntent = { mongoFilter: {}, playerFilter: {}, inviteFilter: {}, checkServerEventsFile: false };
+            routingIntent = { mongoFilter: {}, playerFilter: {}, inviteFilter: {}, ticketFilter: {}, checkServerEventsFile: false };
             if (filterReq.ok) {
                const filterJson = await filterReq.json();
                let rawJson = filterJson.choices?.[0]?.message?.content || "{}";
@@ -1446,6 +1473,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
          const hasMongoFilter = Object.keys(routingIntent.mongoFilter || {}).length > 0;
          const hasPlayerFilter = Object.keys(routingIntent.playerFilter || {}).length > 0;
          const hasInviteFilter = Object.keys(routingIntent.inviteFilter || {}).length > 0;
+         const hasTicketFilter = Object.keys(routingIntent.ticketFilter || {}).length > 0;
 
          if (hasInviteFilter) {
             const { CoachInvite, SupportInvite } = await import('../models/index.mjs');
@@ -1491,7 +1519,22 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
             }
          }
 
-         if (hasMongoFilter || (!routingIntent.checkServerEventsFile && !hasPlayerFilter && !hasInviteFilter)) {
+         if (hasTicketFilter) {
+            const { SupportTicket } = await import('../models/index.mjs');
+            const sanitizedTicketFilter = sanitizeMongoFilter(routingIntent.ticketFilter);
+            try {
+               const tickets = await SupportTicket.find(sanitizedTicketFilter).limit(100).lean();
+               const compactTickets = tickets.map(t => {
+                  const td = t.data || {};
+                  return `[Database][Support Ticket] ID:${t.id} Subject:${td.subject || 'N/A'} Status:${td.status || 'N/A'} Type:${td.type || 'N/A'} AssignedTo:${td.assignedTo || 'Unassigned'} ClosureSummary:${td.closureSummary || 'N/A'}`;
+               });
+               combinedLogsArr.push(...compactTickets);
+            } catch (err) {
+               console.error("Ephemeral Ticket Query Error:", err.message);
+            }
+         }
+
+         if (hasMongoFilter || (!routingIntent.checkServerEventsFile && !hasPlayerFilter && !hasTicketFilter && !hasInviteFilter)) {
             const { AuditLog } = await import('../models/index.mjs');
             const sanitizedFilter = sanitizeMongoFilter(routingIntent.mongoFilter);
             let mongoLogs = [];
