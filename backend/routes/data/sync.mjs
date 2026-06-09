@@ -627,6 +627,13 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
                     else mergedDevices.push(d);
                   });
                 }
+                
+                // 🛡️ ARCHITECTURE FIX: Cap array to prevent MongoDB explosion and UI clutter
+                if (mergedDevices.length > 5) {
+                  mergedDevices.sort((a, b) => (b.lastActive || 0) - (a.lastActive || 0));
+                  mergedDevices.splice(5);
+                }
+
                 // 🛡️ PASSWORD GUARD (v2.6.145): Preserve server-side password for support users
                 const preservedPassword = (existing.role === 'support') ? existing.password : (p.password || existing.password);
                 // 🛡️ [PRESENCE_PURGE] (v2.6.424): Force transient status fields to 'offline' during DB persistence.
