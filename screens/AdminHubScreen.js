@@ -35,13 +35,16 @@ import { useMatchmaking } from '../context/MatchmakingContext';
 import { useAuth } from '../context/AuthContext';
 import { useCommsStore } from '../stores/useCommsStore';
 import { useEvaluationsStore } from '../stores';
+import { useSupportTicketsQuery } from '../stores/hooks';
 
 const AdminHubScreen = ({ navigation, route }) => {
   const { currentUser } = useAuth();
   const { players } = usePlayersStore();
   const { tournaments, onUpdateTournament, onRemovePendingPlayer } = useTournamentsStore();
   const { matchVideos, onUpdateVideoStatus, onBulkUpdateVideoStatus, onForceRefundVideo, onApproveDeleteVideo, onRejectDeleteVideo, onPermanentDeleteVideo, onBulkPermanentDeleteVideos } = useVideoStore();
-  const { supportTickets, onReplyTicket, onUpdateTicketStatus, onReassignTicket, onMarkSeen } = useSupportStore();
+  
+  const { data: supportTickets } = useSupportTicketsQuery();
+  const { onReplyTicket, onUpdateTicketStatus, onReassignTicket, onMarkSeen } = useSupportStore();
 
   const { matchmaking } = useMatchmaking();
   const { evaluations } = useEvaluationsStore();
