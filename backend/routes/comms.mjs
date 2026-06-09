@@ -22,14 +22,14 @@ export default function createCommsRoutes({ io, logAudit, cloudinary, upload }) 
             if (req.query.before) query.timestamp = { $lt: new Date(req.query.before) };
             const messages = await OrgMessage.find(query).populate('replyTo').sort({ timestamp: -1 }).limit(limit);
             
-            // 🛡️ [EXPIRY_FILTER] (v2.6.395): Mark expired attachments
+            // 🛡️ [EXPIRY_FILTER] (v2.6.721): Mark expired attachments (Admin exemption)
             const now = new Date();
             const processed = messages.reverse().map(m => {
                 const msg = m.toObject({ flattenMaps: true }); // 🛡️ [MAP_SERIALIZATION_FIX] (v2.6.413)
                 if (msg.attachments && msg.attachments.length > 0) {
                     msg.attachments = msg.attachments.map(att => ({
                         ...att,
-                        expired: new Date(att.expiresAt) < now
+                        expired: req.userRole !== 'admin' && new Date(att.expiresAt) < now
                     }));
                 }
                 return msg;

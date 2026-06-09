@@ -313,6 +313,7 @@ export default function initScheduler(loginAttempts, sendSecurityAlert) {
     try {
       const { v2: cloudinary } = await import('cloudinary');
       const { OrgMessage } = await import('../models/CommsModels.mjs');
+      const { Player } = await import('../models/index.mjs');
       const now = new Date();
 
       // Find messages with expired attachments
@@ -321,8 +322,19 @@ export default function initScheduler(loginAttempts, sendSecurityAlert) {
         'attachments.0': { $exists: true }
       });
 
+      if (!expiredMsgs.length) return;
+
+      const playerIds = [...new Set([...expiredMsgs.map(m => m.senderId), ...expiredMsgs.map(m => m.receiverId)])];
+      const players = await Player.find({ id: { $in: playerIds } }).lean();
+      const adminIds = new Set(players.filter(p => p.data?.role === 'admin').map(p => p.id));
+
       let deletedCount = 0;
       for (const msg of expiredMsgs) {
+        // 🛡️ [ADMIN_RETENTION_EXEMPTION] (v2.6.721): Keep physical files involving system admins
+        if (adminIds.has(String(msg.senderId)) || adminIds.has(String(msg.receiverId))) {
+          continue;
+        }
+
         const expired = msg.attachments.filter(a => new Date(a.expiresAt) < now);
         for (const att of expired) {
           try {
@@ -344,6 +356,56 @@ export default function initScheduler(loginAttempts, sendSecurityAlert) {
       }
     } catch (err) {
       console.error('❌ [CLEANUP] Attachment purge failed:', err.message);
+    }
+  }, 24 * 60 * 60 * 1000);
+
+  // 🧹 [DIAGNOSTICS_CLEANUP] (v2.6.721): 14-day purge for crash logs
+  setInterval(async () => {
+    try {
+      const { v2: cloudinary } = await import('cloudinary');
+      const fs = await import('fs');
+      const path = await import('path');
+      const now = Date.now();
+      const fourteenDaysMs = 14 * 24 * 60 * 60 * 1000;
+      
+      // 1. Clean Local Files
+      const DIAGNOSTICS_DIR = path.join(process.cwd(), 'diagnostics');
+      if (fs.existsSync(DIAGNOSTICS_DIR)) {
+        const localFiles = fs.readdirSync(DIAGNOSTICS_DIR);
+        for (const file of localFiles) {
+          const filePath = path.join(DIAGNOSTICS_DIR, file);
+          const stats = fs.statSync(filePath);
+          if (now - stats.mtimeMs > fourteenDaysMs) {
+            fs.unlinkSync(filePath);
+          }
+        }
+      }
+      
+      // 2. Clean Cloudinary Files
+      const folders = ['acetrack/diagnostics/', 'acetrack/diagnostics/auto-flush/'];
+      for (const folder of folders) {
+        try {
+          const result = await cloudinary.api.resources({
+            type: 'upload',
+            resource_type: 'raw',
+            prefix: folder,
+            max_results: 500
+          });
+          
+          const expiredPublicIds = result.resources
+            .filter(res => (now - new Date(res.created_at).getTime() > fourteenDaysMs))
+            .map(res => res.public_id);
+            
+          if (expiredPublicIds.length > 0) {
+            await cloudinary.api.delete_resources(expiredPublicIds, { resource_type: 'raw' });
+            console.log(`🧹 [CLEANUP] Purged ${expiredPublicIds.length} old diagnostic logs from ${folder}`);
+          }
+        } catch (cloudErr) {
+          console.error(`⚠️ [CLEANUP] Failed to fetch/delete cloud logs for ${folder}:`, cloudErr.message);
+        }
+      }
+    } catch (e) {
+      console.error('❌ [SCHEDULER] Diagnostics Cleanup failed:', e.message);
     }
   }, 24 * 60 * 60 * 1000);
 
