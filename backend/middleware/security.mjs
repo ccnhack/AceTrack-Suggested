@@ -483,8 +483,8 @@ export const csrfGuard = (req, res, next) => {
   const isWebRequest = origin.includes('localhost') || origin.includes('render.com') || origin.includes('acetrack');
   const hasCookie = !!req.cookies?.acetrack_session;
   
-  // Only enforce CSRF for web-based cookie-authenticated requests
-  if (!isWebRequest && !hasCookie) return next();
+  // Only enforce CSRF for requests that actually have an active cookie session
+  if (!hasCookie) return next();
   
   // Skip safe methods
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
