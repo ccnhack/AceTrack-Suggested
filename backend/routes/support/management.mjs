@@ -67,7 +67,7 @@ router.get('/debug/active-sessions', async (req, res) => {
       };
     });
     const connectedSockets = io.sockets.sockets ? io.sockets.sockets.size : 'unknown';
-    res.json({ : sessions, 
+    res.json({ sessions, 
       totalConnectedSockets: connectedSockets,
       timestamp: new Date().toISOString()
     });
