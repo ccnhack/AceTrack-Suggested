@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { AppState, SupportPasswordReset, Player, AdminMFA, CoachInvite } from '../models/index.mjs';
 import { asyncHandler } from '../helpers/utils.mjs';
-import { apiKeyGuard } from '../middleware/security.mjs';
+import { apiKeyGuard, attachCsrfCookie } from '../middleware/security.mjs';
 
 // 🛡️ [PRODUCTION HARDENING] (v2.6.319): MFA PIN must be set in production
 // 🛡️ [VAPT-F04] (v2.6.556): ADMIN_MFA_PIN MUST be set via environment variable.
@@ -430,6 +430,7 @@ export default function createAuthRoutes({
       sameSite: IS_PRODUCTION ? 'strict' : 'lax',
       maxAge: 24 * 60 * 60 * 1000 // 🛡️ (v2.6.319): Aligned with JWT 24h expiry
     });
+    attachCsrfCookie(res);
 
     const isWeb = req.headers['sec-fetch-mode'] || req.headers['origin'];
     res.json({
@@ -447,6 +448,7 @@ export default function createAuthRoutes({
   // 🛡️ LOGOUT: Clear secure session (v2.6.258)
   router.post('/logout', (req, res) => {
     res.clearCookie('acetrack_session');
+    res.clearCookie('acetrack_csrf');
     res.json({ success: true, message: 'Logged out successfully' });
   });
 
@@ -528,6 +530,7 @@ export default function createAuthRoutes({
       sameSite: IS_PRODUCTION ? 'strict' : 'lax',
       maxAge: 24 * 60 * 60 * 1000 // 🛡️ (v2.6.319): Aligned with JWT 24h expiry
     });
+    attachCsrfCookie(res);
 
     const isWeb = req.headers['sec-fetch-mode'] || req.headers['origin'];
     res.json({ success: true, ...(isWeb ? {} : { token }), user: safeUser });
@@ -675,6 +678,7 @@ export default function createAuthRoutes({
       sameSite: IS_PRODUCTION ? 'strict' : 'lax',
       maxAge: 24 * 60 * 60 * 1000 // 🛡️ (v2.6.319): Aligned with JWT 24h expiry
     });
+    attachCsrfCookie(res);
 
     const isWeb = req.headers['sec-fetch-mode'] || req.headers['origin'];
     res.json({ success: true, ...(isWeb ? {} : { token }), user: safeUser });

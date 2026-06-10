@@ -457,7 +457,7 @@ const CSRF_SECRET = process.env.CSRF_SECRET || crypto.randomBytes(32).toString('
 const CSRF_COOKIE_NAME = 'acetrack_csrf';
 const CSRF_HEADER_NAME = 'x-csrf-token';
 
-export const generateCsrfToken = (req, res) => {
+export const attachCsrfCookie = (res) => {
   const token = crypto.randomBytes(32).toString('hex');
   const hmac = crypto.createHmac('sha256', CSRF_SECRET).update(token).digest('hex');
   const csrfValue = `${token}.${hmac}`;
@@ -469,6 +469,11 @@ export const generateCsrfToken = (req, res) => {
     maxAge: 4 * 60 * 60 * 1000 // 4 hours
   });
   
+  return csrfValue;
+};
+
+export const generateCsrfToken = (req, res) => {
+  const csrfValue = attachCsrfCookie(res);
   res.json({ success: true, csrfToken: csrfValue });
 };
 
