@@ -36,7 +36,8 @@ const QueueManagementDashboard = ({
 
   const getAgentName = (id) => {
     if (!id) return 'Unassigned';
-    const agent = (players || []).find(a => a.id === id);
+    if (String(id).toLowerCase() === 'admin') return 'System Admin';
+    const agent = (players || []).find(a => String(a.id).toLowerCase() === String(id).toLowerCase() || (a.username && String(a.username).toLowerCase() === String(id).toLowerCase()));
     return agent ? agent.name : id;
   };
 

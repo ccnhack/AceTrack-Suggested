@@ -1337,17 +1337,15 @@ const ProfileScreen = ({ navigation, route }) => {
 
                          if (response.ok && data.success) {
                            logger.logAction('PASSWORD_CHANGE_SUCCESS');
-                           Alert.alert("Success", "Password changed successfully!", [
-                             {
-                               text: "OK",
-                               onPress: () => {
-                                 setShowChangePassword(false);
-                                 setOldPassword('');
-                                 setNewPassword('');
-                                 setConfirmPassword('');
-                               }
-                             }
-                           ]);
+                           setShowChangePassword(false);
+                           setOldPassword('');
+                           setNewPassword('');
+                           setConfirmPassword('');
+                           if (Platform.OS === 'web') {
+                             window.alert("Password changed successfully!");
+                           } else {
+                             Alert.alert("Success", "Password changed successfully!");
+                           }
                          } else {
                            safeAlert("Error", data.error || "Failed to change password");
                          }

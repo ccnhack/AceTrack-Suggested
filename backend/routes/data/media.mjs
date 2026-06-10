@@ -18,9 +18,7 @@ export default function ({
   upload,
   SupportMetricsService,
   sendPushNotification,
-  addInAppNotification,
-  activeSupportSessions
-}) {
+  addInAppNotification, }) {
   const router = express.Router();
 
 router.post('/upload', apiKeyGuard, authGuard, upload.single('video'), async (req, res) => {

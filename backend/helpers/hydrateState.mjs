@@ -51,12 +51,13 @@ export async function getSupportTickets() {
 }
 
 /**
- * Hydrates a full state object from AppState + all distinct collections.
- * Use this when you need the complete composed state (equivalent to the old AppState.data).
+ * Hydrates a full state object directly from distinct collections.
+ * 🛡️ [PHASE 2 DECOMPOSITION] (v2.6.620): AppState is now read-only backup.
+ * This function no longer merges from AppState.data.
  */
 export async function getFullHydratedState() {
   const [
-    state,
+    stateMetadata,
     playersDocs,
     tournamentsDocs,
     matchesDocs,
@@ -66,7 +67,7 @@ export async function getFullHydratedState() {
     matchmakingDocs,
     chatbotDocs
   ] = await Promise.all([
-    AppState.findOne().sort({ lastUpdated: -1 }).lean(),
+    AppState.findOne().sort({ lastUpdated: -1 }).select('lastUpdated version _id').lean(),
     Player.find().lean(),
     Tournament.find().lean(),
     Match.find().lean(),
@@ -77,12 +78,10 @@ export async function getFullHydratedState() {
     ChatbotThread.find().lean()
   ]);
 
-  const baseData = (state && state.data) ? state.data : {};
   const chatbotMessages = {};
   chatbotDocs.forEach(doc => { chatbotMessages[doc.userId] = doc.data; });
 
   return {
-    ...baseData,
     players: playersDocs.map(d => d.data),
     tournaments: tournamentsDocs.map(d => d.data),
     matches: matchesDocs.map(d => d.data),
@@ -91,9 +90,9 @@ export async function getFullHydratedState() {
     evaluations: evalsDocs.map(d => d.data),
     matchmaking: matchmakingDocs.map(d => d.data),
     chatbotMessages,
-    _version: state?.version || 1,
-    _lastUpdated: state?.lastUpdated || new Date(),
-    _stateId: state?._id || null
+    _version: stateMetadata?.version || 1,
+    _lastUpdated: stateMetadata?.lastUpdated || new Date(),
+    _stateId: stateMetadata?._id || null
   };
 }
 

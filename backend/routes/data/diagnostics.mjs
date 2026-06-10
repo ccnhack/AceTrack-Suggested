@@ -18,9 +18,7 @@ export default function ({
   upload,
   SupportMetricsService,
   sendPushNotification,
-  addInAppNotification,
-  activeSupportSessions
-}) {
+  addInAppNotification, }) {
   const router = express.Router();
 
 router.get('/diagnostics', apiKeyGuard, sensitiveCacheGuard, asyncHandler(async (req, res) => {

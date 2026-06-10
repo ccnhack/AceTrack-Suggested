@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { 
+import {  
   View, Text, TouchableOpacity, ScrollView, TextInput, 
   StyleSheet, Modal, SafeAreaView, KeyboardAvoidingView, Platform, Image, ActivityIndicator 
-} from 'react-native';
+ } from 'react-native';
+import { apiFetch } from '../utils/apiFetch';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -264,7 +265,7 @@ export const SupportTicketSystem = ({
     setIsSubmittingRating(true);
     setCsatRating(rating);
     try {
-      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/rate-ticket`, {
+      const res = await apiFetch(`${config.API_BASE_URL}/api/v1/support/rate-ticket`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID, 'x-user-id': userId },
         credentials: 'include',

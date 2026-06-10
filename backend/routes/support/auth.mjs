@@ -45,9 +45,7 @@ export default function ({
   cloudinary,
   upload,
   otpLimiter,
-  SupportMetricsService,
-  activeSupportSessions,
-  syncMutex
+  SupportMetricsService, syncMutex
 }) {
   const router = express.Router();
 

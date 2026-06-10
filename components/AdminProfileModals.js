@@ -778,7 +778,9 @@ const OrgChatView = ({ messages, onSend, user, teamDirectory }) => {
                 </View>
                 <View>
                     <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#0F172A' }}>{activeChatUser.name || 'Unknown User'}</Text>
-                    <Text style={{ fontSize: 12, color: '#10B981' }}>Online</Text>
+                    <Text style={{ fontSize: 12, color: activeChatUser.isLive ? '#10B981' : '#94A3B8' }}>
+                        {activeChatUser.isLive ? 'Online' : 'Offline'}
+                    </Text>
                 </View>
             </View>
 

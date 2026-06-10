@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator, Modal, Platform, Linking } from 'react-native';
+import {  View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator, Modal, Platform, Linking  } from 'react-native';
+import { apiFetch } from '../../utils/apiFetch';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, shadows } from '../../theme/designSystem';
 import config from '../../config';
@@ -151,7 +152,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       };
        if (token) headers['Authorization'] = `Bearer ${token}`;
 
-       const res = await fetch(`${config.API_BASE_URL}/api/v1/support/analytics${queryParams}`, {
+       const res = await apiFetch(`${config.API_BASE_URL}/api/v1/support/analytics${queryParams}`, {
          headers,
          credentials: 'include'
        });
@@ -181,7 +182,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/attendance`, {
+      const res = await apiFetch(`${config.API_BASE_URL}/api/v1/support/attendance`, {
         headers,
         credentials: 'include'
       });
@@ -243,7 +244,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/manage-user`, {
+      const res = await apiFetch(`${config.API_BASE_URL}/api/v1/support/manage-user`, {
         method: 'POST',
         headers,
         credentials: 'include',
@@ -285,7 +286,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/force-reset`, {
+      const res = await apiFetch(`${config.API_BASE_URL}/api/v1/support/force-reset`, {
         method: 'POST',
         headers,
         credentials: 'include',
@@ -322,7 +323,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       if (type === 'manager') body.managerId = newId;
       if (type === 'teamLead') body.teamLeadId = newId;
 
-      const res = await fetch(`${config.API_BASE_URL}/api/v1/admin-core/team-directory/${agentId}/hierarchy`, {
+      const res = await apiFetch(`${config.API_BASE_URL}/api/v1/admin-core/team-directory/${agentId}/hierarchy`, {
         method: 'POST',
         headers,
         credentials: 'include',
@@ -399,7 +400,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/transfer-tickets`, {
+      const res = await apiFetch(`${config.API_BASE_URL}/api/v1/support/transfer-tickets`, {
         method: 'POST',
         headers,
         credentials: 'include',
@@ -435,7 +436,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${config.API_BASE_URL}/api/data?_t=${Date.now()}`, {
+      const res = await apiFetch(`${config.API_BASE_URL}/api/data?_t=${Date.now()}`, {
         headers,
         credentials: 'include'
       });

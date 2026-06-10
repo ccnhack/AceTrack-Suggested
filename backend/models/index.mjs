@@ -370,3 +370,16 @@ const PartnerChatMessageSchema = new mongoose.Schema({
 });
 PartnerChatMessageSchema.index({ tournamentId: 1, senderId: 1, receiverId: 1 });
 export const PartnerChatMessage = mongoose.model('PartnerChatMessage', PartnerChatMessageSchema);
+
+// ═══════════════════════════════════════════════════════════════
+// 🔒 LOGIN ATTEMPT HISTORY SCHEMA (v2.6.620)
+// Replaces in-memory login tracker for multi-instance scaling
+// ═══════════════════════════════════════════════════════════════
+const LoginAttemptHistorySchema = new mongoose.Schema({
+  key: { type: String, required: true, index: true }, // identifier_ip
+  identifier: { type: String, required: true },
+  ip: { type: String, required: true },
+  success: { type: Boolean, required: true },
+  timestamp: { type: Date, default: Date.now, expires: '24h' }
+});
+export const LoginAttemptHistory = mongoose.model('LoginAttemptHistory', LoginAttemptHistorySchema);

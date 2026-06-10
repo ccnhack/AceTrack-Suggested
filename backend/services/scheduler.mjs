@@ -1,28 +1,41 @@
 import { SecuritySummary } from '../models/index.mjs';
 
+import { LoginAttemptHistory } from '../models/index.mjs';
+
 // 🛡️ [CUMULATIVE SECURITY SUMMARY] (v2.6.208)
 export async function runBruteForceSummary(loginAttempts, sendSecurityAlert) {
-  const now = Date.now();
-  for (const [key, state] of loginAttempts.entries()) {
-    state.attempts = state.attempts.filter(a => now - a.timestamp < 600000);
-    const failures = state.attempts.filter(a => !a.success);
-    if (failures.length >= 10 && (now - state.lastSummaryAt >= 300000)) {
-      const [identifier, ip] = key.split('_');
-      // 🛡️ [CREDENTIAL_PURGE] (v2.6.620): Replaced plaintext SamplePasswords with count.
-      // Even failed passwords could be typos of real ones — never log them.
-      const uniquePasswordCount = new Set(failures.map(f => f.password)).size;
-      await sendSecurityAlert('BRUTE_FORCE_CUMULATIVE_SUMMARY', {
-          IP: ip,
-          Actor: identifier,
-          TargetUser: identifier,
-          TotalAttempts: state.attempts.length,
-          FailureCount: failures.length,
-          UniquePasswordsTried: uniquePasswordCount,
-          Timeframe: 'Last 5 minutes'
-      });
-      state.lastSummaryAt = now;
+  try {
+    const tenMinutesAgo = new Date(Date.now() - 600000);
+    
+    // Group recent attempts by key
+    const recentAttempts = await LoginAttemptHistory.aggregate([
+      { $match: { timestamp: { $gte: tenMinutesAgo } } },
+      { $group: { 
+          _id: "$key", 
+          total: { $sum: 1 }, 
+          failures: { $sum: { $cond: [{ $eq: ["$success", false] }, 1, 0] } },
+          identifier: { $first: "$identifier" },
+          ip: { $first: "$ip" }
+      }}
+    ]);
+
+    for (const group of recentAttempts) {
+      if (group.failures >= 10) {
+        await sendSecurityAlert('BRUTE_FORCE_CUMULATIVE_SUMMARY', {
+            IP: group.ip,
+            Actor: group.identifier,
+            TargetUser: group.identifier,
+            TotalAttempts: group.total,
+            FailureCount: group.failures,
+            Timeframe: 'Last 10 minutes'
+        });
+        
+        // Clear alerted history to prevent spam
+        await LoginAttemptHistory.deleteMany({ key: group._id, timestamp: { $gte: tenMinutesAgo } });
+      }
     }
-    if (state.attempts.length === 0) loginAttempts.delete(key);
+  } catch (err) {
+    console.error('[runBruteForceSummary] Error:', err.message);
   }
 }
 

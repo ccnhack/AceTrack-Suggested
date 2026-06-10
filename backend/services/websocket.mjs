@@ -3,7 +3,7 @@ import { AppState, Player, SupportTicket, Tournament } from '../models/index.mjs
 /**
  * Initializes and registers all WebSocket handlers.
  */
-export default function registerWebSocketHandlers(io, activeSupportSessions, logServerEvent) {
+export default function registerWebSocketHandlers(io, logServerEvent) {
 io.on('connection', async (socket) => {
   logServerEvent('WS_CLIENT_CONNECTED', { socketId: socket.id });
   
@@ -85,29 +85,35 @@ io.on('connection', async (socket) => {
     // Each socket.id is unique, so concurrent sessions are distinguished by their socket ID + user-agent.
 
     // Use the explicitly provided role from the client if available
+    // 🛡️ [SCALABILITY FIX] (v2.6.620): Migrate active sessions to DB for multi-instance support.
+    const startSession = async () => {
+      try {
+        await Player.updateOne(
+          { id: String(connUserId) },
+          { $set: { 
+              "data.isLive": true, 
+              "data.liveSocketId": socket.id, 
+              "data.liveDeviceName": connDeviceName, 
+              "data.liveUserAgent": connUserAgent, 
+              "data.liveSessionStart": Date.now() 
+            } 
+          }
+        );
+        console.log(`🕐 [SESSION] Support employee ${connUserId} DB session started (socket: ${socket.id})`);
+      } catch (e) {
+        console.warn('[SESSION] Failed to start DB session:', e.message);
+      }
+    };
+
     if (connRole === 'support') {
-      activeSupportSessions.set(socket.id, {
-        userId: connUserId,
-        startTime: Date.now(),
-        deviceName: connDeviceName,
-        userAgent: connUserAgent
-      });
-      console.log(`🕐 [SESSION] Support employee ${connUserId} session started via client role (socket: ${socket.id}, device: ${connDeviceName}, UA: ${connUserAgent.substring(0, 60)}...)`);
+      startSession();
     } else {
       // Fallback: check database if client didn't provide role
       try {
-        // 🛡️ SCALABILITY FIX (v2.6.316): Read from Player distinct collection
         const playerDoc = await Player.findOne({ id: String(connUserId) }).lean();
         const player = playerDoc?.data;
-        console.log(`[DEBUG] Database lookup for ${connUserId} returned role: ${player?.role || 'not found'}`);
         if (player && player.role === 'support') {
-          activeSupportSessions.set(socket.id, {
-            userId: connUserId,
-            startTime: Date.now(),
-            deviceName: connDeviceName,
-            userAgent: connUserAgent
-          });
-          console.log(`🕐 [SESSION] Support employee ${connUserId} session started via DB lookup (socket: ${socket.id}, device: ${connDeviceName}, UA: ${connUserAgent.substring(0, 60)}...)`);
+          startSession();
         }
       } catch (e) {
         console.warn('[SESSION] Failed to check user role on connect:', e.message);
@@ -213,30 +219,37 @@ io.on('connection', async (socket) => {
     logServerEvent('WS_CLIENT_DISCONNECTED', { socketId: socket.id });
     
     // 🕐 [SESSION TRACKER] (v2.6.267): Persist session duration on disconnect
-    const session = activeSupportSessions.get(socket.id);
-    if (session) {
-      activeSupportSessions.delete(socket.id);
-      const durationMs = Date.now() - session.startTime;
-      const durationMins = Math.round(durationMs / 60000);
-      console.log(`🕐 [SESSION] Support employee ${session.userId} disconnected after ${durationMins}m`);
-      
-      if (durationMs > 60000) {
-        try {
-          // 🛡️ SCALABILITY FIX (v2.6.320): Write session history to distinct collection to prevent 16MB document limit
-          const { PlayerSession } = await import('../models/index.mjs');
-          await PlayerSession.create({
-            userId: session.userId,
-            startTime: new Date(session.startTime),
-            endTime: new Date(),
-            durationMs,
-            device: session.deviceName || 'Browser',
-            userAgent: session.userAgent || 'Unknown'
-          });
-          console.log(`🕐 [SESSION] Persisted ${durationMins}m session for ${session.userId} in PlayerSession collection`);
-        } catch (e) {
-          console.error('🕐 [SESSION] Failed to persist session:', e.message);
+    // 🕐 [SESSION TRACKER] (v2.6.620): Persist session duration on disconnect using DB
+    try {
+      const playerDoc = await Player.findOne({ "data.liveSocketId": socket.id }).lean();
+      if (playerDoc && playerDoc.data) {
+        const session = playerDoc.data;
+        if (session.liveSessionStart) {
+          const durationMs = Date.now() - session.liveSessionStart;
+          const durationMins = Math.round(durationMs / 60000);
+          console.log(`🕐 [SESSION] Support employee ${session.id} disconnected after ${durationMins}m`);
+          
+          if (durationMs > 60000) {
+            const { PlayerSession } = await import('../models/index.mjs');
+            await PlayerSession.create({
+              userId: session.id,
+              startTime: new Date(session.liveSessionStart),
+              endTime: new Date(),
+              durationMs,
+              device: session.liveDeviceName || 'Browser',
+              userAgent: session.liveUserAgent || 'Unknown'
+            });
+          }
         }
+        
+        // Unset live fields
+        await Player.updateOne(
+          { id: session.id },
+          { $unset: { "data.isLive": "", "data.liveSocketId": "", "data.liveDeviceName": "", "data.liveUserAgent": "", "data.liveSessionStart": "" } }
+        );
       }
+    } catch (e) {
+      console.error('🕐 [SESSION] Failed to persist session on disconnect:', e.message);
     }
   });
 });

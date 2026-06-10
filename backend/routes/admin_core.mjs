@@ -3,7 +3,7 @@ import { AuditLog, OrgSetting } from '../models/AdminCoreModels.mjs';
 import { Player as User } from '../models/index.mjs';
 import { apiKeyGuard, authGuard } from '../middleware/security.mjs';
 
-export default function createAdminCoreRoutes({ activeSupportSessions } = {}) {
+export default function createAdminCoreRoutes() {
     const router = express.Router();
     
     // Apply global guards for this router
@@ -104,23 +104,16 @@ router.get('/team-directory', async (req, res) => {
             return res.status(403).json({ success: false, message: 'Access denied' });
         }
 
-        const activeUserIds = new Set();
-        if (activeSupportSessions) {
-            for (const session of activeSupportSessions.values()) {
-                if (session.userId) activeUserIds.add(String(session.userId).toLowerCase());
-            }
-        }
-
         // Fetch users who are either admin or support
         const team = await User.find({ "data.role": { $in: ['admin', 'support'] } })
-            .select('id data.name data.email data.role data.designation data.avatar data.phone data.username data.devices data.supportStatus data.supportLevel lastUpdated')
+            .select('id data.name data.email data.role data.designation data.avatar data.phone data.username data.devices data.supportStatus data.supportLevel data.isLive lastUpdated')
             .lean();
             
         // Map data back to flat structure for the frontend
         const mappedTeam = team.map(u => {
             const userId = u.id || u._id?.toString() || '';
             const normalizedId = userId.toLowerCase();
-            const isLive = activeUserIds.has(normalizedId);
+            const isLive = !!u.data?.isLive;
 
             // 🛡️ [PRESENCE_ENRICHMENT] (v2.6.393): Find most recent device activity
             let lastActive = 0;

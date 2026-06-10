@@ -417,12 +417,13 @@ export const AdminGrievancesPanel = ({
 
 
   const getUserName = (userId) => {
-    if (userId === 'admin') return 'System Admin';
-    const p = (players || []).find(pl => pl.id === userId);
+    if (!userId) return 'Unassigned';
+    if (String(userId).toLowerCase() === 'admin') return 'System Admin';
+    const p = (players || []).find(pl => String(pl.id).toLowerCase() === String(userId).toLowerCase() || (pl.username && String(pl.username).toLowerCase() === String(userId).toLowerCase()));
     if (!p) return userId;
     return p.username ? `${p.name} (${p.username})` : p.name;
   };
-  const getUserRole = (userId) => (players || []).find(pl => pl.id === userId)?.role || 'user';
+  const getUserRole = (userId) => (players || []).find(pl => pl.id === userId || String(pl.id).toLowerCase() === String(userId).toLowerCase())?.role || 'user';
 
   const isTicketUnread = (ticket) => {
     if (!ticket) return false;

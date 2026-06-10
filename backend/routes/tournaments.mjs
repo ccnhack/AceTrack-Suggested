@@ -3,6 +3,7 @@ import { Tournament, Player } from '../models/index.mjs';
 import { authGuard } from '../middleware/security.mjs';
 import { addInAppNotification } from '../helpers/utils.mjs';
 import { sendPushNotification } from '../notifications.js';
+import crypto from 'crypto';
 
 export default function({ io }) {
   const router = express.Router();
@@ -153,7 +154,7 @@ export default function({ io }) {
         } else {
           // Create a new team
           const teamId = `team_${Date.now()}`;
-          newTeamCode = Math.random().toString(36).substring(2, 8).toUpperCase(); // 6 chars
+          newTeamCode = crypto.randomBytes(4).toString('hex').toUpperCase(); // 8 chars
           tUpdate.$push = {
             'data.doublesTeams': {
               id: teamId,
@@ -603,7 +604,7 @@ export default function({ io }) {
           notifTitle = 'Tournament Opt-Out';
           notifBody = `Your partner has opted your team out of "${tData.title}".`;
           const notif = {
-            id: `notif_optout_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
+            id: `notif_optout_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
             title: notifTitle,
             message: notifBody,
             date: new Date().toISOString(),

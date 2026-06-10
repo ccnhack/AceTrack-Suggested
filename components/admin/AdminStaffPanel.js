@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator, Clipboard, Modal, Linking, Platform } from 'react-native';
+import {  View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator, Clipboard, Modal, Linking, Platform  } from 'react-native';
+import { apiFetch } from '../../utils/apiFetch';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, shadows } from '../../theme/designSystem';
 import config from '../../config';
@@ -62,7 +63,7 @@ const AdminStaffPanel = () => {
       const headers = { 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/invites`, {
+      const res = await apiFetch(`${config.API_BASE_URL}/api/v1/support/invites`, {
         headers,
         credentials: 'include'
       });
@@ -86,7 +87,7 @@ const AdminStaffPanel = () => {
       const headers = { 'Content-Type': 'application/json', 'x-ace-api-key': config.ACE_API_KEY, 'x-user-id': 'admin' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/invite`, {
+      const res = await apiFetch(`${config.API_BASE_URL}/api/v1/support/invite`, {
         method: 'POST',
         headers,
         credentials: 'include',
@@ -123,7 +124,7 @@ const AdminStaffPanel = () => {
       const headers = { 'Content-Type': 'application/json', 'x-user-id': 'admin' };
       if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
 
-      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/invite/resend`, {
+      const res = await apiFetch(`${config.API_BASE_URL}/api/v1/support/invite/resend`, {
         method: 'POST',
         headers,
         credentials: 'include',
@@ -158,7 +159,7 @@ const AdminStaffPanel = () => {
               const headers = { 'Content-Type': 'application/json', 'x-user-id': 'admin' };
               if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
 
-              const res = await fetch(`${config.API_BASE_URL}/api/v1/support/invite/expire`, {
+              const res = await apiFetch(`${config.API_BASE_URL}/api/v1/support/invite/expire`, {
                 method: 'POST',
                 headers,
                 credentials: 'include',

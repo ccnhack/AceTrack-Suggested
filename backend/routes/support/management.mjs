@@ -2,6 +2,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { AppState, AuditLog, SupportInvite, Player, SupportTicket } from '../../models/index.mjs';
 import { asyncHandler, getISTTimestamp, getISTDate } from '../../helpers/utils.mjs';
 import { apiKeyGuard, authGuard } from '../../middleware/security.mjs';
@@ -46,32 +47,43 @@ export default function ({
   upload,
   otpLimiter,
   SupportMetricsService,
-  activeSupportSessions,
   syncMutex
 }) {
   const router = express.Router();
 
 // 🔐 OTP: Send verification code (Simulated/Hardcoded for Testing)
-router.get('/debug/active-sessions', (req, res) => {
-  const sessions = [];
-  for (const [socketId, sess] of activeSupportSessions) {
-    sessions.push({ socketId, ...sess, durationMs: Date.now() - sess.startTime });
+router.get('/debug/active-sessions', async (req, res) => {
+  try {
+    const liveDocs = await Player.find({ "data.isLive": true }).lean();
+    const sessions = liveDocs.map(doc => {
+      const s = doc.data;
+      return {
+        socketId: s.liveSocketId,
+        userId: s.id,
+        startTime: s.liveSessionStart,
+        deviceName: s.liveDeviceName,
+        userAgent: s.liveUserAgent,
+        durationMs: Date.now() - (s.liveSessionStart || Date.now())
+      };
+    });
+    const connectedSockets = io.sockets.sockets ? io.sockets.sockets.size : 'unknown';
+    res.json({ : sessions, 
+      totalConnectedSockets: connectedSockets,
+      timestamp: new Date().toISOString()
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to fetch sessions' });
   }
-  const connectedSockets = io.sockets.sockets ? io.sockets.sockets.size : 'unknown';
-  res.json({ 
-    activeSupportSessions: sessions, 
-    totalConnectedSockets: connectedSockets,
-    timestamp: new Date().toISOString()
-  });
 });
 
-router.get('/support/session-status/:userId', apiKeyGuard, (req, res) => {
+router.get('/support/session-status/:userId', apiKeyGuard, async (req, res) => {
   const { userId } = req.params;
-  const sessions = [];
-  for (const [socketId, sess] of activeSupportSessions) {
-    if (String(sess.userId) === String(userId)) {
-      // 🛡️ [USER-AGENT PARSING] (v2.6.424): Extract browser name from raw UA string
-      const ua = sess.userAgent || 'Unknown';
+  try {
+    const playerDoc = await Player.findOne({ id: userId }).lean();
+    const sessions = [];
+    if (playerDoc?.data?.isLive) {
+      const sess = playerDoc.data;
+      const ua = sess.liveUserAgent || 'Unknown';
       let browserName = 'Browser';
       if (ua.includes('Edg/')) browserName = 'Microsoft Edge';
       else if (ua.includes('OPR/') || ua.includes('Opera')) browserName = 'Opera';
@@ -81,17 +93,19 @@ router.get('/support/session-status/:userId', apiKeyGuard, (req, res) => {
       else if (ua.includes('MSIE') || ua.includes('Trident/')) browserName = 'Internet Explorer';
 
       sessions.push({
-        socketId,
-        startTime: new Date(sess.startTime).toISOString(),
-        durationMs: Date.now() - sess.startTime,
-        deviceName: sess.deviceName || 'Browser',
+        socketId: sess.liveSocketId,
+        startTime: new Date(sess.liveSessionStart).toISOString(),
+        durationMs: Date.now() - sess.liveSessionStart,
+        deviceName: sess.liveDeviceName || 'Browser',
         browserName,
         userAgent: ua,
         isLive: true
       });
     }
+    res.json({ userId, sessions, isOnline: sessions.length > 0, timestamp: new Date().toISOString() });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
   }
-  res.json({ userId, sessions, isOnline: sessions.length > 0, timestamp: new Date().toISOString() });
 });
 
 router.get('/support/attendance', apiKeyGuard, authGuard, async (req, res) => {
@@ -111,17 +125,15 @@ router.get('/support/attendance', apiKeyGuard, authGuard, async (req, res) => {
     const attendance = agents.map(agent => {
       const sessions = agent.sessionHistory || [];
       
-      // Check if currently online via in-memory tracker
+      // Check if currently online via DB
       const activeSessions = [];
-      for (const [, sess] of activeSupportSessions) {
-        if (String(sess.userId) === String(agent.id)) {
-          activeSessions.push({
-            startTime: new Date(sess.startTime).toISOString(),
-            durationMs: Date.now() - sess.startTime,
-            device: sess.deviceName || 'Browser',
-            isLive: true
-          });
-        }
+      if (agent.isLive && agent.liveSessionStart) {
+        activeSessions.push({
+          startTime: new Date(agent.liveSessionStart).toISOString(),
+          durationMs: Date.now() - agent.liveSessionStart,
+          device: agent.liveDeviceName || 'Browser',
+          isLive: true
+        });
       }
       const isCurrentlyOnline = activeSessions.length > 0;
 
@@ -297,10 +309,7 @@ router.get('/support/analytics', apiKeyGuard, authGuard, async (req, res) => {
       const todayActiveMs = todaySessions.reduce((sum, s) => sum + (s.durationMs || 0), 0);
       
       // Check if currently online
-      let isCurrentlyOnline = false;
-      for (const [, sess] of activeSupportSessions) {
-        if (sess.userId === agentId) { isCurrentlyOnline = true; break; }
-      }
+      let isCurrentlyOnline = !!agent.isLive;
 
       return {
         id: agentId,
@@ -489,7 +498,7 @@ router.post('/support/manage-user', apiKeyGuard, authGuard, async (req, res) => 
         user.reOnboardedAt = new Date().toISOString();
         
         // 🔑 Generate fresh credentials for re-onboarded employee
-        const newPassword = Math.random().toString(36).substring(2, 12);
+        const newPassword = crypto.randomBytes(6).toString('hex'); // 12 chars
         user.password = bcrypt.hashSync(newPassword, 10);
         console.log(`[RE-ONBOARD] Generated new credentials for ${user.email}`);
         
@@ -594,7 +603,7 @@ router.post('/support/force-reset', apiKeyGuard, authGuard, async (req, res) => 
     }
 
     // Generate Random Alphanumeric Password (10 chars)
-    const newPassword = Math.random().toString(36).substring(2, 7) + Math.random().toString(36).substring(2, 7);
+    const newPassword = crypto.randomBytes(5).toString('hex'); // 10 chars
     console.log(`[FORCE-RESET] Generated new password for ${user.email}`);
     
     // Assign Plaintext to match local frontend authentication model

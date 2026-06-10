@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react';
-import { 
+import {  
   View, Text, TouchableOpacity, StyleSheet, TextInput, ScrollView, 
   ActivityIndicator, Alert, Platform, Share, Dimensions, Modal 
-} from 'react-native';
+ } from 'react-native';
+import { apiFetch } from '../../utils/apiFetch';
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -154,7 +155,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${activeApiUrl}/api/diagnostics`, { 
+      const res = await apiFetch(`${activeApiUrl}/api/diagnostics`, { 
         headers,
         credentials: 'include'
       });
@@ -212,7 +213,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${activeApiUrl}/api/diagnostics?userId=${p.id}&_t=${Date.now()}`, { 
+      const res = await apiFetch(`${activeApiUrl}/api/diagnostics?userId=${p.id}&_t=${Date.now()}`, { 
         headers,
         credentials: 'include'
       });
@@ -253,7 +254,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
           };
           if (token) headers['Authorization'] = `Bearer ${token}`;
 
-          const sessionRes = await fetch(`${activeApiUrl}/api/v1/support/session-status/${p.id}`, {
+          const sessionRes = await apiFetch(`${activeApiUrl}/api/v1/support/session-status/${p.id}`, {
             headers,
             credentials: 'include'
           });
@@ -327,7 +328,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
         };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const res = await fetch(`${activeApiUrl}/api/diagnostics?userId=${selectedDiagUser.id}&_t=${Date.now()}`, { 
+        const res = await apiFetch(`${activeApiUrl}/api/diagnostics?userId=${selectedDiagUser.id}&_t=${Date.now()}`, { 
           headers,
           credentials: 'include'
         });
@@ -368,7 +369,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${activeApiUrl}/api/diagnostics/${file}`, { 
+      const res = await apiFetch(`${activeApiUrl}/api/diagnostics/${file}`, { 
         headers,
         credentials: 'include'
       });
