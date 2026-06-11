@@ -269,6 +269,115 @@ router.post('/support/reassign-ticket', apiKeyGuard, authGuard, async (req, res)
   }
 });
 
+// 🛡️ [ESCALATION ENDPOINT] (v2.6.345): Allow support staff to escalate tickets to Manager/Team Lead
+// Ownership (assignedTo) stays with the original agent. Only escalation metadata is updated.
+router.post('/support/escalate-ticket', apiKeyGuard, authGuard, async (req, res) => {
+  const { ticketId, escalationType } = req.body; // escalationType: 'Manager' or 'Team Lead'
+  const requesterId = req.user?.id;
+  console.log(`[API] POST /support/escalate-ticket: ticket=${ticketId}, type=${escalationType}, requester=${requesterId}`);
+
+  if (!ticketId || !escalationType) {
+    return res.status(400).json({ error: 'ticketId and escalationType (Manager or Team Lead) are required' });
+  }
+  if (!['Manager', 'Team Lead'].includes(escalationType)) {
+    return res.status(400).json({ error: 'escalationType must be either "Manager" or "Team Lead"' });
+  }
+
+  try {
+    // 1. Validate requester is a support employee
+    const requesterDoc = await Player.findOne({ id: requesterId }).lean();
+    const requester = requesterDoc?.data;
+    if (!requester || requester.role !== 'support') {
+      return res.status(403).json({ error: 'Only support employees can escalate tickets' });
+    }
+
+    // 2. Find the escalation target based on the requester's hierarchy
+    const targetField = escalationType === 'Manager' ? 'managerId' : 'teamLeadId';
+    const targetId = requester[targetField];
+    if (!targetId) {
+      return res.status(400).json({ error: `No ${escalationType} configured for your profile. Contact admin to set up your reporting hierarchy.` });
+    }
+
+    const targetDoc = await Player.findOne({ id: targetId }).lean();
+    const target = targetDoc?.data;
+    if (!target) {
+      return res.status(404).json({ error: `${escalationType} (ID: ${targetId}) not found in the system` });
+    }
+
+    // 3. Load the ticket
+    const ticketDoc = await SupportTicket.findOne({ id: ticketId });
+    if (!ticketDoc || !ticketDoc.data) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+    const ticket = ticketDoc.data;
+
+    // 4. Prevent duplicate escalation
+    if (ticket.escalatedTo) {
+      return res.status(409).json({ error: `Ticket already escalated to ${ticket.escalationType}: ${ticket.escalatedToName}` });
+    }
+
+    // 5. Stamp escalation metadata (ownership stays unchanged)
+    ticket.escalatedTo = targetId;
+    ticket.escalatedToName = target.name || escalationType;
+    ticket.escalationType = escalationType;
+    ticket.escalatedAt = new Date().toISOString();
+    ticket.escalatedBy = requesterId;
+    ticket.escalatedByName = requester.name || 'Support Agent';
+
+    // 6. Add system event message
+    const eventMsg = {
+      id: `escalation-${Date.now()}`,
+      senderId: 'system',
+      text: `-------- ESCALATED TO ${escalationType.toUpperCase()}: ${target.name || targetId} --------`,
+      timestamp: new Date().toISOString(),
+      type: 'event'
+    };
+    ticket.messages = [...(ticket.messages || []), eventMsg];
+    ticket.updatedAt = new Date().toISOString();
+
+    // 7. Save
+    ticketDoc.data = ticket;
+    ticketDoc.lastUpdated = new Date();
+    ticketDoc.markModified('data');
+    await ticketDoc.save();
+
+    // 8. Notify the escalation target
+    if (target.pushTokens?.length > 0) {
+      const { sendPushNotification } = await import('../../utils/pushNotifications.mjs').catch(() => ({ sendPushNotification: null }));
+      if (sendPushNotification) {
+        sendPushNotification(
+          target.pushTokens,
+          'Ticket Escalated to You ⬆️',
+          `${requester.name || 'A support agent'} escalated ticket: "${ticket.title}"`,
+          { ticketId: ticket.id, type: 'TICKET_ESCALATED' }
+        );
+      }
+    }
+
+    // 9. Broadcast via Socket.IO
+    if (io) {
+      io.emit('entity_updated', {
+        entity: 'supportTickets',
+        data: ticket,
+        source: 'api',
+        timestamp: Date.now()
+      });
+    }
+
+    logServerEvent('TICKET_ESCALATED', { ticketId, escalationType, targetId, targetName: target.name, requesterId });
+    logAudit(req, 'TICKET_ESCALATED', ['supportTickets'], { ticketId, escalationType, targetId }).catch(() => {});
+
+    res.json({
+      success: true,
+      message: `Ticket escalated to ${escalationType}: ${target.name}`,
+      ticket: ticket
+    });
+  } catch (e) {
+    console.error('[API] /support/escalate-ticket error:', e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.post('/support/rate-ticket', apiKeyGuard, authGuard, async (req, res) => {
   const { ticketId, rating, feedback } = req.body;
   // 🛡️ [VAPT-F05] (v2.6.556): Use JWT-verified identity
@@ -697,6 +806,10 @@ router.post('/support/save-ticket', apiKeyGuard, authGuard, async (req, res) => 
   if (!ticket) return res.status(400).json({ error: 'Ticket object required' });
 
   try {
+    // 🛡️ [BUG FIX] (v2.6.345): userDoc was previously undeclared in this scope
+    const userId = req.user?.id;
+    const userDoc = await Player.findOne({ id: userId }).lean();
+
     const generatedId = ticket.id || `${Math.floor(1000000 + Math.random() * 9000000)}`;
     const isNew = !ticket.id;
     
@@ -715,15 +828,41 @@ router.post('/support/save-ticket', apiKeyGuard, authGuard, async (req, res) => 
     };
 
     if (isNew) {
-      // 🛡️ [AUTO-ASSIGN] (v2.6.569): If the ticket is raised by a support agent, assign it to admin automatically
+      // 🛡️ [HIERARCHICAL ASSIGNMENT] (v2.6.345): Route support-staff tickets up the chain
       if (userDoc && userDoc.data && userDoc.data.role === 'support') {
-        enrichmentTicket.assignedTo = 'admin';
+        const creatorLevel = (userDoc.data.supportLevel || '').toLowerCase();
+        const isManagerOrLead = ['manager', 'team lead', 'teamlead'].includes(creatorLevel);
+        const technicalTypes = ['technical issue', 'bug'];
+        const ticketType = (enrichmentTicket.type || '').toLowerCase();
+
+        if (isManagerOrLead) {
+          // Manager/Team Lead tickets → assign directly to admin
+          enrichmentTicket.assignedTo = 'admin';
+        } else if (technicalTypes.includes(ticketType) && userDoc.data.teamLeadId) {
+          // Technical issues from lower staff → assign to Team Lead
+          enrichmentTicket.assignedTo = userDoc.data.teamLeadId;
+        } else if (userDoc.data.managerId) {
+          // Process/concern issues from lower staff → assign to Manager
+          enrichmentTicket.assignedTo = userDoc.data.managerId;
+        } else {
+          // Fallback: assign to admin if no hierarchy configured
+          enrichmentTicket.assignedTo = 'admin';
+        }
+
+        // Look up assigned person's name
+        if (enrichmentTicket.assignedTo !== 'admin') {
+          const assigneeDoc = await Player.findOne({ id: enrichmentTicket.assignedTo }).lean();
+          enrichmentTicket.assignedAgentName = assigneeDoc?.data?.name || 'Support';
+        } else {
+          enrichmentTicket.assignedAgentName = 'Admin';
+        }
+
         enrichmentTicket.assignedAt = new Date().toISOString();
-        enrichmentTicket.assignmentSource = 'auto_assign_support_staff';
+        enrichmentTicket.assignmentSource = 'hierarchy';
         
         const autoResponse = {
           id: `auto-${Date.now()}`,
-          senderId: 'admin',
+          senderId: enrichmentTicket.assignedTo,
           text: 'Thanks for reaching out to AceTrack Support Team, Our team will look into the issue and provide an update shortly',
           timestamp: new Date(Date.now() + 1000).toISOString(),
           status: 'delivered'

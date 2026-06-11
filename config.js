@@ -36,10 +36,10 @@ const ACE_API_KEY = Constants.expoConfig?.extra?.aceApiKey
   || 'AceTrack_Client_v2_Production';
 
 // 🔄 ALWAYS BUMP THIS VERSION TO TRIGGER CACHE INVALIDATION ON STARTUP
-export const APP_VERSION = '2.6.629'; // MUST SYNC WITH App.json & app.json
+export const APP_VERSION = '2.6.630'; // MUST SYNC WITH App.json & app.json
 
 export default {
-  APP_VERSION: '2.6.629',
+  APP_VERSION: '2.6.630',
   get API_BASE_URL() { return _API_BASE_URL; },
   set API_BASE_URL(val) { _API_BASE_URL = val; },
   CLOUD_API_URL,
@@ -66,6 +66,7 @@ export default {
       'STATUS': '/api/status',
       'CLAIM_TICKET': '/api/v1/support/claim-ticket',
       'REASSIGN_TICKET': '/api/v1/support/reassign-ticket',
+      'ESCALATE_TICKET': '/api/v1/support/escalate-ticket',
       'OTP_SEND': '/api/otp/send',
       'OTP_VERIFY': '/api/otp/verify',
       'SUBSCRIBE_PRO': '/api/v1/user/subscribe'

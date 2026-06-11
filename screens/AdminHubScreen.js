@@ -44,7 +44,7 @@ const AdminHubScreen = ({ navigation, route }) => {
   const { matchVideos, onUpdateVideoStatus, onBulkUpdateVideoStatus, onForceRefundVideo, onApproveDeleteVideo, onRejectDeleteVideo, onPermanentDeleteVideo, onBulkPermanentDeleteVideos } = useVideoStore();
   
   const { data: supportTickets } = useSupportTicketsQuery();
-  const { onReplyTicket, onUpdateTicketStatus, onReassignTicket, onMarkSeen } = useSupportStore();
+  const { onReplyTicket, onUpdateTicketStatus, onReassignTicket, onMarkSeen, onEscalateTicket } = useSupportStore();
 
   const { matchmaking } = useMatchmaking();
   const { evaluations } = useEvaluationsStore();
@@ -380,6 +380,7 @@ const AdminHubScreen = ({ navigation, route }) => {
             onUpdateStatus={onUpdateTicketStatus}
             onMarkSeen={onMarkSeen}
             onReassignTicket={onReassignTicket}
+            onEscalateTicket={onEscalateTicket}
             currentUser={currentUser}
             onDetailToggle={(isOpen) => {
               if (!isOpen) {

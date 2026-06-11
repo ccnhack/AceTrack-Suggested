@@ -229,31 +229,63 @@ const ChatBot = ({
     console.log("🤖 [ChatBot] Detected AI Action Trigger:", text.match(/ACTION:[A-Z_]+/)?.[0]);
   };
 
+  // 🛡️ [VALID_TYPES] (v2.6.345): Whitelist of valid ticket types for AI classification
+  const VALID_TICKET_TYPES = ['Technical Issue', 'Bug', 'Refund', 'Payment Issue', 'Enhancement Request', 'Match Recordings', 'Tournament Issue', 'Fraud Report', 'Other'];
+
   const handleConfirmTicket = (type, description, msgTimestamp) => {
     if (!onSaveTicket) return;
     
     const newTicketId = `ticket_${Date.now()}`;
     
+    // 🛡️ [TYPE_VALIDATION] (v2.6.345): Ensure type is a valid category, not a literal like "TYPE"
+    let validatedType = type;
+    if (!VALID_TICKET_TYPES.some(vt => vt.toLowerCase() === (validatedType || '').toLowerCase())) {
+      // Attempt to infer type from description keywords
+      const descLower = (description || '').toLowerCase();
+      if (descLower.includes('bug') || descLower.includes('crash') || descLower.includes('error')) validatedType = 'Bug';
+      else if (descLower.includes('payment') || descLower.includes('wallet') || descLower.includes('money')) validatedType = 'Payment Issue';
+      else if (descLower.includes('refund')) validatedType = 'Refund';
+      else if (descLower.includes('video') || descLower.includes('recording') || descLower.includes('highlight')) validatedType = 'Match Recordings';
+      else if (descLower.includes('tournament') || descLower.includes('draw') || descLower.includes('schedule')) validatedType = 'Tournament Issue';
+      else if (descLower.includes('feature') || descLower.includes('request') || descLower.includes('suggestion')) validatedType = 'Enhancement Request';
+      else if (descLower.includes('fraud') || descLower.includes('scam') || descLower.includes('fake')) validatedType = 'Fraud Report';
+      else if (descLower.includes('technical') || descLower.includes('not working') || descLower.includes('stuck')) validatedType = 'Technical Issue';
+      else validatedType = 'Other';
+      console.log(`🤖 [ChatBot] Type "${type}" invalid, inferred as "${validatedType}"`);
+    } else {
+      // Normalize casing to match whitelist
+      validatedType = VALID_TICKET_TYPES.find(vt => vt.toLowerCase() === validatedType.toLowerCase()) || validatedType;
+    }
+
+    // 🛡️ [RICH_DESCRIPTION] (v2.6.345): Build richer description from conversation context
+    // Collect the last few user messages for context
+    const userContextMsgs = messages
+      .filter(m => m.role === 'user')
+      .slice(-3)
+      .map(m => m.text)
+      .join(' | ');
+    const richDescription = userContextMsgs.length > description.length ? userContextMsgs : description;
+    
     onSaveTicket({
       id: newTicketId,
       userId: user.id,
       userName: user.name,
-      type: type,
+      type: validatedType,
       title: description.length > 50 ? description.substring(0, 47) + '...' : description,
-      description: description,
+      description: richDescription,
       status: 'Open',
       date: new Date().toISOString(),
       source: 'AI', // 🤖 Tag as AI-generated
       messages: [{
         senderId: user.id,
-        text: `Description: ${description}`, // Send clean description
+        text: `Description: ${richDescription}`,
         timestamp: new Date().toISOString()
       }]
     });
     
     setHandledActions(prev => new Set(prev).add(msgTimestamp));
     // Provide immediate feedback in chat with action trigger
-    const feedbackMsg = `I've raised a ${type} ticket for you. Our team will look into it shortly.\n\nACTION:TICKET_CREATED ID:${newTicketId} TYPE:${type.replace(/\s+/g, '_')} DESC:${description}`;
+    const feedbackMsg = `I've raised a **${validatedType}** ticket for you. Our team will look into it shortly.\n\nACTION:TICKET_CREATED ID:${newTicketId} TYPE:${validatedType.replace(/\s+/g, '_')} DESC:${description}`;
     const newMessages = [...messages, { role: 'model', text: feedbackMsg }];
     onSendChatMessage(newMessages);
   };
@@ -273,24 +305,44 @@ const ChatBot = ({
   const parseTicketAction = (text) => {
     if (!text.includes('ACTION:RAISE_TICKET')) return null;
     
-    // Format 1: [TYPE]:[DESCRIPTION]
+    let parsedType = null;
+    let parsedDesc = null;
+    
+    // Format 1: [TYPE]:[DESCRIPTION] — e.g., ACTION:RAISE_TICKET [Bug]:[App crashes on login]
     let match = text.match(/ACTION:RAISE_TICKET\s+\[([^\]]+)\]:\[([^\]]+)\]/);
-    if (match) return { type: match[1].trim(), desc: match[2].trim() };
+    if (match) { parsedType = match[1].trim(); parsedDesc = match[2].trim(); }
     
-    // Format 2: TYPE:Other DESCRIPTION:Request...
-    match = text.match(/ACTION:RAISE_TICKET\s+TYPE:\s*([^\s]+(?: \w+)?)\s+DESCRIPTION:\s*(.+)/);
-    if (match) return { type: match[1].trim(), desc: match[2].trim() };
-    
-    // Format 3: TYPE:DESCRIPTION
-    match = text.match(/ACTION:RAISE_TICKET\s+([^:]+):(.+)/);
-    if (match) {
-      return { 
-        type: match[1].replace(/^\[|\]$/g, '').trim(), 
-        desc: match[2].replace(/^\[|\]$/g, '').trim() 
-      };
+    // Format 2: TYPE:X DESCRIPTION:Y — e.g., ACTION:RAISE_TICKET TYPE:Bug DESCRIPTION:App crashes
+    if (!parsedType) {
+      match = text.match(/ACTION:RAISE_TICKET\s+TYPE:\s*(.+?)\s+DESCRIPTION:\s*(.+)/i);
+      if (match) { parsedType = match[1].trim(); parsedDesc = match[2].trim(); }
     }
     
-    return null;
+    // Format 3: Loose KEY:VALUE — e.g., ACTION:RAISE_TICKET Bug:App crashes on login
+    if (!parsedType) {
+      match = text.match(/ACTION:RAISE_TICKET\s+([^:]+):(.+)/);
+      if (match) {
+        parsedType = match[1].replace(/^\[|\]$/g, '').trim();
+        parsedDesc = match[2].replace(/^\[|\]$/g, '').trim();
+      }
+    }
+    
+    if (!parsedType || !parsedDesc) return null;
+    
+    // 🛡️ [TYPE_SANITIZATION] (v2.6.345): Reject literal placeholder values like "TYPE"
+    const INVALID_TYPES = ['type', 'description', 'desc', 'issue', 'category'];
+    if (INVALID_TYPES.includes(parsedType.toLowerCase())) {
+      // AI emitted the placeholder literally — infer type from description
+      const descLower = parsedDesc.toLowerCase();
+      if (descLower.includes('bug') || descLower.includes('crash') || descLower.includes('error')) parsedType = 'Bug';
+      else if (descLower.includes('payment') || descLower.includes('wallet')) parsedType = 'Payment Issue';
+      else if (descLower.includes('refund')) parsedType = 'Refund';
+      else if (descLower.includes('technical') || descLower.includes('not working')) parsedType = 'Technical Issue';
+      else parsedType = 'Other';
+      console.log(`🤖 [ChatBot] Sanitized invalid type to: ${parsedType}`);
+    }
+    
+    return { type: parsedType, desc: parsedDesc };
   };
 
   const getTournamentsFromAction = (text) => {
@@ -369,9 +421,21 @@ Special Protocol Instructions:
    - NEVER invent fake tournaments, IDs, or details.
    - For EACH recommended tournament, you MUST add "ACTION:NAV_TO_TOURNAMENT ID:ID" at the end of your message (where ID is the ID from the list). 
 2. IMPORTANT: DO NOT include the technical 'ID' (e.g., t1, t_123) in your visible verbal response. Use it ONLY in the ACTION:NAV_TO_TOURNAMENT code.
-3. Support Tickets: If a user has a technical issue, bug, or payment problem, confirm you'll help and add "ACTION:RAISE_TICKET [TYPE]:[DESCRIPTION]" at the end.
-   - Replace [TYPE] with exactly one of: Technical Issue, Bug, Refund, Payment Issue, Other.
-   - Replace [DESCRIPTION] with a concise one-sentence summary of their problem.
+3. Support Tickets — STRICT PROTOCOL:
+   a. NEVER emit ACTION:RAISE_TICKET unless the user has provided a CLEAR, SPECIFIC DESCRIPTION of their problem.
+   b. If the user says generic things like "help me raise a ticket", "I need support", "raise a ticket for me" WITHOUT explaining the issue, you MUST ask clarifying questions FIRST:
+      - "What issue are you experiencing?"
+      - "Can you describe the problem in detail?"
+      - If they mention a specific ticket, ask for the Ticket ID.
+      - If they mention a specific user or player, ask for their username or name.
+      - If they mention a payment issue, ask for the transaction amount and date.
+   c. ONLY after the user responds with sufficient detail (at minimum a clear problem description), emit the action.
+   d. Action format: "ACTION:RAISE_TICKET [TYPE]:[DESCRIPTION]" at the END of your message.
+   e. Replace [TYPE] with exactly one of: Technical Issue, Bug, Refund, Payment Issue, Enhancement Request, Match Recordings, Tournament Issue, Fraud Report, Other.
+      - You MUST classify the type yourself based on the issue described. NEVER use the literal word "TYPE" as the type.
+      - If unsure, use "Other" but NEVER leave [TYPE] as a placeholder.
+   f. Replace [DESCRIPTION] with a detailed, concise summary including all relevant details the user provided (ticket IDs, usernames, error messages, etc).
+   g. CRITICAL: The [TYPE] must be a REAL category from the list above, NOT the literal text "TYPE".
 
 General App Knowledge:
 1. Tournaments: Automated scheduling, draws, and live digital scoring.

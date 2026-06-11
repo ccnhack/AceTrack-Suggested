@@ -364,6 +364,43 @@ export const useSupportStore = create((set, get) => {
       } catch (e) {
         return { success: false, error: e.message };
       }
+    },
+
+    onEscalateTicket: async (ticketId, escalationType) => {
+      try {
+        const config = require('../config').default;
+        const storage = require('../utils/storage').default;
+        const currentUser = useAuthStore.getState().currentUser;
+        
+        const token = await storage.getItem('userToken');
+        const headers = { 
+          'Content-Type': 'application/json', 
+          'x-ace-api-key': config.PUBLIC_APP_ID,
+          'x-user-id': currentUser?.id || 'admin'
+        };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch(`${config.API_BASE_URL}${config.getEndpoint('ESCALATE_TICKET')}`, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({ ticketId, escalationType })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          get().logSupportActivity('TICKET_ESCALATED', ticketId, `Escalated ticket to ${escalationType}`);
+          if (data && data.ticket) {
+             const currentTickets = get().supportTickets;
+             const updatedTickets = currentTickets.map(t => t.id === ticketId ? data.ticket : t);
+             set({ supportTickets: updatedTickets });
+             syncOrchestrator.syncAndSaveData({ supportTickets: updatedTickets }, false, true);
+          }
+          return { success: true, message: data.message };
+        }
+        return { success: false, error: data.error || "Failed to escalate ticket" };
+      } catch (e) {
+        return { success: false, error: e.message };
+      }
     }
   };
 });

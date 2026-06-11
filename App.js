@@ -98,9 +98,9 @@ import { useSupportStore } from './stores';
 
 
 
-// 🔄 Centralized Versioning// 🚀 EXPO OTA SYNC HUB (v2.6.569)
+// 🔄 Centralized Versioning// 🚀 EXPO OTA SYNC HUB
 // ALWAYS BUMP THIS VERSION TO TRIGGER CLIENT-SIDE CACHE INVALIDATION
-const APP_VERSION = '2.6.629';
+const APP_VERSION = '2.6.630';
 const linking = {
   prefixes: [config.API_BASE_URL || 'https://acetrack-suggested.onrender.com', 'acetrack://'],
   config: {

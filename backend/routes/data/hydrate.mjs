@@ -150,6 +150,26 @@ router.get('/data', apiKeyGuard, sensitiveCacheGuard, async (req, res) => {
       chatbotMessages
     };
 
+    // 🛡️ [STAFF_TICKET_VISIBILITY] (v2.6.345): Hide support-staff-raised tickets from other support staff.
+    // Admin sees everything. Support staff only sees:
+    //   1. Tickets raised by non-support users (customer tickets)
+    //   2. Their OWN tickets (for Report Issue section)
+    //   3. Tickets escalated TO them (for the Escalations tab)
+    if (isSupport && !isAdmin) {
+      const supportPlayerIds = new Set(
+        composedData.players
+          .filter(p => p.role === 'support')
+          .map(p => String(p.id || '').toLowerCase())
+      );
+      composedData.supportTickets = composedData.supportTickets.filter(t => {
+        const ticketCreatorId = String(t.userId || '').toLowerCase();
+        const isOwnTicket = ticketCreatorId === normalizedReqId;
+        const isCustomerTicket = !supportPlayerIds.has(ticketCreatorId);
+        const isEscalatedToMe = String(t.escalatedTo || '').toLowerCase() === normalizedReqId;
+        return isCustomerTicket || isOwnTicket || isEscalatedToMe;
+      });
+    }
+
     // 🛡️ [PRESENCE INJECTOR] (v2.6.383)
     if (composedData.players && Array.isArray(composedData.players)) {
       composedData.players = composedData.players.map(p => {

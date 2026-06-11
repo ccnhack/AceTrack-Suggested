@@ -819,8 +819,16 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
           
           if (isNew) {
              logAudit(req, 'TICKET_CREATED', ['supportTickets'], { ticketId: ticket.id, type: ticket.type, title: ticket.title });
-             // Alert Platform Admins and Support staff
-             const staffList = newMasterData.players.filter(p => p.role === 'admin' || p.role === 'support' || p.data?.role === 'admin' || p.data?.role === 'support');
+             // 🛡️ [STAFF_TICKET_NOTIFICATION_SCOPE] (v2.6.345): Staff tickets notify admin only
+             const creatorPlayer = newMasterData.players.find(p =>
+               String(p.id).toLowerCase() === String(ticket.userId || '').toLowerCase()
+             );
+             const isStaffTicket = creatorPlayer && creatorPlayer.role === 'support';
+             const staffList = newMasterData.players.filter(p =>
+               isStaffTicket
+                 ? (p.role === 'admin' || p.data?.role === 'admin') // Staff tickets: admin only
+                 : (p.role === 'admin' || p.role === 'support' || p.data?.role === 'admin' || p.data?.role === 'support')
+             );
              staffList.forEach(staff => {
                const t = "New Support Ticket 🎫";
                const b = `A user opened a new support ticket: "${ticket.title}"`;

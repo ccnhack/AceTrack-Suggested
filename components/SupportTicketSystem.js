@@ -29,7 +29,7 @@ export const SupportTicketSystem = ({
   userId, userName, tickets = [], onCreateTicket, onSendMessage, 
   onTypingStart, onTypingStop, onResolvePrompt, onToggleSupport,
   onUpdateStatus, onReply, onRetryMessage, onMarkSeen, onClaimTicket, userRole,
-  autoSelectTicketId, onConsumeTicketId
+  onEscalateTicket, autoSelectTicketId, onConsumeTicketId
 }) => {
   const [view, setView] = useState('list');
   const [selectedTicket, setSelectedTicket] = useState(null);
@@ -63,6 +63,13 @@ export const SupportTicketSystem = ({
   const [csatRating, setCsatRating] = useState(0);
   const [csatFeedback, setCsatFeedback] = useState('');
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+
+  // 🛡️ [ESCALATION STATE] (v2.6.345)
+  const [showEscalateModal, setShowEscalateModal] = useState(false);
+  const [isEscalating, setIsEscalating] = useState(false);
+  const [escalationReason, setEscalationReason] = useState('');
+  const [escalationTarget, setEscalationTarget] = useState('admin'); // Default to escalating to System Admin
+
   const scrollViewRef = useRef(null);
   const textInputRef = useRef(null);
   const messageYOffsets = useRef({}); // 📍 Track message coordinates (v2.6.27)
@@ -119,6 +126,7 @@ export const SupportTicketSystem = ({
       if (listTab === 'Open') statusMatch = openStatuses.includes(status);
       else if (listTab === 'Closed') statusMatch = status === 'Resolved' || status === 'Closed';
       else if (listTab === 'Pool') statusMatch = !t.assignedTo && status === 'Open';
+      else if (listTab === 'Escalations') statusMatch = String(t.escalatedTo || '').toLowerCase() === String(userId || '').toLowerCase();
 
       if (!statusMatch) return false;
 
@@ -575,6 +583,32 @@ export const SupportTicketSystem = ({
     }
   };
 
+  const handleEscalate = async () => {
+    if (!selectedTicket || !onEscalateTicket) return;
+    if (!escalationReason.trim()) {
+        notify({ success: false, message: "Please provide a reason for escalation." });
+        return;
+    }
+    
+    setIsEscalating(true);
+    try {
+        const res = await onEscalateTicket(selectedTicket.id, escalationTarget, escalationReason.trim());
+        if (res?.success) {
+            notify({ success: true, message: "Ticket escalated successfully." });
+            setShowEscalateModal(false);
+            setEscalationReason('');
+            setEscalationTarget('admin');
+        } else {
+            notify({ success: false, message: res?.message || "Failed to escalate ticket." });
+        }
+    } catch (e) {
+        console.error("Ticket escalation failed:", e);
+        notify({ success: false, message: "An error occurred during escalation." });
+    } finally {
+        setIsEscalating(false);
+    }
+  };
+
   if (view === 'list') {
     return (
       <View style={styles.container}>
@@ -658,6 +692,15 @@ export const SupportTicketSystem = ({
               style={[styles.tabBtn, listTab === 'Pool' && styles.tabBtnActive]}
             >
               <Text style={[styles.tabBtnText, listTab === 'Pool' && styles.tabBtnTextActive]}>Pool</Text>
+            </TouchableOpacity>
+          )}
+
+          {(userRole === 'admin' || userRole === 'support') && (
+            <TouchableOpacity 
+              onPress={() => setListTab('Escalations')}
+              style={[styles.tabBtn, listTab === 'Escalations' && styles.tabBtnActive]}
+            >
+              <Text style={[styles.tabBtnText, listTab === 'Escalations' && styles.tabBtnTextActive]}>Escalations</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -1042,11 +1085,18 @@ export const SupportTicketSystem = ({
                       <View style={styles.statusBadgeUnified}>
                           <Text style={[styles.statusBadgeTextUnified, { color: st.text }]}>{selectedTicket.status}</Text>
                       </View>
-                      {!isClosed && (
-                          <TouchableOpacity onPress={() => setShowClosureModal(true)} style={styles.reqCloseBtnUnified}>
-                              <Text style={styles.reqCloseBtnText}>Request Closure</Text>
-                          </TouchableOpacity>
-                      )}
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                          {isAgent && !isClosed && (
+                              <TouchableOpacity onPress={() => setShowEscalateModal(true)} style={styles.escalateBtnUnified}>
+                                  <Text style={styles.escalateBtnText}>Escalate</Text>
+                              </TouchableOpacity>
+                          )}
+                          {!isClosed && (
+                              <TouchableOpacity onPress={() => setShowClosureModal(true)} style={styles.reqCloseBtnUnified}>
+                                  <Text style={styles.reqCloseBtnText}>Request Closure</Text>
+                              </TouchableOpacity>
+                          )}
+                      </View>
                   </View>
                 )}
             </View>
@@ -1286,6 +1336,55 @@ export const SupportTicketSystem = ({
                            style={[styles.confirmYes, { backgroundColor: '#16A34A' }]}
                         >
                             {isClosing ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.confirmYesText}>Submit & Close</Text>}
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        </Modal>
+
+        <Modal transparent visible={showEscalateModal} animationType="fade">
+            <View style={styles.modalOverlay}>
+                <View style={styles.closureBox}>
+                    <View style={[styles.confirmIcon, { backgroundColor: '#FEE2E2' }]}>
+                        <Ionicons name="alert-circle" size={32} color="#EF4444" />
+                    </View>
+                    <Text style={styles.confirmTitle}>Escalate Ticket</Text>
+                    <Text style={styles.confirmSub}>Provide a reason for escalation to prioritize this issue.</Text>
+                    
+                    <View style={{ width: '100%', marginBottom: 12, flexDirection: 'row', justifyContent: 'center', gap: 12 }}>
+                        <TouchableOpacity 
+                            style={[styles.filterBtn, escalationTarget === 'admin' && styles.filterBtnActive]}
+                            onPress={() => setEscalationTarget('admin')}
+                        >
+                            <Text style={[styles.filterBtnText, escalationTarget === 'admin' && styles.filterBtnTextActive]}>System Admin</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <TextInput
+                        value={escalationReason}
+                        onChangeText={setEscalationReason}
+                        placeholder="Reason for escalation..."
+                        style={styles.closureInput}
+                        multiline
+                        numberOfLines={3}
+                    />
+
+                    <View style={styles.confirmActions}>
+                        <TouchableOpacity 
+                           onPress={() => {
+                             setShowEscalateModal(false);
+                             setEscalationReason('');
+                           }} 
+                           style={styles.confirmNo}
+                        >
+                            <Text style={styles.confirmNoText}>Cancel</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                           onPress={handleEscalate} 
+                           disabled={isEscalating}
+                           style={[styles.confirmYes, { backgroundColor: '#EF4444' }]}
+                        >
+                            {isEscalating ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.confirmYesText}>Escalate</Text>}
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -2056,6 +2155,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  escalateBtnUnified: {
+    width: 70,
+    height: 24,
+    borderRadius: 6,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   statusBadgeTextUnified: {
     fontSize: 8,
     fontWeight: '900',
@@ -2111,6 +2220,12 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '800',
     color: '#64748B',
+    textTransform: 'uppercase',
+  },
+  escalateBtnText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#EF4444',
     textTransform: 'uppercase',
   },
   closedNote: {
