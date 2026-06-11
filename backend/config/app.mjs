@@ -32,15 +32,20 @@ export const SECURITY_WEBHOOK_URL = process.env.SECURITY_WEBHOOK_URL; // OPTIONA
 export const ALLOWED_ORIGINS = [
   'https://acetrack-suggested.onrender.com',
   'https://acetrack-web.onrender.com',
-  'https://acetrack-suggested-web.onrender.com',
-  'http://localhost:8081',
-  'http://localhost:19006',
-  'http://localhost:3005',
-  'http://localhost:8082',
-  'http://127.0.0.1:8082',
-  'http://127.0.0.1:8081',
-  'http://127.0.0.1:19006'
+  'https://acetrack-suggested-web.onrender.com'
 ];
+
+if (process.env.NODE_ENV !== 'production') {
+  ALLOWED_ORIGINS.push(
+    'http://localhost:8081',
+    'http://localhost:19006',
+    'http://localhost:3005',
+    'http://localhost:8082',
+    'http://127.0.0.1:8082',
+    'http://127.0.0.1:8081',
+    'http://127.0.0.1:19006'
+  );
+}
 
 export const signToken = (user, jti = null) => {
   const payload = {

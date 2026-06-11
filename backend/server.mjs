@@ -146,16 +146,7 @@ app.use(helmet({
 
 // CORS
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (origin === 'null') {
-      console.warn(`🛑 CORS REJECTED: Malicious 'null' origin detected.`);
-      return callback(new Error('CORS: null origin is not permitted for security reasons.'));
-    }
-    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-    console.warn(`🛑 CORS Blocked: origin=${origin}`);
-    return callback(new Error(`Not allowed by CORS: ${origin}`));
-  },
+  origin: ALLOWED_ORIGINS,
   allowedHeaders: ['Content-Type', 'x-ace-api-key', 'x-socket-id', 'Authorization', 'x-user-id'],
   credentials: true
 }));
@@ -396,7 +387,7 @@ app.use('/', webRoutes);
 // 404 Handler
 app.use((req, res, next) => {
   if (req.path.startsWith('/api')) {
-    res.status(404).json({ success: false, error: `Resource not found: ${req.method} ${req.originalUrl}`, version: APP_VERSION });
+    res.status(404).json({ success: false, error: `Resource not found: ${req.method} ${req.originalUrl}` });
   } else {
     next();
   }

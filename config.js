@@ -9,11 +9,14 @@ import { Platform } from 'react-native';
 // Automatically detect local IP from Expo's host URI (ideal for physical devices + emulators)
 const hostUri = Constants.expoConfig?.hostUri;
 const hostIp = hostUri ? hostUri.split(':')[0] : null;
-let LOCAL_API_URL = hostIp ? `http://${hostIp}:3005` : 'http://localhost:3005';
 
-// Android Emulators have a special alias for the host's localhost
-if (Platform.OS === 'android' && (!hostIp || hostIp === '127.0.0.1' || hostIp === 'localhost')) {
-  LOCAL_API_URL = 'http://10.0.2.2:3005';
+let LOCAL_API_URL = null;
+if (__DEV__) {
+  LOCAL_API_URL = hostIp ? `http://${hostIp}:3005` : 'http://localhost:3005';
+  // Android Emulators have a special alias for the host's localhost
+  if (Platform.OS === 'android' && (!hostIp || hostIp === '127.0.0.1' || hostIp === 'localhost')) {
+    LOCAL_API_URL = 'http://10.0.2.2:3005';
+  }
 }
 
 // ENVIRONMENT SWITCH:

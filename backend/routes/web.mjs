@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { AppState, SupportPasswordReset, Player, Tournament, Match } from '../models/index.mjs';
+import { AppState, SupportPasswordReset, Player, Tournament, Match, SupportInvite } from '../models/index.mjs';
 import { asyncHandler } from '../helpers/utils.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -229,9 +229,50 @@ ${tournament.sponsorName ? `<div class="sponsor">Sponsored by ${tournament.spons
 // 🎫 Support Staff Onboarding Page (v2.6.124)
 // Server-rendered — works independently of the Expo web bundle
 // ═══════════════════════════════════════════════════════════════
-router.get('/setup/:token', (req, res) => {
+router.get('/setup/:token', asyncHandler(async (req, res) => {
   const { token } = req.params;
   const nonce = res.locals.nonce;
+
+  // 🛡️ [SECURITY: FIX] Server-side Token Validation before rendering HTML (Finding 1)
+  const invite = await SupportInvite.findOne({ token });
+  const isInvalid = !invite || invite.status === 'Used' || invite.status === 'Expired' || invite.expiresAt < new Date() || invite.status === 'Retired';
+  
+  if (isInvalid) {
+    let errorMsg = 'This setup link is invalid or has expired.';
+    if (invite?.status === 'Used') errorMsg = 'This invitation has already been claimed.';
+    if (invite?.status === 'Retired') errorMsg = 'This setup link has been retired by the administrator.';
+    if (invite?.status === 'Expired' || (invite && invite.expiresAt < new Date())) errorMsg = 'This setup link has expired.';
+
+    const invalidHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Invalid Link — AceTrack Support</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0F172A; color: #E2E8F0; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    .card { background: #1E293B; border: 1px solid #334155; border-radius: 24px; padding: 40px; text-align: center; max-width: 400px; box-shadow: 0 25px 60px rgba(0,0,0,0.5); }
+    h2 { color: #F8FAFC; margin-bottom: 8px; }
+    p { color: #94A3B8; font-size: 14px; line-height: 1.6; }
+    .icon { width: 64px; height: 64px; background: rgba(239,68,68,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; }
+    .icon svg { width: 32px; height: 32px; fill: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+    </div>
+    <h2>Invalid Setup Link</h2>
+    <p>${errorMsg}</p>
+    <p style="font-size:12px; margin-top:16px;">Please contact your System Administrator for a new invitation.</p>
+  </div>
+</body>
+</html>`;
+    res.setHeader('Content-Type', 'text/html');
+    return res.send(invalidHtml);
+  }
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
