@@ -813,7 +813,7 @@ router.get('/setup/:token', asyncHandler(async (req, res) => {
 
   res.setHeader('Content-Type', 'text/html');
   res.send(html);
-});
+}));
 
 
 // ═══════════════════════════════════════════════════════════════
