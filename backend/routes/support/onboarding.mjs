@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { AppState, AuditLog, SupportInvite, Player, SupportTicket } from '../../models/index.mjs';
 import { asyncHandler, getISTTimestamp, getISTDate } from '../../helpers/utils.mjs';
 import { apiKeyGuard, authGuard } from '../../middleware/security.mjs';
+import rateLimit from 'express-rate-limit';
 import {
   sendOnboardingEmail,
   buildOnboardingHtml,
@@ -326,7 +327,7 @@ router.post('/support/invite/click', asyncHandler(async (req, res) => {
   res.json({ success: true, email: invite.email });
 }));
 
-router.post('/support/invite/track', asyncHandler(async (req, res) => {
+router.post('/support/invite/track', rateLimit({ max: 10, windowMs: 60000 }), asyncHandler(async (req, res) => {
   const { token, action: rawAction } = req.body;
   if (!token || !rawAction) return res.status(400).json({ error: 'Invalid tracking data' });
 

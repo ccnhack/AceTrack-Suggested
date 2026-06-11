@@ -142,6 +142,14 @@ app.use(helmet({
       upgradeInsecureRequests: [],
     },
   },
+  permissionsPolicy: {
+    features: {
+      camera: [],
+      microphone: [],
+      geolocation: ["self"],
+      payment: []
+    }
+  }
 }));
 
 // CORS
