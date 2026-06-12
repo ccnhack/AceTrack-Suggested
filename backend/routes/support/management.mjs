@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { AppState, AuditLog, SupportInvite, Player, SupportTicket } from '../../models/index.mjs';
+import { AppState, AuditLog, SupportInvite, Player, SupportTicket, PlayerSession } from '../../models/index.mjs';
 import { asyncHandler, getISTTimestamp, getISTDate } from '../../helpers/utils.mjs';
 import { apiKeyGuard, authGuard } from '../../middleware/security.mjs';
 import {
@@ -121,9 +121,23 @@ router.get('/support/attendance', apiKeyGuard, authGuard, async (req, res) => {
     const weekStart = new Date(todayStart);
     weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Sunday
 
+    // 🛡️ [SESSION TRACKER] (v2.6.620+): Read from PlayerSession collection
+    const agentIds = agents.map(a => a.id);
+    const allSessionsDb = await PlayerSession.find({ userId: { $in: agentIds } }).lean();
+    const sessionsByAgent = {};
+    allSessionsDb.forEach(s => {
+      if (!sessionsByAgent[s.userId]) sessionsByAgent[s.userId] = [];
+      sessionsByAgent[s.userId].push(s);
+    });
+
     // Build per-agent attendance data
     const attendance = agents.map(agent => {
-      const sessions = agent.sessionHistory || [];
+      let sessions = agent.sessionHistory || [];
+      const dbSessions = sessionsByAgent[agent.id] || [];
+      if (dbSessions.length > 0) {
+         sessions = [...sessions, ...dbSessions];
+         sessions.sort((a,b) => new Date(a.startTime) - new Date(b.startTime));
+      }
       
       // Check if currently online via DB
       const activeSessions = [];
@@ -219,6 +233,15 @@ router.get('/support/analytics', apiKeyGuard, authGuard, async (req, res) => {
     const agents = allPlayers;
     const tickets = ticketDocs.map(d => d.data);
 
+    // 🛡️ [SESSION TRACKER] (v2.6.620+): Read from PlayerSession collection
+    const agentIds = agents.map(a => a.id);
+    const allSessionsDb = await PlayerSession.find({ userId: { $in: agentIds } }).lean();
+    const sessionsByAgent = {};
+    allSessionsDb.forEach(s => {
+      if (!sessionsByAgent[s.userId]) sessionsByAgent[s.userId] = [];
+      sessionsByAgent[s.userId].push(s);
+    });
+
     // 📊 Compute detailed per-agent metrics from actual ticket data
     const agentMetrics = agents.map(agent => {
       const agentId = agent.id;
@@ -302,7 +325,12 @@ router.get('/support/analytics', apiKeyGuard, authGuard, async (req, res) => {
       const activityTimeline = activities.slice(0, 15);
 
       // 🕐 [SESSION DATA] (v2.6.267): Include attendance summary in analytics
-      const agentSessions = agent.sessionHistory || [];
+      let agentSessions = agent.sessionHistory || [];
+      const dbSessions = sessionsByAgent[agentId] || [];
+      if (dbSessions.length > 0) {
+         agentSessions = [...agentSessions, ...dbSessions];
+         agentSessions.sort((a,b) => new Date(a.startTime) - new Date(b.startTime));
+      }
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
       const todaySessions = agentSessions.filter(s => new Date(s.startTime) >= todayStart);
