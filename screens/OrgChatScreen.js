@@ -774,6 +774,12 @@ const OrgChatScreen = ({ navigation }) => {
             value={msgText}
             onChangeText={setMsgText}
             onSubmitEditing={handleSend}
+            onKeyDown={(e) => {
+              if (Platform.OS === 'web' && e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
             onKeyPress={handleKeyPress}
             blurOnSubmit={false}
             multiline

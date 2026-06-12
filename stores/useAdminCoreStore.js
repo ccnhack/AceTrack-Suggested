@@ -22,7 +22,7 @@ export const useAdminCoreStore = create((set, get) => ({
         set((state) => ({
             teamDirectory: state.teamDirectory.map(user => 
                 String(user.id) === String(userId) 
-                    ? { ...user, isLive, lastActive: lastActive || user.lastActive } 
+                    ? { ...user, isLive, lastActive: lastActive || user.lastActive, status: isLive ? 'active' : 'offline' } 
                     : user
             )
         }));
