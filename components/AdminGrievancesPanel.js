@@ -108,18 +108,25 @@ export const AdminGrievancesPanel = ({
 
   // 🛡️ [STABILITY] Sync local selectedTicket with updated props (v2.6.228)
   useEffect(() => {
-    if (selectedTicket) {
+    if (selectedTicket && tickets) {
       const updated = (tickets || []).find(t => t.id === selectedTicket.id || t._id === selectedTicket.id);
       if (updated) {
+        // 🛡️ [SYNC PROTECTION] (v2.6.253 hardened): Prioritize local assignedTo if it exists to prevent 
+        // stale SQLite data from reverting optimistic UI updates during reassignment.
+        const nextAssignedTo = selectedTicket.assignedTo || updated.assignedTo;
+        
         // Only update if something meaningful changed (e.g. status, messages, assignedTo)
         const hasChanged = updated.status !== selectedTicket.status || 
-                           updated.assignedTo !== selectedTicket.assignedTo ||
+                           nextAssignedTo !== selectedTicket.assignedTo ||
                            updated.closureSummary !== selectedTicket.closureSummary ||
                            (updated.messages?.length !== selectedTicket.messages?.length);
         
         if (hasChanged) {
           console.log(`[AdminGrievancesPanel] [STABILITY] Syncing local selectedTicket: ${selectedTicket.id}`);
-          setSelectedTicket(updated);
+          setSelectedTicket({
+            ...updated,
+            assignedTo: nextAssignedTo
+          });
         }
       }
     }
@@ -297,20 +304,6 @@ export const AdminGrievancesPanel = ({
     jumpToMatch(prevIdx);
   };
 
-  useEffect(() => {
-    if (selectedTicket && tickets) {
-      const updated = (tickets || []).find(t => t.id === selectedTicket.id || t._id === selectedTicket.id);
-      if (updated) {
-        // 🛡️ [SYNC PROTECTION] (v2.6.253)
-        // If the local state has a different assignee (reassigned), keep it until the server catches up
-        const mergedTicket = {
-          ...updated,
-          assignedTo: selectedTicket.assignedTo // Prioritize local state for the current session
-        };
-        setSelectedTicket(mergedTicket);
-      }
-    }
-  }, [tickets]);
 
   const handleStatusChangeRequest = (status) => {
     // 🛡️ Justification Prompt: Moving from Resolved/Closed back to Active status
