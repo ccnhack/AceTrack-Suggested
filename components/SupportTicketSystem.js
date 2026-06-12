@@ -1273,6 +1273,12 @@ export const SupportTicketSystem = ({
                     else onTypingStop?.(selectedTicket.id);
                   }}
                   onBlur={() => onTypingStop?.(selectedTicket.id)}
+                  onKeyPress={(e) => {
+                    if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
                   placeholder="Type your message..."
                   style={styles.chatInput}
                   multiline

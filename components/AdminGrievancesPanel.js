@@ -1228,6 +1228,12 @@ export const AdminGrievancesPanel = ({
                               else onTypingStop?.(selectedTicket.id);
                             }}
                             onBlur={() => onTypingStop?.(selectedTicket.id)}
+                            onKeyPress={(e) => {
+                              if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+                                e.preventDefault();
+                                handleSendReply();
+                              }
+                            }}
                             placeholder="Type a reply..."
                             multiline
                           />
