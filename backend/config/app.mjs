@@ -11,7 +11,7 @@ dotenv.config();
 
 // 🚀 ACE TRACK STABILITY // EXPO OTA SYNC TARGET
 // 🚀 EXPO OTA SYNC HUB (v2.6.569)
-export const APP_VERSION = '2.6.636'; // Critical for Update prompts
+export const APP_VERSION = '2.6.637'; // Critical for Update prompts
 
 // 🛡️ SECURITY: API Key
 export const ACE_API_KEY = process.env.ACE_API_KEY || "AceTrack_Internal_v2_Testing";

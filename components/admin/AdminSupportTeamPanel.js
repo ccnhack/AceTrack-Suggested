@@ -1086,9 +1086,9 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                           <Text style={styles.drillTicketAgent}>Agent: {t.assignedTo ? (players?.find(p => p.id === t.assignedTo)?.name || 'Unknown') : 'Unassigned'}</Text>
                           {t.rating > 0 && <Text style={styles.drillTicketRating}>★ {t.rating}/5</Text>}
                        </View>
-                       {t.ratingFeedback && (
-                          <Text style={{ marginTop: 6, fontStyle: 'italic', color: '#64748B', fontSize: 13, lineHeight: 18 }}>
-                            "{t.ratingFeedback}"
+                       {t.rating > 0 && (
+                          <Text style={{ marginTop: 6, fontStyle: 'italic', color: t.ratingFeedback ? '#64748B' : '#94A3B8', fontSize: t.ratingFeedback ? 13 : 12, lineHeight: 18 }}>
+                            {t.ratingFeedback ? `"${t.ratingFeedback}"` : "No feedbacks received."}
                           </Text>
                        )}
                     </TouchableOpacity>

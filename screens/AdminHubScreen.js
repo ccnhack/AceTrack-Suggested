@@ -382,6 +382,8 @@ const AdminHubScreen = ({ navigation, route }) => {
             onReassignTicket={onReassignTicket}
             onEscalateTicket={onEscalateTicket}
             currentUser={currentUser}
+            autoSelectTicketId={autoSelectTicketId}
+            autoSelectUser={autoSelectUser}
             onDetailToggle={(isOpen) => {
               if (!isOpen) {
                 setAutoSelectTicketId(null);
