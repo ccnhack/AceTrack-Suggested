@@ -859,18 +859,27 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
 
             {/* 📊 Performance Stats Grid — Enhanced (v2.6.147) */}
             <View style={styles.statsGrid}>
-               <View style={[styles.statBox, isSelectedTerminated && styles.statBoxTerminated]}>
+               <TouchableOpacity 
+                 style={[styles.statBox, isSelectedTerminated && styles.statBoxTerminated]}
+                 onPress={() => setDrillDownConfig({ title: `${selectedAgent.name}'s Active Tickets`, category: 'agent-active', agentId: selectedAgent.id })}
+               >
                  <Text style={styles.statLabel}>ACTIVE TICKETS</Text>
                  <Text style={[styles.statValue, { color: isSelectedTerminated ? '#94A3B8' : '#3B82F6' }]}>{selectedAgentStats?.stats?.activeTickets || 0}</Text>
-               </View>
-               <View style={[styles.statBox, isSelectedTerminated && styles.statBoxTerminated]}>
+               </TouchableOpacity>
+               <TouchableOpacity 
+                 style={[styles.statBox, isSelectedTerminated && styles.statBoxTerminated]}
+                 onPress={() => setDrillDownConfig({ title: `${selectedAgent.name}'s Resolved Tickets`, category: 'agent-resolved', agentId: selectedAgent.id })}
+               >
                  <Text style={styles.statLabel}>CLOSED / RESOLVED</Text>
                  <Text style={[styles.statValue, isSelectedTerminated && styles.textMuted]}>{selectedAgentStats?.stats?.closedResolvedCount || 0}</Text>
-               </View>
-               <View style={[styles.statBox, isSelectedTerminated && styles.statBoxTerminated]}>
+               </TouchableOpacity>
+               <TouchableOpacity 
+                 style={[styles.statBox, isSelectedTerminated && styles.statBoxTerminated]}
+                 onPress={() => setDrillDownConfig({ title: `${selectedAgent.name}'s Rated Tickets`, category: 'agent-rated', agentId: selectedAgent.id })}
+               >
                  <Text style={styles.statLabel}>AVG RATING</Text>
                  <Text style={[styles.statValue, { color: isSelectedTerminated ? '#94A3B8' : '#F59E0B' }]}>★ {selectedAgentStats?.stats?.csatScore || 'N/A'}</Text>
-               </View>
+               </TouchableOpacity>
             </View>
 
             {/* 📈 Detailed Metrics List — Enhanced (v2.6.147) */}
@@ -1047,7 +1056,15 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                       const created = new Date(t.createdAt);
                       return (Date.now() - created.getTime()) > (48 * 60 * 60 * 1000);
                     });
-                  } else if (drillDownConfig.category === 'type') list = list.filter(t => (t.type || 'Other') === drillDownConfig.typeStr);
+                  } else if (drillDownConfig.category === 'type') {
+                    list = list.filter(t => (t.type || 'Other') === drillDownConfig.typeStr);
+                  } else if (drillDownConfig.category === 'agent-active') {
+                    list = list.filter(t => t.assignedTo === drillDownConfig.agentId && ['Open', 'In Progress', 'Awaiting Response'].includes(t.status));
+                  } else if (drillDownConfig.category === 'agent-resolved') {
+                    list = list.filter(t => t.assignedTo === drillDownConfig.agentId && (t.status === 'Closed' || t.status === 'Resolved'));
+                  } else if (drillDownConfig.category === 'agent-rated') {
+                    list = list.filter(t => t.assignedTo === drillDownConfig.agentId && t.rating > 0);
+                  }
                   
                   if (list.length === 0) return <Text style={styles.emptyAgents}>No tickets match this filter.</Text>;
 
@@ -1065,10 +1082,15 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                          <Text style={[styles.drillTicketStatus, t.status === 'Open' ? { color: '#3B82F6'} : t.status === 'Closed' || t.status === 'Resolved' ? { color: '#10B981' } : { color: '#F59E0B' }]}>{t.status}</Text>
                        </View>
                        <Text style={styles.drillTicketTitle} numberOfLines={1}>{t.title || 'Untitled Ticket'}</Text>
-                       <View style={styles.drillTicketMeta}>
+                        <View style={styles.drillTicketMeta}>
                           <Text style={styles.drillTicketAgent}>Agent: {t.assignedTo ? (players?.find(p => p.id === t.assignedTo)?.name || 'Unknown') : 'Unassigned'}</Text>
-                          {t.rating && <Text style={styles.drillTicketRating}>★ {t.rating}/5</Text>}
+                          {t.rating > 0 && <Text style={styles.drillTicketRating}>★ {t.rating}/5</Text>}
                        </View>
+                       {t.ratingFeedback && (
+                          <Text style={{ marginTop: 6, fontStyle: 'italic', color: '#64748B', fontSize: 13, lineHeight: 18 }}>
+                            "{t.ratingFeedback}"
+                          </Text>
+                       )}
                     </TouchableOpacity>
                   ));
                 })()}
