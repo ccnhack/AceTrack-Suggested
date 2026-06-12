@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Corporate (HR/Enterprise) Architecture — AceTrack Architecture</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #ffffff;
+      --text: #1a1a2e;
+      --text-muted: #64748b;
+      --accent: #4F46E5;
+      --accent-light: #EEF2FF;
+      --border: #E2E8F0;
+      --section-bg: #F8FAFC;
+      --step-bg: #F1F5F9;
+      --code-bg: #0F172A;
+      --code-text: #E2E8F0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.6;
+      font-size: 11px;
+    }
+
+    /* ===== PRINT LAYOUT ===== */
+    @page {
+      size: A4;
+      margin: 10mm 10mm 10mm 10mm;
+    }
+
+    @media print {
+      body { font-size: 9.5px; }
+      .page-break { display: none; }
+      .no-break { page-break-inside: avoid; }
+      .keep-together { page-break-inside: auto; }
+      h2 { page-break-after: avoid; margin-top: 16px; margin-bottom: 8px; }
+      .flow-section { page-break-inside: auto; margin-bottom: 24px; }
+      .step-detail { page-break-inside: avoid; }
+      .api-table { page-break-inside: avoid; }
+    }
+
+    /* ===== COVER / HEADER ===== */
+    .cover {
+      text-align: center;
+      padding: 20px 20px 15px;
+      border-bottom: 3px solid var(--accent);
+      margin-bottom: 20px;
+    }
+    .cover .emoji { font-size: 36px; margin-bottom: 8px; }
+    .cover h1 {
+      font-size: 24px;
+      font-weight: 900;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+    }
+    .cover .subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-top: 6px;
+      font-weight: 500;
+    }
+    .cover .version {
+      font-size: 10px;
+      color: #94A3B8;
+      margin-top: 12px;
+    }
+
+    /* ===== SECTION HEADERS ===== */
+    h2 {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--accent);
+      margin: 20px 0 8px;
+      padding-bottom: 4px;
+      border-bottom: 2px solid var(--accent-light);
+      letter-spacing: -0.3px;
+    }
+    h3 {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      margin: 14px 0 6px;
+    }
+    .section-intro {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+
+    /* ===== MERMAID DIAGRAM WRAPPER ===== */
+    .diagram-wrapper {
+      background: var(--section-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin: 8px 0 12px;
+      overflow: hidden;
+    }
+    .diagram-wrapper .mermaid {
+      text-align: center;
+    }
+    .diagram-wrapper svg {
+      max-width: 100% !important;
+      max-height: 500px !important;
+      height: auto !important;
+    }
+
+    /* ===== DETAILED STEPS ===== */
+    .steps-container {
+      margin: 8px 0 16px;
+    }
+    .steps-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .steps-title::before {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 14px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+    .step-detail {
+      display: flex;
+      gap: 8px;
+      padding: 8px 10px;
+      margin-bottom: 4px;
+      background: var(--step-bg);
+      border-radius: 6px;
+      border-left: 3px solid var(--accent);
+      page-break-inside: avoid;
+    }
+    .step-number {
+      flex-shrink: 0;
+      width: 26px;
+      height: 26px;
+      background: var(--accent);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+      margin-top: 1px;
+    }
+    .step-content {
+      flex: 1;
+    }
+    .step-content .step-label {
+      font-weight: 700;
+      font-size: 11px;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+    .step-content .step-desc {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .step-content .step-api {
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 9.5px;
+      background: var(--code-bg);
+      color: var(--code-text);
+      padding: 3px 8px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-top: 3px;
+    }
+
+    /* ===== API TABLES ===== */
+    .api-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      font-size: 10px;
+    }
+    .api-table th {
+      background: var(--accent);
+      color: white;
+      padding: 8px 10px;
+      text-align: left;
+      font-weight: 700;
+      font-size: 9.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .api-table td {
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .api-table tr:nth-child(even) { background: var(--section-bg); }
+    .api-table code {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 9px;
+      background: #E2E8F0;
+      padding: 2px 5px;
+      border-radius: 3px;
+    }
+
+    /* ===== FOOTER ===== */
+    .doc-footer {
+      text-align: center;
+      margin-top: 30px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      font-size: 9px;
+      color: #94A3B8;
+    }
+  </style>
+</head>
+<body>
+  <div class="cover">
+    <div class="emoji">🏢</div>
+    <h1>Corporate (HR/Enterprise) Architecture</h1>
+    <div class="subtitle">HR operations, hierarchy, support platform, and deployment topology</div>
+    <div class="version">AceTrack Architecture Documentation • Generated 12 June 2026</div>
+  </div>
+
+  
+  
+  <div class="flow-section keep-together" id="leave-mgmt">
+    <h2>1. HR Module — Leave Management</h2>
+    <p class="section-intro">The HR module uses role-based query scoping (buildHRQuery) to ensure proper data isolation: Admin sees all, Manager sees own + direct reports, Employee sees only own records.</p>
+    <div class="diagram-wrapper no-break">
+      <div class="mermaid">sequenceDiagram
+    participant E as Employee
+    participant M as Manager
+    participant API as HR Routes
+    participant DB as MongoDB
+    E->>API: POST /hr/leaves { type, dates, reason }
+    API->>DB: LeaveRequest.create (Pending)
+    API->>DB: Notify manager in-app
+    API-->>E: { success, leave }
+    M->>API: GET /hr/leaves
+    API->>API: buildHRQuery (Manager scope)
+    API->>DB: LeaveRequest.find + name enrichment
+    API-->>M: { leaves with employeeName }
+    M->>API: PUT /hr/leaves/:id/approve
+    API->>API: RBAC verify (Manager + managerId)
+    API->>DB: Update status + notify employee
+    API-->>M: { success }</div>
+    </div>
+    <div class="steps-container">
+      <div class="steps-title">Detailed Flow Breakdown</div>
+      
+    <div class="step-detail">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-label">Apply for Leave</div>
+        <div class="step-desc">Employee submits a leave request with type (Earned/Sick/Casual), start/end dates, and reason. The server creates a LeaveRequest document with status: "Pending" and auto-notifies the employee's manager via in-app notification.</div>
+        <div class="step-api">POST /api/v1/hr/leaves { type, startDate, endDate, reason }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-label">Manager Notification</div>
+        <div class="step-desc">The server looks up the employee's managerId from their Player document, then pushes an in-app notification to the manager: "[Employee Name] applied for [type] leave from [date]."</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-label">Manager Views Team Leaves</div>
+        <div class="step-desc">buildHRQuery scopes the query based on role. For managers, it fetches direct reports via Player.find({ managerId: self }), then queries leaves for all those userIds. Results include name enrichment (v2.6.446).</div>
+        <div class="step-api">GET /api/v1/hr/leaves</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-label">RBAC Approval Guard</div>
+        <div class="step-desc">When approving/rejecting, the server verifies: (a) req.user.supportLevel === "Manager", and (b) the leave's employee has managerId matching the requesting manager. This prevents managers from approving leaves for employees outside their team.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-label">Approve Leave</div>
+        <div class="step-desc">Manager approves with an optional comment. The server updates the leave status and pushes a notification to the employee: "Your [type] leave was approved."</div>
+        <div class="step-api">PUT /api/v1/hr/leaves/:id/approve { managerComment }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">6</div>
+      <div class="step-content">
+        <div class="step-label">Reject Leave</div>
+        <div class="step-desc">Same RBAC verification as approval. Manager provides a rejection reason, employee is notified with the comment.</div>
+        <div class="step-api">PUT /api/v1/hr/leaves/:id/reject { managerComment }</div>
+      </div>
+    </div>
+    </div>
+    
+    <h3>API Endpoints</h3>
+    <table class="api-table">
+      <thead><tr><th>Endpoint</th><th>Method</th><th>Scoping</th><th>Purpose</th></tr></thead>
+      <tbody><tr><td><code>/hr/leaves</code></td><td>GET</td><td>Admin/Manager/Self</td><td>List leave requests</td></tr><tr><td><code>/hr/leaves</code></td><td>POST</td><td>Self</td><td>Apply for leave</td></tr><tr><td><code>/hr/leaves/:id/approve</code></td><td>PUT</td><td>Admin/Manager</td><td>Approve leave</td></tr><tr><td><code>/hr/leaves/:id/reject</code></td><td>PUT</td><td>Admin/Manager</td><td>Reject leave</td></tr></tbody>
+    </table>
+  </div>
+  <div class="page-break"></div>
+  <div class="flow-section keep-together" id="attendance">
+    <h2>2. HR Module — Attendance, Payslips & Reviews</h2>
+    <p class="section-intro">Employee self-service for daily attendance tracking, payslip viewing, performance reviews, and document management.</p>
+    <div class="diagram-wrapper no-break">
+      <div class="mermaid">sequenceDiagram
+    participant E as Employee
+    participant API as HR Routes
+    participant DB as MongoDB
+    E->>API: POST /hr/attendance/check-in
+    API->>DB: Attendance.upsert({ userId, date })
+    API-->>E: { success, record }
+    E->>API: POST /hr/attendance/check-out
+    API->>DB: Attendance.$set checkOut
+    API-->>E: { success, record }
+    E->>API: GET /hr/payslips
+    API->>DB: Payslip.find({ userId })
+    API-->>E: { payslips }
+    E->>API: GET /hr/reviews
+    API->>DB: PerformanceReview.find(query)
+    API-->>E: { reviews }</div>
+    </div>
+    <div class="steps-container">
+      <div class="steps-title">Detailed Flow Breakdown</div>
+      
+    <div class="step-detail">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-label">Daily Check-In</div>
+        <div class="step-desc">Employee clocks in. The server uses today's date (YYYY-MM-DD) as a unique key with findOneAndUpdate + upsert to create or update the attendance record.</div>
+        <div class="step-api">POST /api/v1/hr/attendance/check-in</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-label">Daily Check-Out</div>
+        <div class="step-desc">Employee clocks out. The server updates the same date's record with the check-out timestamp.</div>
+        <div class="step-api">POST /api/v1/hr/attendance/check-out</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-label">View Attendance History</div>
+        <div class="step-desc">Returns the last 30 attendance records, scoped by buildHRQuery. Managers see their team's records.</div>
+        <div class="step-api">GET /api/v1/hr/attendance</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-label">View Payslips</div>
+        <div class="step-desc">Employee views uploaded payslips sorted by upload date (newest first). Scoped by role.</div>
+        <div class="step-api">GET /api/v1/hr/payslips</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-label">Performance Reviews</div>
+        <div class="step-desc">Employee views their performance review history. Managers can see reviews for their direct reports.</div>
+        <div class="step-api">GET /api/v1/hr/reviews</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">6</div>
+      <div class="step-content">
+        <div class="step-label">HR Documents</div>
+        <div class="step-desc">Employee accesses uploaded HR documents (contracts, certificates, etc.) sorted by upload date.</div>
+        <div class="step-api">GET /api/v1/hr/documents</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">7</div>
+      <div class="step-content">
+        <div class="step-label">Company Policies</div>
+        <div class="step-desc">All employees can view company policies, which are stored as OrgSetting entries with key prefix "policy_".</div>
+        <div class="step-api">GET /api/v1/hr/policies</div>
+      </div>
+    </div>
+    </div>
+    
+    <h3>API Endpoints</h3>
+    <table class="api-table">
+      <thead><tr><th>Endpoint</th><th>Method</th><th>Scoping</th><th>Purpose</th></tr></thead>
+      <tbody><tr><td><code>/hr/attendance/check-in</code></td><td>POST</td><td>Self</td><td>Clock in</td></tr><tr><td><code>/hr/attendance/check-out</code></td><td>POST</td><td>Self</td><td>Clock out</td></tr><tr><td><code>/hr/attendance</code></td><td>GET</td><td>Admin/Manager/Self</td><td>View records</td></tr><tr><td><code>/hr/payslips</code></td><td>GET</td><td>Admin/Manager/Self</td><td>View payslips</td></tr><tr><td><code>/hr/reviews</code></td><td>GET</td><td>Admin/Manager/Self</td><td>View reviews</td></tr><tr><td><code>/hr/documents</code></td><td>GET</td><td>Admin/Manager/Self</td><td>View documents</td></tr><tr><td><code>/hr/policies</code></td><td>GET</td><td>All</td><td>View policies</td></tr></tbody>
+    </table>
+  </div>
+  <div class="page-break"></div>
+  <div class="flow-section keep-together" id="hierarchy">
+    <h2>3. Organizational Hierarchy</h2>
+    <p class="section-intro">The reporting structure uses managerId and teamLeadId references on Player documents to establish a hierarchical chain that controls HR data visibility.</p>
+    <div class="diagram-wrapper no-break">
+      <div class="mermaid">graph TB
+    ADMIN[System Administrator - role: admin] --> MGR[Manager - supportLevel: Manager]
+    MGR --> TL[Team Lead - teamLeadId ref]
+    MGR --> L2[L2 Agent]
+    TL --> L1A[L1 Agent A]
+    TL --> L1B[L1 Agent B]</div>
+    </div>
+    <div class="steps-container">
+      <div class="steps-title">Detailed Flow Breakdown</div>
+      
+    <div class="step-detail">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-label">System Administrator</div>
+        <div class="step-desc">Top-level role with unrestricted access to all data, settings, and operations. Can manage staff hierarchy, view all HR records, and configure org settings.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-label">Manager (supportLevel: Manager)</div>
+        <div class="step-desc">Mid-level role with visibility into direct reports' HR data (leaves, attendance, reviews). Can approve/reject leave requests. Queries use buildHRQuery to scope data.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-label">Team Lead</div>
+        <div class="step-desc">Organizational reference via teamLeadId on Player documents. Team leads may have L1/L2 agents reporting to them. The teamLeadId is set by admin via the hierarchy endpoint.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-label">L2 Agent</div>
+        <div class="step-desc">Higher-level support agent with expanded ticket handling capabilities. Sees only their own HR records.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-label">L1 Agent</div>
+        <div class="step-desc">Entry-level support agent. Handles basic tickets and sees only their own HR records. Can be promoted to L2 or Manager via /support/manage-user.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">6</div>
+      <div class="step-content">
+        <div class="step-label">Ex-Employee Detection</div>
+        <div class="step-desc">The team directory automatically detects ex-employees by checking supportStatus === "terminated" or supportLevel === "EX-EMPLOYEE". These users are shown with "Ex-Employee" designation and isLive: false.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">7</div>
+      <div class="step-content">
+        <div class="step-label">Setting Hierarchy</div>
+        <div class="step-desc">Admin updates the reporting chain via POST /admin-core/team-directory/:id/hierarchy with managerId and teamLeadId. Each change is logged in AuditLog.</div>
+        <div class="step-api">POST /admin-core/team-directory/:id/hierarchy { managerId, teamLeadId }</div>
+      </div>
+    </div>
+    </div>
+    
+  </div>
+  <div class="page-break"></div>
+  <div class="flow-section keep-together" id="ticket-lifecycle">
+    <h2>4. Support Ticket Lifecycle</h2>
+    <p class="section-intro">The support operations platform manages the complete ticket lifecycle from creation to resolution, with AI-powered summaries and analytics.</p>
+    <div class="diagram-wrapper no-break">
+      <div class="mermaid">graph TB
+    NEW[New Ticket] --> CLAIM[Claimed]
+    CLAIM --> PROGRESS[In Progress]
+    PROGRESS --> RESOLVE[Resolved]
+    PROGRESS --> ESCALATE[Escalated]
+    ESCALATE --> PROGRESS
+    RESOLVE --> CLOSED[Closed]
+    CLAIM -->|Reassign| CLAIM
+    PROGRESS -->|Transfer| CLAIM</div>
+    </div>
+    <div class="steps-container">
+      <div class="steps-title">Detailed Flow Breakdown</div>
+      
+    <div class="step-detail">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-label">New Ticket</div>
+        <div class="step-desc">Player submits a ticket with subject, description, and category. A SupportTicket document is created with status "open" and no assignee.</div>
+        <div class="step-api">POST /api/v1/support/save-ticket { subject, description, category }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-label">Claim</div>
+        <div class="step-desc">An agent claims the ticket, setting themselves as the assignee. WebSocket broadcasts the update for real-time dashboard refreshes.</div>
+        <div class="step-api">POST /api/v1/support/claim-ticket { ticketId }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-label">In Progress</div>
+        <div class="step-desc">Agent responds to the player (public reply) or adds internal notes. Messages are appended to the ticket's thread.</div>
+        <div class="step-api">POST /api/v1/support/reply-ticket { ticketId, message, isInternal }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-label">Escalate</div>
+        <div class="step-desc">Agent or admin escalates the ticket's priority or support level (L1 → L2 → Manager) for complex issues.</div>
+        <div class="step-api">POST /api/v1/support/escalate-ticket { ticketId, escalateToLevel }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-label">Reassign / Transfer</div>
+        <div class="step-desc">Ticket can be reassigned to a different agent or bulk-transferred during offboarding.</div>
+        <div class="step-api">POST /support/reassign-ticket or /support/transfer-tickets</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">6</div>
+      <div class="step-content">
+        <div class="step-label">AI Summary</div>
+        <div class="step-desc">Generate an AI-powered summary of the entire ticket thread using Groq/Cerebras LLM for quick context understanding.</div>
+        <div class="step-api">POST /api/v1/support/ai-summary { ticketId }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">7</div>
+      <div class="step-content">
+        <div class="step-label">Resolve & Rate</div>
+        <div class="step-desc">Agent resolves the ticket. Player can rate the resolution quality (1-5 stars with optional feedback).</div>
+        <div class="step-api">POST /support/update-ticket-status + /support/rate-ticket</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">8</div>
+      <div class="step-content">
+        <div class="step-label">Analytics</div>
+        <div class="step-desc">Dashboard view with: open/closed counts, average resolution time, tickets per agent, SLA compliance, and export capability.</div>
+        <div class="step-api">GET /api/v1/support/analytics</div>
+      </div>
+    </div>
+    </div>
+    
+  </div>
+  <div class="page-break"></div>
+  <div class="flow-section keep-together" id="deployment">
+    <h2>5. Deployment & Version Sync</h2>
+    <p class="section-intro">The deployment architecture requires strict synchronization of version constants across 4 files and a complete web rebuild pipeline for every frontend change.</p>
+    <div class="diagram-wrapper no-break">
+      <div class="mermaid">graph LR
+    GIT[GitHub] --> APPJSON[app.json]
+    GIT --> APPJS[App.js]
+    GIT --> CONFIG[config.js]
+    GIT --> SERVER[server.mjs]
+    APPJSON --> EXPO[expo export -p web]
+    EXPO --> DIST[dist/]
+    DIST --> DEPLOY[cp to backend/public]
+    DEPLOY --> SED[grep/sed version purge]
+    SED --> RENDER[Render Deploy]
+    GIT --> EAS[EAS Update - Mobile OTA]</div>
+    </div>
+    <div class="steps-container">
+      <div class="steps-title">Detailed Flow Breakdown</div>
+      
+    <div class="step-detail">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-label">Version Constants (4 Files)</div>
+        <div class="step-desc">Every deployment MUST synchronize APP_VERSION across: app.json (binary), App.js (frontend), config.js (initial state), and server.mjs (backend /api/status). Failure to sync server.mjs causes clients to report "Up to Date" incorrectly.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-label">Web Export</div>
+        <div class="step-desc">Frontend changes require npx expo export -p web to generate the production bundle. The output goes to dist/ folder.</div>
+        <div class="step-api">npx expo export -p web</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-label">Deploy to backend/public</div>
+        <div class="step-desc">The dist/ output replaces backend/public/ which serves the web admin portal. This is the only way frontend changes become visible on the live web app.</div>
+        <div class="step-api">rm -rf backend/public && cp -R dist backend/public</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-label">Version String Purge</div>
+        <div class="step-desc">A grep/sed command replaces all old version references in minified bundles. CRITICAL: Dots in version strings MUST be escaped (e.g., 2\.6\.625) to prevent sed from treating them as regex wildcards and corrupting CSS hex codes.</div>
+        <div class="step-api">grep -Irl "OLD" backend/public | xargs sed -i 's/OLD/NEW/g'</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-label">Render Deploy (Backend + Web)</div>
+        <div class="step-desc">Git push triggers automatic deployment on Render. The Express server serves both the API and the static web bundle from backend/public/.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">6</div>
+      <div class="step-content">
+        <div class="step-label">EAS Update (Mobile OTA)</div>
+        <div class="step-desc">Mobile app updates are pushed via Expo Application Services. Running eas update on production, preview, and main branches delivers over-the-air updates to all mobile clients.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">7</div>
+      <div class="step-content">
+        <div class="step-label">Security Middleware Stack</div>
+        <div class="step-desc">Every request passes through: CORS → Helmet (CSP, HSTS) → Rate Limiter → Cookie Parser → Body Parser (10MB) → Mongo Sanitize → CSP Nonce → API Key Guard → Auth Guard → CSRF Guard (admin/support routes).</div>
+        
+      </div>
+    </div>
+    </div>
+    
+  </div>
+
+  <div class="doc-footer">
+    AceTrack Architecture Documentation — Confidential • © 2026 AceTrack
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      themeVariables: {
+        primaryColor: '#4F46E5',
+        primaryTextColor: '#fff',
+        primaryBorderColor: '#4338CA',
+        lineColor: '#64748B',
+        secondaryColor: '#F1F5F9',
+        tertiaryColor: '#EEF2FF',
+        fontSize: '10px'
+      },
+      sequence: { mirrorActors: false, useMaxWidth: true, wrap: true },
+      flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+    });
+  </script>
+</body>
+</html>

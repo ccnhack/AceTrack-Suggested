@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Academy (Admin) Architecture — AceTrack Architecture</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #ffffff;
+      --text: #1a1a2e;
+      --text-muted: #64748b;
+      --accent: #4F46E5;
+      --accent-light: #EEF2FF;
+      --border: #E2E8F0;
+      --section-bg: #F8FAFC;
+      --step-bg: #F1F5F9;
+      --code-bg: #0F172A;
+      --code-text: #E2E8F0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.6;
+      font-size: 11px;
+    }
+
+    /* ===== PRINT LAYOUT ===== */
+    @page {
+      size: A4;
+      margin: 10mm 10mm 10mm 10mm;
+    }
+
+    @media print {
+      body { font-size: 9.5px; }
+      .page-break { display: none; }
+      .no-break { page-break-inside: avoid; }
+      .keep-together { page-break-inside: auto; }
+      h2 { page-break-after: avoid; margin-top: 16px; margin-bottom: 8px; }
+      .flow-section { page-break-inside: auto; margin-bottom: 24px; }
+      .step-detail { page-break-inside: avoid; }
+      .api-table { page-break-inside: avoid; }
+    }
+
+    /* ===== COVER / HEADER ===== */
+    .cover {
+      text-align: center;
+      padding: 20px 20px 15px;
+      border-bottom: 3px solid var(--accent);
+      margin-bottom: 20px;
+    }
+    .cover .emoji { font-size: 36px; margin-bottom: 8px; }
+    .cover h1 {
+      font-size: 24px;
+      font-weight: 900;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+    }
+    .cover .subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-top: 6px;
+      font-weight: 500;
+    }
+    .cover .version {
+      font-size: 10px;
+      color: #94A3B8;
+      margin-top: 12px;
+    }
+
+    /* ===== SECTION HEADERS ===== */
+    h2 {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--accent);
+      margin: 20px 0 8px;
+      padding-bottom: 4px;
+      border-bottom: 2px solid var(--accent-light);
+      letter-spacing: -0.3px;
+    }
+    h3 {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      margin: 14px 0 6px;
+    }
+    .section-intro {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+
+    /* ===== MERMAID DIAGRAM WRAPPER ===== */
+    .diagram-wrapper {
+      background: var(--section-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin: 8px 0 12px;
+      overflow: hidden;
+    }
+    .diagram-wrapper .mermaid {
+      text-align: center;
+    }
+    .diagram-wrapper svg {
+      max-width: 100% !important;
+      max-height: 500px !important;
+      height: auto !important;
+    }
+
+    /* ===== DETAILED STEPS ===== */
+    .steps-container {
+      margin: 8px 0 16px;
+    }
+    .steps-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .steps-title::before {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 14px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+    .step-detail {
+      display: flex;
+      gap: 8px;
+      padding: 8px 10px;
+      margin-bottom: 4px;
+      background: var(--step-bg);
+      border-radius: 6px;
+      border-left: 3px solid var(--accent);
+      page-break-inside: avoid;
+    }
+    .step-number {
+      flex-shrink: 0;
+      width: 26px;
+      height: 26px;
+      background: var(--accent);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+      margin-top: 1px;
+    }
+    .step-content {
+      flex: 1;
+    }
+    .step-content .step-label {
+      font-weight: 700;
+      font-size: 11px;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+    .step-content .step-desc {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .step-content .step-api {
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 9.5px;
+      background: var(--code-bg);
+      color: var(--code-text);
+      padding: 3px 8px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-top: 3px;
+    }
+
+    /* ===== API TABLES ===== */
+    .api-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      font-size: 10px;
+    }
+    .api-table th {
+      background: var(--accent);
+      color: white;
+      padding: 8px 10px;
+      text-align: left;
+      font-weight: 700;
+      font-size: 9.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .api-table td {
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .api-table tr:nth-child(even) { background: var(--section-bg); }
+    .api-table code {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 9px;
+      background: #E2E8F0;
+      padding: 2px 5px;
+      border-radius: 3px;
+    }
+
+    /* ===== FOOTER ===== */
+    .doc-footer {
+      text-align: center;
+      margin-top: 30px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      font-size: 9px;
+      color: #94A3B8;
+    }
+  </style>
+</head>
+<body>
+  <div class="cover">
+    <div class="emoji">🏫</div>
+    <h1>Academy (Admin) Architecture</h1>
+    <div class="subtitle">Complete admin control plane — tournaments, staff, diagnostics, and operations</div>
+    <div class="version">AceTrack Architecture Documentation • Generated 12 June 2026</div>
+  </div>
+
+  
+  
+  <div class="flow-section keep-together" id="admin-auth">
+    <h2>1. Admin Authentication Flow</h2>
+    <p class="section-intro">Admin login is web-only with a two-factor PIN verification step for enhanced security.</p>
+    <div class="diagram-wrapper no-break">
+      <div class="mermaid">sequenceDiagram
+    participant A as Admin Browser
+    participant API as Auth Routes
+    participant DB as MongoDB
+    A->>API: POST /admin/login
+    API->>API: Rate-limited (loginLimiter)
+    API->>DB: Player.findOne + bcrypt
+    API->>API: Verify role === admin
+    API->>API: Generate 6-digit PIN
+    API-->>A: Set-Cookie + requiresPin: true
+    A->>API: POST /admin/verify-pin
+    API-->>A: { user, verified: true }
+    A->>API: GET /auth/me
+    API-->>A: { user, role: admin }</div>
+    </div>
+    <div class="steps-container">
+      <div class="steps-title">Detailed Flow Breakdown</div>
+      
+    <div class="step-detail">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-label">Web-Only Login Gate</div>
+        <div class="step-desc">Admin login is strictly web-only (platform: "web" required). This prevents regular mobile users from encountering the admin login flow. Rate-limited by loginLimiter middleware.</div>
+        <div class="step-api">POST /api/v1/admin/login { username, password, platform: "web" }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-label">Credential Verification</div>
+        <div class="step-desc">Server queries Player collection by username, verifies the password hash with bcrypt, and confirms the user has role: "admin". Non-admin accounts are rejected with 403.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-label">2FA PIN Generation</div>
+        <div class="step-desc">A 6-digit PIN is generated and stored in the session. The initial JWT cookie is issued with requiresPin: true, meaning the client must complete PIN verification before accessing admin features.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-label">PIN Verification</div>
+        <div class="step-desc">Admin enters the PIN (delivered via a trusted channel). Server validates the PIN matches the session, then upgrades the JWT to a fully-verified state.</div>
+        <div class="step-api">POST /api/v1/admin/verify-pin { pin: "123456" }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-label">Session Management</div>
+        <div class="step-desc">Subsequent requests use the verified JWT cookie. The /auth/me endpoint returns user data with role for client-side UI rendering. Logout clears the HttpOnly cookie.</div>
+        
+      </div>
+    </div>
+    </div>
+    
+    <h3>API Endpoints</h3>
+    <table class="api-table">
+      <thead><tr><th>Endpoint</th><th>Method</th><th>Purpose</th></tr></thead>
+      <tbody><tr><td><code>/admin/login</code></td><td>POST</td><td>Admin login (web-only)</td></tr><tr><td><code>/admin/verify-pin</code></td><td>POST</td><td>2FA PIN verification</td></tr><tr><td><code>/auth/me</code></td><td>GET</td><td>Session check (JWT cookie)</td></tr><tr><td><code>/logout</code></td><td>POST</td><td>Clear auth cookie</td></tr><tr><td><code>/admin/restore-last-state</code></td><td>POST</td><td>Restore previous AppState snapshot</td></tr></tbody>
+    </table>
+  </div>
+  <div class="page-break"></div>
+  <div class="flow-section keep-together" id="tournament-lifecycle">
+    <h2>2. Tournament Full Lifecycle</h2>
+    <p class="section-intro">The admin controls the complete tournament lifecycle: creation → coach assignment → player management → start → end → deletion.</p>
+    <div class="diagram-wrapper no-break">
+      <div class="mermaid">sequenceDiagram
+    participant A as Admin
+    participant API as Tournament Routes
+    participant DB as MongoDB
+    participant WS as WebSocket
+    participant PUSH as Push
+    A->>API: POST /tournaments (create)
+    API->>DB: Tournament.create
+    API->>WS: io.emit entity_updated
+    A->>API: POST /tournaments/:id/assign-coach
+    A->>API: POST /ping-coach
+    API->>PUSH: sendPushNotification
+    A->>API: POST /tournaments/:id/add-player
+    A->>API: POST /tournaments/:id/start
+    API->>DB: status = In Progress
+    A->>API: POST /tournaments/:id/end
+    API->>DB: status = Completed
+    A->>API: DELETE /tournaments/:id</div>
+    </div>
+    <div class="steps-container">
+      <div class="steps-title">Detailed Flow Breakdown</div>
+      
+    <div class="step-detail">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-label">Create Tournament</div>
+        <div class="step-desc">Admin provides title, sport, date/time, location, max players, cost, sponsor, type (singles/doubles), and category. A unique ID is generated, document created in Tournament collection, and synced to AppState.</div>
+        <div class="step-api">POST /api/v1/tournaments { title, sport, date, ... }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-label">Update Tournament</div>
+        <div class="step-desc">Admin can modify any tournament field before it starts. Changes are broadcast via WebSocket for real-time client updates.</div>
+        <div class="step-api">PUT /api/v1/tournaments/:id { ...fields }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-label">Assign Coach</div>
+        <div class="step-desc">Admin assigns a coach by ID. The system updates the tournament document and may trigger notifications to the coach based on their availability.</div>
+        <div class="step-api">POST /api/v1/tournaments/:id/assign-coach { coachId }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-label">Ping Coach</div>
+        <div class="step-desc">Sends a push notification invitation to the coach. Validates availability first, increments ping counter, and tracks delivery status.</div>
+        <div class="step-api">POST /api/v1/ping-coach { tournamentId, coachId }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-label">Manual Player Add</div>
+        <div class="step-desc">Admin manually adds a player to a tournament using $addToSet to prevent duplicates.</div>
+        <div class="step-api">POST /api/v1/tournaments/:id/add-player { playerId }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">6</div>
+      <div class="step-content">
+        <div class="step-label">Manage Interested Players</div>
+        <div class="step-desc">Admin approves or rejects players from the interested list, moving approved players to registeredPlayerIds.</div>
+        <div class="step-api">POST /tournaments/:id/manage-interested { playerId, action }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">7</div>
+      <div class="step-content">
+        <div class="step-label">Start Tournament</div>
+        <div class="step-desc">Sets status to "In Progress". Broadcasts update to all connected clients.</div>
+        <div class="step-api">POST /api/v1/tournaments/:id/start</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">8</div>
+      <div class="step-content">
+        <div class="step-label">End Tournament</div>
+        <div class="step-desc">Sets status to "Completed". Finalizes match results and enables public results page.</div>
+        <div class="step-api">POST /api/v1/tournaments/:id/end</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">9</div>
+      <div class="step-content">
+        <div class="step-label">Delete Tournament</div>
+        <div class="step-desc">Permanently removes the tournament from both the distinct collection and AppState. Broadcasts deletion via WebSocket.</div>
+        <div class="step-api">DELETE /api/v1/tournaments/:id</div>
+      </div>
+    </div>
+    </div>
+    
+  </div>
+  <div class="page-break"></div>
+  <div class="flow-section keep-together" id="support-staff">
+    <h2>3. Support Staff Management</h2>
+    <p class="section-intro">Admin onboards, manages, and monitors support staff through a dedicated invite → setup → management workflow.</p>
+    <div class="diagram-wrapper no-break">
+      <div class="mermaid">sequenceDiagram
+    participant A as Admin
+    participant API as Support Routes
+    participant DB as MongoDB
+    participant EMAIL as Email
+    participant S as New Staff
+    A->>API: POST /support/invite
+    API->>DB: SupportInvite.create
+    API->>EMAIL: Send setup link
+    S->>API: GET /setup/:token
+    API-->>S: 3-step form (HTML)
+    S->>API: POST /support/invite/setup
+    API->>DB: Player.create({ role: support })
+    API-->>S: Account ready
+    A->>API: POST /support/manage-user
+    API->>DB: Update status/level</div>
+    </div>
+    <div class="steps-container">
+      <div class="steps-title">Detailed Flow Breakdown</div>
+      
+    <div class="step-detail">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-label">Send Staff Invite</div>
+        <div class="step-desc">Admin specifies email, designation, and support level (L1/L2/Manager). A SupportInvite document is created with a unique token and 7-day expiry. An onboarding email with the setup link is dispatched.</div>
+        <div class="step-api">POST /api/v1/support/invite { email, designation, supportLevel }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-label">Staff Onboarding Form</div>
+        <div class="step-desc">Staff clicks the link → server-rendered 3-step HTML form: Step 1 (Personal Info: name, phone, address), Step 2 (Government ID upload), Step 3 (Password creation). CSP nonces ensure XSS safety.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-label">Account Finalization</div>
+        <div class="step-desc">Staff submits the multipart form. Server creates a Player document with role "support", hashes the password, uploads gov ID to Cloudinary, and marks the invite as "Used".</div>
+        <div class="step-api">POST /api/v1/support/invite/setup (FormData)</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-label">Manage Existing Staff</div>
+        <div class="step-desc">Admin can activate/deactivate/promote staff members, change support levels, or force password resets.</div>
+        <div class="step-api">POST /api/v1/support/manage-user { userId, action }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-label">Invite Management</div>
+        <div class="step-desc">Admin can list all invites, retire unused invites, or resend expired ones with new tokens.</div>
+        
+      </div>
+    </div>
+    </div>
+    
+    <h3>API Endpoints</h3>
+    <table class="api-table">
+      <thead><tr><th>Endpoint</th><th>Method</th><th>Purpose</th></tr></thead>
+      <tbody><tr><td><code>/support/invite</code></td><td>POST</td><td>Send staff invite</td></tr><tr><td><code>/support/invites</code></td><td>GET</td><td>List all invites</td></tr><tr><td><code>/support/invite/expire</code></td><td>POST</td><td>Retire an invite</td></tr><tr><td><code>/support/invite/resend</code></td><td>POST</td><td>Resend invite email</td></tr><tr><td><code>/support/invite/setup</code></td><td>POST</td><td>Complete onboarding</td></tr><tr><td><code>/support/manage-user</code></td><td>POST</td><td>Manage staff status</td></tr><tr><td><code>/support/force-reset</code></td><td>POST</td><td>Force password reset</td></tr></tbody>
+    </table>
+  </div>
+  <div class="page-break"></div>
+  <div class="flow-section keep-together" id="ticket-ops">
+    <h2>4. Support Ticket Operations</h2>
+    <p class="section-intro">Admin has full visibility and control over the support ticket lifecycle — from triage to resolution analytics.</p>
+    <div class="diagram-wrapper no-break">
+      <div class="mermaid">sequenceDiagram
+    participant A as Admin
+    participant API as Support Operations
+    participant DB as MongoDB
+    participant WS as WebSocket
+    A->>API: POST /support/claim-ticket
+    API->>DB: $set assignedTo
+    A->>API: POST /support/reply-ticket
+    API->>DB: $push messages
+    A->>API: POST /support/escalate-ticket
+    API->>DB: Update priority
+    A->>API: POST /support/update-ticket-status
+    API->>DB: $set status = resolved
+    A->>API: GET /support/analytics
+    API-->>A: { open, closed, avgResolution }</div>
+    </div>
+    <div class="steps-container">
+      <div class="steps-title">Detailed Flow Breakdown</div>
+      
+    <div class="step-detail">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-label">Claim Ticket</div>
+        <div class="step-desc">Admin or support agent claims an unassigned ticket. Sets assignedTo field and broadcasts update via WebSocket.</div>
+        <div class="step-api">POST /api/v1/support/claim-ticket { ticketId }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-label">Reassign Ticket</div>
+        <div class="step-desc">Admin transfers a ticket to a different agent. Updates assignedTo and notifies the new assignee.</div>
+        <div class="step-api">POST /api/v1/support/reassign-ticket { ticketId, newAssigneeId }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-label">Escalate Ticket</div>
+        <div class="step-desc">Raises the ticket's priority level. Can escalate from L1 → L2 → Manager for complex issues.</div>
+        <div class="step-api">POST /api/v1/support/escalate-ticket { ticketId, escalateToLevel }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-label">Reply to Ticket</div>
+        <div class="step-desc">Send a response to the player (public) or add internal notes (isInternal: true). Messages are pushed to the ticket's thread.</div>
+        <div class="step-api">POST /api/v1/support/reply-ticket { ticketId, message, isInternal }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-label">AI Summary</div>
+        <div class="step-desc">Generate an AI-powered summary of the entire ticket thread for quick context understanding.</div>
+        <div class="step-api">POST /api/v1/support/ai-summary { ticketId }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">6</div>
+      <div class="step-content">
+        <div class="step-label">Resolve & Close</div>
+        <div class="step-desc">Update ticket status through the lifecycle: open → in_progress → resolved → closed. Players can rate the resolution quality.</div>
+        <div class="step-api">POST /api/v1/support/update-ticket-status { ticketId, status }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">7</div>
+      <div class="step-content">
+        <div class="step-label">Analytics Dashboard</div>
+        <div class="step-desc">View aggregate support metrics: open/closed ticket counts, average resolution time, tickets per agent, SLA compliance, and trend data.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">8</div>
+      <div class="step-content">
+        <div class="step-label">Bulk Transfer</div>
+        <div class="step-desc">Transfer all tickets from one agent to another (e.g., during employee offboarding or leave).</div>
+        <div class="step-api">POST /api/v1/support/transfer-tickets { fromAgentId, toAgentId }</div>
+      </div>
+    </div>
+    </div>
+    
+  </div>
+  <div class="page-break"></div>
+  <div class="flow-section keep-together" id="diagnostics">
+    <h2>5. Diagnostics & Device Management</h2>
+    <p class="section-intro">Admin can remotely query diagnostics, ping devices, and pull logs from player devices via the WebSocket relay.</p>
+    <div class="diagram-wrapper no-break">
+      <div class="mermaid">sequenceDiagram
+    participant A as Admin
+    participant API as Diagnostics
+    participant WS as WebSocket
+    participant D as Player Device
+    participant CLOUD as Cloudinary
+    A->>API: GET /diagnostics?userId=x
+    API->>CLOUD: List diagnostic files
+    API-->>A: { files: [...] }
+    A->>WS: admin_ping_device
+    WS->>D: admin_ping_device_relay
+    D->>WS: device_pong { deviceId, version }
+    WS-->>A: admin_device_pong
+    A->>WS: admin_pull_diagnostics
+    WS->>D: force_upload_diagnostics
+    D->>API: POST /diagnostics (upload)
+    API->>CLOUD: Store in Cloudinary</div>
+    </div>
+    <div class="steps-container">
+      <div class="steps-title">Detailed Flow Breakdown</div>
+      
+    <div class="step-detail">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-label">List Diagnostic Files</div>
+        <div class="step-desc">Admin queries diagnostics for a specific user. Server fetches from both Cloudinary CDN and local filesystem, deduplicates, and sorts by timestamp.</div>
+        <div class="step-api">GET /api/v1/diagnostics?userId=player123</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-label">Read Diagnostic File</div>
+        <div class="step-desc">Admin opens a specific diagnostic file. Server tries Cloudinary first, falls back to local filesystem if cloud copy doesn't exist.</div>
+        <div class="step-api">GET /api/v1/diagnostics/:filename</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-label">Ping Device</div>
+        <div class="step-desc">Admin sends a WebSocket ping to check if a specific device is online. The target device responds with its deviceId, name, and app version.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-label">Pull Diagnostics</div>
+        <div class="step-desc">Admin remotely triggers a diagnostic upload from a specific device. The device gathers its current DeviceLogger logs and uploads them with a "admin_requested" prefix.</div>
+        <div class="step-api">WebSocket: admin_pull_diagnostics → force_upload_diagnostics</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-label">Raw Server Events</div>
+        <div class="step-desc">Admin can access raw server-side events from the server_events.jsonl file for deep troubleshooting.</div>
+        <div class="step-api">GET /api/v1/diagnostics/raw_events</div>
+      </div>
+    </div>
+    </div>
+    
+  </div>
+  <div class="page-break"></div>
+  <div class="flow-section keep-together" id="comms-audit">
+    <h2>6. Org Chat, Audit Logs & Settings</h2>
+    <p class="section-intro">Admin manages internal communications, reviews audit trails, and configures academy-wide settings.</p>
+    <div class="diagram-wrapper no-break">
+      <div class="mermaid">sequenceDiagram
+    participant A as Admin
+    participant API as Backend
+    participant DB as MongoDB
+    participant WS as WebSocket
+    A->>API: GET /comms/chat?limit=50
+    API-->>A: { messages (admin exempt from expiry) }
+    A->>API: POST /comms/chat
+    API->>DB: OrgMessage.create
+    API->>WS: io.emit org_chat_message
+    A->>API: GET /admin-core/audit-logs
+    API-->>A: { logs (3-day limit) }
+    A->>API: POST /admin-core/settings
+    API->>DB: OrgSetting.upsert + AuditLog</div>
+    </div>
+    <div class="steps-container">
+      <div class="steps-title">Detailed Flow Breakdown</div>
+      
+    <div class="step-detail">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-label">Org Chat (Admin-Only Features)</div>
+        <div class="step-desc">Admin can send messages, upload attachments (via Cloudinary with 7-day expiry), react with emojis, and delete any message. Admin is exempt from the 7-day attachment expiry — can access all files permanently.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-label">Chat Features</div>
+        <div class="step-desc">The chat system supports threaded replies (replyTo field), emoji reactions (Map<emoji, userId[]> toggle), file attachments, read receipts, and real-time delivery via WebSocket.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-label">Announcements</div>
+        <div class="step-desc">Admin can view broadcast announcements that are sent to all staff members.</div>
+        <div class="step-api">GET /api/v1/comms/announcements</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-label">Audit Logs</div>
+        <div class="step-desc">Admin queries audit logs with date range and search filters. A 3-day limit is enforced without specific search criteria to prevent excessive database load. Results are capped at 200 records.</div>
+        <div class="step-api">GET /api/v1/admin-core/audit-logs?startDate=...&search=LOGIN</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-label">Academy Settings</div>
+        <div class="step-desc">Admin creates or updates organizational settings (key-value pairs). Every change is logged in the AuditLog with the admin's identity and IP address.</div>
+        <div class="step-api">POST /api/v1/admin-core/settings { key, value }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">6</div>
+      <div class="step-content">
+        <div class="step-label">Team Directory</div>
+        <div class="step-desc">Admin views all staff with enriched presence data (device activity, online/offline status, ex-employee detection) and manages reporting hierarchy.</div>
+        <div class="step-api">GET /api/v1/admin-core/team-directory</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">7</div>
+      <div class="step-content">
+        <div class="step-label">Security Export</div>
+        <div class="step-desc">Admin can export compiled security audit data for compliance review.</div>
+        <div class="step-api">GET /api/v1/infrastructure/security/export</div>
+      </div>
+    </div>
+    </div>
+    
+  </div>
+
+  <div class="doc-footer">
+    AceTrack Architecture Documentation — Confidential • © 2026 AceTrack
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      themeVariables: {
+        primaryColor: '#4F46E5',
+        primaryTextColor: '#fff',
+        primaryBorderColor: '#4338CA',
+        lineColor: '#64748B',
+        secondaryColor: '#F1F5F9',
+        tertiaryColor: '#EEF2FF',
+        fontSize: '10px'
+      },
+      sequence: { mirrorActors: false, useMaxWidth: true, wrap: true },
+      flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+    });
+  </script>
+</body>
+</html>

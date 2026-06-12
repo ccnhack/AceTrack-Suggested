@@ -873,6 +873,7 @@ router.post('/support/save-ticket', apiKeyGuard, authGuard, async (req, res) => 
         // 🚀 NEW: Automatic Load Balancing for User Tickets (Attendance-Based)
         try {
           const { Attendance } = await import('../../models/HRModels.mjs');
+          const { getISTDate } = await import('../../helpers/utils.mjs');
           
           // 1. Get all active support agents
           const agentsDoc = await Player.find({ 
@@ -881,7 +882,7 @@ router.post('/support/save-ticket', apiKeyGuard, authGuard, async (req, res) => 
           }).lean();
           
           // 2. Query today's attendance to see who is formally checked-in
-          const today = new Date().toISOString().split('T')[0];
+          const today = getISTDate().split('T')[0];
           const activeAttendance = await Attendance.find({
             date: today,
             checkIn: { $exists: true, $ne: null },
@@ -892,7 +893,12 @@ router.post('/support/save-ticket', apiKeyGuard, authGuard, async (req, res) => 
           }).lean();
           
           const checkedInAgentIds = new Set(activeAttendance.map(a => String(a.userId)));
-          const availableAgents = agentsDoc.filter(d => d.data && checkedInAgentIds.has(String(d.data.id))).map(d => d.data);
+          let availableAgents = agentsDoc.filter(d => d.data && checkedInAgentIds.has(String(d.data.id))).map(d => d.data);
+
+          // Fallback if no one is formally checked in: pick among all active agents
+          if (availableAgents.length === 0 && agentsDoc.length > 0) {
+             availableAgents = agentsDoc.map(d => d.data);
+          }
 
           if (availableAgents.length > 0) {
             // 3. Find active ticket counts for these agents
@@ -953,7 +959,11 @@ router.post('/support/save-ticket', apiKeyGuard, authGuard, async (req, res) => 
               { $inc: { "data.metrics.autoAssigned": 1, "data.metrics.totalHandled": 1 }, lastUpdated: new Date() }
             );
           } else {
-             // Fallback: No one is checked in
+             // Fallback: No one is checked in and no agents found
+             enrichmentTicket.assignedTo = 'admin';
+             enrichmentTicket.assignedAt = new Date().toISOString();
+             enrichmentTicket.assignmentSource = 'fallback';
+             enrichmentTicket.assignedAgentName = 'Admin';
              const autoResponse = {
               id: `auto-${Date.now()}`,
               senderId: 'admin',
@@ -966,6 +976,10 @@ router.post('/support/save-ticket', apiKeyGuard, authGuard, async (req, res) => 
         } catch (assignError) {
           console.error('[API] Auto-assign failed:', assignError);
           // Fallback if load balancer crashes
+          enrichmentTicket.assignedTo = 'admin';
+          enrichmentTicket.assignedAt = new Date().toISOString();
+          enrichmentTicket.assignmentSource = 'fallback_error';
+          enrichmentTicket.assignedAgentName = 'Admin';
           const autoResponse = {
             id: `auto-${Date.now()}`,
             senderId: 'admin',

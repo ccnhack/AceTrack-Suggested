@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Player Architecture — AceTrack Architecture</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #ffffff;
+      --text: #1a1a2e;
+      --text-muted: #64748b;
+      --accent: #4F46E5;
+      --accent-light: #EEF2FF;
+      --border: #E2E8F0;
+      --section-bg: #F8FAFC;
+      --step-bg: #F1F5F9;
+      --code-bg: #0F172A;
+      --code-text: #E2E8F0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.6;
+      font-size: 11px;
+    }
+
+    /* ===== PRINT LAYOUT ===== */
+    @page {
+      size: A4;
+      margin: 10mm 10mm 10mm 10mm;
+    }
+
+    @media print {
+      body { font-size: 9.5px; }
+      .page-break { display: none; }
+      .no-break { page-break-inside: avoid; }
+      .keep-together { page-break-inside: auto; }
+      h2 { page-break-after: avoid; margin-top: 16px; margin-bottom: 8px; }
+      .flow-section { page-break-inside: auto; margin-bottom: 24px; }
+      .step-detail { page-break-inside: avoid; }
+      .api-table { page-break-inside: avoid; }
+    }
+
+    /* ===== COVER / HEADER ===== */
+    .cover {
+      text-align: center;
+      padding: 20px 20px 15px;
+      border-bottom: 3px solid var(--accent);
+      margin-bottom: 20px;
+    }
+    .cover .emoji { font-size: 36px; margin-bottom: 8px; }
+    .cover h1 {
+      font-size: 24px;
+      font-weight: 900;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+    }
+    .cover .subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-top: 6px;
+      font-weight: 500;
+    }
+    .cover .version {
+      font-size: 10px;
+      color: #94A3B8;
+      margin-top: 12px;
+    }
+
+    /* ===== SECTION HEADERS ===== */
+    h2 {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--accent);
+      margin: 20px 0 8px;
+      padding-bottom: 4px;
+      border-bottom: 2px solid var(--accent-light);
+      letter-spacing: -0.3px;
+    }
+    h3 {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      margin: 14px 0 6px;
+    }
+    .section-intro {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+
+    /* ===== MERMAID DIAGRAM WRAPPER ===== */
+    .diagram-wrapper {
+      background: var(--section-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin: 8px 0 12px;
+      overflow: hidden;
+    }
+    .diagram-wrapper .mermaid {
+      text-align: center;
+    }
+    .diagram-wrapper svg {
+      max-width: 100% !important;
+      max-height: 500px !important;
+      height: auto !important;
+    }
+
+    /* ===== DETAILED STEPS ===== */
+    .steps-container {
+      margin: 8px 0 16px;
+    }
+    .steps-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .steps-title::before {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 14px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+    .step-detail {
+      display: flex;
+      gap: 8px;
+      padding: 8px 10px;
+      margin-bottom: 4px;
+      background: var(--step-bg);
+      border-radius: 6px;
+      border-left: 3px solid var(--accent);
+      page-break-inside: avoid;
+    }
+    .step-number {
+      flex-shrink: 0;
+      width: 26px;
+      height: 26px;
+      background: var(--accent);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+      margin-top: 1px;
+    }
+    .step-content {
+      flex: 1;
+    }
+    .step-content .step-label {
+      font-weight: 700;
+      font-size: 11px;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+    .step-content .step-desc {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .step-content .step-api {
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 9.5px;
+      background: var(--code-bg);
+      color: var(--code-text);
+      padding: 3px 8px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-top: 3px;
+    }
+
+    /* ===== API TABLES ===== */
+    .api-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      font-size: 10px;
+    }
+    .api-table th {
+      background: var(--accent);
+      color: white;
+      padding: 8px 10px;
+      text-align: left;
+      font-weight: 700;
+      font-size: 9.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .api-table td {
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .api-table tr:nth-child(even) { background: var(--section-bg); }
+    .api-table code {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 9px;
+      background: #E2E8F0;
+      padding: 2px 5px;
+      border-radius: 3px;
+    }
+
+    /* ===== FOOTER ===== */
+    .doc-footer {
+      text-align: center;
+      margin-top: 30px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      font-size: 9px;
+      color: #94A3B8;
+    }
+  </style>
+</head>
+<body>
+  <div class="cover">
+    <div class="emoji">🎾</div>
+    <h1>Player Architecture</h1>
+    <div class="subtitle">Complete system flow from the mobile app player perspective</div>
+    <div class="version">AceTrack Architecture Documentation • Generated 12 June 2026</div>
+  </div>
+
+  
+  
+  <div class="flow-section keep-together" id="auth">
+    <h2>1. Authentication Flow</h2>
+    <p class="section-intro">The player's journey begins with authentication. Two paths exist: new user registration (OTP-verified) and existing user login (username/password).</p>
+    <div class="diagram-wrapper no-break">
+      <div class="mermaid">sequenceDiagram
+    participant P as Player App
+    participant API as Backend
+    participant DB as MongoDB
+    P->>API: POST /api/v1/check-username
+    API->>DB: Player.findOne({ data.username })
+    API-->>P: { available: true/false }
+    P->>API: POST /api/v1/otp/send
+    API->>DB: OtpTemp.create({ code })
+    API-->>P: { success: true }
+    P->>API: POST /api/v1/otp/verify
+    API-->>P: { verified: true }
+    P->>API: POST /api/v1/save (new player)
+    API->>DB: Player.create({ id, data })
+    API-->>P: { success: true }
+    P->>API: POST /api/v1/user/login
+    API->>DB: Player.findOne + bcrypt.compare
+    API-->>P: Set-Cookie + { user, token }</div>
+    </div>
+    <div class="steps-container">
+      <div class="steps-title">Detailed Flow Breakdown</div>
+      
+    <div class="step-detail">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-label">Username Check</div>
+        <div class="step-desc">Player submits desired username. Backend checks MongoDB for case-insensitive match using regex query.</div>
+        <div class="step-api">POST /api/v1/check-username { username }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-label">OTP Dispatch</div>
+        <div class="step-desc">System generates a 6-digit verification code, stores it in OtpTemp collection with expiry. Simulated SMS/email delivery for pre-production.</div>
+        <div class="step-api">POST /api/v1/otp/send { phone/email, purpose: "signup" }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-label">OTP Verification</div>
+        <div class="step-desc">Player submits received code. Server validates against OtpTemp record, checking expiry and max attempts. Rate-limited to prevent brute force.</div>
+        <div class="step-api">POST /api/v1/otp/verify { phone/email, code }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-label">Account Creation</div>
+        <div class="step-desc">New player record saved via the unified /save endpoint. Creates a Player document with hashed password (bcrypt), initial credits, and empty profile.</div>
+        <div class="step-api">POST /api/v1/save { data: { players: [newPlayer] } }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-label">Login (Returning Users)</div>
+        <div class="step-desc">Username/password authentication with bcrypt comparison. On success, issues JWT as HttpOnly cookie (ace_auth_token) for stateless session management.</div>
+        <div class="step-api">POST /api/v1/user/login { username, password }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">6</div>
+      <div class="step-content">
+        <div class="step-label">Session Verification</div>
+        <div class="step-desc">Every subsequent API call verifies the JWT cookie. The /auth/me endpoint returns current user data and role for client-side hydration.</div>
+        <div class="step-api">GET /api/v1/auth/me (Cookie: ace_auth_token)</div>
+      </div>
+    </div>
+    </div>
+    
+    <h3>API Endpoints</h3>
+    <table class="api-table">
+      <thead><tr><th>Endpoint</th><th>Method</th><th>Auth</th><th>Purpose</th></tr></thead>
+      <tbody><tr><td><code>/api/v1/user/login</code></td><td>POST</td><td>Rate limited</td><td>Player login with username/password</td></tr><tr><td><code>/api/v1/auth/me</code></td><td>GET</td><td>API Key</td><td>Session verification via HttpOnly cookie</td></tr><tr><td><code>/api/v1/check-username</code></td><td>POST</td><td>API Key</td><td>Check username availability</td></tr><tr><td><code>/api/v1/otp/send</code></td><td>POST</td><td>Rate limited</td><td>Send OTP for signup verification</td></tr><tr><td><code>/api/v1/otp/verify</code></td><td>POST</td><td>Rate limited</td><td>Verify OTP code</td></tr><tr><td><code>/api/v1/logout</code></td><td>POST</td><td>None</td><td>Clear auth cookie</td></tr><tr><td><code>/api/v1/auth/change-password</code></td><td>POST</td><td>API Key</td><td>Change password (authenticated)</td></tr></tbody>
+    </table>
+  </div>
+  <div class="page-break"></div>
+  <div class="flow-section keep-together" id="hydration">
+    <h2>2. State Hydration & Real-Time Sync</h2>
+    <p class="section-intro">The core data pipeline that keeps the player app synchronized with the server using a combination of REST hydration and WebSocket push events.</p>
+    <div class="diagram-wrapper no-break">
+      <div class="mermaid">sequenceDiagram
+    participant P as Player App
+    participant API as Backend
+    participant DB as MongoDB
+    participant WS as WebSocket
+    P->>API: GET /api/v1/data
+    API->>DB: AppState.findOne().sort(-1)
+    API->>API: getSanitizedState(state, role)
+    API-->>P: { data, version, lastUpdated }
+    P->>WS: socket.emit('join', userId)
+    WS-->>P: Connection established
+    WS-->>P: data_updated event
+    P->>API: GET /api/v1/data (re-hydrate)
+    WS-->>P: entity_updated event
+    P->>P: Merge entity locally</div>
+    </div>
+    <div class="steps-container">
+      <div class="steps-title">Detailed Flow Breakdown</div>
+      
+    <div class="step-detail">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-label">Initial Hydration</div>
+        <div class="step-desc">On app launch, fetches the full application state. The server retrieves the latest AppState document (sorted by version descending) and sanitizes it based on user role — stripping PII and admin-only fields for non-admin users.</div>
+        <div class="step-api">GET /api/v1/data (x-ace-api-key + Cookie)</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-label">Role-Based Sanitization</div>
+        <div class="step-desc">The getSanitizedState() function filters the response. Players see only public tournament data, their own profile, and approved videos. Admin/support fields like audit logs, wallet history of others, and internal notes are removed.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-label">WebSocket Connection</div>
+        <div class="step-desc">Player joins their personal Socket.IO room (user:{userId}). This enables targeted real-time updates and admin device pings.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-label">Push-Based Sync (data_updated)</div>
+        <div class="step-desc">When any user saves data, the server broadcasts a data_updated event with the changed entity keys and new version number. The client re-fetches only if the version is newer than its local copy.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-label">Entity-Level Sync (entity_updated)</div>
+        <div class="step-desc">For granular changes (tournament update, video status change), the server emits entity_updated with the specific entity type and data. The client merges this directly into local state without a full re-hydration.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">6</div>
+      <div class="step-content">
+        <div class="step-label">Save Flow (Player Edits)</div>
+        <div class="step-desc">When a player edits their profile or performs actions, changes are sent via POST /save. The server acquires a sync mutex, performs delta detection to identify changed fields, and writes atomically to both the distinct collection and legacy AppState mirror.</div>
+        <div class="step-api">POST /api/v1/save { data, socketId, clientVersion }</div>
+      </div>
+    </div>
+    </div>
+    
+    <h3>API Endpoints</h3>
+    <table class="api-table">
+      <thead><tr><th>Endpoint</th><th>Method</th><th>Auth</th><th>Purpose</th></tr></thead>
+      <tbody><tr><td><code>/api/v1/data</code></td><td>GET</td><td>API Key + Cache</td><td>Full state hydration (role-filtered)</td></tr><tr><td><code>/api/v1/save</code></td><td>POST</td><td>API Key + Validate</td><td>Atomic state save with delta detection</td></tr><tr><td><code>/api/v1/status</code></td><td>GET</td><td>API Key</td><td>Check server version + latest app version</td></tr></tbody>
+    </table>
+  </div>
+  <div class="page-break"></div>
+  <div class="flow-section keep-together" id="tournament">
+    <h2>3. Tournament Lifecycle (Player Actions)</h2>
+    <p class="section-intro">Players browse, register, manage partners, and check in to tournaments through a comprehensive registration pipeline with financial safeguards.</p>
+    <div class="diagram-wrapper no-break">
+      <div class="mermaid">sequenceDiagram
+    participant P as Player
+    participant API as Tournament Routes
+    participant DB as MongoDB
+    participant WS as WebSocket
+    P->>API: POST /tournaments/:id/register
+    API->>API: Cost validation + Capacity guard
+    API->>API: Idempotency check
+    API->>DB: Tournament.$addToSet registeredPlayerIds
+    API->>DB: Player.$inc credits (deduct)
+    API->>WS: io.emit entity_updated
+    API-->>P: { success, tournament, teamCode }
+    P->>API: POST /tournaments/:id/optout
+    API->>API: Calculate cancellation charge
+    API->>DB: Remove + Credit refund
+    API->>API: Auto-promote from waitlist
+    API-->>P: { refundInfo }</div>
+    </div>
+    <div class="steps-container">
+      <div class="steps-title">Detailed Flow Breakdown</div>
+      
+    <div class="step-detail">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-label">Browse Tournaments</div>
+        <div class="step-desc">Player views available tournaments from the hydrated state data. Tournaments include title, sport, date, location, cost, registered count, and capacity. No API call needed — data comes from initial hydration.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-label">Registration with Cost Validation</div>
+        <div class="step-desc">Server-side cost validation (VAPT-BL2 security fix) ensures the tournament cost matches the server's record, preventing client-side manipulation. An idempotency key prevents double-charges on retry.</div>
+        <div class="step-api">POST /api/v1/tournaments/:id/register { method, idempotencyKey }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-label">Credits Deduction</div>
+        <div class="step-desc">Credits are atomically deducted from the player's wallet using MongoDB $inc operation. A wallet history entry is created for audit trail. If credits are insufficient, registration fails with a clear error.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-label">Doubles Partner Flow</div>
+        <div class="step-desc">For doubles tournaments, the registering player can specify a partner. The system creates a doublesTeam with a unique teamCode (e.g., "A1B2C3D4"), deducts cost for both players, and notifies the partner via push notification.</div>
+        <div class="step-api">POST /tournaments/:id/register { registeringPartnerId }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-label">Join Team via Code</div>
+        <div class="step-desc">A partner joins an existing doubles team by entering the teamCode. The system validates the code, checks the team isn't full, and adds the player as player2.</div>
+        <div class="step-api">POST /tournaments/:id/join-team { teamCode }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">6</div>
+      <div class="step-content">
+        <div class="step-label">Opt-Out with Tiered Refund</div>
+        <div class="step-desc">Cancellation charges are calculated based on time before the event: 0% if ≥5 days, 25% if ≥3 days, 50% if ≥1 day, 100% if less. Refund goes to the original payer. If a waitlisted player exists, they're auto-promoted.</div>
+        <div class="step-api">POST /tournaments/:id/optout { refundToWallet, optOutMode }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">7</div>
+      <div class="step-content">
+        <div class="step-label">Waitlist & Check-In</div>
+        <div class="step-desc">If a tournament is full, players can join the waitlist. On event day, players check in via the app to confirm attendance.</div>
+        <div class="step-api">POST /tournaments/:id/waitlist | /check-in</div>
+      </div>
+    </div>
+    </div>
+    
+    <h3>API Endpoints</h3>
+    <table class="api-table">
+      <thead><tr><th>Endpoint</th><th>Method</th><th>Purpose</th></tr></thead>
+      <tbody><tr><td><code>/tournaments/:id/register</code></td><td>POST</td><td>Register (credits/UPI/pending)</td></tr><tr><td><code>/tournaments/:id/optout</code></td><td>POST</td><td>Opt out with tiered refund</td></tr><tr><td><code>/tournaments/:id/waitlist</code></td><td>POST</td><td>Join waitlist for full tournament</td></tr><tr><td><code>/tournaments/:id/join-team</code></td><td>POST</td><td>Join doubles team with code</td></tr><tr><td><code>/tournaments/:id/partner-chat</code></td><td>GET/POST</td><td>Doubles partner messaging</td></tr><tr><td><code>/tournaments/:id/check-in</code></td><td>POST</td><td>Day-of-event check-in</td></tr></tbody>
+    </table>
+  </div>
+  <div class="page-break"></div>
+  <div class="flow-section keep-together" id="videos">
+    <h2>4. Match Videos & Media</h2>
+    <p class="section-intro">Players upload match videos which are processed with watermarks via Cloudinary's eager transformation pipeline, with webhook-based status updates.</p>
+    <div class="diagram-wrapper no-break">
+      <div class="mermaid">sequenceDiagram
+    participant P as Player
+    participant API as Media Routes
+    participant CLOUD as Cloudinary
+    participant WH as Webhook
+    participant DB as MongoDB
+    P->>API: POST /api/v1/upload (video file)
+    API->>CLOUD: upload_stream + watermark overlay
+    CLOUD-->>API: { secure_url }
+    API-->>P: { url }
+    CLOUD->>WH: POST /webhooks/cloudinary (eager done)
+    WH->>DB: MatchVideo.$set watermarkedUrl
+    WH->>WH: io.emit entity_updated</div>
+    </div>
+    <div class="steps-container">
+      <div class="steps-title">Detailed Flow Breakdown</div>
+      
+    <div class="step-detail">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-label">Video Upload</div>
+        <div class="step-desc">Player uploads a match video via multipart form data. The backend streams it to Cloudinary with an eager transformation that applies an AceTrack watermark overlay.</div>
+        <div class="step-api">POST /api/v1/upload (multipart/form-data)</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-label">Watermark Processing</div>
+        <div class="step-desc">Cloudinary processes the video asynchronously. An eager transformation applies a diagonal watermark text across the video. The original (unwatermarked) URL is stored for purchased/downloaded versions.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-label">Webhook Callback</div>
+        <div class="step-desc">When Cloudinary finishes the eager transform, it calls back to /api/webhooks/cloudinary with the watermarked URL. The server matches the video by public_id regex and updates the MatchVideo document.</div>
+        <div class="step-api">POST /api/webhooks/cloudinary (notification_type: eager)</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-label">Metadata Save</div>
+        <div class="step-desc">The player saves video metadata (matchId, player associations, timestamps) via a separate call. The server creates or updates the MatchVideo document with adminStatus: "Pending" for review.</div>
+        <div class="step-api">POST /api/v1/videos/save-metadata { video: {...} }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-label">Real-Time Update</div>
+        <div class="step-desc">After the webhook updates the watermarked URL, the server emits an entity_updated event so all connected clients see the video's "ready" status in real-time.</div>
+        
+      </div>
+    </div>
+    </div>
+    
+    <h3>API Endpoints</h3>
+    <table class="api-table">
+      <thead><tr><th>Endpoint</th><th>Method</th><th>Purpose</th></tr></thead>
+      <tbody><tr><td><code>/api/v1/upload</code></td><td>POST</td><td>Upload video/image to Cloudinary</td></tr><tr><td><code>/api/v1/videos/save-metadata</code></td><td>POST</td><td>Save video metadata record</td></tr><tr><td><code>/api/webhooks/cloudinary</code></td><td>POST</td><td>Cloudinary eager transform callback</td></tr></tbody>
+    </table>
+  </div>
+  <div class="page-break"></div>
+  <div class="flow-section keep-together" id="notifications">
+    <h2>5. Notifications & Diagnostics</h2>
+    <p class="section-intro">The notification system uses Expo Push for offline delivery and in-app notifications for real-time alerts. Diagnostics enable remote troubleshooting.</p>
+    <div class="diagram-wrapper no-break">
+      <div class="mermaid">sequenceDiagram
+    participant P as Player
+    participant API as Backend
+    participant DB as MongoDB
+    participant EXPO as Expo Push
+    P->>API: POST /register-push-token
+    API->>DB: Player.$set pushTokens (cap: 15)
+    API-->>P: { success }
+    P->>API: POST /mark-read
+    API->>DB: Player.$set notifications[].read
+    API-->>P: { success }
+    EXPO-->>P: Push notification (tournament, slot, etc.)</div>
+    </div>
+    <div class="steps-container">
+      <div class="steps-title">Detailed Flow Breakdown</div>
+      
+    <div class="step-detail">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-label">Push Token Registration</div>
+        <div class="step-desc">On app launch, the player registers their Expo push token. The server caps stored tokens at 15 per user to prevent bloat from multiple devices. A security check ensures userId matches the authenticated user.</div>
+        <div class="step-api">POST /api/v1/register-push-token { userId, pushToken }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-label">Mark Notifications Read</div>
+        <div class="step-desc">Player marks one or all notifications as read. The server updates both the Player document and syncs to the legacy AppState for backward compatibility.</div>
+        <div class="step-api">POST /api/v1/mark-read { notifId }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-label">Push Notification Delivery</div>
+        <div class="step-desc">The server sends push notifications via Expo's push service for events like: tournament registration confirmation, slot opened from waitlist, coach assignment, partner opt-out alerts, and system updates.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-label">Auto-Flush Diagnostics</div>
+        <div class="step-desc">The app periodically uploads diagnostic logs in the background. These are stored both locally and in Cloudinary, with a rotation policy keeping the last 3 files per user.</div>
+        <div class="step-api">POST /api/v1/diagnostics/auto-flush { username, deviceId, logs }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-label">Admin-Triggered Pull</div>
+        <div class="step-desc">Admins can remotely request diagnostic logs from a specific device via WebSocket. The device receives a force_upload_diagnostics event and uploads its current log buffer.</div>
+        
+      </div>
+    </div>
+    </div>
+    
+    <h3>API Endpoints</h3>
+    <table class="api-table">
+      <thead><tr><th>Endpoint</th><th>Method</th><th>Purpose</th></tr></thead>
+      <tbody><tr><td><code>/api/v1/register-push-token</code></td><td>POST</td><td>Register Expo push token</td></tr><tr><td><code>/api/v1/mark-read</code></td><td>POST</td><td>Mark notifications as read</td></tr><tr><td><code>/api/v1/diagnostics</code></td><td>POST</td><td>Upload diagnostic logs</td></tr><tr><td><code>/api/v1/diagnostics/auto-flush</code></td><td>POST</td><td>Background auto-flush logs</td></tr></tbody>
+    </table>
+  </div>
+  <div class="page-break"></div>
+  <div class="flow-section keep-together" id="booking">
+    <h2>6. Coach Booking & Security</h2>
+    <p class="section-intro">Players can book private coaching sessions and view their booking history. Every request passes through a multi-layer security middleware stack.</p>
+    <div class="diagram-wrapper no-break">
+      <div class="mermaid">graph LR
+    REQ[Request] --> CORS[CORS]
+    CORS --> HELMET[Helmet CSP/HSTS]
+    HELMET --> RATE[Rate Limiter]
+    RATE --> COOKIE[Cookie Parser]
+    COOKIE --> BODY[Body Parser 10MB]
+    BODY --> SANIT[Mongo Sanitize]
+    SANIT --> NONCE[CSP Nonce]
+    NONCE --> APIKEY[API Key Guard]
+    APIKEY --> AUTH[Auth Guard JWT]
+    AUTH --> HANDLER[Route Handler]</div>
+    </div>
+    <div class="steps-container">
+      <div class="steps-title">Detailed Flow Breakdown</div>
+      
+    <div class="step-detail">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-label">View Coach Availability</div>
+        <div class="step-desc">Player browses available coaches from the hydrated state. Each coach has a weekly availability schedule (day-of-week + time slots) that determines when they can be booked.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-label">Create Booking</div>
+        <div class="step-desc">Player creates a booking request specifying the coach, date, time, and session type. The booking starts with status "pending" until the coach confirms.</div>
+        <div class="step-api">POST /api/v1/bookings/create { coachId, date, time }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-label">View My Bookings</div>
+        <div class="step-desc">Player can view all their past and upcoming bookings, including status (pending, confirmed, completed, rejected).</div>
+        <div class="step-api">GET /api/v1/bookings/player/:playerId</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-label">CORS Protection</div>
+        <div class="step-desc">Cross-Origin Resource Sharing is configured with a whitelist of allowed origins. Requests from unknown origins are blocked.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-label">Helmet Security Headers</div>
+        <div class="step-desc">Content Security Policy (CSP), HTTP Strict Transport Security (HSTS), X-Frame-Options, and other security headers are applied to every response.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">6</div>
+      <div class="step-content">
+        <div class="step-label">Rate Limiting</div>
+        <div class="step-desc">Global rate limiter prevents abuse. Specific endpoints (login, OTP, password reset) have additional strict rate limits to prevent brute force attacks.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">7</div>
+      <div class="step-content">
+        <div class="step-label">API Key Guard</div>
+        <div class="step-desc">Every API request must include the x-ace-api-key header. This prevents unauthorized access from unknown clients and acts as a first line of defense.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">8</div>
+      <div class="step-content">
+        <div class="step-label">JWT Auth Guard</div>
+        <div class="step-desc">Protected endpoints verify the JWT token from the HttpOnly cookie. The guard extracts userId and role for downstream authorization checks.</div>
+        
+      </div>
+    </div>
+    </div>
+    
+    <h3>API Endpoints</h3>
+    <table class="api-table">
+      <thead><tr><th>Endpoint</th><th>Method</th><th>Purpose</th></tr></thead>
+      <tbody><tr><td><code>/api/v1/bookings/create</code></td><td>POST</td><td>Create a new booking request</td></tr><tr><td><code>/api/v1/bookings/player/:playerId</code></td><td>GET</td><td>Get player's bookings</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="doc-footer">
+    AceTrack Architecture Documentation — Confidential • © 2026 AceTrack
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      themeVariables: {
+        primaryColor: '#4F46E5',
+        primaryTextColor: '#fff',
+        primaryBorderColor: '#4338CA',
+        lineColor: '#64748B',
+        secondaryColor: '#F1F5F9',
+        tertiaryColor: '#EEF2FF',
+        fontSize: '10px'
+      },
+      sequence: { mirrorActors: false, useMaxWidth: true, wrap: true },
+      flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+    });
+  </script>
+</body>
+</html>

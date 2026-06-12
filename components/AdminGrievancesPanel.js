@@ -573,12 +573,73 @@ export const AdminGrievancesPanel = ({
 
   const handleSendReply = async () => {
     if ((!replyText.trim() && !selectedImage) || !selectedTicket) return;
-    const res = await onReply(selectedTicket.id, replyText, selectedImage, replyToMsg);
-    if (res.success) {
-      setReplyText('');
-      setSelectedImage(null);
-      setReplyToMsg(null);
+
+    const myRole = currentUser?.role || 'user';
+    const myLevel = currentUser?.supportLevel || '';
+    const isException = ['admin'].includes(myRole.toLowerCase()) || 
+                        ['manager', 'team lead', 'teamlead'].includes(myLevel.toLowerCase());
+    
+    const isAssignedToMe = String(selectedTicket.assignedTo) === String(currentUser?.id) || String(selectedTicket.assignedTo) === String(currentUser?.username);
+    const hasAssignee = selectedTicket.assignedTo && selectedTicket.assignedTo !== 'Unassigned' && selectedTicket.assignedTo !== '';
+
+    const proceedSend = async () => {
+      const res = await onReply(selectedTicket.id, replyText, selectedImage, replyToMsg);
+      if (res.success) {
+        setReplyText('');
+        setSelectedImage(null);
+        setReplyToMsg(null);
+      }
+    };
+
+    if (!isException && hasAssignee && !isAssignedToMe) {
+      const fiveMinsAgo = Date.now() - 5 * 60 * 1000;
+      let consecutiveCount = 0;
+      
+      const messages = selectedTicket.messages || [];
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const msg = messages[i];
+        if (String(msg.senderId) === String(currentUser?.id)) {
+           if (new Date(msg.timestamp).getTime() > fiveMinsAgo) {
+             consecutiveCount++;
+           } else {
+             break;
+           }
+        } else {
+           break;
+        }
+      }
+
+      if (consecutiveCount >= 2) { 
+         Alert.alert(
+           "Reassign Ticket", 
+           "You have sent 3 messages in a row within 5 mins on a ticket assigned to someone else. Do you want to assign it to yourself to continue?", 
+           [
+              { text: "Cancel", style: "cancel" },
+              { text: "Assign Myself", onPress: async () => { 
+                  const reassignRes = await onReassignTicket(selectedTicket.id, currentUser?.id);
+                  if (reassignRes?.success) {
+                     proceedSend();
+                  } else {
+                     Alert.alert("Error", reassignRes?.error || "Failed to reassign ticket.");
+                  }
+              } }
+           ]
+         );
+         return;
+      }
+      
+      Alert.alert(
+        "Warning", 
+        `The ticket is assigned to support agent ${getUserName(selectedTicket.assignedTo)}, are you willing to send the message?`, 
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Yes", onPress: proceedSend }
+        ]
+      );
+      return;
     }
+
+    proceedSend();
   };
 
   const handleGenerateMissingSummary = async () => {

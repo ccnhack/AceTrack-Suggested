@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Coach Architecture — AceTrack Architecture</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #ffffff;
+      --text: #1a1a2e;
+      --text-muted: #64748b;
+      --accent: #4F46E5;
+      --accent-light: #EEF2FF;
+      --border: #E2E8F0;
+      --section-bg: #F8FAFC;
+      --step-bg: #F1F5F9;
+      --code-bg: #0F172A;
+      --code-text: #E2E8F0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.6;
+      font-size: 11px;
+    }
+
+    /* ===== PRINT LAYOUT ===== */
+    @page {
+      size: A4;
+      margin: 10mm 10mm 10mm 10mm;
+    }
+
+    @media print {
+      body { font-size: 9.5px; }
+      .page-break { display: none; }
+      .no-break { page-break-inside: avoid; }
+      .keep-together { page-break-inside: auto; }
+      h2 { page-break-after: avoid; margin-top: 16px; margin-bottom: 8px; }
+      .flow-section { page-break-inside: auto; margin-bottom: 24px; }
+      .step-detail { page-break-inside: avoid; }
+      .api-table { page-break-inside: avoid; }
+    }
+
+    /* ===== COVER / HEADER ===== */
+    .cover {
+      text-align: center;
+      padding: 20px 20px 15px;
+      border-bottom: 3px solid var(--accent);
+      margin-bottom: 20px;
+    }
+    .cover .emoji { font-size: 36px; margin-bottom: 8px; }
+    .cover h1 {
+      font-size: 24px;
+      font-weight: 900;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+    }
+    .cover .subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-top: 6px;
+      font-weight: 500;
+    }
+    .cover .version {
+      font-size: 10px;
+      color: #94A3B8;
+      margin-top: 12px;
+    }
+
+    /* ===== SECTION HEADERS ===== */
+    h2 {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--accent);
+      margin: 20px 0 8px;
+      padding-bottom: 4px;
+      border-bottom: 2px solid var(--accent-light);
+      letter-spacing: -0.3px;
+    }
+    h3 {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      margin: 14px 0 6px;
+    }
+    .section-intro {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+
+    /* ===== MERMAID DIAGRAM WRAPPER ===== */
+    .diagram-wrapper {
+      background: var(--section-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin: 8px 0 12px;
+      overflow: hidden;
+    }
+    .diagram-wrapper .mermaid {
+      text-align: center;
+    }
+    .diagram-wrapper svg {
+      max-width: 100% !important;
+      max-height: 500px !important;
+      height: auto !important;
+    }
+
+    /* ===== DETAILED STEPS ===== */
+    .steps-container {
+      margin: 8px 0 16px;
+    }
+    .steps-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .steps-title::before {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 14px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+    .step-detail {
+      display: flex;
+      gap: 8px;
+      padding: 8px 10px;
+      margin-bottom: 4px;
+      background: var(--step-bg);
+      border-radius: 6px;
+      border-left: 3px solid var(--accent);
+      page-break-inside: avoid;
+    }
+    .step-number {
+      flex-shrink: 0;
+      width: 26px;
+      height: 26px;
+      background: var(--accent);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+      margin-top: 1px;
+    }
+    .step-content {
+      flex: 1;
+    }
+    .step-content .step-label {
+      font-weight: 700;
+      font-size: 11px;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+    .step-content .step-desc {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .step-content .step-api {
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 9.5px;
+      background: var(--code-bg);
+      color: var(--code-text);
+      padding: 3px 8px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-top: 3px;
+    }
+
+    /* ===== API TABLES ===== */
+    .api-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      font-size: 10px;
+    }
+    .api-table th {
+      background: var(--accent);
+      color: white;
+      padding: 8px 10px;
+      text-align: left;
+      font-weight: 700;
+      font-size: 9.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .api-table td {
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .api-table tr:nth-child(even) { background: var(--section-bg); }
+    .api-table code {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 9px;
+      background: #E2E8F0;
+      padding: 2px 5px;
+      border-radius: 3px;
+    }
+
+    /* ===== FOOTER ===== */
+    .doc-footer {
+      text-align: center;
+      margin-top: 30px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      font-size: 9px;
+      color: #94A3B8;
+    }
+  </style>
+</head>
+<body>
+  <div class="cover">
+    <div class="emoji">🏸</div>
+    <h1>Coach Architecture</h1>
+    <div class="subtitle">Complete system flow from the coach perspective — invite to evaluation</div>
+    <div class="version">AceTrack Architecture Documentation • Generated 12 June 2026</div>
+  </div>
+
+  
+  
+  <div class="flow-section keep-together" id="onboarding">
+    <h2>1. Coach Onboarding Flow</h2>
+    <p class="section-intro">Coaches are onboarded via an invite-only system managed by the Academy Admin. The invite link triggers a validation → account creation → login flow.</p>
+    <div class="diagram-wrapper no-break">
+      <div class="mermaid">sequenceDiagram
+    participant A as Admin
+    participant API as Backend
+    participant EMAIL as Email
+    participant C as Coach
+    participant DB as MongoDB
+    A->>API: POST /save (coachInvites)
+    API->>DB: CoachInvite.create({ token })
+    API->>EMAIL: sendCoachInviteEmail
+    API-->>A: { success }
+    C->>API: GET /coach-invite/validate?token=abc
+    API->>DB: CoachInvite.findOne
+    API-->>C: { valid, email, academy }
+    C->>API: POST /coach-invite/consume
+    API->>DB: Player.create({ role: coach })
+    API->>DB: CoachInvite.status = consumed
+    API-->>C: Set-Cookie + { user }</div>
+    </div>
+    <div class="steps-container">
+      <div class="steps-title">Detailed Flow Breakdown</div>
+      
+    <div class="step-detail">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-label">Admin Creates Invite</div>
+        <div class="step-desc">The Admin saves a coach invite via the /save endpoint with the coach's email and sport expertise. The server generates a unique token, creates a CoachInvite document, and sends an onboarding email.</div>
+        <div class="step-api">POST /api/v1/save { data: { coachInvites: [...] } }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-label">Coach Validates Invite</div>
+        <div class="step-desc">Coach clicks the invite link. The app calls validate to check the token hasn't been consumed or expired. Returns the associated email and academy details.</div>
+        <div class="step-api">GET /api/v1/auth/coach-invite/validate?token=abc123</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-label">Interaction Tracking</div>
+        <div class="step-desc">The system tracks invite analytics (link clicked, form opened) to give admins visibility into invite conversion rates.</div>
+        <div class="step-api">POST /api/v1/auth/coach-invite/track { token, action }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-label">Account Creation (Consume)</div>
+        <div class="step-desc">Coach submits their profile details and password. The server creates a Player document with role "coach", hashes the password, marks the invite as "consumed", and issues a JWT token.</div>
+        <div class="step-api">POST /api/v1/auth/coach-invite/consume { token, name, password }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-label">Subsequent Logins</div>
+        <div class="step-desc">After onboarding, coaches use the standard user login endpoint with username/password. The JWT cookie enables seamless session management.</div>
+        <div class="step-api">POST /api/v1/user/login { username, password }</div>
+      </div>
+    </div>
+    </div>
+    
+    <h3>API Endpoints</h3>
+    <table class="api-table">
+      <thead><tr><th>Endpoint</th><th>Method</th><th>Purpose</th></tr></thead>
+      <tbody><tr><td><code>/auth/coach-invite/validate</code></td><td>GET</td><td>Validate invite token</td></tr><tr><td><code>/auth/coach-invite/track</code></td><td>POST</td><td>Track invite analytics</td></tr><tr><td><code>/auth/coach-invite/consume</code></td><td>POST</td><td>Create coach account</td></tr><tr><td><code>/admin/coach-invites</code></td><td>GET</td><td>List all invites (admin)</td></tr><tr><td><code>/user/login</code></td><td>POST</td><td>Standard login (post-onboarding)</td></tr></tbody>
+    </table>
+  </div>
+  <div class="page-break"></div>
+  <div class="flow-section keep-together" id="availability">
+    <h2>2. Availability Management</h2>
+    <p class="section-intro">Coaches set their weekly availability schedule, which determines tournament eligibility and triggers retroactive notifications for existing assignments.</p>
+    <div class="diagram-wrapper no-break">
+      <div class="mermaid">sequenceDiagram
+    participant C as Coach App
+    participant API as Booking Routes
+    participant DB as MongoDB
+    participant PUSH as Push Service
+    C->>API: PUT /bookings/coach/:id/availability
+    API->>DB: Player.$set data.availability
+    API->>DB: Tournament.find({ assignedCoachId })
+    loop For each tournament
+        API->>API: Check date vs availability
+        alt Available and no notification sent
+            API->>PUSH: sendPushNotification
+        end
+    end
+    API-->>C: { success, availability }</div>
+    </div>
+    <div class="steps-container">
+      <div class="steps-title">Detailed Flow Breakdown</div>
+      
+    <div class="step-detail">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-label">Set Weekly Schedule</div>
+        <div class="step-desc">Coach submits an array of availability slots, each with dayOfWeek (0-6), startTime, and endTime in 24-hour format. This replaces the entire availability array.</div>
+        <div class="step-api">PUT /api/v1/bookings/coach/:coachId/availability { availability: [...] }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-label">Retroactive Assignment Check</div>
+        <div class="step-desc">After updating availability, the server queries all tournaments where this coach is already assigned. For each tournament, it checks whether the event date/time falls within the new availability slots.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-label">Availability Matching Logic</div>
+        <div class="step-desc">The system parses the tournament date to extract day-of-week and converts the event time to 24h format. It then checks if any availability slot matches both the day and time range.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-label">Deferred Notifications</div>
+        <div class="step-desc">If a coach is assigned to a tournament that now falls within their availability, and they haven't been notified yet, the system sends a push notification: "Tournament Assignment 🎓 — You have been assigned as coach for [Tournament]".</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-label">Booking Status Updates</div>
+        <div class="step-desc">Coaches can accept, reject, or complete individual booking requests from players. Status transitions are: pending → confirmed → completed (or rejected).</div>
+        <div class="step-api">PUT /api/v1/bookings/:id/status { status }</div>
+      </div>
+    </div>
+    </div>
+    
+    <h3>API Endpoints</h3>
+    <table class="api-table">
+      <thead><tr><th>Endpoint</th><th>Method</th><th>Purpose</th></tr></thead>
+      <tbody><tr><td><code>/bookings/coach/:coachId</code></td><td>GET</td><td>View incoming bookings</td></tr><tr><td><code>/bookings/:id/status</code></td><td>PUT</td><td>Accept/reject/complete booking</td></tr><tr><td><code>/bookings/coach/:coachId/availability</code></td><td>PUT</td><td>Set weekly availability</td></tr></tbody>
+    </table>
+  </div>
+  <div class="page-break"></div>
+  <div class="flow-section keep-together" id="tournament-assign">
+    <h2>3. Tournament Assignment & Management</h2>
+    <p class="section-intro">Admins assign coaches to tournaments, send push invites, and coaches confirm or decline assignments with optional comments.</p>
+    <div class="diagram-wrapper no-break">
+      <div class="mermaid">sequenceDiagram
+    participant A as Admin
+    participant API as Backend
+    participant DB as MongoDB
+    participant C as Coach
+    participant PUSH as Push
+    A->>API: POST /tournaments/:id/assign-coach
+    API->>DB: Tournament.$set assignedCoach
+    API-->>A: { success }
+    A->>API: POST /ping-coach { coachId }
+    API->>API: Verify availability
+    API->>PUSH: sendPushNotification
+    API-->>A: { pings, tracking }
+    C->>API: POST /tournaments/:id/confirm-coach
+    API->>DB: Tournament.$set coachConfirmed = true
+    API-->>C: { success }</div>
+    </div>
+    <div class="steps-container">
+      <div class="steps-title">Detailed Flow Breakdown</div>
+      
+    <div class="step-detail">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-label">Admin Assigns Coach</div>
+        <div class="step-desc">Admin selects a coach for a tournament. The server updates the tournament's assignedCoach field and broadcasts an entity_updated event.</div>
+        <div class="step-api">POST /api/v1/tournaments/:id/assign-coach { coachId }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-label">Ping Coach (Push Invite)</div>
+        <div class="step-desc">Admin sends a push notification invite to the coach. The system first validates the coach is available at the tournament's date/time, then sends via Expo Push and tracks delivery status.</div>
+        <div class="step-api">POST /api/v1/ping-coach { tournamentId, coachId }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-label">Coach Confirms Assignment</div>
+        <div class="step-desc">Coach reviews the assignment details and confirms. This sets coachConfirmed: true on the tournament document.</div>
+        <div class="step-api">POST /api/v1/tournaments/:id/confirm-coach</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-label">Coach Declines Assignment</div>
+        <div class="step-desc">If the coach declines, the assignedCoach field is cleared, allowing the admin to assign a different coach.</div>
+        <div class="step-api">POST /api/v1/tournaments/:id/decline-coach</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-label">Coach Comment</div>
+        <div class="step-desc">Coach can add notes or instructions about the tournament (e.g., "Bring extra rackets", "Wet court conditions expected").</div>
+        <div class="step-api">POST /api/v1/tournaments/:id/coach-comment { comment }</div>
+      </div>
+    </div>
+    </div>
+    
+    <h3>API Endpoints</h3>
+    <table class="api-table">
+      <thead><tr><th>Endpoint</th><th>Method</th><th>Role</th><th>Purpose</th></tr></thead>
+      <tbody><tr><td><code>/tournaments/:id/confirm-coach</code></td><td>POST</td><td>Coach</td><td>Accept assignment</td></tr><tr><td><code>/tournaments/:id/decline-coach</code></td><td>POST</td><td>Coach</td><td>Decline assignment</td></tr><tr><td><code>/tournaments/:id/coach-comment</code></td><td>POST</td><td>Coach</td><td>Add notes</td></tr><tr><td><code>/tournaments/:id/assign-coach</code></td><td>POST</td><td>Admin</td><td>Assign coach</td></tr><tr><td><code>/ping-coach</code></td><td>POST</td><td>Admin</td><td>Send push invite</td></tr></tbody>
+    </table>
+  </div>
+  <div class="page-break"></div>
+  <div class="flow-section keep-together" id="evaluation">
+    <h2>4. Player Evaluation & AI Analysis</h2>
+    <p class="section-intro">Coaches evaluate player performance with structured scoring across multiple skill dimensions, with optional AI-powered analysis generation.</p>
+    <div class="diagram-wrapper no-break">
+      <div class="mermaid">sequenceDiagram
+    participant C as Coach App
+    participant API as Evaluation Routes
+    participant INFRA as Infrastructure
+    participant AI as Groq/Cerebras LLM
+    participant DB as MongoDB
+    C->>API: POST /evaluations { scores, notes }
+    API->>API: Verify role = coach
+    API->>DB: Evaluation.save
+    API-->>C: { success, evaluation }
+    C->>INFRA: POST /evaluate/analysis
+    INFRA->>AI: fetchWithAIFallback (llama-3.3-70b)
+    AI-->>INFRA: Generated analysis text
+    INFRA-->>C: { success, analysis }</div>
+    </div>
+    <div class="steps-container">
+      <div class="steps-title">Detailed Flow Breakdown</div>
+      
+    <div class="step-detail">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-label">Create Evaluation</div>
+        <div class="step-desc">Coach submits structured scores across skill dimensions: forehand, backhand, serve, footwork, strategy (each 0-100). Optional text notes provide qualitative feedback. The evaluatorId is enforced from JWT to prevent spoofing.</div>
+        <div class="step-api">POST /api/v1/evaluations { playerId, scores, notes }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-label">Ownership Enforcement</div>
+        <div class="step-desc">When updating an existing evaluation, the server verifies that doc.evaluatorId matches the requesting coach (or the user is an admin). This prevents coaches from editing each other's evaluations.</div>
+        
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-label">View Evaluations</div>
+        <div class="step-desc">Coach can list evaluations filtered by playerId, with results sorted by lastUpdated descending. Supports pagination with limit parameter.</div>
+        <div class="step-api">GET /api/v1/evaluations?playerId=xyz&limit=50</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-label">AI Analysis Generation</div>
+        <div class="step-desc">Coach requests an AI-generated analysis based on the evaluation scores. The system uses Groq API with llama-3.3-70b-versatile model, with Cerebras as a fallback. The prompt instructs the AI to be encouraging and motivating.</div>
+        <div class="step-api">POST /api/v1/infrastructure/evaluate/analysis { evaluationScores, playerSkillLevel }</div>
+      </div>
+    </div>
+    <div class="step-detail">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-label">Video Highlights</div>
+        <div class="step-desc">Coach can request AI-generated highlights from match video URLs. The infrastructure route processes the video and returns timestamps of key moments.</div>
+        <div class="step-api">POST /api/v1/infrastructure/videos/:id/highlights { videoUrl }</div>
+      </div>
+    </div>
+    </div>
+    
+    <h3>API Endpoints</h3>
+    <table class="api-table">
+      <thead><tr><th>Endpoint</th><th>Method</th><th>Purpose</th></tr></thead>
+      <tbody><tr><td><code>/evaluations</code></td><td>POST</td><td>Create/update evaluation</td></tr><tr><td><code>/evaluations</code></td><td>GET</td><td>List evaluations</td></tr><tr><td><code>/infrastructure/evaluate/analysis</code></td><td>POST</td><td>AI analysis from scores</td></tr><tr><td><code>/infrastructure/videos/:id/highlights</code></td><td>POST</td><td>Video highlight generation</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="doc-footer">
+    AceTrack Architecture Documentation — Confidential • © 2026 AceTrack
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      themeVariables: {
+        primaryColor: '#4F46E5',
+        primaryTextColor: '#fff',
+        primaryBorderColor: '#4338CA',
+        lineColor: '#64748B',
+        secondaryColor: '#F1F5F9',
+        tertiaryColor: '#EEF2FF',
+        fontSize: '10px'
+      },
+      sequence: { mirrorActors: false, useMaxWidth: true, wrap: true },
+      flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+    });
+  </script>
+</body>
+</html>

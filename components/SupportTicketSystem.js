@@ -1176,7 +1176,7 @@ export const SupportTicketSystem = ({
             )}
 
             {/* ⭐ CSAT Rating (Only for closed tickets & actual users) */}
-            {isClosed && userRole === 'user' && !selectedTicket.rating && (
+            {isClosed && !isAgent && !selectedTicket.rating && (
               <View style={styles.csatCard}>
                 <Text style={styles.csatTitle}>How was our support?</Text>
                 <View style={styles.csatStarsRow}>
