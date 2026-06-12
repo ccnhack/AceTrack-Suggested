@@ -811,10 +811,10 @@ router.post('/support/save-ticket', apiKeyGuard, authGuard, async (req, res) => 
     const userDoc = await Player.findOne({ id: userId }).lean();
 
     const generatedId = ticket.id || `${Math.floor(1000000 + Math.random() * 9000000)}`;
-    const isNew = !ticket.id;
     
     let ticketDoc = await SupportTicket.findOne({ id: generatedId });
-    if (!ticketDoc) {
+    const isNewInDb = !ticketDoc;
+    if (isNewInDb) {
       ticketDoc = new SupportTicket({ id: generatedId, data: {} });
     }
 
@@ -823,11 +823,12 @@ router.post('/support/save-ticket', apiKeyGuard, authGuard, async (req, res) => 
       status: ticket.status || 'Open',
       createdAt: ticket.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      creatorRole: userDoc?.data?.role || 'user',
       ...ticket, 
       deviceInfo: ticket.deviceInfo || deviceInfo
     };
 
-    if (isNew) {
+    if (isNewInDb) {
       // 🛡️ [HIERARCHICAL ASSIGNMENT] (v2.6.345): Route support-staff tickets up the chain
       if (userDoc && userDoc.data && userDoc.data.role === 'support') {
         const creatorLevel = (userDoc.data.supportLevel || '').toLowerCase();

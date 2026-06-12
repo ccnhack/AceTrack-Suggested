@@ -48,7 +48,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
   };
 
   const ticketStats = useMemo(() => {
-    let tickets = supportTickets || [];
+    let tickets = (supportTickets || []).filter(t => t.creatorRole !== 'support');
     
     // Apply strict scoping rules for support staff
     if (currentUser?.id !== 'admin') {
@@ -332,7 +332,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
         showsVerticalScrollIndicator={false}
       >
         <AdminGrievancesPanel 
-          tickets={supportTickets || []}
+          tickets={(supportTickets || []).filter(t => t.creatorRole !== 'support')}
           players={players || []}
           onReply={onReplyTicket}
           onUpdateStatus={onUpdateTicketStatus}

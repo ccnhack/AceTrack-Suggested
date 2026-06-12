@@ -528,6 +528,8 @@ export const AdminGrievancesPanel = ({
     })
     .filter(t => {
       if (!search) return true;
+      // 🛡️ [VISIBILITY GUARD]: Support-created tickets are invisible to non-admin users
+      if (t.creatorRole === 'support' && currentUser?.role !== 'admin') return false;
       const q = search.toLowerCase();
       const userName = (getUserName(t.userId) || '').toLowerCase();
       const userId = (String(t.userId || '')).toLowerCase();
