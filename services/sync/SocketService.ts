@@ -6,6 +6,7 @@ import { eventBus } from '../EventBus';
 import logger from '../../utils/logger';
 import storage from '../../utils/storage';
 import { useCommsStore } from '../../stores/useCommsStore'; // 🛡️ [PATH_FIXED] (v2.6.405)
+import { useAdminCoreStore } from '../../stores/useAdminCoreStore';
 
 class SocketService {
   private socket: Socket | null = null;
@@ -86,6 +87,11 @@ class SocketService {
       // 🗑️ [DELETE_SYNC] (v2.6.405)
       this.socket.on('org_chat_delete', ({ messageId }) => {
         useCommsStore.getState().removeMessage(messageId);
+      });
+
+      // 📡 [PRESENCE] (v2.6.638)
+      this.socket.on('user_presence_changed', ({ userId, isLive, lastActive }) => {
+        useAdminCoreStore.getState().updatePresence(userId, isLive, lastActive);
       });
 
       this.socket.on('connect', () => {

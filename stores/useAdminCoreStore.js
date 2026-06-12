@@ -17,6 +17,17 @@ export const useAdminCoreStore = create((set, get) => ({
     teamDirectory: [],
     isLoading: false,
 
+    // 📡 [PRESENCE] (v2.6.638): Update team member presence
+    updatePresence: (userId, isLive, lastActive) => {
+        set((state) => ({
+            teamDirectory: state.teamDirectory.map(user => 
+                String(user.id) === String(userId) 
+                    ? { ...user, isLive, lastActive: lastActive || user.lastActive } 
+                    : user
+            )
+        }));
+    },
+
     fetchTeamDirectory: async () => {
         try {
             set({ isLoading: true });

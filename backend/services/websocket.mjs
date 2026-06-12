@@ -86,7 +86,7 @@ io.on('connection', async (socket) => {
 
     // Use the explicitly provided role from the client if available
     // 🛡️ [SCALABILITY FIX] (v2.6.620): Migrate active sessions to DB for multi-instance support.
-    const startSession = async () => {
+    const startSession = async (roleOverride) => {
       try {
         await Player.updateOne(
           { id: String(connUserId) },
@@ -99,21 +99,28 @@ io.on('connection', async (socket) => {
             } 
           }
         );
-        console.log(`🕐 [SESSION] Support employee ${connUserId} DB session started (socket: ${socket.id})`);
+        console.log(`🕐 [SESSION] User ${connUserId} DB session started (socket: ${socket.id})`);
+        
+        // 📡 [PRESENCE] (v2.6.638): Broadcast presence change to authenticated clients
+        io.to('authenticated').emit('user_presence_changed', { 
+          userId: connUserId, 
+          isLive: true, 
+          lastActive: Date.now() 
+        });
       } catch (e) {
         console.warn('[SESSION] Failed to start DB session:', e.message);
       }
     };
 
-    if (connRole === 'support') {
-      startSession();
+    if (connRole === 'support' || connRole === 'admin') {
+      startSession(connRole);
     } else {
       // Fallback: check database if client didn't provide role
       try {
         const playerDoc = await Player.findOne({ id: String(connUserId) }).lean();
         const player = playerDoc?.data;
-        if (player && player.role === 'support') {
-          startSession();
+        if (player && (player.role === 'support' || player.role === 'admin')) {
+          startSession(player.role);
         }
       } catch (e) {
         console.warn('[SESSION] Failed to check user role on connect:', e.message);
@@ -245,8 +252,18 @@ io.on('connection', async (socket) => {
         // Unset live fields
         await Player.updateOne(
           { id: session.id },
-          { $unset: { "data.isLive": "", "data.liveSocketId": "", "data.liveDeviceName": "", "data.liveUserAgent": "", "data.liveSessionStart": "" } }
+          { 
+            $unset: { "data.isLive": "", "data.liveSocketId": "", "data.liveDeviceName": "", "data.liveUserAgent": "", "data.liveSessionStart": "" },
+            $set: { "data.lastActive": Date.now() }
+          }
         );
+
+        // 📡 [PRESENCE] (v2.6.638): Broadcast presence change
+        io.to('authenticated').emit('user_presence_changed', { 
+          userId: session.id, 
+          isLive: false, 
+          lastActive: Date.now() 
+        });
       }
     } catch (e) {
       console.error('🕐 [SESSION] Failed to persist session on disconnect:', e.message);
