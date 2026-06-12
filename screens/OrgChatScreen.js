@@ -83,6 +83,22 @@ const OrgChatScreen = ({ navigation }) => {
     }
   }, [teamDirectory?.length, initialContactId]);
 
+  // 🛡️ [SYNC_PRESENCE] (v2.6.640): Keep selectedContact presence in sync with teamDirectory
+  useEffect(() => {
+    if (selectedContact && teamDirectory?.length > 0) {
+      const updatedContact = teamDirectory.find(c => String(c.id) === String(selectedContact.id));
+      if (updatedContact) {
+         const hasChanged = updatedContact.isLive !== selectedContact.isLive || 
+                            updatedContact.status !== selectedContact.status || 
+                            updatedContact.lastActive !== selectedContact.lastActive;
+         if (hasChanged) {
+            console.log(`[OrgChat] Syncing presence for ${selectedContact.name} - isLive: ${updatedContact.isLive}`);
+            setSelectedContact(prev => ({...prev, ...updatedContact}));
+         }
+      }
+    }
+  }, [teamDirectory, selectedContact?.id]);
+
   useEffect(() => {
     const socket = socketService.getSocket();
     if (!socket) return;
