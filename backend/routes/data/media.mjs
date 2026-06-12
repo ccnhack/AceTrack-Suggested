@@ -33,13 +33,30 @@ router.post('/upload', apiKeyGuard, authGuard, upload.single('video'), async (re
     else if (req.file.mimetype.startsWith('image/')) uploadFolder = 'acetrack/images';
     else uploadFolder = 'acetrack/others';
 
+    const uploadOptions = {
+      resource_type: 'auto',
+      folder: uploadFolder,
+      public_id: `${Date.now()}-${Math.round(Math.random() * 1e9)}${req.file.mimetype.startsWith('image/') ? '.jpg' : ''}`,
+      format: req.file.mimetype.startsWith('image/') ? 'jpg' : undefined,
+    };
+
+    if (req.file.mimetype.startsWith('video/')) {
+      uploadOptions.eager = [
+        { 
+          overlay: "text:Arial_40_bold:%40AceTrack", 
+          gravity: "bottom_right", 
+          x: 20, 
+          y: 20, 
+          color: "white", 
+          opacity: 60 
+        }
+      ];
+      uploadOptions.eager_async = true;
+      uploadOptions.eager_notification_url = 'https://acetrack-suggested.onrender.com/api/webhooks/cloudinary';
+    }
+
     const stream = cloudinary.uploader.upload_stream(
-      {
-        resource_type: 'auto',
-        folder: uploadFolder,
-        public_id: `${Date.now()}-${Math.round(Math.random() * 1e9)}${req.file.mimetype.startsWith('image/') ? '.jpg' : ''}`,
-        format: req.file.mimetype.startsWith('image/') ? 'jpg' : undefined,
-      },
+      uploadOptions,
       async (error, result) => {
         if (req.file.path) {
           fs.promises.unlink(req.file.path).catch(e => console.error("Cleanup error:", e));
@@ -65,6 +82,39 @@ router.post('/upload', apiKeyGuard, authGuard, upload.single('video'), async (re
   }
 });
 
+router.post('/webhooks/cloudinary', async (req, res) => {
+  try {
+    const { notification_type, public_id, secure_url, eager } = req.body;
+    
+    // We only care about eager transformation completion
+    if (notification_type === 'eager' && eager && eager.length > 0) {
+      const watermarkedUrl = eager[0].secure_url;
+      
+      // Find the video by its Cloudinary public_id using a regex match on the original URL
+      const videoDocs = await MatchVideo.find({ "data.videoUrl": { $regex: public_id } });
+      
+      for (const doc of videoDocs) {
+        doc.data.watermarkedUrl = watermarkedUrl;
+        doc.data.status = 'ready';
+        doc.markModified('data');
+        await doc.save();
+        
+        if (io) {
+          io.emit('entity_updated', {
+            entity: 'matchVideos',
+            data: doc.data,
+            source: 'webhook',
+            timestamp: Date.now()
+          });
+        }
+      }
+    }
+    res.status(200).send('OK');
+  } catch (error) {
+    console.error('Cloudinary Webhook Error:', error);
+    res.status(500).send('Error');
+  }
+});
 
 router.post('/videos/save-metadata', apiKeyGuard, authGuard, async (req, res) => {
   const { video } = req.body;
