@@ -84,6 +84,7 @@ export const AdminGrievancesPanel = ({
   const [assignmentScope, setAssignmentScope] = useState('all'); // 'me' | 'all'
   const [filterAgentId, setFilterAgentId] = useState(null);
   const [showAgentPicker, setShowAgentPicker] = useState(false);
+  const [interventionModalConfig, setInterventionModalConfig] = useState(null); // ⚠️ [INTERVENTION_MODAL] (v2.6.649)
 
   useEffect(() => {
     if (showReassignModal) {
@@ -596,15 +597,6 @@ export const AdminGrievancesPanel = ({
     const isAssignedToMe = String(selectedTicket.assignedTo) === String(currentUser?.id) || String(selectedTicket.assignedTo) === String(currentUser?.username);
     const hasAssignee = selectedTicket.assignedTo && selectedTicket.assignedTo !== 'Unassigned' && selectedTicket.assignedTo !== '';
 
-    const proceedSend = async () => {
-      const res = await onReply(selectedTicket.id, replyText, selectedImage, replyToMsg);
-      if (res.success) {
-        setReplyText('');
-        setSelectedImage(null);
-        setReplyToMsg(null);
-      }
-    };
-
     if (!isException && hasAssignee && !isAssignedToMe) {
       const fiveMinsAgo = Date.now() - 5 * 60 * 1000;
       let consecutiveCount = 0;
@@ -624,55 +616,30 @@ export const AdminGrievancesPanel = ({
       }
 
       if (consecutiveCount >= 2) { 
-         if (Platform.OS === 'web') {
-           const confirmed = window.confirm("You have sent 3 messages in a row within 5 mins on a ticket assigned to someone else. Do you want to assign it to yourself to continue?");
-           if (confirmed) {
-             const reassignRes = await onReassignTicket(selectedTicket.id, currentUser?.id);
-             if (reassignRes?.success) {
-               await proceedSend();
-             } else {
-               window.alert(reassignRes?.error || "Failed to reassign ticket.");
-             }
-           }
-         } else {
-           Alert.alert(
-             "Reassign Ticket", 
-             "You have sent 3 messages in a row within 5 mins on a ticket assigned to someone else. Do you want to assign it to yourself to continue?", 
-             [
-                { text: "Cancel", style: "cancel" },
-                { text: "Assign Myself", onPress: async () => { 
-                    const reassignRes = await onReassignTicket(selectedTicket.id, currentUser?.id);
-                    if (reassignRes?.success) {
-                       proceedSend();
-                    } else {
-                       Alert.alert("Error", reassignRes?.error || "Failed to reassign ticket.");
-                    }
-                } }
-             ]
-           );
-         }
+         setInterventionModalConfig({
+           type: 'reassign',
+           message: "You have sent 3 messages in a row within 5 mins on a ticket assigned to someone else. Do you want to assign it to yourself to continue?"
+         });
          return;
       }
       
-      if (Platform.OS === 'web') {
-        const confirmed = window.confirm(`The ticket is assigned to support agent ${getUserName(selectedTicket.assignedTo)}, are you willing to send the message?`);
-        if (confirmed) {
-          await proceedSend();
-        }
-      } else {
-        Alert.alert(
-          "Warning", 
-          `The ticket is assigned to support agent ${getUserName(selectedTicket.assignedTo)}, are you willing to send the message?`, 
-          [
-            { text: "Cancel", style: "cancel" },
-            { text: "Yes", onPress: proceedSend }
-          ]
-        );
-      }
+      setInterventionModalConfig({
+        type: 'warning',
+        message: `The ticket is assigned to support agent ${getUserName(selectedTicket.assignedTo)}, are you willing to send the message?`
+      });
       return;
     }
 
-    proceedSend();
+    executeSendReply();
+  };
+
+  const executeSendReply = async () => {
+    const res = await onReply(selectedTicket.id, replyText, selectedImage, replyToMsg);
+    if (res.success) {
+      setReplyText('');
+      setSelectedImage(null);
+      setReplyToMsg(null);
+    }
   };
 
   const handleGenerateMissingSummary = async () => {
@@ -1354,6 +1321,47 @@ export const AdminGrievancesPanel = ({
               <View style={styles.loadingBox}>
                 <ActivityIndicator color="#2563EB" size="large" />
                 <Text style={styles.loadingText}>ACE AI Analyzing Conversation...</Text>
+              </View>
+            </View>
+          )}
+
+          {interventionModalConfig && (
+            <View style={[styles.modalOverlay, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1003 }]}>
+              <View style={styles.confirmBox}>
+                <Text style={styles.confirmTitle}>
+                  {interventionModalConfig.type === 'reassign' ? 'Reassign Ticket' : 'Warning'}
+                </Text>
+                <Text style={styles.confirmBody}>{interventionModalConfig.message}</Text>
+                <View style={styles.confirmButtons}>
+                  <TouchableOpacity 
+                    onPress={() => setInterventionModalConfig(null)} 
+                    style={styles.confirmNo}
+                  >
+                    <Text style={styles.confirmNoText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    onPress={async () => {
+                      const configType = interventionModalConfig.type;
+                      setInterventionModalConfig(null);
+                      
+                      if (configType === 'reassign') {
+                        const reassignRes = await onReassignTicket(selectedTicket.id, currentUser?.id);
+                        if (reassignRes?.success) {
+                           await executeSendReply();
+                        } else {
+                           Alert.alert("Error", reassignRes?.error || "Failed to reassign ticket.");
+                        }
+                      } else {
+                        await executeSendReply();
+                      }
+                    }} 
+                    style={styles.confirmYes}
+                  >
+                    <Text style={styles.confirmYesText}>
+                      {interventionModalConfig.type === 'reassign' ? 'Assign Myself' : 'Yes'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           )}
