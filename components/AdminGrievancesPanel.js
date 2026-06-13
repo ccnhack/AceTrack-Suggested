@@ -578,8 +578,20 @@ export const AdminGrievancesPanel = ({
 
     const myRole = currentUser?.role || 'user';
     const myLevel = currentUser?.supportLevel || '';
-    const isException = ['admin'].includes(myRole.toLowerCase()) || 
-                        ['manager', 'team lead', 'teamlead'].includes(myLevel.toLowerCase());
+    
+    let isException = ['admin'].includes(myRole.toLowerCase());
+    if (!isException && ['manager', 'team lead', 'teamlead'].includes(myLevel.toLowerCase())) {
+        if (selectedTicket.assignedTo && selectedTicket.assignedTo !== 'Unassigned') {
+            const assignee = (players || []).find(p => String(p.id) === String(selectedTicket.assignedTo) || p.username === selectedTicket.assignedTo);
+            if (assignee) {
+                const isTheirManager = String(assignee.managerId) === String(currentUser?.id);
+                const isTheirTeamLead = String(assignee.teamLeadId) === String(currentUser?.id);
+                if (isTheirManager || isTheirTeamLead) {
+                    isException = true;
+                }
+            }
+        }
+    }
     
     const isAssignedToMe = String(selectedTicket.assignedTo) === String(currentUser?.id) || String(selectedTicket.assignedTo) === String(currentUser?.username);
     const hasAssignee = selectedTicket.assignedTo && selectedTicket.assignedTo !== 'Unassigned' && selectedTicket.assignedTo !== '';
