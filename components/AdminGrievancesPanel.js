@@ -345,14 +345,16 @@ export const AdminGrievancesPanel = ({
       return;
     }
     // 🛡️ [FIX v2.6.290] Atomic Status + Justification Update
-    const statusRes = onUpdateStatus(selectedTicket.id, pendingReopenStatus, null, reopenJustification.trim());
+    const statusRes = await onUpdateStatus(selectedTicket.id, pendingReopenStatus, null, reopenJustification.trim());
     
-    if (statusRes.success) {
+    if (statusRes && statusRes.success) {
       setShowReopenModal(false);
       setReopenJustification('');
       setPendingReopenStatus(null);
     }
-    notify(statusRes);
+    if (statusRes) {
+      notify(statusRes);
+    }
   };
 
   const processStatusConfirmation = async (confirmed) => {
