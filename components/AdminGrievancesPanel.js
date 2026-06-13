@@ -624,32 +624,51 @@ export const AdminGrievancesPanel = ({
       }
 
       if (consecutiveCount >= 2) { 
-         Alert.alert(
-           "Reassign Ticket", 
-           "You have sent 3 messages in a row within 5 mins on a ticket assigned to someone else. Do you want to assign it to yourself to continue?", 
-           [
-              { text: "Cancel", style: "cancel" },
-              { text: "Assign Myself", onPress: async () => { 
-                  const reassignRes = await onReassignTicket(selectedTicket.id, currentUser?.id);
-                  if (reassignRes?.success) {
-                     proceedSend();
-                  } else {
-                     Alert.alert("Error", reassignRes?.error || "Failed to reassign ticket.");
-                  }
-              } }
-           ]
-         );
+         if (Platform.OS === 'web') {
+           const confirmed = window.confirm("You have sent 3 messages in a row within 5 mins on a ticket assigned to someone else. Do you want to assign it to yourself to continue?");
+           if (confirmed) {
+             const reassignRes = await onReassignTicket(selectedTicket.id, currentUser?.id);
+             if (reassignRes?.success) {
+               await proceedSend();
+             } else {
+               window.alert(reassignRes?.error || "Failed to reassign ticket.");
+             }
+           }
+         } else {
+           Alert.alert(
+             "Reassign Ticket", 
+             "You have sent 3 messages in a row within 5 mins on a ticket assigned to someone else. Do you want to assign it to yourself to continue?", 
+             [
+                { text: "Cancel", style: "cancel" },
+                { text: "Assign Myself", onPress: async () => { 
+                    const reassignRes = await onReassignTicket(selectedTicket.id, currentUser?.id);
+                    if (reassignRes?.success) {
+                       proceedSend();
+                    } else {
+                       Alert.alert("Error", reassignRes?.error || "Failed to reassign ticket.");
+                    }
+                } }
+             ]
+           );
+         }
          return;
       }
       
-      Alert.alert(
-        "Warning", 
-        `The ticket is assigned to support agent ${getUserName(selectedTicket.assignedTo)}, are you willing to send the message?`, 
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Yes", onPress: proceedSend }
-        ]
-      );
+      if (Platform.OS === 'web') {
+        const confirmed = window.confirm(`The ticket is assigned to support agent ${getUserName(selectedTicket.assignedTo)}, are you willing to send the message?`);
+        if (confirmed) {
+          await proceedSend();
+        }
+      } else {
+        Alert.alert(
+          "Warning", 
+          `The ticket is assigned to support agent ${getUserName(selectedTicket.assignedTo)}, are you willing to send the message?`, 
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Yes", onPress: proceedSend }
+          ]
+        );
+      }
       return;
     }
 
