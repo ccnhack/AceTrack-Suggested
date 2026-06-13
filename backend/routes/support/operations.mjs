@@ -230,10 +230,15 @@ router.post('/support/reassign-ticket', apiKeyGuard, authGuard, async (req, res)
     }
 
     // Inject the introduction message into the ticket's messages
+    // 🛡️ [REASSIGN_MSG] (v2.6.650): Differentiate intro message for reassignment vs first assignment
+    const isReassignment = oldAgentId && oldAgentId !== 'Unassigned' && oldAgentId !== '' && oldAgentId !== targetAgentId;
+    const introText = isReassignment
+      ? `To ensure faster resolution, this ticket has been reassigned and will now be handled by ${targetAgent.name}. We're committed to resolving your issue related to ${issueDescription} as quickly as possible.`
+      : `Hi ${userName}, I am ${targetAgent.name} and I will be working on resolving the issue related to ${issueDescription}.`;
     const introMsg = {
       id: `intro-${Date.now()}`,
       senderId: targetAgentId,
-      text: `Hi ${userName}, I am ${targetAgent.name} and I will be working on resolving the issue related to ${issueDescription}.`,
+      text: introText,
       timestamp: new Date().toISOString(),
       status: 'delivered'
     };

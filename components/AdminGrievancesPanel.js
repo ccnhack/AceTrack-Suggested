@@ -112,9 +112,15 @@ export const AdminGrievancesPanel = ({
     if (selectedTicket && tickets) {
       const updated = (tickets || []).find(t => t.id === selectedTicket.id || t._id === selectedTicket.id);
       if (updated) {
-        // 🛡️ [SYNC PROTECTION] (v2.6.253 hardened): Prioritize local assignedTo if it exists to prevent 
-        // stale SQLite data from reverting optimistic UI updates during reassignment.
-        const nextAssignedTo = selectedTicket.assignedTo || updated.assignedTo;
+        // 🛡️ [SYNC PROTECTION] (v2.6.650 hardened): Accept store assignedTo when it changes,
+        // to prevent stale local state from blocking UI refresh after reassignment.
+        const storeAssignedTo = updated.assignedTo;
+        const localAssignedTo = selectedTicket.assignedTo;
+        // If the store's assignedTo is different from local AND different from what it was,
+        // the store has a real update (e.g. reassignment happened) — use it.
+        const nextAssignedTo = (storeAssignedTo && storeAssignedTo !== localAssignedTo) 
+          ? storeAssignedTo 
+          : (localAssignedTo || storeAssignedTo);
         
         // Only update if something meaningful changed (e.g. status, messages, assignedTo)
         const hasChanged = updated.status !== selectedTicket.status || 
@@ -1347,6 +1353,8 @@ export const AdminGrievancesPanel = ({
                       if (configType === 'reassign') {
                         const reassignRes = await onReassignTicket(selectedTicket.id, currentUser?.id);
                         if (reassignRes?.success) {
+                           // Force-update local selectedTicket to reflect new assignee immediately
+                           setSelectedTicket(prev => prev ? { ...prev, assignedTo: currentUser?.id, assignedAgentName: currentUser?.name } : prev);
                            await executeSendReply();
                         } else {
                            Alert.alert("Error", reassignRes?.error || "Failed to reassign ticket.");
