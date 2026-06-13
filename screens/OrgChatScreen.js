@@ -474,6 +474,7 @@ const OrgChatScreen = ({ navigation }) => {
             conversation.map((msg, idx) => {
               const isMe = String(msg.senderId) === String(currentUser?.id);
               const showDate = idx === 0 || new Date(msg.timestamp).toDateString() !== new Date(conversation[idx - 1].timestamp).toDateString();
+              const isEmptyMessage = (!msg.content || msg.content === '(empty)') && (!msg.attachments || msg.attachments.length === 0);
               
               return (
                 <View 
@@ -515,7 +516,13 @@ const OrgChatScreen = ({ navigation }) => {
                       onMouseEnter={() => isWeb && setHoveredMessageId(msg._id)}
                       onMouseLeave={() => isWeb && setHoveredMessageId(null)}
                     >
-                      {/* 🛡️ [REPLY_TO_UI] (v2.6.407): Show populated quoted message */}
+                      {isEmptyMessage ? (
+                        <Text style={[styles.msgContent, { fontStyle: 'italic', color: isMe ? 'rgba(255,255,255,0.7)' : '#94A3B8', padding: 4 }]}>
+                          Message removed as per organisation policy
+                        </Text>
+                      ) : (
+                        <>
+                          {/* 🛡️ [REPLY_TO_UI] (v2.6.407): Show populated quoted message */}
                       {msg.replyTo && (
                         <TouchableOpacity 
                           activeOpacity={0.7}
@@ -660,6 +667,8 @@ const OrgChatScreen = ({ navigation }) => {
                             );
                           })}
                         </View>
+                      )}
+                      </>
                       )}
 
                       <Text style={[styles.msgTimestamp, isMe && { color: 'rgba(255,255,255,0.6)' }]}>
