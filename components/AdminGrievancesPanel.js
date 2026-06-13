@@ -1021,7 +1021,7 @@ export const AdminGrievancesPanel = ({
                       </View>
 
                       <View style={[styles.statusControl, { marginTop: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 16 }]}>
-                         <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12 }}>
+                         <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                            {((currentUser?.role === 'admin' || currentUser?.id === 'admin') && !isPermanentlyClosed) ? (
                              <TouchableOpacity 
                                onPress={handleReassign}
