@@ -41,6 +41,7 @@ const OrgChatScreen = ({ navigation }) => {
   const [activeMenuId, setActiveMenuId] = useState(null); // ⋯ [DROPDOWN_STATE]
   const [previewImage, setPreviewImage] = useState(null); // 🖼️ [IMAGE_PREVIEW] (v2.6.466)
   const [reactionTooltip, setReactionTooltip] = useState(null); // 💡 [REACTION_TOOLTIP] (v2.6.468)
+  const [showContactCard, setShowContactCard] = useState(false); // 📇 [CONTACT_CARD]
   const fileInputRef = useRef(null);
   const chatScrollRef = useRef(null);
   const chatInputRef = useRef(null);
@@ -442,8 +443,43 @@ const OrgChatScreen = ({ navigation }) => {
               <Ionicons name="arrow-back" size={22} color="#0F172A" />
             </TouchableOpacity>
           )}
-          <View style={styles.chatHeaderAvatar}>
-            <Text style={styles.chatHeaderAvatarText}>{getInitials(selectedContact.name)}</Text>
+          <View 
+            style={{ position: 'relative', zIndex: 50 }}
+            onMouseEnter={() => isWeb && setShowContactCard(true)}
+            onMouseLeave={() => isWeb && setShowContactCard(false)}
+          >
+            <View style={styles.chatHeaderAvatar}>
+              <Text style={styles.chatHeaderAvatarText}>{getInitials(selectedContact.name)}</Text>
+            </View>
+
+            {showContactCard && isWeb && (
+              <View style={styles.contactCard}>
+                <Text style={styles.contactCardName}>{selectedContact.name}</Text>
+                <Text style={styles.contactCardDesig}>{selectedContact.designation || 'No Designation'}</Text>
+                
+                <View style={styles.contactCardRow}>
+                  <Ionicons name="call" size={14} color="#64748B" />
+                  <Text style={styles.contactCardText}>{selectedContact.phone || 'N/A'}</Text>
+                </View>
+                
+                <View style={styles.contactCardRow}>
+                  <Ionicons name="mail" size={14} color="#64748B" />
+                  <Text style={styles.contactCardText}>{selectedContact.email || 'N/A'}</Text>
+                </View>
+
+                {(selectedContact.managerId || selectedContact.teamLeadId) && (
+                  <View style={styles.contactCardRow}>
+                    <Ionicons name="person" size={14} color="#64748B" />
+                    <Text style={styles.contactCardText}>
+                      Manager(s): {[
+                        teamDirectory.find(c => String(c.id) === String(selectedContact.managerId))?.name,
+                        teamDirectory.find(c => String(c.id) === String(selectedContact.teamLeadId))?.name
+                      ].filter(Boolean).join(', ') || 'Unknown'}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
           </View>
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -999,6 +1035,27 @@ const styles = StyleSheet.create({
     fontWeight: '500'
   },
   chatHeaderRole: { fontSize: 12, color: '#64748B', textTransform: 'capitalize' },
+  contactCard: {
+    position: 'absolute',
+    top: 50,
+    left: 0,
+    backgroundColor: '#FFF',
+    borderRadius: 8,
+    padding: 12,
+    minWidth: 200,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    zIndex: 100,
+  },
+  contactCardName: { fontSize: 14, fontWeight: '800', color: '#0F172A', marginBottom: 2 },
+  contactCardDesig: { fontSize: 12, color: '#6366F1', fontWeight: '600', marginBottom: 8 },
+  contactCardRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  contactCardText: { fontSize: 12, color: '#475569', marginLeft: 8 },
 
   // ─── Empty Chat ───────────────
   emptyChatContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
