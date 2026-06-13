@@ -116,9 +116,9 @@ router.get('/team-directory', async (req, res) => {
             const isLive = !!u.data?.isLive;
 
             // 🛡️ [PRESENCE_ENRICHMENT] (v2.6.393): Find most recent device activity
-            let lastActive = 0;
+            let lastActive = u.data?.lastActive || 0;
             if (u.data?.devices && Array.isArray(u.data.devices)) {
-                lastActive = Math.max(...u.data.devices.map(d => d.lastActive || 0), 0);
+                lastActive = Math.max(lastActive, ...u.data.devices.map(d => d.lastActive || 0), 0);
             }
 
             const dbStatus = (u.data?.supportStatus || '').toLowerCase();
