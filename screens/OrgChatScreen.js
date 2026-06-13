@@ -247,7 +247,20 @@ const OrgChatScreen = ({ navigation }) => {
     }
     
     // 🛡️ [HISTORY_UI] (v2.6.393): Use enriched lastActive timestamp
-    const lastActiveTs = contact.lastActive || 0;
+    let lastActiveTs = contact.lastActive || 0;
+    
+    // 🛡️ [ACTIVITY_ENRICHMENT] (v2.6.643): Also check message history for implicit activity
+    if (messages && messages.length > 0) {
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (String(messages[i].senderId) === String(contact.id)) {
+          if (messages[i].timestamp > lastActiveTs) {
+            lastActiveTs = messages[i].timestamp;
+          }
+          break;
+        }
+      }
+    }
+
     if (lastActiveTs > 0) {
       const diffMs = Date.now() - new Date(lastActiveTs).getTime();
       const diffMins = Math.floor(diffMs / 60000);
@@ -1007,6 +1020,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
+    zIndex: 1000,
   },
   chatHeaderAvatar: {
     width: 40,
