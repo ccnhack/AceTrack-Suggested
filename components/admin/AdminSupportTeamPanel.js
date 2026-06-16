@@ -54,7 +54,13 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   
   const [search, setSearch] = useState('');
   const [analytics, setAnalytics] = useState(null);
-  const [selectedAgentId, setSelectedAgentId] = useState(null);
+  const [selectedAgentId, setSelectedAgentId] = useState(() => {
+    if (Platform.OS === 'web') {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('agentId') || null;
+    }
+    return null;
+  });
   const [managerSearch, setManagerSearch] = useState('');
   const [leadSearch, setLeadSearch] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -78,7 +84,45 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   // 🕐 [ATTENDANCE] (v2.6.267): Attendance data state
   const [attendanceData, setAttendanceData] = useState(null);
   const [isLoadingAttendance, setIsLoadingAttendance] = useState(false);
-  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+  const [showAttendanceModal, setShowAttendanceModal] = useState(() => {
+    if (Platform.OS === 'web') {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('attendance') === 'true';
+    }
+    return false;
+  });
+
+  // 🛡️ [URL_PERSISTENCE] (v2.6.652): Keep agent and attendance state in URL to survive refreshes
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const currentUrl = new URL(window.location.href);
+      let changed = false;
+
+      if (selectedAgentId) {
+        if (currentUrl.searchParams.get('agentId') !== selectedAgentId) {
+          currentUrl.searchParams.set('agentId', selectedAgentId);
+          changed = true;
+        }
+      } else if (currentUrl.searchParams.has('agentId')) {
+        currentUrl.searchParams.delete('agentId');
+        changed = true;
+      }
+      
+      if (showAttendanceModal) {
+        if (currentUrl.searchParams.get('attendance') !== 'true') {
+          currentUrl.searchParams.set('attendance', 'true');
+          changed = true;
+        }
+      } else if (currentUrl.searchParams.has('attendance')) {
+        currentUrl.searchParams.delete('attendance');
+        changed = true;
+      }
+      
+      if (changed) {
+        window.history.replaceState({}, '', currentUrl.toString());
+      }
+    }
+  }, [selectedAgentId, showAttendanceModal]);
   const [attendanceDateFilter, setAttendanceDateFilter] = useState(() => new Date().toISOString().split('T')[0]);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
