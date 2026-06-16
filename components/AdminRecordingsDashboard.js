@@ -32,8 +32,51 @@ const AdminRecordingsDashboard = ({
   onPermanentDeleteVideo,
   onBulkPermanentDeleteVideos,
 }) => {
-  const [selectedAcademyId, setSelectedAcademyId] = useState(null);
-  const [selectedTournamentId, setSelectedTournamentId] = useState(null);
+  const [selectedAcademyId, setSelectedAcademyId] = useState(() => {
+    if (Platform.OS === 'web') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('academyId');
+    }
+    return null;
+  });
+  const [selectedTournamentId, setSelectedTournamentId] = useState(() => {
+    if (Platform.OS === 'web') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('tournamentId');
+    }
+    return null;
+  });
+
+  // 🛡️ [URL_PERSISTENCE] (v2.6.652)
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const currentUrl = new URL(window.location.href);
+      let changed = false;
+      if (selectedAcademyId) {
+        if (currentUrl.searchParams.get('academyId') !== selectedAcademyId) {
+          currentUrl.searchParams.set('academyId', selectedAcademyId);
+          changed = true;
+        }
+      } else if (currentUrl.searchParams.has('academyId')) {
+        currentUrl.searchParams.delete('academyId');
+        changed = true;
+      }
+      
+      if (selectedTournamentId) {
+        if (currentUrl.searchParams.get('tournamentId') !== selectedTournamentId) {
+          currentUrl.searchParams.set('tournamentId', selectedTournamentId);
+          changed = true;
+        }
+      } else if (currentUrl.searchParams.has('tournamentId')) {
+        currentUrl.searchParams.delete('tournamentId');
+        changed = true;
+      }
+
+      if (changed) {
+        window.history.replaceState({}, '', currentUrl.toString());
+      }
+    }
+  }, [selectedAcademyId, selectedTournamentId]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterSport, setFilterSport] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');

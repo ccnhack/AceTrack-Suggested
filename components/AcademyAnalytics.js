@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Modal, SafeAreaView } from 'react-native';
+import React, { useMemo, useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Modal, SafeAreaView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import designSystem from '../theme/designSystem';
 import { formatDateIST } from '../utils/tournamentUtils';
@@ -16,7 +16,33 @@ export const AcademyAnalytics = ({
   evaluations = []
 }) => {
   const [activeModal, setActiveModal] = useState(null); // 'revenue' | 'retention' | 'sport' | 'area'
-  const [selectedPlayerId, setSelectedPlayerId] = useState(null);
+  const [selectedPlayerId, setSelectedPlayerId] = useState(() => {
+    if (Platform.OS === 'web') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('playerId');
+    }
+    return null;
+  });
+
+  // 🛡️ [URL_PERSISTENCE] (v2.6.652)
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const currentUrl = new URL(window.location.href);
+      let changed = false;
+      if (selectedPlayerId) {
+        if (currentUrl.searchParams.get('playerId') !== selectedPlayerId) {
+          currentUrl.searchParams.set('playerId', selectedPlayerId);
+          changed = true;
+        }
+      } else if (currentUrl.searchParams.has('playerId')) {
+        currentUrl.searchParams.delete('playerId');
+        changed = true;
+      }
+      if (changed) {
+        window.history.replaceState({}, '', currentUrl.toString());
+      }
+    }
+  }, [selectedPlayerId]);
 
   const stats = useMemo(() => {
     // 1. My Data Filter

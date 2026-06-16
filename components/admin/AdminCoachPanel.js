@@ -1,7 +1,7 @@
-import React, { useMemo, useState, memo } from 'react';
+import React, { useMemo, useState, memo, useEffect } from 'react';
 import { 
   View, Text, TouchableOpacity, StyleSheet, Image, ScrollView, 
-  Alert, Linking, Modal, TextInput, ActivityIndicator 
+  Alert, Linking, Modal, TextInput, ActivityIndicator, Platform 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePlayersStore } from '../../stores';
@@ -13,7 +13,33 @@ const AdminCoachPanel = memo(({ search }) => {
   const { onApproveCoach } = useTournamentsStore();
   
   const [coachSubTab, setCoachSubTab] = useState('pending');
-  const [selectedCoachId, setSelectedCoachId] = useState(null);
+  const [selectedCoachId, setSelectedCoachId] = useState(() => {
+    if (Platform.OS === 'web') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('coachId');
+    }
+    return null;
+  });
+
+  // 🛡️ [URL_PERSISTENCE] (v2.6.652)
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const currentUrl = new URL(window.location.href);
+      let changed = false;
+      if (selectedCoachId) {
+        if (currentUrl.searchParams.get('coachId') !== selectedCoachId) {
+          currentUrl.searchParams.set('coachId', selectedCoachId);
+          changed = true;
+        }
+      } else if (currentUrl.searchParams.has('coachId')) {
+        currentUrl.searchParams.delete('coachId');
+        changed = true;
+      }
+      if (changed) {
+        window.history.replaceState({}, '', currentUrl.toString());
+      }
+    }
+  }, [selectedCoachId]);
   
   // Modal states
   const [rejectType, setRejectType] = useState(null); // 'rejected' | 'addendum'

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, Image,
   StyleSheet, Modal, TextInput, Alert, ActivityIndicator,
-  FlatList, Dimensions, SafeAreaView
+  FlatList, Dimensions, SafeAreaView, Platform
 } from 'react-native';
 import SafeAvatar from './SafeAvatar';
 import { Ionicons } from '@expo/vector-icons';
@@ -156,12 +156,57 @@ export const VideoManagement = ({
   const [deletionVideoId, setDeletionVideoId] = useState(null);
   const [deletionReason, setDeletionReason] = useState('');
   const [deletionComment, setDeletionComment] = useState('');
-  const [selectedTournamentId, setSelectedTournamentId] = useState('');
+  const [selectedTournamentId, setSelectedTournamentId] = useState(() => {
+    if (Platform.OS === 'web') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('tournamentId') || '';
+    }
+    return '';
+  });
   const [cameraType, setCameraType] = useState('Single');
   const [price, setPrice] = useState('49');
   const [videoFile, setVideoFile] = useState(null);
   const [expandedVideoPurchasers, setExpandedVideoPurchasers] = useState(new Set());
-  const [selectedMatchId, setSelectedMatchId] = useState('');
+  const [selectedMatchId, setSelectedMatchId] = useState(() => {
+    if (Platform.OS === 'web') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('matchId') || '';
+    }
+    return '';
+  });
+
+  // 🛡️ [URL_PERSISTENCE] (v2.6.652)
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const currentUrl = new URL(window.location.href);
+      let changed = false;
+      
+      if (selectedTournamentId) {
+        if (currentUrl.searchParams.get('tournamentId') !== selectedTournamentId) {
+          currentUrl.searchParams.set('tournamentId', selectedTournamentId);
+          changed = true;
+        }
+      } else if (currentUrl.searchParams.has('tournamentId')) {
+        currentUrl.searchParams.delete('tournamentId');
+        changed = true;
+      }
+
+      if (selectedMatchId) {
+        if (currentUrl.searchParams.get('matchId') !== selectedMatchId) {
+          currentUrl.searchParams.set('matchId', selectedMatchId);
+          changed = true;
+        }
+      } else if (currentUrl.searchParams.has('matchId')) {
+        currentUrl.searchParams.delete('matchId');
+        changed = true;
+      }
+
+      if (changed) {
+        window.history.replaceState({}, '', currentUrl.toString());
+      }
+    }
+  }, [selectedTournamentId, selectedMatchId]);
+
   const [showPurchasePrompt, setShowPurchasePrompt] = useState(null);
   const [playingPreview, setPlayingPreview] = useState(null);
   const [isUploading, setIsUploading] = useState(false);

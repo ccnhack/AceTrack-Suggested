@@ -1,5 +1,5 @@
-import React, { useMemo, useState, memo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image, Linking, ScrollView } from 'react-native';
+import React, { useMemo, useState, memo, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Image, Linking, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import PlayerDashboardView from '../PlayerDashboardView';
 import { usePlayersStore } from '../../stores';
@@ -8,7 +8,33 @@ import { useTournamentsStore } from '../../stores';
 const AdminUserPanel = memo(({ subTab, search }) => {
   const { players } = usePlayersStore();
   const { tournaments } = useTournamentsStore();
-  const [selectedAcademy, setSelectedAcademy] = useState(null);
+  const [selectedAcademy, setSelectedAcademy] = useState(() => {
+    if (Platform.OS === 'web') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('academyId');
+    }
+    return null;
+  });
+
+  // 🛡️ [URL_PERSISTENCE] (v2.6.652)
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const currentUrl = new URL(window.location.href);
+      let changed = false;
+      if (selectedAcademy) {
+        if (currentUrl.searchParams.get('academyId') !== selectedAcademy) {
+          currentUrl.searchParams.set('academyId', selectedAcademy);
+          changed = true;
+        }
+      } else if (currentUrl.searchParams.has('academyId')) {
+        currentUrl.searchParams.delete('academyId');
+        changed = true;
+      }
+      if (changed) {
+        window.history.replaceState({}, '', currentUrl.toString());
+      }
+    }
+  }, [selectedAcademy]);
 
   const filterData = (data, field = 'name') => {
     if (!data) return [];

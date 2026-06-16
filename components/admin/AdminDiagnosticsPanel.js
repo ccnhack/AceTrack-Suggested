@@ -60,6 +60,55 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
   const [isAnomaliesExpanded, setIsAnomaliesExpanded] = useState(false);
   const pongBufferRef = useRef({});
 
+  // 🛡️ [URL_PERSISTENCE] (v2.6.652)
+  const [selectedDiagUserIdFromUrl, setSelectedDiagUserIdFromUrl] = useState(() => {
+    if (Platform.OS === 'web') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('diagUserId');
+    }
+    return null;
+  });
+  
+  const [selectedDiagFileFromUrl, setSelectedDiagFileFromUrl] = useState(() => {
+    if (Platform.OS === 'web') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('diagFile');
+    }
+    return null;
+  });
+
+  // Sync selectedDiagUser and selectedDiagFile TO the URL
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const currentUrl = new URL(window.location.href);
+      let changed = false;
+      
+      if (selectedDiagUser) {
+        if (currentUrl.searchParams.get('diagUserId') !== selectedDiagUser.id) {
+          currentUrl.searchParams.set('diagUserId', selectedDiagUser.id);
+          changed = true;
+        }
+      } else if (currentUrl.searchParams.has('diagUserId')) {
+        currentUrl.searchParams.delete('diagUserId');
+        changed = true;
+      }
+
+      if (selectedDiagFile) {
+        if (currentUrl.searchParams.get('diagFile') !== selectedDiagFile) {
+          currentUrl.searchParams.set('diagFile', selectedDiagFile);
+          changed = true;
+        }
+      } else if (currentUrl.searchParams.has('diagFile')) {
+        currentUrl.searchParams.delete('diagFile');
+        changed = true;
+      }
+
+      if (changed) {
+        window.history.replaceState({}, '', currentUrl.toString());
+      }
+    }
+  }, [selectedDiagUser, selectedDiagFile]);
+
   // 🛡️ Pong Handling Logic
   useEffect(() => {
     const socket = socketRef?.current;
@@ -120,6 +169,24 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
       }
     }
   }, [autoSelectUser, players, onConsumeAutoSelect]);
+
+  // URL Auto-Selection
+  useEffect(() => {
+    if (selectedDiagUserIdFromUrl && players && players.length > 0) {
+      const player = players.find(p => p.id === selectedDiagUserIdFromUrl);
+      if (player && !selectedDiagUser) {
+        handleSelectDiagPlayer(player);
+        setSelectedDiagUserIdFromUrl(null); // Consume
+      }
+    }
+  }, [selectedDiagUserIdFromUrl, players, selectedDiagUser]);
+
+  useEffect(() => {
+    if (selectedDiagFileFromUrl && userDiagFiles && userDiagFiles.includes(selectedDiagFileFromUrl)) {
+      handleViewLog(selectedDiagFileFromUrl);
+      setSelectedDiagFileFromUrl(null); // Consume
+    }
+  }, [selectedDiagFileFromUrl, userDiagFiles]);
 
   // 🛡️ Proactive Ping when subtab is ready
   useEffect(() => {

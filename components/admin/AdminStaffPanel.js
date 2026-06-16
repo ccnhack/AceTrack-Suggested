@@ -27,7 +27,34 @@ const AdminStaffPanel = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [resendingToken, setResendingToken] = useState(null);
   const [resendCooldowns, setResendCooldowns] = useState({});
-  const [expandedAnalytics, setExpandedAnalytics] = useState(null); // token of expanded card
+  const [expandedAnalytics, setExpandedAnalytics] = useState(() => {
+    if (Platform.OS === 'web') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('expandedToken');
+    }
+    return null;
+  }); // token of expanded card
+  
+  // 🛡️ [URL_PERSISTENCE] (v2.6.652)
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const currentUrl = new URL(window.location.href);
+      let changed = false;
+      if (expandedAnalytics) {
+        if (currentUrl.searchParams.get('expandedToken') !== expandedAnalytics) {
+          currentUrl.searchParams.set('expandedToken', expandedAnalytics);
+          changed = true;
+        }
+      } else if (currentUrl.searchParams.has('expandedToken')) {
+        currentUrl.searchParams.delete('expandedToken');
+        changed = true;
+      }
+      if (changed) {
+        window.history.replaceState({}, '', currentUrl.toString());
+      }
+    }
+  }, [expandedAnalytics]);
+
   const [selectedEvent, setSelectedEvent] = useState(null); // specific event for modal
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('active'); // 'active', 'onboarded', 'resolved'
