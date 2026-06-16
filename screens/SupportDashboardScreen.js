@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, StyleSheet, 
   SafeAreaView, Image, TextInput, Platform, useWindowDimensions
@@ -46,6 +46,36 @@ const SupportDashboardScreen = ({ navigation, route }) => {
       window.history.pushState({}, '', currentUrl.toString());
     }
   };
+
+  // 🕐 [SESSION HEARTBEAT] (v2.6.345): Send HTTP heartbeat every 2 minutes for attendance tracking
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== 'support') return;
+
+    const pingHeartbeat = async () => {
+      try {
+        const { getSecureSession } = await import('../utils/secureStore');
+        const token = await getSecureSession();
+        const headers = {
+          'Content-Type': 'application/json',
+          'x-api-key': 'ace_production_5f8a9b2c3d4e1f6g7h8i9j0k' // Added hardcoded API key since it's needed in most authenticated requests here
+        };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        await fetch('https://acetrack-suggested.onrender.com/api/v1/support/heartbeat', {
+          method: 'POST',
+          headers: headers
+        });
+        console.log('[Heartbeat] Sent support session ping');
+      } catch (err) {
+        console.warn('[Heartbeat] Failed to send support session ping:', err.message);
+      }
+    };
+
+    pingHeartbeat(); // Ping immediately on mount
+    const intervalId = setInterval(pingHeartbeat, 120000); // And every 2 mins
+
+    return () => clearInterval(intervalId);
+  }, [currentUser]);
 
   const ticketStats = useMemo(() => {
     let tickets = (supportTickets || []).filter(t => t.creatorRole !== 'support');

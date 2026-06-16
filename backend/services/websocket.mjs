@@ -236,7 +236,7 @@ io.on('connection', async (socket) => {
           const durationMins = Math.round(durationMs / 60000);
           console.log(`🕐 [SESSION] Support employee ${session.id} disconnected after ${durationMins}m`);
           
-          if (durationMs > 60000) {
+          if (durationMs > 10000) { // 🛡️ [SESSION FIX] (v2.6.345): Lowered from 60s to 10s — prevents silent session drops
             const { PlayerSession } = await import('../models/index.mjs');
             await PlayerSession.create({
               userId: session.id,

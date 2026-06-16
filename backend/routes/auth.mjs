@@ -654,9 +654,18 @@ export default function createAuthRoutes({
     const rotatedSessions = activeSessions.sort((a, b) => b.iat - a.iat).slice(0, 2);
     
     // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Removed syncMutex — Player.updateOne is atomic
+    // 🕐 [SESSION FIX] (v2.6.345): Seed session immediately upon login so attendance tracking catches it even if WebSocket fails
+    const now = Date.now();
     await Player.updateOne(
       { id: supportUser.id },
-      { $set: { "data.activeSessions": rotatedSessions, lastUpdated: new Date() } }
+      { $set: { 
+          "data.activeSessions": rotatedSessions, 
+          "data.isLive": true, 
+          "data.liveSessionStart": now,
+          "data.lastActive": now,
+          lastUpdated: new Date() 
+        } 
+      }
     );
 
     // Strip sensitive fields before sending the user object back

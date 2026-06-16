@@ -207,6 +207,56 @@ router.get('/support/attendance', apiKeyGuard, authGuard, async (req, res) => {
   }
 });
 
+// 🕐 [SESSION HEARTBEAT] (v2.6.345): HTTP-based session fallback for when WebSocket fails
+// Called every 2 minutes by the frontend to ensure session is tracked even without WS.
+router.post('/support/heartbeat', apiKeyGuard, authGuard, async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Authentication required' });
+
+  try {
+    const now = Date.now();
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    // 1. Find an open (no endTime) session for this user today
+    let openSession = await PlayerSession.findOne({
+      userId,
+      startTime: { $gte: todayStart },
+      endTime: { $exists: false }
+    });
+
+    if (openSession) {
+      // Extend the existing open session
+      openSession.endTime = new Date();
+      openSession.durationMs = now - new Date(openSession.startTime).getTime();
+      openSession.device = req.headers['user-agent']?.includes('Mobile') ? 'Mobile' : 'Browser';
+      await openSession.save();
+    } else {
+      // Check if WS already started a session (has endTime set by disconnect)
+      // If not, create a new HTTP-seeded session
+      openSession = await PlayerSession.create({
+        userId,
+        startTime: new Date(now - 120000), // Assume started ~2min ago (first heartbeat)
+        endTime: new Date(),
+        durationMs: 120000,
+        device: 'Browser (HTTP)',
+        userAgent: req.headers['user-agent'] || 'Unknown'
+      });
+    }
+
+    // 2. Keep Player marked as live (fallback for WS failure)
+    await Player.updateOne(
+      { id: userId },
+      { $set: { "data.isLive": true, "data.lastActive": now, "data.liveSessionStart": openSession.startTime.getTime() } }
+    );
+
+    res.json({ success: true, sessionId: openSession._id, durationMs: openSession.durationMs });
+  } catch (e) {
+    console.error('[HEARTBEAT] Error:', e.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.get('/support/analytics', apiKeyGuard, authGuard, async (req, res) => {
   // 🛡️ SECURITY HARDENING (v2.6.257): Use verified role
   if (req.userRole !== 'admin') {
