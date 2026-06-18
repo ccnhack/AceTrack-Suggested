@@ -324,6 +324,70 @@
       padding-top: 30px;
     }
 
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(2, 6, 23, 0.8);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+    }
+    .modal-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+    .modal-content {
+      background: var(--bg-dark);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      padding: 40px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      position: relative;
+      transform: translateY(20px);
+      transition: transform 0.3s ease;
+    }
+    .modal-overlay.active .modal-content {
+      transform: translateY(0);
+    }
+    .modal-close {
+      position: absolute;
+      top: 20px; right: 20px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1.5rem;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .modal-close:hover { color: var(--text-light); }
+    .modal-content h3 {
+      font-family: var(--font-heading);
+      font-size: 1.8rem;
+      margin-bottom: 20px;
+      color: var(--text-light);
+    }
+    .modal-content p {
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      font-size: 1rem;
+      line-height: 1.6;
+    }
+    .modal-content a {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .modal-content a:hover { text-decoration: underline; }
+
     /* Mobile */
     @media (max-width: 900px) {
       .nav-links { display: none; }
@@ -370,7 +434,7 @@
     <h1>Elevate Your Game.</h1>
     <p>The premier platform for academies, coaches, and players to connect, track performance, and dominate the court. Data-driven sports management at your fingertips.</p>
     <div class="hero-buttons">
-      <a href="/" class="btn-large btn-primary">Start Your Journey</a>
+      <button onclick="document.getElementById('inviteModal').classList.add('active')" class="btn-large btn-primary" style="cursor:pointer; border:none; font-family:var(--font-body);">Start Your Journey</button>
       <a href="#features" class="btn-large btn-secondary">Explore Features</a>
     </div>
   </section>
@@ -475,6 +539,22 @@
     </div>
   </footer>
 
+  <!-- Invite-Only Modal -->
+  <div class="modal-overlay" id="inviteModal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="document.getElementById('inviteModal').classList.remove('active')">&times;</button>
+      <h3>Hello,</h3>
+      <p>Thank you for your interest in AceTrack! We're excited to announce that our app is currently available exclusively to a select group of users.</p>
+      <p>This limited release allows us to gather valuable feedback and make final enhancements before our public launch.</p>
+      <p>If you'd like to be among the first to explore AceTrack, we invite you to join our community of invited users. Simply reach out to us at <a href="mailto:admin@acetrack.com">admin@acetrack.com</a>, and we'll be thrilled to welcome you aboard.</p>
+      <p>Stay tuned for our upcoming public launch – it's just around the corner!</p>
+      <p style="margin-top:24px; font-weight:600; color:var(--text-light);">
+        Happy Tracking,<br>
+        <span style="color:var(--primary);">The AceTrack Team</span>
+      </p>
+    </div>
+  </div>
+
   <script>
     // Smooth scrolling
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
@@ -485,6 +565,13 @@
           target.scrollIntoView({ behavior: 'smooth' });
         }
       });
+    });
+
+    // Close modal on click outside
+    document.getElementById('inviteModal').addEventListener('click', function(e) {
+      if (e.target === this) {
+        this.classList.remove('active');
+      }
     });
   </script>
 </body>
