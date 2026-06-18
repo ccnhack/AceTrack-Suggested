@@ -11,6 +11,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   
+  <!-- AOS Animation Library -->
+  <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+  
   <style>
     /* CSS Variables */
     :root {
@@ -47,16 +50,21 @@
     .navbar {
       position: fixed;
       top: 0; width: 100%;
-      padding: 20px 5%;
+      padding: 25px 5%;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: rgba(15, 23, 42, 0.8);
+      background: transparent;
+      z-index: 1000;
+      transition: all 0.4s ease;
+    }
+    .navbar.sticky {
+      padding: 15px 5%;
+      background: rgba(15, 23, 42, 0.9);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--glass-border);
-      z-index: 1000;
-      transition: all 0.3s ease;
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
     }
     .logo {
       font-family: var(--font-heading);
@@ -128,7 +136,6 @@
       margin-bottom: 24px;
       border: 1px solid rgba(99, 102, 241, 0.2);
       text-transform: uppercase;
-      animation: fadeInDown 0.8s ease backwards;
     }
     .hero h1 {
       font-family: var(--font-heading);
@@ -140,19 +147,16 @@
       background-clip: text;
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
-      animation: fadeInUp 0.8s ease backwards 0.2s;
     }
     .hero p {
       font-size: clamp(1.1rem, 2vw, 1.25rem);
       color: var(--text-muted);
       max-width: 600px;
       margin-bottom: 40px;
-      animation: fadeInUp 0.8s ease backwards 0.4s;
     }
     .hero-buttons {
       display: flex;
       gap: 16px;
-      animation: fadeInUp 0.8s ease backwards 0.6s;
     }
     .btn-large {
       padding: 16px 36px;
@@ -253,6 +257,77 @@
     }
     .feature-row:nth-child(even) .feature-image::after {
       right: 20px; left: -20px;
+    }
+
+    /* Steps & Cards (How it works, Reviews) */
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 30px;
+    }
+    .step-card, .review-card {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 40px 30px;
+      text-align: center;
+      transition: transform 0.3s;
+    }
+    .step-card:hover, .review-card:hover {
+      transform: translateY(-5px);
+      border-color: rgba(99,102,241,0.4);
+    }
+    .step-number {
+      width: 50px; height: 50px;
+      background: rgba(99,102,241,0.2);
+      color: var(--primary);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; font-weight: 800;
+      margin: 0 auto 20px;
+    }
+    .review-author {
+      margin-top: 20px;
+      font-weight: 600; color: var(--accent);
+    }
+
+    /* FAQs Accordion */
+    .faq-container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    details {
+      background: rgba(30, 41, 59, 0.4);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      margin-bottom: 16px;
+      overflow: hidden;
+      transition: background 0.3s;
+    }
+    details[open] {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(99,102,241,0.3);
+    }
+    summary {
+      padding: 20px;
+      font-weight: 600;
+      font-size: 1.1rem;
+      cursor: pointer;
+      list-style: none;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::after {
+      content: '+';
+      color: var(--primary);
+      font-size: 1.5rem;
+      transition: transform 0.3s;
+    }
+    details[open] summary::after { transform: rotate(45deg); }
+    .faq-content {
+      padding: 0 20px 20px;
+      color: var(--text-muted);
+      line-height: 1.6;
     }
 
     /* Roles Section */
@@ -397,16 +472,6 @@
       .hero-buttons { flex-direction: column; width: 100%; }
       .btn-large { width: 100%; }
     }
-
-    /* Animations */
-    @keyframes fadeInUp {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes fadeInDown {
-      from { opacity: 0; transform: translateY(-20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
   </style>
 </head>
 <body>
@@ -418,10 +483,10 @@
       Ace<span>Track</span>
     </a>
     <div class="nav-links">
+      <a href="#how-it-works">How It Works</a>
       <a href="#features">Features</a>
-      <a href="#for-who">For Who</a>
-      <a href="#about">About</a>
-      <a href="#contact">Contact</a>
+      <a href="#reviews">Reviews</a>
+      <a href="#faqs">FAQs</a>
     </div>
     <div class="nav-buttons">
       <a href="/" class="btn-login">Portal Login</a>
@@ -430,23 +495,46 @@
 
   <!-- Hero -->
   <section class="hero">
-    <div class="hero-badge">v2.6 Live Now</div>
-    <h1>Elevate Your Game.</h1>
-    <p>The premier platform for academies, coaches, and players to connect, track performance, and dominate the court. Data-driven sports management at your fingertips.</p>
-    <div class="hero-buttons">
+    <div class="hero-badge" data-aos="fade-down" data-aos-delay="100">v2.6 Live Now</div>
+    <h1 data-aos="fade-up" data-aos-delay="200">Elevate Your Game.</h1>
+    <p data-aos="fade-up" data-aos-delay="300">The premier platform for academies, coaches, and players to connect, track performance, and dominate the court. Data-driven sports management at your fingertips.</p>
+    <div class="hero-buttons" data-aos="fade-up" data-aos-delay="400">
       <button onclick="document.getElementById('inviteModal').classList.add('active')" class="btn-large btn-primary" style="cursor:pointer; border:none; font-family:var(--font-body);">Start Your Journey</button>
       <a href="#features" class="btn-large btn-secondary">Explore Features</a>
     </div>
   </section>
 
+  <!-- How It Works -->
+  <section id="how-it-works" class="section">
+    <h2 class="section-title" data-aos="fade-up">How It Works</h2>
+    <p class="section-subtitle" data-aos="fade-up" data-aos-delay="100">Your journey to dominance starts here.</p>
+    <div class="grid-3">
+      <div class="step-card" data-aos="fade-up" data-aos-delay="200">
+        <div class="step-number">1</div>
+        <h3 style="margin-bottom:10px;">Create Profile</h3>
+        <p style="color:var(--text-muted)">Sign up and establish your player baseline or academy facility details securely.</p>
+      </div>
+      <div class="step-card" data-aos="fade-up" data-aos-delay="300">
+        <div class="step-number">2</div>
+        <h3 style="margin-bottom:10px;">Find Matches</h3>
+        <p style="color:var(--text-muted)">Use our intelligent matchmaking to find players at your skill level, or book a certified coach.</p>
+      </div>
+      <div class="step-card" data-aos="fade-up" data-aos-delay="400">
+        <div class="step-number">3</div>
+        <h3 style="margin-bottom:10px;">Analyze & Grow</h3>
+        <p style="color:var(--text-muted)">Upload match recordings, get AI insights, and track your global progression leaderboard.</p>
+      </div>
+    </div>
+  </section>
+
   <!-- Features -->
   <section id="features" class="section">
-    <h2 class="section-title">Everything you need to succeed</h2>
-    <p class="section-subtitle">Powerful tools designed specifically for the modern sports ecosystem.</p>
+    <h2 class="section-title" data-aos="fade-up">Everything you need to succeed</h2>
+    <p class="section-subtitle" data-aos="fade-up" data-aos-delay="100">Powerful tools designed specifically for the modern sports ecosystem.</p>
     
     <div class="feature-showcase">
       <!-- Feature 1 -->
-      <div class="feature-row">
+      <div class="feature-row" data-aos="fade-up">
         <div class="feature-text">
           <h3>🎾 Intelligent Matchmaking</h3>
           <p>Finding the perfect opponent has never been easier. Our proprietary skill-rating algorithms analyze your past performance, consistency, and playstyle to instantly connect you with players at your exact skill level.</p>
@@ -458,7 +546,7 @@
       </div>
 
       <!-- Feature 2 -->
-      <div class="feature-row">
+      <div class="feature-row" data-aos="fade-up">
         <div class="feature-text">
           <h3>🏆 Tournament Management</h3>
           <p>Whether you're hosting a local weekend shootout or a national championship, AceTrack handles it all. Generate dynamic brackets, process registrations, and broadcast live scoring directly to the cloud.</p>
@@ -470,7 +558,7 @@
       </div>
 
       <!-- Feature 3 -->
-      <div class="feature-row">
+      <div class="feature-row" data-aos="fade-up">
         <div class="feature-text">
           <h3>📹 AI Video Analytics</h3>
           <p>Stop guessing and start improving. Upload your match recordings directly to the AceTrack Cloud and let our advanced AI models break down your mechanics frame by frame.</p>
@@ -483,12 +571,26 @@
     </div>
   </section>
 
+  <!-- Safety & Community -->
+  <section id="safety" class="section" style="background: rgba(15, 23, 42, 0.5); border-top: 1px solid var(--glass-border); border-bottom: 1px solid var(--glass-border);">
+    <div class="feature-row" data-aos="fade-up">
+      <div class="feature-text">
+        <h3 style="color:#10B981;">🛡️ Safe & Verified Community</h3>
+        <p>Your data privacy and safety are our top priorities. Every coach on AceTrack is background-verified, and our secure environment ensures that match videos and direct messages are fully encrypted and only accessible to authorized users.</p>
+        <p>Join a trusted network of passionate sports enthusiasts dedicated to fair play and continuous improvement.</p>
+      </div>
+      <div class="feature-image">
+        <div style="background:var(--bg-darker); height: 250px; border-radius: 20px; display:flex; align-items:center; justify-content:center; font-size:4rem; border:1px solid var(--glass-border);">🤝</div>
+      </div>
+    </div>
+  </section>
+
   <!-- Roles -->
   <section id="for-who" class="section">
-    <h2 class="section-title">Built for the whole community</h2>
+    <h2 class="section-title" data-aos="fade-up">Built for the whole community</h2>
     
     <div class="roles-container">
-      <div class="role-row">
+      <div class="role-row" data-aos="fade-up">
         <div class="role-content">
           <h3>For Players</h3>
           <p>Track your wins, losses, and overall progression over time. Book sessions with certified coaches to improve specific aspects of your game.</p>
@@ -496,7 +598,7 @@
         <div class="role-image">🏃</div>
       </div>
       
-      <div class="role-row">
+      <div class="role-row" data-aos="fade-up" data-aos-delay="100">
         <div class="role-content">
           <h3 style="color:#F59E0B;">For Coaches</h3>
           <p>Manage your availability, accept booking requests, and provide structured evaluations and feedback to your students securely.</p>
@@ -504,13 +606,52 @@
         <div class="role-image">📋</div>
       </div>
       
-      <div class="role-row">
+      <div class="role-row" data-aos="fade-up" data-aos-delay="200">
         <div class="role-content">
           <h3 style="color:#3B82F6;">For Academies</h3>
           <p>Complete facility management. Monitor court utilization, track coach performance, and handle tournament registrations all in one place.</p>
         </div>
         <div class="role-image">🏟️</div>
       </div>
+    </div>
+  </section>
+
+  <!-- Reviews -->
+  <section id="reviews" class="section">
+    <h2 class="section-title" data-aos="fade-up">What our users say</h2>
+    <p class="section-subtitle" data-aos="fade-up" data-aos-delay="100">Trusted by top athletes and academies.</p>
+    <div class="grid-3">
+      <div class="review-card" data-aos="zoom-in" data-aos-delay="100">
+        <p style="font-style:italic">"AceTrack completely transformed how our academy runs tournaments. The automated brackets saved us hours of manual work."</p>
+        <div class="review-author">- Sarah J., Academy Director</div>
+      </div>
+      <div class="review-card" data-aos="zoom-in" data-aos-delay="200">
+        <p style="font-style:italic">"The AI Video Analytics helped me fix my forehand grip in just two weeks. Being able to see my swing broken down frame-by-frame is incredible."</p>
+        <div class="review-author">- Mike T., Amateur Player</div>
+      </div>
+      <div class="review-card" data-aos="zoom-in" data-aos-delay="300">
+        <p style="font-style:italic">"I can easily manage my coaching availability and give structured feedback to all my students directly through the app."</p>
+        <div class="review-author">- Coach David R.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQs -->
+  <section id="faqs" class="section">
+    <h2 class="section-title" data-aos="fade-up">Frequently Asked Questions</h2>
+    <div class="faq-container" data-aos="fade-up" data-aos-delay="100">
+      <details>
+        <summary>Is AceTrack free for players?</summary>
+        <div class="faq-content">Yes! Players can register, track stats, and join public matchmaking for free. Premium features like advanced AI video analytics require a subscription.</div>
+      </details>
+      <details>
+        <summary>How does the matchmaking rating work?</summary>
+        <div class="faq-content">We use a proprietary algorithm that calculates your rating based on win/loss records, opponent skill level, and historical consistency to ensure balanced matches.</div>
+      </details>
+      <details>
+        <summary>Are my match recordings private?</summary>
+        <div class="faq-content">Absolutely. All video uploads are strictly private by default. You have full control over whether you want to share them with a coach, an academy, or keep them for personal review.</div>
+      </details>
     </div>
   </section>
 
@@ -555,7 +696,26 @@
     </div>
   </div>
 
+  <!-- AOS Script -->
+  <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
   <script>
+    // Initialize Animations
+    AOS.init({
+      duration: 800,
+      once: true,
+      offset: 100,
+    });
+
+    // Sticky Navbar
+    window.addEventListener('scroll', () => {
+      const nav = document.querySelector('.navbar');
+      if (window.scrollY > 50) {
+        nav.classList.add('sticky');
+      } else {
+        nav.classList.remove('sticky');
+      }
+    });
+
     // Smooth scrolling
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
       anchor.addEventListener('click', function (e) {
