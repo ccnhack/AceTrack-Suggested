@@ -863,6 +863,17 @@ if (fs.existsSync(publicPath)) {
     }
   }));
 
+  // 🌐 [STATIC LANDING PAGE]: Serve the dedicated marketing homepage.
+  router.get('/home', (req, res) => {
+    const homePath = path.join(__dirname, '../views/home.html');
+    if (fs.existsSync(homePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.sendFile(homePath);
+    } else {
+      res.status(404).send('Landing page not found.');
+    }
+  });
+
   // 🛡️ [SPA FALLBACK]: Handle deep-links for the Single Page Application.
   // We exclude paths with extensions (containing a dot) to ensure missing assets return 404, not HTML.
   router.use((req, res, next) => {
