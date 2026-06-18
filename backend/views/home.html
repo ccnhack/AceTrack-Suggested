@@ -36,8 +36,10 @@
       line-height: 1.6;
       overflow-x: hidden;
       background-image: 
-        radial-gradient(circle at 15% 50%, rgba(99, 102, 241, 0.12), transparent 25%),
-        radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.08), transparent 25%);
+        linear-gradient(to bottom, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.95)),
+        url('/uploads/hero_bg.png');
+      background-size: cover;
+      background-position: center;
       background-attachment: fixed;
     }
 
@@ -108,8 +110,12 @@
     }
     .hero::before {
       content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-      background: url('data:image/svg+xml;utf8,<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg"><circle cx="2" cy="2" r="1" fill="rgba(255,255,255,0.03)"/></svg>');
+      background: url('/uploads/hero_bg.png') no-repeat center center;
+      background-size: cover;
+      opacity: 0.35;
       z-index: -1;
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%);
+      -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%);
     }
     .hero-badge {
       background: rgba(99, 102, 241, 0.1);
@@ -195,40 +201,58 @@
       margin-bottom: 60px;
     }
 
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 30px;
+    /* Feature Showcase - Detailed Layout */
+    .feature-showcase {
+      display: flex;
+      flex-direction: column;
+      gap: 80px;
+      margin-top: 40px;
     }
-    .card {
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      border-radius: 24px;
-      padding: 40px;
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      transition: transform 0.3s, border-color 0.3s;
+    .feature-row {
+      display: flex;
+      align-items: center;
+      gap: 60px;
     }
-    .card:hover {
-      transform: translateY(-10px);
-      border-color: rgba(99, 102, 241, 0.5);
+    .feature-row:nth-child(even) {
+      flex-direction: row-reverse;
     }
-    .card-icon {
-      font-size: 2.5rem;
-      margin-bottom: 24px;
-      display: inline-block;
-      padding: 16px;
-      background: rgba(255,255,255,0.03);
-      border-radius: 20px;
-    }
-    .card h3 {
+    .feature-text { flex: 1; }
+    .feature-text h3 {
       font-family: var(--font-heading);
-      font-size: 1.5rem;
-      margin-bottom: 12px;
+      font-size: 2.2rem;
+      margin-bottom: 20px;
+      color: var(--text-light);
     }
-    .card p {
+    .feature-text p {
       color: var(--text-muted);
-      font-size: 0.95rem;
+      font-size: 1.1rem;
+      margin-bottom: 20px;
+      line-height: 1.8;
+    }
+    .feature-image {
+      flex: 1;
+      position: relative;
+    }
+    .feature-image img {
+      width: 100%;
+      border-radius: 20px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--glass-border);
+      transition: transform 0.5s ease;
+    }
+    .feature-image img:hover {
+      transform: scale(1.02);
+    }
+    .feature-image::after {
+      content: '';
+      position: absolute;
+      top: -20px; right: -20px; bottom: 20px; left: 20px;
+      background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(16,185,129,0.1));
+      border-radius: 24px;
+      z-index: -1;
+    }
+    .feature-row:nth-child(even) .feature-image::after {
+      right: 20px; left: -20px;
     }
 
     /* Roles Section */
@@ -301,10 +325,11 @@
     }
 
     /* Mobile */
-    @media (max-width: 768px) {
+    @media (max-width: 900px) {
       .nav-links { display: none; }
-      .role-row { flex-direction: column !important; }
-      .role-image { width: 100%; }
+      .role-row, .feature-row { flex-direction: column !important; }
+      .role-image, .feature-image { width: 100%; margin-top: 20px; }
+      .feature-image::after { display: none; }
       .hero-buttons { flex-direction: column; width: 100%; }
       .btn-large { width: 100%; }
     }
@@ -324,7 +349,10 @@
 
   <!-- Navigation -->
   <nav class="navbar">
-    <a href="/home" class="logo">Ace<span>Track</span></a>
+    <a href="/home" class="logo">
+      <img src="/uploads/icon.png" alt="AceTrack Logo" style="height: 36px; width: 36px; border-radius: 8px;">
+      Ace<span>Track</span>
+    </a>
     <div class="nav-links">
       <a href="#features">Features</a>
       <a href="#for-who">For Who</a>
@@ -352,21 +380,41 @@
     <h2 class="section-title">Everything you need to succeed</h2>
     <p class="section-subtitle">Powerful tools designed specifically for the modern sports ecosystem.</p>
     
-    <div class="grid">
-      <div class="card">
-        <div class="card-icon">🎾</div>
-        <h3>Matchmaking</h3>
-        <p>Find opponents at your skill level instantly. Challenge friends or climb the global ladder with our proprietary skill-rating algorithms.</p>
+    <div class="feature-showcase">
+      <!-- Feature 1 -->
+      <div class="feature-row">
+        <div class="feature-text">
+          <h3>🎾 Intelligent Matchmaking</h3>
+          <p>Finding the perfect opponent has never been easier. Our proprietary skill-rating algorithms analyze your past performance, consistency, and playstyle to instantly connect you with players at your exact skill level.</p>
+          <p>Challenge friends, accept global invitations, and climb the localized ladder to establish your dominance on the court.</p>
+        </div>
+        <div class="feature-image">
+          <img src="/uploads/demo_challenge.png" alt="Matchmaking Screen">
+        </div>
       </div>
-      <div class="card">
-        <div class="card-icon">🏆</div>
-        <h3>Tournaments</h3>
-        <p>Host or join local and national tournaments. Real-time bracket generation, live scoring, and public results pages.</p>
+
+      <!-- Feature 2 -->
+      <div class="feature-row">
+        <div class="feature-text">
+          <h3>🏆 Tournament Management</h3>
+          <p>Whether you're hosting a local weekend shootout or a national championship, AceTrack handles it all. Generate dynamic brackets, process registrations, and broadcast live scoring directly to the cloud.</p>
+          <p>Participants get automated push notifications for match schedules and court assignments, ensuring your event runs perfectly on time.</p>
+        </div>
+        <div class="feature-image">
+          <img src="/uploads/demo_tournaments.png" alt="Tournaments Dashboard">
+        </div>
       </div>
-      <div class="card">
-        <div class="card-icon">📹</div>
-        <h3>AI Video Analytics</h3>
-        <p>Upload match recordings and let our AI break down your mechanics. Frame-by-frame analysis and highlight generation.</p>
+
+      <!-- Feature 3 -->
+      <div class="feature-row">
+        <div class="feature-text">
+          <h3>📹 AI Video Analytics</h3>
+          <p>Stop guessing and start improving. Upload your match recordings directly to the AceTrack Cloud and let our advanced AI models break down your mechanics frame by frame.</p>
+          <p>Get instant insights on footwork, racket speed, and shot placement. Generate automated highlight reels to share with scouts or coaches for further technical review.</p>
+        </div>
+        <div class="feature-image">
+          <img src="/uploads/demo_ai.png" alt="AI Video Analytics">
+        </div>
       </div>
     </div>
   </section>
