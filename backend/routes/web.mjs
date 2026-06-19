@@ -821,24 +821,9 @@ router.get('/setup/:token', asyncHandler(async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 // publicPath is defined above
 if (fs.existsSync(publicPath)) {
-  // 🛡️ [ENTRY-POINT GUARD]: Handle the root explicitly with no-cache headers.
+  // 🌐 [ROOT REDIRECT]: Redirect root to the marketing homepage.
   router.get('/', (req, res) => {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    res.setHeader('Surrogate-Control', 'no-store');
-    
-    // 🛡️ [SECURITY INJECTION] (v2.6.423): Inject per-request CSP nonce into static bundle
-    const indexPath = path.join(publicPath, 'index.html');
-    if (fs.existsSync(indexPath)) {
-      let html = fs.readFileSync(indexPath, 'utf8');
-      const nonce = res.locals.nonce;
-      // Inject nonce into the script tag
-      html = html.replace('<script ', `<script nonce="${nonce}" `);
-      res.send(html);
-    } else {
-      res.status(404).send('Web bundle not found. Please run web-build.');
-    }
+    res.redirect('/home');
   });
 
   // 🛡️ [HIGH COMPATIBILITY ASSETS]: Explicitly handle Font MIME types and CORS (v2.6.257)
@@ -852,11 +837,6 @@ if (fs.existsSync(publicPath)) {
       res.setHeader('Access-Control-Allow-Origin', '*');
     }
     next();
-  });
-
-  // 🌐 [ROOT REDIRECT]: Redirect root to the marketing homepage.
-  router.get('/', (req, res) => {
-    res.redirect('/home');
   });
 
   // 🛡️ [STATIC ASSETS]: Serve physical files (JS, CSS, Images, etc.)
@@ -891,7 +871,17 @@ if (fs.existsSync(publicPath)) {
     if (req.method === 'GET' && !isApi && !hasExtension) {
       // Still apply no-cache for SPA routes to be safe
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-      res.sendFile(path.join(publicPath, 'index.html'));
+      
+      const indexPath = path.join(publicPath, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        let html = fs.readFileSync(indexPath, 'utf8');
+        const nonce = res.locals.nonce;
+        // Inject nonce into the script tag
+        html = html.replace('<script ', `<script nonce="${nonce}" `);
+        res.send(html);
+      } else {
+        res.status(404).send('Web bundle not found. Please run web-build.');
+      }
     } else {
       next();
     }
