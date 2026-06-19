@@ -499,7 +499,7 @@
     <h1 data-aos="fade-up" data-aos-delay="200">Elevate Your Game.</h1>
     <p data-aos="fade-up" data-aos-delay="300">The premier platform for academies, coaches, and players to connect, track performance, and dominate the court. Data-driven sports management at your fingertips.</p>
     <div class="hero-buttons" data-aos="fade-up" data-aos-delay="400">
-      <button onclick="document.getElementById('inviteModal').classList.add('active')" class="btn-large btn-primary" style="cursor:pointer; border:none; font-family:var(--font-body);">Start Your Journey</button>
+      <button id="startJourneyBtn" class="btn-large btn-primary" style="cursor:pointer; border:none; font-family:var(--font-body);">Start Your Journey</button>
       <a href="#features" class="btn-large btn-secondary">Explore Features</a>
     </div>
   </section>
@@ -683,7 +683,7 @@
   <!-- Invite-Only Modal -->
   <div class="modal-overlay" id="inviteModal">
     <div class="modal-content">
-      <button class="modal-close" onclick="document.getElementById('inviteModal').classList.remove('active')">&times;</button>
+      <button class="modal-close" id="closeInviteModalBtn">&times;</button>
       <h3>Hello,</h3>
       <p>Thank you for your interest in AceTrack! We're excited to announce that our app is currently available exclusively to a select group of users.</p>
       <p>This limited release allows us to gather valuable feedback and make final enhancements before our public launch.</p>
@@ -733,6 +733,22 @@
         this.classList.remove('active');
       }
     });
+
+    // Open modal on button click
+    const startJourneyBtn = document.getElementById('startJourneyBtn');
+    if (startJourneyBtn) {
+      startJourneyBtn.addEventListener('click', function() {
+        document.getElementById('inviteModal').classList.add('active');
+      });
+    }
+
+    // Close modal on 'X' button click
+    const closeBtn = document.getElementById('closeInviteModalBtn');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function() {
+        document.getElementById('inviteModal').classList.remove('active');
+      });
+    }
   </script>
 </body>
 </html>

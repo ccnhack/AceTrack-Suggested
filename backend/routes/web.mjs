@@ -867,8 +867,11 @@ if (fs.existsSync(publicPath)) {
   router.get('/home', (req, res) => {
     const homePath = path.join(__dirname, '../views/home.html');
     if (fs.existsSync(homePath)) {
-      res.setHeader('Cache-Control', 'public, max-age=3600');
-      res.sendFile(homePath);
+      let html = fs.readFileSync(homePath, 'utf8');
+      // Inject the CSP nonce into script tags so they aren't blocked by Helmet
+      html = html.replace(/<script>/g, `<script nonce="${res.locals.nonce}">`);
+      res.setHeader('Cache-Control', 'no-store'); // Nonce changes every request, so don't cache
+      res.send(html);
     } else {
       res.status(404).send('Landing page not found.');
     }
