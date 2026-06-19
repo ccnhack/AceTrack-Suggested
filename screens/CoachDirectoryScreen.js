@@ -15,6 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import { usePlayersStore } from '../stores';
 import { useCoachBookingStore } from '../stores/useCoachBookingStore';
 import CoachBookingModal from '../components/CoachBookingModal';
+import CoachBookingService from '../services/CoachBookingService';
 
 export default function CoachDirectoryScreen({ navigation }) {
   const { currentUser: user, userRole: role, onUpdateUser } = useAuth();
@@ -45,7 +46,6 @@ export default function CoachDirectoryScreen({ navigation }) {
   const handleUpdateBookingStatus = async (bookingId, newStatus) => {
     try {
       updateBookingStatus(bookingId, newStatus);
-      const { default: CoachBookingService } = await import('../services/CoachBookingService');
       await CoachBookingService.updateBookingStatus(bookingId, newStatus);
       
       const booking = coachBookings.find(b => b.id === bookingId);

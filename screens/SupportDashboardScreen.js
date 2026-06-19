@@ -14,6 +14,7 @@ import { useSync } from '../context/SyncContext';
 import { useAuth } from '../context/AuthContext';
 import { useCommsStore } from '../stores/useCommsStore';
 
+
 const SupportDashboardScreen = ({ navigation, route }) => {
   const { players } = usePlayersStore();
   const { supportTickets, onReplyTicket, onUpdateTicketStatus, onMarkSeen, onReassignTicket } = useSupportStore();
@@ -53,8 +54,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
 
     const pingHeartbeat = async () => {
       try {
-        const { getSecureSession } = await import('../utils/secureStore');
-        const token = await getSecureSession();
+        const token = null; // Removed missing getSecureSession
         const headers = {
           'Content-Type': 'application/json',
           'x-api-key': 'ace_production_5f8a9b2c3d4e1f6g7h8i9j0k' // Added hardcoded API key since it's needed in most authenticated requests here
@@ -142,7 +142,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
             ) : (
               <Ionicons name="menu" size={28} color="#FFF" style={{ marginRight: 16 }} />
             )}
-            <Image source={require('../assets/icon.png')} style={{ width: 36, height: 36, borderRadius: 8, marginRight: 12 }} />
+            <Image source={{ uri: '/assets/assets/icon.1cbbacdee3826df7ca26e1b3cddc7b88.png' }} style={{ width: 36, height: 36, borderRadius: 8, marginRight: 12 }} />
             <Text style={{ color: '#FFF', fontSize: 20, fontWeight: '900', letterSpacing: 1 }}>ACETRACK</Text>
           </View>
 
