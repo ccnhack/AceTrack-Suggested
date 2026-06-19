@@ -877,6 +877,11 @@ if (fs.existsSync(publicPath)) {
     }
   });
 
+  // 🌐 [ROOT REDIRECT]: Redirect root to the marketing homepage.
+  router.get('/', (req, res) => {
+    res.redirect('/home');
+  });
+
   // 🛡️ [SPA FALLBACK]: Handle deep-links for the Single Page Application.
   // We exclude paths with extensions (containing a dot) to ensure missing assets return 404, not HTML.
   router.use((req, res, next) => {
