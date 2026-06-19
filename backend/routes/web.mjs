@@ -854,6 +854,11 @@ if (fs.existsSync(publicPath)) {
     next();
   });
 
+  // 🌐 [ROOT REDIRECT]: Redirect root to the marketing homepage.
+  router.get('/', (req, res) => {
+    res.redirect('/home');
+  });
+
   // 🛡️ [STATIC ASSETS]: Serve physical files (JS, CSS, Images, etc.)
   router.use(express.static(publicPath, {
     setHeaders: (res, path) => {
@@ -875,11 +880,6 @@ if (fs.existsSync(publicPath)) {
     } else {
       res.status(404).send('Landing page not found.');
     }
-  });
-
-  // 🌐 [ROOT REDIRECT]: Redirect root to the marketing homepage.
-  router.get('/', (req, res) => {
-    res.redirect('/home');
   });
 
   // 🛡️ [SPA FALLBACK]: Handle deep-links for the Single Page Application.
