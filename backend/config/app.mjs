@@ -9,9 +9,8 @@ import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 dotenv.config();
 
-// 🚀 ACE TRACK STABILITY // EXPO OTA SYNC TARGET
-// 🚀 EXPO OTA SYNC HUB (v2.6.569)
-export const APP_VERSION = '2.6.653'; // Critical for Update prompts
+// 🚀 ACE TRACK STABILITY // 🔄 Backend Version - Keep this perfectly synced with frontend App.js APP_VERSION
+export const APP_VERSION = '2.6.654'; // Critical for Update prompts
 
 // 🛡️ SECURITY: API Key
 export const ACE_API_KEY = process.env.ACE_API_KEY || "AceTrack_Internal_v2_Testing";

@@ -225,7 +225,7 @@ const AdminHubScreen = ({ navigation, route }) => {
             ) : (
               <Ionicons name="menu" size={28} color="#FFF" style={{ marginRight: 16 }} />
             )}
-            <Image source={require('../assets/icon.png')} style={{ width: 36, height: 36, borderRadius: 8, marginRight: 12 }} />
+            <Image source={{ uri: '/assets/assets/icon.1cbbacdee3826df7ca26e1b3cddc7b88.png' }} style={{ width: 36, height: 36, borderRadius: 8, marginRight: 12 }} />
             <Text style={{ color: '#FFF', fontSize: 20, fontWeight: '900', letterSpacing: 1 }}>ACETRACK</Text>
           </View>
           <ScrollView showsVerticalScrollIndicator={false} style={{ flexGrow: 1, paddingHorizontal: 16 }}>

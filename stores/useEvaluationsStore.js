@@ -28,7 +28,7 @@ export const useEvaluationsStore = create((set, get) => {
 
     onSaveEvaluation: async (evaluationData) => {
       try {
-        const config = require('../../config').default;
+        const config = require('../config').default;
         const storage = require('../utils/storage').default;
         const userToken = await storage.getItem('userToken');
         
