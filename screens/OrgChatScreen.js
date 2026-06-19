@@ -466,9 +466,11 @@ const OrgChatScreen = ({ navigation }) => {
             </View>
 
             {showContactCard && isWeb && (
-              <View style={styles.contactCard}>
-                <Text style={styles.contactCardName}>{selectedContact.name}</Text>
-                <Text style={styles.contactCardDesig}>{selectedContact.designation || 'No Designation'}</Text>
+              <>
+                <View style={{ position: 'absolute', top: 40, left: 0, width: '100%', height: 10, backgroundColor: 'transparent' }} />
+                <View style={styles.contactCard}>
+                  <Text style={styles.contactCardName}>{selectedContact.name}</Text>
+                  <Text style={styles.contactCardDesig}>{selectedContact.designation || 'No Designation'}</Text>
                 
                 <View style={styles.contactCardRow}>
                   <Ionicons name="call" size={14} color="#64748B" />
@@ -492,6 +494,7 @@ const OrgChatScreen = ({ navigation }) => {
                   </View>
                 )}
               </View>
+              </>
             )}
           </View>
           <View style={{ flex: 1 }}>
