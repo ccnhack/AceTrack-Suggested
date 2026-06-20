@@ -394,7 +394,7 @@ export const AdminGrievancesPanel = ({
       }
 
       const prompt = [
-        { role: 'system', text: "You are a professional support analyst. Read the conversation history and summarize it into exactly 3 concise sentences. 1) The original issue. 2) The troubleshooting steps taken. 3) The final fix/resolution. Be clear and objective." },
+        { role: 'system', text: "You are a professional support analyst. Read the conversation history and summarize it. Format your response EXACTLY as follows with these headings:\\n\\nProblem Description:\\n(Detail the full scope of issues identified through the conversation, not just the title)\\n\\nTechnical Details:\\n(Numbered bullet points of all steps performed to fix the issue)\\n\\nClosure Summary:\\n(Brief summary of only the final resolution details which fixed the issue)" },
         { role: 'user', text: `History:\n${history}` }
       ];
     
@@ -662,7 +662,7 @@ export const AdminGrievancesPanel = ({
       }
 
       const prompt = [
-        { role: 'system', text: "You are a professional support analyst. Read the conversation history and summarize it into exactly 3 concise sentences. 1) The original issue. 2) The actions taken. 3) The resolution summary. Be clear and objective." },
+        { role: 'system', text: "You are a professional support analyst. Read the conversation history and summarize it. Format your response EXACTLY as follows with these headings:\\n\\nProblem Description:\\n(Detail the full scope of issues identified through the conversation, not just the title)\\n\\nTechnical Details:\\n(Numbered bullet points of all steps performed to fix the issue)\\n\\nClosure Summary:\\n(Brief summary of only the final resolution details which fixed the issue)" },
         { role: 'user', text: `History:\n${history}\n\nThe ticket was closed without a summary. Please generate one based on the history.` }
       ];
 
