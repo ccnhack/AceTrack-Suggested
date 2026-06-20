@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   dayLabel: {
-    width: (width - 80) / 7,
+    width: '14.28%',
     textAlign: 'center',
     fontSize: 10,
     fontWeight: 'bold',
@@ -237,12 +237,11 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   dayCell: {
-    width: (width - 110) / 7,
+    width: '14.28%',
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
     marginVertical: 4,
-    marginHorizontal: 2,
     borderRadius: 20,
   },
   dayCellActive: {
