@@ -981,7 +981,16 @@ const ProfileScreen = ({ navigation, route }) => {
                       try {
                         const formData = new FormData();
                         
-                        if (Platform.OS === 'web' && (editAvatar.startsWith('data:') || editAvatar.startsWith('blob:'))) {
+                        if (Platform.OS === 'web' && editAvatar.startsWith('data:')) {
+                          const arr = editAvatar.split(',');
+                          const mime = arr[0].match(/:(.*?);/)[1] || 'image/jpeg';
+                          const bstr = atob(arr[1]);
+                          let n = bstr.length;
+                          const u8arr = new Uint8Array(n);
+                          while(n--) { u8arr[n] = bstr.charCodeAt(n); }
+                          const blob = new Blob([u8arr], {type:mime});
+                          formData.append('video', blob, `avatar_${user.id || 'new'}.jpg`);
+                        } else if (Platform.OS === 'web' && editAvatar.startsWith('blob:')) {
                           const res = await fetch(editAvatar);
                           const blob = await res.blob();
                           formData.append('video', blob, `avatar_${user.id || 'new'}.jpg`);
