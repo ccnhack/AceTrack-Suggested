@@ -123,7 +123,15 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
       }
     }
   }, [selectedAgentId, showAttendanceModal]);
-  const [attendanceDateFilter, setAttendanceDateFilter] = useState(() => new Date().toISOString().split('T')[0]);
+  const getLocalDateString = (d) => {
+    const dateObj = d ? new Date(d) : new Date();
+    const y = dateObj.getFullYear();
+    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const [attendanceDateFilter, setAttendanceDateFilter] = useState(() => getLocalDateString());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [attendanceRangeMode, setAttendanceRangeMode] = useState(false);
@@ -133,7 +141,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
   const [selectedLeaveDate, setSelectedLeaveDate] = useState(null);
-  const [attendanceEndDateFilter, setAttendanceEndDateFilter] = useState(() => new Date().toISOString().split('T')[0]);
+  const [attendanceEndDateFilter, setAttendanceEndDateFilter] = useState(() => getLocalDateString());
   const [selectedSessionForActivity, setSelectedSessionForActivity] = useState(null);
   const [showActionsModal, setShowActionsModal] = useState(false);
   const [showRoleConfirmModal, setShowRoleConfirmModal] = useState(false);
@@ -1177,10 +1185,10 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
               }
 
               // Compute stats for selected date or range
-              const isTodayFilter = !attendanceRangeMode && attendanceDateFilter === new Date().toISOString().split('T')[0];
+              const isTodayFilter = !attendanceRangeMode && attendanceDateFilter === getLocalDateString();
               
               const dateSessions = (agentAttendance.allSessions || []).filter(s => {
-                const sDate = new Date(s.startTime).toISOString().split('T')[0];
+                const sDate = getLocalDateString(s.startTime);
                 if (attendanceRangeMode) {
                   return sDate >= attendanceDateFilter && sDate <= attendanceEndDateFilter;
                 }
@@ -1190,7 +1198,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
               // Add live sessions to today's count if today is within filter
               let totalMsForDate = dateSessions.reduce((sum, s) => sum + (s.durationMs || 0), 0);
               let liveSessionDocs = [];
-              const todayStr = new Date().toISOString().split('T')[0];
+              const todayStr = getLocalDateString();
               const isTodayInRange = attendanceRangeMode 
                 ? (todayStr >= attendanceDateFilter && todayStr <= attendanceEndDateFilter)
                 : (todayStr === attendanceDateFilter);
@@ -1244,7 +1252,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
 
               const sessionDaysSet = new Set();
               (agentAttendance.allSessions || []).forEach(s => {
-                 sessionDaysSet.add(new Date(s.startTime).toISOString().split('T')[0]);
+                 sessionDaysSet.add(getLocalDateString(s.startTime));
               });
 
               const historicalAbsences = {};
@@ -1255,7 +1263,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
               while (iterDate < todayDateObj) {
                 const dayOfWeek = iterDate.getDay();
                 if (dayOfWeek !== 0 && dayOfWeek !== 6) { 
-                  const ds = iterDate.toISOString().split('T')[0];
+                  const ds = getLocalDateString(iterDate);
                   if (!sessionDaysSet.has(ds)) {
                     if (currentEarnedLeaves > 0) {
                       currentEarnedLeaves--;
@@ -1288,7 +1296,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
               joinDateObj.setHours(0, 0, 0, 0);
 
               for (let d = new Date(firstDayOfMonth); d <= lastDayOfMonth; d.setDate(d.getDate() + 1)) {
-                const dateStr = d.toISOString().split('T')[0];
+                const dateStr = getLocalDateString(d);
                 const dayOfWeek = d.getDay();
                 const isWeekday = dayOfWeek !== 0 && dayOfWeek !== 6;
                 const isBeforeJoinDate = d.getTime() < joinDateObj.getTime();
@@ -1477,7 +1485,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                                 onPress={() => {
                                   const d = new Date(attendanceDateFilter);
                                   d.setDate(d.getDate() - 1);
-                                  setAttendanceDateFilter(d.toISOString().split('T')[0]);
+                                  setAttendanceDateFilter(getLocalDateString(d));
                                 }}
                                 style={styles.dateNavBtn}
                               >
@@ -1518,7 +1526,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                                 onPress={() => {
                                   const d = new Date(attendanceDateFilter);
                                   d.setDate(d.getDate() + 1);
-                                  setAttendanceDateFilter(d.toISOString().split('T')[0]);
+                                  setAttendanceDateFilter(getLocalDateString(d));
                                 }}
                                 style={[styles.dateNavBtn, isTodayFilter && { opacity: 0.3 }]}
                               >
@@ -1605,7 +1613,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                                 const barHeight = Math.max((day.totalMs / maxWeeklyMs) * 60, 3);
                                 const hrs = Math.floor(day.totalMs / 3600000);
                                 const mins = Math.floor((day.totalMs % 3600000) / 60000);
-                                const isToday = day.date === new Date().toISOString().split('T')[0];
+                                const isToday = day.date === getLocalDateString();
                                 return (
                                   <View key={i} style={styles.weeklyBarCol}>
                                     <Text style={styles.weeklyBarValue}>
@@ -1643,7 +1651,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                 <PureJSDateTimePicker 
                     mode="date"
                     value={attendanceDateFilter}
-                    maxDate={attendanceRangeMode ? attendanceEndDateFilter : new Date().toISOString().split('T')[0]}
+                    maxDate={attendanceRangeMode ? attendanceEndDateFilter : getLocalDateString()}
                     onChange={(val) => { setAttendanceDateFilter(val); setShowDatePicker(false); }}
                 />
               </View>
@@ -1665,7 +1673,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                     mode="date"
                     value={attendanceEndDateFilter}
                     minDate={attendanceDateFilter}
-                    maxDate={new Date().toISOString().split('T')[0]}
+                    maxDate={getLocalDateString()}
                     onChange={(val) => { setAttendanceEndDateFilter(val); setShowEndDatePicker(false); }}
                 />
               </View>
