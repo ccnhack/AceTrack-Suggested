@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal, TextInput } from 'react-native';
+import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import { usePlayersStore } from '../../stores';
 import { useAdminCoreStore } from '../../stores/useAdminCoreStore';
@@ -370,6 +371,10 @@ const ShiftHistorySection = ({ allSupportAgents }) => {
   const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState('');
 
+  // Calendar Modal state
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarTarget, setCalendarTarget] = useState(null); // 'start' or 'end'
+
   const fetchHistory = useCallback(async (sDate, eDate, userId) => {
     setIsLoading(true);
     setError(null);
@@ -554,26 +559,28 @@ const ShiftHistorySection = ({ allSupportAgents }) => {
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' }}>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: '#64748B', fontSize: 9, fontWeight: '700', marginBottom: 4 }}>FROM (DD-MM-YYYY)</Text>
-                <TextInput
-                  value={startDateDisplay}
-                  onChangeText={setStartDateDisplay}
-                  placeholder="DD-MM-YYYY"
-                  placeholderTextColor="#475569"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: '#F8FAFC', fontSize: 13, fontWeight: '600', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
-                  maxLength={10}
-                />
+                <TouchableOpacity
+                  onPress={() => { setCalendarTarget('start'); setShowCalendar(true); }}
+                  style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <Text style={{ color: startDateDisplay ? '#F8FAFC' : '#475569', fontSize: 13, fontWeight: '600' }}>
+                    {startDateDisplay || "DD-MM-YYYY"}
+                  </Text>
+                  <Ionicons name="calendar-outline" size={14} color="#64748B" />
+                </TouchableOpacity>
               </View>
               <Ionicons name="arrow-forward" size={16} color="#475569" style={{ marginTop: 16 }} />
               <View style={{ flex: 1 }}>
                 <Text style={{ color: '#64748B', fontSize: 9, fontWeight: '700', marginBottom: 4 }}>TO (DD-MM-YYYY)</Text>
-                <TextInput
-                  value={endDateDisplay}
-                  onChangeText={setEndDateDisplay}
-                  placeholder="DD-MM-YYYY"
-                  placeholderTextColor="#475569"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: '#F8FAFC', fontSize: 13, fontWeight: '600', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
-                  maxLength={10}
-                />
+                <TouchableOpacity
+                  onPress={() => { setCalendarTarget('end'); setShowCalendar(true); }}
+                  style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <Text style={{ color: endDateDisplay ? '#F8FAFC' : '#475569', fontSize: 13, fontWeight: '600' }}>
+                    {endDateDisplay || "DD-MM-YYYY"}
+                  </Text>
+                  <Ionicons name="calendar-outline" size={14} color="#64748B" />
+                </TouchableOpacity>
               </View>
               <TouchableOpacity
                 onPress={handleApplyDateRange}
@@ -715,6 +722,43 @@ const ShiftHistorySection = ({ allSupportAgents }) => {
           )}
         </View>
       )}
+
+      {/* Calendar Modal */}
+      <Modal visible={showCalendar} transparent={true} animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxWidth: 350, padding: 16 }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>
+                Select {calendarTarget === 'start' ? 'Start' : 'End'} Date
+              </Text>
+              <TouchableOpacity onPress={() => setShowCalendar(false)}>
+                <Ionicons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+            <Calendar
+              current={calendarTarget === 'start' ? parseDDMMYYYYToISO(startDateDisplay) : parseDDMMYYYYToISO(endDateDisplay)}
+              maxDate={formatDateISO(new Date())}
+              onDayPress={(day) => {
+                const selectedIso = day.dateString;
+                const formattedDate = formatDateDDMMYYYY(selectedIso);
+                if (calendarTarget === 'start') {
+                  setStartDateDisplay(formattedDate);
+                } else {
+                  setEndDateDisplay(formattedDate);
+                }
+                setShowCalendar(false);
+              }}
+              theme={{
+                todayTextColor: '#6366F1',
+                arrowColor: '#6366F1',
+                textDayFontWeight: '500',
+                textMonthFontWeight: 'bold',
+                textDayHeaderFontWeight: 'bold'
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
