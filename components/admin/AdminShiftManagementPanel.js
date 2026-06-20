@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePlayersStore } from '../../stores';
@@ -213,6 +213,11 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
         )}
       </View>
 
+      {/* ═══════════════════════════════════════════════════════════ */}
+      {/* 📅 SHIFT HISTORY SECTION                                   */}
+      {/* ═══════════════════════════════════════════════════════════ */}
+      <ShiftHistorySection allSupportAgents={activeAgents} />
+
       {/* Details Modal */}
       <Modal visible={modalState.isOpen} transparent={true} animationType="fade">
         <View style={styles.modalOverlay}>
@@ -340,6 +345,486 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
   );
 };
 
+/* ═══════════════════════════════════════════════════════════════ */
+/* 📅 SHIFT HISTORY SUB-COMPONENT                                */
+/* ═══════════════════════════════════════════════════════════════ */
+const ShiftHistorySection = ({ allSupportAgents }) => {
+  const [historyData, setHistoryData] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Date range state
+  const today = new Date();
+  const todayStr = formatDateISO(today);
+  const [startDate, setStartDate] = useState(todayStr);
+  const [endDate, setEndDate] = useState(todayStr);
+  const [dateMode, setDateMode] = useState('single'); // 'single' or 'range'
+
+  // Display format state (for the text inputs)
+  const [startDateDisplay, setStartDateDisplay] = useState(formatDateDDMMYYYY(todayStr));
+  const [endDateDisplay, setEndDateDisplay] = useState(formatDateDDMMYYYY(todayStr));
+
+  // Employee filter
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
+  const [employeeSearch, setEmployeeSearch] = useState('');
+
+  const fetchHistory = useCallback(async (sDate, eDate, userId) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const token = await storage.getItem('userToken');
+      const headers = {
+        'x-user-id': 'admin',
+        'x-ace-api-key': config.ACE_API_KEY || config.PUBLIC_APP_ID
+      };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      let url = `${config.API_BASE_URL}/api/v1/admin-core/shift-history?startDate=${sDate}`;
+      if (eDate && eDate !== sDate) url += `&endDate=${eDate}`;
+      if (userId) url += `&userId=${userId}`;
+
+      const res = await apiFetch(url, { headers, credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setHistoryData(data);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setError(errData.message || 'Failed to fetch shift history');
+      }
+    } catch (e) {
+      setError('Network error fetching shift history');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Quick date presets
+  const getQuickDates = useCallback(() => {
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      dates.push({
+        label: i === 0 ? 'Today' : i === 1 ? 'Yesterday' : d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' }),
+        date: formatDateISO(d),
+        displayDate: formatDateDDMMYYYY(formatDateISO(d))
+      });
+    }
+    return dates;
+  }, []);
+
+  const handleQuickDate = (dateStr) => {
+    setDateMode('single');
+    setStartDate(dateStr);
+    setEndDate(dateStr);
+    setStartDateDisplay(formatDateDDMMYYYY(dateStr));
+    setEndDateDisplay(formatDateDDMMYYYY(dateStr));
+    fetchHistory(dateStr, dateStr, selectedEmployee?.id || null);
+  };
+
+  const handleApplyDateRange = () => {
+    const isoStart = parseDDMMYYYYToISO(startDateDisplay);
+    const isoEnd = parseDDMMYYYYToISO(endDateDisplay);
+    if (!isoStart) { setError('Invalid start date. Use DD-MM-YYYY.'); return; }
+    if (dateMode === 'range' && !isoEnd) { setError('Invalid end date. Use DD-MM-YYYY.'); return; }
+    setStartDate(isoStart);
+    setEndDate(isoEnd || isoStart);
+    setError(null);
+    fetchHistory(isoStart, isoEnd || isoStart, selectedEmployee?.id || null);
+  };
+
+  const handleEmployeeSelect = (agent) => {
+    setSelectedEmployee(agent);
+    setShowEmployeeDropdown(false);
+    setEmployeeSearch('');
+    if (startDate) fetchHistory(startDate, endDate, agent?.id || null);
+  };
+
+  const handleClearEmployee = () => {
+    setSelectedEmployee(null);
+    if (startDate) fetchHistory(startDate, endDate, null);
+  };
+
+  // CSV Export
+  const handleExportCSV = () => {
+    if (!historyData?.shifts?.length) return;
+    const rows = [['Date', 'Employee', 'Email', 'Level', 'Check-In', 'Check-Out', 'Duration', 'Overtime', 'Early Checkout', 'Auto Checkout', 'Justification']];
+    for (const s of historyData.shifts) {
+      const dur = s.totalShiftMs != null ? `${Math.floor(s.totalShiftMs / 3600000)}h ${Math.floor((s.totalShiftMs % 3600000) / 60000)}m` : 'In Progress';
+      const ot = s.overtimeMs > 0 ? `${Math.floor(s.overtimeMs / 60000)}m` : '—';
+      rows.push([
+        formatDateDDMMYYYY(s.date),
+        s.name,
+        s.email,
+        s.supportLevel,
+        s.checkinTime ? new Date(s.checkinTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—',
+        s.checkoutTime ? new Date(s.checkoutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—',
+        dur,
+        ot,
+        s.isEarlyCheckout ? 'Yes' : 'No',
+        s.isAutoCheckout ? 'Yes' : 'No',
+        s.justification || '—'
+      ]);
+    }
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    if (typeof window !== 'undefined') {
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const rangeLabel = startDate === endDate ? formatDateDDMMYYYY(startDate) : `${formatDateDDMMYYYY(startDate)}_to_${formatDateDDMMYYYY(endDate)}`;
+      a.download = `shift_history_${rangeLabel}${selectedEmployee ? `_${selectedEmployee.name.replace(/\s+/g, '_')}` : ''}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const quickDates = getQuickDates();
+  const filteredEmployees = (allSupportAgents || []).filter(a =>
+    !employeeSearch || a.name?.toLowerCase().includes(employeeSearch.toLowerCase())
+  );
+
+  // Group shifts by date for range view
+  const groupedShifts = useMemo(() => {
+    if (!historyData?.shifts) return {};
+    const groups = {};
+    for (const s of historyData.shifts) {
+      if (!groups[s.date]) groups[s.date] = [];
+      groups[s.date].push(s);
+    }
+    return groups;
+  }, [historyData]);
+
+  return (
+    <View style={{ marginHorizontal: 16, marginBottom: 16, backgroundColor: '#0F172A', borderRadius: 20, borderWidth: 1, borderColor: '#1E293B', overflow: 'hidden' }}>
+      {/* Header */}
+      <TouchableOpacity
+        onPress={() => { setIsExpanded(!isExpanded); if (!isExpanded && !historyData) fetchHistory(startDate, endDate, selectedEmployee?.id || null); }}
+        style={{ flexDirection: 'row', alignItems: 'center', padding: 20 }}
+      >
+        <Ionicons name="calendar-outline" size={18} color="#6366F1" style={{ marginRight: 8 }} />
+        <Text style={{ color: '#F8FAFC', fontSize: 15, fontWeight: '900', flex: 1 }}>Shift History</Text>
+        <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={18} color="#94A3B8" />
+      </TouchableOpacity>
+
+      {isExpanded && (
+        <View style={{ paddingHorizontal: 20, paddingBottom: 20 }}>
+          {/* Date Mode Toggle */}
+          <View style={{ flexDirection: 'row', marginBottom: 12, gap: 8 }}>
+            <TouchableOpacity
+              onPress={() => setDateMode('single')}
+              style={{ flex: 1, paddingVertical: 8, borderRadius: 10, backgroundColor: dateMode === 'single' ? '#6366F1' : 'rgba(255,255,255,0.05)', alignItems: 'center', borderWidth: 1, borderColor: dateMode === 'single' ? '#818CF8' : 'rgba(255,255,255,0.1)' }}
+            >
+              <Text style={{ color: dateMode === 'single' ? '#FFF' : '#94A3B8', fontSize: 12, fontWeight: '700' }}>Single Day</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setDateMode('range')}
+              style={{ flex: 1, paddingVertical: 8, borderRadius: 10, backgroundColor: dateMode === 'range' ? '#6366F1' : 'rgba(255,255,255,0.05)', alignItems: 'center', borderWidth: 1, borderColor: dateMode === 'range' ? '#818CF8' : 'rgba(255,255,255,0.1)' }}
+            >
+              <Text style={{ color: dateMode === 'range' ? '#FFF' : '#94A3B8', fontSize: 12, fontWeight: '700' }}>Date Range</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Quick Date Chips */}
+          {dateMode === 'single' && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {quickDates.map(qd => {
+                  const isSelected = startDate === qd.date && dateMode === 'single';
+                  return (
+                    <TouchableOpacity
+                      key={qd.date}
+                      onPress={() => handleQuickDate(qd.date)}
+                      style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: isSelected ? '#6366F1' : 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: isSelected ? '#818CF8' : 'rgba(255,255,255,0.1)' }}
+                    >
+                      <Text style={{ color: isSelected ? '#FFF' : '#CBD5E1', fontSize: 11, fontWeight: '700' }}>{qd.label}</Text>
+                      <Text style={{ color: isSelected ? 'rgba(255,255,255,0.7)' : '#64748B', fontSize: 9, fontWeight: '600', marginTop: 2 }}>{qd.displayDate}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          )}
+
+          {/* Custom Date Inputs */}
+          {dateMode === 'range' && (
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: '#64748B', fontSize: 9, fontWeight: '700', marginBottom: 4 }}>FROM (DD-MM-YYYY)</Text>
+                <TextInput
+                  value={startDateDisplay}
+                  onChangeText={setStartDateDisplay}
+                  placeholder="DD-MM-YYYY"
+                  placeholderTextColor="#475569"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: '#F8FAFC', fontSize: 13, fontWeight: '600', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
+                  maxLength={10}
+                />
+              </View>
+              <Ionicons name="arrow-forward" size={16} color="#475569" style={{ marginTop: 16 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: '#64748B', fontSize: 9, fontWeight: '700', marginBottom: 4 }}>TO (DD-MM-YYYY)</Text>
+                <TextInput
+                  value={endDateDisplay}
+                  onChangeText={setEndDateDisplay}
+                  placeholder="DD-MM-YYYY"
+                  placeholderTextColor="#475569"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: '#F8FAFC', fontSize: 13, fontWeight: '600', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
+                  maxLength={10}
+                />
+              </View>
+              <TouchableOpacity
+                onPress={handleApplyDateRange}
+                style={{ marginTop: 16, backgroundColor: '#6366F1', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 }}
+              >
+                <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '800' }}>Go</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Employee Filter */}
+          <View style={{ marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity
+                onPress={() => setShowEmployeeDropdown(!showEmployeeDropdown)}
+                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
+              >
+                <Ionicons name="person-outline" size={14} color="#94A3B8" style={{ marginRight: 8 }} />
+                <Text style={{ color: selectedEmployee ? '#F8FAFC' : '#64748B', fontSize: 13, fontWeight: '600', flex: 1 }}>
+                  {selectedEmployee ? selectedEmployee.name : 'All Employees'}
+                </Text>
+                <Ionicons name={showEmployeeDropdown ? 'chevron-up' : 'chevron-down'} size={14} color="#64748B" />
+              </TouchableOpacity>
+              {selectedEmployee && (
+                <TouchableOpacity onPress={handleClearEmployee} style={{ padding: 8 }}>
+                  <Ionicons name="close-circle" size={20} color="#EF4444" />
+                </TouchableOpacity>
+              )}
+              {/* Export Button */}
+              {historyData?.shifts?.length > 0 && (
+                <TouchableOpacity
+                  onPress={handleExportCSV}
+                  style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(16,185,129,0.15)', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(16,185,129,0.3)' }}
+                >
+                  <Ionicons name="download-outline" size={14} color="#10B981" style={{ marginRight: 4 }} />
+                  <Text style={{ color: '#10B981', fontSize: 11, fontWeight: '800' }}>CSV</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Employee Dropdown */}
+            {showEmployeeDropdown && (
+              <View style={{ marginTop: 8, backgroundColor: '#1E293B', borderRadius: 12, borderWidth: 1, borderColor: '#334155', maxHeight: 200 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#334155' }}>
+                  <Ionicons name="search" size={14} color="#64748B" />
+                  <TextInput
+                    value={employeeSearch}
+                    onChangeText={setEmployeeSearch}
+                    placeholder="Search..."
+                    placeholderTextColor="#475569"
+                    style={{ flex: 1, marginLeft: 8, color: '#F8FAFC', fontSize: 13 }}
+                    autoFocus
+                  />
+                </View>
+                <ScrollView style={{ maxHeight: 160 }} nestedScrollEnabled>
+                  <TouchableOpacity
+                    onPress={() => handleEmployeeSelect(null)}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', backgroundColor: !selectedEmployee ? 'rgba(99,102,241,0.1)' : 'transparent' }}
+                  >
+                    <Ionicons name="people" size={14} color="#94A3B8" style={{ marginRight: 8 }} />
+                    <Text style={{ color: '#CBD5E1', fontSize: 13, fontWeight: '600' }}>All Employees</Text>
+                  </TouchableOpacity>
+                  {filteredEmployees.map(agent => (
+                    <TouchableOpacity
+                      key={agent.id}
+                      onPress={() => handleEmployeeSelect(agent)}
+                      style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', backgroundColor: selectedEmployee?.id === agent.id ? 'rgba(99,102,241,0.1)' : 'transparent' }}
+                    >
+                      <SafeAvatar uri={agent.avatar} name={agent.name} role={agent.role} size={20} borderRadius={6} />
+                      <Text style={{ color: '#CBD5E1', fontSize: 13, fontWeight: '600', marginLeft: 8 }}>{agent.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+
+          {/* Error */}
+          {error && (
+            <View style={{ backgroundColor: 'rgba(239,68,68,0.1)', padding: 12, borderRadius: 10, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)' }}>
+              <Text style={{ color: '#F87171', fontSize: 12, fontWeight: '600' }}>{error}</Text>
+            </View>
+          )}
+
+          {/* Loading */}
+          {isLoading && (
+            <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+              <Text style={{ color: '#94A3B8', fontSize: 12, fontWeight: '600' }}>Loading shift history...</Text>
+            </View>
+          )}
+
+          {/* Summary Stats */}
+          {!isLoading && historyData?.summary && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+              <View style={{ flex: 1, minWidth: 100, backgroundColor: 'rgba(99,102,241,0.1)', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(99,102,241,0.2)' }}>
+                <Text style={{ color: '#818CF8', fontSize: 9, fontWeight: '800', letterSpacing: 1 }}>TOTAL SHIFTS</Text>
+                <Text style={{ color: '#F8FAFC', fontSize: 20, fontWeight: '900', marginTop: 4 }}>{historyData.summary.totalShifts}</Text>
+                <Text style={{ color: '#64748B', fontSize: 10, fontWeight: '600' }}>{historyData.summary.totalWorkers} employees</Text>
+              </View>
+              <View style={{ flex: 1, minWidth: 100, backgroundColor: 'rgba(16,185,129,0.1)', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(16,185,129,0.2)' }}>
+                <Text style={{ color: '#34D399', fontSize: 9, fontWeight: '800', letterSpacing: 1 }}>AVG DURATION</Text>
+                <Text style={{ color: '#F8FAFC', fontSize: 20, fontWeight: '900', marginTop: 4 }}>{formatDuration(historyData.summary.avgDurationMs)}</Text>
+                <Text style={{ color: '#64748B', fontSize: 10, fontWeight: '600' }}>{historyData.summary.completedShifts} completed</Text>
+              </View>
+              <View style={{ flex: 1, minWidth: 100, backgroundColor: 'rgba(239,68,68,0.1)', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)' }}>
+                <Text style={{ color: '#F87171', fontSize: 9, fontWeight: '800', letterSpacing: 1 }}>OVERTIME</Text>
+                <Text style={{ color: '#F8FAFC', fontSize: 20, fontWeight: '900', marginTop: 4 }}>{formatDuration(historyData.summary.totalOvertimeMs)}</Text>
+                <Text style={{ color: '#64748B', fontSize: 10, fontWeight: '600' }}>{historyData.summary.earlyCheckouts} early exits</Text>
+              </View>
+            </View>
+          )}
+
+          {/* Shift Cards */}
+          {!isLoading && historyData && (
+            <View>
+              {historyData.shifts.length === 0 ? (
+                <View style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 12 }}>
+                  <Ionicons name="calendar-clear-outline" size={24} color="#475569" />
+                  <Text style={{ color: '#475569', fontSize: 12, fontWeight: '600', marginTop: 8 }}>No shift records found for this period</Text>
+                </View>
+              ) : (
+                Object.keys(groupedShifts).sort((a, b) => b.localeCompare(a)).map(dateKey => (
+                  <View key={dateKey} style={{ marginBottom: 16 }}>
+                    {/* Date Header (only show in range mode or multi-day results) */}
+                    {Object.keys(groupedShifts).length > 1 && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }}>
+                        <Ionicons name="calendar" size={12} color="#6366F1" style={{ marginRight: 6 }} />
+                        <Text style={{ color: '#C7D2FE', fontSize: 12, fontWeight: '800' }}>{formatDateDDMMYYYY(dateKey)}</Text>
+                        <Text style={{ color: '#475569', fontSize: 10, fontWeight: '600', marginLeft: 8 }}>({groupedShifts[dateKey].length} shifts)</Text>
+                      </View>
+                    )}
+                    {groupedShifts[dateKey].map((shift, idx) => (
+                      <ShiftCard key={`${shift.userId}-${shift.checkinTime}-${idx}`} shift={shift} />
+                    ))}
+                  </View>
+                ))
+              )}
+            </View>
+          )}
+        </View>
+      )}
+    </View>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════ */
+/* 🃏 SHIFT CARD SUB-COMPONENT                                */
+/* ═══════════════════════════════════════════════════════════ */
+const ShiftCard = ({ shift }) => {
+  const checkinStr = shift.checkinTime ? new Date(shift.checkinTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
+  const checkoutStr = shift.checkoutTime ? new Date(shift.checkoutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
+  const durationStr = shift.totalShiftMs != null ? formatDuration(shift.totalShiftMs) : 'In Progress';
+  const overtimeStr = shift.overtimeMs > 0 ? `+${Math.floor(shift.overtimeMs / 60000)}m` : null;
+
+  return (
+    <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', padding: 14, borderRadius: 14, marginBottom: 8, borderWidth: 1, borderColor: shift.isEarlyCheckout ? 'rgba(245,158,11,0.3)' : shift.overtimeMs > 0 ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.06)' }}>
+      {/* Name Row */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+        <SafeAvatar uri={shift.avatar} name={shift.name} size={28} borderRadius={8} />
+        <View style={{ marginLeft: 10, flex: 1 }}>
+          <Text style={{ color: '#F8FAFC', fontSize: 13, fontWeight: '700' }}>{shift.name}</Text>
+          <Text style={{ color: '#64748B', fontSize: 10 }}>{shift.email || shift.supportLevel}</Text>
+        </View>
+        {/* Status Badges */}
+        <View style={{ flexDirection: 'row', gap: 4 }}>
+          {!shift.checkoutTime && (
+            <View style={{ backgroundColor: 'rgba(99,102,241,0.2)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+              <Text style={{ color: '#818CF8', fontSize: 9, fontWeight: '800' }}>IN PROGRESS</Text>
+            </View>
+          )}
+          {shift.isAutoCheckout && (
+            <View style={{ backgroundColor: 'rgba(245,158,11,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+              <Text style={{ color: '#FBBF24', fontSize: 9, fontWeight: '800' }}>AUTO</Text>
+            </View>
+          )}
+          {shift.isEarlyCheckout && (
+            <View style={{ backgroundColor: 'rgba(245,158,11,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+              <Text style={{ color: '#F59E0B', fontSize: 9, fontWeight: '800' }}>EARLY</Text>
+            </View>
+          )}
+          {overtimeStr && (
+            <View style={{ backgroundColor: 'rgba(239,68,68,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+              <Text style={{ color: '#F87171', fontSize: 9, fontWeight: '800' }}>{overtimeStr} OT</Text>
+            </View>
+          )}
+        </View>
+      </View>
+
+      {/* Time Details Row */}
+      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+        <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+          <Text style={{ color: '#64748B', fontSize: 8, fontWeight: '700', letterSpacing: 0.5 }}>CHECK-IN</Text>
+          <Text style={{ color: '#10B981', fontSize: 13, fontWeight: '700', marginTop: 2 }}>{checkinStr}</Text>
+        </View>
+        <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+          <Text style={{ color: '#64748B', fontSize: 8, fontWeight: '700', letterSpacing: 0.5 }}>CHECK-OUT</Text>
+          <Text style={{ color: shift.checkoutTime ? '#F87171' : '#475569', fontSize: 13, fontWeight: '700', marginTop: 2 }}>{checkoutStr}</Text>
+        </View>
+        <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+          <Text style={{ color: '#64748B', fontSize: 8, fontWeight: '700', letterSpacing: 0.5 }}>DURATION</Text>
+          <Text style={{ color: '#C7D2FE', fontSize: 13, fontWeight: '700', marginTop: 2 }}>{durationStr}</Text>
+        </View>
+      </View>
+
+      {/* Justification */}
+      {shift.justification && (
+        <View style={{ marginTop: 10, backgroundColor: 'rgba(245,158,11,0.08)', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(245,158,11,0.2)' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+            <Ionicons name="warning" size={11} color="#F59E0B" style={{ marginRight: 4 }} />
+            <Text style={{ color: '#FBBF24', fontSize: 10, fontWeight: '800' }}>EARLY CHECKOUT JUSTIFICATION</Text>
+          </View>
+          <Text style={{ color: '#FDE68A', fontSize: 12, fontStyle: 'italic' }}>"{shift.justification}"</Text>
+        </View>
+      )}
+    </View>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════ */
+/* 🛠️ HELPER FUNCTIONS                                       */
+/* ═══════════════════════════════════════════════════════════ */
+function formatDateISO(date) {
+  const d = new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function formatDateDDMMYYYY(isoDateStr) {
+  if (!isoDateStr) return '';
+  const parts = isoDateStr.split('-');
+  if (parts.length !== 3) return isoDateStr;
+  return `${parts[2]}-${parts[1]}-${parts[0]}`;
+}
+
+function parseDDMMYYYYToISO(ddmmyyyy) {
+  if (!ddmmyyyy) return null;
+  const parts = ddmmyyyy.split('-');
+  if (parts.length !== 3) return null;
+  const [dd, mm, yyyy] = parts;
+  if (!dd || !mm || !yyyy || yyyy.length !== 4) return null;
+  const d = new Date(`${yyyy}-${mm}-${dd}`);
+  if (isNaN(d.getTime())) return null;
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function formatDuration(ms) {
+  if (!ms || ms <= 0) return '0m';
+  const hours = Math.floor(ms / 3600000);
+  const mins = Math.floor((ms % 3600000) / 60000);
+  if (hours === 0) return `${mins}m`;
+  return `${hours}h ${mins}m`;
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 16 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
@@ -347,3 +832,4 @@ const styles = StyleSheet.create({
 });
 
 export default AdminShiftManagementPanel;
+

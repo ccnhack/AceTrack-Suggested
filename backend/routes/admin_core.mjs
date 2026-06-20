@@ -186,6 +186,138 @@ router.post('/team-directory/:id/hierarchy', requireAdmin, async (req, res) => {
     }
 });
 
+// GET /api/v1/admin-core/shift-history
+router.get('/shift-history', requireAdmin, async (req, res) => {
+    try {
+        const { startDate, endDate, userId } = req.query;
+        if (!startDate) {
+            return res.status(400).json({ success: false, message: 'startDate is required (YYYY-MM-DD)' });
+        }
+
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        const end = endDate ? new Date(endDate) : new Date(startDate);
+        end.setHours(23, 59, 59, 999);
+
+        // Enforce max 31-day range
+        const diffDays = (end - start) / (1000 * 60 * 60 * 24);
+        if (diffDays > 31) {
+            return res.status(400).json({ success: false, message: 'Date range cannot exceed 31 days.' });
+        }
+
+        const query = {
+            action: { $in: ['SUPPORT_SHIFT_CHECKIN', 'SUPPORT_SHIFT_CHECKOUT'] },
+            timestamp: { $gte: start, $lte: end }
+        };
+        if (userId) query.userId = userId;
+
+        const logs = await AuditLog.find(query).sort({ timestamp: 1 }).limit(2000).lean();
+
+        // Build a map of player names for enrichment
+        const userIds = [...new Set(logs.map(l => l.details?.userId || l.userId))];
+        const playerDocs = await User.find({ id: { $in: userIds } }).select('id data.name data.avatar data.email data.supportLevel').lean();
+        const playerMap = {};
+        for (const p of playerDocs) {
+            playerMap[p.id] = {
+                name: p.data?.name || p.id,
+                avatar: p.data?.avatar || '',
+                email: p.data?.email || '',
+                supportLevel: p.data?.supportLevel || ''
+            };
+        }
+
+        // Pair checkins with checkouts per user per day
+        const shifts = [];
+        const checkinMap = {}; // userId -> [pending checkins]
+
+        for (const log of logs) {
+            const uid = log.details?.userId || log.userId;
+            if (!uid) continue;
+
+            if (log.action === 'SUPPORT_SHIFT_CHECKIN') {
+                if (!checkinMap[uid]) checkinMap[uid] = [];
+                checkinMap[uid].push(log);
+            } else if (log.action === 'SUPPORT_SHIFT_CHECKOUT') {
+                const pending = checkinMap[uid];
+                const checkinLog = pending && pending.length > 0 ? pending.shift() : null;
+
+                const totalShiftMs = log.details?.totalShiftMs || 0;
+                const overtimeMs = log.details?.overtimeMs || 0;
+                const SEVEN_HOURS_MS = 7 * 60 * 60 * 1000;
+
+                shifts.push({
+                    userId: uid,
+                    name: playerMap[uid]?.name || uid,
+                    avatar: playerMap[uid]?.avatar || '',
+                    email: playerMap[uid]?.email || '',
+                    supportLevel: playerMap[uid]?.supportLevel || '',
+                    checkinTime: checkinLog?.details?.actualTime || checkinLog?.details?.roundedTime || checkinLog?.timestamp || log.details?.checkinRounded || null,
+                    checkinRounded: checkinLog?.details?.roundedTime || log.details?.checkinRounded || null,
+                    checkoutTime: log.details?.checkoutTime || log.timestamp,
+                    totalShiftMs,
+                    overtimeMs,
+                    isAutoCheckout: !!log.details?.isAutoCheckout,
+                    isEarlyCheckout: totalShiftMs < SEVEN_HOURS_MS && !log.details?.isAutoCheckout,
+                    justification: log.details?.justification || null,
+                    date: new Date(log.timestamp).toISOString().split('T')[0]
+                });
+            }
+        }
+
+        // Handle orphan checkins (checked in but never checked out within the range)
+        for (const uid of Object.keys(checkinMap)) {
+            for (const orphan of checkinMap[uid]) {
+                shifts.push({
+                    userId: uid,
+                    name: playerMap[uid]?.name || uid,
+                    avatar: playerMap[uid]?.avatar || '',
+                    email: playerMap[uid]?.email || '',
+                    supportLevel: playerMap[uid]?.supportLevel || '',
+                    checkinTime: orphan.details?.actualTime || orphan.details?.roundedTime || orphan.timestamp,
+                    checkinRounded: orphan.details?.roundedTime || null,
+                    checkoutTime: null,
+                    totalShiftMs: null,
+                    overtimeMs: 0,
+                    isAutoCheckout: false,
+                    isEarlyCheckout: false,
+                    justification: null,
+                    date: new Date(orphan.timestamp).toISOString().split('T')[0]
+                });
+            }
+        }
+
+        // Sort by date desc, then checkin time desc
+        shifts.sort((a, b) => {
+            if (a.date !== b.date) return b.date.localeCompare(a.date);
+            return new Date(b.checkinTime || 0) - new Date(a.checkinTime || 0);
+        });
+
+        // Summary stats
+        const uniqueWorkers = new Set(shifts.map(s => s.userId)).size;
+        const completedShifts = shifts.filter(s => s.checkoutTime);
+        const avgDurationMs = completedShifts.length > 0
+            ? completedShifts.reduce((sum, s) => sum + (s.totalShiftMs || 0), 0) / completedShifts.length
+            : 0;
+        const totalOvertimeMs = completedShifts.reduce((sum, s) => sum + (s.overtimeMs || 0), 0);
+        const earlyCheckouts = completedShifts.filter(s => s.isEarlyCheckout).length;
+
+        res.json({
+            success: true,
+            shifts,
+            summary: {
+                totalWorkers: uniqueWorkers,
+                totalShifts: shifts.length,
+                completedShifts: completedShifts.length,
+                avgDurationMs,
+                totalOvertimeMs,
+                earlyCheckouts
+            }
+        });
+    } catch (error) {
+        console.error("Error fetching shift history:", error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
 
     return router;
 }
