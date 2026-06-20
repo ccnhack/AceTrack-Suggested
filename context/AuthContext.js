@@ -351,7 +351,7 @@ export const AuthProvider = ({ children }) => {
 
   const onUpdateUser = useCallback((updatedUser) => {
     setCurrentUser(updatedUser);
-    syncAndSaveData({ currentUser: updatedUser });
+    syncAndSaveData({ currentUser: updatedUser, players: [updatedUser] });
   }, [syncAndSaveData]);
 
   const onVerifyAccount = useCallback((type) => {
