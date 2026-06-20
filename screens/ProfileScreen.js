@@ -28,6 +28,8 @@ import ProfileMenuSection from '../components/ProfileMenuSection';
 import { OTPVerificationModal, CalendarWidget } from '../components/ProfileSubComponents';
 import AdminProfileModals from '../components/AdminProfileModals';
 import ShareablePlayerCard from '../components/ShareablePlayerCard';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const calculateAcademyTier = (uid, tournaments = []) => {
   const hostedCount = (tournaments || []).filter(t => t.creatorId === uid).length;
@@ -91,6 +93,67 @@ const ProfileScreen = ({ navigation, route }) => {
 
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [latestVersion, setLatestVersion] = useState(null);
+
+  // 🕐 [SHIFT MANAGEMENT] (v2.6.673): Profile shift status state
+  const [profileShiftStatus, setProfileShiftStatus] = useState(null);
+  const [profileShiftCheckinRounded, setProfileShiftCheckinRounded] = useState(null);
+  const [profileShiftCheckoutDue, setProfileShiftCheckoutDue] = useState(null);
+  const [profileShiftLoading, setProfileShiftLoading] = useState(false);
+
+  // Fetch shift status on focus
+  useEffect(() => {
+    if (!isFocused || !user || user.role !== 'support') return;
+    const fetchShift = async () => {
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        const headers = { 'x-ace-api-key': config.PUBLIC_APP_ID, 'x-user-id': user.id };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${config.API_BASE_URL}/api/v1/support/shift-status`, { headers, credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          setProfileShiftStatus(data.shiftStatus);
+          setProfileShiftCheckinRounded(data.shiftCheckinRounded);
+          setProfileShiftCheckoutDue(data.shiftCheckoutDue);
+        }
+      } catch (e) { console.warn('[Profile] Shift fetch error:', e.message); }
+    };
+    fetchShift();
+  }, [isFocused, user]);
+
+  const handleProfileShiftAction = async (action) => {
+    if (profileShiftLoading) return;
+    setProfileShiftLoading(true);
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const headers = { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID, 'x-user-id': user.id };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const endpoint = action === 'checkin' ? 'check-in' : 'check-out';
+      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/${endpoint}`, {
+        method: 'POST', headers, credentials: 'include',
+        body: JSON.stringify(action === 'checkout' ? { isAutoCheckout: false } : {})
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (action === 'checkin') {
+          setProfileShiftStatus('on_shift');
+          setProfileShiftCheckinRounded(data.checkinTime);
+          setProfileShiftCheckoutDue(data.checkoutDue);
+          Alert.alert('✅ Checked In!', `Shift started at ${new Date(data.checkinTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}.`);
+        } else {
+          setProfileShiftStatus('off_shift');
+          const totalH = Math.floor(data.totalShiftMs / 3600000);
+          const totalM = Math.floor((data.totalShiftMs % 3600000) / 60000);
+          Alert.alert('✅ Checked Out!', `Total shift: ${totalH}h ${totalM}m. Have a great day! 🎉`);
+        }
+      } else {
+        Alert.alert('Error', data.error || 'Unknown error');
+      }
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setProfileShiftLoading(false);
+    }
+  };
 
   const activeApiUrl = isUsingCloud ? 'https://acetrack-suggested.onrender.com' : config.API_BASE_URL;
 
@@ -703,6 +766,54 @@ const ProfileScreen = ({ navigation, route }) => {
                   </TouchableOpacity>
                 )}
             </View>
+          </View>
+        )}
+
+        {/* 🕐 [SHIFT STATUS CARD] (v2.6.673) — Only for support employees */}
+        {user?.role === 'support' && (
+          <View style={{ marginHorizontal: 20, marginBottom: 16, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: profileShiftStatus === 'on_shift' ? 'rgba(16,185,129,0.3)' : 'rgba(99,102,241,0.2)' }}>
+            <LinearGradient colors={profileShiftStatus === 'on_shift' ? ['#065F46', '#047857'] : ['#312E81', '#4338CA']} style={{ padding: 20 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                  <Ionicons name={profileShiftStatus === 'on_shift' ? 'checkmark-circle' : 'time-outline'} size={22} color="#FFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '900' }}>Shift Status</Text>
+                  <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '600', marginTop: 2 }}>
+                    {profileShiftStatus === 'on_shift' ? `On Shift since ${profileShiftCheckinRounded ? new Date(profileShiftCheckinRounded).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—'}` : 'Not checked in'}
+                  </Text>
+                </View>
+                <View style={{ backgroundColor: profileShiftStatus === 'on_shift' ? '#10B981' : '#6366F1', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                  <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900' }}>{profileShiftStatus === 'on_shift' ? 'ACTIVE' : 'INACTIVE'}</Text>
+                </View>
+              </View>
+              {profileShiftStatus === 'on_shift' && profileShiftCheckoutDue && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 12, marginBottom: 16 }}>
+                  <Ionicons name="alarm-outline" size={16} color="rgba(255,255,255,0.7)" style={{ marginRight: 8 }} />
+                  <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '600' }}>Checkout due by {new Date(profileShiftCheckoutDue).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</Text>
+                </View>
+              )}
+              <TouchableOpacity
+                onPress={() => {
+                  if (profileShiftStatus === 'on_shift') {
+                    Alert.alert('🚪 Confirm Checkout', 'Are you sure you want to end your shift?', [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Check Out', style: 'destructive', onPress: () => handleProfileShiftAction('checkout') }
+                    ]);
+                  } else {
+                    handleProfileShiftAction('checkin');
+                  }
+                }}
+                disabled={profileShiftLoading}
+                activeOpacity={0.8}
+                style={{ backgroundColor: profileShiftStatus === 'on_shift' ? 'rgba(239,68,68,0.9)' : 'rgba(16,185,129,0.9)', paddingVertical: 14, borderRadius: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}
+              >
+                <Ionicons name={profileShiftStatus === 'on_shift' ? 'log-out-outline' : 'checkmark-circle-outline'} size={18} color="#FFF" />
+                <Text style={{ color: '#FFF', fontSize: 15, fontWeight: '900' }}>
+                  {profileShiftLoading ? 'Processing...' : profileShiftStatus === 'on_shift' ? 'Check Out' : 'Check In Now'}
+                </Text>
+              </TouchableOpacity>
+            </LinearGradient>
           </View>
         )}
 

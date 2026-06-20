@@ -172,7 +172,13 @@ const PlayerDataSchema = new mongoose.Schema({
   reOnboardedAt: String,
   designation: String,
   lastForceLogoutAt: Number,
-  activeSessions: [mongoose.Schema.Types.Mixed]
+  activeSessions: [mongoose.Schema.Types.Mixed],
+  // 🕐 [SHIFT MANAGEMENT] (v2.6.673): Check-in/Check-out system
+  shiftStatus: String,           // 'on_shift', 'off_shift', null
+  shiftCheckinAt: String,        // Raw ISO timestamp of actual check-in
+  shiftCheckinRounded: String,   // Rounded to nearest 30 min
+  shiftCheckoutAt: String,       // Raw ISO timestamp of checkout
+  shiftCheckoutDue: String       // Calculated: rounded check-in + 8 hours
 }, { _id: false, strict: false });
 
 const PlayerSchema = new mongoose.Schema({

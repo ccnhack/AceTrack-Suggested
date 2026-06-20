@@ -1,12 +1,14 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { 
   View, Text, TouchableOpacity, ScrollView, StyleSheet, 
-  SafeAreaView, Image, TextInput, Platform, useWindowDimensions
+  SafeAreaView, Image, TextInput, Platform, useWindowDimensions,
+  Modal, Alert, Animated
 } from 'react-native';
 import { colors, shadows } from '../theme/designSystem';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AdminGrievancesPanel } from '../components/AdminGrievancesPanel';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { usePlayersStore } from '../stores';
 import { useSupportStore } from '../stores';
@@ -14,6 +16,30 @@ import { useSync } from '../context/SyncContext';
 import { useAuth } from '../context/AuthContext';
 import { useCommsStore } from '../stores/useCommsStore';
 import config from '../config';
+
+// 🕐 [SHIFT MANAGEMENT UTILS] (v2.6.673)
+function roundToNearest30(date) {
+  const d = new Date(date);
+  const minutes = d.getMinutes();
+  if (minutes < 15) {
+    d.setMinutes(0, 0, 0);
+  } else if (minutes < 45) {
+    d.setMinutes(30, 0, 0);
+  } else {
+    d.setMinutes(0, 0, 0);
+    d.setHours(d.getHours() + 1);
+  }
+  return d;
+}
+
+function formatTime(date) {
+  return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+
+function getLocalDateStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 
 const SupportDashboardScreen = ({ navigation, route }) => {
@@ -24,7 +50,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
   
   const { width: windowWidth } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
-  const isSmallScreen = windowWidth < 1024; // 📱 [RESPONSIVE] (v2.6.463): Covers mobile-web and native mobile
+  const isSmallScreen = windowWidth < 1024; // 📱 [RESPONSIVE] (v2.6.463)
   const [isWebSidebarOpen, setIsWebSidebarOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [urlTicketId, setUrlTicketId] = useState(() => {
@@ -49,7 +75,231 @@ const SupportDashboardScreen = ({ navigation, route }) => {
     }
   };
 
-  // 🕐 [SESSION HEARTBEAT] (v2.6.345): Send HTTP heartbeat every 2 minutes for attendance tracking
+  // ═══════════════════════════════════════════════════════════════
+  // 🕐 SHIFT CHECK-IN / CHECK-OUT STATE (v2.6.673)
+  // ═══════════════════════════════════════════════════════════════
+  const [showCheckinModal, setShowCheckinModal] = useState(false);
+  const [shiftStatus, setShiftStatus] = useState(null);
+  const [shiftCheckinRounded, setShiftCheckinRounded] = useState(null);
+  const [shiftCheckoutDue, setShiftCheckoutDue] = useState(null);
+  const [showCheckoutBanner, setShowCheckoutBanner] = useState(false);
+  const [checkoutCountdown, setCheckoutCountdown] = useState('');
+  const [checkinLoading, setCheckinLoading] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const checkoutDismissedUntilRef = useRef(0);
+  const autoCheckoutFiredRef = useRef(false);
+  const bannerPulse = useRef(new Animated.Value(0)).current;
+
+  // Fetch shift status on mount
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== 'support') return;
+    
+    const fetchShiftStatus = async () => {
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        const headers = { 'x-ace-api-key': config.PUBLIC_APP_ID, 'x-user-id': currentUser.id };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        
+        const res = await fetch(`${config.API_BASE_URL}/api/v1/support/shift-status`, {
+          headers, credentials: 'include'
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          setShiftStatus(data.shiftStatus);
+          setShiftCheckinRounded(data.shiftCheckinRounded);
+          setShiftCheckoutDue(data.shiftCheckoutDue);
+          
+          // If not on shift, check if we should show the check-in modal
+          if (data.shiftStatus !== 'on_shift') {
+            const todayKey = `checkin_muted_${currentUser.id}_${getLocalDateStr()}`;
+            const isMuted = await AsyncStorage.getItem(todayKey);
+            if (!isMuted) {
+              setShowCheckinModal(true);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[Shift] Failed to fetch shift status:', e.message);
+      }
+    };
+    
+    fetchShiftStatus();
+  }, [currentUser]);
+
+  // 🕐 Checkout banner timer — checks every 30s
+  useEffect(() => {
+    if (!shiftCheckoutDue || shiftStatus !== 'on_shift') {
+      setShowCheckoutBanner(false);
+      return;
+    }
+
+    const checkBanner = () => {
+      const now = Date.now();
+      const checkinTime = new Date(shiftCheckinRounded).getTime();
+      const dueTime = new Date(shiftCheckoutDue).getTime();
+      const BANNER_START_MS = 7.5 * 60 * 60 * 1000; // 7h 30m
+      const GRACE_END_MS = 8.25 * 60 * 60 * 1000;   // 8h 15m
+
+      const elapsedMs = now - checkinTime;
+
+      if (elapsedMs >= BANNER_START_MS && now > checkoutDismissedUntilRef.current) {
+        setShowCheckoutBanner(true);
+
+        // Auto-checkout at 8h 15m
+        if (elapsedMs >= GRACE_END_MS && !autoCheckoutFiredRef.current) {
+          autoCheckoutFiredRef.current = true;
+          handleCheckout(true);
+          return;
+        }
+
+        // Dynamic countdown message
+        const remainingMs = dueTime - now;
+        if (remainingMs > 0) {
+          const mins = Math.ceil(remainingMs / 60000);
+          setCheckoutCountdown(`Your shift ends in ${mins} minute${mins !== 1 ? 's' : ''}! 🎉`);
+        } else {
+          const overtimeMins = Math.floor((now - dueTime) / 60000);
+          setCheckoutCountdown(`Shift complete! ${overtimeMins > 0 ? `(${overtimeMins}m overtime)` : 'Time to check out.'}`);
+        }
+      }
+    };
+
+    checkBanner();
+    const interval = setInterval(checkBanner, 30000);
+    return () => clearInterval(interval);
+  }, [shiftCheckoutDue, shiftStatus, shiftCheckinRounded]);
+
+  // Banner pulse animation
+  useEffect(() => {
+    if (showCheckoutBanner) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(bannerPulse, { toValue: 1, duration: 1500, useNativeDriver: false }),
+          Animated.timing(bannerPulse, { toValue: 0, duration: 1500, useNativeDriver: false }),
+        ])
+      ).start();
+    } else {
+      bannerPulse.setValue(0);
+    }
+  }, [showCheckoutBanner]);
+
+  // 🕐 Handle Check-In
+  const handleCheckin = useCallback(async () => {
+    if (checkinLoading) return;
+    setCheckinLoading(true);
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const headers = { 
+        'Content-Type': 'application/json',
+        'x-ace-api-key': config.PUBLIC_APP_ID, 
+        'x-user-id': currentUser.id 
+      };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/check-in`, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({})
+      });
+      
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setShiftStatus('on_shift');
+        setShiftCheckinRounded(data.checkinTime);
+        setShiftCheckoutDue(data.checkoutDue);
+        setShowCheckinModal(false);
+        autoCheckoutFiredRef.current = false;
+        
+        Alert.alert(
+          '✅ Checked In!',
+          `Shift started at ${formatTime(data.checkinTime)}.\nCheckout due by ${formatTime(data.checkoutDue)}.`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Check-In Failed', data.error || 'Unknown error');
+      }
+    } catch (e) {
+      Alert.alert('Error', `Check-in failed: ${e.message}`);
+    } finally {
+      setCheckinLoading(false);
+    }
+  }, [currentUser, checkinLoading]);
+
+  // 🕐 Handle Check-Out
+  const handleCheckout = useCallback(async (isAuto = false) => {
+    if (checkoutLoading) return;
+    
+    const doCheckout = async () => {
+      setCheckoutLoading(true);
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        const headers = { 
+          'Content-Type': 'application/json',
+          'x-ace-api-key': config.PUBLIC_APP_ID, 
+          'x-user-id': currentUser.id 
+        };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch(`${config.API_BASE_URL}/api/v1/support/check-out`, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({ isAutoCheckout: isAuto })
+        });
+        
+        const data = await res.json();
+        if (res.ok && data.success) {
+          setShiftStatus('off_shift');
+          setShowCheckoutBanner(false);
+          
+          const totalH = Math.floor(data.totalShiftMs / 3600000);
+          const totalM = Math.floor((data.totalShiftMs % 3600000) / 60000);
+          const overtimeM = Math.floor(data.overtimeMs / 60000);
+          
+          Alert.alert(
+            isAuto ? '⏰ Auto Checkout' : '✅ Checked Out!',
+            `Total shift: ${totalH}h ${totalM}m.${overtimeM > 0 ? `\nOvertime: ${overtimeM} min.` : ''}\nNo new tickets will be assigned to you.\nHave a great day! 🎉`,
+            [{ text: 'OK' }]
+          );
+        } else {
+          Alert.alert('Checkout Failed', data.error || 'Unknown error');
+        }
+      } catch (e) {
+        Alert.alert('Error', `Checkout failed: ${e.message}`);
+      } finally {
+        setCheckoutLoading(false);
+      }
+    };
+
+    if (isAuto) {
+      doCheckout();
+    } else {
+      Alert.alert(
+        '🚪 Confirm Checkout',
+        'Are you sure you want to end your shift?\nNo new tickets will be assigned to you after checkout.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Check Out', style: 'destructive', onPress: doCheckout }
+        ]
+      );
+    }
+  }, [currentUser, checkoutLoading]);
+
+  // 🕐 Handle Mute for Today
+  const handleMuteForToday = useCallback(async () => {
+    try {
+      const todayKey = `checkin_muted_${currentUser.id}_${getLocalDateStr()}`;
+      await AsyncStorage.setItem(todayKey, 'true');
+      setShowCheckinModal(false);
+    } catch (e) {
+      console.warn('[Shift] Mute failed:', e.message);
+      setShowCheckinModal(false);
+    }
+  }, [currentUser]);
+
+  // 🕐 [SESSION HEARTBEAT] (v2.6.345)
   useEffect(() => {
     if (!currentUser || currentUser.role !== 'support') return;
 
@@ -65,16 +315,14 @@ const SupportDashboardScreen = ({ navigation, route }) => {
       }
     };
 
-    pingHeartbeat(); // Ping immediately on mount
-    const intervalId = setInterval(pingHeartbeat, 120000); // And every 2 mins
-
+    pingHeartbeat();
+    const intervalId = setInterval(pingHeartbeat, 120000);
     return () => clearInterval(intervalId);
   }, [currentUser]);
 
   const ticketStats = useMemo(() => {
     let tickets = (supportTickets || []).filter(t => t.creatorRole !== 'support');
     
-    // Apply strict scoping rules for support staff
     if (currentUser?.id !== 'admin') {
       tickets = tickets.filter(t => {
         const isMine = (t.assignedTo && t.assignedTo === currentUser?.id) || 
@@ -105,6 +353,133 @@ const SupportDashboardScreen = ({ navigation, route }) => {
     return unreadSenders.size;
   }, [messages, currentUser]);
 
+  // ═══════════════════════════════════════════════════════════════
+  // 🕐 CHECK-IN MODAL (v2.6.673)
+  // ═══════════════════════════════════════════════════════════════
+  const renderCheckinModal = () => {
+    if (!showCheckinModal || !currentUser || currentUser.role !== 'support') return null;
+    
+    const now = new Date();
+    const rounded = roundToNearest30(now);
+    const checkoutDuePreview = new Date(rounded.getTime() + 8 * 60 * 60 * 1000);
+
+    return (
+      <Modal transparent animationType="fade" visible={showCheckinModal}>
+        <View style={shiftStyles.modalOverlay}>
+          <View style={shiftStyles.modalCard}>
+            <LinearGradient colors={['#6366F1', '#4F46E5']} style={shiftStyles.modalHeader}>
+              <Ionicons name="time-outline" size={36} color="#FFF" />
+              <Text style={shiftStyles.modalTitle}>Good {now.getHours() < 12 ? 'Morning' : now.getHours() < 17 ? 'Afternoon' : 'Evening'}!</Text>
+              <Text style={shiftStyles.modalSubtitle}>Ready to start your shift?</Text>
+            </LinearGradient>
+
+            <View style={shiftStyles.modalBody}>
+              <View style={shiftStyles.timeRow}>
+                <View style={shiftStyles.timeBlock}>
+                  <Text style={shiftStyles.timeLabel}>Current Time</Text>
+                  <Text style={shiftStyles.timeValue}>{formatTime(now)}</Text>
+                </View>
+                <Ionicons name="arrow-forward" size={20} color="#94A3B8" />
+                <View style={shiftStyles.timeBlock}>
+                  <Text style={shiftStyles.timeLabel}>Check-In As</Text>
+                  <Text style={[shiftStyles.timeValue, { color: '#6366F1' }]}>{formatTime(rounded)}</Text>
+                </View>
+              </View>
+
+              <View style={shiftStyles.shiftInfoRow}>
+                <Ionicons name="briefcase-outline" size={16} color="#64748B" />
+                <Text style={shiftStyles.shiftInfoText}>8-hour shift · Checkout due by {formatTime(checkoutDuePreview)}</Text>
+              </View>
+
+              <TouchableOpacity 
+                style={shiftStyles.checkinBtn}
+                onPress={handleCheckin}
+                disabled={checkinLoading}
+                activeOpacity={0.8}
+              >
+                <LinearGradient colors={['#10B981', '#059669']} style={shiftStyles.checkinBtnGradient}>
+                  <Ionicons name="checkmark-circle" size={22} color="#FFF" />
+                  <Text style={shiftStyles.checkinBtnText}>
+                    {checkinLoading ? 'Checking in...' : 'Check In Now'}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={shiftStyles.notNowBtn}
+                onPress={() => setShowCheckinModal(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={shiftStyles.notNowText}>Not Now</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={shiftStyles.muteBtn}
+                onPress={handleMuteForToday}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="notifications-off-outline" size={14} color="#94A3B8" />
+                <Text style={shiftStyles.muteText}>Mute for Today</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🕐 CHECKOUT BANNER (v2.6.673)
+  // ═══════════════════════════════════════════════════════════════
+  const bannerBg = bannerPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['rgba(245, 158, 11, 0.12)', 'rgba(245, 158, 11, 0.22)']
+  });
+
+  const renderCheckoutBanner = () => {
+    if (!showCheckoutBanner || shiftStatus !== 'on_shift') return null;
+
+    return (
+      <Animated.View style={[shiftStyles.checkoutBanner, { backgroundColor: bannerBg }]}>
+        <View style={shiftStyles.checkoutBannerContent}>
+          <View style={shiftStyles.checkoutBannerLeft}>
+            <View style={shiftStyles.checkoutIconCircle}>
+              <Ionicons name="alarm-outline" size={18} color="#F59E0B" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={shiftStyles.checkoutTitle}>{checkoutCountdown}</Text>
+              <Text style={shiftStyles.checkoutSubtitle}>Have a great day ahead! ✨</Text>
+            </View>
+          </View>
+          <View style={shiftStyles.checkoutActions}>
+            <TouchableOpacity 
+              style={shiftStyles.checkoutBtn}
+              onPress={() => handleCheckout(false)}
+              disabled={checkoutLoading}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="log-out-outline" size={14} color="#FFF" />
+              <Text style={shiftStyles.checkoutBtnText}>{checkoutLoading ? '...' : 'Check Out'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={shiftStyles.checkoutDismissBtn}
+              onPress={() => {
+                setShowCheckoutBanner(false);
+                checkoutDismissedUntilRef.current = Date.now() + 10 * 60 * 1000;
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={shiftStyles.checkoutDismissText}>Not Now</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Animated.View>
+    );
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // SIDEBAR
+  // ═══════════════════════════════════════════════════════════════
   const renderWebSidebar = () => (
     <>
       {(isSmallScreen && isWebSidebarOpen) && (
@@ -144,7 +519,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
             <View style={{ paddingHorizontal: 16 }}>
               <Text style={{ color: '#475569', fontSize: 11, fontWeight: '800', marginBottom: 12, paddingHorizontal: 12, letterSpacing: 1.5 }}>SUPPORT CENTER</Text>
               
-              {/* Tickets - always active */}
+              {/* Tickets */}
               <TouchableOpacity 
                 style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, backgroundColor: '#6366F1', marginBottom: 4 }}
                 onPress={() => { if (isSmallScreen) setIsWebSidebarOpen(false); }}
@@ -158,7 +533,28 @@ const SupportDashboardScreen = ({ navigation, route }) => {
                 )}
               </TouchableOpacity>
 
-              {/* Quick stats in sidebar */}
+              {/* 🕐 Shift Status Badge in Sidebar */}
+              {currentUser?.role === 'support' && (
+                <View style={{ marginTop: 12, paddingHorizontal: 12 }}>
+                  <View style={{ 
+                    flexDirection: 'row', alignItems: 'center', 
+                    backgroundColor: shiftStatus === 'on_shift' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.1)', 
+                    borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, 
+                    borderWidth: 1, 
+                    borderColor: shiftStatus === 'on_shift' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.2)' 
+                  }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: shiftStatus === 'on_shift' ? '#10B981' : '#EF4444', marginRight: 8 }} />
+                    <Text style={{ color: shiftStatus === 'on_shift' ? '#10B981' : '#F87171', fontSize: 11, fontWeight: '800', letterSpacing: 0.5, flex: 1 }}>
+                      {shiftStatus === 'on_shift' ? 'ON SHIFT' : 'OFF SHIFT'}
+                    </Text>
+                    {shiftStatus === 'on_shift' && shiftCheckinRounded && (
+                      <Text style={{ color: '#94A3B8', fontSize: 9, fontWeight: '600' }}>Since {formatTime(shiftCheckinRounded)}</Text>
+                    )}
+                  </View>
+                </View>
+              )}
+
+              {/* Quick stats */}
               <View style={{ marginTop: 24, paddingHorizontal: 12 }}>
                 <Text style={{ color: '#475569', fontSize: 11, fontWeight: '800', marginBottom: 16, letterSpacing: 1.5 }}>QUICK STATS</Text>
                 {[
@@ -177,7 +573,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
                 ))}
               </View>
 
-              {/* Reporting Hierarchy in sidebar */}
+              {/* Reporting Hierarchy */}
               <View style={{ marginTop: 24, paddingHorizontal: 12, paddingBottom: 20 }}>
                 <Text style={{ color: '#475569', fontSize: 11, fontWeight: '800', marginBottom: 16, letterSpacing: 1.5 }}>REPORTING HIERARCHY</Text>
                 
@@ -220,45 +616,16 @@ const SupportDashboardScreen = ({ navigation, route }) => {
         </View>
 
         {/* Pinned Bottom Footer Section */}
-        <View style={{ 
-          paddingHorizontal: 16, 
-          paddingTop: 8, 
-          paddingBottom: 16, 
-          borderTopWidth: 1, 
-          borderTopColor: '#1E293B',
-          backgroundColor: '#0F172A' 
-        }}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16, borderTopWidth: 1, borderTopColor: '#1E293B', backgroundColor: '#0F172A' }}>
           {/* Chat/Collaborate link */}
           <TouchableOpacity 
             onPress={() => { navigation.navigate('OrgChat'); if (isSmallScreen) setIsWebSidebarOpen(false); }} 
-            style={{ 
-              flexDirection: 'row', 
-              alignItems: 'center', 
-              paddingHorizontal: 12, 
-              paddingVertical: 12, 
-              borderRadius: 12, 
-              backgroundColor: 'rgba(99, 102, 241, 0.15)', 
-              borderWidth: 1, 
-              borderColor: 'rgba(99, 102, 241, 0.3)',
-              marginBottom: 8 
-            }}
+            style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 12, borderRadius: 12, backgroundColor: 'rgba(99, 102, 241, 0.15)', borderWidth: 1, borderColor: 'rgba(99, 102, 241, 0.3)', marginBottom: 8 }}
           >
             <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#6366F1', justifyContent: 'center', alignItems: 'center' }}>
               <Ionicons name="chatbubble-ellipses" size={18} color="#FFF" />
               {totalUnreadChat > 0 && (
-                <View style={{ 
-                  position: 'absolute', 
-                  top: -5, 
-                  right: -5, 
-                  backgroundColor: '#EF4444', 
-                  borderRadius: 10, 
-                  minWidth: 18, 
-                  height: 18, 
-                  justifyContent: 'center', 
-                  alignItems: 'center',
-                  borderWidth: 2,
-                  borderColor: '#0F172A'
-                }}>
+                <View style={{ position: 'absolute', top: -5, right: -5, backgroundColor: '#EF4444', borderRadius: 10, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#0F172A' }}>
                   <Text style={{ color: '#FFF', fontSize: 9, fontWeight: '900' }}>{totalUnreadChat}</Text>
                 </View>
               )}
@@ -273,14 +640,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
           {/* Profile link */}
           <TouchableOpacity 
             onPress={() => { navigation.navigate('Profile'); if (isSmallScreen) setIsWebSidebarOpen(false); }} 
-            style={{ 
-              flexDirection: 'row', 
-              alignItems: 'center', 
-              paddingHorizontal: 12, 
-              paddingVertical: 10, 
-              borderRadius: 12, 
-              backgroundColor: '#1E293B' 
-            }}
+            style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: '#1E293B' }}
           >
             <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#334155', justifyContent: 'center', alignItems: 'center' }}>
               <Ionicons name="person" size={16} color="#FFF" />
@@ -296,6 +656,9 @@ const SupportDashboardScreen = ({ navigation, route }) => {
     </>
   );
 
+  // ═══════════════════════════════════════════════════════════════
+  // MAIN CONTENT
+  // ═══════════════════════════════════════════════════════════════
   const content = (
     <View style={styles.container}>
       <LinearGradient colors={['#3B82F6', '#2563EB']} style={styles.premiumHeader}>
@@ -338,6 +701,9 @@ const SupportDashboardScreen = ({ navigation, route }) => {
         </SafeAreaView>
       </LinearGradient>
 
+      {/* 🕐 Checkout Banner */}
+      {renderCheckoutBanner()}
+
       {/* Search bar */}
       <View style={styles.searchBar}>
         <Ionicons name="search" size={16} color="#94A3B8" />
@@ -371,6 +737,9 @@ const SupportDashboardScreen = ({ navigation, route }) => {
           onConsumeTicketId={() => setUrlTicketId(null)}
         />
       </ScrollView>
+
+      {/* 🕐 Check-In Modal */}
+      {renderCheckinModal()}
     </View>
   );
 
@@ -386,6 +755,9 @@ const SupportDashboardScreen = ({ navigation, route }) => {
   ) : content;
 };
 
+// ═══════════════════════════════════════════════════════════════
+// STYLES
+// ═══════════════════════════════════════════════════════════════
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.navy[50] },
   premiumHeader: { paddingBottom: 24, paddingHorizontal: 20, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
@@ -401,19 +773,48 @@ const styles = StyleSheet.create({
   lastSyncText: { fontSize: 9, color: 'rgba(255,255,255,0.5)', fontWeight: 'bold' },
   headerIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
   searchBar: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: '#FFF', 
-    margin: 16, 
-    paddingHorizontal: 16, 
-    paddingVertical: 12, 
-    borderRadius: 20, 
-    ...shadows.sm,
-    borderWidth: 1,
-    borderColor: '#F1F5F9'
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', 
+    margin: 16, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20, 
+    ...shadows.sm, borderWidth: 1, borderColor: '#F1F5F9'
   },
   searchInput: { flex: 1, marginLeft: 10, fontSize: 14, color: colors.navy[900], fontWeight: '600' },
   content: { flex: 1 },
+});
+
+// 🕐 SHIFT MANAGEMENT STYLES (v2.6.673)
+const shiftStyles = StyleSheet.create({
+  // Check-In Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  modalCard: { backgroundColor: '#FFF', borderRadius: 24, width: '100%', maxWidth: 400, overflow: 'hidden', ...(Platform.OS === 'web' ? { boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' } : shadows.lg) },
+  modalHeader: { padding: 28, alignItems: 'center' },
+  modalTitle: { fontSize: 22, fontWeight: '900', color: '#FFF', marginTop: 12 },
+  modalSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 4, fontWeight: '600' },
+  modalBody: { padding: 24 },
+  timeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', marginBottom: 20, paddingVertical: 16, backgroundColor: '#F8FAFC', borderRadius: 16 },
+  timeBlock: { alignItems: 'center' },
+  timeLabel: { fontSize: 10, fontWeight: '800', color: '#94A3B8', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
+  timeValue: { fontSize: 22, fontWeight: '900', color: '#1E293B' },
+  shiftInfoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 24, gap: 6 },
+  shiftInfoText: { fontSize: 12, color: '#64748B', fontWeight: '600' },
+  checkinBtn: { borderRadius: 16, overflow: 'hidden', marginBottom: 12 },
+  checkinBtnGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, gap: 8 },
+  checkinBtnText: { fontSize: 16, fontWeight: '900', color: '#FFF' },
+  notNowBtn: { paddingVertical: 12, alignItems: 'center', marginBottom: 8 },
+  notNowText: { fontSize: 14, fontWeight: '700', color: '#64748B' },
+  muteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, gap: 4 },
+  muteText: { fontSize: 12, fontWeight: '600', color: '#94A3B8' },
+  // Checkout Banner
+  checkoutBanner: { marginHorizontal: 16, marginTop: 8, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.3)', overflow: 'hidden' },
+  checkoutBannerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 16, flexWrap: 'wrap', gap: 8 },
+  checkoutBannerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 200 },
+  checkoutIconCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(245, 158, 11, 0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
+  checkoutTitle: { fontSize: 13, fontWeight: '800', color: '#92400E' },
+  checkoutSubtitle: { fontSize: 11, color: '#B45309', fontWeight: '600', marginTop: 1 },
+  checkoutActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  checkoutBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F59E0B', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, gap: 4 },
+  checkoutBtnText: { color: '#FFF', fontSize: 12, fontWeight: '800' },
+  checkoutDismissBtn: { paddingHorizontal: 10, paddingVertical: 8 },
+  checkoutDismissText: { color: '#92400E', fontSize: 12, fontWeight: '700' },
 });
 
 export default SupportDashboardScreen;

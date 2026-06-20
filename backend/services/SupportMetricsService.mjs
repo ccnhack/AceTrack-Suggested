@@ -40,8 +40,18 @@ class SupportMetricsService {
       return null;
     }
 
-    // Calculate current load for each active agent
-    const agentsWithLoad = activeAgents.map(agent => {
+    // 🕐 [SHIFT PREFERENCE] (v2.6.673): Prefer agents who have checked in for their shift
+    const onShiftAgents = activeAgents.filter(a => a.shiftStatus === 'on_shift');
+    const candidatePool = onShiftAgents.length > 0 ? onShiftAgents : activeAgents;
+    
+    if (onShiftAgents.length > 0) {
+      console.log(`✅ [SupportMetrics] ${onShiftAgents.length} on-shift agent(s) available, using shift-aware pool.`);
+    } else {
+      console.log(`⚠️ [SupportMetrics] No on-shift agents, falling back to all ${activeAgents.length} active agent(s).`);
+    }
+
+    // Calculate current load for each candidate agent
+    const agentsWithLoad = candidatePool.map(agent => {
       const currentLoad = (tickets || []).filter(t => 
         t && 
         t.assignedTo === agent.id && 
@@ -60,7 +70,7 @@ class SupportMetricsService {
     });
 
     const best = agentsWithLoad[0].agent;
-    console.log(`✅ [SupportMetrics] Best agent found: ${best.id} (Load: ${agentsWithLoad[0].currentLoad})`);
+    console.log(`✅ [SupportMetrics] Best agent found: ${best.id} (Load: ${agentsWithLoad[0].currentLoad}, OnShift: ${best.shiftStatus === 'on_shift'})`);
     return best;
   }
 

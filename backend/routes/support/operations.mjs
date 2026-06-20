@@ -1018,5 +1018,207 @@ router.post('/support/save-ticket', apiKeyGuard, authGuard, async (req, res) => 
   }
 });
 
+// ═══════════════════════════════════════════════════════════════
+// 🕐 SHIFT MANAGEMENT SYSTEM (v2.6.673)
+// Check-in/Check-out with time rounding, overtime tracking, and
+// auto-checkout after 8h 15m grace period.
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Rounds a Date to the nearest 30 minutes.
+ * < 15 min → round down to :00
+ * 15–44 min → round to :30
+ * >= 45 min → round up to next hour :00
+ */
+function roundToNearest30(date) {
+  const d = new Date(date);
+  const minutes = d.getMinutes();
+  if (minutes < 15) {
+    d.setMinutes(0, 0, 0);
+  } else if (minutes < 45) {
+    d.setMinutes(30, 0, 0);
+  } else {
+    d.setMinutes(0, 0, 0);
+    d.setHours(d.getHours() + 1);
+  }
+  return d;
+}
+
+// 🕐 POST /support/check-in — Start shift
+router.post('/support/check-in', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Authentication required' });
+
+  const playerDoc = await Player.findOne({ id: userId }).lean();
+  if (!playerDoc || !playerDoc.data) return res.status(404).json({ error: 'User not found' });
+  if (playerDoc.data.role !== 'support') return res.status(403).json({ error: 'Only support employees can check in' });
+
+  // Prevent double check-in
+  const todayStr = new Date().toISOString().split('T')[0];
+  const existingCheckin = playerDoc.data.shiftCheckinAt;
+  if (existingCheckin && existingCheckin.startsWith(todayStr) && playerDoc.data.shiftStatus === 'on_shift') {
+    return res.status(409).json({ 
+      error: 'Already checked in today',
+      checkinTime: playerDoc.data.shiftCheckinRounded,
+      checkoutDue: playerDoc.data.shiftCheckoutDue
+    });
+  }
+
+  const now = new Date();
+  const rounded = roundToNearest30(now);
+  const SHIFT_DURATION_MS = 8 * 60 * 60 * 1000; // 8 hours
+  const checkoutDue = new Date(rounded.getTime() + SHIFT_DURATION_MS);
+
+  await Player.updateOne(
+    { id: userId },
+    { $set: {
+      'data.shiftStatus': 'on_shift',
+      'data.shiftCheckinAt': now.toISOString(),
+      'data.shiftCheckinRounded': rounded.toISOString(),
+      'data.shiftCheckoutDue': checkoutDue.toISOString(),
+      'data.shiftCheckoutAt': null,
+      lastUpdated: new Date()
+    }}
+  );
+
+  logAudit(req, 'SUPPORT_SHIFT_CHECKIN', ['players'], {
+    userId,
+    actualTime: now.toISOString(),
+    roundedTime: rounded.toISOString(),
+    checkoutDue: checkoutDue.toISOString()
+  }).catch(() => {});
+
+  console.log(`🕐 [SHIFT] ${userId} checked in at ${now.toLocaleTimeString()} → rounded to ${rounded.toLocaleTimeString()}, checkout due at ${checkoutDue.toLocaleTimeString()}`);
+
+  // 📡 Notify all clients that this agent's shift status changed
+  if (io) {
+    io.emit('entity_updated', {
+      entity: 'players',
+      data: { id: userId, shiftStatus: 'on_shift' },
+      source: 'shift_checkin',
+      timestamp: Date.now()
+    });
+  }
+
+  res.json({
+    success: true,
+    checkinTime: rounded.toISOString(),
+    checkinTimeActual: now.toISOString(),
+    checkoutDue: checkoutDue.toISOString(),
+    shiftStatus: 'on_shift'
+  });
+}));
+
+// 🕐 POST /support/check-out — End shift
+router.post('/support/check-out', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
+  const userId = req.user?.id;
+  const { isAutoCheckout } = req.body || {};
+  if (!userId) return res.status(401).json({ error: 'Authentication required' });
+
+  const playerDoc = await Player.findOne({ id: userId }).lean();
+  if (!playerDoc || !playerDoc.data) return res.status(404).json({ error: 'User not found' });
+  if (playerDoc.data.role !== 'support') return res.status(403).json({ error: 'Only support employees can check out' });
+
+  const checkinTime = playerDoc.data.shiftCheckinRounded;
+  if (!checkinTime) {
+    return res.status(400).json({ error: 'No active check-in found' });
+  }
+
+  const now = new Date();
+  const checkinDate = new Date(checkinTime);
+  const totalShiftMs = now.getTime() - checkinDate.getTime();
+  const SHIFT_LIMIT_MS = 8 * 60 * 60 * 1000;
+  const overtimeMs = Math.max(0, totalShiftMs - SHIFT_LIMIT_MS);
+
+  await Player.updateOne(
+    { id: userId },
+    { $set: {
+      'data.shiftStatus': 'off_shift',
+      'data.shiftCheckoutAt': now.toISOString(),
+      lastUpdated: new Date()
+    }}
+  );
+
+  logAudit(req, 'SUPPORT_SHIFT_CHECKOUT', ['players'], {
+    userId,
+    checkoutTime: now.toISOString(),
+    checkinRounded: checkinTime,
+    totalShiftMs,
+    overtimeMs,
+    isAutoCheckout: !!isAutoCheckout
+  }).catch(() => {});
+
+  console.log(`🕐 [SHIFT] ${userId} checked out at ${now.toLocaleTimeString()}. Total: ${Math.floor(totalShiftMs / 3600000)}h ${Math.floor((totalShiftMs % 3600000) / 60000)}m. Overtime: ${Math.floor(overtimeMs / 60000)}m`);
+
+  // 📡 Notify manager if overtime occurred
+  if (overtimeMs > 0) {
+    try {
+      const managerId = playerDoc.data.managerId;
+      if (managerId) {
+        const managerDoc = await Player.findOne({ id: managerId }).lean();
+        const managerData = managerDoc?.data;
+        if (managerData?.pushTokens?.length > 0) {
+          const { sendPushNotification } = await import('../../utils/pushNotifications.mjs').catch(() => ({ sendPushNotification: null }));
+          if (sendPushNotification) {
+            const overtimeMinutes = Math.floor(overtimeMs / 60000);
+            sendPushNotification(
+              managerData.pushTokens,
+              '⏰ Employee Overtime Alert',
+              `${playerDoc.data.name || userId} worked ${overtimeMinutes} min overtime${isAutoCheckout ? ' (auto-checkout)' : ''}.`,
+              { type: 'OVERTIME_ALERT', userId, overtimeMs }
+            );
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[SHIFT] Manager notification failed:', e.message);
+    }
+
+    logAudit(req, 'SUPPORT_OVERTIME_DETECTED', ['players'], {
+      userId,
+      overtimeMs,
+      overtimeMinutes: Math.floor(overtimeMs / 60000),
+      isAutoCheckout: !!isAutoCheckout
+    }).catch(() => {});
+  }
+
+  // 📡 Notify all clients
+  if (io) {
+    io.emit('entity_updated', {
+      entity: 'players',
+      data: { id: userId, shiftStatus: 'off_shift' },
+      source: 'shift_checkout',
+      timestamp: Date.now()
+    });
+  }
+
+  res.json({
+    success: true,
+    checkoutTime: now.toISOString(),
+    totalShiftMs,
+    overtimeMs,
+    shiftStatus: 'off_shift'
+  });
+}));
+
+// 🕐 GET /support/shift-status — Query current shift state
+router.get('/support/shift-status', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Authentication required' });
+
+  const playerDoc = await Player.findOne({ id: userId }).lean();
+  if (!playerDoc || !playerDoc.data) return res.status(404).json({ error: 'User not found' });
+
+  const d = playerDoc.data;
+  res.json({
+    success: true,
+    shiftStatus: d.shiftStatus || 'off_shift',
+    shiftCheckinAt: d.shiftCheckinAt || null,
+    shiftCheckinRounded: d.shiftCheckinRounded || null,
+    shiftCheckoutAt: d.shiftCheckoutAt || null,
+    shiftCheckoutDue: d.shiftCheckoutDue || null
+  });
+}));
+
   return router;
 }
