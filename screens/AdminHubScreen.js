@@ -244,7 +244,7 @@ const AdminHubScreen = ({ navigation, route }) => {
               { id: 'recruitment', label: 'Recruitment', icon: 'people-outline' },
               { id: 'support_team', label: 'Support Team', icon: 'shield-checkmark-outline' },
               { id: 'shifts', label: 'Shift Management', icon: 'time-outline' },
-              { id: 'support_dashboard', label: 'Support Dashboard', icon: 'headset-outline', route: 'SupportDashboard' },
+              { id: 'support_dashboard', label: 'Support Dashboard', icon: 'headset-outline', route: 'Support' },
               { id: 'audit', label: 'Audit Logs', icon: 'list-outline' },
               { id: 'security', label: 'Security', icon: 'shield-half-outline' },
               { id: 'diagnostics', label: 'Diagnostics', icon: 'pulse-outline' }
