@@ -950,6 +950,7 @@ const ProfileScreen = ({ navigation, route }) => {
                         ) : (
                            <SafeAvatar 
                              uri={url} 
+                             name={user?.name}
                              size={56}
                              borderRadius={28}
                              style={styles.avatarOptionImage} 
@@ -975,7 +976,8 @@ const ProfileScreen = ({ navigation, route }) => {
                     let finalAvatar = editAvatar;
                     if (editAvatar && (editAvatar.startsWith('file://') || editAvatar.startsWith('content://') || editAvatar.startsWith('data:') || editAvatar.startsWith('blob:'))) {
                       setIsUploading(true);
-                      logger.logAction('AVATAR_UPLOAD_START', { localUri: editAvatar });
+                      const uriToLog = editAvatar.startsWith('data:') ? `[base64 data:${editAvatar.length} bytes]` : editAvatar;
+                      logger.logAction('AVATAR_UPLOAD_START', { localUri: uriToLog });
                       try {
                         const formData = new FormData();
                         
