@@ -806,11 +806,11 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
             index === self.findIndex((s) => s.deviceId === session.deviceId)
           );
         
-        const liveSessions = isSupportUser 
+        const liveSessions = (isSupportUser 
           ? allUserSessions  // Support users: show ALL as live browser sessions
           : allUserSessions.filter(status => 
               !selectedDiagUser.devices?.some(d => d.id === status.deviceId)
-            );
+            )).filter(status => status.version === config.APP_VERSION);
 
         // Deduplicate Registered Devices
         const registeredDevices = (selectedDiagUser.devices || [])
