@@ -101,7 +101,7 @@ import { useSupportStore } from './stores';
 // 🔄 Centralized Versioning// 🚀 EXPO OTA SYNC HUB
 // 🚀 EXPO OTA SYNC HUB
 // ALWAYS BUMP THIS VERSION TO TRIGGER CLIENT-SIDE CACHE INVALIDATION
-const APP_VERSION = '2.6.656';
+const APP_VERSION = '2.6.657';
 const linking = {
   prefixes: [config.API_BASE_URL || 'https://acetrack-suggested.onrender.com', 'acetrack://'],
   config: {
@@ -240,7 +240,7 @@ function Root() {
                       const cacheNames = await window.caches.keys();
                       for (let name of cacheNames) await window.caches.delete(name);
                     }
-                  } catch (e) {}
+                  } catch (e) { console.warn('[UpdateEngine] Cache cleanup failed:', e.message); }
                   const currentUrl = new URL(window.location.href);
                   currentUrl.searchParams.set('v', Date.now().toString());
                   window.location.href = currentUrl.toString();

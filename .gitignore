@@ -42,6 +42,8 @@ backend/diagnostics/
 *.zip
 
 # 🛡️ [REPO HYGIENE] (v2.6.315): Debug & test artifacts
+.dev/
+backend/.dev/
 detox_*.log
 detox_*.txt
 app_logs.txt

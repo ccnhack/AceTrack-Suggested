@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, Text, TouchableOpacity, TextInput, ScrollView, 
   StyleSheet, Platform, useWindowDimensions, SafeAreaView, ActivityIndicator,
-  Animated, Image, Linking, Modal, Share
+  Animated, Image, Linking, Modal, Share, Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -186,7 +186,7 @@ const OrgChatScreen = ({ navigation }) => {
       if (fileInputRef.current) fileInputRef.current.value = '';
     } else {
       // Mobile implementation would use expo-document-picker or expo-image-picker
-      alert('File selection is currently optimized for Web.');
+      Alert.alert('Info', 'File selection is currently optimized for Web.');
     }
   };
 
@@ -755,7 +755,7 @@ const OrgChatScreen = ({ navigation }) => {
                                 <Ionicons name="return-up-back" size={16} color="#475569" />
                                 <Text style={styles.actionItemText}>Reply with quote</Text>
                               </TouchableOpacity>
-                              <TouchableOpacity style={styles.actionItem} onPress={() => { alert('Forwarding feature coming soon'); setActiveMenuId(null); }}>
+                              <TouchableOpacity style={styles.actionItem} onPress={() => { Alert.alert('Coming Soon', 'Forwarding feature coming soon'); setActiveMenuId(null); }}>
                                 <Ionicons name="arrow-redo" size={16} color="#475569" />
                                 <Text style={styles.actionItemText}>Forward</Text>
                               </TouchableOpacity>

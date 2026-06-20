@@ -368,7 +368,7 @@ class SyncOrchestrator {
                      eventBus.emitEntityUpdate('players', null, 'update', 'internal');
                   }
                }
-            } catch(e) {}
+            } catch(e: any) { console.warn('[SyncOrchestrator] Post-sync player harmonization failed:', e.message); }
          })();
       }
 

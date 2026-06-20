@@ -13,6 +13,7 @@ import { useSupportStore } from '../stores';
 import { useSync } from '../context/SyncContext';
 import { useAuth } from '../context/AuthContext';
 import { useCommsStore } from '../stores/useCommsStore';
+import config from '../config';
 
 
 const SupportDashboardScreen = ({ navigation, route }) => {
@@ -54,16 +55,9 @@ const SupportDashboardScreen = ({ navigation, route }) => {
 
     const pingHeartbeat = async () => {
       try {
-        const token = null; // Removed missing getSecureSession
-        const headers = {
-          'Content-Type': 'application/json',
-          'x-api-key': 'ace_production_5f8a9b2c3d4e1f6g7h8i9j0k' // Added hardcoded API key since it's needed in most authenticated requests here
-        };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-
-        await fetch('https://acetrack-suggested.onrender.com/api/v1/support/heartbeat', {
+        await fetch(`${config.API_BASE_URL}/api/v1/support/heartbeat`, {
           method: 'POST',
-          headers: headers
+          headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID }
         });
         console.log('[Heartbeat] Sent support session ping');
       } catch (err) {

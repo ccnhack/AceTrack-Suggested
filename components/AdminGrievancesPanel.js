@@ -348,7 +348,7 @@ export const AdminGrievancesPanel = ({
 
   const handleReopenSubmit = async () => {
     if (!reopenJustification.trim()) {
-      alert("Please provide a justification for reopening this ticket.");
+      Alert.alert("Required", "Please provide a justification for reopening this ticket.");
       return;
     }
     // 🛡️ [FIX v2.6.290] Atomic Status + Justification Update

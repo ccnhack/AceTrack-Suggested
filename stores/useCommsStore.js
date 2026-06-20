@@ -94,7 +94,7 @@ export const useCommsStore = create((set, get) => ({
                 );
                 set({ messages: updated });
             }
-        } catch (e) {}
+        } catch (e) { console.warn('[Comms] toggleReaction failed:', e.message); }
     },
 
     // 🗑️ [DELETE_LOGIC] (v2.6.405)
@@ -110,7 +110,7 @@ export const useCommsStore = create((set, get) => ({
             if (data.success) {
                 set({ messages: get().messages.filter(m => m._id !== id) });
             }
-        } catch (e) {}
+        } catch (e) { console.warn('[Comms] deleteMessage failed:', e.message); }
     },
 
     setReplyTo: (msg) => set({ replyTo: msg }),
@@ -175,7 +175,7 @@ export const useCommsStore = create((set, get) => ({
                 );
                 set({ messages: updated });
             }
-        } catch (e) {}
+        } catch (e) { console.warn('[Comms] markAsSeen failed:', e.message); }
     },
 
     fetchAnnouncements: async () => {

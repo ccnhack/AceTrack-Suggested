@@ -1341,11 +1341,7 @@ const ProfileScreen = ({ navigation, route }) => {
                            setOldPassword('');
                            setNewPassword('');
                            setConfirmPassword('');
-                           if (Platform.OS === 'web') {
-                             window.alert("Password changed successfully!");
-                           } else {
-                             Alert.alert("Success", "Password changed successfully!");
-                           }
+                           Alert.alert("Success", "Password changed successfully!");
                          } else {
                            safeAlert("Error", data.error || "Failed to change password");
                          }

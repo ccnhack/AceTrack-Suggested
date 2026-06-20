@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {  
   View, Text, TouchableOpacity, ScrollView, TextInput, 
-  StyleSheet, Modal, SafeAreaView, KeyboardAvoidingView, Platform, Image, ActivityIndicator 
+  StyleSheet, Modal, SafeAreaView, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Alert
  } from 'react-native';
 import { apiFetch } from '../utils/apiFetch';
 import { Ionicons } from '@expo/vector-icons';
@@ -309,7 +309,7 @@ export const SupportTicketSystem = ({
 
   const handleCreate = async () => {
     if (!formData.title.trim() || !formData.description.trim()) {
-      alert('Please fill in both title and description.');
+      Alert.alert('Missing Fields', 'Please fill in both title and description.');
       return;
     }
     const res = await onCreateTicket({ 
