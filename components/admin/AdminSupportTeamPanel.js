@@ -739,6 +739,156 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
         </View>
       )}
 
+      {/* 🕐 SHIFT OVERVIEW DASHBOARD (v2.6.674) — Phase 2 Admin Visibility */}
+      {activeTab === 'employees' && (
+        <View style={{ marginHorizontal: 16, marginTop: 8, marginBottom: 16, backgroundColor: '#0F172A', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#1E293B' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+            <Ionicons name="time-outline" size={18} color="#6366F1" style={{ marginRight: 8 }} />
+            <Text style={{ color: '#F8FAFC', fontSize: 15, fontWeight: '900', flex: 1 }}>Shift Overview</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {(() => {
+                const onShift = activeAgents.filter(a => a.shiftStatus === 'on_shift').length;
+                const offShift = activeAgents.length - onShift;
+                return (
+                  <>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(16,185,129,0.15)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(16,185,129,0.3)' }}>
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981', marginRight: 6 }} />
+                      <Text style={{ color: '#10B981', fontSize: 12, fontWeight: '800' }}>{onShift} On Shift</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(239,68,68,0.1)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)' }}>
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444', marginRight: 6 }} />
+                      <Text style={{ color: '#F87171', fontSize: 12, fontWeight: '800' }}>{offShift} Off Shift</Text>
+                    </View>
+                  </>
+                );
+              })()}
+            </View>
+          </View>
+
+          {/* Shift Timeline — who's on shift */}
+          {(() => {
+            const onShiftAgents = activeAgents.filter(a => a.shiftStatus === 'on_shift');
+            if (onShiftAgents.length === 0) return (
+              <View style={{ alignItems: 'center', paddingVertical: 12, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 12 }}>
+                <Ionicons name="moon-outline" size={20} color="#475569" />
+                <Text style={{ color: '#475569', fontSize: 12, fontWeight: '600', marginTop: 4 }}>No employees currently on shift</Text>
+              </View>
+            );
+            return (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {onShiftAgents.map(agent => {
+                    const checkinTime = agent.shiftCheckinRounded ? new Date(agent.shiftCheckinRounded).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
+                    const checkoutDue = agent.shiftCheckoutDue ? new Date(agent.shiftCheckoutDue).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
+                    const isOvertime = agent.shiftCheckoutDue && new Date() > new Date(agent.shiftCheckoutDue);
+                    return (
+                      <View key={agent.id} style={{ backgroundColor: isOvertime ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.08)', borderRadius: 12, padding: 10, minWidth: 130, borderWidth: 1, borderColor: isOvertime ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.2)' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                          <SafeAvatar uri={agent.avatar} name={agent.name} role={agent.role} size={24} borderRadius={8} />
+                          <Text style={{ color: '#E2E8F0', fontSize: 11, fontWeight: '700', marginLeft: 6, flex: 1 }} numberOfLines={1}>{agent.name?.split(' ')[0]}</Text>
+                          {isOvertime && <Ionicons name="alert-circle" size={12} color="#EF4444" />}
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ color: '#94A3B8', fontSize: 9, fontWeight: '600' }}>{checkinTime}</Text>
+                          <Ionicons name="arrow-forward" size={8} color="#475569" />
+                          <Text style={{ color: isOvertime ? '#F87171' : '#94A3B8', fontSize: 9, fontWeight: '600' }}>{checkoutDue}</Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            );
+          })()}
+
+          {/* Round-Robin Next-5 Queue */}
+          {(() => {
+            const candidates = activeAgents.filter(a => a.shiftStatus === 'on_shift' && (a.supportStatus === 'active' || !a.supportStatus));
+            if (candidates.length === 0) return null;
+
+            // Calculate load for each candidate
+            const withLoad = candidates.map(agent => {
+              const agentTickets = analytics?.tickets || [];
+              const activeCount = agentTickets.filter(t => t.assignedTo === agent.id && ['Open', 'In Progress', 'Awaiting Response'].includes(t.status)).length;
+              return { ...agent, currentLoad: activeCount, lifetime: agent.metrics?.totalHandled || 0 };
+            }).sort((a, b) => {
+              if (a.currentLoad !== b.currentLoad) return a.currentLoad - b.currentLoad;
+              return a.lifetime - b.lifetime;
+            }).slice(0, 5);
+
+            return (
+              <View style={{ backgroundColor: 'rgba(99,102,241,0.08)', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(99,102,241,0.15)' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                  <Ionicons name="swap-horizontal" size={14} color="#818CF8" style={{ marginRight: 6 }} />
+                  <Text style={{ color: '#C7D2FE', fontSize: 11, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' }}>Round-Robin Queue — Next 5</Text>
+                </View>
+                {withLoad.map((agent, idx) => (
+                  <View key={agent.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: 'rgba(255,255,255,0.05)' }}>
+                    <Text style={{ color: idx === 0 ? '#10B981' : '#94A3B8', fontSize: 12, fontWeight: '900', width: 24 }}>#{idx + 1}</Text>
+                    <SafeAvatar uri={agent.avatar} name={agent.name} role={agent.role} size={20} borderRadius={6} />
+                    <Text style={{ color: '#E2E8F0', fontSize: 12, fontWeight: '700', marginLeft: 8, flex: 1 }} numberOfLines={1}>{agent.name}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '600' }}>{agent.currentLoad} active</Text>
+                      {idx === 0 && <View style={{ backgroundColor: '#10B981', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}><Text style={{ color: '#FFF', fontSize: 8, fontWeight: '900' }}>NEXT</Text></View>}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            );
+          })()}
+
+          {/* Overtime Logs (Phase 2) */}
+          {(() => {
+            if (!auditLogs) return null;
+            const overtimeEvents = auditLogs
+              .filter(log => log.action === 'SUPPORT_OVERTIME_DETECTED')
+              .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+              .slice(0, 5);
+              
+            if (overtimeEvents.length === 0) return null;
+
+            return (
+              <View style={{ marginTop: 12, backgroundColor: 'rgba(239,68,68,0.05)', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(239,68,68,0.15)' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                  <Ionicons name="warning-outline" size={14} color="#EF4444" style={{ marginRight: 6 }} />
+                  <Text style={{ color: '#FCA5A5', fontSize: 11, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' }}>Recent Overtime Activity</Text>
+                </View>
+                {overtimeEvents.map((log, idx) => {
+                  const agent = allSupportAgents.find(a => a.id === log.userId);
+                  const agentName = agent?.name || log.userId;
+                  const mins = log.metadata?.overtimeMinutes || Math.floor((log.metadata?.overtimeMs || 0) / 60000);
+                  const dt = new Date(log.timestamp);
+                  return (
+                    <View key={log._id || idx} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: 'rgba(239,68,68,0.1)' }}>
+                      <Text style={{ color: '#FCA5A5', fontSize: 10, fontWeight: '600', width: 45 }}>{dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</Text>
+                      <Text style={{ color: '#E2E8F0', fontSize: 12, fontWeight: '600', flex: 1, marginHorizontal: 8 }} numberOfLines={1}>
+                        {agentName}
+                      </Text>
+                      <View style={{ backgroundColor: 'rgba(239,68,68,0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                        <Text style={{ color: '#F87171', fontSize: 10, fontWeight: '700' }}>+{mins}m</Text>
+                      </View>
+                      <TouchableOpacity 
+                        onPress={() => {
+                          const sessEnd = dt.getTime();
+                          const sessStart = sessEnd - (8 * 3600000) - (log.metadata?.overtimeMs || 0); // Approx 8 hours before
+                          setSelectedSessionForActivity({ agentId: log.userId, startTime: sessStart, endTime: sessEnd, isLive: false });
+                          setSelectedAgentId(log.userId);
+                          setActiveTab('employees');
+                          setShowAttendanceModal(true);
+                        }}
+                        style={{ marginLeft: 8 }}
+                      >
+                        <Ionicons name="list" size={16} color="#94A3B8" />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </View>
+            );
+          })()}
+        </View>
+      )}
+
       {/* Sub-Tabs: Employees / Ex-Employees */}
       <View style={styles.subTabRow}>
         <TouchableOpacity 
@@ -796,19 +946,25 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
               ]} numberOfLines={1}>
                 {agent.firstName || agent.name?.split(' ')[0]}
               </Text>
-              <View style={[
-                styles.statusDot, 
-                { 
-                  backgroundColor: (() => {
-                    if (agent.supportStatus === 'terminated' || agent.supportStatus === 'inactive' || agent.supportLevel === 'EX-EMPLOYEE') return '#EF4444';
-                    if (agent.supportStatus === 'suspended') return '#F97316';
-                    
-                    // Live Online Status
-                    const agentAtt = attendanceData?.find(a => String(a.id) === String(agent.id));
-                    return agentAtt?.isCurrentlyOnline ? '#10B981' : '#CBD5E1'; // Green if online, Gray if offline
-                  })()
-                }
-              ]} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                {/* 🕐 Shift status indicator */}
+                {agent.shiftStatus === 'on_shift' && (
+                  <View style={{ backgroundColor: '#10B981', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3 }}>
+                    <Text style={{ color: '#FFF', fontSize: 6, fontWeight: '900' }}>SHIFT</Text>
+                  </View>
+                )}
+                <View style={[
+                  styles.statusDot, 
+                  { 
+                    backgroundColor: (() => {
+                      if (agent.supportStatus === 'terminated' || agent.supportStatus === 'inactive' || agent.supportLevel === 'EX-EMPLOYEE') return '#EF4444';
+                      if (agent.supportStatus === 'suspended') return '#F97316';
+                      const agentAtt = attendanceData?.find(a => String(a.id) === String(agent.id));
+                      return agentAtt?.isCurrentlyOnline ? '#10B981' : '#CBD5E1';
+                    })()
+                  }
+                ]} />
+              </View>
             </TouchableOpacity>
           ))}
           {filteredAgents.length === 0 && (
@@ -874,6 +1030,25 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                         {isSelectedTerminated ? 'Terminated' : (selectedAgent.supportStatus || selectedAgent.status || 'Active')}
                       </Text>
                     </View>
+
+                    {/* 🕐 Shift Status Badge (v2.6.674) */}
+                    {!isSelectedTerminated && (
+                      <View style={[
+                        styles.statusPill,
+                        { backgroundColor: selectedAgent.shiftStatus === 'on_shift' ? '#ECFDF5' : '#FEF2F2', marginLeft: 6 }
+                      ]}>
+                        <View style={[
+                          styles.statusPillDot,
+                          { backgroundColor: selectedAgent.shiftStatus === 'on_shift' ? '#10B981' : '#EF4444' }
+                        ]} />
+                        <Text style={[
+                          styles.statusPillText,
+                          { color: selectedAgent.shiftStatus === 'on_shift' ? '#059669' : '#DC2626' }
+                        ]}>
+                          {selectedAgent.shiftStatus === 'on_shift' ? 'On Shift' : 'Off Shift'}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 </View>
               </View>
