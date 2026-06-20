@@ -1261,8 +1261,139 @@ router.get('/support/shift-status', apiKeyGuard, authGuard, asyncHandler(async (
     shiftCheckinAt: d.shiftCheckinAt || null,
     shiftCheckinRounded: d.shiftCheckinRounded || null,
     shiftCheckoutAt: d.shiftCheckoutAt || null,
-    shiftCheckoutDue: d.shiftCheckoutDue || null
+    shiftCheckoutDue: d.shiftCheckoutDue || null,
+    shiftLeaveStatus: d.shiftLeaveStatus || null,
+    shiftLeaveReason: d.shiftLeaveReason || null,
+    shiftLeaveDuration: d.shiftLeaveDuration || null
   });
+}));
+
+// 🕐 POST /support/request-short-leave
+router.post('/support/request-short-leave', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
+  const userId = req.user?.id;
+  const { durationHours, reason } = req.body;
+  if (!userId) return res.status(401).json({ error: 'Authentication required' });
+
+  const playerDoc = await Player.findOne({ id: userId }).lean();
+  if (!playerDoc || !playerDoc.data) return res.status(404).json({ error: 'User not found' });
+  if (playerDoc.data.shiftStatus !== 'on_shift') {
+    return res.status(400).json({ error: 'You must be on shift to request short leave.' });
+  }
+
+  await Player.updateOne(
+    { id: userId },
+    { $set: { 
+      'data.shiftLeaveStatus': 'pending',
+      'data.shiftLeaveDuration': durationHours,
+      'data.shiftLeaveReason': reason,
+      lastUpdated: new Date()
+    }}
+  );
+
+  if (io) {
+    io.emit('entity_updated', {
+      entity: 'players',
+      data: { id: userId, shiftLeaveStatus: 'pending' },
+      source: 'request_short_leave',
+      timestamp: Date.now()
+    });
+  }
+
+  res.json({ success: true });
+}));
+
+// 🕐 POST /support/resolve-short-leave
+router.post('/support/resolve-short-leave', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
+  const adminId = req.user?.id;
+  const { agentId, action } = req.body; // action: 'approve' or 'reject'
+  
+  if (!adminId) return res.status(401).json({ error: 'Authentication required' });
+
+  const adminDoc = await Player.findOne({ id: adminId }).lean();
+  if (!adminDoc || !['admin', 'superadmin', 'support'].includes(adminDoc.data?.role)) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  const agentDoc = await Player.findOne({ id: agentId }).lean();
+  if (!agentDoc || !agentDoc.data) return res.status(404).json({ error: 'Agent not found' });
+  if (agentDoc.data.shiftLeaveStatus !== 'pending') {
+    return res.status(400).json({ error: 'No pending leave request found' });
+  }
+
+  if (action === 'reject') {
+    await Player.updateOne(
+      { id: agentId },
+      { $unset: { 'data.shiftLeaveStatus': '', 'data.shiftLeaveDuration': '', 'data.shiftLeaveReason': '' } }
+    );
+    if (io) {
+      io.emit('entity_updated', {
+        entity: 'players',
+        data: { id: agentId, shiftLeaveStatus: null },
+        source: 'resolve_short_leave',
+        timestamp: Date.now()
+      });
+    }
+    return res.json({ success: true, status: 'rejected' });
+  }
+
+  if (action === 'approve') {
+    // Treat as checkout
+    const now = new Date();
+    const justification = `Approved Short Leave: ${agentDoc.data.shiftLeaveReason}`;
+    
+    const updateSet = {
+      'data.shiftStatus': 'off_shift',
+      'data.shiftCheckoutAt': now.toISOString(),
+      'data.shiftCheckoutJustification': justification,
+      lastUpdated: new Date()
+    };
+    
+    await Player.updateOne(
+      { id: agentId },
+      { 
+        $set: updateSet,
+        $unset: { 'data.shiftLeaveStatus': '', 'data.shiftLeaveDuration': '', 'data.shiftLeaveReason': '' } 
+      }
+    );
+
+    const checkinTime = agentDoc.data.shiftCheckinRounded;
+    const totalShiftMs = checkinTime ? now.getTime() - new Date(checkinTime).getTime() : 0;
+    const SHIFT_LIMIT_MS = 8 * 60 * 60 * 1000;
+    const overtimeMs = Math.max(0, totalShiftMs - SHIFT_LIMIT_MS);
+
+    logAudit(req, 'SUPPORT_SHIFT_CHECKOUT', ['players'], {
+      userId: agentId,
+      name: agentDoc.data.name,
+      email: agentDoc.data.email,
+      username: agentDoc.data.username,
+      checkoutTime: now.toISOString(),
+      checkinRounded: checkinTime,
+      totalShiftMs,
+      overtimeMs,
+      isAutoCheckout: false,
+      justification,
+      adminApproved: true,
+      adminId
+    }).catch(() => {});
+
+    if (io) {
+      io.emit('entity_updated', {
+        entity: 'players',
+        data: { 
+          id: agentId, 
+          shiftStatus: 'off_shift',
+          shiftCheckoutAt: now.toISOString(),
+          shiftLeaveStatus: null
+        },
+        source: 'shift_checkout',
+        timestamp: Date.now()
+      });
+    }
+
+    return res.json({ success: true, status: 'approved' });
+  }
+
+  return res.status(400).json({ error: 'Invalid action' });
 }));
 
   return router;

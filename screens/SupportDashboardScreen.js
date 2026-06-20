@@ -82,6 +82,9 @@ const SupportDashboardScreen = ({ navigation, route }) => {
   const [shiftStatus, setShiftStatus] = useState(null);
   const [shiftCheckinRounded, setShiftCheckinRounded] = useState(null);
   const [shiftCheckoutDue, setShiftCheckoutDue] = useState(null);
+  const [shiftLeaveStatus, setShiftLeaveStatus] = useState(null);
+  const [shiftLeaveReason, setShiftLeaveReason] = useState(null);
+  const [shiftLeaveDuration, setShiftLeaveDuration] = useState(null);
   const [showCheckoutBanner, setShowCheckoutBanner] = useState(false);
   const [checkoutCountdown, setCheckoutCountdown] = useState('');
   const [checkinLoading, setCheckinLoading] = useState(false);
@@ -89,6 +92,11 @@ const SupportDashboardScreen = ({ navigation, route }) => {
   const checkoutDismissedUntilRef = useRef(0);
   const autoCheckoutFiredRef = useRef(false);
   const bannerPulse = useRef(new Animated.Value(0)).current;
+
+  // Short Leave State
+  const [showShortLeaveModal, setShowShortLeaveModal] = useState(false);
+  const [shortLeaveForm, setShortLeaveForm] = useState({ durationHours: 1, reason: '' });
+  const [shortLeaveLoading, setShortLeaveLoading] = useState(false);
 
   // Fetch shift status on mount
   useEffect(() => {
@@ -109,6 +117,9 @@ const SupportDashboardScreen = ({ navigation, route }) => {
           setShiftStatus(data.shiftStatus);
           setShiftCheckinRounded(data.shiftCheckinRounded);
           setShiftCheckoutDue(data.shiftCheckoutDue);
+          setShiftLeaveStatus(data.shiftLeaveStatus);
+          setShiftLeaveReason(data.shiftLeaveReason);
+          setShiftLeaveDuration(data.shiftLeaveDuration);
           
           // If not on shift, check if we should show the check-in modal
           if (data.shiftStatus !== 'on_shift') {
@@ -299,6 +310,51 @@ const SupportDashboardScreen = ({ navigation, route }) => {
     }
   }, [currentUser]);
 
+  // 🕐 Handle Short Leave Request
+  const handleShortLeaveSubmit = async () => {
+    if (!shortLeaveForm.reason.trim()) {
+      Alert.alert('Error', 'Please provide a reason for your short leave.');
+      return;
+    }
+    
+    setShortLeaveLoading(true);
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const headers = { 
+        'Content-Type': 'application/json',
+        'x-ace-api-key': config.PUBLIC_APP_ID, 
+        'x-user-id': currentUser.id 
+      };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/request-short-leave`, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({
+          durationHours: shortLeaveForm.durationHours,
+          reason: shortLeaveForm.reason.trim()
+        })
+      });
+      
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setShiftLeaveStatus('pending');
+        setShiftLeaveReason(shortLeaveForm.reason.trim());
+        setShiftLeaveDuration(shortLeaveForm.durationHours);
+        setShowShortLeaveModal(false);
+        setShortLeaveForm({ durationHours: 1, reason: '' });
+        Alert.alert('Success', 'Short leave requested. Awaiting manager approval.');
+      } else {
+        Alert.alert('Error', data.error || 'Failed to request leave');
+      }
+    } catch (e) {
+      Alert.alert('Error', `Network error: ${e.message}`);
+    } finally {
+      setShortLeaveLoading(false);
+    }
+  };
+
   // 🕐 [SESSION HEARTBEAT] (v2.6.345)
   useEffect(() => {
     if (!currentUser || currentUser.role !== 'support') return;
@@ -420,6 +476,69 @@ const SupportDashboardScreen = ({ navigation, route }) => {
               >
                 <Ionicons name="notifications-off-outline" size={14} color="#94A3B8" />
                 <Text style={shiftStyles.muteText}>Mute for Today</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🕐 SHORT LEAVE MODAL (v2.6.674)
+  // ═══════════════════════════════════════════════════════════════
+  const renderShortLeaveModal = () => {
+    if (!showShortLeaveModal) return null;
+    return (
+      <Modal transparent animationType="fade" visible={showShortLeaveModal} onRequestClose={() => setShowShortLeaveModal(false)}>
+        <View style={shiftStyles.modalOverlay}>
+          <View style={shiftStyles.modalCard}>
+            <LinearGradient colors={['#F59E0B', '#D97706']} style={shiftStyles.modalHeader}>
+              <Ionicons name="cafe-outline" size={36} color="#FFF" />
+              <Text style={shiftStyles.modalTitle}>Request Short Leave</Text>
+              <Text style={shiftStyles.modalSubtitle}>Need to step away?</Text>
+            </LinearGradient>
+            <View style={shiftStyles.modalBody}>
+              <Text style={{ fontSize: 13, color: '#475569', fontWeight: '600', marginBottom: 8 }}>Duration (Hours)</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <TouchableOpacity onPress={() => setShortLeaveForm(prev => ({ ...prev, durationHours: Math.max(1, prev.durationHours - 1) }))} style={{ padding: 16 }}>
+                  <Ionicons name="remove-circle-outline" size={24} color="#64748B" />
+                </TouchableOpacity>
+                <Text style={{ flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '800', color: '#1E293B' }}>{shortLeaveForm.durationHours} hr</Text>
+                <TouchableOpacity onPress={() => setShortLeaveForm(prev => ({ ...prev, durationHours: Math.min(8, prev.durationHours + 1) }))} style={{ padding: 16 }}>
+                  <Ionicons name="add-circle-outline" size={24} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={{ fontSize: 13, color: '#475569', fontWeight: '600', marginBottom: 8 }}>Reason</Text>
+              <TextInput 
+                style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 16, fontSize: 15, color: '#1E293B', borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 24, minHeight: 80 }}
+                placeholder="e.g. Doctor appointment"
+                placeholderTextColor="#94A3B8"
+                multiline
+                value={shortLeaveForm.reason}
+                onChangeText={(val) => setShortLeaveForm(prev => ({ ...prev, reason: val }))}
+              />
+
+              <TouchableOpacity 
+                style={shiftStyles.checkinBtn}
+                onPress={handleShortLeaveSubmit}
+                disabled={shortLeaveLoading}
+                activeOpacity={0.8}
+              >
+                <LinearGradient colors={['#F59E0B', '#D97706']} style={shiftStyles.checkinBtnGradient}>
+                  <Ionicons name="send" size={20} color="#FFF" />
+                  <Text style={shiftStyles.checkinBtnText}>
+                    {shortLeaveLoading ? 'Submitting...' : 'Submit Request'}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={shiftStyles.notNowBtn}
+                onPress={() => setShowShortLeaveModal(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={shiftStyles.notNowText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -551,6 +670,26 @@ const SupportDashboardScreen = ({ navigation, route }) => {
                       <Text style={{ color: '#94A3B8', fontSize: 9, fontWeight: '600' }}>Since {formatTime(shiftCheckinRounded)}</Text>
                     )}
                   </View>
+
+                  {/* Short Leave Button / Banner */}
+                  {shiftStatus === 'on_shift' && !shiftLeaveStatus && (
+                    <TouchableOpacity 
+                      style={{ marginTop: 8, paddingVertical: 8, borderRadius: 8, backgroundColor: 'rgba(245, 158, 11, 0.1)', borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.3)', alignItems: 'center', flexDirection: 'row', justifyContent: 'center' }}
+                      onPress={() => setShowShortLeaveModal(true)}
+                    >
+                      <Ionicons name="cafe-outline" size={14} color="#F59E0B" style={{ marginRight: 6 }} />
+                      <Text style={{ color: '#F59E0B', fontSize: 11, fontWeight: '700' }}>Request Short Leave</Text>
+                    </TouchableOpacity>
+                  )}
+                  {shiftLeaveStatus === 'pending' && (
+                    <View style={{ marginTop: 8, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, backgroundColor: 'rgba(59, 130, 246, 0.1)', borderWidth: 1, borderColor: 'rgba(59, 130, 246, 0.3)' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                        <Ionicons name="time-outline" size={14} color="#3B82F6" style={{ marginRight: 6 }} />
+                        <Text style={{ color: '#3B82F6', fontSize: 11, fontWeight: '800' }}>Leave Pending</Text>
+                      </View>
+                      <Text style={{ color: '#94A3B8', fontSize: 9, fontWeight: '600' }}>{shiftLeaveDuration} hr for: {shiftLeaveReason}</Text>
+                    </View>
+                  )}
                 </View>
               )}
 
@@ -740,6 +879,9 @@ const SupportDashboardScreen = ({ navigation, route }) => {
 
       {/* 🕐 Check-In Modal */}
       {renderCheckinModal()}
+      
+      {/* 🕐 Short Leave Modal */}
+      {renderShortLeaveModal()}
     </View>
   );
 
