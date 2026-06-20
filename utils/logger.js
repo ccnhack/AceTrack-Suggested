@@ -250,7 +250,10 @@ const logger = {
       global.fetch = async (...args) => {
         const [resource, config] = args;
         const method = config?.method || 'GET';
-        const urlStr = typeof resource === 'string' ? resource : (resource?.url || 'unknown-url');
+        const urlRaw = typeof resource === 'string' ? resource : (resource?.url || 'unknown-url');
+        const urlStr = (urlRaw.startsWith('data:') || urlRaw.startsWith('blob:')) 
+          ? `${urlRaw.substring(0, 40)}...[truncated ${urlRaw.length} bytes]` 
+          : urlRaw;
         
         // Log Outgoing Request
         addLog('info', 'network_req', `[${method}] ${urlStr}`);
