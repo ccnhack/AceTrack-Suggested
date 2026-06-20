@@ -41,7 +41,7 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
     fetchTeamAnalytics();
   }, [fetchTeamAnalytics]);
 
-  const allSupportAgents = (players || []).filter(p => p.role === 'support' || p.supportLevel);
+  const allSupportAgents = (players || []).filter(p => ['support', 'admin', 'superadmin'].includes(p.role) || p.supportLevel);
   const activeAgents = allSupportAgents.filter(a => a.supportStatus !== 'terminated' && a.supportStatus !== 'inactive' && a.supportLevel !== 'EX-EMPLOYEE');
 
   const onShift = activeAgents.filter(a => a.shiftStatus === 'on_shift').length;
