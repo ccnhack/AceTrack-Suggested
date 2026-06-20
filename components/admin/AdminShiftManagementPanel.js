@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePlayersStore } from '../../stores';
+import { useAdminCoreStore } from '../../stores/useAdminCoreStore';
 import { useAdmin } from '../../context/AdminContext';
 import SafeAvatar from '../SafeAvatar';
 import { useAuth } from '../../context/AuthContext';
@@ -12,9 +13,16 @@ import { apiFetch } from '../../utils/apiFetch';
 const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
   const { players } = usePlayersStore();
   const { auditLogs } = useAdmin();
+  const { auditLogs: coreLogs, fetchAuditLogs } = useAdminCoreStore();
   const [analytics, setAnalytics] = useState(null);
   const [modalState, setModalState] = useState({ isOpen: false, type: null });
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    if (modalState.isOpen && modalState.type === 'off_shift') {
+      fetchAuditLogs({ limit: 100 });
+    }
+  }, [modalState.isOpen, modalState.type, fetchAuditLogs]);
 
   const fetchTeamAnalytics = useCallback(async () => {
     try {
@@ -262,9 +270,9 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
                     }
                   }
 
-                  let justificationStr = null;
-                  if (modalState.type === 'off_shift' && agent.shiftCheckoutAt) {
-                    const justificationLog = (auditLogs || []).find(log => 
+                  let justificationStr = agent.shiftCheckoutJustification || null;
+                  if (!justificationStr && modalState.type === 'off_shift' && agent.shiftCheckoutAt) {
+                    const justificationLog = [...(auditLogs || []), ...(coreLogs || [])].find(log => 
                       log.action === 'SUPPORT_SHIFT_CHECKOUT' && 
                       log.userId === agent.id && 
                       new Date(log.timestamp).toDateString() === new Date(agent.shiftCheckoutAt).toDateString() &&

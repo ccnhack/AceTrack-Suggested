@@ -1144,13 +1144,20 @@ router.post('/support/check-out', apiKeyGuard, authGuard, asyncHandler(async (re
   const SHIFT_LIMIT_MS = 8 * 60 * 60 * 1000;
   const overtimeMs = Math.max(0, totalShiftMs - SHIFT_LIMIT_MS);
 
-  await Player.updateOne(
-    { id: userId },
-    { $set: {
+  const updateSet = {
       'data.shiftStatus': 'off_shift',
       'data.shiftCheckoutAt': now.toISOString(),
       lastUpdated: new Date()
-    }}
+  };
+  if (justification && justification.trim().length > 0) {
+      updateSet['data.shiftCheckoutJustification'] = justification.trim();
+  } else {
+      updateSet['data.shiftCheckoutJustification'] = null;
+  }
+
+  await Player.updateOne(
+    { id: userId },
+    { $set: updateSet }
   );
 
   logAudit(req, 'SUPPORT_SHIFT_CHECKOUT', ['players'], {
