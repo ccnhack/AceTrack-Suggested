@@ -142,6 +142,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   });
   const [selectedLeaveDate, setSelectedLeaveDate] = useState(null);
   const [attendanceEndDateFilter, setAttendanceEndDateFilter] = useState(() => getLocalDateString());
+  const [showActiveSessionsOnly, setShowActiveSessionsOnly] = useState(false);
   const [selectedSessionForActivity, setSelectedSessionForActivity] = useState(null);
   const [showActionsModal, setShowActionsModal] = useState(false);
   const [showRoleConfirmModal, setShowRoleConfirmModal] = useState(false);
@@ -1588,49 +1589,69 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
 
                           {/* Sessions for Selected Date */}
                           <View style={styles.sessionLogCard}>
-                            <Text style={styles.sessionLogTitle}>Session Log ({displaySessions.length} total)</Text>
-                            {displaySessions.length > 0 ? displaySessions.map((sess, i) => {
-                              const startDate = new Date(sess.startTime);
-                              const endDate = sess.isLive ? new Date() : new Date(sess.endTime);
-                              const durHrs = Math.floor(sess.durationMs / 3600000);
-                              const durMins = Math.floor((sess.durationMs % 3600000) / 60000);
-                              return (
-                                <TouchableOpacity 
-                                  key={i} 
-                                  style={[styles.sessionLogRow, { borderLeftWidth: 3, borderLeftColor: sess.isLive ? '#10B981' : '#6366F1' }]}
-                                  onPress={() => setSelectedSessionForActivity({ ...sess, agentId: selectedAgentId })}
-                                >
-                                  <View style={{ flex: 1 }}>
-                                    <Text style={styles.sessionLogTime}>
-                                      {startDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} → {sess.isLive ? 'ACTIVE NOW' : endDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                              <Text style={[styles.sessionLogTitle, { marginBottom: 0 }]}>Session Log ({displaySessions.length} total)</Text>
+                              <TouchableOpacity onPress={() => setShowActiveSessionsOnly(!showActiveSessionsOnly)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <View style={{ width: 32, height: 18, borderRadius: 9, backgroundColor: showActiveSessionsOnly ? '#10B981' : '#E2E8F0', padding: 2 }}>
+                                  <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: '#FFF', transform: [{ translateX: showActiveSessionsOnly ? 14 : 0 }] }} />
+                                </View>
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: showActiveSessionsOnly ? '#10B981' : '#94A3B8' }}>Active Only</Text>
+                              </TouchableOpacity>
+                            </View>
+                            {(() => {
+                              const processedSessions = displaySessions.map(sess => {
+                                const count = auditLogs.filter(log => {
+                                  if (log.userId !== selectedAgentId) return false;
+                                  if (log.category !== 'support_activity') return false;
+                                  const logTime = new Date(log.timestamp).getTime();
+                                  const sessStart = new Date(sess.startTime).getTime();
+                                  const sessEnd = sess.isLive ? Date.now() : new Date(sess.endTime).getTime();
+                                  return logTime >= sessStart && logTime <= sessEnd;
+                                }).length;
+                                return { ...sess, activityCount: count };
+                              });
+                              
+                              const filteredSessions = showActiveSessionsOnly 
+                                ? processedSessions.filter(s => s.activityCount > 0) 
+                                : processedSessions;
+                              
+                              if (filteredSessions.length === 0) {
+                                return (
+                                  <View style={{ padding: 20, alignItems: 'center' }}>
+                                    <Text style={{ color: '#94A3B8', fontWeight: '600' }}>
+                                      {showActiveSessionsOnly ? 'No active sessions found.' : 'No sessions on this date.'}
                                     </Text>
-                                    {(() => {
-                                      const count = auditLogs.filter(log => {
-                                        if (log.userId !== selectedAgentId) return false;
-                                        if (log.category !== 'support_activity') return false;
-                                        const logTime = new Date(log.timestamp).getTime();
-                                        const sessStart = new Date(sess.startTime).getTime();
-                                        const sessEnd = sess.isLive ? Date.now() : new Date(sess.endTime).getTime();
-                                        return logTime >= sessStart && logTime <= sessEnd;
-                                      }).length;
-                                      return (
-                                        <Text style={{ fontSize: 11, color: count > 0 ? '#6366F1' : '#94A3B8', marginTop: 2, fontWeight: count > 0 ? '700' : '400' }}>
-                                          Tap to view activities {count > 0 ? `(${count} activities)` : '(Idle)'}
-                                        </Text>
-                                      );
-                                    })()}
                                   </View>
-                                  <Text style={[styles.sessionLogDuration, sess.isLive && { color: '#10B981' }]}>
-                                    {durHrs > 0 ? `${durHrs}h ` : ''}{durMins}m
-                                  </Text>
-                                  <Ionicons name="chevron-forward" size={16} color="#CBD5E1" style={{ marginLeft: 8 }} />
-                                </TouchableOpacity>
-                              );
-                            }) : (
-                              <View style={{ padding: 20, alignItems: 'center' }}>
-                                <Text style={{ color: '#94A3B8', fontWeight: '600' }}>No sessions on this date.</Text>
-                              </View>
-                            )}
+                                );
+                              }
+
+                              return filteredSessions.map((sess, i) => {
+                                const startDate = new Date(sess.startTime);
+                                const endDate = sess.isLive ? new Date() : new Date(sess.endTime);
+                                const durHrs = Math.floor(sess.durationMs / 3600000);
+                                const durMins = Math.floor((sess.durationMs % 3600000) / 60000);
+                                return (
+                                  <TouchableOpacity 
+                                    key={i} 
+                                    style={[styles.sessionLogRow, { borderLeftWidth: 3, borderLeftColor: sess.isLive ? '#10B981' : '#6366F1' }]}
+                                    onPress={() => setSelectedSessionForActivity({ ...sess, agentId: selectedAgentId })}
+                                  >
+                                    <View style={{ flex: 1 }}>
+                                      <Text style={styles.sessionLogTime}>
+                                        {startDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} → {sess.isLive ? 'ACTIVE NOW' : endDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                      </Text>
+                                      <Text style={{ fontSize: 11, color: sess.activityCount > 0 ? '#6366F1' : '#94A3B8', marginTop: 2, fontWeight: sess.activityCount > 0 ? '700' : '400' }}>
+                                        Tap to view activities {sess.activityCount > 0 ? `(${sess.activityCount} activities)` : '(Idle)'}
+                                      </Text>
+                                    </View>
+                                    <Text style={[styles.sessionLogDuration, sess.isLive && { color: '#10B981' }]}>
+                                      {durHrs > 0 ? `${durHrs}h ` : ''}{durMins}m
+                                    </Text>
+                                    <Ionicons name="chevron-forward" size={16} color="#CBD5E1" style={{ marginLeft: 8 }} />
+                                  </TouchableOpacity>
+                                );
+                              });
+                            })()}
                           </View>
 
                           {/* Weekly Summary */}
