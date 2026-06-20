@@ -241,15 +241,16 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
                   let checkoutStr = '—';
                   let lastActiveStr = agent.lastActive ? new Date(agent.lastActive).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
 
-                  if (agent.shiftCheckinRounded) {
-                    checkinStr = new Date(agent.shiftCheckinRounded).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  const checkinTimeSource = agent.shiftCheckinAt || agent.shiftCheckinRounded;
+                  if (checkinTimeSource) {
+                    checkinStr = new Date(checkinTimeSource).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     
                     if (modalState.type === 'on_shift') {
-                      const ms = new Date().getTime() - new Date(agent.shiftCheckinRounded).getTime();
+                      const ms = new Date().getTime() - new Date(checkinTimeSource).getTime();
                       durationStr = `${Math.floor(ms / 3600000)}h ${Math.floor((ms % 3600000) / 60000)}m`;
                     } else if (agent.shiftCheckoutAt) {
                       checkoutStr = new Date(agent.shiftCheckoutAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                      const ms = new Date(agent.shiftCheckoutAt).getTime() - new Date(agent.shiftCheckinRounded).getTime();
+                      const ms = new Date(agent.shiftCheckoutAt).getTime() - new Date(checkinTimeSource).getTime();
                       durationStr = `${Math.floor(ms / 3600000)}h ${Math.floor((ms % 3600000) / 60000)}m`;
                     }
                   }
