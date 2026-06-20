@@ -806,6 +806,9 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                 <View style={[
                   styles.statusDot, 
                   { 
+                    position: 'relative',
+                    top: 0,
+                    right: 0,
                     backgroundColor: (() => {
                       if (agent.supportStatus === 'terminated' || agent.supportStatus === 'inactive' || agent.supportLevel === 'EX-EMPLOYEE') return '#EF4444';
                       if (agent.supportStatus === 'suspended') return '#F97316';
