@@ -450,7 +450,7 @@ const ShiftHistorySection = ({ allSupportAgents }) => {
   // CSV Export
   const handleExportCSV = () => {
     if (!historyData?.shifts?.length) return;
-    const rows = [['Date', 'Employee', 'Email', 'Level', 'Check-In', 'Check-Out', 'Duration', 'Overtime', 'Early Checkout', 'Auto Checkout', 'Justification']];
+    const rows = [['Date', 'Employee', 'Email', 'Level', 'Manager', 'Check-In', 'Check-Out', 'Duration', 'Overtime', 'Early Checkout', 'Auto Checkout', 'Justification']];
     for (const s of historyData.shifts) {
       const dur = s.totalShiftMs != null ? `${Math.floor(s.totalShiftMs / 3600000)}h ${Math.floor((s.totalShiftMs % 3600000) / 60000)}m` : 'In Progress';
       const ot = s.overtimeMs > 0 ? `${Math.floor(s.overtimeMs / 60000)}m` : '—';
@@ -459,6 +459,7 @@ const ShiftHistorySection = ({ allSupportAgents }) => {
         s.name,
         s.email,
         s.supportLevel,
+        s.managerName || '—',
         s.checkinTime ? new Date(s.checkinTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—',
         s.checkoutTime ? new Date(s.checkoutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—',
         dur,
@@ -735,6 +736,12 @@ const ShiftCard = ({ shift }) => {
         <View style={{ marginLeft: 10, flex: 1 }}>
           <Text style={{ color: '#F8FAFC', fontSize: 13, fontWeight: '700' }}>{shift.name}</Text>
           <Text style={{ color: '#64748B', fontSize: 10 }}>{shift.email || shift.supportLevel}</Text>
+          {shift.managerName ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+              <Ionicons name="person-circle-outline" size={10} color="#6366F1" style={{ marginRight: 3 }} />
+              <Text style={{ color: '#818CF8', fontSize: 9, fontWeight: '600' }}>Reports to: {shift.managerName}</Text>
+            </View>
+          ) : null}
         </View>
         {/* Status Badges */}
         <View style={{ flexDirection: 'row', gap: 4 }}>

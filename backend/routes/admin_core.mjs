@@ -215,15 +215,25 @@ router.get('/shift-history', requireAdmin, async (req, res) => {
 
         // Build a map of player names for enrichment
         const userIds = [...new Set(logs.map(l => l.details?.userId || l.userId))];
-        const playerDocs = await User.find({ id: { $in: userIds } }).select('id data.name data.avatar data.email data.supportLevel').lean();
+        const playerDocs = await User.find({ id: { $in: userIds } }).select('id data.name data.avatar data.email data.supportLevel data.managerId').lean();
         const playerMap = {};
+        const managerIds = new Set();
         for (const p of playerDocs) {
+            const managerId = p.data?.managerId || '';
+            if (managerId) managerIds.add(managerId);
             playerMap[p.id] = {
                 name: p.data?.name || p.id,
                 avatar: p.data?.avatar || '',
                 email: p.data?.email || '',
-                supportLevel: p.data?.supportLevel || ''
+                supportLevel: p.data?.supportLevel || '',
+                managerId
             };
+        }
+        // Fetch manager names
+        const managerDocs = managerIds.size > 0 ? await User.find({ id: { $in: [...managerIds] } }).select('id data.name').lean() : [];
+        const managerMap = {};
+        for (const m of managerDocs) {
+            managerMap[m.id] = m.data?.name || m.id;
         }
 
         // Pair checkins with checkouts per user per day
@@ -241,9 +251,17 @@ router.get('/shift-history', requireAdmin, async (req, res) => {
                 const pending = checkinMap[uid];
                 const checkinLog = pending && pending.length > 0 ? pending.shift() : null;
 
-                const totalShiftMs = log.details?.totalShiftMs || 0;
-                const overtimeMs = log.details?.overtimeMs || 0;
+                // Use actual checkin time for duration calculation (not rounded)
+                const actualCheckinTime = checkinLog?.details?.actualTime || checkinLog?.timestamp || log.details?.checkinRounded || null;
+                const actualCheckoutTime = log.details?.checkoutTime || log.timestamp;
+                let totalShiftMs = 0;
+                if (actualCheckinTime && actualCheckoutTime) {
+                    totalShiftMs = new Date(actualCheckoutTime).getTime() - new Date(actualCheckinTime).getTime();
+                }
+                const EIGHT_HOURS_MS = 8 * 60 * 60 * 1000;
                 const SEVEN_HOURS_MS = 7 * 60 * 60 * 1000;
+                const overtimeMs = Math.max(0, totalShiftMs - EIGHT_HOURS_MS);
+                const mgrId = playerMap[uid]?.managerId || '';
 
                 shifts.push({
                     userId: uid,
@@ -251,9 +269,11 @@ router.get('/shift-history', requireAdmin, async (req, res) => {
                     avatar: playerMap[uid]?.avatar || '',
                     email: playerMap[uid]?.email || '',
                     supportLevel: playerMap[uid]?.supportLevel || '',
-                    checkinTime: checkinLog?.details?.actualTime || checkinLog?.details?.roundedTime || checkinLog?.timestamp || log.details?.checkinRounded || null,
+                    managerId: mgrId,
+                    managerName: mgrId ? (managerMap[mgrId] || mgrId) : '',
+                    checkinTime: actualCheckinTime,
                     checkinRounded: checkinLog?.details?.roundedTime || log.details?.checkinRounded || null,
-                    checkoutTime: log.details?.checkoutTime || log.timestamp,
+                    checkoutTime: actualCheckoutTime,
                     totalShiftMs,
                     overtimeMs,
                     isAutoCheckout: !!log.details?.isAutoCheckout,
@@ -267,12 +287,15 @@ router.get('/shift-history', requireAdmin, async (req, res) => {
         // Handle orphan checkins (checked in but never checked out within the range)
         for (const uid of Object.keys(checkinMap)) {
             for (const orphan of checkinMap[uid]) {
+                const mgrId = playerMap[uid]?.managerId || '';
                 shifts.push({
                     userId: uid,
                     name: playerMap[uid]?.name || uid,
                     avatar: playerMap[uid]?.avatar || '',
                     email: playerMap[uid]?.email || '',
                     supportLevel: playerMap[uid]?.supportLevel || '',
+                    managerId: mgrId,
+                    managerName: mgrId ? (managerMap[mgrId] || mgrId) : '',
                     checkinTime: orphan.details?.actualTime || orphan.details?.roundedTime || orphan.timestamp,
                     checkinRounded: orphan.details?.roundedTime || null,
                     checkoutTime: null,
