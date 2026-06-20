@@ -1051,7 +1051,7 @@ router.post('/support/check-in', apiKeyGuard, authGuard, asyncHandler(async (req
 
   const playerDoc = await Player.findOne({ id: userId }).lean();
   if (!playerDoc || !playerDoc.data) return res.status(404).json({ error: 'User not found' });
-  if (playerDoc.data.role !== 'support') return res.status(403).json({ error: 'Only support employees can check in' });
+  if (!['support', 'admin', 'superadmin'].includes(playerDoc.data.role)) return res.status(403).json({ error: 'Only support employees and admins can check in' });
 
   // Prevent double check-in
   const todayStr = new Date().toISOString().split('T')[0];
@@ -1117,7 +1117,7 @@ router.post('/support/check-out', apiKeyGuard, authGuard, asyncHandler(async (re
 
   const playerDoc = await Player.findOne({ id: userId }).lean();
   if (!playerDoc || !playerDoc.data) return res.status(404).json({ error: 'User not found' });
-  if (playerDoc.data.role !== 'support') return res.status(403).json({ error: 'Only support employees can check out' });
+  if (!['support', 'admin', 'superadmin'].includes(playerDoc.data.role)) return res.status(403).json({ error: 'Only support employees and admins can check out' });
 
   const checkinTime = playerDoc.data.shiftCheckinRounded;
   if (!checkinTime) {

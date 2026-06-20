@@ -447,7 +447,10 @@ export const thinPlayer = (p: any) => {
     // 🛡️ [IDENTITY_GUARD] (v2.6.121) 
     // Always preserve verification and login identifiers in the thinned list
     email, username, isEmailVerified, isPhoneVerified,
-    notifications, walletHistory, trueSkillHistory
+    notifications, walletHistory, trueSkillHistory,
+    // Shift and Support Management
+    shiftStatus, shiftCheckinAt, shiftCheckinRounded, shiftCheckoutDue, shiftCheckoutAt,
+    supportStatus, supportLevel, terminatedAt, reOnboardedAt, status
   } = p;
   
   return { 
@@ -456,6 +459,9 @@ export const thinPlayer = (p: any) => {
     isApprovedCoach, coachStatus, preferredFormat, mostPlayedVenue,
     referralCode, devices, phone,
     email, username, isEmailVerified, isPhoneVerified,
+    // Shift and Support Management
+    shiftStatus, shiftCheckinAt, shiftCheckinRounded, shiftCheckoutDue, shiftCheckoutAt,
+    supportStatus, supportLevel, terminatedAt, reOnboardedAt, status,
     // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Include UI-required arrays but cap to 5 items to protect CursorWindow
     notifications: Array.isArray(notifications) ? notifications.slice(0, 5) : notifications,
     walletHistory: Array.isArray(walletHistory) ? walletHistory.slice(0, 5) : walletHistory,
