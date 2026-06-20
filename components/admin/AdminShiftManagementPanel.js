@@ -712,9 +712,16 @@ const ShiftHistorySection = ({ allSupportAgents }) => {
                         <Text style={{ color: '#475569', fontSize: 10, fontWeight: '600', marginLeft: 8 }}>({groupedShifts[dateKey].length} shifts)</Text>
                       </View>
                     )}
-                    {groupedShifts[dateKey].map((shift, idx) => (
-                      <ShiftCard key={`${shift.userId}-${shift.checkinTime}-${idx}`} shift={shift} />
-                    ))}
+                    {(() => {
+                        const employeeGroups = {};
+                        groupedShifts[dateKey].forEach(s => {
+                            if (!employeeGroups[s.userId]) employeeGroups[s.userId] = [];
+                            employeeGroups[s.userId].push(s);
+                        });
+                        return Object.values(employeeGroups).map(shifts => (
+                            <GroupedShiftCard key={shifts[0].userId} shifts={shifts} />
+                        ));
+                    })()}
                   </View>
                 ))
               )}
@@ -766,40 +773,56 @@ const ShiftHistorySection = ({ allSupportAgents }) => {
 /* ═══════════════════════════════════════════════════════════ */
 /* 🃏 SHIFT CARD SUB-COMPONENT                                */
 /* ═══════════════════════════════════════════════════════════ */
-const ShiftCard = ({ shift }) => {
-  const checkinStr = shift.checkinTime ? new Date(shift.checkinTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
-  const checkoutStr = shift.checkoutTime ? new Date(shift.checkoutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
-  const durationStr = shift.totalShiftMs != null ? formatDuration(shift.totalShiftMs) : 'In Progress';
-  const overtimeStr = shift.overtimeMs > 0 ? `+${Math.floor(shift.overtimeMs / 60000)}m` : null;
+const GroupedShiftCard = ({ shifts }) => {
+  const baseUser = shifts[0]; // All segments share the same employee profile details
+  
+  let totalDurationMs = 0;
+  let hasInProgress = false;
+  let hasAutoCheckout = false;
+  let hasEarlyCheckout = false;
+  let totalOvertimeMs = 0;
+
+  shifts.forEach(s => {
+    if (s.totalShiftMs != null) totalDurationMs += s.totalShiftMs;
+    else hasInProgress = true;
+    if (s.isAutoCheckout) hasAutoCheckout = true;
+    if (s.isEarlyCheckout) hasEarlyCheckout = true;
+    if (s.overtimeMs > 0) totalOvertimeMs += s.overtimeMs;
+  });
+
+  const durationStr = totalDurationMs > 0 ? formatDuration(totalDurationMs) : '0m';
+  const finalDurationStr = hasInProgress ? (totalDurationMs > 0 ? `${durationStr} + In Progress` : 'In Progress') : durationStr;
+  const overtimeStr = totalOvertimeMs > 0 ? `+${Math.floor(totalOvertimeMs / 60000)}m` : null;
 
   return (
-    <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', padding: 14, borderRadius: 14, marginBottom: 8, borderWidth: 1, borderColor: shift.isEarlyCheckout ? 'rgba(245,158,11,0.3)' : shift.overtimeMs > 0 ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.06)' }}>
+    <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', padding: 14, borderRadius: 14, marginBottom: 8, borderWidth: 1, borderColor: hasEarlyCheckout ? 'rgba(245,158,11,0.3)' : totalOvertimeMs > 0 ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.06)' }}>
       {/* Name Row */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-        <SafeAvatar uri={shift.avatar} name={shift.name} size={28} borderRadius={8} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+        <SafeAvatar uri={baseUser.avatar} name={baseUser.name} size={28} borderRadius={8} />
         <View style={{ marginLeft: 10, flex: 1 }}>
-          <Text style={{ color: '#F8FAFC', fontSize: 13, fontWeight: '700' }}>{shift.name}</Text>
-          <Text style={{ color: '#64748B', fontSize: 10 }}>{shift.email || shift.supportLevel}</Text>
-          {shift.managerName ? (
+          <Text style={{ color: '#F8FAFC', fontSize: 13, fontWeight: '700' }}>{baseUser.name}</Text>
+          <Text style={{ color: '#64748B', fontSize: 10 }}>{baseUser.email || baseUser.supportLevel}</Text>
+          {baseUser.managerName ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
               <Ionicons name="person-circle-outline" size={10} color="#6366F1" style={{ marginRight: 3 }} />
-              <Text style={{ color: '#818CF8', fontSize: 9, fontWeight: '600' }}>Reports to: {shift.managerName}</Text>
+              <Text style={{ color: '#818CF8', fontSize: 9, fontWeight: '600' }}>Reports to: {baseUser.managerName}</Text>
             </View>
           ) : null}
         </View>
-        {/* Status Badges */}
+        
+        {/* Aggregated Badges */}
         <View style={{ flexDirection: 'row', gap: 4 }}>
-          {!shift.checkoutTime && (
+          {hasInProgress && (
             <View style={{ backgroundColor: 'rgba(99,102,241,0.2)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
               <Text style={{ color: '#818CF8', fontSize: 9, fontWeight: '800' }}>IN PROGRESS</Text>
             </View>
           )}
-          {shift.isAutoCheckout && (
+          {hasAutoCheckout && (
             <View style={{ backgroundColor: 'rgba(245,158,11,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
               <Text style={{ color: '#FBBF24', fontSize: 9, fontWeight: '800' }}>AUTO</Text>
             </View>
           )}
-          {shift.isEarlyCheckout && (
+          {hasEarlyCheckout && (
             <View style={{ backgroundColor: 'rgba(245,158,11,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
               <Text style={{ color: '#F59E0B', fontSize: 9, fontWeight: '800' }}>EARLY</Text>
             </View>
@@ -812,30 +835,41 @@ const ShiftCard = ({ shift }) => {
         </View>
       </View>
 
-      {/* Time Details Row */}
-      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-        <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
-          <Text style={{ color: '#64748B', fontSize: 8, fontWeight: '700', letterSpacing: 0.5 }}>CHECK-IN</Text>
-          <Text style={{ color: '#10B981', fontSize: 13, fontWeight: '700', marginTop: 2 }}>{checkinStr}</Text>
-        </View>
-        <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
-          <Text style={{ color: '#64748B', fontSize: 8, fontWeight: '700', letterSpacing: 0.5 }}>CHECK-OUT</Text>
-          <Text style={{ color: shift.checkoutTime ? '#F87171' : '#475569', fontSize: 13, fontWeight: '700', marginTop: 2 }}>{checkoutStr}</Text>
-        </View>
-        <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
-          <Text style={{ color: '#64748B', fontSize: 8, fontWeight: '700', letterSpacing: 0.5 }}>DURATION</Text>
-          <Text style={{ color: '#C7D2FE', fontSize: 13, fontWeight: '700', marginTop: 2 }}>{durationStr}</Text>
-        </View>
+      {/* Segments Header */}
+      <View style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', paddingTop: 10, paddingBottom: 6 }}>
+        <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 }}>SHIFT SEGMENTS</Text>
       </View>
 
-      {/* Justification */}
-      {shift.justification && (
-        <View style={{ marginTop: 10, backgroundColor: 'rgba(245,158,11,0.08)', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(245,158,11,0.2)' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-            <Ionicons name="warning" size={11} color="#F59E0B" style={{ marginRight: 4 }} />
-            <Text style={{ color: '#FBBF24', fontSize: 10, fontWeight: '800' }}>EARLY CHECKOUT JUSTIFICATION</Text>
-          </View>
-          <Text style={{ color: '#FDE68A', fontSize: 12, fontStyle: 'italic' }}>"{shift.justification}"</Text>
+      {/* Shift Segments List */}
+      <View style={{ gap: 6 }}>
+        {shifts.map((shift, idx) => {
+            const checkinStr = shift.checkinTime ? new Date(shift.checkinTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
+            const checkoutStr = shift.checkoutTime ? new Date(shift.checkoutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
+            const durStr = shift.totalShiftMs != null ? formatDuration(shift.totalShiftMs) : 'In Progress';
+            return (
+                <View key={idx} style={{ backgroundColor: 'rgba(0,0,0,0.2)', padding: 10, borderRadius: 8 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Ionicons name="time-outline" size={12} color="#6366F1" style={{ marginRight: 6 }} />
+                            <Text style={{ color: '#E2E8F0', fontSize: 12, fontWeight: '600' }}>{checkinStr} <Text style={{ color: '#64748B' }}>to</Text> {checkoutStr}</Text>
+                        </View>
+                        <Text style={{ color: '#A5B4FC', fontSize: 11, fontWeight: '700' }}>{durStr}</Text>
+                    </View>
+                    {shift.justification && (
+                        <View style={{ marginTop: 6, backgroundColor: 'rgba(245,158,11,0.05)', padding: 6, borderRadius: 6, borderLeftWidth: 2, borderLeftColor: '#F59E0B' }}>
+                            <Text style={{ color: '#FDE68A', fontSize: 10, fontStyle: 'italic' }}>"{shift.justification}"</Text>
+                        </View>
+                    )}
+                </View>
+            );
+        })}
+      </View>
+
+      {/* Total Duration Footer */}
+      {shifts.length > 1 && (
+        <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>TOTAL ACTIVE DURATION</Text>
+            <Text style={{ color: '#10B981', fontSize: 13, fontWeight: '800' }}>{finalDurationStr}</Text>
         </View>
       )}
     </View>
