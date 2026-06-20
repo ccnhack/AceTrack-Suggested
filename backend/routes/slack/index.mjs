@@ -165,11 +165,12 @@ You MUST format your response EXACTLY like this (use standard bullet points, and
 
 • [Bullet point 1 summarizing the core issue]
 • [Bullet point 2 summarizing the conversation history]
-• [Bullet point 3 summarizing the current state]
+• [Bullet point 3 summarizing the current state, mentioning that it is ${statusRaw.toUpperCase()}]
 
 *Next Step:* [1 clear, highly actionable next step for the support agent]
 
 Ticket Description: ${issueDesc}
+Ticket Status: ${statusRaw.toUpperCase()}
 Chat History:
 ${chatHistory.substring(0, 3000)}`;
 
