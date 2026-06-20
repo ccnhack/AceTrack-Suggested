@@ -993,12 +993,15 @@ const ProfileScreen = ({ navigation, route }) => {
                           });
                         }
                         
+                        const token = await storage.getItem('userToken');
                         const response = await fetch(`${activeApiUrl}/api/upload`, {
                           method: 'POST',
                           body: formData,
                           headers: { 
-                            'x-ace-api-key': config.PUBLIC_APP_ID
+                            'x-ace-api-key': config.PUBLIC_APP_ID,
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                           },
+                          credentials: 'include'
                         });
                         
                         if (response.ok) {
