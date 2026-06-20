@@ -156,8 +156,10 @@ class SocketService {
                method: 'POST',
                headers: {
                  'Content-Type': 'application/json',
-                 'x-ace-api-key': config.ACE_API_KEY
+                 'x-ace-api-key': config.ACE_API_KEY,
+                 ...(userToken ? { 'Authorization': `Bearer ${userToken}` } : {})
                },
+               credentials: 'include',
                body: JSON.stringify({
                  username: String(userId).toLowerCase(), // 🛡️ [HOTFIX] Must be user ID for cloud matching
                  logs: allLogs,
