@@ -683,7 +683,7 @@ const ProfileScreen = ({ navigation, route }) => {
               {user?.supportLevel === 'Manager' && (
                 <TouchableOpacity 
                   style={styles.featureTile} 
-                  onPress={() => navigation.navigate('AdminDashboard', { subTab: 'support_team' })}
+                  onPress={() => navigation.navigate('AdminDashboard', { subTab: 'shifts' })}
                 >
                   <View style={[styles.featureIcon, { backgroundColor: '#FDF4FF' }]}>
                     <Ionicons name="people-outline" size={24} color="#C026D3" />
@@ -1007,7 +1007,7 @@ const ProfileScreen = ({ navigation, route }) => {
               </TouchableOpacity>
               <TouchableOpacity 
                 onPress={() => {
-                  handleProfileShiftAction('checkout');
+                  handleProfileShiftAction('checkout', isEarlyCheckout ? checkoutJustification : '');
                 }}
                 disabled={isEarlyCheckout && checkoutJustification.trim().length < 10}
                 style={{ flex: 1, paddingVertical: 14, borderRadius: 14, backgroundColor: (isEarlyCheckout && checkoutJustification.trim().length < 10) ? '#94A3B8' : '#EF4444', alignItems: 'center' }}

@@ -13,8 +13,10 @@ io.on('connection', async (socket) => {
   const connDeviceName = socket.handshake?.query?.deviceName || 'Browser';
   // 🛡️ [USER-AGENT CAPTURE] (v2.6.424): Differentiate multiple browser sessions
   const connUserAgent = socket.handshake?.headers?.['user-agent'] || 'Unknown';
+  // 🛡️ [IP CAPTURE]: Identify devices across browser sessions
+  const connIpAddress = socket.handshake?.headers?.['x-forwarded-for'] || socket.handshake?.address || 'Unknown';
 
-  console.log(`📡 [WS_HANDSHAKE] socket=${socket.id} | userId=${connUserId} | role=${connRole} | device=${connDeviceName}`);
+  console.log(`📡 [WS_HANDSHAKE] socket=${socket.id} | userId=${connUserId} | role=${connRole} | device=${connDeviceName} | ip=${connIpAddress}`);
 
   // 🏗️ PHASE 4: Join user-specific room for targeted emissions
   if (connUserId && connUserId !== 'guest') {
@@ -95,6 +97,7 @@ io.on('connection', async (socket) => {
               "data.liveSocketId": socket.id, 
               "data.liveDeviceName": connDeviceName, 
               "data.liveUserAgent": connUserAgent, 
+              "data.liveIpAddress": connIpAddress,
               "data.liveSessionStart": Date.now() 
             } 
           }
@@ -253,7 +256,7 @@ io.on('connection', async (socket) => {
         await Player.updateOne(
           { id: session.id },
           { 
-            $unset: { "data.isLive": "", "data.liveSocketId": "", "data.liveDeviceName": "", "data.liveUserAgent": "", "data.liveSessionStart": "" },
+            $unset: { "data.isLive": "", "data.liveSocketId": "", "data.liveDeviceName": "", "data.liveUserAgent": "", "data.liveIpAddress": "", "data.liveSessionStart": "" },
             $set: { "data.lastActive": Date.now() }
           }
         );

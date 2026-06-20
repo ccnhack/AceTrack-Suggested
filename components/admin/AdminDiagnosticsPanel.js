@@ -339,6 +339,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
                   deviceId: `browser_${s.socketId || idx}`,
                   deviceName: s.browserName || s.deviceName || 'Browser',
                   userAgent: s.userAgent || '',
+                  ipAddress: s.ipAddress || '',
                   targetUserId: p.id
                 };
               });
@@ -833,6 +834,11 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
                       {session.userAgent ? (
                         <Text style={{ fontSize: 9, color: '#94A3B8', marginTop: 2 }} numberOfLines={1}>
                           {session.userAgent.length > 70 ? session.userAgent.substring(0, 70) + '...' : session.userAgent}
+                        </Text>
+                      ) : null}
+                      {session.ipAddress ? (
+                        <Text style={{ fontSize: 9, color: '#6366F1', marginTop: 2, fontWeight: 'bold' }}>
+                          IP: {session.ipAddress}
                         </Text>
                       ) : null}
                       <View style={styles.deviceMeta}>

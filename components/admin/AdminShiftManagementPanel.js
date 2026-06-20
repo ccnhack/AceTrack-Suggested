@@ -46,7 +46,7 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
 
   let allSupportAgents = (players || []).filter(p => (['support', 'admin', 'superadmin'].includes(p.role) || p.supportLevel) && p.id !== 'admin');
   
-  if (currentUser?.supportLevel === 'Manager' && currentUser?.role !== 'admin') {
+  if (currentUser?.supportLevel === 'Manager') {
     allSupportAgents = allSupportAgents.filter(p => p.managerId === currentUser.id || p.id === currentUser.id);
   }
   const activeAgents = allSupportAgents.filter(a => {
