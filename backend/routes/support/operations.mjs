@@ -1094,7 +1094,14 @@ router.post('/support/check-in', apiKeyGuard, authGuard, asyncHandler(async (req
   if (io) {
     io.emit('entity_updated', {
       entity: 'players',
-      data: { id: userId, shiftStatus: 'on_shift' },
+      data: { 
+        id: userId, 
+        shiftStatus: 'on_shift',
+        shiftCheckinAt: now.toISOString(),
+        shiftCheckinRounded: rounded.toISOString(),
+        shiftCheckoutDue: checkoutDue.toISOString(),
+        shiftCheckoutAt: null
+      },
       source: 'shift_checkin',
       timestamp: Date.now()
     });
@@ -1186,7 +1193,12 @@ router.post('/support/check-out', apiKeyGuard, authGuard, asyncHandler(async (re
   if (io) {
     io.emit('entity_updated', {
       entity: 'players',
-      data: { id: userId, shiftStatus: 'off_shift' },
+      data: { 
+        id: userId, 
+        shiftStatus: 'off_shift',
+        shiftCheckoutAt: now.toISOString(),
+        supportStatus: playerDoc.data.supportStatus || 'active'
+      },
       source: 'shift_checkout',
       timestamp: Date.now()
     });
