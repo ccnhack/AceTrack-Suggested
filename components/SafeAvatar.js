@@ -56,11 +56,11 @@ const SafeAvatar = memo(({ uri, name, role, size = 44, borderRadius = 14, style,
   const colorIndex = (name || '').length % colors.length;
   const backgroundColor = isAdmin ? '#0F172A' : colors[colorIndex];
 
+  const isDataOrBlob = typeof uri === 'string' && (uri.startsWith('data:') || uri.startsWith('blob:'));
   const isRemoteImage = uri && 
     typeof uri === 'string' && 
     uri.trim() !== '' && 
-    !uri.includes('null') && 
-    !uri.includes('undefined');
+    (isDataOrBlob || (!uri.includes('null') && !uri.includes('undefined')));
 
   // 🛡️ [REPLICATION] High-precision URL preparation matching mobile-app 4
   const sanitizedUri = config.sanitizeUrl(uri);
