@@ -1083,6 +1083,9 @@ router.post('/support/check-in', apiKeyGuard, authGuard, asyncHandler(async (req
 
   logAudit(req, 'SUPPORT_SHIFT_CHECKIN', ['players'], {
     userId,
+    name: playerDoc.data.name,
+    email: playerDoc.data.email,
+    username: playerDoc.data.username,
     actualTime: now.toISOString(),
     roundedTime: rounded.toISOString(),
     checkoutDue: checkoutDue.toISOString()
@@ -1162,6 +1165,9 @@ router.post('/support/check-out', apiKeyGuard, authGuard, asyncHandler(async (re
 
   logAudit(req, 'SUPPORT_SHIFT_CHECKOUT', ['players'], {
     userId,
+    name: playerDoc.data.name,
+    email: playerDoc.data.email,
+    username: playerDoc.data.username,
     checkoutTime: now.toISOString(),
     checkinRounded: checkinTime,
     totalShiftMs,

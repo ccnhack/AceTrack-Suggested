@@ -1010,7 +1010,7 @@ We have five data sources:
    - Common actions: 'SUPPORT_LOGIN_SUCCESS', 'SUPPORT_LOGIN_FAILED', 'ADMIN_LOGIN_SUCCESS', 'ADMIN_LOGIN_FAILED', 'PASSWORD_CHANGED', 'BRUTE_FORCE_DETECTED', 'UNAUTHORIZED_ACCESS_BLOCKED', 'SUPPORT_SHIFT_CHECKIN', 'SUPPORT_SHIFT_CHECKOUT', etc.
    - ⚠️ IMPORTANT: If the user asks about "logins" or "login attempts", ensure your regex includes "UNAUTHORIZED" alongside "LOGIN" (e.g., {"action": {"$regex": "LOGIN|UNAUTHORIZED", "$options": "i"}}).
    - ⚠️ IMPORTANT: If the user asks about "shifts", "checkin", "checkout", or "timings", ensure your regex includes "SHIFT" or explicitly uses 'SUPPORT_SHIFT_CHECKIN' and 'SUPPORT_SHIFT_CHECKOUT'.
-   - ⚠️ IMPORTANT: For queries involving usernames or emails (like 'shush' or 'john'), do NOT just query 'userId'. Use an $or array on 'details.email', 'details.name', 'details.userId', 'details.identifier', 'details.receivedIdentifier'.
+   - ⚠️ IMPORTANT: For queries involving usernames, names, or emails (like 'shush' or 'john'), AuditLog may not have their name directly in 'details'. You MUST also provide a "playerFilter" (e.g. {"data.name": {"$regex": "john", "$options": "i"}}) to find the user profile. The system will automatically use the found profile IDs to search the AuditLogs.
    - ⚠️ CRITICAL: ONLY apply a "timestamp" date filter if the user explicitly asks for a specific timeframe. Use the Current Server Time provided above to calculate accurate ISO date strings for $gte/$lte.
 2. 'server_events.jsonl' (Filesystem): Contains system crashes, server panics, WebSocket errors, and legacy ephemeral events.
 3. 'Player' (MongoDB): Contains user profiles and their current state (e.g. active, suspended, role).
@@ -1056,6 +1056,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
          }
 
          let combinedLogsArr = [];
+         let foundPlayerIds = [];
 
          const hasMongoFilter = Object.keys(routingIntent.mongoFilter || {}).length > 0;
          const hasPlayerFilter = Object.keys(routingIntent.playerFilter || {}).length > 0;
@@ -1099,6 +1100,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
             const sanitizedPlayerFilter = sanitizeMongoFilter(routingIntent.playerFilter);
             try {
                const players = await Player.find(sanitizedPlayerFilter).limit(100).lean();
+               foundPlayerIds = players.map(p => p.id);
                const compactPlayers = players.map(p => {
                   const pd = p.data || {};
                   return {
@@ -1132,7 +1134,15 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
 
          if (hasMongoFilter || (!routingIntent.checkServerEventsFile && !hasPlayerFilter && !hasTicketFilter && !hasInviteFilter)) {
             const { AuditLog } = await import('../../models/index.mjs');
-            const sanitizedFilter = sanitizeMongoFilter(routingIntent.mongoFilter);
+            let sanitizedFilter = sanitizeMongoFilter(routingIntent.mongoFilter);
+            
+            // Automatically inject resolved player IDs into the AuditLog query
+            if (foundPlayerIds.length > 0) {
+               if (!sanitizedFilter.$or) sanitizedFilter.$or = [];
+               sanitizedFilter.$or.push({ userId: { $in: foundPlayerIds } });
+               sanitizedFilter.$or.push({ "details.userId": { $in: foundPlayerIds } });
+            }
+
             let mongoLogs = [];
             try {
                mongoLogs = await AuditLog.find(sanitizedFilter).sort({ timestamp: -1 }).limit(300).lean();
