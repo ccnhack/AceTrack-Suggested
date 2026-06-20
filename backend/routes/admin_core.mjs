@@ -17,6 +17,13 @@ export default function createAdminCoreRoutes() {
         next();
     };
 
+    const requireAdminOrSupport = (req, res, next) => {
+        if (req.userRole !== 'admin' && req.userRole !== 'support') {
+            return res.status(403).json({ success: false, message: 'Access denied: Admins or Support only' });
+        }
+        next();
+    };
+
 // GET /api/v1/admin-core/audit-logs
 router.get('/audit-logs', requireAdmin, async (req, res) => {
     try {
@@ -187,7 +194,7 @@ router.post('/team-directory/:id/hierarchy', requireAdmin, async (req, res) => {
 });
 
 // GET /api/v1/admin-core/shift-history
-router.get('/shift-history', requireAdmin, async (req, res) => {
+router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
     try {
         const { startDate, endDate, userId } = req.query;
         if (!startDate) {
@@ -309,15 +316,21 @@ router.get('/shift-history', requireAdmin, async (req, res) => {
             }
         }
 
+        // 🛡️ Filter shifts for managers: only show their own shifts or their reportees' shifts
+        let filteredShifts = shifts;
+        if (req.userRole !== 'admin') {
+            filteredShifts = shifts.filter(s => s.userId === req.userId || s.managerId === req.userId);
+        }
+
         // Sort by date desc, then checkin time desc
-        shifts.sort((a, b) => {
+        filteredShifts.sort((a, b) => {
             if (a.date !== b.date) return b.date.localeCompare(a.date);
             return new Date(b.checkinTime || 0) - new Date(a.checkinTime || 0);
         });
 
         // Summary stats
-        const uniqueWorkers = new Set(shifts.map(s => s.userId)).size;
-        const completedShifts = shifts.filter(s => s.checkoutTime);
+        const uniqueWorkers = new Set(filteredShifts.map(s => s.userId)).size;
+        const completedShifts = filteredShifts.filter(s => s.checkoutTime);
         const avgDurationMs = completedShifts.length > 0
             ? completedShifts.reduce((sum, s) => sum + (s.totalShiftMs || 0), 0) / completedShifts.length
             : 0;
@@ -326,10 +339,10 @@ router.get('/shift-history', requireAdmin, async (req, res) => {
 
         res.json({
             success: true,
-            shifts,
+            shifts: filteredShifts,
             summary: {
                 totalWorkers: uniqueWorkers,
-                totalShifts: shifts.length,
+                totalShifts: filteredShifts.length,
                 completedShifts: completedShifts.length,
                 avgDurationMs,
                 totalOvertimeMs,
