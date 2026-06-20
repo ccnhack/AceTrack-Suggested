@@ -1104,7 +1104,7 @@ const styles = StyleSheet.create({
   userListScroll: { marginBottom: 20 },
   miniUserCard: { width: 80, alignItems: 'center', marginRight: 12, padding: 8, borderRadius: 16, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#F1F5F9' },
   miniUserCardActive: { backgroundColor: '#6366F1', borderColor: '#6366F1' },
-  miniAvatar: { backgroundColor: '#F8FAFC' },
+  miniAvatar: {},
   miniUserName: { fontSize: 11, fontWeight: 'bold', color: '#1E293B' },
   miniUserNameActive: { color: '#FFF' },
   miniUserId: { fontSize: 8, color: '#94A3B8' },
