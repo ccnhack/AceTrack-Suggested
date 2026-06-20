@@ -244,13 +244,14 @@ const AdminHubScreen = ({ navigation, route }) => {
               { id: 'recruitment', label: 'Recruitment', icon: 'people-outline' },
               { id: 'support_team', label: 'Support Team', icon: 'shield-checkmark-outline' },
               { id: 'shifts', label: 'Shift Management', icon: 'time-outline' },
+              { id: 'support_dashboard', label: 'Support Dashboard', icon: 'headset-outline', route: 'SupportDashboard' },
               { id: 'audit', label: 'Audit Logs', icon: 'list-outline' },
               { id: 'security', label: 'Security', icon: 'shield-half-outline' },
               { id: 'diagnostics', label: 'Diagnostics', icon: 'pulse-outline' }
             ].filter(tab => {
                if (currentUser?.role === 'admin') return true;
                if (currentUser?.supportLevel === 'Manager') {
-                 return ['support_team', 'shifts'].includes(tab.id);
+                 return ['support_team', 'shifts', 'support_dashboard'].includes(tab.id);
                }
                return false;
             }).map(tab => {
@@ -259,6 +260,11 @@ const AdminHubScreen = ({ navigation, route }) => {
                  <TouchableOpacity 
                    key={tab.id}
                    onPress={() => { 
+                     if (tab.route) {
+                         navigation.navigate(tab.route);
+                         if (isMobileWeb) setIsWebSidebarOpen(false);
+                         return;
+                     }
                      handleTabChange(tab.id);
                      if (isMobileWeb) setIsWebSidebarOpen(false);
                    }}
