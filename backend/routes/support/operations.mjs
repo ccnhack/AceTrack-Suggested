@@ -1119,7 +1119,7 @@ router.post('/support/check-in', apiKeyGuard, authGuard, asyncHandler(async (req
 // 🕐 POST /support/check-out — End shift
 router.post('/support/check-out', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
   const userId = req.user?.id;
-  const { isAutoCheckout } = req.body || {};
+  const { isAutoCheckout, justification } = req.body || {};
   if (!userId) return res.status(401).json({ error: 'Authentication required' });
 
   const playerDoc = await Player.findOne({ id: userId }).lean();
@@ -1134,6 +1134,13 @@ router.post('/support/check-out', apiKeyGuard, authGuard, asyncHandler(async (re
   const now = new Date();
   const checkinDate = new Date(checkinTime);
   const totalShiftMs = now.getTime() - checkinDate.getTime();
+  
+  if (totalShiftMs < 7 * 60 * 60 * 1000 && !isAutoCheckout) {
+    if (!justification || justification.trim().length === 0) {
+      return res.status(400).json({ error: 'Early checkout justification is required.' });
+    }
+  }
+
   const SHIFT_LIMIT_MS = 8 * 60 * 60 * 1000;
   const overtimeMs = Math.max(0, totalShiftMs - SHIFT_LIMIT_MS);
 
@@ -1152,13 +1159,15 @@ router.post('/support/check-out', apiKeyGuard, authGuard, asyncHandler(async (re
     checkinRounded: checkinTime,
     totalShiftMs,
     overtimeMs,
-    isAutoCheckout: !!isAutoCheckout
+    isAutoCheckout: !!isAutoCheckout,
+    justification: justification || null
   }).catch(() => {});
 
   console.log(`🕐 [SHIFT] ${userId} checked out at ${now.toLocaleTimeString()}. Total: ${Math.floor(totalShiftMs / 3600000)}h ${Math.floor((totalShiftMs % 3600000) / 60000)}m. Overtime: ${Math.floor(overtimeMs / 60000)}m`);
 
-  // 📡 Notify manager if overtime occurred
-  if (overtimeMs > 0) {
+  // 📡 Notify manager if overtime or early checkout occurred
+  const isEarly = totalShiftMs < 7 * 60 * 60 * 1000 && !isAutoCheckout;
+  if (overtimeMs > 0 || isEarly) {
     try {
       const managerId = playerDoc.data.managerId;
       if (managerId) {
@@ -1167,13 +1176,22 @@ router.post('/support/check-out', apiKeyGuard, authGuard, asyncHandler(async (re
         if (managerData?.pushTokens?.length > 0) {
           const { sendPushNotification } = await import('../../utils/pushNotifications.mjs').catch(() => ({ sendPushNotification: null }));
           if (sendPushNotification) {
-            const overtimeMinutes = Math.floor(overtimeMs / 60000);
-            sendPushNotification(
-              managerData.pushTokens,
-              '⏰ Employee Overtime Alert',
-              `${playerDoc.data.name || userId} worked ${overtimeMinutes} min overtime${isAutoCheckout ? ' (auto-checkout)' : ''}.`,
-              { type: 'OVERTIME_ALERT', userId, overtimeMs }
-            );
+            if (overtimeMs > 0) {
+              const overtimeMinutes = Math.floor(overtimeMs / 60000);
+              sendPushNotification(
+                managerData.pushTokens,
+                '⏰ Employee Overtime Alert',
+                `${playerDoc.data.name || userId} worked ${overtimeMinutes} min overtime${isAutoCheckout ? ' (auto-checkout)' : ''}.`,
+                { type: 'OVERTIME_ALERT', userId, overtimeMs }
+              );
+            } else if (isEarly) {
+              sendPushNotification(
+                managerData.pushTokens,
+                '⚠️ Early Checkout Alert',
+                `${playerDoc.data.name || userId} checked out early. Reason: ${justification}`,
+                { type: 'EARLY_CHECKOUT_ALERT', userId, justification }
+              );
+            }
           }
         }
       }
@@ -1181,12 +1199,14 @@ router.post('/support/check-out', apiKeyGuard, authGuard, asyncHandler(async (re
       console.warn('[SHIFT] Manager notification failed:', e.message);
     }
 
-    logAudit(req, 'SUPPORT_OVERTIME_DETECTED', ['players'], {
-      userId,
-      overtimeMs,
-      overtimeMinutes: Math.floor(overtimeMs / 60000),
-      isAutoCheckout: !!isAutoCheckout
-    }).catch(() => {});
+    if (overtimeMs > 0) {
+      logAudit(req, 'SUPPORT_OVERTIME_DETECTED', ['players'], {
+        userId,
+        overtimeMs,
+        overtimeMinutes: Math.floor(overtimeMs / 60000),
+        isAutoCheckout: !!isAutoCheckout
+      }).catch(() => {});
+    }
   }
 
   // 📡 Notify all clients

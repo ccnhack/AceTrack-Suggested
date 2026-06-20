@@ -99,6 +99,9 @@ const ProfileScreen = ({ navigation, route }) => {
   const [profileShiftCheckinRounded, setProfileShiftCheckinRounded] = useState(null);
   const [profileShiftCheckoutDue, setProfileShiftCheckoutDue] = useState(null);
   const [profileShiftLoading, setProfileShiftLoading] = useState(false);
+  const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
+  const [checkoutJustification, setCheckoutJustification] = useState('');
+  const [isEarlyCheckout, setIsEarlyCheckout] = useState(false);
 
   // Fetch shift status on focus
   useEffect(() => {
@@ -120,7 +123,7 @@ const ProfileScreen = ({ navigation, route }) => {
     fetchShift();
   }, [isFocused, user]);
 
-  const handleProfileShiftAction = async (action) => {
+  const handleProfileShiftAction = async (action, justification = '') => {
     if (profileShiftLoading) return;
     setProfileShiftLoading(true);
     try {
@@ -128,9 +131,10 @@ const ProfileScreen = ({ navigation, route }) => {
       const headers = { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID, 'x-user-id': user.id };
       if (token) headers['Authorization'] = `Bearer ${token}`;
       const endpoint = action === 'checkin' ? 'check-in' : 'check-out';
+      const payload = action === 'checkout' ? { isAutoCheckout: false, justification } : {};
       const res = await fetch(`${config.API_BASE_URL}/api/v1/support/${endpoint}`, {
         method: 'POST', headers, credentials: 'include',
-        body: JSON.stringify(action === 'checkout' ? { isAutoCheckout: false } : {})
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -143,7 +147,10 @@ const ProfileScreen = ({ navigation, route }) => {
           setProfileShiftStatus('off_shift');
           const totalH = Math.floor(data.totalShiftMs / 3600000);
           const totalM = Math.floor((data.totalShiftMs % 3600000) / 60000);
-          Alert.alert('✅ Checked Out!', `Total shift: ${totalH}h ${totalM}m. Have a great day! 🎉`);
+          setCheckoutModalVisible(false);
+          if (Platform.OS !== 'web') {
+            Alert.alert('✅ Checked Out!', `Total shift: ${totalH}h ${totalM}m. Have a great day! 🎉`);
+          }
         }
       } else {
         Alert.alert('Error', data.error || 'Unknown error');
@@ -673,6 +680,18 @@ const ProfileScreen = ({ navigation, route }) => {
                 </Text>
               </TouchableOpacity>
 
+              {user?.supportLevel === 'Manager' && (
+                <TouchableOpacity 
+                  style={styles.featureTile} 
+                  onPress={() => setActiveSupportModal('team_directory')}
+                >
+                  <View style={[styles.featureIcon, { backgroundColor: '#FDF4FF' }]}>
+                    <Ionicons name="people-outline" size={24} color="#C026D3" />
+                  </View>
+                  <Text style={styles.featureLabel}>My Team</Text>
+                </TouchableOpacity>
+              )}
+
               <TouchableOpacity 
                 style={styles.featureTile} 
                 onPress={() => navigation.navigate('OrgChat')}
@@ -796,10 +815,18 @@ const ProfileScreen = ({ navigation, route }) => {
               <TouchableOpacity
                 onPress={() => {
                   if (profileShiftStatus === 'on_shift') {
-                    Alert.alert('🚪 Confirm Checkout', 'Are you sure you want to end your shift?', [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Check Out', style: 'destructive', onPress: () => handleProfileShiftAction('checkout') }
-                    ]);
+                    if (profileShiftCheckinRounded) {
+                      const durMs = Date.now() - new Date(profileShiftCheckinRounded).getTime();
+                      if (durMs < 7 * 60 * 60 * 1000) {
+                        setIsEarlyCheckout(true);
+                      } else {
+                        setIsEarlyCheckout(false);
+                      }
+                    } else {
+                      setIsEarlyCheckout(false);
+                    }
+                    setCheckoutJustification('');
+                    setCheckoutModalVisible(true);
                   } else {
                     handleProfileShiftAction('checkin');
                   }

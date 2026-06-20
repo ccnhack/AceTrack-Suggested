@@ -7,8 +7,8 @@ import config from '../../config';
 import storage from '../../utils/storage';
 import { usePlayersStore } from '../../stores';
 import { useAdmin } from '../../context/AdminContext';
-import SafeAvatar from '../SafeAvatar';
 import PureJSDateTimePicker from '../PureJSDateTimePicker';
+import { useAuth } from '../../context/AuthContext';
 import { Calendar } from 'react-native-calendars';
 import AceDialog from '../AceDialog';
 
@@ -51,6 +51,7 @@ const formatDuration = (ms) => {
 const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const { players } = usePlayersStore();
   const { auditLogs } = useAdmin();
+  const { currentUser } = useAuth();
   
   const [search, setSearch] = useState('');
   const [analytics, setAnalytics] = useState(null);
@@ -510,9 +511,20 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
 
   // Use server truth if available, otherwise fall back to local cache
   const allSupportAgents = useMemo(() => {
-    if (serverAgents) return serverAgents;
-    return (players || []).filter(p => p.role === 'support');
-  }, [serverAgents, players]);
+    let list = serverAgents || players || [];
+    list = list.filter(p => {
+      if (!p) return false;
+      const role = (p.role || '').toLowerCase();
+      return role === 'support' || role === 'admin' || role === 'superadmin';
+    });
+    
+    // 🛡️ MANAGER VISIBILITY GUARD (v2.6.685)
+    if (currentUser?.role === 'support' && currentUser?.supportLevel === 'Manager') {
+      list = list.filter(p => p.managerId === currentUser.id || p.id === currentUser.id);
+    }
+    
+    return list;
+  }, [serverAgents, players, currentUser]);
 
   const availableManagers = useMemo(() => {
     const list = serverAgents || players || [];
@@ -1563,6 +1575,32 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                               </TouchableOpacity>
                             )}
                           </View>
+
+                          {/* Early Checkout Justification Card */}
+                          {(() => {
+                            let justificationLog = null;
+                            if (auditLogs) {
+                              justificationLog = auditLogs.find(log => {
+                                if (log.action !== 'SUPPORT_SHIFT_CHECKOUT' || log.userId !== selectedAgentId) return false;
+                                if (!log.details || !log.details.justification) return false;
+                                const dStr = getLocalDateString(new Date(log.timestamp));
+                                if (attendanceRangeMode) {
+                                  return dStr >= attendanceDateFilter && dStr <= attendanceEndDateFilter;
+                                }
+                                return dStr === attendanceDateFilter;
+                              });
+                            }
+                            return justificationLog ? (
+                              <View style={{ backgroundColor: '#FFFBEB', padding: 16, borderRadius: 12, marginBottom: 16, borderWidth: 1, borderColor: '#FDE68A' }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                  <Ionicons name="warning" size={16} color="#D97706" style={{ marginRight: 6 }} />
+                                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#B45309' }}>Early Checkout Justification</Text>
+                                </View>
+                                <Text style={{ fontSize: 13, color: '#92400E', fontStyle: 'italic', marginBottom: 8 }}>"{justificationLog.details.justification}"</Text>
+                                <Text style={{ fontSize: 10, color: '#D97706', fontWeight: '600' }}>Logged at {new Date(justificationLog.timestamp).toLocaleTimeString()}</Text>
+                              </View>
+                            ) : null;
+                          })()}
 
                           {/* Hours Chart for Selected Date */}
                           <View style={styles.todayHoursCard}>
