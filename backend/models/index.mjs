@@ -59,6 +59,22 @@ SecuritySummarySchema.index({ lastEventAt: 1 }, { expireAfterSeconds: 30 * 24 * 
 export const SecuritySummary = mongoose.model('SecuritySummary', SecuritySummarySchema);
 
 // ═══════════════════════════════════════════════════════════════
+// 🤖 SlackFeedback — AI Response Feedback Logging
+// ═══════════════════════════════════════════════════════════════
+const SlackFeedbackSchema = new mongoose.Schema({
+  userId: String,
+  channelId: String,
+  query: String,
+  responseContext: String,
+  routingIntent: mongoose.Schema.Types.Mixed,
+  isPositive: Boolean,
+  feedbackText: String,
+  timestamp: { type: Date, default: Date.now }
+});
+
+export const SlackFeedback = mongoose.model('SlackFeedback', SlackFeedbackSchema);
+
+// ═══════════════════════════════════════════════════════════════
 // 🎫 SUPPORT INVITE SCHEMA (v2.6.122)
 // Isolated collection to prevent invite tokens/IPs from leaking to mobile clients
 // ═══════════════════════════════════════════════════════════════

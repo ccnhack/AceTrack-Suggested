@@ -1,6 +1,6 @@
 import express from 'express';
 import crypto from 'crypto';
-import { AppState, Player, AuditLog, SupportTicket } from '../../models/index.mjs';
+import { AppState, Player, AuditLog, SupportTicket, SlackFeedback } from '../../models/index.mjs';
 import { asyncHandler } from '../../helpers/utils.mjs';
 import { fetchWithAIFallback } from '../../utils/aiRouter.mjs';
 
@@ -234,7 +234,13 @@ ${chatHistory.substring(0, 3000)}`;
             {
                "type": "section",
                "text": { "type": "mrkdwn", "text": `*🤖 AI Conversation Summary & Next Steps:*\n${summary}` }
-            }
+            },
+            { "type": "context", "elements": [ { "type": "mrkdwn", "text": `*<!date^${expTs}^⏳ Expiring at {time}|⏳ Expiring in 30 mins>*` } ] },
+            { "type": "actions", "elements": [ 
+               { "type": "button", "text": { "type": "plain_text", "text": "🔗 View Ticket", "emoji": true }, "url": ticketLink, "action_id": "view_ticket" },
+               { "type": "button", "text": { "type": "plain_text", "text": "👍", "emoji": true }, "value": JSON.stringify({ action: "up", context: "ticket", query: ticketId, intent: null }), "action_id": "ai_feedback_up" },
+               { "type": "button", "text": { "type": "plain_text", "text": "👎", "emoji": true }, "value": JSON.stringify({ action: "down", context: "ticket", query: ticketId, intent: null }), "action_id": "ai_feedback_down" }
+            ] }
          ];
          
          await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", blocks });
@@ -454,6 +460,26 @@ ${chatHistory.substring(0, 3000)}`;
                console.error("MFA View parsing error:", e);
             }
             return;
+         } else if (payload.view.callback_id === 'ai_feedback_modal') {
+            const stateValues = payload.view.state.values;
+            const feedbackText = stateValues.feedback_block.feedback_input.value;
+            try {
+               const meta = JSON.parse(payload.view.private_metadata);
+               await SlackFeedback.create({
+                  userId: payload.user?.id,
+                  channelId: payload.view.team_id,
+                  query: meta.query,
+                  responseContext: meta.context,
+                  routingIntent: meta.intent,
+                  isPositive: false,
+                  feedbackText: feedbackText
+               });
+               console.log(`🤖 [SLACK_FEEDBACK] Negative feedback logged from ${payload.user?.name}`);
+            } catch (e) {
+               console.error("Slack Feedback Saving Error:", e);
+            }
+            res.json({ response_action: 'clear' });
+            return;
          }
       }
 
@@ -472,6 +498,57 @@ ${chatHistory.substring(0, 3000)}`;
       // Ignore intermediate datepicker changes before submit
       if (actionId === 'queue_start_date' || actionId === 'queue_end_date') {
          return; 
+      }
+
+      if (actionId === 'ai_feedback_up') {
+         const btnVal = JSON.parse(actionObj.value || '{}');
+         try {
+            await SlackFeedback.create({
+               userId: payload.user?.id,
+               channelId: payload.channel?.id,
+               query: btnVal.query,
+               responseContext: btnVal.context,
+               routingIntent: btnVal.intent,
+               isPositive: true
+            });
+            console.log(`🤖 [SLACK_FEEDBACK] Positive feedback logged from ${payload.user?.name}`);
+         } catch (e) {
+            console.error("Slack Feedback Saving Error:", e);
+         }
+         return await sendDelayedSlackResponse(responseUrl, { response_type: "ephemeral", text: "✅ Thanks for your feedback! This helps improve the AI.", replace_original: false });
+      }
+
+      if (actionId === 'ai_feedback_down') {
+         const btnVal = JSON.parse(actionObj.value || '{}');
+         const modalPayload = {
+            trigger_id: payload.trigger_id,
+            view: {
+               type: "modal",
+               callback_id: "ai_feedback_modal",
+               private_metadata: JSON.stringify({ query: btnVal.query, context: btnVal.context, intent: btnVal.intent }),
+               title: { type: "plain_text", text: "Provide Feedback" },
+               submit: { type: "plain_text", text: "Submit" },
+               close: { type: "plain_text", text: "Cancel" },
+               blocks: [
+                  {
+                     type: "input",
+                     block_id: "feedback_block",
+                     label: { type: "plain_text", text: "What went wrong with this response?" },
+                     element: { type: "plain_text_input", action_id: "feedback_input", multiline: true }
+                  }
+               ]
+            }
+         };
+         try {
+            await fetch("https://slack.com/api/views.open", {
+               method: "POST",
+               headers: { "Authorization": `Bearer ${process.env.SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
+               body: JSON.stringify(modalPayload)
+            });
+         } catch (e) {
+            console.error("Failed to open feedback modal", e);
+         }
+         return res.json({ ok: true });
       }
 
       // 📊 Handle Queue Date Range Submit (v2.6.435)
@@ -896,7 +973,14 @@ Provide a highly structured, visually clean summary of these results.
             { "type": "mrkdwn", "text": `*<!date^${expTs}^⏳ Auto-expiring at {time}|⏳ Auto-expiring in 30 mins>*` }
          ]},
          { "type": "divider" },
-         { "type": "section", "text": { "type": "mrkdwn", "text": summaryContent } }
+         { "type": "section", "text": { "type": "mrkdwn", "text": summaryContent } },
+         {
+            "type": "actions",
+            "elements": [
+               { "type": "button", "text": { "type": "plain_text", "text": "👍 Helpful", "emoji": true }, "value": JSON.stringify({ action: "up", context: "query", query: originalQuery.substring(0, 200), intent: null }), "action_id": "ai_feedback_up" },
+               { "type": "button", "text": { "type": "plain_text", "text": "👎 Unhelpful", "emoji": true }, "value": JSON.stringify({ action: "down", context: "query", query: originalQuery.substring(0, 200), intent: null }), "action_id": "ai_feedback_down" }
+            ]
+         }
       ];
 
       await sendDelayedSlackResponse(responseUrl, { response_type: "ephemeral", replace_original: true, blocks });
@@ -1267,6 +1351,15 @@ ${securityInstruction}`;
                 "elements": actionsElements
              });
          }
+
+         // Add Feedback Buttons
+         blocks.push({
+            "type": "actions",
+            "elements": [
+               { "type": "button", "text": { "type": "plain_text", "text": "👍 Helpful", "emoji": true }, "value": JSON.stringify({ action: "up", context: "log_search", query: userQuery.substring(0, 200), intent: routingIntent }), "action_id": "ai_feedback_up" },
+               { "type": "button", "text": { "type": "plain_text", "text": "👎 Unhelpful", "emoji": true }, "value": JSON.stringify({ action: "down", context: "log_search", query: userQuery.substring(0, 200), intent: routingIntent }), "action_id": "ai_feedback_down" }
+            ]
+         });
 
          const payloadToSend = { 
             response_type: "ephemeral", 
