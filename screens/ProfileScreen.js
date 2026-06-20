@@ -1007,13 +1007,10 @@ const ProfileScreen = ({ navigation, route }) => {
               </TouchableOpacity>
               <TouchableOpacity 
                 onPress={() => {
-                  if (isEarlyCheckout && checkoutJustification.trim().length < 10) {
-                    Alert.alert("Justification Required", "Please provide a valid reason (min 10 characters) for checking out early.");
-                    return;
-                  }
                   handleProfileShiftAction('checkout');
                 }}
-                style={{ flex: 1, paddingVertical: 14, borderRadius: 14, backgroundColor: '#EF4444', alignItems: 'center' }}
+                disabled={isEarlyCheckout && checkoutJustification.trim().length < 10}
+                style={{ flex: 1, paddingVertical: 14, borderRadius: 14, backgroundColor: (isEarlyCheckout && checkoutJustification.trim().length < 10) ? '#94A3B8' : '#EF4444', alignItems: 'center' }}
               >
                 <Text style={{ color: '#FFF', fontWeight: '900', fontSize: 15 }}>Check Out</Text>
               </TouchableOpacity>
