@@ -42,7 +42,22 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
   }, [fetchTeamAnalytics]);
 
   const allSupportAgents = (players || []).filter(p => ['support', 'admin', 'superadmin'].includes(p.role) || p.supportLevel);
-  const activeAgents = allSupportAgents.filter(a => a.supportStatus !== 'terminated' && a.supportStatus !== 'inactive' && a.supportLevel !== 'EX-EMPLOYEE');
+  const activeAgents = allSupportAgents.filter(a => {
+    const status = (a.supportStatus || a.status || 'active').toLowerCase();
+    const level = (a.supportLevel || a.level || '').toUpperCase();
+    
+    // Lifecycle Guard: Terminated unless re-onboarded later
+    const hasActiveTermination = !!a.terminatedAt && (!a.reOnboardedAt || new Date(a.terminatedAt) > new Date(a.reOnboardedAt));
+    
+    const isExplicitlyEx = 
+      status === 'terminated' || 
+      status === 'inactive' || 
+      status === 'left' ||
+      level === 'EX-EMPLOYEE' ||
+      hasActiveTermination;
+
+    return !isExplicitlyEx;
+  });
 
   const onShift = activeAgents.filter(a => a.shiftStatus === 'on_shift').length;
   const offShift = activeAgents.length - onShift;
