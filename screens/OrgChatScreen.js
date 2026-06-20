@@ -10,6 +10,7 @@ import { useAdminCoreStore } from '../stores/useAdminCoreStore';
 import { useCommsStore } from '../stores/useCommsStore';
 import { useAuth } from '../context/AuthContext';
 import { socketService } from '../services/sync/SocketService';
+import SafeAvatar from '../components/SafeAvatar';
 
 const OrgChatScreen = ({ navigation }) => {
   const handleOpenURL = (url) => {
@@ -396,8 +397,8 @@ const OrgChatScreen = ({ navigation }) => {
                   activeOpacity={0.7}
                 >
                   <View style={styles.avatarContainer}>
-                    <View style={[styles.avatar, hasUnread ? styles.avatarActive : (isActive && { backgroundColor: '#475569' })]}>
-                      <Text style={[styles.avatarText, (isActive || hasUnread) && { color: '#FFF' }]}>{getInitials(contact.name)}</Text>
+                    <View style={[hasUnread ? styles.avatarActive : (isActive && { backgroundColor: '#475569' }), { borderRadius: 20, padding: 2 }]}>
+                      <SafeAvatar uri={contact.avatar} name={contact.name} role={contact.role} size={36} borderRadius={18} />
                     </View>
                     {getStatusText(contact) === 'Online' && <View style={styles.avatarOnlineDot} />}
                   </View>
@@ -457,13 +458,17 @@ const OrgChatScreen = ({ navigation }) => {
             </TouchableOpacity>
           )}
           <View 
-            style={{ position: 'relative', zIndex: 50 }}
+            style={{ position: 'relative', zIndex: 50, marginRight: 12 }}
             onMouseEnter={() => isWeb && setShowContactCard(true)}
             onMouseLeave={() => isWeb && setShowContactCard(false)}
           >
-            <View style={styles.chatHeaderAvatar}>
-              <Text style={styles.chatHeaderAvatarText}>{getInitials(selectedContact.name)}</Text>
-            </View>
+            <SafeAvatar 
+              uri={selectedContact.avatar} 
+              name={selectedContact.name} 
+              role={selectedContact.role} 
+              size={40} 
+              borderRadius={20} 
+            />
 
             {showContactCard && isWeb && (
               <>
@@ -549,9 +554,14 @@ const OrgChatScreen = ({ navigation }) => {
                   )}
                   <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
                     {!isMe && (
-                      <View style={styles.msgAvatarSmall}>
-                        <Text style={styles.msgAvatarSmallText}>{getInitials(selectedContact.name)}</Text>
-                      </View>
+                      <SafeAvatar 
+                        uri={selectedContact.avatar} 
+                        name={selectedContact.name} 
+                        role={selectedContact.role} 
+                        size={28} 
+                        borderRadius={14} 
+                        style={{ marginRight: 8, marginTop: 4 }} 
+                      />
                     )}
                     <TouchableOpacity 
                       activeOpacity={0.9}
