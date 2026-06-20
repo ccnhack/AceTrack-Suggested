@@ -23,6 +23,7 @@ import AdminEvaluationsPanel from '../components/admin/AdminEvaluationsPanel';
 import AdminPaymentsPanel from '../components/admin/AdminPaymentsPanel';
 import AdminStaffPanel from '../components/admin/AdminStaffPanel';
 import AdminSupportTeamPanel from '../components/admin/AdminSupportTeamPanel';
+import AdminShiftManagementPanel from '../components/admin/AdminShiftManagementPanel';
 
 // Context Hooks
 import { usePlayersStore } from '../stores';
@@ -243,6 +244,7 @@ const AdminHubScreen = ({ navigation, route }) => {
               { id: 'assignments', label: 'Assignments', icon: 'clipboard-outline', count: badges.assignments },
               { id: 'recruitment', label: 'Recruitment', icon: 'people-outline' },
               { id: 'support_team', label: 'Support Team', icon: 'shield-checkmark-outline' },
+              { id: 'shifts', label: 'Shift Management', icon: 'time-outline' },
               { id: 'audit', label: 'Audit Logs', icon: 'list-outline' },
               { id: 'security', label: 'Security', icon: 'shield-half-outline' },
               { id: 'diagnostics', label: 'Diagnostics', icon: 'pulse-outline' }
@@ -371,6 +373,17 @@ const AdminHubScreen = ({ navigation, route }) => {
             }} 
           />
         );
+      case 'shifts':
+        return (
+          <AdminShiftManagementPanel 
+            onOpenAttendance={(agentId, startTime, endTime) => {
+              // Redirect to support team tab with the specific user and attendance modal open
+              // For simplicity, we just navigate to support team and auto-select user
+              setAutoSelectUser({ id: agentId });
+              handleTabChange('support_team');
+            }}
+          />
+        );
       case 'grievances':
         return (
           <AdminGrievancesPanel 
@@ -491,6 +504,7 @@ const AdminHubScreen = ({ navigation, route }) => {
             { id: 'diagnostics', label: 'Diag', icon: 'pulse' },
             { id: 'recruitment', label: 'Staff', icon: 'people-circle-outline' },
             { id: 'support_team', label: 'Support', icon: 'shield-checkmark' },
+            { id: 'shifts', label: 'Shifts', icon: 'time' },
           ].map(tab => {
             const isActive = subTab === tab.id;
             const showBadge = tab.count > 0 && (tab.id === 'grievances' || !visitedAdminSubTabs.has(tab.id));
@@ -515,7 +529,7 @@ const AdminHubScreen = ({ navigation, route }) => {
         </ScrollView>
       </View>
 
-      {subTab !== 'diagnostics' && subTab !== 'recruitment' && subTab !== 'support_team' && (
+      {subTab !== 'diagnostics' && subTab !== 'recruitment' && subTab !== 'support_team' && subTab !== 'shifts' && (
         <View style={styles.searchBar}>
           <Ionicons name="search" size={16} color="#94A3B8" />
           <TextInput 
