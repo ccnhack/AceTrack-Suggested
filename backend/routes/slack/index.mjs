@@ -66,8 +66,10 @@ export default function createSlackRoutes({ syncMutex, logAudit, APP_VERSION }) 
       }
 
       const { command, text, response_url } = req.body;
+      console.log("SLACK_DEBUG req.body:", req.body);
+      await logAudit(req, 'SLACK_DEBUG_COMMAND', [], { command, text, rawBodyHasKeys: Object.keys(req.body || {}) });
       if (command === '/acetrack' && String(text).trim().toLowerCase() === 'security') {
-        const { generateSecuritySummaryBlocks } = await import('../services/scheduler.mjs');
+        const { generateSecuritySummaryBlocks } = await import('../../services/scheduler.mjs');
         const summary = await generateSecuritySummaryBlocks(24);
          await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", replace_original: true, ...summary });
       } else if (command === '/acetrack' && String(text).trim().toLowerCase() === 'queue') {
@@ -116,7 +118,7 @@ export default function createSlackRoutes({ syncMutex, logAudit, APP_VERSION }) 
             return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: "Please provide a valid ticket ID. Usage: `/acetrack ticket 123456`" });
          }
          
-         const { SupportTicket, Player } = await import('../models/index.mjs');
+         const { SupportTicket, Player } = await import('../../models/index.mjs');
          const ticket = await SupportTicket.findOne({ id: String(ticketId) }).lean();
          
          if (!ticket) {
@@ -290,7 +292,7 @@ ${chatHistory.substring(0, 3000)}`;
             return await sendDelayedSlackResponse(response_url, { response_type: "ephemeral", text: `⚠️ *Invalid JSON:* ${e.message}` });
          }
 
-         const { AuditLog } = await import('../models/index.mjs');
+         const { AuditLog } = await import('../../models/index.mjs');
          let mongoLogs = [];
          try {
             mongoLogs = await AuditLog.find(sanitizeMongoFilter(queryObj)).sort({ timestamp: -1 }).limit(50).lean();
@@ -307,7 +309,7 @@ ${chatHistory.substring(0, 3000)}`;
          const args = String(text).trim().toLowerCase().split(' ').slice(1);
          const roleFilter = args.length > 0 && args[0] !== '' ? args[0] : 'all';
 
-         const { Player } = await import('../models/index.mjs');
+         const { Player } = await import('../../models/index.mjs');
          
          let filter = { id: { $ne: 'admin' } };
          if (roleFilter === 'support') {
@@ -490,7 +492,7 @@ ${chatHistory.substring(0, 3000)}`;
          const endOfDate = new Date(endDateStr);
          endOfDate.setHours(23, 59, 59, 999);
          
-         const { SupportTicket, Player } = await import('../models/index.mjs');
+         const { SupportTicket, Player } = await import('../../models/index.mjs');
          
          const query = {
              $or: [
@@ -975,13 +977,13 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
          const hasTicketFilter = Object.keys(routingIntent.ticketFilter || {}).length > 0;
 
          if (hasInviteFilter) {
-            const { CoachInvite, SupportInvite } = await import('../models/index.mjs');
+            const { CoachInvite, SupportInvite } = await import('../../models/index.mjs');
             const sanitizedInviteFilter = sanitizeMongoFilter(routingIntent.inviteFilter);
             try {
                const cInvites = await CoachInvite.find(sanitizedInviteFilter).limit(50).lean();
                const sInvites = await SupportInvite.find(sanitizedInviteFilter).limit(50).lean();
                
-               const { Tournament, Player } = await import('../models/index.mjs');
+               const { Tournament, Player } = await import('../../models/index.mjs');
                const formatInvite = async (i, type) => {
                   let acName = i.academyId || 'N/A';
                   let trName = i.tournamentId || 'N/A';
@@ -1007,7 +1009,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
          }
 
          if (hasPlayerFilter) {
-            const { Player } = await import('../models/index.mjs');
+            const { Player } = await import('../../models/index.mjs');
             const sanitizedPlayerFilter = sanitizeMongoFilter(routingIntent.playerFilter);
             try {
                const players = await Player.find(sanitizedPlayerFilter).limit(100).lean();
@@ -1025,7 +1027,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
          }
 
          if (hasTicketFilter) {
-            const { SupportTicket } = await import('../models/index.mjs');
+            const { SupportTicket } = await import('../../models/index.mjs');
             const sanitizedTicketFilter = sanitizeMongoFilter(routingIntent.ticketFilter);
             try {
                const tickets = await SupportTicket.find(sanitizedTicketFilter).limit(100).lean();
@@ -1043,7 +1045,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
          }
 
          if (hasMongoFilter || (!routingIntent.checkServerEventsFile && !hasPlayerFilter && !hasTicketFilter && !hasInviteFilter)) {
-            const { AuditLog } = await import('../models/index.mjs');
+            const { AuditLog } = await import('../../models/index.mjs');
             const sanitizedFilter = sanitizeMongoFilter(routingIntent.mongoFilter);
             let mongoLogs = [];
             try {
@@ -1119,7 +1121,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
 
          if (userSearchTerm && userSearchTerm.length > 2) {
             try {
-               const { Player } = await import('../models/index.mjs');
+               const { Player } = await import('../../models/index.mjs');
                const playerDoc = await Player.findOne({ 
                   $or: [
                      { id: { $regex: userSearchTerm, $options: 'i' } },
@@ -1371,13 +1373,13 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
          const hasTicketFilter = Object.keys(routingIntent.ticketFilter || {}).length > 0;
 
          if (hasInviteFilter) {
-            const { CoachInvite, SupportInvite } = await import('../models/index.mjs');
+            const { CoachInvite, SupportInvite } = await import('../../models/index.mjs');
             const sanitizedInviteFilter = sanitizeMongoFilter(routingIntent.inviteFilter);
             try {
                const cInvites = await CoachInvite.find(sanitizedInviteFilter).limit(50).lean();
                const sInvites = await SupportInvite.find(sanitizedInviteFilter).limit(50).lean();
                
-               const { Tournament, Player } = await import('../models/index.mjs');
+               const { Tournament, Player } = await import('../../models/index.mjs');
                const formatInvite = async (i, type) => {
                   let acName = i.academyId || 'N/A';
                   let trName = i.tournamentId || 'N/A';
@@ -1400,7 +1402,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
          }
 
          if (hasPlayerFilter) {
-            const { Player } = await import('../models/index.mjs');
+            const { Player } = await import('../../models/index.mjs');
             const sanitizedPlayerFilter = sanitizeMongoFilter(routingIntent.playerFilter);
             try {
                const players = await Player.find(sanitizedPlayerFilter).limit(100).lean();
@@ -1415,7 +1417,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
          }
 
          if (hasTicketFilter) {
-            const { SupportTicket } = await import('../models/index.mjs');
+            const { SupportTicket } = await import('../../models/index.mjs');
             const sanitizedTicketFilter = sanitizeMongoFilter(routingIntent.ticketFilter);
             try {
                const tickets = await SupportTicket.find(sanitizedTicketFilter).limit(100).lean();
@@ -1430,7 +1432,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
          }
 
          if (hasMongoFilter || (!routingIntent.checkServerEventsFile && !hasPlayerFilter && !hasTicketFilter && !hasInviteFilter)) {
-            const { AuditLog } = await import('../models/index.mjs');
+            const { AuditLog } = await import('../../models/index.mjs');
             const sanitizedFilter = sanitizeMongoFilter(routingIntent.mongoFilter);
             let mongoLogs = [];
             try {
@@ -1485,7 +1487,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
 
          if (userSearchTerm && userSearchTerm.length > 2) {
             try {
-               const { Player } = await import('../models/index.mjs');
+               const { Player } = await import('../../models/index.mjs');
                const playerDoc = await Player.findOne({ 
                   $or: [
                      { id: { $regex: userSearchTerm, $options: 'i' } },
@@ -1709,7 +1711,7 @@ Formatting rules:
 
       let combinedLogsArr = [];
       if (Object.keys(routingIntent.mongoFilter || {}).length > 0 || !routingIntent.checkServerEventsFile) {
-         const { AuditLog } = await import('../models/index.mjs');
+         const { AuditLog } = await import('../../models/index.mjs');
          const sanitizedFilter = sanitizeMongoFilter(routingIntent.mongoFilter);
          let mongoLogs = [];
          try {
