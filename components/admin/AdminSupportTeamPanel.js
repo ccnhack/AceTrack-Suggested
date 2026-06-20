@@ -519,7 +519,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
     });
     
     // 🛡️ MANAGER VISIBILITY GUARD (v2.6.685)
-    if (currentUser?.role === 'support' && currentUser?.supportLevel === 'Manager') {
+    if (currentUser?.role === 'support' && (currentUser?.supportLevel || '').toLowerCase() === 'manager') {
       list = list.filter(p => p.managerId === currentUser.id || p.id === currentUser.id);
     }
     

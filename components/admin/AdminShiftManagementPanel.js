@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { usePlayersStore } from '../../stores';
 import { useAdmin } from '../../context/AdminContext';
 import SafeAvatar from '../SafeAvatar';
+import { useAuth } from '../../context/AuthContext';
 import config from '../../config';
 import storage from '../../utils/storage';
 import { apiFetch } from '../../utils/apiFetch';
@@ -41,7 +42,13 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
     fetchTeamAnalytics();
   }, [fetchTeamAnalytics]);
 
-  const allSupportAgents = (players || []).filter(p => (['support', 'admin', 'superadmin'].includes(p.role) || p.supportLevel) && p.id !== 'admin');
+  const { currentUser } = useAuth();
+
+  let allSupportAgents = (players || []).filter(p => (['support', 'admin', 'superadmin'].includes(p.role) || p.supportLevel) && p.id !== 'admin');
+  
+  if (currentUser?.supportLevel === 'Manager' && currentUser?.role !== 'admin') {
+    allSupportAgents = allSupportAgents.filter(p => p.managerId === currentUser.id || p.id === currentUser.id);
+  }
   const activeAgents = allSupportAgents.filter(a => {
     const status = (a.supportStatus || a.status || 'active').toLowerCase();
     const level = (a.supportLevel || a.level || '').toUpperCase();

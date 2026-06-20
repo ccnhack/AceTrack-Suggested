@@ -52,14 +52,13 @@ const AdminHubScreen = ({ navigation, route }) => {
   const { seenAdminActionIds = new Set(), setSeenAdminActionIds, auditLogs, hasSeen, hasVisited, setVisitedAdminSubTabs, visitedAdminSubTabs = new Set() } = useAdmin();
   const { isCloudOnline, isUsingCloud, lastSyncTime, onManualSync } = useSync();
 
-  // 🛡️ [URL_PERSISTENCE] (v2.6.460): Lazy initialize from URL to prevent race conditions
   const [subTab, setSubTab] = useState(() => {
     if (Platform.OS === 'web') {
       const tab = new URLSearchParams(window.location.search).get('subTab');
       if (tab) console.log(`[AdminHub] [INIT] Restoring tab from URL: ${tab}`);
-      return tab || 'individuals';
+      return tab || (currentUser?.supportLevel === 'Manager' ? 'support_team' : 'individuals');
     }
-    return 'individuals';
+    return currentUser?.supportLevel === 'Manager' ? 'support_team' : 'individuals';
   });
 
   const [autoSelectTicketId, setAutoSelectTicketId] = useState(() => {
@@ -248,7 +247,13 @@ const AdminHubScreen = ({ navigation, route }) => {
               { id: 'audit', label: 'Audit Logs', icon: 'list-outline' },
               { id: 'security', label: 'Security', icon: 'shield-half-outline' },
               { id: 'diagnostics', label: 'Diagnostics', icon: 'pulse-outline' }
-            ].map(tab => {
+            ].filter(tab => {
+               if (currentUser?.role === 'admin') return true;
+               if (currentUser?.supportLevel === 'Manager') {
+                 return ['support_team', 'shifts'].includes(tab.id);
+               }
+               return false;
+            }).map(tab => {
               const isActive = subTab === tab.id;
               return (
                  <TouchableOpacity 
@@ -505,7 +510,13 @@ const AdminHubScreen = ({ navigation, route }) => {
             { id: 'recruitment', label: 'Staff', icon: 'people-circle-outline' },
             { id: 'support_team', label: 'Support', icon: 'shield-checkmark' },
             { id: 'shifts', label: 'Shifts', icon: 'time' },
-          ].map(tab => {
+          ].filter(tab => {
+             if (currentUser?.role === 'admin') return true;
+             if (currentUser?.supportLevel === 'Manager') {
+               return ['support_team', 'shifts'].includes(tab.id);
+             }
+             return false;
+          }).map(tab => {
             const isActive = subTab === tab.id;
             const showBadge = tab.count > 0 && (tab.id === 'grievances' || !visitedAdminSubTabs.has(tab.id));
             

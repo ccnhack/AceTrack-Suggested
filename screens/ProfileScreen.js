@@ -683,7 +683,7 @@ const ProfileScreen = ({ navigation, route }) => {
               {user?.supportLevel === 'Manager' && (
                 <TouchableOpacity 
                   style={styles.featureTile} 
-                  onPress={() => setActiveSupportModal('team_directory')}
+                  onPress={() => navigation.navigate('AdminDashboard', { subTab: 'support_team' })}
                 >
                   <View style={[styles.featureIcon, { backgroundColor: '#FDF4FF' }]}>
                     <Ionicons name="people-outline" size={24} color="#C026D3" />
