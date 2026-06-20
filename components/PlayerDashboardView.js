@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
   },
   playerCardActive: { borderLeftColor: '#10B981', backgroundColor: '#F8FAFC' },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatar: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#F1F5F9' },
+  avatar: { width: 44, height: 44, borderRadius: 14 },
   info: { flex: 1 },
   name: { fontSize: 14, fontWeight: '800', color: '#1E293B', textTransform: 'uppercase' },
   phone: { fontSize: 10, fontWeight: 'bold', color: '#94A3B8', textTransform: 'none', marginTop: 2 },
