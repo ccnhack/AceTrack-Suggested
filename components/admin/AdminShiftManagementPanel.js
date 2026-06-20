@@ -262,6 +262,19 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
                     }
                   }
 
+                  let justificationStr = null;
+                  if (modalState.type === 'off_shift' && agent.shiftCheckoutAt) {
+                    const justificationLog = (auditLogs || []).find(log => 
+                      log.action === 'SUPPORT_SHIFT_CHECKOUT' && 
+                      log.userId === agent.id && 
+                      new Date(log.timestamp).toDateString() === new Date(agent.shiftCheckoutAt).toDateString() &&
+                      log.details?.justification
+                    );
+                    if (justificationLog) {
+                      justificationStr = justificationLog.details.justification;
+                    }
+                  }
+
                   return (
                     <View key={agent.id} style={{ backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
@@ -297,6 +310,16 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
                           </View>
                         )}
                       </View>
+
+                      {justificationStr && (
+                        <View style={{ marginTop: 10, backgroundColor: '#FFFBEB', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#FDE68A' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                            <Ionicons name="warning" size={12} color="#D97706" style={{ marginRight: 4 }} />
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#B45309' }}>Early Checkout Justification</Text>
+                          </View>
+                          <Text style={{ fontSize: 12, color: '#92400E', fontStyle: 'italic' }}>"{justificationStr}"</Text>
+                        </View>
+                      )}
                     </View>
                   );
                 });
