@@ -201,10 +201,10 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
             return res.status(400).json({ success: false, message: 'startDate is required (YYYY-MM-DD)' });
         }
 
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
-        const end = endDate ? new Date(endDate) : new Date(startDate);
-        end.setHours(23, 59, 59, 999);
+        // Parse dates assuming IST (UTC+5:30) to prevent night shifts spilling into the next/previous day
+        const start = new Date(`${startDate}T00:00:00+05:30`);
+        const endStr = endDate || startDate;
+        const end = new Date(`${endStr}T23:59:59.999+05:30`);
 
         // Enforce max 31-day range
         const diffDays = (end - start) / (1000 * 60 * 60 * 24);
@@ -247,6 +247,13 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
         const shifts = [];
         const checkinMap = {}; // userId -> [pending checkins]
 
+        // Utility to get IST date string (YYYY-MM-DD) from a timestamp
+        const getIstDateString = (ts) => {
+            const d = new Date(ts);
+            d.setTime(d.getTime() + (5.5 * 60 * 60 * 1000)); // Add 5.5 hours for IST
+            return d.toISOString().split('T')[0];
+        };
+
         for (const log of logs) {
             const uid = log.details?.userId || log.userId;
             if (!uid) continue;
@@ -286,7 +293,7 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                     isAutoCheckout: !!log.details?.isAutoCheckout,
                     isEarlyCheckout: totalShiftMs < SEVEN_HOURS_MS && !log.details?.isAutoCheckout,
                     justification: log.details?.justification || null,
-                    date: new Date(log.timestamp).toISOString().split('T')[0]
+                    date: getIstDateString(log.timestamp)
                 });
             }
         }
@@ -311,7 +318,7 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                     isAutoCheckout: false,
                     isEarlyCheckout: false,
                     justification: null,
-                    date: new Date(orphan.timestamp).toISOString().split('T')[0]
+                    date: getIstDateString(orphan.timestamp)
                 });
             }
         }
