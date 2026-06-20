@@ -941,7 +941,7 @@ const ProfileScreen = ({ navigation, route }) => {
 
                     {allAvatars.map((url, idx) => (
                       <TouchableOpacity 
-                        key={`${url}_${idx}`} 
+                        key={`avatar_opt_${idx}`} 
                         onPress={() => setEditAvatar(url)}
                         style={[styles.avatarOption, editAvatar === url && styles.avatarOptionSelected]}
                       >
@@ -995,7 +995,6 @@ const ProfileScreen = ({ navigation, route }) => {
                           method: 'POST',
                           body: formData,
                           headers: { 
-                            'Content-Type': 'multipart/form-data',
                             'x-ace-api-key': config.PUBLIC_APP_ID
                           },
                         });
