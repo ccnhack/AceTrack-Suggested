@@ -39,7 +39,7 @@ const ACE_API_KEY = Constants.expoConfig?.extra?.aceApiKey
   || 'AceTrack_Client_v2_Production';
 
 // 🔄 ALWAYS BUMP THIS VERSION TO TRIGGER CACHE INVALIDATION ON STARTUP
-export const APP_VERSION = '2.6.745'; // MUST SYNC WITH App.json & app.json
+export const APP_VERSION = '2.6.746'; // MUST SYNC WITH App.json & app.json
 
 export default {
   API_BASE_URL: 'https://acetrack-suggested.onrender.com', // Always use Render backend

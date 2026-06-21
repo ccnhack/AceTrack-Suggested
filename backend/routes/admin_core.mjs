@@ -459,7 +459,8 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                     isEarlyCheckout: totalShiftMs < SEVEN_HOURS_MS && !log.details?.isAutoCheckout,
                     isLateCheckin: false,
                     justification: log.details?.justification || null,
-                    date: dateStr
+                    date: dateStr,
+                    shiftLogId: log._id
                 });
             }
         }
