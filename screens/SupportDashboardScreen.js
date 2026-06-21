@@ -478,7 +478,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
     const todayStr = getLocalDateStr();
     
     return shortLeaves.filter(l => {
-      if (l.status === 'rejected' || l.status === 'cancelled') return false;
+      if (l.status === 'rejected' || l.status === 'cancelled' || l.status === 'completed') return false;
       
       // Keep if it's today and end time hasn't passed, or if it's in the future
       if (l.date === todayStr) {

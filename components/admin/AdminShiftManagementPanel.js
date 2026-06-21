@@ -179,46 +179,78 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
                   <Text style={{ color: '#64748B', fontSize: 14, fontWeight: '600', marginTop: 12 }}>No leave requests found.</Text>
                 </View>
               ) : (
-                filteredLeaves.map(({ agent, leave }) => (
-                  <View key={`hist_${agent.id}_${leave.id}`} style={{ backgroundColor: leave.status === 'approved' ? 'rgba(16,185,129,0.05)' : leave.status === 'rejected' ? 'rgba(239,68,68,0.05)' : 'rgba(245,158,11,0.05)', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: leave.status === 'approved' ? 'rgba(16,185,129,0.2)' : leave.status === 'rejected' ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.2)', marginTop: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-                      <SafeAvatar uri={agent.avatar} name={agent.name} role={agent.role} size={36} borderRadius={10} />
-                      <View style={{ flex: 1, marginLeft: 12 }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Text style={{ color: '#1E293B', fontSize: 14, fontWeight: '800' }}>{agent.name}</Text>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: leave.status === 'approved' ? '#10B981' : leave.status === 'rejected' ? '#EF4444' : '#F59E0B', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
-                            <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '800', textTransform: 'uppercase' }}>{leave.status}</Text>
-                          </View>
-                        </View>
-                        <Text style={{ color: '#64748B', fontSize: 12, fontWeight: '600', marginTop: 4 }}>
-                          <Ionicons name="calendar-outline" size={11} /> {leave.date} ({leave.startTime} - {leave.endTime})
-                        </Text>
-                        <Text style={{ color: '#475569', fontSize: 12, marginTop: 6, fontStyle: 'italic' }}>"{leave.reason}"</Text>
+                <>
+                  {leaveHistorySearch ? (
+                    <View style={{ backgroundColor: 'rgba(99,102,241,0.05)', padding: 12, borderRadius: 12, marginTop: 12, borderWidth: 1, borderColor: 'rgba(99,102,241,0.2)' }}>
+                      <Text style={{ color: '#475569', fontSize: 12, fontWeight: '700', marginBottom: 4 }}>
+                        Search Summary:
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 12 }}>
+                        <Text style={{ color: '#10B981', fontSize: 12, fontWeight: '600' }}>Completed: {filteredLeaves.filter(l => l.leave.status === 'completed').length}</Text>
+                        <Text style={{ color: '#EF4444', fontSize: 12, fontWeight: '600' }}>Late Returns: {filteredLeaves.filter(l => l.leave.isLateReturn).length}</Text>
                       </View>
                     </View>
-                    {/* Action buttons if not rejected already */}
-                    {leave.status !== 'rejected' && agent.id !== currentUser?.id && (
-                      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', paddingTop: 12 }}>
-                        {leave.status === 'pending' && (
-                          <TouchableOpacity 
-                            onPress={() => handleResolveShortLeave(agent.id, leave.id, 'approve')}
-                            disabled={leaveLoading}
-                            style={{ backgroundColor: 'rgba(16,185,129,0.15)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, marginRight: 8 }}
-                          >
-                            <Text style={{ color: '#10B981', fontSize: 12, fontWeight: '700' }}>Approve</Text>
-                          </TouchableOpacity>
-                        )}
-                        <TouchableOpacity 
-                          onPress={() => handleResolveShortLeave(agent.id, leave.id, 'reject')}
-                          disabled={leaveLoading}
-                          style={{ backgroundColor: 'rgba(239,68,68,0.1)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}
-                        >
-                          <Text style={{ color: '#EF4444', fontSize: 12, fontWeight: '700' }}>{leave.status === 'approved' ? 'Cancel Leave' : 'Reject'}</Text>
-                        </TouchableOpacity>
+                  ) : null}
+                  {filteredLeaves.map(({ agent, leave }) => (
+                    <View key={`hist_${agent.id}_${leave.id}`} style={{ backgroundColor: leave.status === 'approved' ? 'rgba(16,185,129,0.05)' : leave.status === 'rejected' ? 'rgba(239,68,68,0.05)' : leave.status === 'completed' ? 'rgba(99,102,241,0.05)' : leave.status === 'cancelled' ? 'rgba(100,116,139,0.05)' : 'rgba(245,158,11,0.05)', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: leave.status === 'approved' ? 'rgba(16,185,129,0.2)' : leave.status === 'rejected' ? 'rgba(239,68,68,0.2)' : leave.status === 'completed' ? 'rgba(99,102,241,0.2)' : leave.status === 'cancelled' ? 'rgba(100,116,139,0.2)' : 'rgba(245,158,11,0.2)', marginTop: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                        <SafeAvatar uri={agent.avatar} name={agent.name} role={agent.role} size={36} borderRadius={10} />
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={{ color: '#1E293B', fontSize: 14, fontWeight: '800' }}>{agent.name}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: leave.status === 'approved' ? '#10B981' : leave.status === 'rejected' ? '#EF4444' : leave.status === 'completed' ? '#6366F1' : leave.status === 'cancelled' ? '#64748B' : '#F59E0B', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                              <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '800', textTransform: 'uppercase' }}>{leave.status}</Text>
+                            </View>
+                          </View>
+                          <Text style={{ color: '#64748B', fontSize: 12, fontWeight: '600', marginTop: 4 }}>
+                            <Ionicons name="calendar-outline" size={11} /> {leave.date} ({leave.startTime} - {leave.endTime})
+                          </Text>
+                          <Text style={{ color: '#475569', fontSize: 12, marginTop: 6, fontStyle: 'italic' }}>"{leave.reason}"</Text>
+                          
+                          {leave.status === 'completed' && leave.actualReturnTime && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 }}>
+                              <Text style={{ color: '#6366F1', fontSize: 11, fontWeight: '700' }}>
+                                Returned: {leave.actualReturnTime}
+                              </Text>
+                              {leave.isLateReturn && (
+                                <View style={{ backgroundColor: 'rgba(239,68,68,0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)' }}>
+                                  <Text style={{ color: '#EF4444', fontSize: 10, fontWeight: '800' }}>LATE BY {leave.lateDurationMinutes}m</Text>
+                                </View>
+                              )}
+                            </View>
+                          )}
+
+                          {leave.status === 'cancelled' && leave.cancellationNote && (
+                            <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '600', marginTop: 8 }}>
+                              Note: {leave.cancellationNote}
+                            </Text>
+                          )}
+                        </View>
                       </View>
-                    )}
-                  </View>
-                ))
+                      {/* Action buttons if not rejected or completed already */}
+                      {leave.status !== 'rejected' && leave.status !== 'completed' && leave.status !== 'cancelled' && agent.id !== currentUser?.id && (
+                        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', paddingTop: 12 }}>
+                          {leave.status === 'pending' && (
+                            <TouchableOpacity 
+                              onPress={() => handleResolveShortLeave(agent.id, leave.id, 'approve')}
+                              disabled={leaveLoading}
+                              style={{ backgroundColor: 'rgba(16,185,129,0.15)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, marginRight: 8 }}
+                            >
+                              <Text style={{ color: '#10B981', fontSize: 12, fontWeight: '700' }}>Approve</Text>
+                            </TouchableOpacity>
+                          )}
+                          <TouchableOpacity 
+                            onPress={() => handleResolveShortLeave(agent.id, leave.id, 'reject')}
+                            disabled={leaveLoading}
+                            style={{ backgroundColor: 'rgba(239,68,68,0.1)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}
+                          >
+                            <Text style={{ color: '#EF4444', fontSize: 12, fontWeight: '700' }}>{leave.status === 'approved' ? 'Cancel Leave' : 'Reject'}</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </>
               )}
             </ScrollView>
           </View>

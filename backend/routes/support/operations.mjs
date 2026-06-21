@@ -1322,30 +1322,58 @@ router.post('/support/cancel-short-leave', apiKeyGuard, authGuard, asyncHandler(
   if (!playerDoc || !playerDoc.data) return res.status(404).json({ error: 'User not found' });
 
   const shortLeaves = playerDoc.data.shortLeaves || [];
-  const targetLeave = shortLeaves.find(l => l.id === leaveId);
+  const targetLeaveIndex = shortLeaves.findIndex(l => l.id === leaveId);
+  const targetLeave = shortLeaves[targetLeaveIndex];
+
   if (!targetLeave || (targetLeave.status !== 'pending' && targetLeave.status !== 'approved')) {
-    return res.status(400).json({ error: 'Leave request cannot be cancelled.' });
+    return res.status(400).json({ error: 'Leave request cannot be cancelled or completed.' });
   }
 
-  const updatedLeaves = shortLeaves.filter(l => l.id !== leaveId);
+  const now = new Date();
+  
+  if (targetLeave.status === 'approved') {
+    // Agent is resuming shift after approved leave
+    targetLeave.status = 'completed';
+    targetLeave.actualReturnTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    
+    // Check if late
+    const [endH, endM] = targetLeave.endTime.split(':').map(Number);
+    const endObj = new Date(now.getFullYear(), now.getMonth(), now.getDate(), endH, endM);
+    
+    if (now > endObj) {
+      targetLeave.isLateReturn = true;
+      const lateDiffMs = now.getTime() - endObj.getTime();
+      targetLeave.lateDurationMinutes = Math.floor(lateDiffMs / 60000);
+    } else {
+      targetLeave.isLateReturn = false;
+      targetLeave.lateDurationMinutes = 0;
+    }
+  } else if (targetLeave.status === 'pending') {
+    // Agent is cancelling an unapproved request
+    targetLeave.status = 'cancelled';
+    targetLeave.cancellationNote = 'Cancelled by employee';
+    targetLeave.cancelledAt = now.toISOString();
+  }
+
+  shortLeaves[targetLeaveIndex] = targetLeave;
 
   await Player.updateOne(
     { id: userId },
     { 
-      $set: { 'data.shortLeaves': updatedLeaves, lastUpdated: new Date() }
+      $set: { 'data.shortLeaves': shortLeaves, lastUpdated: now }
     }
   );
 
   if (io) {
     io.emit('entity_updated', {
       entity: 'players',
-      data: { id: userId, shortLeaves: updatedLeaves },
+      data: { id: userId, shortLeaves: shortLeaves },
       source: 'cancel_short_leave',
       timestamp: Date.now()
     });
   }
 
-  res.json({ success: true });
+  res.json({ success: true, updatedLeave: targetLeave });
 }));
 
 // 🕐 POST /support/resolve-short-leave
