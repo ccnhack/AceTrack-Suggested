@@ -58,10 +58,10 @@ export default function AdminSlackFeedbackPanel({ onRefresh, onRefreshComplete }
   ];
 
   return (
-    <View style={{ flex: 1, padding: 20 }}>
+    <View style={{ marginHorizontal: 16, marginBottom: 16, backgroundColor: '#0F172A', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#1E293B', overflow: 'hidden' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
         <Ionicons name="chatbubbles" size={24} color="#8B5CF6" style={{ marginRight: 10 }} />
-        <Text style={{ color: '#F8FAFC', fontSize: 22, fontWeight: '800' }}>Slack AI Feedbacks</Text>
+        <Text style={{ color: '#F8FAFC', fontSize: 20, fontWeight: '900' }}>Slack AI Feedbacks</Text>
       </View>
 
       <View style={{ flexDirection: 'row', marginBottom: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 4 }}>
@@ -84,7 +84,7 @@ export default function AdminSlackFeedbackPanel({ onRefresh, onRefreshComplete }
               }}
             >
               <Ionicons name={tab.icon} size={16} color={isActive ? "#A78BFA" : "#64748B"} style={{ marginRight: 6 }} />
-              <Text style={{ color: isActive ? '#E2E8F0' : '#64748B', fontWeight: isActive ? '700' : '500', fontSize: 13 }}>
+              <Text style={{ color: isActive ? '#E2E8F0' : '#64748B', fontWeight: isActive ? '700' : '600', fontSize: 13 }}>
                 {tab.label}
               </Text>
             </TouchableOpacity>
@@ -99,7 +99,7 @@ export default function AdminSlackFeedbackPanel({ onRefresh, onRefreshComplete }
         </View>
       ) : error ? (
         <View style={{ padding: 20, backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.3)' }}>
-          <Text style={{ color: '#FCA5A5', textAlign: 'center' }}>{error}</Text>
+          <Text style={{ color: '#FCA5A5', textAlign: 'center', fontWeight: '600' }}>{error}</Text>
         </View>
       ) : feedbacks.length === 0 ? (
         <View style={{ padding: 40, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 12 }}>
@@ -107,65 +107,78 @@ export default function AdminSlackFeedbackPanel({ onRefresh, onRefreshComplete }
           <Text style={{ color: '#94A3B8', fontSize: 15, fontWeight: '600' }}>No {activeTab !== 'all' ? activeTab : ''} feedback available.</Text>
         </View>
       ) : (
-        <ScrollView style={{ flex: 1 }}>
-          {feedbacks.map((item, idx) => (
-            <BlurView
-              key={item._id || idx}
-              intensity={20}
-              tint="dark"
-              style={{
-                marginBottom: 12,
-                borderRadius: 16,
-                padding: 16,
-                borderWidth: 1,
-                borderColor: item.isPositive ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-                backgroundColor: item.isPositive ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)'
-              }}
-            >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  {item.isPositive ? (
-                    <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.2)', padding: 6, borderRadius: 8, marginRight: 10 }}>
-                      <Ionicons name="thumbs-up" size={16} color="#10B981" />
+        <ScrollView style={{ maxHeight: 600 }} nestedScrollEnabled>
+          {feedbacks.map((item, idx) => {
+            const dateStr = item.timestamp 
+              ? new Date(item.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) 
+              : 'Unknown Date';
+              
+            return (
+              <View
+                key={item._id || idx}
+                style={{
+                  marginBottom: 12,
+                  borderRadius: 16,
+                  padding: 16,
+                  borderWidth: 1,
+                  borderColor: item.isPositive ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)',
+                  backgroundColor: item.isPositive ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)'
+                }}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    {item.isPositive ? (
+                      <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.2)', padding: 6, borderRadius: 8, marginRight: 10 }}>
+                        <Ionicons name="thumbs-up" size={16} color="#10B981" />
+                      </View>
+                    ) : (
+                      <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', padding: 6, borderRadius: 8, marginRight: 10 }}>
+                        <Ionicons name="thumbs-down" size={16} color="#EF4444" />
+                      </View>
+                    )}
+                    <View>
+                      <Text style={{ color: '#F8FAFC', fontSize: 14, fontWeight: '800' }}>
+                        {item.userId || 'Unknown User'}
+                      </Text>
+                      <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '600', marginTop: 2 }}>
+                        {dateStr}
+                      </Text>
                     </View>
-                  ) : (
-                    <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', padding: 6, borderRadius: 8, marginRight: 10 }}>
-                      <Ionicons name="thumbs-down" size={16} color="#EF4444" />
-                    </View>
-                  )}
-                  <View>
-                    <Text style={{ color: '#F8FAFC', fontSize: 14, fontWeight: '700' }}>
-                      {item.userId || 'Unknown User'}
-                    </Text>
-                    <Text style={{ color: '#64748B', fontSize: 11 }}>
-                      {item.createdAt ? new Date(item.createdAt).toLocaleString() : 'Unknown Date'}
+                  </View>
+                  <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                    <Text style={{ color: '#CBD5E1', fontSize: 10, textTransform: 'uppercase', fontWeight: '800' }}>
+                      {item.responseContext || 'General'}
                     </Text>
                   </View>
                 </View>
-                <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
-                  <Text style={{ color: '#94A3B8', fontSize: 10, textTransform: 'uppercase', fontWeight: '700' }}>
-                    {item.responseContext || 'General'}
+
+                <View style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
+                  <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '800', letterSpacing: 0.5, marginBottom: 6 }}>ORIGINAL QUERY</Text>
+                  <Text style={{ color: '#E2E8F0', fontSize: 13, fontStyle: 'italic', fontWeight: '500' }}>
+                    "{item.query || 'N/A'}"
                   </Text>
                 </View>
-              </View>
+                
+                {item.routingIntent && Object.keys(item.routingIntent).length > 0 && (
+                  <View style={{ marginTop: 8, backgroundColor: 'rgba(15, 23, 42, 0.4)', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
+                    <Text style={{ color: '#8B5CF6', fontSize: 10, fontWeight: '800', letterSpacing: 0.5, marginBottom: 6 }}>AI ROUTING INTENT</Text>
+                    <Text style={{ color: '#C4B5FD', fontSize: 11, fontFamily: 'monospace' }}>
+                      {JSON.stringify(item.routingIntent, null, 2)}
+                    </Text>
+                  </View>
+                )}
 
-              <View style={{ backgroundColor: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 8, marginTop: 8 }}>
-                <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '600', marginBottom: 4 }}>ORIGINAL QUERY</Text>
-                <Text style={{ color: '#E2E8F0', fontSize: 13, fontStyle: 'italic' }}>
-                  "{item.query || 'N/A'}"
-                </Text>
+                {!item.isPositive && item.feedbackText && (
+                  <View style={{ marginTop: 8, backgroundColor: 'rgba(239, 68, 68, 0.15)', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.3)' }}>
+                    <Text style={{ color: '#FCA5A5', fontSize: 10, fontWeight: '800', letterSpacing: 0.5, marginBottom: 6 }}>USER FEEDBACK</Text>
+                    <Text style={{ color: '#FEF2F2', fontSize: 13, fontWeight: '500' }}>
+                      {item.feedbackText}
+                    </Text>
+                  </View>
+                )}
               </View>
-
-              {!item.isPositive && item.feedbackText && (
-                <View style={{ marginTop: 12, backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.2)' }}>
-                  <Text style={{ color: '#FCA5A5', fontSize: 11, fontWeight: '700', marginBottom: 4 }}>USER FEEDBACK</Text>
-                  <Text style={{ color: '#FEF2F2', fontSize: 13 }}>
-                    {item.feedbackText}
-                  </Text>
-                </View>
-              )}
-            </BlurView>
-          ))}
+            );
+          })}
         </ScrollView>
       )}
     </View>
