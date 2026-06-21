@@ -194,11 +194,13 @@ router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), asyncHandl
       logAudit(req, 'DIAG_UPLOAD_CLOUDINARY_SUCCESS', [], { url: cloudResult.secure_url, filename });
       
       try {
-        const result = await cloudinary.search
-          .expression('folder:acetrack/diagnostics/*')
-          .sort_by('created_at', 'desc')
-          .max_results(100)
-          .execute();
+        const result = await cloudinary.api.resources({
+          type: 'upload',
+          resource_type: 'raw',
+          prefix: 'acetrack/diagnostics/',
+          max_results: 100,
+          direction: 'desc'
+        });
           
         const userFilesCloud = result.resources.filter(f => {
           const fName = f.public_id.split('/').pop().toLowerCase();
@@ -279,6 +281,35 @@ router.post('/diagnostics/auto-flush', apiKeyGuard, validate(AutoFlushSchema), a
     for (const f of userFiles.slice(3)) {
       await fs.promises.unlink(path.join(DIAGNOSTICS_DIR, f)).catch(() => {});
     }
+  }
+
+  try {
+    const result = await cloudinary.api.resources({
+      type: 'upload',
+      resource_type: 'raw',
+      prefix: 'acetrack/diagnostics/auto-flush/',
+      max_results: 100,
+      direction: 'desc'
+    });
+    const userFilesCloud = result.resources.filter(f => {
+      const fName = f.public_id.split('/').pop().toLowerCase();
+      return fName.startsWith(`${safeUser}_${safeDevice}_`.toLowerCase()) && fName.endsWith('.log');
+    });
+    
+    // Sort descending by timestamp extracted from filename
+    userFilesCloud.sort((a, b) => {
+      const timeA = parseInt(a.public_id.split('_').pop().replace('.log', '')) || 0;
+      const timeB = parseInt(b.public_id.split('_').pop().replace('.log', '')) || 0;
+      return timeB - timeA;
+    });
+
+    if (userFilesCloud.length > 3) {
+      const filesToDelete = userFilesCloud.slice(3).map(f => f.public_id);
+      console.log(`🧹 [Cloudinary] Rotating ${filesToDelete.length} old auto-flush logs for ${safeUser}`);
+      await cloudinary.api.delete_resources(filesToDelete, { resource_type: 'raw' });
+    }
+  } catch (rotationErr) {
+    console.error('❌ [Cloudinary Auto-Flush] Rotation Failed:', rotationErr.message);
   }
 
   res.json({ success: true, count: logs.length, retained: 3 });

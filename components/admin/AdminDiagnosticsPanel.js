@@ -796,7 +796,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
       )}
 
       {selectedDiagUser && (() => {
-        const isSupportUser = selectedDiagUser.role === 'support';
+        const isSupportUser = ['support', 'admin', 'system_admin'].includes(selectedDiagUser.role);
         
         // For support users: show ALL ponging devices as live (they only use browsers)
         // For other users: show ponging devices NOT in .devices as live
