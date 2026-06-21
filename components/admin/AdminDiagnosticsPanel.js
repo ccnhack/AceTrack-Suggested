@@ -286,19 +286,15 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
       });
       if (res.ok) {
         const data = await res.json();
-        const pNameRaw = (p.name || '').toLowerCase();
-        const firstName = pNameRaw.split(' ')[0];
-        const safeName = pNameRaw.replace(/[^a-z0-9]/gi, '_');
-        
         const safeId = p.id.toLowerCase();
         
         const filterFiles = (files) => {
           return (files || []).filter(f => {
             const lf = f.toLowerCase();
-            // Strict match: starts with ID_, ID-, or contains requested_ID_
-            return lf.startsWith(safeId + '_') || 
-                   lf.startsWith(safeId + '-') || 
-                   lf.includes('_requested_' + safeId + '_');
+            if (lf.startsWith('admin_requested_')) {
+              return lf.startsWith(`admin_requested_${safeId}_`);
+            }
+            return lf.startsWith(safeId + '_') || lf.startsWith(safeId + '-');
           }).sort((a, b) => {
             const getTs = (str) => {
               const m = str.match(/(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})|(\d{8}_\d{6})/);
@@ -314,7 +310,8 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
 
       // 🛡️ [REST_SESSION_FALLBACK] (v2.6.270): For support users, also check via REST API
       // The socket ping/pong is unreliable when admin is on mobile and support is on web
-      if (p.role === 'support') {
+      const isSupportUserRole = ['support', 'admin', 'system_admin'].includes(p.role);
+      if (isSupportUserRole) {
         try {
           const headers = { 
             'x-ace-api-key': config.PUBLIC_APP_ID
@@ -405,9 +402,10 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
           const data = await res.json();
           const filteredFs = (data.files || []).filter(f => {
             const lf = f.toLowerCase();
-            return lf.startsWith(safeId + '_') || 
-                   lf.startsWith(safeId + '-') || 
-                   lf.includes('_requested_' + safeId + '_');
+            if (lf.startsWith('admin_requested_')) {
+              return lf.startsWith(`admin_requested_${safeId}_`);
+            }
+            return lf.startsWith(safeId + '_') || lf.startsWith(safeId + '-');
           }).sort((a, b) => b.localeCompare(a));
           
           // 🛡️ [Diff Detection] Detect brand new filenames explicitly
@@ -806,11 +804,11 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
             index === self.findIndex((s) => s.deviceId === session.deviceId)
           );
         
-        const liveSessions = (isSupportUser 
+        const liveSessions = isSupportUser 
           ? allUserSessions  // Support users: show ALL as live browser sessions
           : allUserSessions.filter(status => 
               !selectedDiagUser.devices?.some(d => d.id === status.deviceId)
-            )).filter(status => status.version === config.APP_VERSION);
+            );
 
         // Deduplicate Registered Devices
         const registeredDevices = (selectedDiagUser.devices || [])

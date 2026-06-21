@@ -9,8 +9,7 @@ import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 dotenv.config();
 
-// 🚀 ACE TRACK STABILITY // 🔄 Backend Version - Keep this perfectly synced with frontend App.js APP_VERSION
-export const APP_VERSION = '2.6.710'; // Critical for Update prompts
+export const APP_VERSION = '2.6.712'; // Critical for Update prompts
 
 // 🛡️ SECURITY: API Key
 export const ACE_API_KEY = process.env.ACE_API_KEY || "AceTrack_Internal_v2_Testing";

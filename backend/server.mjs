@@ -71,7 +71,7 @@ initFirebase();
 // ═══════════════════════════════════════════════════════════════
 // Security Middleware Initialization
 // ═══════════════════════════════════════════════════════════════
-initSecurity({ aceApiKey: ACE_API_KEY, jwtSecret: JWT_SECRET, appVersion: APP_VERSION, logAudit });
+initSecurity({ aceApiKey: ACE_API_KEY, jwtSecret: JWT_SECRET, appVersion: '2.6.712', logAudit });
 const { globalApiLimiter, loginLimiter, otpLimiter, passwordResetLimiter, phoneLookupLimiter } = createRateLimiters(APP_VERSION);
 
 initScheduler(loginAttempts, sendSecurityAlert);

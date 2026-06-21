@@ -102,3 +102,4 @@ query_test*.mjs
 test_db*.mjs
 test_reply.mjs
 test_populate.mjs
+backend/validate_slack_feedback.mjs

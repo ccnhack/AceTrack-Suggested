@@ -149,7 +149,7 @@ const MainTabs = memo(() => {
       {role === 'admin' && (
         <Tab.Screen name="Admin" component={AdminHubScreen} options={{ tabBarTestID: 'nav.tab.Admin' }} />
       )}
-      {role === 'support' && (
+      {(role === 'admin' || role === 'support') && (
         <Tab.Screen name="Support" component={SupportDashboardScreen} options={{ tabBarTestID: 'nav.tab.Support' }} />
       )}
       {(role === 'admin' || role === 'support') && (
