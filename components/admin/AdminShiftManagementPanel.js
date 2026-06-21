@@ -49,7 +49,7 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
 
   const [leaveLoading, setLeaveLoading] = useState(false);
 
-  const handleResolveShortLeave = async (agentId, action) => {
+  const handleResolveShortLeave = async (agentId, leaveId, action) => {
     if (leaveLoading) return;
     setLeaveLoading(true);
     try {
@@ -65,7 +65,7 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
         method: 'POST',
         headers,
         credentials: 'include',
-        body: JSON.stringify({ agentId, action })
+        body: JSON.stringify({ agentId, leaveId, action })
       });
       
       const data = await res.json();
@@ -261,32 +261,40 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
           <Ionicons name="time" size={18} color="#F59E0B" style={{ marginRight: 8 }} />
           <Text style={{ color: '#F8FAFC', fontSize: 15, fontWeight: '900', flex: 1 }}>Pending Short Leaves</Text>
         </View>
-        {activeAgents.filter(a => a.shiftLeaveStatus === 'pending').length === 0 ? (
-          <View style={{ padding: 16, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 12 }}>
-            <Text style={{ color: '#64748B', fontSize: 13, fontWeight: '600' }}>No pending short leave requests.</Text>
-          </View>
-        ) : (
-          activeAgents.filter(a => a.shiftLeaveStatus === 'pending').map(agent => (
-            <View key={`leave_${agent.id}`} style={{ backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)', marginBottom: 8 }}>
+        {(() => {
+          const pendingLeaves = activeAgents.flatMap(agent => 
+            (agent.shortLeaves || []).filter(l => l.status === 'pending').map(leave => ({ agent, leave }))
+          );
+
+          if (pendingLeaves.length === 0) {
+            return (
+              <View style={{ padding: 16, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 12 }}>
+                <Text style={{ color: '#64748B', fontSize: 13, fontWeight: '600' }}>No pending short leave requests.</Text>
+              </View>
+            );
+          }
+
+          return pendingLeaves.map(({ agent, leave }) => (
+            <View key={`leave_${leave.id}`} style={{ backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)', marginBottom: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
                 <SafeAvatar uri={agent.avatar} name={agent.name} role={agent.role} size={32} borderRadius={8} />
                 <View style={{ flex: 1, marginLeft: 10 }}>
                   <Text style={{ color: '#E2E8F0', fontSize: 13, fontWeight: '700' }}>{agent.name}</Text>
-                  <Text style={{ color: '#F59E0B', fontSize: 11, fontWeight: '600', marginTop: 2 }}>{agent.shiftLeaveDuration} hour(s)</Text>
-                  <Text style={{ color: '#94A3B8', fontSize: 11, marginTop: 4, fontStyle: 'italic' }}>"{agent.shiftLeaveReason}"</Text>
+                  <Text style={{ color: '#F59E0B', fontSize: 11, fontWeight: '600', marginTop: 2 }}>{leave.date} ({leave.startTime} - {leave.endTime})</Text>
+                  <Text style={{ color: '#94A3B8', fontSize: 11, marginTop: 4, fontStyle: 'italic' }}>"{leave.reason}"</Text>
                 </View>
                 <View style={{ flexDirection: 'row', gap: 6 }}>
                   {agent.id !== currentUser?.id ? (
                     <>
                       <TouchableOpacity 
-                        onPress={() => handleResolveShortLeave(agent.id, 'approve')}
+                        onPress={() => handleResolveShortLeave(agent.id, leave.id, 'approve')}
                         disabled={leaveLoading}
                         style={{ backgroundColor: 'rgba(16,185,129,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(16,185,129,0.5)' }}
                       >
                         <Text style={{ color: '#10B981', fontSize: 11, fontWeight: '800' }}>Approve</Text>
                       </TouchableOpacity>
                       <TouchableOpacity 
-                        onPress={() => handleResolveShortLeave(agent.id, 'reject')}
+                        onPress={() => handleResolveShortLeave(agent.id, leave.id, 'reject')}
                         disabled={leaveLoading}
                         style={{ backgroundColor: 'rgba(239,68,68,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(239,68,68,0.5)' }}
                       >
@@ -301,8 +309,8 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
                 </View>
               </View>
             </View>
-          ))
-        )}
+          ));
+        })()}
       </View>
 
       {/* Details Modal */}
