@@ -498,6 +498,14 @@ ${chatHistory.substring(0, 3000)}`;
                   feedbackText: feedbackText
                });
                console.log(`🤖 [SLACK_FEEDBACK] Negative feedback logged from ${payload.user?.name}`);
+               
+               if (meta.responseUrl) {
+                  await sendDelayedSlackResponse(meta.responseUrl, { 
+                     response_type: "ephemeral", 
+                     text: "✅ Thanks for your detailed feedback! We will review this to improve the AI.", 
+                     replace_original: false 
+                  }).catch(e => console.error('Failed to send delayed confirmation:', e.message));
+               }
             } catch (e) {
                console.error("Slack Feedback Saving Error:", e);
             }
@@ -548,7 +556,7 @@ ${chatHistory.substring(0, 3000)}`;
             view: {
                type: "modal",
                callback_id: "ai_feedback_modal",
-               private_metadata: JSON.stringify({ query: btnVal.query, context: btnVal.context, intent: btnVal.intent }),
+               private_metadata: JSON.stringify({ query: btnVal.query, context: btnVal.context, intent: btnVal.intent, responseUrl: payload.response_url }),
                title: { type: "plain_text", text: "Provide Feedback" },
                submit: { type: "plain_text", text: "Submit" },
                close: { type: "plain_text", text: "Cancel" },

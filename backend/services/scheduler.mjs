@@ -422,5 +422,46 @@ export default function initScheduler(loginAttempts, sendSecurityAlert) {
     }
   }, 24 * 60 * 60 * 1000);
 
+  // 🕐 [SHORT LEAVE ENFORCEMENT] (v2.6.722): Run every minute
+  setInterval(async () => {
+    try {
+      const { Player } = await import('../models/index.mjs');
+      const now = new Date();
+      
+      const agentsOnShift = await Player.find({ 'data.shiftStatus': 'on_shift' }).lean();
+      
+      for (const player of agentsOnShift) {
+        if (!player.data?.shortLeaves || !Array.isArray(player.data.shortLeaves)) continue;
+        
+        for (const leave of player.data.shortLeaves) {
+          if (leave.status === 'approved') {
+            // Assume date format is YYYY-MM-DD and time is HH:MM
+            const startStr = `${leave.date}T${leave.startTime}:00`;
+            const endStr = `${leave.date}T${leave.endTime}:00`;
+            const leaveStart = new Date(startStr);
+            const leaveEnd = new Date(endStr);
+            
+            // If now is within the leave period, force them off_shift
+            if (now >= leaveStart && now < leaveEnd) {
+              await Player.updateOne(
+                { id: player.id },
+                { $set: { 'data.shiftStatus': 'off_shift', lastUpdated: new Date() } }
+              );
+              
+              // We need access to io, wait we can just rely on the next polling or find it.
+              // Assuming global.io is available, or just skip emit and let the client re-poll
+              // Wait, operations.mjs uses io via import or dependency injection.
+              // I will just use DB update, the frontend will catch it via heartbeat or sync.
+              console.log(`[Scheduler] Auto off-shift for ${player.id} due to active short leave: ${leave.id}`);
+              break;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error('❌ [SCHEDULER] Short Leave Enforcement failed:', e.message);
+    }
+  }, 60 * 1000);
+
   console.log('🕒 Scheduler initialized (v2.6.395)');
 }

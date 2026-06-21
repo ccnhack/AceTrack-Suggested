@@ -1265,16 +1265,14 @@ router.get('/support/shift-status', apiKeyGuard, authGuard, asyncHandler(async (
     shiftCheckinRounded: d.shiftCheckinRounded || null,
     shiftCheckoutAt: d.shiftCheckoutAt || null,
     shiftCheckoutDue: d.shiftCheckoutDue || null,
-    shiftLeaveStatus: d.shiftLeaveStatus || null,
-    shiftLeaveReason: d.shiftLeaveReason || null,
-    shiftLeaveDuration: d.shiftLeaveDuration || null
+    shortLeaves: d.shortLeaves || []
   });
 }));
 
 // 🕐 POST /support/request-short-leave
 router.post('/support/request-short-leave', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
   const userId = req.user?.id;
-  const { durationHours, reason } = req.body;
+  const { date, startTime, endTime, reason } = req.body;
   if (!userId) return res.status(401).json({ error: 'Authentication required' });
 
   const playerDoc = await Player.findOne({ id: userId }).lean();
@@ -1283,20 +1281,29 @@ router.post('/support/request-short-leave', apiKeyGuard, authGuard, asyncHandler
     return res.status(400).json({ error: 'You must be on shift to request short leave.' });
   }
 
+  const leaveId = Date.now().toString() + Math.random().toString(36).substring(2, 7);
+  const newLeave = {
+    id: leaveId,
+    date,
+    startTime,
+    endTime,
+    reason,
+    status: 'pending',
+    createdAt: new Date().toISOString()
+  };
+
   await Player.updateOne(
     { id: userId },
-    { $set: { 
-      'data.shiftLeaveStatus': 'pending',
-      'data.shiftLeaveDuration': durationHours,
-      'data.shiftLeaveReason': reason,
-      lastUpdated: new Date()
-    }}
+    { 
+      $push: { 'data.shortLeaves': newLeave },
+      $set: { lastUpdated: new Date() }
+    }
   );
 
   if (io) {
     io.emit('entity_updated', {
       entity: 'players',
-      data: { id: userId, shiftLeaveStatus: 'pending' },
+      data: { id: userId, shortLeaves: [...(playerDoc.data.shortLeaves || []), newLeave] },
       source: 'request_short_leave',
       timestamp: Date.now()
     });
@@ -1308,26 +1315,31 @@ router.post('/support/request-short-leave', apiKeyGuard, authGuard, asyncHandler
 // 🕐 POST /support/cancel-short-leave
 router.post('/support/cancel-short-leave', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
   const userId = req.user?.id;
+  const { leaveId } = req.body;
   if (!userId) return res.status(401).json({ error: 'Authentication required' });
 
   const playerDoc = await Player.findOne({ id: userId }).lean();
   if (!playerDoc || !playerDoc.data) return res.status(404).json({ error: 'User not found' });
-  if (playerDoc.data.shiftLeaveStatus !== 'pending') {
-    return res.status(400).json({ error: 'No pending leave request to cancel.' });
+
+  const shortLeaves = playerDoc.data.shortLeaves || [];
+  const targetLeave = shortLeaves.find(l => l.id === leaveId);
+  if (!targetLeave || (targetLeave.status !== 'pending' && targetLeave.status !== 'approved')) {
+    return res.status(400).json({ error: 'Leave request cannot be cancelled.' });
   }
+
+  const updatedLeaves = shortLeaves.filter(l => l.id !== leaveId);
 
   await Player.updateOne(
     { id: userId },
     { 
-      $unset: { 'data.shiftLeaveStatus': '', 'data.shiftLeaveDuration': '', 'data.shiftLeaveReason': '' },
-      $set: { lastUpdated: new Date() }
+      $set: { 'data.shortLeaves': updatedLeaves, lastUpdated: new Date() }
     }
   );
 
   if (io) {
     io.emit('entity_updated', {
       entity: 'players',
-      data: { id: userId, shiftLeaveStatus: null, shiftLeaveDuration: null, shiftLeaveReason: null },
+      data: { id: userId, shortLeaves: updatedLeaves },
       source: 'cancel_short_leave',
       timestamp: Date.now()
     });
@@ -1339,7 +1351,7 @@ router.post('/support/cancel-short-leave', apiKeyGuard, authGuard, asyncHandler(
 // 🕐 POST /support/resolve-short-leave
 router.post('/support/resolve-short-leave', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
   const adminId = req.user?.id;
-  const { agentId, action } = req.body; // action: 'approve' or 'reject'
+  const { agentId, leaveId, action } = req.body; // action: 'approve' or 'reject'
   
   if (!adminId) return res.status(401).json({ error: 'Authentication required' });
 
@@ -1354,84 +1366,35 @@ router.post('/support/resolve-short-leave', apiKeyGuard, authGuard, asyncHandler
 
   const agentDoc = await Player.findOne({ id: agentId }).lean();
   if (!agentDoc || !agentDoc.data) return res.status(404).json({ error: 'Agent not found' });
-  if (agentDoc.data.shiftLeaveStatus !== 'pending') {
+
+  const shortLeaves = agentDoc.data.shortLeaves || [];
+  const targetLeave = shortLeaves.find(l => l.id === leaveId);
+  if (!targetLeave || targetLeave.status !== 'pending') {
     return res.status(400).json({ error: 'No pending leave request found' });
   }
 
-  if (action === 'reject') {
-    await Player.updateOne(
-      { id: agentId },
-      { $unset: { 'data.shiftLeaveStatus': '', 'data.shiftLeaveDuration': '', 'data.shiftLeaveReason': '' } }
-    );
-    if (io) {
-      io.emit('entity_updated', {
-        entity: 'players',
-        data: { id: agentId, shiftLeaveStatus: null },
-        source: 'resolve_short_leave',
-        timestamp: Date.now()
-      });
+  const updatedLeaves = shortLeaves.map(l => {
+    if (l.id === leaveId) {
+      return { ...l, status: action === 'approve' ? 'approved' : 'rejected' };
     }
-    return res.json({ success: true, status: 'rejected' });
+    return l;
+  });
+
+  await Player.updateOne(
+    { id: agentId },
+    { $set: { 'data.shortLeaves': updatedLeaves, lastUpdated: new Date() } }
+  );
+
+  if (io) {
+    io.emit('entity_updated', {
+      entity: 'players',
+      data: { id: agentId, shortLeaves: updatedLeaves },
+      source: 'resolve_short_leave',
+      timestamp: Date.now()
+    });
   }
 
-  if (action === 'approve') {
-    // Treat as checkout
-    const now = new Date();
-    const justification = `Approved Short Leave: ${agentDoc.data.shiftLeaveReason}`;
-    
-    const updateSet = {
-      'data.shiftStatus': 'off_shift',
-      'data.shiftCheckoutAt': now.toISOString(),
-      'data.shiftCheckoutJustification': justification,
-      lastUpdated: new Date()
-    };
-    
-    await Player.updateOne(
-      { id: agentId },
-      { 
-        $set: updateSet,
-        $unset: { 'data.shiftLeaveStatus': '', 'data.shiftLeaveDuration': '', 'data.shiftLeaveReason': '' } 
-      }
-    );
-
-    const checkinTime = agentDoc.data.shiftCheckinRounded;
-    const totalShiftMs = checkinTime ? now.getTime() - new Date(checkinTime).getTime() : 0;
-    const SHIFT_LIMIT_MS = 8 * 60 * 60 * 1000;
-    const overtimeMs = Math.max(0, totalShiftMs - SHIFT_LIMIT_MS);
-
-    logAudit(req, 'SUPPORT_SHIFT_CHECKOUT', ['players'], {
-      userId: agentId,
-      name: agentDoc.data.name,
-      email: agentDoc.data.email,
-      username: agentDoc.data.username,
-      checkoutTime: now.toISOString(),
-      checkinRounded: checkinTime,
-      totalShiftMs,
-      overtimeMs,
-      isAutoCheckout: false,
-      justification,
-      adminApproved: true,
-      adminId
-    }).catch(() => {});
-
-    if (io) {
-      io.emit('entity_updated', {
-        entity: 'players',
-        data: { 
-          id: agentId, 
-          shiftStatus: 'off_shift',
-          shiftCheckoutAt: now.toISOString(),
-          shiftLeaveStatus: null
-        },
-        source: 'shift_checkout',
-        timestamp: Date.now()
-      });
-    }
-
-    return res.json({ success: true, status: 'approved' });
-  }
-
-  return res.status(400).json({ error: 'Invalid action' });
+  res.json({ success: true, status: action === 'approve' ? 'approved' : 'rejected' });
 }));
 
   return router;

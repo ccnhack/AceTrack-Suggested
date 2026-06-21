@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AdminGrievancesPanel } from '../components/AdminGrievancesPanel';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { usePlayersStore } from '../stores';
 import { useSupportStore } from '../stores';
@@ -82,9 +83,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
   const [shiftStatus, setShiftStatus] = useState(null);
   const [shiftCheckinRounded, setShiftCheckinRounded] = useState(null);
   const [shiftCheckoutDue, setShiftCheckoutDue] = useState(null);
-  const [shiftLeaveStatus, setShiftLeaveStatus] = useState(null);
-  const [shiftLeaveReason, setShiftLeaveReason] = useState(null);
-  const [shiftLeaveDuration, setShiftLeaveDuration] = useState(null);
+  const [shortLeaves, setShortLeaves] = useState([]);
   const [showCheckoutBanner, setShowCheckoutBanner] = useState(false);
   const [checkoutCountdown, setCheckoutCountdown] = useState('');
   const [checkinLoading, setCheckinLoading] = useState(false);
@@ -95,7 +94,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
 
   // Short Leave State
   const [showShortLeaveModal, setShowShortLeaveModal] = useState(false);
-  const [shortLeaveForm, setShortLeaveForm] = useState({ durationHours: 1, reason: '' });
+  const [shortLeaveForm, setShortLeaveForm] = useState({ id: null, date: getLocalDateStr(), startTime: '14:00', endTime: '15:00', reason: '' });
   const [shortLeaveLoading, setShortLeaveLoading] = useState(false);
 
   // Fetch shift status on mount
@@ -117,9 +116,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
           setShiftStatus(data.shiftStatus);
           setShiftCheckinRounded(data.shiftCheckinRounded);
           setShiftCheckoutDue(data.shiftCheckoutDue);
-          setShiftLeaveStatus(data.shiftLeaveStatus);
-          setShiftLeaveReason(data.shiftLeaveReason);
-          setShiftLeaveDuration(data.shiftLeaveDuration);
+          setShortLeaves(data.shortLeaves || []);
           
           // If not on shift, check if we should show the check-in modal
           if (data.shiftStatus !== 'on_shift') {
@@ -338,18 +335,18 @@ const SupportDashboardScreen = ({ navigation, route }) => {
         headers,
         credentials: 'include',
         body: JSON.stringify({
-          durationHours: shortLeaveForm.durationHours,
+          date: shortLeaveForm.date,
+          startTime: shortLeaveForm.startTime,
+          endTime: shortLeaveForm.endTime,
           reason: shortLeaveForm.reason.trim()
         })
       });
       
       const data = await res.json();
       if (res.ok && data.success) {
-        setShiftLeaveStatus('pending');
-        setShiftLeaveReason(shortLeaveForm.reason.trim());
-        setShiftLeaveDuration(shortLeaveForm.durationHours);
+        // Will be updated via heartbeat/sync, but we can optimistically update or just re-fetch
         setShowShortLeaveModal(false);
-        setShortLeaveForm({ durationHours: 1, reason: '' });
+        setShortLeaveForm({ id: null, date: getLocalDateStr(), startTime: '14:00', endTime: '15:00', reason: '' });
         Alert.alert('Success', 'Short leave requested. Awaiting manager approval.');
       } else {
         Alert.alert('Error', data.error || 'Failed to request leave');
@@ -362,7 +359,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
   };
 
   // 🕐 Handle Cancel Short Leave
-  const handleCancelShortLeave = async () => {
+  const handleCancelShortLeave = async (leaveId) => {
     setShortLeaveLoading(true);
     try {
       const token = await AsyncStorage.getItem('userToken');
@@ -377,14 +374,12 @@ const SupportDashboardScreen = ({ navigation, route }) => {
         method: 'POST',
         headers,
         credentials: 'include',
-        body: JSON.stringify({})
+        body: JSON.stringify({ leaveId })
       });
       
       const data = await res.json();
       if (res.ok && data.success) {
-        setShiftLeaveStatus(null);
-        setShiftLeaveReason(null);
-        setShiftLeaveDuration(null);
+        setShortLeaves(prev => prev.filter(l => l.id !== leaveId));
         Alert.alert('Success', 'Short leave request cancelled.');
       } else {
         Alert.alert('Error', data.error || 'Failed to cancel leave');
@@ -540,16 +535,59 @@ const SupportDashboardScreen = ({ navigation, route }) => {
               <Text style={shiftStyles.modalSubtitle}>Need to step away?</Text>
             </LinearGradient>
             <View style={shiftStyles.modalBody}>
-              <Text style={{ fontSize: 13, color: '#475569', fontWeight: '600', marginBottom: 8 }}>Duration (Hours)</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                <TouchableOpacity onPress={() => setShortLeaveForm(prev => ({ ...prev, durationHours: Math.max(1, prev.durationHours - 1) }))} style={{ padding: 16 }}>
-                  <Ionicons name="remove-circle-outline" size={24} color="#64748B" />
-                </TouchableOpacity>
-                <Text style={{ flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '800', color: '#1E293B' }}>{shortLeaveForm.durationHours} hr</Text>
-                <TouchableOpacity onPress={() => setShortLeaveForm(prev => ({ ...prev, durationHours: Math.min(8, prev.durationHours + 1) }))} style={{ padding: 16 }}>
-                  <Ionicons name="add-circle-outline" size={24} color="#64748B" />
-                </TouchableOpacity>
-              </View>
+              <Text style={{ fontSize: 13, color: '#475569', fontWeight: '600', marginBottom: 8 }}>Time Frame</Text>
+              {Platform.OS === 'web' ? (
+                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4 }}>Date</Text>
+                    <input 
+                      type="date" 
+                      value={shortLeaveForm.date} 
+                      onChange={e => setShortLeaveForm({...shortLeaveForm, date: e.target.value})} 
+                      style={{ padding: 12, borderRadius: 12, border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', width: '100%', fontSize: 15 }} 
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4 }}>Start Time</Text>
+                    <input 
+                      type="time" 
+                      value={shortLeaveForm.startTime} 
+                      onChange={e => setShortLeaveForm({...shortLeaveForm, startTime: e.target.value})} 
+                      style={{ padding: 12, borderRadius: 12, border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', width: '100%', fontSize: 15 }} 
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4 }}>End Time</Text>
+                    <input 
+                      type="time" 
+                      value={shortLeaveForm.endTime} 
+                      onChange={e => setShortLeaveForm({...shortLeaveForm, endTime: e.target.value})} 
+                      style={{ padding: 12, borderRadius: 12, border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', width: '100%', fontSize: 15 }} 
+                    />
+                  </View>
+                </View>
+              ) : (
+                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4 }}>Start (HH:MM)</Text>
+                    <TextInput 
+                      style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, fontSize: 15, borderWidth: 1, borderColor: '#E2E8F0', textAlign: 'center' }}
+                      placeholder="14:00"
+                      value={shortLeaveForm.startTime}
+                      onChangeText={(val) => setShortLeaveForm(prev => ({ ...prev, startTime: val }))}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4 }}>End (HH:MM)</Text>
+                    <TextInput 
+                      style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, fontSize: 15, borderWidth: 1, borderColor: '#E2E8F0', textAlign: 'center' }}
+                      placeholder="15:00"
+                      value={shortLeaveForm.endTime}
+                      onChangeText={(val) => setShortLeaveForm(prev => ({ ...prev, endTime: val }))}
+                    />
+                  </View>
+                </View>
+              )}
 
               <Text style={{ fontSize: 13, color: '#475569', fontWeight: '600', marginBottom: 8 }}>Reason</Text>
               <TextInput 
@@ -713,37 +751,45 @@ const SupportDashboardScreen = ({ navigation, route }) => {
                   </View>
 
                   {/* Short Leave Button / Banner */}
-                  {shiftStatus === 'on_shift' && !shiftLeaveStatus && (
+                  {shiftStatus === 'on_shift' && (
                     <TouchableOpacity 
                       style={{ marginTop: 8, paddingVertical: 8, borderRadius: 8, backgroundColor: 'rgba(245, 158, 11, 0.1)', borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.3)', alignItems: 'center', flexDirection: 'row', justifyContent: 'center' }}
-                      onPress={() => setShowShortLeaveModal(true)}
+                      onPress={() => {
+                        setShortLeaveForm({ id: null, date: getLocalDateStr(), startTime: '14:00', endTime: '15:00', reason: '' });
+                        setShowShortLeaveModal(true);
+                      }}
                     >
                       <Ionicons name="cafe-outline" size={14} color="#F59E0B" style={{ marginRight: 6 }} />
                       <Text style={{ color: '#F59E0B', fontSize: 11, fontWeight: '700' }}>Request Short Leave</Text>
                     </TouchableOpacity>
                   )}
-                  {shiftLeaveStatus === 'pending' && (
-                    <View style={{ marginTop: 8, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, backgroundColor: 'rgba(59, 130, 246, 0.1)', borderWidth: 1, borderColor: 'rgba(59, 130, 246, 0.3)' }}>
+                  {shortLeaves.map((leave, idx) => (
+                    <View key={leave.id || idx} style={{ marginTop: 8, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, backgroundColor: leave.status === 'approved' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(59, 130, 246, 0.1)', borderWidth: 1, borderColor: leave.status === 'approved' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(59, 130, 246, 0.3)' }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, justifyContent: 'space-between' }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Ionicons name="time-outline" size={14} color="#3B82F6" style={{ marginRight: 6 }} />
-                          <Text style={{ color: '#3B82F6', fontSize: 11, fontWeight: '800' }}>Leave Pending</Text>
+                          <Ionicons name={leave.status === 'approved' ? "checkmark-circle" : "time-outline"} size={14} color={leave.status === 'approved' ? "#10B981" : "#3B82F6"} style={{ marginRight: 6 }} />
+                          <Text style={{ color: leave.status === 'approved' ? '#10B981' : '#3B82F6', fontSize: 11, fontWeight: '800', textTransform: 'capitalize' }}>{leave.status} Leave</Text>
                         </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <TouchableOpacity onPress={() => {
-                            setShortLeaveForm({ durationHours: shiftLeaveDuration || 1, reason: shiftLeaveReason || '' });
-                            setShowShortLeaveModal(true);
-                          }}>
-                            <Text style={{ color: '#3B82F6', fontSize: 10, fontWeight: '700', textDecorationLine: 'underline' }}>Modify</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={handleCancelShortLeave}>
-                            <Text style={{ color: '#EF4444', fontSize: 10, fontWeight: '700', textDecorationLine: 'underline' }}>Cancel</Text>
-                          </TouchableOpacity>
-                        </View>
+                        {(leave.status === 'pending' || leave.status === 'approved') && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            {leave.status === 'pending' && (
+                              <TouchableOpacity onPress={() => {
+                                setShortLeaveForm({ ...leave });
+                                setShowShortLeaveModal(true);
+                              }}>
+                                <Text style={{ color: '#3B82F6', fontSize: 10, fontWeight: '700', textDecorationLine: 'underline' }}>Modify</Text>
+                              </TouchableOpacity>
+                            )}
+                            <TouchableOpacity onPress={() => handleCancelShortLeave(leave.id)}>
+                              <Text style={{ color: '#EF4444', fontSize: 10, fontWeight: '700', textDecorationLine: 'underline' }}>Cancel</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
                       </View>
-                      <Text style={{ color: '#94A3B8', fontSize: 9, fontWeight: '600' }}>{shiftLeaveDuration} hr for: {shiftLeaveReason}</Text>
+                      <Text style={{ color: '#94A3B8', fontSize: 9, fontWeight: '600' }}>{leave.date} ({leave.startTime} - {leave.endTime})</Text>
+                      <Text style={{ color: '#94A3B8', fontSize: 9, fontWeight: '600' }} numberOfLines={1}>For: {leave.reason}</Text>
                     </View>
-                  )}
+                  ))}
                 </View>
               )}
 
