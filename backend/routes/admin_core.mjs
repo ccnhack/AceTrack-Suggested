@@ -605,7 +605,13 @@ router.get('/shift-attendance-patterns', requireAdminOrSupport, async (req, res)
                 if (checkinH > schedH || (checkinH === schedH && checkinM > schedM + 10)) {
                     p.lateCheckins++;
                     if (!p.lateCheckinDates) p.lateCheckinDates = [];
-                    if (!p.lateCheckinDates.includes(dateStr)) p.lateCheckinDates.push(dateStr);
+                    // Format: "YYYY-MM-DD|HH:MM|LATEMINS" to allow frontend parsing
+                    const lateMins = ((checkinH - schedH) * 60) + (checkinM - schedM);
+                    const hhStr = checkinH.toString().padStart(2, '0');
+                    const mmStr = checkinM.toString().padStart(2, '0');
+                    const timeStr = `${hhStr}:${mmStr}`;
+                    const entryStr = `${dateStr}|${timeStr}|${lateMins}`;
+                    if (!p.lateCheckinDates.includes(entryStr)) p.lateCheckinDates.push(entryStr);
                 }
             }
 

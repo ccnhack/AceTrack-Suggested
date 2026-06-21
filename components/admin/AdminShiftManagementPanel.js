@@ -603,7 +603,22 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
                                {p.lateCheckinDates?.length > 0 && (
                                  <View style={{ flexDirection: 'row' }}>
                                     <Text style={{ color: '#FCD34D', fontSize: 11, fontWeight: '700', width: 90 }}>Late Check-in:</Text>
-                                    <Text style={{ color: '#E2E8F0', fontSize: 11, flex: 1 }}>{p.lateCheckinDates.map(formatDateDDMMYYYY).join(', ')}</Text>
+                                    <Text style={{ color: '#E2E8F0', fontSize: 11, flex: 1, lineHeight: 16 }}>
+                                      {p.lateCheckinDates.map(item => {
+                                          if (item.includes('|')) {
+                                              const [dateStr, timeStr, mins] = item.split('|');
+                                              let formattedTime = timeStr;
+                                              if (timeStr) {
+                                                  const [h, m] = timeStr.split(':').map(Number);
+                                                  const ampm = h >= 12 ? 'PM' : 'AM';
+                                                  const h12 = h % 12 || 12;
+                                                  formattedTime = `${h12}:${m.toString().padStart(2, '0')} ${ampm}`;
+                                              }
+                                              return `${formatDateDDMMYYYY(dateStr)} - ${formattedTime} (${mins}m late)`;
+                                          }
+                                          return formatDateDDMMYYYY(item);
+                                      }).join('\n')}
+                                    </Text>
                                  </View>
                                )}
                                {p.autoCheckoutDates?.length > 0 && (
