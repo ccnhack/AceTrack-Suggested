@@ -302,9 +302,6 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
             return d.toISOString().split('T')[0];
         };
 
-        for (const log of logs) {
-            const uid = log.details?.userId || log.userId;
-            if (!uid) continue;
         // Utility to generate segments from a shift period and player's short leaves
         const calculateSegments = (uid, checkinTime, checkoutTime, shiftDateStr) => {
             const startTs = new Date(checkinTime).getTime();
