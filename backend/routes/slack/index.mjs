@@ -1572,7 +1572,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
                const players = await Player.find(sanitizedPlayerFilter).limit(100).lean();
                const compactPlayers = players.map(p => {
                   const pd = p.data || {};
-                  return `[Database][Player Record] ID:${p.id} Name:${pd.name || pd.firstName || 'N/A'} Role:${p.role || pd.role || 'N/A'} Status:${pd.supportStatus || pd.status || 'active'} Email:${pd.email || 'N/A'}`;
+                  return `[Database][Player Record] ID:${p.id} Name:${pd.name || pd.firstName || 'N/A'} Role:${p.role || pd.role || 'N/A'} Status:${pd.supportStatus || pd.status || 'active'} Email:${pd.email || 'N/A'} ShortLeaves:${pd.shortLeaves ? JSON.stringify(pd.shortLeaves) : 'None'}`;
                });
                combinedLogsArr.push(...compactPlayers);
             } catch (err) {
