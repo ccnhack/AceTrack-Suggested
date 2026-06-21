@@ -57,9 +57,10 @@ class SupportMetricsService {
         const [endH, endM] = l.endTime.split(':').map(Number);
         
         const startTotalM = startH * 60 + startM;
-        const endTotalM = endH * 60 + endM;
         
-        return currentTotalM >= startTotalM && currentTotalM <= endTotalM;
+        // CRITICAL (v2.6.735): Leave blocks ticket assignment from the start time UNTIL explicitly deleted
+        // The frontend requires them to click "Resume Shift", which deletes the leave.
+        return currentTotalM >= startTotalM;
       });
     };
 

@@ -454,33 +454,23 @@ const SupportDashboardScreen = ({ navigation, route }) => {
     return shortLeaves.find(l => {
       if (l.status !== 'approved' || l.date !== todayStr) return false;
       const [startH, startM] = l.startTime.split(':').map(Number);
-      const [endH, endM] = l.endTime.split(':').map(Number);
-      
       const startObj = new Date(now.getFullYear(), now.getMonth(), now.getDate(), startH, startM);
-      const endObj = new Date(now.getFullYear(), now.getMonth(), now.getDate(), endH, endM);
       
-      return now >= startObj && now <= endObj;
+      // CRITICAL: Leave stays active until explicitly resumed (deleted)
+      return now >= startObj;
     });
   }, [shortLeaves]);
 
   const isCurrentlyOnLeave = !!activeLeave;
-
-  const previousLeaveRef = useRef(isCurrentlyOnLeave);
-  useEffect(() => {
-    if (previousLeaveRef.current && !isCurrentlyOnLeave) {
-      // Transitioned from on leave -> off leave
-      if (Platform.OS === 'web') {
-        window.alert("Your short leave has ended. You are now automatically back ON SHIFT and receiving tickets.");
-      } else {
-        Alert.alert(
-          "Short Leave Ended",
-          "Your short leave duration has elapsed. You are now automatically back ON SHIFT and receiving tickets.",
-          [{ text: "Understood", style: "default" }]
-        );
-      }
-    }
-    previousLeaveRef.current = isCurrentlyOnLeave;
-  }, [isCurrentlyOnLeave]);
+  
+  // Check if they are late from their leave
+  const isLateFromLeave = useMemo(() => {
+    if (!activeLeave) return false;
+    const now = new Date();
+    const [endH, endM] = activeLeave.endTime.split(':').map(Number);
+    const endObj = new Date(now.getFullYear(), now.getMonth(), now.getDate(), endH, endM);
+    return now > endObj;
+  }, [activeLeave]);
 
   const upcomingShortLeaves = useMemo(() => {
     if (!shortLeaves) return [];
@@ -853,14 +843,14 @@ const SupportDashboardScreen = ({ navigation, route }) => {
                 <View style={{ marginTop: 12, paddingHorizontal: 12 }}>
                   <View style={{ 
                     flexDirection: 'row', alignItems: 'center', 
-                    backgroundColor: shiftStatus === 'on_shift' ? (isCurrentlyOnLeave ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)') : 'rgba(239, 68, 68, 0.1)', 
+                    backgroundColor: shiftStatus === 'on_shift' ? (isCurrentlyOnLeave ? (isLateFromLeave ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)') : 'rgba(16, 185, 129, 0.15)') : 'rgba(239, 68, 68, 0.1)', 
                     borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, 
                     borderWidth: 1, 
-                    borderColor: shiftStatus === 'on_shift' ? (isCurrentlyOnLeave ? 'rgba(245, 158, 11, 0.3)' : 'rgba(16, 185, 129, 0.3)') : 'rgba(239, 68, 68, 0.2)' 
+                    borderColor: shiftStatus === 'on_shift' ? (isCurrentlyOnLeave ? (isLateFromLeave ? 'rgba(239, 68, 68, 0.4)' : 'rgba(245, 158, 11, 0.3)') : 'rgba(16, 185, 129, 0.3)') : 'rgba(239, 68, 68, 0.2)' 
                   }}>
-                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: shiftStatus === 'on_shift' ? (isCurrentlyOnLeave ? '#F59E0B' : '#10B981') : '#EF4444', marginRight: 8 }} />
-                    <Text style={{ color: shiftStatus === 'on_shift' ? (isCurrentlyOnLeave ? '#F59E0B' : '#10B981') : '#F87171', fontSize: 11, fontWeight: '800', letterSpacing: 0.5, flex: 1 }}>
-                      {shiftStatus === 'on_shift' ? (isCurrentlyOnLeave ? 'ON SHORT LEAVE' : 'ON SHIFT') : 'OFF SHIFT'}
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: shiftStatus === 'on_shift' ? (isCurrentlyOnLeave ? (isLateFromLeave ? '#EF4444' : '#F59E0B') : '#10B981') : '#EF4444', marginRight: 8 }} />
+                    <Text style={{ color: shiftStatus === 'on_shift' ? (isCurrentlyOnLeave ? (isLateFromLeave ? '#EF4444' : '#F59E0B') : '#10B981') : '#F87171', fontSize: 11, fontWeight: '800', letterSpacing: 0.5, flex: 1 }}>
+                      {shiftStatus === 'on_shift' ? (isCurrentlyOnLeave ? (isLateFromLeave ? 'LATE FROM LEAVE' : 'ON SHORT LEAVE') : 'ON SHIFT') : 'OFF SHIFT'}
                     </Text>
                     {shiftStatus === 'on_shift' && shiftCheckinRounded && (
                       <Text style={{ color: '#94A3B8', fontSize: 9, fontWeight: '600' }}>Since {formatTime(shiftCheckinRounded)}</Text>
@@ -883,11 +873,13 @@ const SupportDashboardScreen = ({ navigation, route }) => {
 
                   {shiftStatus === 'on_shift' && isCurrentlyOnLeave && activeLeave && (
                     <TouchableOpacity 
-                      style={{ marginTop: 8, paddingVertical: 8, borderRadius: 8, backgroundColor: 'rgba(16, 185, 129, 0.1)', borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.3)', alignItems: 'center', flexDirection: 'row', justifyContent: 'center' }}
+                      style={{ marginTop: 8, paddingVertical: 8, borderRadius: 8, backgroundColor: isLateFromLeave ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)', borderWidth: 1, borderColor: isLateFromLeave ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.3)', alignItems: 'center', flexDirection: 'row', justifyContent: 'center' }}
                       onPress={() => handleCancelShortLeave(activeLeave.id)}
                     >
-                      <Ionicons name="play-circle-outline" size={16} color="#10B981" style={{ marginRight: 6 }} />
-                      <Text style={{ color: '#10B981', fontSize: 11, fontWeight: '800' }}>Resume Shift Early</Text>
+                      <Ionicons name={isLateFromLeave ? "warning-outline" : "play-circle-outline"} size={16} color={isLateFromLeave ? "#EF4444" : "#10B981"} style={{ marginRight: 6 }} />
+                      <Text style={{ color: isLateFromLeave ? '#EF4444' : '#10B981', fontSize: 11, fontWeight: '800' }}>
+                        {isLateFromLeave ? 'Resume Shift Now (Overdue)' : 'Resume Shift Early'}
+                      </Text>
                     </TouchableOpacity>
                   )}
                   {upcomingShortLeaves.slice(0, 3).map((leave, idx) => (
