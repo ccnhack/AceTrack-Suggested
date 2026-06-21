@@ -71,7 +71,7 @@ initFirebase();
 // ═══════════════════════════════════════════════════════════════
 // Security Middleware Initialization
 // ═══════════════════════════════════════════════════════════════
-initSecurity({ aceApiKey: ACE_API_KEY, jwtSecret: JWT_SECRET, appVersion: '2.6.713', logAudit });
+initSecurity({ aceApiKey: ACE_API_KEY, jwtSecret: JWT_SECRET, appVersion: '2.6.714', logAudit });
 const { globalApiLimiter, loginLimiter, otpLimiter, passwordResetLimiter, phoneLookupLimiter } = createRateLimiters(APP_VERSION);
 
 initScheduler(loginAttempts, sendSecurityAlert);
@@ -409,7 +409,7 @@ app.use((err, req, res, next) => {
     console.error(`❌ [SERVER_ERROR] ${req.method} ${req.url}:`, err.stack);
     logServerEvent('CRITICAL_ERROR', { url: req.url, error: message });
   }
-  res.status(status).json({ "success": false, "error": message, "version": '2.6.713', "timestamp": getISTDate() });
+  res.status(status).json({ "success": false, "error": message, "version": '2.6.714', "timestamp": getISTDate() });
 });
 
 // ═══════════════════════════════════════════════════════════════

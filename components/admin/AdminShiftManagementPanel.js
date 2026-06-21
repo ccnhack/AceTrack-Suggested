@@ -153,48 +153,7 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
           </View>
         </View>
 
-        {/* Pending Short Leaves */}
-        {activeAgents.filter(a => a.shiftLeaveStatus === 'pending').length > 0 && (
-          <View style={{ marginBottom: 16 }}>
-            <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '700', marginBottom: 8, letterSpacing: 1, textTransform: 'uppercase' }}>Pending Short Leaves</Text>
-            {activeAgents.filter(a => a.shiftLeaveStatus === 'pending').map(agent => (
-              <View key={`leave_${agent.id}`} style={{ backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)', marginBottom: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-                  <SafeAvatar uri={agent.avatar} name={agent.name} role={agent.role} size={32} borderRadius={8} />
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={{ color: '#E2E8F0', fontSize: 13, fontWeight: '700' }}>{agent.name}</Text>
-                    <Text style={{ color: '#F59E0B', fontSize: 11, fontWeight: '600', marginTop: 2 }}>{agent.shiftLeaveDuration} hour(s)</Text>
-                    <Text style={{ color: '#94A3B8', fontSize: 11, marginTop: 4, fontStyle: 'italic' }}>"{agent.shiftLeaveReason}"</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', gap: 6 }}>
-                    {agent.id !== currentUser?.id ? (
-                      <>
-                        <TouchableOpacity 
-                          onPress={() => handleResolveShortLeave(agent.id, 'approve')}
-                          disabled={leaveLoading}
-                          style={{ backgroundColor: 'rgba(16,185,129,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(16,185,129,0.5)' }}
-                        >
-                          <Text style={{ color: '#10B981', fontSize: 11, fontWeight: '800' }}>Approve</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                          onPress={() => handleResolveShortLeave(agent.id, 'reject')}
-                          disabled={leaveLoading}
-                          style={{ backgroundColor: 'rgba(239,68,68,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(239,68,68,0.5)' }}
-                        >
-                          <Text style={{ color: '#F87171', fontSize: 11, fontWeight: '800' }}>Reject</Text>
-                        </TouchableOpacity>
-                      </>
-                    ) : (
-                      <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
-                        <Text style={{ color: '#94A3B8', fontSize: 10, fontStyle: 'italic', fontWeight: '600' }}>Pending Admin Approval</Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
+
 
         {/* Shift Timeline */}
         {onShiftAgents.length === 0 ? (
@@ -293,6 +252,54 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
       {/* 📅 SHIFT HISTORY SECTION                                   */}
       {/* ═══════════════════════════════════════════════════════════ */}
       <ShiftHistorySection allSupportAgents={activeAgents} />
+
+      {/* ═══════════════════════════════════════════════════════════ */}
+      {/* 📅 PENDING SHORT LEAVES                                     */}
+      {/* ═══════════════════════════════════════════════════════════ */}
+      {activeAgents.filter(a => a.shiftLeaveStatus === 'pending').length > 0 && (
+        <View style={{ marginHorizontal: 16, marginBottom: 16, backgroundColor: '#0F172A', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#1E293B' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+            <Ionicons name="time" size={18} color="#F59E0B" style={{ marginRight: 8 }} />
+            <Text style={{ color: '#F8FAFC', fontSize: 15, fontWeight: '900', flex: 1 }}>Pending Short Leaves</Text>
+          </View>
+          {activeAgents.filter(a => a.shiftLeaveStatus === 'pending').map(agent => (
+            <View key={`leave_${agent.id}`} style={{ backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)', marginBottom: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                <SafeAvatar uri={agent.avatar} name={agent.name} role={agent.role} size={32} borderRadius={8} />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={{ color: '#E2E8F0', fontSize: 13, fontWeight: '700' }}>{agent.name}</Text>
+                  <Text style={{ color: '#F59E0B', fontSize: 11, fontWeight: '600', marginTop: 2 }}>{agent.shiftLeaveDuration} hour(s)</Text>
+                  <Text style={{ color: '#94A3B8', fontSize: 11, marginTop: 4, fontStyle: 'italic' }}>"{agent.shiftLeaveReason}"</Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {agent.id !== currentUser?.id ? (
+                    <>
+                      <TouchableOpacity 
+                        onPress={() => handleResolveShortLeave(agent.id, 'approve')}
+                        disabled={leaveLoading}
+                        style={{ backgroundColor: 'rgba(16,185,129,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(16,185,129,0.5)' }}
+                      >
+                        <Text style={{ color: '#10B981', fontSize: 11, fontWeight: '800' }}>Approve</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        onPress={() => handleResolveShortLeave(agent.id, 'reject')}
+                        disabled={leaveLoading}
+                        style={{ backgroundColor: 'rgba(239,68,68,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(239,68,68,0.5)' }}
+                      >
+                        <Text style={{ color: '#F87171', fontSize: 11, fontWeight: '800' }}>Reject</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
+                      <Text style={{ color: '#94A3B8', fontSize: 10, fontStyle: 'italic', fontWeight: '600' }}>Pending Admin Approval</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
 
       {/* Details Modal */}
       <Modal visible={modalState.isOpen} transparent={true} animationType="fade">
