@@ -164,7 +164,7 @@ export default function AdminSlackFeedbackPanel({ onRefresh, onRefreshComplete }
                         {item.userId || 'Unknown User'}
                       </Text>
                       <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '600', marginTop: 2 }} numberOfLines={2}>
-                        {dateStr}
+                        {dateStr} • ID: {item._id || 'N/A'}
                       </Text>
                     </View>
                   </View>
