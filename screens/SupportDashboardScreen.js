@@ -94,6 +94,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
 
   // Short Leave State
   const [showShortLeaveModal, setShowShortLeaveModal] = useState(false);
+  const [showAllLeavesModal, setShowAllLeavesModal] = useState(false);
   const [shortLeaveForm, setShortLeaveForm] = useState({ id: null, date: getLocalDateStr(), startTime: '14:00', endTime: '15:00', reason: '' });
   const [shortLeaveLoading, setShortLeaveLoading] = useState(false);
 
@@ -627,6 +628,65 @@ const SupportDashboardScreen = ({ navigation, route }) => {
   };
 
   // ═══════════════════════════════════════════════════════════════
+  // 🕐 ALL SHORT LEAVES MODAL
+  // ═══════════════════════════════════════════════════════════════
+  const renderAllLeavesModal = () => {
+    if (!showAllLeavesModal) return null;
+    return (
+      <Modal transparent animationType="fade" visible={showAllLeavesModal} onRequestClose={() => setShowAllLeavesModal(false)}>
+        <View style={shiftStyles.modalOverlay}>
+          <View style={[shiftStyles.modalCard, { maxHeight: '80%' }]}>
+            <LinearGradient colors={['#3B82F6', '#2563EB']} style={shiftStyles.modalHeader}>
+              <Ionicons name="list-outline" size={36} color="#FFF" />
+              <Text style={shiftStyles.modalTitle}>All Short Leaves</Text>
+            </LinearGradient>
+            <View style={[shiftStyles.modalBody, { padding: 0 }]}>
+              <ScrollView style={{ padding: 20 }}>
+                {shortLeaves.map((leave, idx) => (
+                  <View key={leave.id || idx} style={{ marginBottom: 12, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 12, backgroundColor: leave.status === 'approved' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(59, 130, 246, 0.1)', borderWidth: 1, borderColor: leave.status === 'approved' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(59, 130, 246, 0.3)' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6, justifyContent: 'space-between' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Ionicons name={leave.status === 'approved' ? "checkmark-circle" : "time-outline"} size={16} color={leave.status === 'approved' ? "#10B981" : "#3B82F6"} style={{ marginRight: 6 }} />
+                        <Text style={{ color: leave.status === 'approved' ? '#10B981' : '#3B82F6', fontSize: 13, fontWeight: '800', textTransform: 'capitalize' }}>{leave.status} Leave</Text>
+                      </View>
+                      {(leave.status === 'pending' || leave.status === 'approved') && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                          {leave.status === 'pending' && (
+                            <TouchableOpacity onPress={() => {
+                              setShowAllLeavesModal(false);
+                              setShortLeaveForm({ ...leave });
+                              setShowShortLeaveModal(true);
+                            }}>
+                              <Text style={{ color: '#3B82F6', fontSize: 12, fontWeight: '700', textDecorationLine: 'underline' }}>Modify</Text>
+                            </TouchableOpacity>
+                          )}
+                          <TouchableOpacity onPress={() => handleCancelShortLeave(leave.id)}>
+                            <Text style={{ color: '#EF4444', fontSize: 12, fontWeight: '700', textDecorationLine: 'underline' }}>Cancel</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={{ color: '#64748B', fontSize: 12, fontWeight: '600' }}>{leave.date} ({leave.startTime} - {leave.endTime})</Text>
+                    <Text style={{ color: '#475569', fontSize: 11, fontWeight: '500', marginTop: 4 }}>For: {leave.reason}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+              <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                <TouchableOpacity 
+                  style={{ backgroundColor: '#F8FAFC', paddingVertical: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}
+                  onPress={() => setShowAllLeavesModal(false)}
+                >
+                  <Text style={{ color: '#64748B', fontSize: 14, fontWeight: '700' }}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  // ═══════════════════════════════════════════════════════════════
   // 🕐 CHECKOUT BANNER (v2.6.673)
   // ═══════════════════════════════════════════════════════════════
   const bannerBg = bannerPulse.interpolate({
@@ -763,7 +823,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
                       <Text style={{ color: '#F59E0B', fontSize: 11, fontWeight: '700' }}>Request Short Leave</Text>
                     </TouchableOpacity>
                   )}
-                  {shortLeaves.map((leave, idx) => (
+                  {shortLeaves.slice(0, 3).map((leave, idx) => (
                     <View key={leave.id || idx} style={{ marginTop: 8, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, backgroundColor: leave.status === 'approved' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(59, 130, 246, 0.1)', borderWidth: 1, borderColor: leave.status === 'approved' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(59, 130, 246, 0.3)' }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, justifyContent: 'space-between' }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -790,6 +850,15 @@ const SupportDashboardScreen = ({ navigation, route }) => {
                       <Text style={{ color: '#94A3B8', fontSize: 9, fontWeight: '600' }} numberOfLines={1}>For: {leave.reason}</Text>
                     </View>
                   ))}
+                  {shortLeaves.length > 3 && (
+                    <TouchableOpacity 
+                      style={{ marginTop: 8, paddingVertical: 8, borderRadius: 8, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)', alignItems: 'center', flexDirection: 'row', justifyContent: 'center' }}
+                      onPress={() => setShowAllLeavesModal(true)}
+                    >
+                      <Ionicons name="list-outline" size={14} color="#94A3B8" style={{ marginRight: 6 }} />
+                      <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '700' }}>View All ({shortLeaves.length})</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
 
@@ -993,6 +1062,9 @@ const SupportDashboardScreen = ({ navigation, route }) => {
       
       {/* 🕐 Short Leave Modal */}
       {renderShortLeaveModal()}
+
+      {/* 🕐 All Short Leaves Modal */}
+      {renderAllLeavesModal()}
     </View>
   );
 
