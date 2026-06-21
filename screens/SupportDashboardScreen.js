@@ -752,7 +752,18 @@ const SupportDashboardScreen = ({ navigation, route }) => {
                    ) : null;
                 })()}
 
-                {!currentUser?.managerId && !currentUser?.teamLeadId && (
+                {!currentUser?.managerId && !currentUser?.teamLeadId && currentUser?.supportLevel?.toLowerCase() === 'manager' && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                    <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#334155', marginRight: 10, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' }}>
+                      <Ionicons name="shield-checkmark" size={16} color="#10B981" />
+                    </View>
+                    <View>
+                      <Text style={{ color: '#E2E8F0', fontSize: 13, fontWeight: '700' }}>System Admin</Text>
+                      <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '600' }}>ADMIN</Text>
+                    </View>
+                  </View>
+                )}
+                {!currentUser?.managerId && !currentUser?.teamLeadId && currentUser?.supportLevel?.toLowerCase() !== 'manager' && (
                    <Text style={{ color: '#64748B', fontSize: 12, fontStyle: 'italic', marginBottom: 12 }}>No hierarchy assigned</Text>
                 )}
               </View>

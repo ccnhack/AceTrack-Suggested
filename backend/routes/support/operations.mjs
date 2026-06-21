@@ -1182,7 +1182,10 @@ router.post('/support/check-out', apiKeyGuard, authGuard, asyncHandler(async (re
   const isEarly = totalShiftMs < 7 * 60 * 60 * 1000 && !isAutoCheckout;
   if (overtimeMs > 0 || isEarly) {
     try {
-      const managerId = playerDoc.data.managerId;
+      let managerId = playerDoc.data.managerId;
+      if (!managerId && playerDoc.data.supportLevel?.toLowerCase() === 'manager') {
+        managerId = 'admin';
+      }
       if (managerId) {
         const managerDoc = await Player.findOne({ id: managerId }).lean();
         const managerData = managerDoc?.data;
@@ -1312,6 +1315,10 @@ router.post('/support/resolve-short-leave', apiKeyGuard, authGuard, asyncHandler
   const adminDoc = await Player.findOne({ id: adminId }).lean();
   if (!adminDoc || !['admin', 'superadmin', 'support'].includes(adminDoc.data?.role)) {
     return res.status(403).json({ error: 'Access denied' });
+  }
+
+  if (adminId === agentId && adminDoc.data?.role !== 'admin' && adminDoc.data?.role !== 'superadmin') {
+    return res.status(403).json({ error: 'You cannot approve your own leave request. Please wait for an Admin.' });
   }
 
   const agentDoc = await Player.findOne({ id: agentId }).lean();

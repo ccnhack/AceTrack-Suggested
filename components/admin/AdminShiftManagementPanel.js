@@ -167,20 +167,28 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
                     <Text style={{ color: '#94A3B8', fontSize: 11, marginTop: 4, fontStyle: 'italic' }}>"{agent.shiftLeaveReason}"</Text>
                   </View>
                   <View style={{ flexDirection: 'row', gap: 6 }}>
-                    <TouchableOpacity 
-                      onPress={() => handleResolveShortLeave(agent.id, 'approve')}
-                      disabled={leaveLoading}
-                      style={{ backgroundColor: 'rgba(16,185,129,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(16,185,129,0.5)' }}
-                    >
-                      <Text style={{ color: '#10B981', fontSize: 11, fontWeight: '800' }}>Approve</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      onPress={() => handleResolveShortLeave(agent.id, 'reject')}
-                      disabled={leaveLoading}
-                      style={{ backgroundColor: 'rgba(239,68,68,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(239,68,68,0.5)' }}
-                    >
-                      <Text style={{ color: '#F87171', fontSize: 11, fontWeight: '800' }}>Reject</Text>
-                    </TouchableOpacity>
+                    {agent.id !== currentUser?.id ? (
+                      <>
+                        <TouchableOpacity 
+                          onPress={() => handleResolveShortLeave(agent.id, 'approve')}
+                          disabled={leaveLoading}
+                          style={{ backgroundColor: 'rgba(16,185,129,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(16,185,129,0.5)' }}
+                        >
+                          <Text style={{ color: '#10B981', fontSize: 11, fontWeight: '800' }}>Approve</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                          onPress={() => handleResolveShortLeave(agent.id, 'reject')}
+                          disabled={leaveLoading}
+                          style={{ backgroundColor: 'rgba(239,68,68,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(239,68,68,0.5)' }}
+                        >
+                          <Text style={{ color: '#F87171', fontSize: 11, fontWeight: '800' }}>Reject</Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
+                        <Text style={{ color: '#94A3B8', fontSize: 10, fontStyle: 'italic', fontWeight: '600' }}>Pending Admin Approval</Text>
+                      </View>
+                    )}
                   </View>
                 </View>
               </View>
