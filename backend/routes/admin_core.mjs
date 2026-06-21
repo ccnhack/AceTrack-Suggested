@@ -603,13 +603,23 @@ router.get('/shift-attendance-patterns', requireAdminOrSupport, async (req, res)
                 const checkinM = checkinIST.getUTCMinutes();
                 if (checkinH > schedH || (checkinH === schedH && checkinM > schedM + 10)) {
                     p.lateCheckins++;
+                    if (!p.lateCheckinDates) p.lateCheckinDates = [];
+                    if (!p.lateCheckinDates.includes(dateStr)) p.lateCheckinDates.push(dateStr);
                 }
             }
 
             if (log.action === 'SUPPORT_SHIFT_CHECKOUT') {
-                if (log.details?.isAutoCheckout) p.autoCheckouts++;
+                if (log.details?.isAutoCheckout) {
+                    p.autoCheckouts++;
+                    if (!p.autoCheckoutDates) p.autoCheckoutDates = [];
+                    if (!p.autoCheckoutDates.includes(dateStr)) p.autoCheckoutDates.push(dateStr);
+                }
                 const totalMs = log.details?.totalShiftMs || 0;
-                if (totalMs > 0 && totalMs < 7 * 3600000 && !log.details?.isAutoCheckout) p.earlyCheckouts++;
+                if (totalMs > 0 && totalMs < 7 * 3600000 && !log.details?.isAutoCheckout) {
+                    p.earlyCheckouts++;
+                    if (!p.earlyCheckoutDates) p.earlyCheckoutDates = [];
+                    if (!p.earlyCheckoutDates.includes(dateStr)) p.earlyCheckoutDates.push(dateStr);
+                }
                 p.totalShiftMs += totalMs;
             }
         }

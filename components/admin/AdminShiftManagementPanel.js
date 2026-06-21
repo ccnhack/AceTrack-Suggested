@@ -121,6 +121,7 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
   const [attendancePatterns, setAttendancePatterns] = useState([]);
   const [showAttendancePatterns, setShowAttendancePatterns] = useState(false);
   const [patternsLoading, setPatternsLoading] = useState(false);
+  const [expandedPatternIdx, setExpandedPatternIdx] = useState(null);
 
   const fetchAttendancePatterns = useCallback(async () => {
     setPatternsLoading(true);
@@ -533,22 +534,59 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
                   const rateColor = p.attendanceRate >= 80 ? '#10B981' : p.attendanceRate >= 50 ? '#FBBF24' : '#EF4444';
                   const lateColor = p.lateCheckins > 3 ? '#EF4444' : p.lateCheckins > 1 ? '#FBBF24' : '#10B981';
                   return (
-                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 8, backgroundColor: idx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent', borderRadius: 8 }}>
-                      <View style={{ flex: 2, flexDirection: 'row', alignItems: 'center' }}>
-                        <SafeAvatar uri={p.avatar} name={p.name} size={22} borderRadius={6} />
-                        <Text style={{ color: '#E2E8F0', fontSize: 11, fontWeight: '600', marginLeft: 8 }} numberOfLines={1}>{p.name}</Text>
-                      </View>
-                      <Text style={{ color: '#A5B4FC', fontSize: 11, fontWeight: '700', flex: 1, textAlign: 'center' }}>{p.daysWorked}/30</Text>
-                      <Text style={{ color: lateColor, fontSize: 11, fontWeight: '700', flex: 1, textAlign: 'center' }}>{p.lateCheckins}</Text>
-                      <Text style={{ color: p.autoCheckouts > 0 ? '#FBBF24' : '#64748B', fontSize: 11, fontWeight: '700', flex: 1, textAlign: 'center' }}>{p.autoCheckouts}</Text>
-                      <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '600', flex: 1, textAlign: 'center' }}>{avgH}h{avgM}m</Text>
-                      <View style={{ flex: 1, alignItems: 'center' }}>
-                        <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 4, height: 6, width: '80%' }}>
-                          <View style={{ backgroundColor: rateColor, borderRadius: 4, height: 6, width: `${Math.min(100, p.attendanceRate)}%` }} />
+                    <TouchableOpacity 
+                      key={idx} 
+                      onPress={() => setExpandedPatternIdx(expandedPatternIdx === idx ? null : idx)}
+                      style={{ paddingVertical: 8, paddingHorizontal: 8, backgroundColor: idx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent', borderRadius: 8 }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={{ flex: 2, flexDirection: 'row', alignItems: 'center' }}>
+                          <SafeAvatar uri={p.avatar} name={p.name} size={22} borderRadius={6} />
+                          <Text style={{ color: '#E2E8F0', fontSize: 11, fontWeight: '600', marginLeft: 8 }} numberOfLines={1}>{p.name}</Text>
                         </View>
-                        <Text style={{ color: rateColor, fontSize: 8, fontWeight: '800', marginTop: 2 }}>{p.attendanceRate}%</Text>
+                        <Text style={{ color: '#A5B4FC', fontSize: 11, fontWeight: '700', flex: 1, textAlign: 'center' }}>{p.daysWorked}/30</Text>
+                        <Text style={{ color: lateColor, fontSize: 11, fontWeight: '700', flex: 1, textAlign: 'center', textDecorationLine: p.lateCheckins > 0 ? 'underline' : 'none' }}>{p.lateCheckins}</Text>
+                        <Text style={{ color: p.autoCheckouts > 0 ? '#FBBF24' : '#64748B', fontSize: 11, fontWeight: '700', flex: 1, textAlign: 'center', textDecorationLine: p.autoCheckouts > 0 ? 'underline' : 'none' }}>{p.autoCheckouts}</Text>
+                        <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '600', flex: 1, textAlign: 'center' }}>{avgH}h{avgM}m</Text>
+                        <View style={{ flex: 1, alignItems: 'center' }}>
+                          <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 4, height: 6, width: '80%' }}>
+                            <View style={{ backgroundColor: rateColor, borderRadius: 4, height: 6, width: `${Math.min(100, p.attendanceRate)}%` }} />
+                          </View>
+                          <Text style={{ color: rateColor, fontSize: 8, fontWeight: '800', marginTop: 2 }}>{p.attendanceRate}%</Text>
+                        </View>
                       </View>
-                    </View>
+                      
+                      {expandedPatternIdx === idx && (
+                        <View style={{ marginTop: 10, padding: 10, backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
+                          <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '800', marginBottom: 6, letterSpacing: 0.5 }}>DETAILED BREAKDOWN</Text>
+                          {(!p.lateCheckinDates?.length && !p.autoCheckoutDates?.length && !p.earlyCheckoutDates?.length) ? (
+                             <Text style={{ color: '#64748B', fontSize: 11, fontStyle: 'italic' }}>No anomalies recorded in this period.</Text>
+                          ) : (
+                             <View style={{ gap: 4 }}>
+                               {p.lateCheckinDates?.length > 0 && (
+                                 <View style={{ flexDirection: 'row' }}>
+                                    <Text style={{ color: '#FCD34D', fontSize: 11, fontWeight: '700', width: 90 }}>Late Check-in:</Text>
+                                    <Text style={{ color: '#E2E8F0', fontSize: 11, flex: 1 }}>{p.lateCheckinDates.map(formatDateDDMMYYYY).join(', ')}</Text>
+                                 </View>
+                               )}
+                               {p.autoCheckoutDates?.length > 0 && (
+                                 <View style={{ flexDirection: 'row' }}>
+                                    <Text style={{ color: '#FBBF24', fontSize: 11, fontWeight: '700', width: 90 }}>Auto Checkout:</Text>
+                                    <Text style={{ color: '#E2E8F0', fontSize: 11, flex: 1 }}>{p.autoCheckoutDates.map(formatDateDDMMYYYY).join(', ')}</Text>
+                                 </View>
+                               )}
+                               {p.earlyCheckoutDates?.length > 0 && (
+                                 <View style={{ flexDirection: 'row' }}>
+                                    <Text style={{ color: '#F59E0B', fontSize: 11, fontWeight: '700', width: 90 }}>Early Checkout:</Text>
+                                    <Text style={{ color: '#E2E8F0', fontSize: 11, flex: 1 }}>{p.earlyCheckoutDates.map(formatDateDDMMYYYY).join(', ')}</Text>
+                                 </View>
+                               )}
+                             </View>
+                          )}
+                        </View>
+                      )}
+                    </TouchableOpacity>
                   );
                 })}
               </View>
