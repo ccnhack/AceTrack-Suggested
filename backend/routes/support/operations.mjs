@@ -1305,6 +1305,37 @@ router.post('/support/request-short-leave', apiKeyGuard, authGuard, asyncHandler
   res.json({ success: true });
 }));
 
+// 🕐 POST /support/cancel-short-leave
+router.post('/support/cancel-short-leave', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Authentication required' });
+
+  const playerDoc = await Player.findOne({ id: userId }).lean();
+  if (!playerDoc || !playerDoc.data) return res.status(404).json({ error: 'User not found' });
+  if (playerDoc.data.shiftLeaveStatus !== 'pending') {
+    return res.status(400).json({ error: 'No pending leave request to cancel.' });
+  }
+
+  await Player.updateOne(
+    { id: userId },
+    { 
+      $unset: { 'data.shiftLeaveStatus': '', 'data.shiftLeaveDuration': '', 'data.shiftLeaveReason': '' },
+      $set: { lastUpdated: new Date() }
+    }
+  );
+
+  if (io) {
+    io.emit('entity_updated', {
+      entity: 'players',
+      data: { id: userId, shiftLeaveStatus: null, shiftLeaveDuration: null, shiftLeaveReason: null },
+      source: 'cancel_short_leave',
+      timestamp: Date.now()
+    });
+  }
+
+  res.json({ success: true });
+}));
+
 // 🕐 POST /support/resolve-short-leave
 router.post('/support/resolve-short-leave', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
   const adminId = req.user?.id;

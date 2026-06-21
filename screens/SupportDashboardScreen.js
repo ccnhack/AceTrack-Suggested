@@ -361,6 +361,41 @@ const SupportDashboardScreen = ({ navigation, route }) => {
     }
   };
 
+  // 🕐 Handle Cancel Short Leave
+  const handleCancelShortLeave = async () => {
+    setShortLeaveLoading(true);
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const headers = { 
+        'Content-Type': 'application/json',
+        'x-ace-api-key': config.PUBLIC_APP_ID, 
+        'x-user-id': currentUser.id 
+      };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${config.API_BASE_URL}/api/v1/support/cancel-short-leave`, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({})
+      });
+      
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setShiftLeaveStatus(null);
+        setShiftLeaveReason(null);
+        setShiftLeaveDuration(null);
+        Alert.alert('Success', 'Short leave request cancelled.');
+      } else {
+        Alert.alert('Error', data.error || 'Failed to cancel leave');
+      }
+    } catch (e) {
+      Alert.alert('Error', `Network error: ${e.message}`);
+    } finally {
+      setShortLeaveLoading(false);
+    }
+  };
+
   // 🕐 [SESSION HEARTBEAT] (v2.6.345)
   useEffect(() => {
     if (!currentUser || currentUser.role !== 'support') return;
@@ -689,9 +724,22 @@ const SupportDashboardScreen = ({ navigation, route }) => {
                   )}
                   {shiftLeaveStatus === 'pending' && (
                     <View style={{ marginTop: 8, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, backgroundColor: 'rgba(59, 130, 246, 0.1)', borderWidth: 1, borderColor: 'rgba(59, 130, 246, 0.3)' }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                        <Ionicons name="time-outline" size={14} color="#3B82F6" style={{ marginRight: 6 }} />
-                        <Text style={{ color: '#3B82F6', fontSize: 11, fontWeight: '800' }}>Leave Pending</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, justifyContent: 'space-between' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Ionicons name="time-outline" size={14} color="#3B82F6" style={{ marginRight: 6 }} />
+                          <Text style={{ color: '#3B82F6', fontSize: 11, fontWeight: '800' }}>Leave Pending</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <TouchableOpacity onPress={() => {
+                            setShortLeaveForm({ durationHours: shiftLeaveDuration || 1, reason: shiftLeaveReason || '' });
+                            setShowShortLeaveModal(true);
+                          }}>
+                            <Text style={{ color: '#3B82F6', fontSize: 10, fontWeight: '700', textDecorationLine: 'underline' }}>Modify</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={handleCancelShortLeave}>
+                            <Text style={{ color: '#EF4444', fontSize: 10, fontWeight: '700', textDecorationLine: 'underline' }}>Cancel</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                       <Text style={{ color: '#94A3B8', fontSize: 9, fontWeight: '600' }}>{shiftLeaveDuration} hr for: {shiftLeaveReason}</Text>
                     </View>
