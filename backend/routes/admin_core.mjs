@@ -222,7 +222,7 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
 
         // Build a map of player names for enrichment
         const userIds = [...new Set(logs.map(l => l.details?.userId || l.userId))];
-        const playerDocs = await User.find({ id: { $in: userIds } }).select('id data.name data.avatar data.email data.supportLevel data.managerId data.isLive data.liveSessionStart').lean();
+        const playerDocs = await User.find({ id: { $in: userIds } }).select('id data.name data.avatar data.email data.supportLevel data.managerId data.isLive data.liveSessionStart data.shortLeaves').lean();
         const playerMap = {};
         const managerIds = new Set();
         for (const p of playerDocs) {
@@ -233,7 +233,8 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                 avatar: p.data?.avatar || '',
                 email: p.data?.email || '',
                 supportLevel: p.data?.supportLevel || '',
-                managerId
+                managerId,
+                shortLeaves: p.data?.shortLeaves || []
             };
         }
         // Fetch manager names
@@ -304,6 +305,104 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
         for (const log of logs) {
             const uid = log.details?.userId || log.userId;
             if (!uid) continue;
+        // Utility to generate segments from a shift period and player's short leaves
+        const calculateSegments = (uid, checkinTime, checkoutTime, shiftDateStr) => {
+            const startTs = new Date(checkinTime).getTime();
+            const endTs = checkoutTime ? new Date(checkoutTime).getTime() : Date.now();
+            let totalShiftMs = checkoutTime ? (endTs - startTs) : null;
+            
+            const leaves = playerMap[uid]?.shortLeaves || [];
+            // Find leaves for this shift's date
+            const shiftLeaves = leaves.filter(l => 
+                l.date === shiftDateStr && 
+                (l.status === 'approved' || l.status === 'completed')
+            );
+            
+            const segments = [];
+            let currentCursor = startTs;
+            let isOnBreak = false;
+            
+            // Sort leaves by start time
+            shiftLeaves.sort((a, b) => {
+                const aMins = a.startTime.split(':').map(Number).reduce((h, m) => h * 60 + m);
+                const bMins = b.startTime.split(':').map(Number).reduce((h, m) => h * 60 + m);
+                return aMins - bMins;
+            });
+
+            for (const l of shiftLeaves) {
+                // Parse leave times
+                const [startH, startM] = l.startTime.split(':').map(Number);
+                const dStart = new Date(checkinTime);
+                dStart.setUTCHours(startH - 5);
+                dStart.setUTCMinutes(startM - 30); // simplistic IST to UTC conversion
+                // Actually safer to construct in IST
+                const leaveStartIso = `${shiftDateStr}T${l.startTime}:00+05:30`;
+                const leaveStartTs = new Date(leaveStartIso).getTime();
+                
+                let leaveEndTs;
+                if (l.status === 'completed' && l.actualReturnTime) {
+                    const leaveEndIso = `${shiftDateStr}T${l.actualReturnTime}:00+05:30`;
+                    leaveEndTs = new Date(leaveEndIso).getTime();
+                } else if (l.status === 'approved') {
+                    leaveEndTs = Date.now(); // Still on break
+                    isOnBreak = true;
+                }
+                
+                if (!leaveEndTs) continue;
+                
+                // Clip leave to shift boundaries
+                const clippedStart = Math.max(startTs, leaveStartTs);
+                const clippedEnd = Math.min(endTs, leaveEndTs);
+                
+                if (clippedStart < clippedEnd) {
+                    // Create preceding active segment
+                    if (clippedStart > currentCursor) {
+                        segments.push({
+                            type: 'shift',
+                            start: currentCursor,
+                            end: clippedStart,
+                            durationMs: clippedStart - currentCursor
+                        });
+                    }
+                    
+                    // Create break segment
+                    const breakDurationMs = clippedEnd - clippedStart;
+                    if (totalShiftMs !== null) {
+                        totalShiftMs -= breakDurationMs;
+                    }
+                    
+                    segments.push({
+                        type: 'break',
+                        start: clippedStart,
+                        end: clippedEnd,
+                        durationMs: breakDurationMs,
+                        justification: l.reason || 'Short Leave',
+                        lateDurationMinutes: l.lateDurationMinutes || null
+                    });
+                    
+                    currentCursor = clippedEnd;
+                }
+            }
+            
+            // Final active segment
+            if (currentCursor < endTs && !isOnBreak) {
+                segments.push({
+                    type: 'shift',
+                    start: currentCursor,
+                    end: checkoutTime ? endTs : null,
+                    durationMs: checkoutTime ? (endTs - currentCursor) : null
+                });
+            }
+            
+            // Sort segments descending
+            segments.sort((a, b) => b.start - a.start);
+            
+            return { segments, totalShiftMs, isOnBreak };
+        };
+
+        for (const log of logs) {
+            const uid = log.details?.userId || log.userId;
+            if (!uid) continue;
 
             if (log.action === 'SUPPORT_SHIFT_CHECKIN') {
                 if (!checkinMap[uid]) checkinMap[uid] = [];
@@ -312,13 +411,21 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                 const pending = checkinMap[uid];
                 const checkinLog = pending && pending.length > 0 ? pending.shift() : null;
 
-                // Use actual checkin time for duration calculation (not rounded)
                 const actualCheckinTime = checkinLog?.details?.actualTime || checkinLog?.timestamp || log.details?.checkinRounded || null;
                 const actualCheckoutTime = log.details?.checkoutTime || log.timestamp;
+                const dateStr = getIstDateString(log.timestamp);
+                
                 let totalShiftMs = 0;
+                let segments = [];
+                let isOnBreak = false;
+                
                 if (actualCheckinTime && actualCheckoutTime) {
-                    totalShiftMs = new Date(actualCheckoutTime).getTime() - new Date(actualCheckinTime).getTime();
+                    const res = calculateSegments(uid, actualCheckinTime, actualCheckoutTime, dateStr);
+                    totalShiftMs = res.totalShiftMs;
+                    segments = res.segments;
+                    isOnBreak = res.isOnBreak;
                 }
+
                 const EIGHT_HOURS_MS = 8 * 60 * 60 * 1000;
                 const SEVEN_HOURS_MS = 7 * 60 * 60 * 1000;
                 const overtimeMs = Math.max(0, totalShiftMs - EIGHT_HOURS_MS);
@@ -336,12 +443,14 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                     checkinRounded: checkinLog?.details?.roundedTime || log.details?.checkinRounded || null,
                     checkoutTime: actualCheckoutTime,
                     totalShiftMs,
+                    segments,
+                    isOnBreak,
                     activeDurationMs: calculateActiveTime(uid, actualCheckinTime, actualCheckoutTime),
                     overtimeMs,
                     isAutoCheckout: !!log.details?.isAutoCheckout,
                     isEarlyCheckout: totalShiftMs < SEVEN_HOURS_MS && !log.details?.isAutoCheckout,
                     justification: log.details?.justification || null,
-                    date: getIstDateString(log.timestamp)
+                    date: dateStr
                 });
             }
         }
@@ -350,6 +459,11 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
         for (const uid of Object.keys(checkinMap)) {
             for (const orphan of checkinMap[uid]) {
                 const mgrId = playerMap[uid]?.managerId || '';
+                const actualCheckinTime = orphan.details?.actualTime || orphan.details?.roundedTime || orphan.timestamp;
+                const dateStr = getIstDateString(orphan.timestamp);
+                
+                const res = calculateSegments(uid, actualCheckinTime, null, dateStr);
+                
                 shifts.push({
                     userId: uid,
                     name: playerMap[uid]?.name || uid,
@@ -358,16 +472,18 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                     supportLevel: playerMap[uid]?.supportLevel || '',
                     managerId: mgrId,
                     managerName: mgrId ? (managerMap[mgrId] || mgrId) : '',
-                    checkinTime: orphan.details?.actualTime || orphan.details?.roundedTime || orphan.timestamp,
+                    checkinTime: actualCheckinTime,
                     checkinRounded: orphan.details?.roundedTime || null,
                     checkoutTime: null,
                     totalShiftMs: null,
-                    activeDurationMs: calculateActiveTime(uid, orphan.details?.actualTime || orphan.details?.roundedTime || orphan.timestamp, null),
+                    segments: res.segments,
+                    isOnBreak: res.isOnBreak,
+                    activeDurationMs: calculateActiveTime(uid, actualCheckinTime, null),
                     overtimeMs: 0,
                     isAutoCheckout: false,
                     isEarlyCheckout: false,
                     justification: null,
-                    date: getIstDateString(orphan.timestamp)
+                    date: dateStr
                 });
             }
         }

@@ -1017,6 +1017,7 @@ const GroupedShiftCard = ({ shifts }) => {
   let totalDurationMs = 0;
   let totalActiveDurationMs = 0;
   let hasInProgress = false;
+  let hasOnBreak = false;
   let hasAutoCheckout = false;
   let hasEarlyCheckout = false;
   let totalOvertimeMs = 0;
@@ -1024,6 +1025,9 @@ const GroupedShiftCard = ({ shifts }) => {
   shifts.forEach(s => {
     if (s.totalShiftMs != null) totalDurationMs += s.totalShiftMs;
     else hasInProgress = true;
+    
+    if (s.isOnBreak) hasOnBreak = true;
+    
     if (s.activeDurationMs != null) totalActiveDurationMs += s.activeDurationMs;
     if (s.isAutoCheckout) hasAutoCheckout = true;
     if (s.isEarlyCheckout) hasEarlyCheckout = true;
@@ -1055,11 +1059,15 @@ const GroupedShiftCard = ({ shifts }) => {
         
         {/* Aggregated Badges */}
         <View style={{ flexDirection: 'row', gap: 4 }}>
-          {hasInProgress && (
+          {hasOnBreak ? (
+            <View style={{ backgroundColor: 'rgba(245,158,11,0.2)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+              <Text style={{ color: '#FBBF24', fontSize: 9, fontWeight: '800' }}>ON BREAK</Text>
+            </View>
+          ) : hasInProgress ? (
             <View style={{ backgroundColor: 'rgba(99,102,241,0.2)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
               <Text style={{ color: '#818CF8', fontSize: 9, fontWeight: '800' }}>IN PROGRESS</Text>
             </View>
-          )}
+          ) : null}
           {hasAutoCheckout && (
             <View style={{ backgroundColor: 'rgba(245,158,11,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
               <Text style={{ color: '#FBBF24', fontSize: 9, fontWeight: '800' }}>AUTO</Text>
@@ -1085,13 +1093,61 @@ const GroupedShiftCard = ({ shifts }) => {
 
       {/* Shift Segments List */}
       <View style={{ gap: 6 }}>
-        {shifts.map((shift, idx) => {
+        {shifts.map((shift, shiftIdx) => {
+            // Render explicit segments if available
+            if (shift.segments && shift.segments.length > 0) {
+                return shift.segments.map((seg, segIdx) => {
+                    const startStr = seg.start ? new Date(seg.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
+                    const endStr = seg.end ? new Date(seg.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
+                    const durStr = seg.durationMs != null ? formatDuration(seg.durationMs) : 'In Progress';
+                    
+                    if (seg.type === 'break') {
+                        return (
+                            <View key={`${shiftIdx}-${segIdx}`} style={{ backgroundColor: 'rgba(245,158,11,0.05)', padding: 10, borderRadius: 8, borderLeftWidth: 2, borderLeftColor: '#F59E0B' }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Ionicons name="cafe-outline" size={12} color="#F59E0B" style={{ marginRight: 6 }} />
+                                        <Text style={{ color: '#FDE68A', fontSize: 12, fontWeight: '600' }}>{startStr} <Text style={{ color: '#D97706' }}>to</Text> {endStr}</Text>
+                                    </View>
+                                    <View style={{ alignItems: 'flex-end' }}>
+                                        <Text style={{ color: '#FCD34D', fontSize: 11, fontWeight: '700' }}>{durStr} {seg.lateDurationMinutes ? `(Late ${seg.lateDurationMinutes}m)` : ''}</Text>
+                                        <Text style={{ color: '#F59E0B', fontSize: 10, fontWeight: '600', marginTop: 2 }}>Break</Text>
+                                    </View>
+                                </View>
+                                {seg.justification && (
+                                    <View style={{ marginTop: 6 }}>
+                                        <Text style={{ color: '#FBBF24', fontSize: 10, fontStyle: 'italic' }}>"{seg.justification}"</Text>
+                                    </View>
+                                )}
+                            </View>
+                        );
+                    }
+                    
+                    // Active shift segment
+                    return (
+                        <View key={`${shiftIdx}-${segIdx}`} style={{ backgroundColor: 'rgba(0,0,0,0.2)', padding: 10, borderRadius: 8 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Ionicons name="time-outline" size={12} color="#6366F1" style={{ marginRight: 6 }} />
+                                    <Text style={{ color: '#E2E8F0', fontSize: 12, fontWeight: '600' }}>{startStr} <Text style={{ color: '#64748B' }}>to</Text> {endStr}</Text>
+                                </View>
+                                <View style={{ alignItems: 'flex-end' }}>
+                                    <Text style={{ color: '#A5B4FC', fontSize: 11, fontWeight: '700' }}>{durStr}</Text>
+                                    <Text style={{ color: '#10B981', fontSize: 10, fontWeight: '600', marginTop: 2 }}>Actual Active</Text>
+                                </View>
+                            </View>
+                        </View>
+                    );
+                });
+            }
+            
+            // Fallback for older data without explicit segments
             const checkinStr = shift.checkinTime ? new Date(shift.checkinTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
             const checkoutStr = shift.checkoutTime ? new Date(shift.checkoutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
             const durStr = shift.totalShiftMs != null ? formatDuration(shift.totalShiftMs) : 'In Progress';
             const activeDurStr = shift.activeDurationMs != null ? formatDuration(shift.activeDurationMs) : '0m';
             return (
-                <View key={idx} style={{ backgroundColor: 'rgba(0,0,0,0.2)', padding: 10, borderRadius: 8 }}>
+                <View key={shiftIdx} style={{ backgroundColor: 'rgba(0,0,0,0.2)', padding: 10, borderRadius: 8 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <Ionicons name="time-outline" size={12} color="#6366F1" style={{ marginRight: 6 }} />
