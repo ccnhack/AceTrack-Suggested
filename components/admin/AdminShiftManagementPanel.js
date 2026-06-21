@@ -614,7 +614,14 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
                                                   const h12 = h % 12 || 12;
                                                   formattedTime = `${h12}:${m.toString().padStart(2, '0')} ${ampm}`;
                                               }
-                                              return `${formatDateDDMMYYYY(dateStr)} - ${formattedTime} (${mins}m late)`;
+                                              let durationStr = `${mins}m`;
+                                              const mNum = parseInt(mins, 10);
+                                              if (!isNaN(mNum) && mNum >= 60) {
+                                                  const h = Math.floor(mNum / 60);
+                                                  const rem = mNum % 60;
+                                                  durationStr = rem > 0 ? `${h}h ${rem}m` : `${h}h`;
+                                              }
+                                              return `${formatDateDDMMYYYY(dateStr)} - ${formattedTime} (${durationStr} late)`;
                                           }
                                           return formatDateDDMMYYYY(item);
                                       }).join('\n')}
