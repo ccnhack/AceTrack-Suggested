@@ -677,6 +677,12 @@ router.get('/shift-anomalies', requireAdmin, async (req, res) => {
             timestamp: { $gte: start, $lte: end }
         }).sort({ timestamp: 1 }).lean();
 
+        const getIstDateString = (ts) => {
+            const d = new Date(ts);
+            d.setTime(d.getTime() + (5.5 * 60 * 60 * 1000));
+            return d.toISOString().split('T')[0];
+        };
+
         const userIds = [...new Set(logs.map(l => l.details?.userId || l.userId))];
         const playerDocs = await User.find({ id: { $in: userIds } }).select('id data.name data.avatar data.supportLevel data.shortLeaves').lean();
         const playerMap = {};
@@ -689,17 +695,67 @@ router.get('/shift-anomalies', requireAdmin, async (req, res) => {
             };
         }
 
-        // Build per-user anomaly counters
+        // Build per-user anomaly counters & check sequences
         const userStats = {};
+        const anomalies = [];
+        const pendingCheckins = {};
+
         for (const log of logs) {
             const uid = log.details?.userId || log.userId;
             if (!uid) continue;
             if (!userStats[uid]) userStats[uid] = { autoCheckouts: 0, overtimeMs: 0, breakExceededDays: new Set() };
 
-            if (log.action === 'SUPPORT_SHIFT_CHECKOUT') {
+            if (log.action === 'SUPPORT_SHIFT_CHECKIN') {
+                if (pendingCheckins[uid]) {
+                    anomalies.push({
+                        type: 'overlapping_checkin',
+                        severity: 'warning',
+                        agentId: uid,
+                        agentName: playerMap[uid]?.name || uid,
+                        agentAvatar: playerMap[uid]?.avatar || '',
+                        details: `Consecutive check-in without check-out on ${getIstDateString(log.timestamp)}`,
+                        occurrences: 1
+                    });
+                }
+                pendingCheckins[uid] = log;
+            } else if (log.action === 'SUPPORT_SHIFT_CHECKOUT') {
                 if (log.details?.isAutoCheckout) userStats[uid].autoCheckouts++;
                 const totalMs = log.details?.totalShiftMs || 0;
-                if (totalMs > 8 * 3600000) userStats[uid].overtimeMs += (totalMs - 8 * 3600000);
+                
+                if (totalMs > 8 * 3600000) {
+                    userStats[uid].overtimeMs += (totalMs - 8 * 3600000);
+                    if (!log.details?.overtimeJustification) {
+                        anomalies.push({
+                            type: 'pending_overtime',
+                            severity: 'warning',
+                            agentId: uid,
+                            agentName: playerMap[uid]?.name || uid,
+                            agentAvatar: playerMap[uid]?.avatar || '',
+                            details: `Pending overtime justification for shift on ${getIstDateString(log.timestamp)}`,
+                            occurrences: 1
+                        });
+                    }
+                }
+                pendingCheckins[uid] = null;
+            }
+        }
+
+        // Check for orphan checkins
+        const nowMs = Date.now();
+        for (const [uid, log] of Object.entries(pendingCheckins)) {
+            if (log) {
+                const ageMs = nowMs - new Date(log.timestamp).getTime();
+                if (ageMs > 14 * 3600000) {
+                    anomalies.push({
+                        type: 'orphan_checkin',
+                        severity: 'critical',
+                        agentId: uid,
+                        agentName: playerMap[uid]?.name || uid,
+                        agentAvatar: playerMap[uid]?.avatar || '',
+                        details: `Checked in ${Math.floor(ageMs/3600000)}h ago but never checked out`,
+                        occurrences: 1
+                    });
+                }
             }
         }
 
@@ -733,7 +789,6 @@ router.get('/shift-anomalies', requireAdmin, async (req, res) => {
         }
 
         // Build anomaly alerts
-        const anomalies = [];
         for (const [uid, stats] of Object.entries(userStats)) {
             if (stats.autoCheckouts >= 2) {
                 anomalies.push({

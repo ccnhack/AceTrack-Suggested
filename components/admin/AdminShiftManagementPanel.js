@@ -122,6 +122,7 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
   const [showAttendancePatterns, setShowAttendancePatterns] = useState(false);
   const [patternsLoading, setPatternsLoading] = useState(false);
   const [expandedPatternIdx, setExpandedPatternIdx] = useState(null);
+  const [activeMainTab, setActiveMainTab] = useState('Dashboard');
 
   const fetchAttendancePatterns = useCallback(async () => {
     setPatternsLoading(true);
@@ -321,57 +322,92 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
 
   return (
     <View style={styles.container}>
-      {/* ═══════════════════════════════════════════════════════════ */}
-      {/* ⚠️ ANOMALY ALERTS (Admin Only)                             */}
-      {/* ═══════════════════════════════════════════════════════════ */}
-      {isAdmin && anomalies.length > 0 && (
-        <View style={{ marginHorizontal: 16, marginTop: 8, marginBottom: 16, backgroundColor: '#0F172A', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
-            <Ionicons name="warning" size={18} color="#EF4444" style={{ marginRight: 8 }} />
-            <Text style={{ color: '#FCA5A5', fontSize: 15, fontWeight: '900', flex: 1 }}>Anomaly Alerts</Text>
-            <View style={{ backgroundColor: 'rgba(239,68,68,0.2)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 }}>
-              <Text style={{ color: '#F87171', fontSize: 11, fontWeight: '800' }}>{anomalies.length} Alert{anomalies.length !== 1 ? 's' : ''}</Text>
-            </View>
-          </View>
-          <View style={{ gap: 8 }}>
-            {anomalies.map((a, idx) => {
-              const isCritical = a.severity === 'critical';
-              const iconMap = {
-                excessive_auto_checkouts: 'log-out-outline',
-                break_policy_violation: 'cafe-outline',
-                chronic_late_returns: 'alarm-outline',
-                excessive_overtime: 'flame-outline'
-              };
-              const labelMap = {
-                excessive_auto_checkouts: 'Auto-Checkouts',
-                break_policy_violation: 'Break Exceeded',
-                chronic_late_returns: 'Late Returns',
-                excessive_overtime: 'Excess Overtime'
-              };
-              return (
-                <View key={idx} style={{ backgroundColor: isCritical ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.08)', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: isCritical ? 'rgba(239,68,68,0.25)' : 'rgba(245,158,11,0.2)' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <SafeAvatar uri={a.agentAvatar} name={a.agentName} size={28} borderRadius={8} />
-                    <View style={{ flex: 1, marginLeft: 10 }}>
-                      <Text style={{ color: '#F8FAFC', fontSize: 12, fontWeight: '700' }}>{a.agentName}</Text>
-                      <Text style={{ color: isCritical ? '#FCA5A5' : '#FDE68A', fontSize: 10, marginTop: 2 }}>{a.details}</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <View style={{ backgroundColor: isCritical ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                        <Text style={{ color: isCritical ? '#F87171' : '#FBBF24', fontSize: 8, fontWeight: '900' }}>{isCritical ? 'CRITICAL' : 'WARNING'}</Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Ionicons name={iconMap[a.type] || 'alert-circle-outline'} size={12} color={isCritical ? '#F87171' : '#FBBF24'} />
-                        <Text style={{ color: isCritical ? '#FCA5A5' : '#FDE68A', fontSize: 9, fontWeight: '700', marginLeft: 4 }}>{labelMap[a.type] || a.type}</Text>
-                      </View>
-                    </View>
-                  </View>
+      <View style={{ flexDirection: 'row', paddingHorizontal: 16, marginTop: 16, marginBottom: 8, gap: 12 }}>
+        {['Dashboard', 'Anomalies & Alerts'].map(tab => (
+          <TouchableOpacity 
+            key={tab}
+            onPress={() => setActiveMainTab(tab)}
+            style={{ 
+              paddingVertical: 8, paddingHorizontal: 16, 
+              backgroundColor: activeMainTab === tab ? '#6366F1' : 'rgba(255,255,255,0.05)', 
+              borderRadius: 8, borderWidth: 1, 
+              borderColor: activeMainTab === tab ? '#818CF8' : 'rgba(255,255,255,0.1)' 
+            }}
+          >
+            <Text style={{ color: activeMainTab === tab ? '#FFF' : '#94A3B8', fontSize: 12, fontWeight: '700' }}>
+              {tab === 'Anomalies & Alerts' && anomalies.length > 0 ? `${tab} (${anomalies.length})` : tab}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {activeMainTab === 'Anomalies & Alerts' ? (
+        <View style={{ flex: 1, marginHorizontal: 16 }}>
+          {isAdmin && anomalies.length > 0 ? (
+            <View style={{ marginTop: 8, marginBottom: 16, backgroundColor: '#0F172A', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+                <Ionicons name="warning" size={18} color="#EF4444" style={{ marginRight: 8 }} />
+                <Text style={{ color: '#FCA5A5', fontSize: 15, fontWeight: '900', flex: 1 }}>Anomaly Alerts</Text>
+                <View style={{ backgroundColor: 'rgba(239,68,68,0.2)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 }}>
+                  <Text style={{ color: '#F87171', fontSize: 11, fontWeight: '800' }}>{anomalies.length} Alert{anomalies.length !== 1 ? 's' : ''}</Text>
                 </View>
-              );
-            })}
-          </View>
+              </View>
+              <ScrollView style={{ maxHeight: 600 }} showsVerticalScrollIndicator={false}>
+                <View style={{ gap: 8 }}>
+                  {anomalies.map((a, idx) => {
+                    const isCritical = a.severity === 'critical';
+                    const iconMap = {
+                      excessive_auto_checkouts: 'log-out-outline',
+                      break_policy_violation: 'cafe-outline',
+                      chronic_late_returns: 'alarm-outline',
+                      excessive_overtime: 'flame-outline',
+                      orphan_checkin: 'help-circle-outline',
+                      overlapping_checkin: 'duplicate-outline',
+                      pending_overtime: 'time-outline'
+                    };
+                    const labelMap = {
+                      excessive_auto_checkouts: 'Auto-Checkouts',
+                      break_policy_violation: 'Break Exceeded',
+                      chronic_late_returns: 'Late Returns',
+                      excessive_overtime: 'Excess Overtime',
+                      orphan_checkin: 'Orphan Check-In',
+                      overlapping_checkin: 'Overlapping',
+                      pending_overtime: 'Pending OT'
+                    };
+                    return (
+                      <View key={idx} style={{ backgroundColor: isCritical ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.08)', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: isCritical ? 'rgba(239,68,68,0.25)' : 'rgba(245,158,11,0.2)' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <SafeAvatar uri={a.agentAvatar} name={a.agentName} size={28} borderRadius={8} />
+                          <View style={{ flex: 1, marginLeft: 10 }}>
+                            <Text style={{ color: '#F8FAFC', fontSize: 12, fontWeight: '700' }}>{a.agentName}</Text>
+                            <Text style={{ color: isCritical ? '#FCA5A5' : '#FDE68A', fontSize: 10, marginTop: 2 }}>{a.details}</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <View style={{ backgroundColor: isCritical ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                              <Text style={{ color: isCritical ? '#F87171' : '#FBBF24', fontSize: 8, fontWeight: '900' }}>{isCritical ? 'CRITICAL' : 'WARNING'}</Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                              <Ionicons name={iconMap[a.type] || 'alert-circle-outline'} size={12} color={isCritical ? '#F87171' : '#FBBF24'} />
+                              <Text style={{ color: isCritical ? '#FCA5A5' : '#FDE68A', fontSize: 9, fontWeight: '700', marginLeft: 4 }}>{labelMap[a.type] || a.type}</Text>
+                            </View>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            </View>
+          ) : (
+            <View style={{ alignItems: 'center', padding: 40, backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 20, marginTop: 8 }}>
+              <Ionicons name="checkmark-circle-outline" size={48} color="#10B981" />
+              <Text style={{ color: '#A7F3D0', fontSize: 16, fontWeight: '800', marginTop: 16 }}>All Clear!</Text>
+              <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: 8, textAlign: 'center' }}>No shift anomalies detected across the team right now.</Text>
+            </View>
+          )}
         </View>
-      )}
+      ) : (
+        <>
 
       <View style={{ marginHorizontal: 16, marginTop: 8, marginBottom: 16, backgroundColor: '#0F172A', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#1E293B' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
@@ -786,6 +822,8 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
         </View>
       </Modal>
       {renderLeaveHistoryModal()}
+      </>
+      )}
     </View>
   );
 };
