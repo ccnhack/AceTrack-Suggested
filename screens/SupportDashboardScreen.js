@@ -287,14 +287,20 @@ const SupportDashboardScreen = ({ navigation, route }) => {
     if (isAuto) {
       doCheckout();
     } else {
-      Alert.alert(
-        '🚪 Confirm Checkout',
-        'Are you sure you want to end your shift?\nNo new tickets will be assigned to you after checkout.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Check Out', style: 'destructive', onPress: doCheckout }
-        ]
-      );
+      if (Platform.OS === 'web') {
+        if (window.confirm('🚪 Confirm Checkout\n\nAre you sure you want to end your shift?\nNo new tickets will be assigned to you after checkout.')) {
+          doCheckout();
+        }
+      } else {
+        Alert.alert(
+          '🚪 Confirm Checkout',
+          'Are you sure you want to end your shift?\nNo new tickets will be assigned to you after checkout.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Check Out', style: 'destructive', onPress: doCheckout }
+          ]
+        );
+      }
     }
   }, [currentUser, checkoutLoading]);
 
