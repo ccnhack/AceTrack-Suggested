@@ -1,6 +1,6 @@
 import express from 'express';
 import { AuditLog, OrgSetting } from '../models/AdminCoreModels.mjs';
-import { Player as User } from '../models/index.mjs';
+import { Player as User, PlayerSession } from '../models/index.mjs';
 import { apiKeyGuard, authGuard } from '../middleware/security.mjs';
 
 export default function createAdminCoreRoutes() {
@@ -222,7 +222,7 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
 
         // Build a map of player names for enrichment
         const userIds = [...new Set(logs.map(l => l.details?.userId || l.userId))];
-        const playerDocs = await User.find({ id: { $in: userIds } }).select('id data.name data.avatar data.email data.supportLevel data.managerId').lean();
+        const playerDocs = await User.find({ id: { $in: userIds } }).select('id data.name data.avatar data.email data.supportLevel data.managerId data.isLive data.liveSessionStart').lean();
         const playerMap = {};
         const managerIds = new Set();
         for (const p of playerDocs) {
@@ -242,6 +242,53 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
         for (const m of managerDocs) {
             managerMap[m.id] = m.data?.name || m.id;
         }
+
+        const playerSessions = await PlayerSession.find({
+            userId: { $in: userIds },
+            $or: [
+               { startTime: { $gte: start, $lte: end } },
+               { endTime: { $gte: start, $lte: end } }
+            ]
+        }).lean();
+
+        const calculateActiveTime = (uid, shiftStartTs, shiftEndTs) => {
+            if (!shiftStartTs) return 0;
+            const shiftStart = new Date(shiftStartTs).getTime();
+            const shiftEnd = shiftEndTs ? new Date(shiftEndTs).getTime() : Date.now();
+            let intervals = playerSessions
+                .filter(s => s.userId === uid)
+                .map(s => {
+                    const st = new Date(s.startTime).getTime();
+                    const et = s.endTime ? new Date(s.endTime).getTime() : Date.now();
+                    return [Math.max(shiftStart, st), Math.min(shiftEnd, et)];
+                })
+                .filter(i => i[0] < i[1]);
+            
+            const pData = playerMap[uid];
+            if (pData?.isLive && pData?.liveSessionStart) {
+                const st = new Date(pData.liveSessionStart).getTime();
+                const et = Date.now();
+                const clippedStart = Math.max(shiftStart, st);
+                const clippedEnd = Math.min(shiftEnd, et);
+                if (clippedStart < clippedEnd) {
+                    intervals.push([clippedStart, clippedEnd]);
+                }
+            }
+
+            if (intervals.length === 0) return 0;
+            intervals.sort((a, b) => a[0] - b[0]);
+            let merged = [intervals[0]];
+            for (let i = 1; i < intervals.length; i++) {
+                let current = intervals[i];
+                let last = merged[merged.length - 1];
+                if (current[0] <= last[1]) {
+                    last[1] = Math.max(last[1], current[1]);
+                } else {
+                    merged.push(current);
+                }
+            }
+            return merged.reduce((sum, interval) => sum + (interval[1] - interval[0]), 0);
+        };
 
         // Pair checkins with checkouts per user per day
         const shifts = [];
@@ -289,6 +336,7 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                     checkinRounded: checkinLog?.details?.roundedTime || log.details?.checkinRounded || null,
                     checkoutTime: actualCheckoutTime,
                     totalShiftMs,
+                    activeDurationMs: calculateActiveTime(uid, actualCheckinTime, actualCheckoutTime),
                     overtimeMs,
                     isAutoCheckout: !!log.details?.isAutoCheckout,
                     isEarlyCheckout: totalShiftMs < SEVEN_HOURS_MS && !log.details?.isAutoCheckout,
@@ -314,6 +362,7 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                     checkinRounded: orphan.details?.roundedTime || null,
                     checkoutTime: null,
                     totalShiftMs: null,
+                    activeDurationMs: calculateActiveTime(uid, orphan.details?.actualTime || orphan.details?.roundedTime || orphan.timestamp, null),
                     overtimeMs: 0,
                     isAutoCheckout: false,
                     isEarlyCheckout: false,

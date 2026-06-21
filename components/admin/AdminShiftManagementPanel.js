@@ -859,6 +859,7 @@ const GroupedShiftCard = ({ shifts }) => {
   const baseUser = shifts[0]; // All segments share the same employee profile details
   
   let totalDurationMs = 0;
+  let totalActiveDurationMs = 0;
   let hasInProgress = false;
   let hasAutoCheckout = false;
   let hasEarlyCheckout = false;
@@ -867,6 +868,7 @@ const GroupedShiftCard = ({ shifts }) => {
   shifts.forEach(s => {
     if (s.totalShiftMs != null) totalDurationMs += s.totalShiftMs;
     else hasInProgress = true;
+    if (s.activeDurationMs != null) totalActiveDurationMs += s.activeDurationMs;
     if (s.isAutoCheckout) hasAutoCheckout = true;
     if (s.isEarlyCheckout) hasEarlyCheckout = true;
     if (s.overtimeMs > 0) totalOvertimeMs += s.overtimeMs;
@@ -874,6 +876,9 @@ const GroupedShiftCard = ({ shifts }) => {
 
   const durationStr = totalDurationMs > 0 ? formatDuration(totalDurationMs) : '0m';
   const finalDurationStr = hasInProgress ? (totalDurationMs > 0 ? `${durationStr} + In Progress` : 'In Progress') : durationStr;
+  
+  const activeDurationStr = totalActiveDurationMs > 0 ? formatDuration(totalActiveDurationMs) : '0m';
+  const finalActiveDurationStr = hasInProgress ? (totalActiveDurationMs > 0 ? `${activeDurationStr} + In Progress` : 'In Progress') : activeDurationStr;
   const overtimeStr = totalOvertimeMs > 0 ? `+${Math.floor(totalOvertimeMs / 60000)}m` : null;
 
   return (
@@ -928,6 +933,7 @@ const GroupedShiftCard = ({ shifts }) => {
             const checkinStr = shift.checkinTime ? new Date(shift.checkinTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
             const checkoutStr = shift.checkoutTime ? new Date(shift.checkoutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
             const durStr = shift.totalShiftMs != null ? formatDuration(shift.totalShiftMs) : 'In Progress';
+            const activeDurStr = shift.activeDurationMs != null ? formatDuration(shift.activeDurationMs) : '0m';
             return (
                 <View key={idx} style={{ backgroundColor: 'rgba(0,0,0,0.2)', padding: 10, borderRadius: 8 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -935,7 +941,10 @@ const GroupedShiftCard = ({ shifts }) => {
                             <Ionicons name="time-outline" size={12} color="#6366F1" style={{ marginRight: 6 }} />
                             <Text style={{ color: '#E2E8F0', fontSize: 12, fontWeight: '600' }}>{checkinStr} <Text style={{ color: '#64748B' }}>to</Text> {checkoutStr}</Text>
                         </View>
-                        <Text style={{ color: '#A5B4FC', fontSize: 11, fontWeight: '700' }}>{durStr}</Text>
+                        <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={{ color: '#A5B4FC', fontSize: 11, fontWeight: '700' }}>{durStr}</Text>
+                            <Text style={{ color: '#10B981', fontSize: 10, fontWeight: '600', marginTop: 2 }}>Actual Active: {activeDurStr}</Text>
+                        </View>
                     </View>
                     {shift.justification && (
                         <View style={{ marginTop: 6, backgroundColor: 'rgba(245,158,11,0.05)', padding: 6, borderRadius: 6, borderLeftWidth: 2, borderLeftColor: '#F59E0B' }}>
@@ -949,9 +958,15 @@ const GroupedShiftCard = ({ shifts }) => {
 
       {/* Total Duration Footer */}
       {shifts.length > 1 && (
-        <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>TOTAL ACTIVE DURATION</Text>
-            <Text style={{ color: '#10B981', fontSize: 13, fontWeight: '800' }}>{finalDurationStr}</Text>
+        <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', gap: 4 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>TOTAL SHIFT DURATION</Text>
+                <Text style={{ color: '#A5B4FC', fontSize: 12, fontWeight: '800' }}>{finalDurationStr}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>TOTAL ACTIVE DURATION</Text>
+                <Text style={{ color: '#10B981', fontSize: 13, fontWeight: '800' }}>{finalActiveDurationStr}</Text>
+            </View>
         </View>
       )}
     </View>
