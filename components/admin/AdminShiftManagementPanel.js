@@ -573,6 +573,7 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
           </View>
         </View>
       </Modal>
+      {renderLeaveHistoryModal()}
     </View>
   );
 };
@@ -1118,7 +1119,6 @@ const GroupedShiftCard = ({ shifts }) => {
             </View>
         </View>
       )}
-      {renderLeaveHistoryModal()}
     </View>
   );
 };
