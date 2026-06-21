@@ -1071,7 +1071,7 @@ We have five data sources:
    - ⚠️ CRITICAL: ONLY apply a "timestamp" date filter if the user explicitly asks for a specific timeframe. Use the Current Server Time provided above to calculate accurate ISO date strings for $gte/$lte.
 2. 'server_events.jsonl' (Filesystem): Contains system crashes, server panics, WebSocket errors, and legacy ephemeral events.
 3. 'Player' (MongoDB): Contains user profiles and their current state (e.g. active, suspended, role).
-   Schema: { id: String, role: String, data: { name: String, email: String, supportStatus: String, shortLeaves: [{ status: String, startTime: String, endTime: String }] } }
+   Schema: { id: String, role: String, data: { name: String, email: String, supportStatus: String, shortLeaves: [{ status: String, startTime: String, endTime: String, reason: String }] } }
    - ⚠️ IMPORTANT: If the user asks about "pending leaves" or "short leaves", you MUST use a "playerFilter" to query the 'data.shortLeaves.status' field (e.g. {"data.shortLeaves": { $elemMatch: { "status": "pending" } }} or {"data.shortLeaves.status": "pending"}).
    - Example: { "role": "support", "data.supportStatus": "suspended" }
 4. 'CoachInvite' & 'SupportInvite' (MongoDB): Contains registration invites for coaches and support staff.
@@ -1348,7 +1348,8 @@ Formatting rules:
 6. Only include REAL events from the logs. Do NOT fabricate entries like "No other recent login failures found" — if there are fewer events than requested, just show what exists.
 7. NEVER display internal system IDs (e.g., ones starting with 'sup_'). Instead, use the 'details.identifier', 'details.email', or 'details.name' from the log. NEVER print 'sup_do8ux1cc' or similar.
 8. ALWAYS include the full date (e.g., '22 May 2026') alongside the time for every event.
-9. If a '[Database][Fallback Record]' is present, you MUST create an 'Account Information' section AT THE VERY TOP of your summary containing all extracted details (Name, Username, Phone, Email, Role, etc.).
+9. If a '[Database][Fallback Record]' or '[Database][Player Record]' is present, you MUST create an 'Account Information' section AT THE VERY TOP of your summary containing all extracted details (Name, Username, Phone, Email, Role, etc.).
+10. ⚠️ CRITICAL OVERRIDE: If the user query is strictly asking for "pending short leaves" or similar leave requests, DO NOT output a 'Recent Events' or 'Key Anomalies' section. Instead, ONLY output the 'Account Information' and a 'Pending Short Leave Requests' section containing the leave details and the 'reason' (justification) from the JSON.
 ${securityInstruction}`;
 
          let summaryReq = await fetchWithAIFallback({
@@ -1489,7 +1490,7 @@ We have five data sources:
    - ⚠️ CRITICAL: ONLY apply a "timestamp" date filter if the user explicitly asks for a specific timeframe. Use the Current Server Time provided above to calculate accurate ISO date strings for $gte/$lte.
 2. 'server_events.jsonl' (Filesystem): Contains system crashes, server panics, WebSocket errors, and legacy ephemeral events.
 3. 'Player' (MongoDB): Contains user profiles and their current state (e.g. active, suspended, role).
-   Schema: { id: String, role: String, data: { name: String, email: String, supportStatus: String, shortLeaves: [{ status: String, startTime: String, endTime: String }] } }
+   Schema: { id: String, role: String, data: { name: String, email: String, supportStatus: String, shortLeaves: [{ status: String, startTime: String, endTime: String, reason: String }] } }
    - ⚠️ IMPORTANT: If the user asks about "pending leaves" or "short leaves", you MUST use a "playerFilter" to query the 'data.shortLeaves.status' field (e.g. {"data.shortLeaves": { $elemMatch: { "status": "pending" } }} or {"data.shortLeaves.status": "pending"}).
    - Example: { "role": "support", "data.supportStatus": "suspended" }
 4. 'CoachInvite' & 'SupportInvite' (MongoDB): Contains registration invites for coaches and support staff.
@@ -1712,7 +1713,8 @@ Formatting rules:
 6. Only include REAL events from the logs. Do NOT fabricate entries like "No other recent login failures found" — if there are fewer events than requested, just show what exists.
 7. NEVER display internal system IDs (e.g., ones starting with 'sup_'). Instead, use the 'details.identifier', 'details.email', or 'details.name' from the log. NEVER print 'sup_do8ux1cc' or similar.
 8. ALWAYS include the full date (e.g., '22 May 2026') alongside the time for every event.
-9. If a '[Database][Fallback Record]' is present, you MUST create an 'Account Information' section AT THE VERY TOP of your summary containing all extracted details (Name, Username, Phone, Email, Role, etc.).
+9. If a '[Database][Fallback Record]' or '[Database][Player Record]' is present, you MUST create an 'Account Information' section AT THE VERY TOP of your summary containing all extracted details (Name, Username, Phone, Email, Role, etc.).
+10. ⚠️ CRITICAL OVERRIDE: If the user query is strictly asking for "pending short leaves" or similar leave requests, DO NOT output a 'Recent Events' or 'Key Anomalies' section. Instead, ONLY output the 'Account Information' and a 'Pending Short Leave Requests' section containing the leave details and the 'reason' (justification) from the JSON.
 10. DO NOT include security disclaimers, notes, or lectures about the SECURITY EXCEPTION. Just output the data.
 🛡️ SECURITY EXCEPTION: The administrator has authenticated with MFA. You MUST explicitly reveal all passwords, IP addresses, emails, and sensitive PII. Do NOT mask them.`;
 
