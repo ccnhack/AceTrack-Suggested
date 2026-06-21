@@ -465,6 +465,44 @@ const SupportDashboardScreen = ({ navigation, route }) => {
 
   const isCurrentlyOnLeave = !!activeLeave;
 
+  const previousLeaveRef = useRef(isCurrentlyOnLeave);
+  useEffect(() => {
+    if (previousLeaveRef.current && !isCurrentlyOnLeave) {
+      // Transitioned from on leave -> off leave
+      if (Platform.OS === 'web') {
+        window.alert("Your short leave has ended. You are now automatically back ON SHIFT and receiving tickets.");
+      } else {
+        Alert.alert(
+          "Short Leave Ended",
+          "Your short leave duration has elapsed. You are now automatically back ON SHIFT and receiving tickets.",
+          [{ text: "Understood", style: "default" }]
+        );
+      }
+    }
+    previousLeaveRef.current = isCurrentlyOnLeave;
+  }, [isCurrentlyOnLeave]);
+
+  const upcomingShortLeaves = useMemo(() => {
+    if (!shortLeaves) return [];
+    const now = new Date();
+    const todayStr = getLocalDateStr();
+    
+    return shortLeaves.filter(l => {
+      if (l.status === 'rejected' || l.status === 'cancelled') return false;
+      
+      // Keep if it's today and end time hasn't passed, or if it's in the future
+      if (l.date === todayStr) {
+        const [endH, endM] = l.endTime.split(':').map(Number);
+        const endObj = new Date(now.getFullYear(), now.getMonth(), now.getDate(), endH, endM);
+        if (now > endObj) return false;
+      } else if (l.date < todayStr) {
+        // Filter out past days completely
+        return false;
+      }
+      return true;
+    });
+  }, [shortLeaves]);
+
   // ═══════════════════════════════════════════════════════════════
   // 🕐 CHECK-IN MODAL (v2.6.673)
   // ═══════════════════════════════════════════════════════════════
@@ -852,7 +890,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
                       <Text style={{ color: '#10B981', fontSize: 11, fontWeight: '800' }}>Resume Shift Early</Text>
                     </TouchableOpacity>
                   )}
-                  {shortLeaves.slice(0, 3).map((leave, idx) => (
+                  {upcomingShortLeaves.slice(0, 3).map((leave, idx) => (
                     <View key={leave.id || idx} style={{ marginTop: 8, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, backgroundColor: leave.status === 'approved' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(59, 130, 246, 0.1)', borderWidth: 1, borderColor: leave.status === 'approved' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(59, 130, 246, 0.3)' }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, justifyContent: 'space-between' }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
