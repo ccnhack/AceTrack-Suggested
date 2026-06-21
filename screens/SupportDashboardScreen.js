@@ -121,9 +121,18 @@ const SupportDashboardScreen = ({ navigation, route }) => {
           
           // If not on shift, check if we should show the check-in modal
           if (data.shiftStatus !== 'on_shift') {
+            let hasCheckedInToday = false;
+            if (data.shiftCheckinRounded) {
+              const checkinDate = new Date(data.shiftCheckinRounded);
+              const localCheckinStr = `${checkinDate.getFullYear()}-${String(checkinDate.getMonth() + 1).padStart(2, '0')}-${String(checkinDate.getDate()).padStart(2, '0')}`;
+              if (localCheckinStr === getLocalDateStr()) {
+                hasCheckedInToday = true;
+              }
+            }
+
             const todayKey = `checkin_muted_${currentUser.id}_${getLocalDateStr()}`;
             const isMuted = await AsyncStorage.getItem(todayKey);
-            if (!isMuted) {
+            if (!isMuted && !hasCheckedInToday) {
               setShowCheckinModal(true);
             }
           }
