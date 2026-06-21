@@ -1412,7 +1412,12 @@ router.post('/support/resolve-short-leave', apiKeyGuard, authGuard, asyncHandler
 
   const updatedLeaves = shortLeaves.map(l => {
     if (l.id === leaveId) {
-      return { ...l, status: action === 'approve' ? 'approved' : 'rejected' };
+      return { 
+        ...l, 
+        status: action === 'approve' ? 'approved' : 'rejected',
+        resolvedByName: adminDoc.data?.name || 'Admin',
+        resolvedByRole: adminDoc.data?.role === 'admin' || adminDoc.data?.role === 'superadmin' ? 'Admin' : 'Manager'
+      };
     }
     return l;
   });

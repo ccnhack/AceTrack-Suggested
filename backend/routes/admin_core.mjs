@@ -379,7 +379,9 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                         end: clippedEnd,
                         durationMs: breakDurationMs,
                         justification: l.reason || 'Short Leave',
-                        lateDurationMinutes: l.lateDurationMinutes || null
+                        lateDurationMinutes: l.lateDurationMinutes || null,
+                        resolvedByName: l.resolvedByName || null,
+                        resolvedByRole: l.resolvedByRole || null
                     });
                     
                     currentCursor = clippedEnd;

@@ -1301,9 +1301,14 @@ const GroupedShiftCard = ({ shifts }) => {
                                         <Text style={{ color: '#F59E0B', fontSize: 10, fontWeight: '600', marginTop: 2 }}>Break</Text>
                                     </View>
                                 </View>
-                                {seg.justification && (
+                                {(seg.justification || seg.resolvedByName) && (
                                     <View style={{ marginTop: 6 }}>
-                                        <Text style={{ color: '#FBBF24', fontSize: 10, fontStyle: 'italic' }}>"{seg.justification}"</Text>
+                                        {seg.justification ? <Text style={{ color: '#FBBF24', fontSize: 10, fontStyle: 'italic' }}>"{seg.justification}"</Text> : null}
+                                        {seg.resolvedByName && (
+                                            <Text style={{ color: '#FCD34D', fontSize: 9, marginTop: 2, fontWeight: '600' }}>
+                                                Approved by {seg.resolvedByRole} ({seg.resolvedByName})
+                                            </Text>
+                                        )}
                                     </View>
                                 )}
                             </View>
