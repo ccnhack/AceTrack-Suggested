@@ -1108,6 +1108,16 @@ const GroupedShiftCard = ({ shifts }) => {
                                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                         <Ionicons name="cafe-outline" size={12} color="#F59E0B" style={{ marginRight: 6 }} />
                                         <Text style={{ color: '#FDE68A', fontSize: 12, fontWeight: '600' }}>{startStr} <Text style={{ color: '#D97706' }}>to</Text> {endStr}</Text>
+                                        {segIdx === 0 && shift.isAutoCheckout && (
+                                            <View style={{ backgroundColor: 'rgba(245,158,11,0.15)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 }}>
+                                                <Text style={{ color: '#FBBF24', fontSize: 8, fontWeight: '800' }}>AUTO</Text>
+                                            </View>
+                                        )}
+                                        {segIdx === 0 && shift.isEarlyCheckout && (
+                                            <View style={{ backgroundColor: 'rgba(245,158,11,0.15)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 }}>
+                                                <Text style={{ color: '#F59E0B', fontSize: 8, fontWeight: '800' }}>EARLY</Text>
+                                            </View>
+                                        )}
                                     </View>
                                     <View style={{ alignItems: 'flex-end' }}>
                                         <Text style={{ color: '#FCD34D', fontSize: 11, fontWeight: '700' }}>{durStr} {seg.lateDurationMinutes ? `(Late ${seg.lateDurationMinutes}m)` : ''}</Text>
@@ -1130,6 +1140,16 @@ const GroupedShiftCard = ({ shifts }) => {
                                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                     <Ionicons name="time-outline" size={12} color="#6366F1" style={{ marginRight: 6 }} />
                                     <Text style={{ color: '#E2E8F0', fontSize: 12, fontWeight: '600' }}>{startStr} <Text style={{ color: '#64748B' }}>to</Text> {endStr}</Text>
+                                    {segIdx === 0 && shift.isAutoCheckout && (
+                                        <View style={{ backgroundColor: 'rgba(245,158,11,0.15)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 }}>
+                                            <Text style={{ color: '#FBBF24', fontSize: 8, fontWeight: '800' }}>AUTO</Text>
+                                        </View>
+                                    )}
+                                    {segIdx === 0 && shift.isEarlyCheckout && (
+                                        <View style={{ backgroundColor: 'rgba(245,158,11,0.15)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 }}>
+                                            <Text style={{ color: '#F59E0B', fontSize: 8, fontWeight: '800' }}>EARLY</Text>
+                                        </View>
+                                    )}
                                 </View>
                                 <View style={{ alignItems: 'flex-end' }}>
                                     <Text style={{ color: '#A5B4FC', fontSize: 11, fontWeight: '700' }}>{durStr}</Text>
@@ -1152,6 +1172,16 @@ const GroupedShiftCard = ({ shifts }) => {
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <Ionicons name="time-outline" size={12} color="#6366F1" style={{ marginRight: 6 }} />
                             <Text style={{ color: '#E2E8F0', fontSize: 12, fontWeight: '600' }}>{checkinStr} <Text style={{ color: '#64748B' }}>to</Text> {checkoutStr}</Text>
+                            {shift.isAutoCheckout && (
+                                <View style={{ backgroundColor: 'rgba(245,158,11,0.15)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 }}>
+                                    <Text style={{ color: '#FBBF24', fontSize: 8, fontWeight: '800' }}>AUTO</Text>
+                                </View>
+                            )}
+                            {shift.isEarlyCheckout && (
+                                <View style={{ backgroundColor: 'rgba(245,158,11,0.15)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 }}>
+                                    <Text style={{ color: '#F59E0B', fontSize: 8, fontWeight: '800' }}>EARLY</Text>
+                                </View>
+                            )}
                         </View>
                         <View style={{ alignItems: 'flex-end' }}>
                             <Text style={{ color: '#A5B4FC', fontSize: 11, fontWeight: '700' }}>{durStr}</Text>
