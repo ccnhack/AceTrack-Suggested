@@ -86,11 +86,64 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
   }, [fetchTeamAnalytics]);
 
   const { currentUser } = useAuth();
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'superadmin';
+
+  // ═══════════════════════════════════════════════════════════════
+  // ⚠️ ANOMALY ALERTS STATE (Admin Only)
+  // ═══════════════════════════════════════════════════════════════
+  const [anomalies, setAnomalies] = useState([]);
+  const [anomaliesLoading, setAnomaliesLoading] = useState(false);
+
+  const fetchAnomalies = useCallback(async () => {
+    if (!isAdmin) return;
+    setAnomaliesLoading(true);
+    try {
+      const token = await storage.getItem('userToken');
+      const headers = { 
+        'x-user-id': currentUser?.id || 'admin',
+        'x-ace-api-key': config.ACE_API_KEY || config.PUBLIC_APP_ID
+      };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await apiFetch(`${config.API_BASE_URL}/api/v1/admin-core/shift-anomalies`, { headers, credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setAnomalies(data.anomalies || []);
+      }
+    } catch (e) { console.warn('[SHIFT] Failed to fetch anomalies'); }
+    finally { setAnomaliesLoading(false); }
+  }, [isAdmin, currentUser?.id]);
+
+  useEffect(() => { fetchAnomalies(); }, [fetchAnomalies]);
+
+  // ═══════════════════════════════════════════════════════════════
+  // 📊 ATTENDANCE PATTERNS STATE
+  // ═══════════════════════════════════════════════════════════════
+  const [attendancePatterns, setAttendancePatterns] = useState([]);
+  const [showAttendancePatterns, setShowAttendancePatterns] = useState(false);
+  const [patternsLoading, setPatternsLoading] = useState(false);
+
+  const fetchAttendancePatterns = useCallback(async () => {
+    setPatternsLoading(true);
+    try {
+      const token = await storage.getItem('userToken');
+      const headers = { 
+        'x-user-id': currentUser?.id || 'admin',
+        'x-ace-api-key': config.ACE_API_KEY || config.PUBLIC_APP_ID
+      };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await apiFetch(`${config.API_BASE_URL}/api/v1/admin-core/shift-attendance-patterns`, { headers, credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setAttendancePatterns(data.patterns || []);
+      }
+    } catch (e) { console.warn('[SHIFT] Failed to fetch patterns'); }
+    finally { setPatternsLoading(false); }
+  }, [currentUser?.id]);
 
   let allSupportAgents = (players || []).filter(p => (['support', 'admin', 'superadmin'].includes(p.role) || p.supportLevel) && p.id !== 'admin');
   
   if (currentUser?.supportLevel === 'Manager') {
-    allSupportAgents = allSupportAgents.filter(p => p.managerId === currentUser.id || p.id === currentUser.id);
+    allSupportAgents = allSupportAgents.filter(p => p.managerId === currentUser.id);
   }
   const activeAgents = allSupportAgents.filter(a => {
     const status = (a.supportStatus || a.status || 'active').toLowerCase();
@@ -267,6 +320,58 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
 
   return (
     <View style={styles.container}>
+      {/* ═══════════════════════════════════════════════════════════ */}
+      {/* ⚠️ ANOMALY ALERTS (Admin Only)                             */}
+      {/* ═══════════════════════════════════════════════════════════ */}
+      {isAdmin && anomalies.length > 0 && (
+        <View style={{ marginHorizontal: 16, marginTop: 8, marginBottom: 16, backgroundColor: '#0F172A', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+            <Ionicons name="warning" size={18} color="#EF4444" style={{ marginRight: 8 }} />
+            <Text style={{ color: '#FCA5A5', fontSize: 15, fontWeight: '900', flex: 1 }}>Anomaly Alerts</Text>
+            <View style={{ backgroundColor: 'rgba(239,68,68,0.2)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 }}>
+              <Text style={{ color: '#F87171', fontSize: 11, fontWeight: '800' }}>{anomalies.length} Alert{anomalies.length !== 1 ? 's' : ''}</Text>
+            </View>
+          </View>
+          <View style={{ gap: 8 }}>
+            {anomalies.map((a, idx) => {
+              const isCritical = a.severity === 'critical';
+              const iconMap = {
+                excessive_auto_checkouts: 'log-out-outline',
+                break_policy_violation: 'cafe-outline',
+                chronic_late_returns: 'alarm-outline',
+                excessive_overtime: 'flame-outline'
+              };
+              const labelMap = {
+                excessive_auto_checkouts: 'Auto-Checkouts',
+                break_policy_violation: 'Break Exceeded',
+                chronic_late_returns: 'Late Returns',
+                excessive_overtime: 'Excess Overtime'
+              };
+              return (
+                <View key={idx} style={{ backgroundColor: isCritical ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.08)', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: isCritical ? 'rgba(239,68,68,0.25)' : 'rgba(245,158,11,0.2)' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <SafeAvatar uri={a.agentAvatar} name={a.agentName} size={28} borderRadius={8} />
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                      <Text style={{ color: '#F8FAFC', fontSize: 12, fontWeight: '700' }}>{a.agentName}</Text>
+                      <Text style={{ color: isCritical ? '#FCA5A5' : '#FDE68A', fontSize: 10, marginTop: 2 }}>{a.details}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View style={{ backgroundColor: isCritical ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                        <Text style={{ color: isCritical ? '#F87171' : '#FBBF24', fontSize: 8, fontWeight: '900' }}>{isCritical ? 'CRITICAL' : 'WARNING'}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Ionicons name={iconMap[a.type] || 'alert-circle-outline'} size={12} color={isCritical ? '#F87171' : '#FBBF24'} />
+                        <Text style={{ color: isCritical ? '#FCA5A5' : '#FDE68A', fontSize: 9, fontWeight: '700', marginLeft: 4 }}>{labelMap[a.type] || a.type}</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
       <View style={{ marginHorizontal: 16, marginTop: 8, marginBottom: 16, backgroundColor: '#0F172A', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#1E293B' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
           <Ionicons name="time-outline" size={18} color="#6366F1" style={{ marginRight: 8 }} />
@@ -388,6 +493,69 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
       {/* 📅 SHIFT HISTORY SECTION                                   */}
       {/* ═══════════════════════════════════════════════════════════ */}
       <ShiftHistorySection allSupportAgents={activeAgents} />
+
+      {/* ═══════════════════════════════════════════════════════════ */}
+      {/* 📊 ATTENDANCE PATTERNS (30 Days)                            */}
+      {/* ═══════════════════════════════════════════════════════════ */}
+      <View style={{ marginHorizontal: 16, marginBottom: 16, backgroundColor: '#0F172A', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#1E293B' }}>
+        <TouchableOpacity 
+          onPress={() => { 
+            setShowAttendancePatterns(!showAttendancePatterns); 
+            if (!showAttendancePatterns && attendancePatterns.length === 0) fetchAttendancePatterns(); 
+          }}
+          style={{ flexDirection: 'row', alignItems: 'center' }}
+        >
+          <Ionicons name="bar-chart-outline" size={18} color="#6366F1" style={{ marginRight: 8 }} />
+          <Text style={{ color: '#F8FAFC', fontSize: 15, fontWeight: '900', flex: 1 }}>Attendance Patterns (30 Days)</Text>
+          <Ionicons name={showAttendancePatterns ? 'chevron-up' : 'chevron-down'} size={18} color="#64748B" />
+        </TouchableOpacity>
+
+        {showAttendancePatterns && (
+          <View style={{ marginTop: 14 }}>
+            {patternsLoading ? (
+              <Text style={{ color: '#64748B', fontSize: 12, textAlign: 'center', paddingVertical: 20 }}>Loading patterns...</Text>
+            ) : attendancePatterns.length === 0 ? (
+              <Text style={{ color: '#64748B', fontSize: 12, textAlign: 'center', paddingVertical: 20 }}>No attendance data available.</Text>
+            ) : (
+              <View style={{ gap: 8 }}>
+                {/* Header Row */}
+                <View style={{ flexDirection: 'row', paddingHorizontal: 8, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' }}>
+                  <Text style={{ color: '#94A3B8', fontSize: 9, fontWeight: '800', flex: 2 }}>EMPLOYEE</Text>
+                  <Text style={{ color: '#94A3B8', fontSize: 9, fontWeight: '800', flex: 1, textAlign: 'center' }}>DAYS</Text>
+                  <Text style={{ color: '#94A3B8', fontSize: 9, fontWeight: '800', flex: 1, textAlign: 'center' }}>LATE</Text>
+                  <Text style={{ color: '#94A3B8', fontSize: 9, fontWeight: '800', flex: 1, textAlign: 'center' }}>AUTO</Text>
+                  <Text style={{ color: '#94A3B8', fontSize: 9, fontWeight: '800', flex: 1, textAlign: 'center' }}>AVG</Text>
+                  <Text style={{ color: '#94A3B8', fontSize: 9, fontWeight: '800', flex: 1, textAlign: 'center' }}>RATE</Text>
+                </View>
+                {attendancePatterns.map((p, idx) => {
+                  const avgH = Math.floor((p.avgShiftMs || 0) / 3600000);
+                  const avgM = Math.floor(((p.avgShiftMs || 0) % 3600000) / 60000);
+                  const rateColor = p.attendanceRate >= 80 ? '#10B981' : p.attendanceRate >= 50 ? '#FBBF24' : '#EF4444';
+                  const lateColor = p.lateCheckins > 3 ? '#EF4444' : p.lateCheckins > 1 ? '#FBBF24' : '#10B981';
+                  return (
+                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 8, backgroundColor: idx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent', borderRadius: 8 }}>
+                      <View style={{ flex: 2, flexDirection: 'row', alignItems: 'center' }}>
+                        <SafeAvatar uri={p.avatar} name={p.name} size={22} borderRadius={6} />
+                        <Text style={{ color: '#E2E8F0', fontSize: 11, fontWeight: '600', marginLeft: 8 }} numberOfLines={1}>{p.name}</Text>
+                      </View>
+                      <Text style={{ color: '#A5B4FC', fontSize: 11, fontWeight: '700', flex: 1, textAlign: 'center' }}>{p.daysWorked}/30</Text>
+                      <Text style={{ color: lateColor, fontSize: 11, fontWeight: '700', flex: 1, textAlign: 'center' }}>{p.lateCheckins}</Text>
+                      <Text style={{ color: p.autoCheckouts > 0 ? '#FBBF24' : '#64748B', fontSize: 11, fontWeight: '700', flex: 1, textAlign: 'center' }}>{p.autoCheckouts}</Text>
+                      <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '600', flex: 1, textAlign: 'center' }}>{avgH}h{avgM}m</Text>
+                      <View style={{ flex: 1, alignItems: 'center' }}>
+                        <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 4, height: 6, width: '80%' }}>
+                          <View style={{ backgroundColor: rateColor, borderRadius: 4, height: 6, width: `${Math.min(100, p.attendanceRate)}%` }} />
+                        </View>
+                        <Text style={{ color: rateColor, fontSize: 8, fontWeight: '800', marginTop: 2 }}>{p.attendanceRate}%</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        )}
+      </View>
 
       {/* ═══════════════════════════════════════════════════════════ */}
       {/* 📅 PENDING SHORT LEAVES                                     */}
@@ -1016,10 +1184,12 @@ const GroupedShiftCard = ({ shifts }) => {
   
   let totalDurationMs = 0;
   let totalActiveDurationMs = 0;
+  let totalBreakMs = 0;
   let hasInProgress = false;
   let hasOnBreak = false;
   let hasAutoCheckout = false;
   let hasEarlyCheckout = false;
+  let hasBreakExceeded = false;
   let totalOvertimeMs = 0;
 
   shifts.forEach(s => {
@@ -1027,6 +1197,8 @@ const GroupedShiftCard = ({ shifts }) => {
     else hasInProgress = true;
     
     if (s.isOnBreak) hasOnBreak = true;
+    if (s.totalBreakMs) totalBreakMs += s.totalBreakMs;
+    if (s.breakExceeded) hasBreakExceeded = true;
     
     if (s.activeDurationMs != null) totalActiveDurationMs += s.activeDurationMs;
     if (s.isAutoCheckout) hasAutoCheckout = true;
@@ -1081,6 +1253,11 @@ const GroupedShiftCard = ({ shifts }) => {
           {overtimeStr && (
             <View style={{ backgroundColor: 'rgba(239,68,68,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
               <Text style={{ color: '#F87171', fontSize: 9, fontWeight: '800' }}>{overtimeStr} OT</Text>
+            </View>
+          )}
+          {hasBreakExceeded && (
+            <View style={{ backgroundColor: 'rgba(239,68,68,0.2)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+              <Text style={{ color: '#EF4444', fontSize: 9, fontWeight: '800' }}>BREAK EXCEEDED</Text>
             </View>
           )}
         </View>
@@ -1209,6 +1386,14 @@ const GroupedShiftCard = ({ shifts }) => {
                 <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>TOTAL ACTIVE DURATION</Text>
                 <Text style={{ color: '#10B981', fontSize: 13, fontWeight: '800' }}>{finalActiveDurationStr}</Text>
             </View>
+            {totalBreakMs > 0 && (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>TOTAL BREAK TIME</Text>
+                    <Text style={{ color: hasBreakExceeded ? '#EF4444' : '#F59E0B', fontSize: 12, fontWeight: '800' }}>
+                        {formatDuration(totalBreakMs)}{hasBreakExceeded ? ' ⚠️' : ''}
+                    </Text>
+                </View>
+            )}
         </View>
       )}
     </View>

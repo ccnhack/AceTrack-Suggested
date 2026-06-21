@@ -3,6 +3,11 @@ import { AuditLog, OrgSetting } from '../models/AdminCoreModels.mjs';
 import { Player as User, PlayerSession } from '../models/index.mjs';
 import { apiKeyGuard, authGuard } from '../middleware/security.mjs';
 
+const MAX_BREAK_DURATION_MS = 90 * 60 * 1000; // 90 minutes max break per day
+const DEFAULT_SHIFT_START = '09:00'; // 9:00 AM IST
+const DEFAULT_SHIFT_END = '18:00';   // 6:00 PM IST
+const OVERTIME_JUSTIFY_THRESHOLD_MS = 30 * 60 * 1000; // 30 min overtime needs justification
+
 export default function createAdminCoreRoutes() {
     const router = express.Router();
     
@@ -442,10 +447,15 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                     totalShiftMs,
                     segments,
                     isOnBreak,
+                    totalBreakMs: segments.filter(s => s.type === 'break').reduce((sum, s) => sum + (s.durationMs || 0), 0),
+                    breakExceeded: segments.filter(s => s.type === 'break').reduce((sum, s) => sum + (s.durationMs || 0), 0) > MAX_BREAK_DURATION_MS,
                     activeDurationMs: calculateActiveTime(uid, actualCheckinTime, actualCheckoutTime),
                     overtimeMs,
+                    overtimeStatus: overtimeMs > OVERTIME_JUSTIFY_THRESHOLD_MS ? (log.details?.overtimeJustification ? 'justified' : 'pending_justification') : null,
+                    overtimeJustification: log.details?.overtimeJustification || null,
                     isAutoCheckout: !!log.details?.isAutoCheckout,
                     isEarlyCheckout: totalShiftMs < SEVEN_HOURS_MS && !log.details?.isAutoCheckout,
+                    isLateCheckin: false,
                     justification: log.details?.justification || null,
                     date: dateStr
                 });
@@ -485,10 +495,10 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
             }
         }
 
-        // 🛡️ Filter shifts for managers: only show their own shifts or their reportees' shifts
+        // 🛡️ Filter shifts for managers: only show their reportees' shifts (NOT their own)
         let filteredShifts = shifts;
         if (req.userRole !== 'admin') {
-            filteredShifts = shifts.filter(s => s.userId === req.userId || s.managerId === req.userId);
+            filteredShifts = shifts.filter(s => s.managerId === req.userId);
         }
 
         // Sort by date desc, then checkin time desc
@@ -520,6 +530,311 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
         });
     } catch (error) {
         console.error("Error fetching shift history:", error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// 📊 ATTENDANCE PATTERNS (30 Days)
+// ═══════════════════════════════════════════════════════════════
+router.get('/shift-attendance-patterns', requireAdminOrSupport, async (req, res) => {
+    try {
+        const end = new Date();
+        const start = new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+        const logs = await AuditLog.find({
+            action: { $in: ['SUPPORT_SHIFT_CHECKIN', 'SUPPORT_SHIFT_CHECKOUT'] },
+            timestamp: { $gte: start, $lte: end }
+        }).sort({ timestamp: 1 }).lean();
+
+        const userIds = [...new Set(logs.map(l => l.details?.userId || l.userId))];
+        const playerDocs = await User.find({ id: { $in: userIds } }).select('id data.name data.avatar data.supportLevel data.managerId data.shortLeaves data.scheduledShiftStart data.scheduledShiftEnd').lean();
+        const playerMap = {};
+        for (const p of playerDocs) {
+            playerMap[p.id] = {
+                name: p.data?.name || p.id,
+                avatar: p.data?.avatar || '',
+                supportLevel: p.data?.supportLevel || '',
+                managerId: p.data?.managerId || '',
+                shortLeaves: p.data?.shortLeaves || [],
+                scheduledStart: p.data?.scheduledShiftStart || DEFAULT_SHIFT_START,
+                scheduledEnd: p.data?.scheduledShiftEnd || DEFAULT_SHIFT_END
+            };
+        }
+
+        // Build per-user stats
+        const patterns = {};
+        for (const log of logs) {
+            const uid = log.details?.userId || log.userId;
+            if (!uid) continue;
+            if (!patterns[uid]) {
+                patterns[uid] = {
+                    userId: uid,
+                    name: playerMap[uid]?.name || uid,
+                    avatar: playerMap[uid]?.avatar || '',
+                    supportLevel: playerMap[uid]?.supportLevel || '',
+                    managerId: playerMap[uid]?.managerId || '',
+                    scheduledStart: playerMap[uid]?.scheduledStart || DEFAULT_SHIFT_START,
+                    scheduledEnd: playerMap[uid]?.scheduledEnd || DEFAULT_SHIFT_END,
+                    daysWorked: new Set(),
+                    lateCheckins: 0,
+                    autoCheckouts: 0,
+                    earlyCheckouts: 0,
+                    totalShiftMs: 0,
+                    shiftCount: 0,
+                    totalBreakMs: 0,
+                    lateReturns: 0
+                };
+            }
+
+            const p = patterns[uid];
+            const dateStr = new Date(new Date(log.timestamp).getTime() + 5.5 * 3600000).toISOString().split('T')[0];
+            p.daysWorked.add(dateStr);
+
+            if (log.action === 'SUPPORT_SHIFT_CHECKIN') {
+                p.shiftCount++;
+                // Check if late check-in
+                const schedStart = playerMap[uid]?.scheduledStart || DEFAULT_SHIFT_START;
+                const [schedH, schedM] = schedStart.split(':').map(Number);
+                const checkinIST = new Date(new Date(log.timestamp).getTime() + 5.5 * 3600000);
+                const checkinH = checkinIST.getUTCHours();
+                const checkinM = checkinIST.getUTCMinutes();
+                if (checkinH > schedH || (checkinH === schedH && checkinM > schedM + 10)) {
+                    p.lateCheckins++;
+                }
+            }
+
+            if (log.action === 'SUPPORT_SHIFT_CHECKOUT') {
+                if (log.details?.isAutoCheckout) p.autoCheckouts++;
+                const totalMs = log.details?.totalShiftMs || 0;
+                if (totalMs > 0 && totalMs < 7 * 3600000 && !log.details?.isAutoCheckout) p.earlyCheckouts++;
+                p.totalShiftMs += totalMs;
+            }
+        }
+
+        // Calculate break stats from shortLeaves
+        for (const uid of Object.keys(patterns)) {
+            const leaves = playerMap[uid]?.shortLeaves || [];
+            const recentLeaves = leaves.filter(l => {
+                const ld = new Date(l.date);
+                return ld >= start && ld <= end;
+            });
+            for (const l of recentLeaves) {
+                if (l.status === 'completed' && l.actualReturnTime && l.startTime) {
+                    const [sh, sm] = l.startTime.split(':').map(Number);
+                    const [eh, em] = l.actualReturnTime.split(':').map(Number);
+                    const breakMs = ((eh * 60 + em) - (sh * 60 + sm)) * 60000;
+                    if (breakMs > 0) patterns[uid].totalBreakMs += breakMs;
+                }
+                if (l.isLateReturn) patterns[uid].lateReturns++;
+            }
+        }
+
+        // Filter for managers
+        let result = Object.values(patterns).map(p => ({
+            ...p,
+            daysWorked: p.daysWorked.size,
+            avgShiftMs: p.shiftCount > 0 ? Math.round(p.totalShiftMs / p.shiftCount) : 0,
+            attendanceRate: Math.round((p.daysWorked.size / 30) * 100)
+        }));
+
+        if (req.userRole !== 'admin') {
+            result = result.filter(p => p.managerId === req.userId);
+        }
+
+        result.sort((a, b) => b.lateCheckins - a.lateCheckins);
+
+        res.json({ success: true, patterns: result });
+    } catch (error) {
+        console.error('Error fetching attendance patterns:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ⚠️ ANOMALY ALERTS (Admin Only)
+// ═══════════════════════════════════════════════════════════════
+router.get('/shift-anomalies', requireAdmin, async (req, res) => {
+    try {
+        const end = new Date();
+        const start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+        const logs = await AuditLog.find({
+            action: { $in: ['SUPPORT_SHIFT_CHECKIN', 'SUPPORT_SHIFT_CHECKOUT'] },
+            timestamp: { $gte: start, $lte: end }
+        }).sort({ timestamp: 1 }).lean();
+
+        const userIds = [...new Set(logs.map(l => l.details?.userId || l.userId))];
+        const playerDocs = await User.find({ id: { $in: userIds } }).select('id data.name data.avatar data.supportLevel data.shortLeaves').lean();
+        const playerMap = {};
+        for (const p of playerDocs) {
+            playerMap[p.id] = {
+                name: p.data?.name || p.id,
+                avatar: p.data?.avatar || '',
+                supportLevel: p.data?.supportLevel || '',
+                shortLeaves: p.data?.shortLeaves || []
+            };
+        }
+
+        // Build per-user anomaly counters
+        const userStats = {};
+        for (const log of logs) {
+            const uid = log.details?.userId || log.userId;
+            if (!uid) continue;
+            if (!userStats[uid]) userStats[uid] = { autoCheckouts: 0, overtimeMs: 0, breakExceededDays: new Set() };
+
+            if (log.action === 'SUPPORT_SHIFT_CHECKOUT') {
+                if (log.details?.isAutoCheckout) userStats[uid].autoCheckouts++;
+                const totalMs = log.details?.totalShiftMs || 0;
+                if (totalMs > 8 * 3600000) userStats[uid].overtimeMs += (totalMs - 8 * 3600000);
+            }
+        }
+
+        // Check break policy violations from shortLeaves
+        for (const uid of Object.keys(userStats)) {
+            const leaves = playerMap[uid]?.shortLeaves || [];
+            const dailyBreaks = {};
+            for (const l of leaves) {
+                if (l.status === 'completed' && l.actualReturnTime && l.startTime) {
+                    const ld = new Date(l.date);
+                    if (ld < start || ld > end) continue;
+                    const [sh, sm] = l.startTime.split(':').map(Number);
+                    const [eh, em] = l.actualReturnTime.split(':').map(Number);
+                    const breakMs = ((eh * 60 + em) - (sh * 60 + sm)) * 60000;
+                    if (!dailyBreaks[l.date]) dailyBreaks[l.date] = 0;
+                    dailyBreaks[l.date] += breakMs;
+                }
+            }
+            for (const [date, totalMs] of Object.entries(dailyBreaks)) {
+                if (totalMs > MAX_BREAK_DURATION_MS) userStats[uid].breakExceededDays.add(date);
+            }
+        }
+
+        // Count late returns from shortLeaves
+        for (const uid of Object.keys(userStats)) {
+            const leaves = playerMap[uid]?.shortLeaves || [];
+            userStats[uid].lateReturns = leaves.filter(l => {
+                const ld = new Date(l.date);
+                return ld >= start && ld <= end && l.isLateReturn;
+            }).length;
+        }
+
+        // Build anomaly alerts
+        const anomalies = [];
+        for (const [uid, stats] of Object.entries(userStats)) {
+            if (stats.autoCheckouts >= 2) {
+                anomalies.push({
+                    type: 'excessive_auto_checkouts',
+                    severity: stats.autoCheckouts >= 3 ? 'critical' : 'warning',
+                    agentId: uid,
+                    agentName: playerMap[uid]?.name || uid,
+                    agentAvatar: playerMap[uid]?.avatar || '',
+                    details: `${stats.autoCheckouts} auto-checkouts in the past 7 days`,
+                    occurrences: stats.autoCheckouts
+                });
+            }
+            if (stats.breakExceededDays.size >= 2) {
+                anomalies.push({
+                    type: 'break_policy_violation',
+                    severity: stats.breakExceededDays.size >= 3 ? 'critical' : 'warning',
+                    agentId: uid,
+                    agentName: playerMap[uid]?.name || uid,
+                    agentAvatar: playerMap[uid]?.avatar || '',
+                    details: `Break exceeded 90 min on ${stats.breakExceededDays.size} days`,
+                    occurrences: stats.breakExceededDays.size
+                });
+            }
+            if (stats.lateReturns >= 3) {
+                anomalies.push({
+                    type: 'chronic_late_returns',
+                    severity: stats.lateReturns >= 5 ? 'critical' : 'warning',
+                    agentId: uid,
+                    agentName: playerMap[uid]?.name || uid,
+                    agentAvatar: playerMap[uid]?.avatar || '',
+                    details: `${stats.lateReturns} late returns from breaks in 7 days`,
+                    occurrences: stats.lateReturns
+                });
+            }
+            if (stats.overtimeMs > 2 * 3600000) {
+                const hrs = Math.round(stats.overtimeMs / 3600000 * 10) / 10;
+                anomalies.push({
+                    type: 'excessive_overtime',
+                    severity: stats.overtimeMs > 4 * 3600000 ? 'critical' : 'warning',
+                    agentId: uid,
+                    agentName: playerMap[uid]?.name || uid,
+                    agentAvatar: playerMap[uid]?.avatar || '',
+                    details: `${hrs}h overtime accumulated in 7 days`,
+                    occurrences: Math.ceil(hrs)
+                });
+            }
+        }
+
+        anomalies.sort((a, b) => {
+            const sevOrder = { critical: 0, warning: 1 };
+            return (sevOrder[a.severity] || 1) - (sevOrder[b.severity] || 1);
+        });
+
+        res.json({ success: true, anomalies });
+    } catch (error) {
+        console.error('Error fetching anomalies:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ✅ OVERTIME JUSTIFICATION
+// ═══════════════════════════════════════════════════════════════
+router.post('/overtime-justify', requireAdminOrSupport, async (req, res) => {
+    try {
+        const { shiftLogId, justification } = req.body;
+        if (!shiftLogId || !justification) {
+            return res.status(400).json({ success: false, message: 'shiftLogId and justification are required' });
+        }
+
+        const log = await AuditLog.findById(shiftLogId);
+        if (!log) {
+            return res.status(404).json({ success: false, message: 'Shift log not found' });
+        }
+
+        log.details = log.details || {};
+        log.details.overtimeJustification = justification;
+        log.details.overtimeJustifiedBy = req.userId;
+        log.details.overtimeJustifiedAt = new Date().toISOString();
+        await log.save();
+
+        res.json({ success: true, message: 'Overtime justified successfully' });
+    } catch (error) {
+        console.error('Error justifying overtime:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ⏰ UPDATE AGENT SHIFT SCHEDULE
+// ═══════════════════════════════════════════════════════════════
+router.post('/update-shift-schedule', requireAdminOrSupport, async (req, res) => {
+    try {
+        const { agentId, scheduledShiftStart, scheduledShiftEnd } = req.body;
+        if (!agentId) return res.status(400).json({ success: false, message: 'agentId is required' });
+
+        const player = await User.findOne({ id: agentId });
+        if (!player) return res.status(404).json({ success: false, message: 'Agent not found' });
+
+        if (scheduledShiftStart) player.data.scheduledShiftStart = scheduledShiftStart;
+        if (scheduledShiftEnd) player.data.scheduledShiftEnd = scheduledShiftEnd;
+        player.markModified('data');
+        await player.save();
+
+        await AuditLog.create({
+            action: 'SHIFT_SCHEDULE_UPDATED',
+            userId: req.userId,
+            timestamp: new Date(),
+            details: { agentId, scheduledShiftStart, scheduledShiftEnd, updatedBy: req.userId }
+        });
+
+        res.json({ success: true, message: 'Shift schedule updated' });
+    } catch (error) {
+        console.error('Error updating shift schedule:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
