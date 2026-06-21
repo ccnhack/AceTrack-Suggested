@@ -24,6 +24,7 @@ import AdminPaymentsPanel from '../components/admin/AdminPaymentsPanel';
 import AdminStaffPanel from '../components/admin/AdminStaffPanel';
 import AdminSupportTeamPanel from '../components/admin/AdminSupportTeamPanel';
 import AdminShiftManagementPanel from '../components/admin/AdminShiftManagementPanel';
+import AdminSlackFeedbackPanel from '../components/admin/AdminSlackFeedbackPanel';
 
 // Context Hooks
 import { usePlayersStore } from '../stores';
@@ -247,7 +248,8 @@ const AdminHubScreen = ({ navigation, route }) => {
               { id: 'support_dashboard', label: 'Support Dashboard', icon: 'headset-outline', route: 'Support' },
               { id: 'audit', label: 'Audit Logs', icon: 'list-outline' },
               { id: 'security', label: 'Security', icon: 'shield-half-outline' },
-              { id: 'diagnostics', label: 'Diagnostics', icon: 'pulse-outline' }
+              { id: 'diagnostics', label: 'Diagnostics', icon: 'pulse-outline' },
+              { id: 'slack_feedback', label: 'Slack AI Feedbacks', icon: 'chatbubbles-outline' }
             ].filter(tab => {
                if (currentUser?.role === 'admin') return true;
                if (currentUser?.supportLevel === 'Manager') {
@@ -370,6 +372,8 @@ const AdminHubScreen = ({ navigation, route }) => {
         );
       case 'recruitment':
         return <AdminStaffPanel />;
+      case 'slack_feedback':
+        return <AdminSlackFeedbackPanel />;
       case 'support_team':
         return (
           <AdminSupportTeamPanel 
@@ -513,6 +517,7 @@ const AdminHubScreen = ({ navigation, route }) => {
             { id: 'audit', label: 'Audit', icon: 'list' },
             { id: 'security', label: 'Security', icon: 'shield-half' },
             { id: 'diagnostics', label: 'Diag', icon: 'pulse' },
+            { id: 'slack_feedback', label: 'Slack AI Feedbacks', icon: 'chatbubbles' },
             { id: 'recruitment', label: 'Staff', icon: 'people-circle-outline' },
             { id: 'support_team', label: 'Support', icon: 'shield-checkmark' },
             { id: 'shifts', label: 'Shifts', icon: 'time' },
@@ -546,7 +551,7 @@ const AdminHubScreen = ({ navigation, route }) => {
         </ScrollView>
       </View>
 
-      {subTab !== 'diagnostics' && subTab !== 'recruitment' && subTab !== 'support_team' && subTab !== 'shifts' && (
+      {subTab !== 'diagnostics' && subTab !== 'recruitment' && subTab !== 'support_team' && subTab !== 'shifts' && subTab !== 'slack_feedback' && (
         <View style={styles.searchBar}>
           <Ionicons name="search" size={16} color="#94A3B8" />
           <TextInput 

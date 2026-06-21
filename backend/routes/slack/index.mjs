@@ -4,8 +4,31 @@ import { AppState, Player, AuditLog, SupportTicket, SlackFeedback } from '../../
 import { asyncHandler } from '../../helpers/utils.mjs';
 import { fetchWithAIFallback } from '../../utils/aiRouter.mjs';
 
+import { apiKeyGuard } from '../../middleware/security.mjs';
+
 export default function createSlackRoutes({ syncMutex, logAudit, APP_VERSION }) {
   const router = express.Router();
+
+  // 🛡️ API Endpoints
+  router.get('/infrastructure/slack-feedbacks', apiKeyGuard, asyncHandler(async (req, res) => {
+    const limit = parseInt(req.query.limit) || 100;
+    const skip = parseInt(req.query.skip) || 0;
+    const filter = {};
+    
+    // Optional status filtering
+    if (req.query.status === 'positive') filter.isPositive = true;
+    else if (req.query.status === 'negative') filter.isPositive = false;
+
+    const feedbacks = await SlackFeedback.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+      
+    const total = await SlackFeedback.countDocuments(filter);
+    
+    res.json({ success: true, feedbacks, total });
+  }));
 
   // Handles both /slack/command and /slack/interact at all potential paths
   router.post('/slack/command', handleSlackUnified);
