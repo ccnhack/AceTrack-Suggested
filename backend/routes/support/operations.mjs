@@ -1369,8 +1369,8 @@ router.post('/support/resolve-short-leave', apiKeyGuard, authGuard, asyncHandler
 
   const shortLeaves = agentDoc.data.shortLeaves || [];
   const targetLeave = shortLeaves.find(l => l.id === leaveId);
-  if (!targetLeave || targetLeave.status !== 'pending') {
-    return res.status(400).json({ error: 'No pending leave request found' });
+  if (!targetLeave) {
+    return res.status(400).json({ error: 'Leave request not found' });
   }
 
   const updatedLeaves = shortLeaves.map(l => {

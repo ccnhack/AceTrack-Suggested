@@ -19,8 +19,6 @@ import compression from 'compression';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
-
-// 🏗️ [PHASE 2 MODULARIZATION] (v2.6.620): Extracted config modules
 import { APP_VERSION, ACE_API_KEY, JWT_SECRET, ALLOWED_ORIGINS, signToken } from './config/app.mjs';
 import { initFirebase } from './config/firebase.mjs';
 import { initCloudinary, cloudinary } from './config/cloudinary.mjs';
