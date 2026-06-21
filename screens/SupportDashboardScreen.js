@@ -446,12 +446,12 @@ const SupportDashboardScreen = ({ navigation, route }) => {
     return unreadSenders.size;
   }, [messages, currentUser]);
 
-  const isCurrentlyOnLeave = useMemo(() => {
-    if (!shortLeaves || shortLeaves.length === 0) return false;
+  const activeLeave = useMemo(() => {
+    if (!shortLeaves || shortLeaves.length === 0) return null;
     const now = new Date();
     const todayStr = getLocalDateStr();
     
-    return shortLeaves.some(l => {
+    return shortLeaves.find(l => {
       if (l.status !== 'approved' || l.date !== todayStr) return false;
       const [startH, startM] = l.startTime.split(':').map(Number);
       const [endH, endM] = l.endTime.split(':').map(Number);
@@ -462,6 +462,8 @@ const SupportDashboardScreen = ({ navigation, route }) => {
       return now >= startObj && now <= endObj;
     });
   }, [shortLeaves]);
+
+  const isCurrentlyOnLeave = !!activeLeave;
 
   // ═══════════════════════════════════════════════════════════════
   // 🕐 CHECK-IN MODAL (v2.6.673)
@@ -828,7 +830,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
                   </View>
 
                   {/* Short Leave Button / Banner */}
-                  {shiftStatus === 'on_shift' && (
+                  {shiftStatus === 'on_shift' && !isCurrentlyOnLeave && (
                     <TouchableOpacity 
                       style={{ marginTop: 8, paddingVertical: 8, borderRadius: 8, backgroundColor: 'rgba(245, 158, 11, 0.1)', borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.3)', alignItems: 'center', flexDirection: 'row', justifyContent: 'center' }}
                       onPress={() => {
@@ -838,6 +840,16 @@ const SupportDashboardScreen = ({ navigation, route }) => {
                     >
                       <Ionicons name="cafe-outline" size={14} color="#F59E0B" style={{ marginRight: 6 }} />
                       <Text style={{ color: '#F59E0B', fontSize: 11, fontWeight: '700' }}>Request Short Leave</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {shiftStatus === 'on_shift' && isCurrentlyOnLeave && activeLeave && (
+                    <TouchableOpacity 
+                      style={{ marginTop: 8, paddingVertical: 8, borderRadius: 8, backgroundColor: 'rgba(16, 185, 129, 0.1)', borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.3)', alignItems: 'center', flexDirection: 'row', justifyContent: 'center' }}
+                      onPress={() => handleCancelShortLeave(activeLeave.id)}
+                    >
+                      <Ionicons name="play-circle-outline" size={16} color="#10B981" style={{ marginRight: 6 }} />
+                      <Text style={{ color: '#10B981', fontSize: 11, fontWeight: '800' }}>Resume Shift Early</Text>
                     </TouchableOpacity>
                   )}
                   {shortLeaves.slice(0, 3).map((leave, idx) => (
