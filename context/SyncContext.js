@@ -97,7 +97,7 @@ export const SyncProvider = ({ children }) => {
   const syncAndSaveData = useCallback(async (updates, isAtomic = false, isInternal = false) => {
     try {
       await syncOrchestrator.syncAndSaveData(updates, isAtomic, isInternal);
-      setLastSyncTime(new Date().toISOString());
+      setLastSyncTime(new Date().toLocaleTimeString()); // App.js override guarantees IST
       // 🛡️ [C-2 FIX] (v2.6.315): Removed false setIsCloudOnline(true) here.
       // Cloud status is only set true by loadData/checkForUpdates after actual network success.
       return true;
