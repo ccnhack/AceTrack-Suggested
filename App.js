@@ -101,7 +101,9 @@ import { useSupportStore } from './stores';
 // 🔄 Centralized Versioning// 🚀 EXPO OTA SYNC HUB
 // 🚀 EXPO OTA SYNC HUB
 // ALWAYS BUMP THIS VERSION TO TRIGGER CLIENT-SIDE CACHE INVALIDATION
-const APP_VERSION = '2.6.728';
+const APP_VERSION = '2.6.729'; // MUST SYNC WITH app.json
+const OTA_CHECK_INTERVAL = 30 * 60 * 1000; // 30 mins
+const INITIAL_OTA_DELAY = 15000; // 15 seconds
 const linking = {
   prefixes: [config.API_BASE_URL || 'https://acetrack-suggested.onrender.com', 'acetrack://'],
   config: {

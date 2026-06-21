@@ -450,7 +450,7 @@ export const thinPlayer = (p: any) => {
     notifications, walletHistory, trueSkillHistory,
     // Shift and Support Management
     shiftStatus, shiftCheckinAt, shiftCheckinRounded, shiftCheckoutDue, shiftCheckoutAt,
-    supportStatus, supportLevel, terminatedAt, reOnboardedAt, status
+    supportStatus, supportLevel, terminatedAt, reOnboardedAt, status, shortLeaves
   } = p;
   
   return { 
@@ -461,7 +461,7 @@ export const thinPlayer = (p: any) => {
     email, username, isEmailVerified, isPhoneVerified,
     // Shift and Support Management
     shiftStatus, shiftCheckinAt, shiftCheckinRounded, shiftCheckoutDue, shiftCheckoutAt,
-    supportStatus, supportLevel, terminatedAt, reOnboardedAt, status,
+    supportStatus, supportLevel, terminatedAt, reOnboardedAt, status, shortLeaves,
     // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Include UI-required arrays but cap to 5 items to protect CursorWindow
     notifications: Array.isArray(notifications) ? notifications.slice(0, 5) : notifications,
     walletHistory: Array.isArray(walletHistory) ? walletHistory.slice(0, 5) : walletHistory,

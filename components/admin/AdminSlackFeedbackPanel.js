@@ -149,7 +149,7 @@ export default function AdminSlackFeedbackPanel({ onRefresh, onRefreshComplete }
                 }}
               >
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
                     {item.isPositive ? (
                       <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.2)', padding: 6, borderRadius: 8, marginRight: 10 }}>
                         <Ionicons name="thumbs-up" size={16} color="#10B981" />
@@ -159,16 +159,16 @@ export default function AdminSlackFeedbackPanel({ onRefresh, onRefreshComplete }
                         <Ionicons name="thumbs-down" size={16} color="#EF4444" />
                       </View>
                     )}
-                    <View>
-                      <Text style={{ color: '#F8FAFC', fontSize: 14, fontWeight: '800' }}>
+                    <View style={{ flexShrink: 1 }}>
+                      <Text style={{ color: '#F8FAFC', fontSize: 14, fontWeight: '800' }} numberOfLines={1}>
                         {item.userId || 'Unknown User'}
                       </Text>
-                      <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '600', marginTop: 2 }}>
+                      <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '600', marginTop: 2 }} numberOfLines={2}>
                         {dateStr}
                       </Text>
                     </View>
                   </View>
-                  <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                  <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, flexShrink: 0 }}>
                     <Text style={{ color: '#CBD5E1', fontSize: 10, textTransform: 'uppercase', fontWeight: '800' }}>
                       {item.responseContext || 'General'}
                     </Text>

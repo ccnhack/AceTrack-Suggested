@@ -523,8 +523,20 @@ ${chatHistory.substring(0, 3000)}`;
             } catch (e) {
                console.error("Slack Feedback Saving Error:", e);
             }
-            res.json({ response_action: 'clear' });
-            return;
+            return res.json({ 
+               response_action: 'update',
+               view: {
+                  type: 'modal',
+                  title: { type: 'plain_text', text: 'Feedback Received' },
+                  close: { type: 'plain_text', text: 'Close' },
+                  blocks: [
+                     {
+                        type: 'section',
+                        text: { type: 'mrkdwn', text: '✅ *Thanks for your detailed feedback!*\nWe will review this to improve the AI.' }
+                     }
+                  ]
+               }
+            });
          }
       }
 
