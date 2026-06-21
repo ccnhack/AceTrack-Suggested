@@ -256,13 +256,17 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
       {/* ═══════════════════════════════════════════════════════════ */}
       {/* 📅 PENDING SHORT LEAVES                                     */}
       {/* ═══════════════════════════════════════════════════════════ */}
-      {activeAgents.filter(a => a.shiftLeaveStatus === 'pending').length > 0 && (
-        <View style={{ marginHorizontal: 16, marginBottom: 16, backgroundColor: '#0F172A', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#1E293B' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-            <Ionicons name="time" size={18} color="#F59E0B" style={{ marginRight: 8 }} />
-            <Text style={{ color: '#F8FAFC', fontSize: 15, fontWeight: '900', flex: 1 }}>Pending Short Leaves</Text>
+      <View style={{ marginHorizontal: 16, marginBottom: 16, backgroundColor: '#0F172A', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#1E293B' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+          <Ionicons name="time" size={18} color="#F59E0B" style={{ marginRight: 8 }} />
+          <Text style={{ color: '#F8FAFC', fontSize: 15, fontWeight: '900', flex: 1 }}>Pending Short Leaves</Text>
+        </View>
+        {activeAgents.filter(a => a.shiftLeaveStatus === 'pending').length === 0 ? (
+          <View style={{ padding: 16, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 12 }}>
+            <Text style={{ color: '#64748B', fontSize: 13, fontWeight: '600' }}>No pending short leave requests.</Text>
           </View>
-          {activeAgents.filter(a => a.shiftLeaveStatus === 'pending').map(agent => (
+        ) : (
+          activeAgents.filter(a => a.shiftLeaveStatus === 'pending').map(agent => (
             <View key={`leave_${agent.id}`} style={{ backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)', marginBottom: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
                 <SafeAvatar uri={agent.avatar} name={agent.name} role={agent.role} size={32} borderRadius={8} />
@@ -297,9 +301,9 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
                 </View>
               </View>
             </View>
-          ))}
-        </View>
-      )}
+          ))
+        )}
+      </View>
 
       {/* Details Modal */}
       <Modal visible={modalState.isOpen} transparent={true} animationType="fade">
