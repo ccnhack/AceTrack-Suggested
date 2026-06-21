@@ -1489,7 +1489,8 @@ We have five data sources:
    - ⚠️ CRITICAL: ONLY apply a "timestamp" date filter if the user explicitly asks for a specific timeframe. Use the Current Server Time provided above to calculate accurate ISO date strings for $gte/$lte.
 2. 'server_events.jsonl' (Filesystem): Contains system crashes, server panics, WebSocket errors, and legacy ephemeral events.
 3. 'Player' (MongoDB): Contains user profiles and their current state (e.g. active, suspended, role).
-   Schema: { id: String, role: String, data: { name: String, email: String, supportStatus: String } }
+   Schema: { id: String, role: String, data: { name: String, email: String, supportStatus: String, shortLeaves: [{ status: String, startTime: String, endTime: String }] } }
+   - ⚠️ IMPORTANT: If the user asks about "pending leaves" or "short leaves", you MUST use a "playerFilter" to query the 'data.shortLeaves.status' field (e.g. {"data.shortLeaves": { $elemMatch: { "status": "pending" } }} or {"data.shortLeaves.status": "pending"}).
    - Example: { "role": "support", "data.supportStatus": "suspended" }
 4. 'CoachInvite' & 'SupportInvite' (MongoDB): Contains registration invites for coaches and support staff.
    Schema: { email: String, name: String, status: String (Pending|Clicked|Used|Expired), academyId: String, tournamentId: String }
