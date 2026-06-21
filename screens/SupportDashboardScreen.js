@@ -538,13 +538,13 @@ const SupportDashboardScreen = ({ navigation, route }) => {
               <Text style={{ fontSize: 13, color: '#475569', fontWeight: '600', marginBottom: 8 }}>Time Frame</Text>
               {Platform.OS === 'web' ? (
                 <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1.5 }}>
                     <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4 }}>Date</Text>
                     <input 
                       type="date" 
                       value={shortLeaveForm.date} 
                       onChange={e => setShortLeaveForm({...shortLeaveForm, date: e.target.value})} 
-                      style={{ padding: 12, borderRadius: 12, border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', width: '100%', fontSize: 15 }} 
+                      style={{ padding: 12, borderRadius: 12, border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', width: '100%', fontSize: 14 }} 
                     />
                   </View>
                   <View style={{ flex: 1 }}>
@@ -553,7 +553,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
                       type="time" 
                       value={shortLeaveForm.startTime} 
                       onChange={e => setShortLeaveForm({...shortLeaveForm, startTime: e.target.value})} 
-                      style={{ padding: 12, borderRadius: 12, border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', width: '100%', fontSize: 15 }} 
+                      style={{ padding: 12, borderRadius: 12, border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', width: '100%', fontSize: 14 }} 
                     />
                   </View>
                   <View style={{ flex: 1 }}>
@@ -562,7 +562,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
                       type="time" 
                       value={shortLeaveForm.endTime} 
                       onChange={e => setShortLeaveForm({...shortLeaveForm, endTime: e.target.value})} 
-                      style={{ padding: 12, borderRadius: 12, border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', width: '100%', fontSize: 15 }} 
+                      style={{ padding: 12, borderRadius: 12, border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', width: '100%', fontSize: 14 }} 
                     />
                   </View>
                 </View>
