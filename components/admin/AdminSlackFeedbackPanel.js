@@ -7,7 +7,7 @@ export default function AdminSlackFeedbackPanel({ onRefresh, onRefreshComplete }
   const [feedbacks, setFeedbacks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState('all'); // 'all', 'positive', 'negative'
+  const [activeTab, setActiveTab] = useState('all'); // 'all', 'positive', 'negative', 'resolved'
 
   const fetchFeedbacks = async () => {
     try {
@@ -17,6 +17,7 @@ export default function AdminSlackFeedbackPanel({ onRefresh, onRefreshComplete }
       let url = '/api/v1/infrastructure/slack-feedbacks?limit=50';
       if (activeTab === 'positive') url += '&status=positive';
       else if (activeTab === 'negative') url += '&status=negative';
+      else if (activeTab === 'resolved') url += '&status=resolved';
 
       const ACE_API_KEY = localStorage.getItem('diag_token') || 'ACE_DIAG_998_2024';
 
@@ -41,6 +42,27 @@ export default function AdminSlackFeedbackPanel({ onRefresh, onRefreshComplete }
     }
   };
 
+  const handleResolve = async (id) => {
+    try {
+      const ACE_API_KEY = localStorage.getItem('diag_token') || 'ACE_DIAG_998_2024';
+      const response = await fetch(`/api/v1/infrastructure/slack-feedbacks/${id}/resolve`, {
+        method: 'POST',
+        headers: {
+          'x-api-key': ACE_API_KEY
+        }
+      });
+      const data = await response.json();
+      if (data.success) {
+        fetchFeedbacks();
+      } else {
+        alert(data.error || 'Failed to resolve feedback');
+      }
+    } catch (err) {
+      console.error('Resolve error:', err);
+      alert('Network request failed');
+    }
+  };
+
   useEffect(() => {
     fetchFeedbacks();
   }, [activeTab]);
@@ -52,9 +74,10 @@ export default function AdminSlackFeedbackPanel({ onRefresh, onRefreshComplete }
   }, [onRefresh]);
 
   const tabs = [
-    { id: 'all', label: 'All Feedback', icon: 'list' },
+    { id: 'all', label: 'All', icon: 'list' },
     { id: 'positive', label: 'Positive', icon: 'thumbs-up' },
-    { id: 'negative', label: 'Negative', icon: 'thumbs-down' }
+    { id: 'negative', label: 'Negative (Pending)', icon: 'thumbs-down' },
+    { id: 'resolved', label: 'Resolved', icon: 'checkmark-circle' }
   ];
 
   return (
@@ -175,6 +198,16 @@ export default function AdminSlackFeedbackPanel({ onRefresh, onRefreshComplete }
                       {item.feedbackText}
                     </Text>
                   </View>
+                )}
+
+                {activeTab === 'negative' && (
+                  <TouchableOpacity 
+                    onPress={() => handleResolve(item._id)}
+                    style={{ marginTop: 12, backgroundColor: 'rgba(16, 185, 129, 0.2)', paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.5)', alignItems: 'center', flexDirection: 'row', justifyContent: 'center' }}
+                  >
+                    <Ionicons name="checkmark-done" size={16} color="#10B981" style={{ marginRight: 6 }} />
+                    <Text style={{ color: '#10B981', fontWeight: '700', fontSize: 13 }}>Mark as Resolved</Text>
+                  </TouchableOpacity>
                 )}
               </View>
             );

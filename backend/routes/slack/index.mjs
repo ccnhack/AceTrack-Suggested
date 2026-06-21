@@ -16,11 +16,18 @@ export default function createSlackRoutes({ syncMutex, logAudit, APP_VERSION }) 
     const filter = {};
     
     // Optional status filtering
-    if (req.query.status === 'positive') filter.isPositive = true;
-    else if (req.query.status === 'negative') filter.isPositive = false;
+    if (req.query.status === 'positive') {
+      filter.isPositive = true;
+    } else if (req.query.status === 'negative') {
+      filter.isPositive = false;
+      filter.isResolved = { $ne: true };
+    } else if (req.query.status === 'resolved') {
+      filter.isPositive = false;
+      filter.isResolved = true;
+    }
 
     const feedbacks = await SlackFeedback.find(filter)
-      .sort({ createdAt: -1 })
+      .sort({ timestamp: -1 })
       .skip(skip)
       .limit(limit)
       .lean();
@@ -28,6 +35,13 @@ export default function createSlackRoutes({ syncMutex, logAudit, APP_VERSION }) 
     const total = await SlackFeedback.countDocuments(filter);
     
     res.json({ success: true, feedbacks, total });
+  }));
+
+  router.post('/infrastructure/slack-feedbacks/:id/resolve', apiKeyGuard, asyncHandler(async (req, res) => {
+    const feedbackId = req.params.id;
+    const updated = await SlackFeedback.findByIdAndUpdate(feedbackId, { isResolved: true }, { new: true });
+    if (!updated) return res.status(404).json({ success: false, error: 'Feedback not found' });
+    res.json({ success: true, feedback: updated });
   }));
 
   // Handles both /slack/command and /slack/interact at all potential paths

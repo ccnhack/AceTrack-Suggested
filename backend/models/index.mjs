@@ -69,6 +69,7 @@ const SlackFeedbackSchema = new mongoose.Schema({
   routingIntent: mongoose.Schema.Types.Mixed,
   isPositive: Boolean,
   feedbackText: String,
+  isResolved: { type: Boolean, default: false },
   timestamp: { type: Date, default: Date.now }
 });
 
