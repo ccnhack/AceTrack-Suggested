@@ -188,6 +188,7 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
                       <View style={{ flexDirection: 'row', gap: 12 }}>
                         <Text style={{ color: '#10B981', fontSize: 12, fontWeight: '600' }}>Completed: {filteredLeaves.filter(l => l.leave.status === 'completed').length}</Text>
                         <Text style={{ color: '#EF4444', fontSize: 12, fontWeight: '600' }}>Late Returns: {filteredLeaves.filter(l => l.leave.isLateReturn).length}</Text>
+                        <Text style={{ color: '#10B981', fontSize: 12, fontWeight: '600' }}>Early Returns: {filteredLeaves.filter(l => l.leave.isEarlyReturn).length}</Text>
                       </View>
                     </View>
                   ) : null}
@@ -215,6 +216,11 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
                               {leave.isLateReturn && (
                                 <View style={{ backgroundColor: 'rgba(239,68,68,0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)' }}>
                                   <Text style={{ color: '#EF4444', fontSize: 10, fontWeight: '800' }}>LATE BY {leave.lateDurationMinutes}m</Text>
+                                </View>
+                              )}
+                              {leave.isEarlyReturn && (
+                                <View style={{ backgroundColor: 'rgba(16,185,129,0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: 'rgba(16,185,129,0.3)' }}>
+                                  <Text style={{ color: '#10B981', fontSize: 10, fontWeight: '800' }}>EARLY BY {leave.earlyDurationMinutes}m</Text>
                                 </View>
                               )}
                             </View>

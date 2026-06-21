@@ -1334,19 +1334,28 @@ router.post('/support/cancel-short-leave', apiKeyGuard, authGuard, asyncHandler(
   if (targetLeave.status === 'approved') {
     // Agent is resuming shift after approved leave
     targetLeave.status = 'completed';
-    targetLeave.actualReturnTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     
-    // Check if late
+    // Shift now to IST (UTC + 5.5 hours)
+    const nowIstMs = now.getTime() + (5.5 * 60 * 60 * 1000);
+    const nowIst = new Date(nowIstMs);
+    
+    targetLeave.actualReturnTime = `${String(nowIst.getUTCHours()).padStart(2, '0')}:${String(nowIst.getUTCMinutes()).padStart(2, '0')}`;
+    
+    // Check if late or early by comparing minutes from midnight
     const [endH, endM] = targetLeave.endTime.split(':').map(Number);
-    const endObj = new Date(now.getFullYear(), now.getMonth(), now.getDate(), endH, endM);
+    const currentIstMinutes = nowIst.getUTCHours() * 60 + nowIst.getUTCMinutes();
+    const endMinutes = endH * 60 + endM;
     
-    if (now > endObj) {
+    if (currentIstMinutes > endMinutes) {
       targetLeave.isLateReturn = true;
-      const lateDiffMs = now.getTime() - endObj.getTime();
-      targetLeave.lateDurationMinutes = Math.floor(lateDiffMs / 60000);
+      targetLeave.lateDurationMinutes = currentIstMinutes - endMinutes;
+      targetLeave.isEarlyReturn = false;
+      targetLeave.earlyDurationMinutes = 0;
     } else {
       targetLeave.isLateReturn = false;
       targetLeave.lateDurationMinutes = 0;
+      targetLeave.isEarlyReturn = true;
+      targetLeave.earlyDurationMinutes = endMinutes - currentIstMinutes;
     }
   } else if (targetLeave.status === 'pending') {
     // Agent is cancelling an unapproved request
