@@ -781,6 +781,9 @@ const ShiftHistorySection = ({ allSupportAgents }) => {
   const [showCalendar, setShowCalendar] = useState(false);
   const [calendarTarget, setCalendarTarget] = useState(null); // 'start' or 'end'
 
+  // View Mode: daily, weekly, monthly
+  const [viewMode, setViewMode] = useState('daily');
+
   const fetchHistory = useCallback(async (sDate, eDate, userId) => {
     setIsLoading(true);
     setError(null);
@@ -1027,10 +1030,26 @@ const ShiftHistorySection = ({ allSupportAgents }) => {
               )}
             </View>
 
-            {/* Employee Dropdown */}
-            {showEmployeeDropdown && (
-              <View style={{ marginTop: 8, backgroundColor: '#1E293B', borderRadius: 12, borderWidth: 1, borderColor: '#334155', maxHeight: 200 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#334155' }}>
+          {/* View Mode Toggle */}
+          <View style={{ flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 4, marginBottom: 16 }}>
+            {['Daily', 'Weekly', 'Monthly'].map(mode => {
+              const lowerMode = mode.toLowerCase();
+              return (
+                <TouchableOpacity
+                  key={lowerMode}
+                  onPress={() => setViewMode(lowerMode)}
+                  style={{ flex: 1, paddingVertical: 8, alignItems: 'center', backgroundColor: viewMode === lowerMode ? '#6366F1' : 'transparent', borderRadius: 8 }}
+                >
+                  <Text style={{ color: viewMode === lowerMode ? '#FFF' : '#94A3B8', fontSize: 11, fontWeight: '800' }}>{mode}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Employee Dropdown */}
+          {showEmployeeDropdown && (
+            <View style={{ marginTop: 8, backgroundColor: '#1E293B', borderRadius: 12, borderWidth: 1, borderColor: '#334155', maxHeight: 200, marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#334155' }}>
                   <Ionicons name="search" size={14} color="#64748B" />
                   <TextInput
                     value={employeeSearch}
@@ -1099,7 +1118,7 @@ const ShiftHistorySection = ({ allSupportAgents }) => {
             </View>
           )}
 
-          {/* Shift Cards */}
+          {/* Shift Cards or Summary */}
           {!isLoading && historyData && (
             <View>
               {historyData.shifts.length === 0 ? (
@@ -1107,10 +1126,10 @@ const ShiftHistorySection = ({ allSupportAgents }) => {
                   <Ionicons name="calendar-clear-outline" size={24} color="#475569" />
                   <Text style={{ color: '#475569', fontSize: 12, fontWeight: '600', marginTop: 8 }}>No shift records found for this period</Text>
                 </View>
-              ) : (
+              ) : viewMode === 'daily' ? (
                 Object.keys(groupedShifts).sort((a, b) => b.localeCompare(a)).map(dateKey => (
                   <View key={dateKey} style={{ marginBottom: 16 }}>
-                    {/* Date Header (only show in range mode or multi-day results) */}
+                    {/* Date Header */}
                     {Object.keys(groupedShifts).length > 1 && (
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }}>
                         <Ionicons name="calendar" size={12} color="#6366F1" style={{ marginRight: 6 }} />
@@ -1130,6 +1149,57 @@ const ShiftHistorySection = ({ allSupportAgents }) => {
                     })()}
                   </View>
                 ))
+              ) : (
+                (() => {
+                  const groups = {};
+                  historyData.shifts.forEach(s => {
+                    let groupKey = s.shiftDate;
+                    if (viewMode === 'weekly') {
+                      const d = new Date(s.shiftDate);
+                      const day = d.getDay() || 7;
+                      d.setDate(d.getDate() - day + 1);
+                      groupKey = `Week of ${formatDateDDMMYYYY(formatDateISO(d))}`;
+                    } else if (viewMode === 'monthly') {
+                      const d = new Date(s.shiftDate);
+                      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                      groupKey = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+                    }
+                    if (!groups[groupKey]) groups[groupKey] = {};
+                    if (!groups[groupKey][s.userId]) {
+                      const baseUser = allSupportAgents.find(a => a.id === s.userId) || { id: s.userId, name: 'Unknown', avatar: null };
+                      groups[groupKey][s.userId] = { user: baseUser, shifts: 0, totalMs: 0, activeMs: 0, breakMs: 0, overtimeMs: 0 };
+                    }
+                    const stat = groups[groupKey][s.userId];
+                    stat.shifts += 1;
+                    stat.totalMs += s.totalShiftMs || 0;
+                    stat.activeMs += s.activeDurationMs || 0;
+                    stat.breakMs += s.totalBreakMs || 0;
+                    stat.overtimeMs += s.overtimeMs || 0;
+                  });
+
+                  return Object.keys(groups).sort((a,b) => b.localeCompare(a)).map(dateKey => (
+                    <View key={dateKey} style={{ marginBottom: 16 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }}>
+                        <Ionicons name="calendar" size={12} color="#10B981" style={{ marginRight: 6 }} />
+                        <Text style={{ color: '#A7F3D0', fontSize: 12, fontWeight: '800' }}>{dateKey}</Text>
+                      </View>
+                      {Object.values(groups[dateKey]).map(stat => (
+                        <View key={stat.user.id} style={{ backgroundColor: 'rgba(255,255,255,0.04)', padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', flexDirection: 'row', alignItems: 'center' }}>
+                          <SafeAvatar uri={stat.user.avatar} name={stat.user.name} size={32} borderRadius={8} />
+                          <View style={{ marginLeft: 10, flex: 1 }}>
+                            <Text style={{ color: '#F8FAFC', fontSize: 13, fontWeight: '700' }}>{stat.user.name}</Text>
+                            <Text style={{ color: '#64748B', fontSize: 10 }}>{stat.shifts} shift{stat.shifts !== 1 ? 's' : ''}</Text>
+                          </View>
+                          <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                            <Text style={{ color: '#818CF8', fontSize: 11, fontWeight: '700' }}>Total: {formatDuration(stat.totalMs)}</Text>
+                            <Text style={{ color: '#34D399', fontSize: 10, fontWeight: '600' }}>Active: {formatDuration(stat.activeMs)}</Text>
+                            {stat.overtimeMs > 0 && <Text style={{ color: '#F87171', fontSize: 9, fontWeight: '800' }}>OT: {formatDuration(stat.overtimeMs)}</Text>}
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  ));
+                })()
               )}
             </View>
           )}
