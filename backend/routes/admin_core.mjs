@@ -363,7 +363,8 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                             type: 'shift',
                             start: currentCursor,
                             end: clippedStart,
-                            durationMs: clippedStart - currentCursor
+                            durationMs: clippedStart - currentCursor,
+                            activeDurationMs: calculateActiveTime(uid, currentCursor, clippedStart)
                         });
                     }
                     
@@ -394,7 +395,8 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                     type: 'shift',
                     start: currentCursor,
                     end: checkoutTime ? endTs : null,
-                    durationMs: checkoutTime ? (endTs - currentCursor) : null
+                    durationMs: checkoutTime ? (endTs - currentCursor) : null,
+                    activeDurationMs: calculateActiveTime(uid, currentCursor, checkoutTime ? endTs : null)
                 });
             }
             

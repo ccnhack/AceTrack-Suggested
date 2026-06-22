@@ -1517,6 +1517,11 @@ const GroupedShiftCard = ({ shifts }) => {
                         durStr = `In Progress (${formatDuration(msDiff)})`;
                     }
                     
+                    let activeDurStr = '0m';
+                    if (seg.activeDurationMs != null) {
+                        activeDurStr = formatDuration(seg.activeDurationMs);
+                    }
+                    
                     if (seg.type === 'break') {
                         return (
                             <View key={`${shiftIdx}-${segIdx}`} style={{ backgroundColor: 'rgba(245,158,11,0.05)', padding: 10, borderRadius: 8, borderLeftWidth: 2, borderLeftColor: '#F59E0B' }}>
@@ -1574,7 +1579,7 @@ const GroupedShiftCard = ({ shifts }) => {
                                 </View>
                                 <View style={{ alignItems: 'flex-end' }}>
                                     <Text style={{ color: '#A5B4FC', fontSize: 11, fontWeight: '700' }}>{durStr}</Text>
-                                    <Text style={{ color: '#10B981', fontSize: 10, fontWeight: '600', marginTop: 2 }}>Actual Active</Text>
+                                    <Text style={{ color: '#10B981', fontSize: 10, fontWeight: '600', marginTop: 2 }}>Actual Active: {activeDurStr}</Text>
                                 </View>
                             </View>
                             {segIdx === shift.segments.length - 1 && shift.overtimeStatus && shift.shiftLogId && (
