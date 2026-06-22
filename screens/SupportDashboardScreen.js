@@ -592,59 +592,77 @@ const SupportDashboardScreen = ({ navigation, route }) => {
               <Text style={shiftStyles.modalSubtitle}>Need to step away?</Text>
             </LinearGradient>
             <View style={shiftStyles.modalBody}>
-              <Text style={{ fontSize: 13, color: '#475569', fontWeight: '600', marginBottom: 8 }}>Time Frame</Text>
-              {Platform.OS === 'web' ? (
-                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
-                  <View style={{ flex: 1.5 }}>
-                    <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4 }}>Date</Text>
-                    <input 
-                      type="date" 
-                      value={shortLeaveForm.date} 
-                      onChange={e => setShortLeaveForm({...shortLeaveForm, date: e.target.value})} 
-                      style={{ padding: 12, borderRadius: 12, border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', width: '100%', fontSize: 14 }} 
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4 }}>Start Time</Text>
-                    <input 
-                      type="time" 
-                      value={shortLeaveForm.startTime} 
-                      onChange={e => setShortLeaveForm({...shortLeaveForm, startTime: e.target.value})} 
-                      style={{ padding: 12, borderRadius: 12, border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', width: '100%', fontSize: 14 }} 
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4 }}>End Time</Text>
-                    <input 
-                      type="time" 
-                      value={shortLeaveForm.endTime} 
-                      onChange={e => setShortLeaveForm({...shortLeaveForm, endTime: e.target.value})} 
-                      style={{ padding: 12, borderRadius: 12, border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', width: '100%', fontSize: 14 }} 
-                    />
-                  </View>
-                </View>
-              ) : (
-                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4 }}>Start (HH:MM)</Text>
-                    <TextInput 
-                      style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, fontSize: 15, borderWidth: 1, borderColor: '#E2E8F0', textAlign: 'center' }}
-                      placeholder="14:00"
-                      value={shortLeaveForm.startTime}
-                      onChangeText={(val) => setShortLeaveForm(prev => ({ ...prev, startTime: val }))}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4 }}>End (HH:MM)</Text>
-                    <TextInput 
-                      style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, fontSize: 15, borderWidth: 1, borderColor: '#E2E8F0', textAlign: 'center' }}
-                      placeholder="15:00"
-                      value={shortLeaveForm.endTime}
-                      onChangeText={(val) => setShortLeaveForm(prev => ({ ...prev, endTime: val }))}
-                    />
-                  </View>
-                </View>
-              )}
+              <Text style={{ fontSize: 13, color: '#475569', fontWeight: '700', marginBottom: 12, letterSpacing: 0.5, textTransform: 'uppercase' }}>Time Frame</Text>
+              <View style={{ marginBottom: 24 }}>
+                {Platform.OS === 'web' ? (
+                  <>
+                    <View style={{ marginBottom: 16 }}>
+                      <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600', marginBottom: 6 }}>Date</Text>
+                      <input 
+                        type="date" 
+                        value={shortLeaveForm.date} 
+                        onChange={e => setShortLeaveForm({...shortLeaveForm, date: e.target.value})} 
+                        style={{ padding: '12px 16px', borderRadius: 12, border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', width: '100%', fontSize: 14, outline: 'none', color: '#1E293B', fontFamily: 'inherit', boxSizing: 'border-box' }} 
+                      />
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 16 }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600', marginBottom: 6 }}>Start Time</Text>
+                        <input 
+                          type="time" 
+                          value={shortLeaveForm.startTime} 
+                          onChange={e => setShortLeaveForm({...shortLeaveForm, startTime: e.target.value})} 
+                          style={{ padding: '12px 16px', borderRadius: 12, border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', width: '100%', fontSize: 14, outline: 'none', color: '#1E293B', fontFamily: 'inherit', boxSizing: 'border-box' }} 
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600', marginBottom: 6 }}>End Time</Text>
+                        <input 
+                          type="time" 
+                          value={shortLeaveForm.endTime} 
+                          onChange={e => setShortLeaveForm({...shortLeaveForm, endTime: e.target.value})} 
+                          style={{ padding: '12px 16px', borderRadius: 12, border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', width: '100%', fontSize: 14, outline: 'none', color: '#1E293B', fontFamily: 'inherit', boxSizing: 'border-box' }} 
+                        />
+                      </View>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <View style={{ marginBottom: 16 }}>
+                      <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600', marginBottom: 6 }}>Date (YYYY-MM-DD)</Text>
+                      <TextInput 
+                        style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 14, fontSize: 15, borderWidth: 1, borderColor: '#E2E8F0', color: '#1E293B' }}
+                        placeholder="2026-06-22"
+                        placeholderTextColor="#94A3B8"
+                        value={shortLeaveForm.date}
+                        onChangeText={(val) => setShortLeaveForm(prev => ({ ...prev, date: val }))}
+                      />
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 16 }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600', marginBottom: 6 }}>Start (HH:MM)</Text>
+                        <TextInput 
+                          style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 14, fontSize: 15, borderWidth: 1, borderColor: '#E2E8F0', color: '#1E293B', textAlign: 'center' }}
+                          placeholder="14:00"
+                          placeholderTextColor="#94A3B8"
+                          value={shortLeaveForm.startTime}
+                          onChangeText={(val) => setShortLeaveForm(prev => ({ ...prev, startTime: val }))}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600', marginBottom: 6 }}>End (HH:MM)</Text>
+                        <TextInput 
+                          style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 14, fontSize: 15, borderWidth: 1, borderColor: '#E2E8F0', color: '#1E293B', textAlign: 'center' }}
+                          placeholder="15:00"
+                          placeholderTextColor="#94A3B8"
+                          value={shortLeaveForm.endTime}
+                          onChangeText={(val) => setShortLeaveForm(prev => ({ ...prev, endTime: val }))}
+                        />
+                      </View>
+                    </View>
+                  </>
+                )}
+              </View>
 
               <Text style={{ fontSize: 13, color: '#475569', fontWeight: '600', marginBottom: 8 }}>Reason</Text>
               <TextInput 
