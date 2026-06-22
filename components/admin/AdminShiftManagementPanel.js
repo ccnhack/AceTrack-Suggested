@@ -912,6 +912,19 @@ const ShiftHistorySection = ({ allSupportAgents }) => {
     }
   }, []);
 
+  // Real-time synchronization
+  const statusHash = useMemo(() => {
+    return allSupportAgents.map(a => `${a.id}:${a.shiftStatus}:${a.shiftCheckinRounded}:${a.shortLeaves?.length || 0}`).join('|');
+  }, [allSupportAgents]);
+
+  useEffect(() => {
+    // Re-fetch automatically if data is currently visible and the global state of players changes
+    if (isExpanded) {
+      fetchHistory(startDate, endDate, selectedEmployee?.id || null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusHash]);
+
   // Quick date presets
   const getQuickDates = useCallback(() => {
     const dates = [];
@@ -1416,6 +1429,14 @@ const GroupedShiftCard = ({ shifts }) => {
   const baseUser = shifts[0]; // All segments share the same employee profile details
   
   const [selectedIntervals, setSelectedIntervals] = useState(null);
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+      const timer = setInterval(() => {
+          setTick(t => t + 1);
+      }, 30000); // Re-render every 30 seconds to update 'In Progress' text
+      return () => clearInterval(timer);
+  }, []);
   
   let totalDurationMs = 0;
   let totalActiveDurationMs = 0;
