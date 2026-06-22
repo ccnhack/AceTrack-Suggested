@@ -1509,7 +1509,13 @@ const GroupedShiftCard = ({ shifts }) => {
                 return shift.segments.map((seg, segIdx) => {
                     const startStr = seg.start ? new Date(seg.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
                     const endStr = seg.end ? new Date(seg.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
-                    const durStr = seg.durationMs != null ? formatDuration(seg.durationMs) : 'In Progress';
+                    let durStr = 'In Progress';
+                    if (seg.durationMs != null) {
+                        durStr = formatDuration(seg.durationMs);
+                    } else if (seg.start) {
+                        const msDiff = Math.max(0, new Date().getTime() - new Date(seg.start).getTime());
+                        durStr = `In Progress (${formatDuration(msDiff)})`;
+                    }
                     
                     if (seg.type === 'break') {
                         return (
@@ -1586,7 +1592,14 @@ const GroupedShiftCard = ({ shifts }) => {
             // Fallback for older data without explicit segments
             const checkinStr = shift.checkinTime ? new Date(shift.checkinTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
             const checkoutStr = shift.checkoutTime ? new Date(shift.checkoutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
-            const durStr = shift.totalShiftMs != null ? formatDuration(shift.totalShiftMs) : 'In Progress';
+            let durStr = 'In Progress';
+            if (shift.totalShiftMs != null) {
+                durStr = formatDuration(shift.totalShiftMs);
+            } else if (shift.checkinTime) {
+                const msDiff = Math.max(0, new Date().getTime() - new Date(shift.checkinTime).getTime());
+                durStr = `In Progress (${formatDuration(msDiff)})`;
+            }
+            
             const activeDurStr = shift.activeDurationMs != null ? formatDuration(shift.activeDurationMs) : '0m';
             return (
                 <View key={shiftIdx} style={{ backgroundColor: 'rgba(0,0,0,0.2)', padding: 10, borderRadius: 8 }}>
