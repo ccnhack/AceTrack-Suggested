@@ -123,6 +123,24 @@ const ProfileScreen = ({ navigation, route }) => {
     fetchShift();
   }, [isFocused, user]);
 
+  // Sync shift status from global players store (for when it changes externally)
+  useEffect(() => {
+    if (user && players) {
+      const myPlayer = players.find(p => String(p.id) === String(user.id));
+      if (myPlayer) {
+        if (myPlayer.shiftStatus !== undefined) {
+           setProfileShiftStatus(myPlayer.shiftStatus);
+        }
+        if (myPlayer.shiftCheckinRounded !== undefined) {
+           setProfileShiftCheckinRounded(myPlayer.shiftCheckinRounded);
+        }
+        if (myPlayer.shiftCheckoutDue !== undefined) {
+           setProfileShiftCheckoutDue(myPlayer.shiftCheckoutDue);
+        }
+      }
+    }
+  }, [players, user]);
+
   const handleProfileShiftAction = async (action, justification = '') => {
     if (profileShiftLoading) return;
     setProfileShiftLoading(true);

@@ -145,6 +145,16 @@ const SupportDashboardScreen = ({ navigation, route }) => {
     fetchShiftStatus();
   }, [currentUser]);
 
+  // Sync short leaves from global players store (for when admins approve/reject)
+  useEffect(() => {
+    if (currentUser && players) {
+      const myPlayer = players.find(p => String(p.id) === String(currentUser.id));
+      if (myPlayer && myPlayer.shortLeaves) {
+        setShortLeaves(myPlayer.shortLeaves);
+      }
+    }
+  }, [players, currentUser]);
+
   // 🕐 Checkout banner timer — checks every 30s
   useEffect(() => {
     if (!shiftCheckoutDue || shiftStatus !== 'on_shift') {
