@@ -1,6 +1,6 @@
 import express from 'express';
 import { AuditLog, OrgSetting } from '../models/AdminCoreModels.mjs';
-import { Player as User, PlayerSession } from '../models/index.mjs';
+import { Player as User, PlayerSession, ActivityHeartbeat } from '../models/index.mjs';
 import { apiKeyGuard, authGuard } from '../middleware/security.mjs';
 
 const MAX_BREAK_DURATION_MS = 90 * 60 * 1000; // 90 minutes max break per day
@@ -257,10 +257,46 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
             ]
         }).lean();
 
+        // 🎯 [ACTIVITY HEARTBEAT] (v2.6.760): Fetch heartbeats for accurate activity tracking
+        const activityHeartbeats = await ActivityHeartbeat.find({
+            userId: { $in: userIds },
+            timestamp: { $gte: start, $lte: end }
+        }).lean();
+
         const calculateActiveTime = (uid, shiftStartTs, shiftEndTs) => {
             if (!shiftStartTs) return 0;
             const shiftStart = new Date(shiftStartTs).getTime();
             const shiftEnd = shiftEndTs ? new Date(shiftEndTs).getTime() : Date.now();
+            
+            // 🎯 NEW ALGORITHM: Try ActivityHeartbeat first
+            const heartbeats = activityHeartbeats
+                .filter(h => h.userId === uid && new Date(h.timestamp).getTime() >= shiftStart && new Date(h.timestamp).getTime() <= shiftEnd)
+                .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                
+            if (heartbeats.length > 0) {
+                let intervals = [];
+                let currentStart = new Date(heartbeats[0].timestamp).getTime();
+                let currentEnd = currentStart;
+                
+                for (let i = 1; i < heartbeats.length; i++) {
+                    const ts = new Date(heartbeats[i].timestamp).getTime();
+                    // If heartbeat is within 60s of last one, extend the continuous interval
+                    if (ts - currentEnd <= 60000) {
+                        currentEnd = ts;
+                    } else {
+                        // Gap detected: close interval (+30s buffer for the last ping)
+                        intervals.push([currentStart, currentEnd + 30000]);
+                        currentStart = ts;
+                        currentEnd = ts;
+                    }
+                }
+                // Close the final interval (+30s buffer, clamped to current time if ongoing)
+                intervals.push([currentStart, Math.min(currentEnd + 30000, Date.now())]);
+                
+                return intervals.reduce((sum, interval) => sum + (interval[1] - interval[0]), 0);
+            }
+
+            // ⚠️ FALLBACK: Legacy PlayerSession calculation (pre-v2.6.760 data)
             let intervals = playerSessions
                 .filter(s => s.userId === uid)
                 .map(s => {

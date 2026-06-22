@@ -368,6 +368,20 @@ const PlayerSessionSchema = new mongoose.Schema({
 export const PlayerSession = mongoose.model('PlayerSession', PlayerSessionSchema);
 
 // ═══════════════════════════════════════════════════════════════
+// 🎯 ACTIVITY HEARTBEAT (v2.6.760)
+// Lightweight activity-based pings sent every 30s only when
+// the employee is genuinely interacting with the dashboard.
+// Used by calculateActiveTime to compute real "Actual Active" time.
+// ═══════════════════════════════════════════════════════════════
+const ActivityHeartbeatSchema = new mongoose.Schema({
+  userId: { type: String, required: true, index: true },
+  timestamp: { type: Date, required: true },
+  createdAt: { type: Date, default: Date.now, expires: '90d' }
+});
+ActivityHeartbeatSchema.index({ userId: 1, timestamp: 1 });
+export const ActivityHeartbeat = mongoose.model('ActivityHeartbeat', ActivityHeartbeatSchema);
+
+// ═══════════════════════════════════════════════════════════════
 // ⏱️ RATE LIMIT SCHEMA (v2.6.530)
 // Replaces rate-limit-mongo which was incompatible with express-rate-limit v7
 // ═══════════════════════════════════════════════════════════════

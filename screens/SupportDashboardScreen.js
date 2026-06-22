@@ -447,25 +447,81 @@ const SupportDashboardScreen = ({ navigation, route }) => {
     }
   };
 
-  // 🕐 [SESSION HEARTBEAT] (v2.6.345)
+  // 🎯 [ACTIVITY HEARTBEAT] (v2.6.760): Activity-based session tracking
+  // Sends heartbeat every 30s ONLY when user is actively interacting AND tab is visible
   useEffect(() => {
     if (!currentUser || currentUser.role !== 'support') return;
 
-    const pingHeartbeat = async () => {
+    const HEARTBEAT_INTERVAL = 30000; // 30 seconds
+    const IDLE_TIMEOUT = 180000; // 3 minutes
+    let lastActivityTs = Date.now();
+    let isTabVisible = true;
+    let heartbeatTimer = null;
+
+    // Track user activity (throttled to 1 update per second)
+    let activityThrottleTimer = null;
+    const markActive = () => {
+      if (activityThrottleTimer) return;
+      lastActivityTs = Date.now();
+      activityThrottleTimer = setTimeout(() => { activityThrottleTimer = null; }, 1000);
+    };
+
+    // Web: Detect tab visibility
+    const handleVisibilityChange = () => {
+      isTabVisible = Platform.OS === 'web' ? !document.hidden : true;
+      if (isTabVisible) lastActivityTs = Date.now(); // Resume counts as activity
+    };
+
+    // Mobile: Detect app state
+    const { AppState: RNAppState } = require('react-native');
+    const appStateListener = RNAppState.addEventListener?.('change', (nextState) => {
+      isTabVisible = nextState === 'active';
+      if (isTabVisible) lastActivityTs = Date.now();
+    });
+
+    // Register activity listeners (web only — mobile gets touch events natively)
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      document.addEventListener('mousemove', markActive, { passive: true });
+      document.addEventListener('click', markActive, { passive: true });
+      document.addEventListener('keydown', markActive, { passive: true });
+      document.addEventListener('scroll', markActive, { passive: true });
+      document.addEventListener('touchstart', markActive, { passive: true });
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    // Heartbeat sender — only fires when active + visible
+    const sendHeartbeat = async () => {
+      const isIdle = (Date.now() - lastActivityTs) > IDLE_TIMEOUT;
+      if (!isTabVisible || isIdle) {
+        console.log(`[Heartbeat] Skipped (visible=${isTabVisible}, idle=${isIdle})`);
+        return;
+      }
       try {
         await fetch(`${config.API_BASE_URL}/api/v1/support/heartbeat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-ace-api-key': config.PUBLIC_APP_ID }
         });
-        console.log('[Heartbeat] Sent support session ping');
       } catch (err) {
-        console.warn('[Heartbeat] Failed to send support session ping:', err.message);
+        // Silent fail — don't spam console
       }
     };
 
-    pingHeartbeat();
-    const intervalId = setInterval(pingHeartbeat, 120000);
-    return () => clearInterval(intervalId);
+    sendHeartbeat(); // Initial ping
+    heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
+
+    return () => {
+      clearInterval(heartbeatTimer);
+      if (activityThrottleTimer) clearTimeout(activityThrottleTimer);
+      if (appStateListener?.remove) appStateListener.remove();
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        document.removeEventListener('mousemove', markActive);
+        document.removeEventListener('click', markActive);
+        document.removeEventListener('keydown', markActive);
+        document.removeEventListener('scroll', markActive);
+        document.removeEventListener('touchstart', markActive);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
   }, [currentUser]);
 
   const ticketStats = useMemo(() => {
