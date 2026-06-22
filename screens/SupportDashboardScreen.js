@@ -95,6 +95,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
   // Short Leave State
   const [showShortLeaveModal, setShowShortLeaveModal] = useState(false);
   const [showAllLeavesModal, setShowAllLeavesModal] = useState(false);
+  const [showResumeLeaveModal, setShowResumeLeaveModal] = useState(false);
   const [shortLeaveForm, setShortLeaveForm] = useState({ id: null, date: getLocalDateStr(), startTime: '14:00', endTime: '15:00', reason: '' });
   const [shortLeaveLoading, setShortLeaveLoading] = useState(false);
 
@@ -134,6 +135,20 @@ const SupportDashboardScreen = ({ navigation, route }) => {
             const isMuted = await AsyncStorage.getItem(todayKey);
             if (!isMuted && !hasCheckedInToday) {
               setShowCheckinModal(true);
+            }
+          } else {
+            // If on shift, check if they are returning from a short leave
+            const now = new Date();
+            const todayStr = getLocalDateStr();
+            const currentActiveLeave = (data.shortLeaves || []).find(l => {
+              if (l.status !== 'approved' || l.date !== todayStr) return false;
+              const [startH, startM] = l.startTime.split(':').map(Number);
+              const startObj = new Date(now.getFullYear(), now.getMonth(), now.getDate(), startH, startM);
+              return now >= startObj;
+            });
+            
+            if (currentActiveLeave) {
+              setShowResumeLeaveModal(true);
             }
           }
         }
@@ -410,8 +425,18 @@ const SupportDashboardScreen = ({ navigation, route }) => {
       
       const data = await res.json();
       if (res.ok && data.success) {
-        setShortLeaves(prev => prev.filter(l => l.id !== leaveId));
-        Alert.alert('Success', 'Short leave request cancelled.');
+        if (data.updatedLeave) {
+          setShortLeaves(prev => {
+            const idx = prev.findIndex(l => l.id === data.updatedLeave.id);
+            if (idx >= 0) {
+              const clone = [...prev];
+              clone[idx] = data.updatedLeave;
+              return clone;
+            }
+            return [...prev, data.updatedLeave];
+          });
+        }
+        Alert.alert('Success', data.updatedLeave?.status === 'completed' ? 'Shift resumed successfully.' : 'Short leave request cancelled.');
       } else {
         Alert.alert('Error', data.error || 'Failed to cancel leave');
       }
@@ -522,6 +547,53 @@ const SupportDashboardScreen = ({ navigation, route }) => {
       return true;
     });
   }, [shortLeaves]);
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🕐 RESUME LEAVE MODAL (v2.6.758)
+  // ═══════════════════════════════════════════════════════════════
+  const renderResumeLeaveModal = () => {
+    if (!showResumeLeaveModal || !activeLeave) return null;
+    
+    return (
+      <Modal transparent animationType="fade" visible={showResumeLeaveModal} onRequestClose={() => setShowResumeLeaveModal(false)}>
+        <View style={shiftStyles.modalOverlay}>
+          <View style={shiftStyles.modalCard}>
+            <LinearGradient colors={isLateFromLeave ? ['#EF4444', '#B91C1C'] : ['#F59E0B', '#D97706']} style={shiftStyles.modalHeader}>
+              <Ionicons name={isLateFromLeave ? "warning-outline" : "time-outline"} size={36} color="#FFF" />
+              <Text style={shiftStyles.modalTitle}>Resume Your Shift</Text>
+            </LinearGradient>
+            <View style={shiftStyles.modalBody}>
+              <Text style={[shiftStyles.modalText, { textAlign: 'center', marginBottom: 20 }]}>
+                Welcome back! You are currently on a short leave ({activeLeave.startTime} - {activeLeave.endTime}).
+                {isLateFromLeave ? " Your leave is currently overdue." : " Are you ready to resume your shift early?"}
+              </Text>
+              
+              <TouchableOpacity 
+                style={[shiftStyles.checkinBtn, { marginBottom: 12 }]}
+                onPress={() => {
+                  setShowResumeLeaveModal(false);
+                  handleCancelShortLeave(activeLeave.id, true);
+                }}
+                disabled={shortLeaveLoading}
+              >
+                <LinearGradient colors={['#10B981', '#059669']} style={shiftStyles.checkinBtnGradient}>
+                  <Ionicons name="play-circle-outline" size={22} color="#FFF" />
+                  <Text style={shiftStyles.checkinBtnText}>{shortLeaveLoading ? 'Resuming...' : 'Yes, Resume Shift Now'}</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[shiftStyles.muteBtn, { marginTop: 0 }]}
+                onPress={() => setShowResumeLeaveModal(false)}
+              >
+                <Text style={shiftStyles.muteBtnText}>Not Yet</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
 
   // ═══════════════════════════════════════════════════════════════
   // 🕐 CHECK-IN MODAL (v2.6.673)
@@ -1166,6 +1238,9 @@ const SupportDashboardScreen = ({ navigation, route }) => {
 
       {/* 🕐 Check-In Modal */}
       {renderCheckinModal()}
+      
+      {/* 🕐 Resume Leave Modal */}
+      {renderResumeLeaveModal()}
       
       {/* 🕐 Short Leave Modal */}
       {renderShortLeaveModal()}
