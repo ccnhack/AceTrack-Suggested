@@ -262,9 +262,8 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
             userId: { $in: userIds },
             timestamp: { $gte: start, $lte: end }
         }).lean();
-
         const calculateActiveTime = (uid, shiftStartTs, shiftEndTs) => {
-            if (!shiftStartTs) return 0;
+            if (!shiftStartTs) return { totalMs: 0, intervals: [] };
             const shiftStart = new Date(shiftStartTs).getTime();
             const shiftEnd = shiftEndTs ? new Date(shiftEndTs).getTime() : Date.now();
             
@@ -293,7 +292,8 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                 // Close the final interval (+30s buffer, clamped to current time if ongoing)
                 intervals.push([currentStart, Math.min(currentEnd + 30000, Date.now())]);
                 
-                return intervals.reduce((sum, interval) => sum + (interval[1] - interval[0]), 0);
+                const totalMs = intervals.reduce((sum, interval) => sum + (interval[1] - interval[0]), 0);
+                return { totalMs, intervals };
             }
 
             // ⚠️ FALLBACK: Legacy PlayerSession calculation (pre-v2.6.760 data)
@@ -317,7 +317,7 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                 }
             }
 
-            if (intervals.length === 0) return 0;
+            if (intervals.length === 0) return { totalMs: 0, intervals: [] };
             intervals.sort((a, b) => a[0] - b[0]);
             let merged = [intervals[0]];
             for (let i = 1; i < intervals.length; i++) {
@@ -329,7 +329,8 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                     merged.push(current);
                 }
             }
-            return merged.reduce((sum, interval) => sum + (interval[1] - interval[0]), 0);
+            const totalMs = merged.reduce((sum, interval) => sum + (interval[1] - interval[0]), 0);
+            return { totalMs, intervals: merged };
         };
 
         // Pair checkins with checkouts per user per day
@@ -395,12 +396,14 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                 if (clippedStart < clippedEnd) {
                     // Create preceding active segment
                     if (clippedStart > currentCursor) {
+                        const activeData = calculateActiveTime(uid, currentCursor, clippedStart);
                         segments.push({
                             type: 'shift',
                             start: currentCursor,
                             end: clippedStart,
                             durationMs: clippedStart - currentCursor,
-                            activeDurationMs: calculateActiveTime(uid, currentCursor, clippedStart)
+                            activeDurationMs: activeData.totalMs,
+                            activeIntervals: activeData.intervals
                         });
                     }
                     
@@ -427,12 +430,14 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
             
             // Final active segment
             if (currentCursor < endTs && !isOnBreak) {
+                const activeData = calculateActiveTime(uid, currentCursor, checkoutTime ? endTs : null);
                 segments.push({
                     type: 'shift',
                     start: currentCursor,
                     end: checkoutTime ? endTs : null,
                     durationMs: checkoutTime ? (endTs - currentCursor) : null,
-                    activeDurationMs: calculateActiveTime(uid, currentCursor, checkoutTime ? endTs : null)
+                    activeDurationMs: activeData.totalMs,
+                    activeIntervals: activeData.intervals
                 });
             }
             

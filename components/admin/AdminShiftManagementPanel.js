@@ -1415,6 +1415,8 @@ const OvertimeJustificationInput = ({ shiftLogId, initialValue = '', initialStat
 const GroupedShiftCard = ({ shifts }) => {
   const baseUser = shifts[0]; // All segments share the same employee profile details
   
+  const [selectedIntervals, setSelectedIntervals] = useState(null);
+  
   let totalDurationMs = 0;
   let totalActiveDurationMs = 0;
   let totalBreakMs = 0;
@@ -1579,7 +1581,14 @@ const GroupedShiftCard = ({ shifts }) => {
                                 </View>
                                 <View style={{ alignItems: 'flex-end' }}>
                                     <Text style={{ color: '#A5B4FC', fontSize: 11, fontWeight: '700' }}>{durStr}</Text>
-                                    <Text style={{ color: '#10B981', fontSize: 10, fontWeight: '600', marginTop: 2 }}>Actual Active: {activeDurStr}</Text>
+                                    {seg.activeIntervals && seg.activeIntervals.length > 0 ? (
+                                        <TouchableOpacity onPress={() => setSelectedIntervals({ intervals: seg.activeIntervals, start: seg.start, end: seg.end || Date.now() })} style={{ marginTop: 2, flexDirection: 'row', alignItems: 'center' }}>
+                                            <Text style={{ color: '#10B981', fontSize: 10, fontWeight: '600' }}>Actual Active: {activeDurStr}</Text>
+                                            <Ionicons name="information-circle-outline" size={12} color="#10B981" style={{ marginLeft: 4 }} />
+                                        </TouchableOpacity>
+                                    ) : (
+                                        <Text style={{ color: '#10B981', fontSize: 10, fontWeight: '600', marginTop: 2 }}>Actual Active: {activeDurStr}</Text>
+                                    )}
                                 </View>
                             </View>
                             {segIdx === shift.segments.length - 1 && shift.overtimeStatus && shift.shiftLogId && (
@@ -1625,7 +1634,14 @@ const GroupedShiftCard = ({ shifts }) => {
                         </View>
                         <View style={{ alignItems: 'flex-end' }}>
                             <Text style={{ color: '#A5B4FC', fontSize: 11, fontWeight: '700' }}>{durStr}</Text>
-                            <Text style={{ color: '#10B981', fontSize: 10, fontWeight: '600', marginTop: 2 }}>Actual Active: {activeDurStr}</Text>
+                            {shift.activeIntervals && shift.activeIntervals.length > 0 ? (
+                                <TouchableOpacity onPress={() => setSelectedIntervals({ intervals: shift.activeIntervals, start: new Date(shift.checkinTime).getTime(), end: shift.checkoutTime ? new Date(shift.checkoutTime).getTime() : Date.now() })} style={{ marginTop: 2, flexDirection: 'row', alignItems: 'center' }}>
+                                    <Text style={{ color: '#10B981', fontSize: 10, fontWeight: '600' }}>Actual Active: {activeDurStr}</Text>
+                                    <Ionicons name="information-circle-outline" size={12} color="#10B981" style={{ marginLeft: 4 }} />
+                                </TouchableOpacity>
+                            ) : (
+                                <Text style={{ color: '#10B981', fontSize: 10, fontWeight: '600', marginTop: 2 }}>Actual Active: {activeDurStr}</Text>
+                            )}
                         </View>
                     </View>
                     {shift.justification && (
@@ -1665,6 +1681,90 @@ const GroupedShiftCard = ({ shifts }) => {
                 </View>
             )}
         </View>
+      )}
+
+      {/* 🎯 [ACTIVITY HEARTBEAT] Breakdown Modal */}
+      {selectedIntervals && (
+          <Modal transparent visible animationType="fade" onRequestClose={() => setSelectedIntervals(null)}>
+              <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+                  <View style={{ width: '100%', maxWidth: 400, backgroundColor: '#1E293B', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#334155' }}>
+                      <View style={{ padding: 16, backgroundColor: '#0F172A', borderBottomWidth: 1, borderBottomColor: '#334155', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                              <Ionicons name="stats-chart" size={16} color="#10B981" style={{ marginRight: 8 }} />
+                              <Text style={{ color: '#F8FAFC', fontSize: 16, fontWeight: '700' }}>Activity Timeline</Text>
+                          </View>
+                          <TouchableOpacity onPress={() => setSelectedIntervals(null)}>
+                              <Ionicons name="close" size={24} color="#94A3B8" />
+                          </TouchableOpacity>
+                      </View>
+                      
+                      <ScrollView style={{ maxHeight: 300, padding: 16 }}>
+                          {(() => {
+                              const blocks = [];
+                              const startCursor = selectedIntervals.start;
+                              const endCursor = selectedIntervals.end;
+                              const intervals = selectedIntervals.intervals;
+                              
+                              if (intervals.length === 0) {
+                                  return <Text style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', marginVertical: 20 }}>No activity data available for this segment.</Text>;
+                              }
+
+                              // Initial AFK block if first interval doesn't start exactly at segment start
+                              if (intervals[0][0] > startCursor + 60000) {
+                                  blocks.push({ type: 'afk', start: startCursor, end: intervals[0][0] });
+                              }
+
+                              for (let i = 0; i < intervals.length; i++) {
+                                  blocks.push({ type: 'active', start: intervals[i][0], end: intervals[i][1] });
+                                  
+                                  // Inter-interval AFK block
+                                  if (i < intervals.length - 1) {
+                                      const gapStart = intervals[i][1];
+                                      const gapEnd = intervals[i+1][0];
+                                      if (gapEnd - gapStart > 60000) {
+                                          blocks.push({ type: 'afk', start: gapStart, end: gapEnd });
+                                      }
+                                  }
+                              }
+
+                              // Trailing AFK block
+                              const lastEnd = intervals[intervals.length - 1][1];
+                              if (endCursor - lastEnd > 60000) {
+                                  blocks.push({ type: 'afk', start: lastEnd, end: endCursor });
+                              }
+
+                              return blocks.map((block, idx) => {
+                                  const sTime = new Date(block.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                  const eTime = new Date(block.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                  const dur = formatDuration(block.end - block.start);
+                                  
+                                  if (block.type === 'active') {
+                                      return (
+                                          <View key={idx} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 }}>
+                                              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#10B981', marginTop: 4, marginRight: 12 }} />
+                                              <View style={{ flex: 1 }}>
+                                                  <Text style={{ color: '#F8FAFC', fontSize: 13, fontWeight: '600' }}>{sTime} <Text style={{ color: '#64748B' }}>→</Text> {eTime}</Text>
+                                                  <Text style={{ color: '#10B981', fontSize: 11, fontWeight: '700', marginTop: 2 }}>{dur} (Active)</Text>
+                                              </View>
+                                          </View>
+                                      );
+                                  } else {
+                                      return (
+                                          <View key={idx} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12, opacity: 0.7 }}>
+                                              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#EF4444', marginTop: 4, marginRight: 12 }} />
+                                              <View style={{ flex: 1 }}>
+                                                  <Text style={{ color: '#94A3B8', fontSize: 13, fontWeight: '600' }}>{sTime} <Text style={{ color: '#64748B' }}>→</Text> {eTime}</Text>
+                                                  <Text style={{ color: '#EF4444', fontSize: 11, fontWeight: '700', marginTop: 2 }}>{dur} (Unavailable/AFK)</Text>
+                                              </View>
+                                          </View>
+                                      );
+                                  }
+                              });
+                          })()}
+                      </ScrollView>
+                  </View>
+              </View>
+          </Modal>
       )}
     </View>
   );
