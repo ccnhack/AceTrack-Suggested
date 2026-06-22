@@ -1272,7 +1272,7 @@ router.get('/support/shift-status', apiKeyGuard, authGuard, asyncHandler(async (
 // 🕐 POST /support/request-short-leave
 router.post('/support/request-short-leave', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
   const userId = req.user?.id;
-  const { date, startTime, endTime, reason } = req.body;
+  const { leaveId, date, startTime, endTime, reason } = req.body;
   if (!userId) return res.status(401).json({ error: 'Authentication required' });
 
   const playerDoc = await Player.findOne({ id: userId }).lean();
@@ -1281,35 +1281,57 @@ router.post('/support/request-short-leave', apiKeyGuard, authGuard, asyncHandler
     return res.status(400).json({ error: 'You must be on shift to request short leave.' });
   }
 
-  const leaveId = Date.now().toString() + Math.random().toString(36).substring(2, 7);
-  const newLeave = {
-    id: leaveId,
-    date,
-    startTime,
-    endTime,
-    reason,
-    status: 'pending',
-    createdAt: new Date().toISOString()
-  };
+  let shortLeaves = playerDoc.data.shortLeaves || [];
+  let updatedLeave = null;
+
+  if (leaveId) {
+    const targetLeaveIndex = shortLeaves.findIndex(l => l.id === leaveId);
+    if (targetLeaveIndex >= 0) {
+      if (shortLeaves[targetLeaveIndex].status !== 'pending') {
+        return res.status(400).json({ error: 'Only pending requests can be modified.' });
+      }
+      shortLeaves[targetLeaveIndex] = {
+        ...shortLeaves[targetLeaveIndex],
+        date,
+        startTime,
+        endTime,
+        reason,
+        updatedAt: new Date().toISOString()
+      };
+      updatedLeave = shortLeaves[targetLeaveIndex];
+    } else {
+      return res.status(404).json({ error: 'Leave request not found' });
+    }
+  } else {
+    updatedLeave = {
+      id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
+      date,
+      startTime,
+      endTime,
+      reason,
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
+    shortLeaves.push(updatedLeave);
+  }
 
   await Player.updateOne(
     { id: userId },
     { 
-      $push: { 'data.shortLeaves': newLeave },
-      $set: { lastUpdated: new Date() }
+      $set: { 'data.shortLeaves': shortLeaves, lastUpdated: new Date() }
     }
   );
 
   if (io) {
     io.emit('entity_updated', {
       entity: 'players',
-      data: { id: userId, shortLeaves: [...(playerDoc.data.shortLeaves || []), newLeave] },
+      data: { id: userId, shortLeaves },
       source: 'request_short_leave',
       timestamp: Date.now()
     });
   }
 
-  res.json({ success: true });
+  res.json({ success: true, updatedLeave });
 }));
 
 // 🕐 POST /support/cancel-short-leave

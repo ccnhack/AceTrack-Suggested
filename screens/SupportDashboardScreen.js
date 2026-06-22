@@ -345,6 +345,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
         headers,
         credentials: 'include',
         body: JSON.stringify({
+          leaveId: shortLeaveForm.id,
           date: shortLeaveForm.date,
           startTime: shortLeaveForm.startTime,
           endTime: shortLeaveForm.endTime,
@@ -354,7 +355,17 @@ const SupportDashboardScreen = ({ navigation, route }) => {
       
       const data = await res.json();
       if (res.ok && data.success) {
-        // Will be updated via heartbeat/sync, but we can optimistically update or just re-fetch
+        if (data.updatedLeave) {
+          setShortLeaves(prev => {
+            const idx = prev.findIndex(l => l.id === data.updatedLeave.id);
+            if (idx >= 0) {
+              const clone = [...prev];
+              clone[idx] = data.updatedLeave;
+              return clone;
+            }
+            return [...prev, data.updatedLeave];
+          });
+        }
         setShowShortLeaveModal(false);
         setShortLeaveForm({ id: null, date: getLocalDateStr(), startTime: '14:00', endTime: '15:00', reason: '' });
         Alert.alert('Success', 'Short leave requested. Awaiting manager approval.');
@@ -936,13 +947,13 @@ const SupportDashboardScreen = ({ navigation, route }) => {
                       <Text style={{ color: '#94A3B8', fontSize: 9, fontWeight: '600' }} numberOfLines={1}>For: {leave.reason}</Text>
                     </View>
                   ))}
-                  {shortLeaves.length > 3 && (
+                  {shortLeaves.length > 0 && (
                     <TouchableOpacity 
                       style={{ marginTop: 8, paddingVertical: 8, borderRadius: 8, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)', alignItems: 'center', flexDirection: 'row', justifyContent: 'center' }}
                       onPress={() => setShowAllLeavesModal(true)}
                     >
                       <Ionicons name="list-outline" size={14} color="#94A3B8" style={{ marginRight: 6 }} />
-                      <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '700' }}>View All ({shortLeaves.length})</Text>
+                      <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '700' }}>View All History ({shortLeaves.length})</Text>
                     </TouchableOpacity>
                   )}
                 </View>
