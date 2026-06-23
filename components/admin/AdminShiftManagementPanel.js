@@ -637,7 +637,29 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
                                {p.earlyCheckoutDates?.length > 0 && (
                                  <View style={{ flexDirection: 'row' }}>
                                     <Text style={{ color: '#F59E0B', fontSize: 11, fontWeight: '700', width: 90 }}>Early Checkout:</Text>
-                                    <Text style={{ color: '#E2E8F0', fontSize: 11, flex: 1 }}>{p.earlyCheckoutDates.map(formatDateDDMMYYYY).join(', ')}</Text>
+                                    <Text style={{ color: '#E2E8F0', fontSize: 11, flex: 1, lineHeight: 16 }}>
+                                      {p.earlyCheckoutDates.map(item => {
+                                          if (item.includes('|')) {
+                                              const [dateStr, timeStr, mins] = item.split('|');
+                                              let formattedTime = timeStr;
+                                              if (timeStr) {
+                                                  const [h, m] = timeStr.split(':').map(Number);
+                                                  const ampm = h >= 12 ? 'PM' : 'AM';
+                                                  const h12 = h % 12 || 12;
+                                                  formattedTime = `${h12}:${m.toString().padStart(2, '0')} ${ampm}`;
+                                              }
+                                              let durationStr = `${mins}m`;
+                                              const mNum = parseInt(mins, 10);
+                                              if (!isNaN(mNum) && mNum >= 60) {
+                                                  const h = Math.floor(mNum / 60);
+                                                  const rem = mNum % 60;
+                                                  durationStr = rem > 0 ? `${h}h ${rem}m` : `${h}h`;
+                                              }
+                                              return `${formatDateDDMMYYYY(dateStr)} - ${formattedTime} (${durationStr} early)`;
+                                          }
+                                          return formatDateDDMMYYYY(item);
+                                      }).join('\n')}
+                                    </Text>
                                  </View>
                                )}
                              </View>

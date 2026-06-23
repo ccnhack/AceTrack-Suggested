@@ -668,7 +668,25 @@ router.get('/shift-attendance-patterns', requireAdminOrSupport, async (req, res)
                 if (totalMs > 0 && totalMs < 7 * 3600000 && !log.details?.isAutoCheckout) {
                     p.earlyCheckouts++;
                     if (!p.earlyCheckoutDates) p.earlyCheckoutDates = [];
-                    if (!p.earlyCheckoutDates.includes(dateStr)) p.earlyCheckoutDates.push(dateStr);
+                    
+                    const schedEnd = playerMap[uid]?.scheduledEnd || DEFAULT_SHIFT_END;
+                    const [schedH, schedM] = schedEnd.split(':').map(Number);
+                    
+                    const checkoutIST = new Date(new Date(log.timestamp).getTime() + 5.5 * 3600000);
+                    const checkoutH = checkoutIST.getUTCHours();
+                    const checkoutM = checkoutIST.getUTCMinutes();
+                    
+                    let earlyMins = ((schedH - checkoutH) * 60) + (schedM - checkoutM);
+                    if (earlyMins < 0) earlyMins = 0;
+                    
+                    const hhStr = checkoutH.toString().padStart(2, '0');
+                    const mmStr = checkoutM.toString().padStart(2, '0');
+                    const timeStr = `${hhStr}:${mmStr}`;
+                    const entryStr = `${dateStr}|${timeStr}|${earlyMins}`;
+                    
+                    if (!p.earlyCheckoutDates.find(e => e.startsWith(dateStr))) {
+                        p.earlyCheckoutDates.push(entryStr);
+                    }
                 }
                 p.totalShiftMs += totalMs;
             }
