@@ -151,6 +151,10 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const [pendingRoleChange, setPendingRoleChange] = useState(null);
   const [roleChangeComment, setRoleChangeComment] = useState('');
 
+  const [editShiftStart, setEditShiftStart] = useState('');
+  const [editShiftEnd, setEditShiftEnd] = useState('');
+  const [isUpdatingShift, setIsUpdatingShift] = useState(false);
+
   // 🎨 [ACE_DIALOG] (v2.6.431): State-driven dialog system — replaces window.alert/confirm/prompt
   const [dialog, setDialog] = useState({ visible: false, title: '', message: '', type: 'info', confirmText: 'OK', cancelText: 'Cancel', pickerOptions: [] });
   const dialogResolveRef = useRef(null);
@@ -1776,6 +1780,12 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
         transparent={true}
         animationType="fade"
         onRequestClose={() => setShowActionsModal(false)}
+        onShow={() => {
+          if (selectedAgent) {
+            setEditShiftStart(selectedAgent.scheduledShiftStart || '13:00');
+            setEditShiftEnd(selectedAgent.scheduledShiftEnd || '21:00');
+          }
+        }}
       >
         <View style={styles.actionsModalOverlay}>
           <View style={styles.actionsModalContent}>
@@ -1974,6 +1984,75 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                       </ScrollView>
                     );
                   })()}
+                </View>
+
+                <Text style={styles.actionSectionTitle}>SHIFT TIMINGS</Text>
+                <View style={{ flexDirection: 'row', marginHorizontal: 16, marginBottom: 16, gap: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: '#64748B', fontSize: 10, fontWeight: 'bold', marginBottom: 4 }}>Expected Check-in (HH:MM)</Text>
+                    <TextInput
+                      style={{ backgroundColor: '#0F172A', color: '#F8FAFC', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#334155' }}
+                      value={editShiftStart}
+                      onChangeText={setEditShiftStart}
+                      placeholder="e.g. 13:00"
+                      placeholderTextColor="#475569"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: '#64748B', fontSize: 10, fontWeight: 'bold', marginBottom: 4 }}>Expected Checkout (HH:MM)</Text>
+                    <TextInput
+                      style={{ backgroundColor: '#0F172A', color: '#F8FAFC', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#334155' }}
+                      value={editShiftEnd}
+                      onChangeText={setEditShiftEnd}
+                      placeholder="e.g. 21:00"
+                      placeholderTextColor="#475569"
+                    />
+                  </View>
+                </View>
+                <View style={{ marginHorizontal: 16, marginBottom: 24 }}>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#6366F1', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                    disabled={isUpdatingShift}
+                    onPress={async () => {
+                       setIsUpdatingShift(true);
+                       try {
+                          const token = await storage.getItem('userToken');
+                          const headers = { 
+                            'x-user-id': currentUser?.id || 'admin',
+                            'x-ace-api-key': config.ACE_API_KEY || config.PUBLIC_APP_ID,
+                            'Content-Type': 'application/json'
+                          };
+                          if (token) headers['Authorization'] = `Bearer ${token}`;
+
+                          const res = await apiFetch(`${config.API_BASE_URL}/api/v1/admin-core/update-shift-schedule`, {
+                            method: 'POST',
+                            headers,
+                            credentials: 'include',
+                            body: JSON.stringify({
+                              agentId: selectedAgent.id,
+                              scheduledShiftStart: editShiftStart,
+                              scheduledShiftEnd: editShiftEnd
+                            })
+                          });
+
+                          if (res.ok) {
+                            Alert.alert('Success', 'Shift timings updated successfully. It may take a moment to reflect.');
+                            setShowActionsModal(false);
+                          } else {
+                            const err = await res.json();
+                            Alert.alert('Error', err.message || 'Failed to update shift timings.');
+                          }
+                       } catch (e) {
+                          Alert.alert('Error', 'Network error. Could not update shift timings.');
+                       } finally {
+                          setIsUpdatingShift(false);
+                       }
+                    }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>
+                      {isUpdatingShift ? 'Updating...' : 'Save Shift Timings'}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
 
                 <Text style={styles.actionSectionTitle}>ACCOUNT CONTROLS</Text>
