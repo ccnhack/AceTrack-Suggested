@@ -210,7 +210,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
   };
 
   const handleCloudFilenameSearch = async () => {
-    if (!diagUserSearch.trim()) return;
+    if (!diagUserSearch?.trim()) return;
     setIsSearchingFilenames(true);
     setCloudMatchFiles([]);
     
@@ -228,7 +228,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
       });
       if (res.ok) {
         const data = await res.json();
-        const searchLow = diagUserSearch.toLowerCase().trim();
+        const searchLow = diagUserSearch?.toLowerCase().trim() || '';
         const matches = (data?.files || []).filter(f => f.toLowerCase().includes(searchLow));
         setCloudMatchFiles(matches.slice(0, 10));
         if (matches.length === 0) {
@@ -483,7 +483,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
   };
 
   const filteredPlayers = (players || []).filter(p => {
-    const s = diagUserSearch.toLowerCase().trim();
+    const s = diagUserSearch?.toLowerCase().trim() || '';
     if (!s) return true;
     return p.name?.toLowerCase().includes(s) || p.id?.toLowerCase().includes(s) || p.email?.toLowerCase().includes(s);
   });

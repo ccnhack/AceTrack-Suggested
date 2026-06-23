@@ -39,7 +39,7 @@ const AdminUserPanel = memo(({ subTab, search }) => {
   const filterData = (data, field = 'name') => {
     if (!data) return [];
     if (!search) return data;
-    const s = search.toLowerCase().trim();
+    const s = search?.toLowerCase().trim() || '';
     return data.filter(item => 
       (item[field] || '').toLowerCase().includes(s) ||
       (item.id || '').toLowerCase().includes(s) ||

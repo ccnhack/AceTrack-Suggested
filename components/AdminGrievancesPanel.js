@@ -261,7 +261,7 @@ export const AdminGrievancesPanel = ({
 
   // 🔍 Conversational Search Logic (v2.6.33)
   useEffect(() => {
-    if (chatSearchText.trim() && selectedTicket?.messages) {
+    if (chatSearchText?.trim() && selectedTicket?.messages) {
       const q = chatSearchText.toLowerCase();
       const matches = [];
       selectedTicket.messages.forEach((msg, idx) => {
@@ -347,12 +347,12 @@ export const AdminGrievancesPanel = ({
   };
 
   const handleReopenSubmit = async () => {
-    if (!reopenJustification.trim()) {
+    if (!reopenJustification?.trim()) {
       Alert.alert("Required", "Please provide a justification for reopening this ticket.");
       return;
     }
     // 🛡️ [FIX v2.6.290] Atomic Status + Justification Update
-    const statusRes = await onUpdateStatus(selectedTicket.id, pendingReopenStatus, null, reopenJustification.trim());
+    const statusRes = await onUpdateStatus(selectedTicket.id, pendingReopenStatus, null, reopenJustification?.trim() || '');
     
     if (statusRes && statusRes.success) {
       setShowReopenModal(false);
@@ -389,7 +389,7 @@ export const AdminGrievancesPanel = ({
         return `${sender}: ${text}`;
       }).filter(line => line.split(': ')[1]).join('\n');
     
-      if (!history.trim()) {
+      if (!history?.trim()) {
          history = "No messages were exchanged in this ticket.";
       }
 
@@ -399,7 +399,7 @@ export const AdminGrievancesPanel = ({
       ];
     
       const rawAiSummary = await generateAIResponse(prompt);
-      const aiSummary = rawAiSummary ? rawAiSummary.trim() : "Closure summary was successfully resolved, but AI was unable to generate a summary.";
+      const aiSummary = rawAiSummary ? rawAiSummary?.trim() : "Closure summary was successfully resolved, but AI was unable to generate a summary.";
       const res = await onUpdateStatus(selectedTicket.id, pendingStatus, aiSummary);
       notify(res);
     } catch (e) {
@@ -581,7 +581,7 @@ export const AdminGrievancesPanel = ({
   };
 
   const handleSendReply = async () => {
-    if ((!replyText.trim() && !selectedImage) || !selectedTicket) return;
+    if ((!replyText?.trim() && !selectedImage) || !selectedTicket) return;
 
     const myRole = currentUser?.role || 'user';
     const myLevel = currentUser?.supportLevel || '';
@@ -657,7 +657,7 @@ export const AdminGrievancesPanel = ({
         `${m.senderId === 'admin' ? 'Admin' : 'User'}: ${m.text || ''}`
       ).join('\n');
 
-      if (!history.trim()) {
+      if (!history?.trim()) {
          history = "No messages were exchanged in this ticket.";
       }
 
@@ -667,7 +667,7 @@ export const AdminGrievancesPanel = ({
       ];
 
       const rawAiSummary = await generateAIResponse(prompt);
-      const aiSummary = rawAiSummary ? rawAiSummary.trim() : "Closure summary was successfully resolved, but AI was unable to generate a summary.";
+      const aiSummary = rawAiSummary ? rawAiSummary?.trim() : "Closure summary was successfully resolved, but AI was unable to generate a summary.";
       
       const res = await onUpdateStatus(selectedTicket.id, selectedTicket.status, aiSummary);
       if (res?.success) {
@@ -1245,8 +1245,8 @@ export const AdminGrievancesPanel = ({
                           />
                           <TouchableOpacity 
                             testID="admin.support.reply.submit"
-                            style={[styles.sendBtn, (!replyText.trim() && !selectedImage) && styles.sendDisabled]} 
-                            disabled={!replyText.trim() && !selectedImage}
+                            style={[styles.sendBtn, (!replyText?.trim() && !selectedImage) && styles.sendDisabled]} 
+                            disabled={!replyText?.trim() && !selectedImage}
                             onPress={handleSendReply}
                           >
                             <Ionicons name="send" size={18} color="#FFFFFF" />

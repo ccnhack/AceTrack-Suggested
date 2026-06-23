@@ -106,7 +106,7 @@ const AdminStaffPanel = () => {
 
   const generateInvite = async () => {
     if (!email.includes('@')) { Alert.alert("Invalid Email", "Please enter a valid corporate email address."); return; }
-    if (!firstName.trim() || !lastName.trim()) { Alert.alert("Name Required", "Please enter the employee's first and last name."); return; }
+    if (!firstName?.trim() || !lastName?.trim()) { Alert.alert("Name Required", "Please enter the employee's first and last name."); return; }
     
     setIsGenerating(true);
     try {
@@ -118,7 +118,7 @@ const AdminStaffPanel = () => {
         method: 'POST',
         headers,
         credentials: 'include',
-        body: JSON.stringify({ email, firstName: firstName.trim(), lastName: lastName.trim(), supportLevel })
+        body: JSON.stringify({ email, firstName: firstName?.trim() || '', lastName: lastName?.trim() || '', supportLevel })
       });
       const data = await res.json();
       if (res.ok) {
@@ -275,7 +275,7 @@ const AdminStaffPanel = () => {
     return null;
   };
 
-  const isFormValid = email.includes('@') && firstName.trim() && lastName.trim();
+  const isFormValid = email.includes('@') && firstName?.trim() && lastName?.trim();
 
   const filteredInvites = invites.filter(inv => {
     // 1. Tab Filtering
@@ -363,7 +363,7 @@ const AdminStaffPanel = () => {
               ))}
             </ScrollView>
 
-            {firstName.trim() && lastName.trim() && (() => {
+            {firstName?.trim() && lastName?.trim() && (() => {
               const existingExEmployee = players?.find(p => 
                 p.role === 'support' && 
                 ((p.supportStatus || '').toLowerCase() === 'terminated' || (p.supportStatus || '').toLowerCase() === 'inactive' || p.supportLevel === 'EX-EMPLOYEE') && 
@@ -380,7 +380,7 @@ const AdminStaffPanel = () => {
                       </View>
                     )}
                   </View>
-                  <Text style={styles.previewText}>Hi {lastName.trim()}, {firstName.trim()}</Text>
+                  <Text style={styles.previewText}>Hi {lastName?.trim()}, {firstName?.trim()}</Text>
                 </View>
               );
             })()}
@@ -713,7 +713,7 @@ const AdminStaffPanel = () => {
               <View style={styles.infoSection}>
                 <Text style={styles.infoLabel}>IP - Location Chain</Text>
                 {selectedEvent?.ip?.split(',').map((ip, i) => {
-                  const cleanIp = ip.trim();
+                  const cleanIp = ip?.trim() || '';
                   const isPrimary = i === 0;
                   const location = isPrimary ? [selectedEvent.city, selectedEvent.region, selectedEvent.country].filter(Boolean).join(', ') : '';
                   return (

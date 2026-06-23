@@ -600,7 +600,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
   const displayedAgents = activeTab === 'employees' ? activeAgents : exEmployees;
 
   const filteredAgents = useMemo(() => {
-    const s = search.toLowerCase().trim();
+    const s = search?.toLowerCase().trim() || '';
     if (!s) return displayedAgents;
     return displayedAgents.filter(a => 
       a.name?.toLowerCase().includes(s) || 
@@ -2115,12 +2115,12 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                   multiline
                   numberOfLines={3}
                   style={{
-                    backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: roleChangeComment.trim() ? '#6366F1' : '#E2E8F0',
+                    backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: roleChangeComment?.trim() ? '#6366F1' : '#E2E8F0',
                     borderRadius: 14, padding: 14, fontSize: 14, color: '#1E293B', fontWeight: '600',
                     minHeight: 80, textAlignVertical: 'top'
                   }}
                 />
-                {!roleChangeComment.trim() && (
+                {!roleChangeComment?.trim() && (
                   <Text style={{ fontSize: 11, color: '#EF4444', fontWeight: '700', marginTop: 6 }}>A reason is required to proceed.</Text>
                 )}
 
@@ -2133,16 +2133,16 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                     <Text style={{ fontSize: 14, fontWeight: '800', color: '#64748B' }}>Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
-                    disabled={!roleChangeComment.trim()}
+                    disabled={!roleChangeComment?.trim()}
                     onPress={() => {
-                      updateUserStatus(pendingRoleChange.agentId, null, pendingRoleChange.newLevel, roleChangeComment.trim());
+                      updateUserStatus(pendingRoleChange.agentId, null, pendingRoleChange.newLevel, roleChangeComment?.trim() || '');
                       setShowRoleConfirmModal(false);
                       setPendingRoleChange(null);
                       setRoleChangeComment('');
                     }}
                     style={{ 
                       flex: 1, paddingVertical: 14, borderRadius: 14, alignItems: 'center',
-                      backgroundColor: roleChangeComment.trim() ? '#6366F1' : '#CBD5E1'
+                      backgroundColor: roleChangeComment?.trim() ? '#6366F1' : '#CBD5E1'
                     }}
                   >
                     <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFF' }}>Confirm {pendingRoleChange.changeType}</Text>
