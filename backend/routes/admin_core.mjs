@@ -227,7 +227,7 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
 
         // Build a map of player names for enrichment
         const userIds = [...new Set(logs.map(l => l.details?.userId || l.userId))];
-        const playerDocs = await User.find({ id: { $in: userIds } }).select('id data.name data.avatar data.email data.supportLevel data.managerId data.isLive data.liveSessionStart data.shortLeaves').lean();
+        const playerDocs = await User.find({ id: { $in: userIds } }).select('id data.name data.avatar data.email data.supportLevel data.managerId data.isLive data.liveSessionStart data.shortLeaves data.scheduledShiftStart data.scheduledShiftEnd').lean();
         const playerMap = {};
         const managerIds = new Set();
         for (const p of playerDocs) {
@@ -239,7 +239,9 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                 email: p.data?.email || '',
                 supportLevel: p.data?.supportLevel || '',
                 managerId,
-                shortLeaves: p.data?.shortLeaves || []
+                shortLeaves: p.data?.shortLeaves || [],
+                scheduledStart: p.data?.scheduledShiftStart || DEFAULT_SHIFT_START,
+                scheduledEnd: p.data?.scheduledShiftEnd || DEFAULT_SHIFT_END
             };
         }
         // Fetch manager names
@@ -486,6 +488,8 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                     supportLevel: playerMap[uid]?.supportLevel || '',
                     managerId: mgrId,
                     managerName: mgrId ? (managerMap[mgrId] || mgrId) : '',
+                    scheduledStart: playerMap[uid]?.scheduledStart || DEFAULT_SHIFT_START,
+                    scheduledEnd: playerMap[uid]?.scheduledEnd || DEFAULT_SHIFT_END,
                     checkinTime: actualCheckinTime,
                     checkinRounded: checkinLog?.details?.roundedTime || log.details?.checkinRounded || null,
                     checkoutTime: actualCheckoutTime,
@@ -525,6 +529,8 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                     supportLevel: playerMap[uid]?.supportLevel || '',
                     managerId: mgrId,
                     managerName: mgrId ? (managerMap[mgrId] || mgrId) : '',
+                    scheduledStart: playerMap[uid]?.scheduledStart || DEFAULT_SHIFT_START,
+                    scheduledEnd: playerMap[uid]?.scheduledEnd || DEFAULT_SHIFT_END,
                     checkinTime: actualCheckinTime,
                     checkinRounded: orphan.details?.roundedTime || null,
                     checkoutTime: null,

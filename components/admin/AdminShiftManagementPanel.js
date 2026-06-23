@@ -579,7 +579,10 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <View style={{ flex: 2, flexDirection: 'row', alignItems: 'center' }}>
                           <SafeAvatar uri={p.avatar} name={p.name} size={22} borderRadius={6} />
-                          <Text style={{ color: '#E2E8F0', fontSize: 11, fontWeight: '600', marginLeft: 8 }} numberOfLines={1}>{p.name}</Text>
+                          <View style={{ marginLeft: 8, flex: 1 }}>
+                            <Text style={{ color: '#E2E8F0', fontSize: 11, fontWeight: '600' }} numberOfLines={1}>{p.name}</Text>
+                            <Text style={{ color: '#94A3B8', fontSize: 9, fontWeight: '500' }}>Shift: {p.scheduledStart} - {p.scheduledEnd}</Text>
+                          </View>
                         </View>
                         <Text style={{ color: '#A5B4FC', fontSize: 11, fontWeight: '700', flex: 1, textAlign: 'center' }}>{p.daysWorked}/30</Text>
                         <Text style={{ color: lateColor, fontSize: 11, fontWeight: '700', flex: 1, textAlign: 'center', textDecorationLine: p.lateCheckins > 0 ? 'underline' : 'none' }}>{p.lateCheckins}</Text>
@@ -1499,6 +1502,7 @@ const GroupedShiftCard = ({ shifts }) => {
         <View style={{ marginLeft: 10, flex: 1 }}>
           <Text style={{ color: '#F8FAFC', fontSize: 13, fontWeight: '700' }}>{baseUser.name}</Text>
           <Text style={{ color: '#64748B', fontSize: 10 }}>{baseUser.email || baseUser.supportLevel}</Text>
+          <Text style={{ color: '#94A3B8', fontSize: 9, fontWeight: '500', marginTop: 2 }}>Expected Shift: {baseUser.scheduledStart} - {baseUser.scheduledEnd}</Text>
           {baseUser.managerName ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
               <Ionicons name="person-circle-outline" size={10} color="#6366F1" style={{ marginRight: 3 }} />
