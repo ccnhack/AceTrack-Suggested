@@ -646,7 +646,7 @@ router.get('/shift-attendance-patterns', requireAdminOrSupport, async (req, res)
             if (log.action === 'SUPPORT_SHIFT_CHECKIN') {
                 p.shiftCount++;
                 // Check if late check-in
-                const schedStart = playerMap[uid]?.scheduledStart || DEFAULT_SHIFT_START;
+                const schedStart = log.details?.scheduledStart || playerMap[uid]?.scheduledStart || DEFAULT_SHIFT_START;
                 const [schedH, schedM] = schedStart.split(':').map(Number);
                 const checkinIST = new Date(new Date(log.timestamp).getTime() + 5.5 * 3600000);
                 const checkinH = checkinIST.getUTCHours();
@@ -675,7 +675,7 @@ router.get('/shift-attendance-patterns', requireAdminOrSupport, async (req, res)
                     p.earlyCheckouts++;
                     if (!p.earlyCheckoutDates) p.earlyCheckoutDates = [];
                     
-                    const schedEnd = playerMap[uid]?.scheduledEnd || DEFAULT_SHIFT_END;
+                    const schedEnd = log.details?.scheduledEnd || playerMap[uid]?.scheduledEnd || DEFAULT_SHIFT_END;
                     const [schedH, schedM] = schedEnd.split(':').map(Number);
                     
                     const checkoutIST = new Date(new Date(log.timestamp).getTime() + 5.5 * 3600000);

@@ -1088,7 +1088,9 @@ router.post('/support/check-in', apiKeyGuard, authGuard, asyncHandler(async (req
     username: playerDoc.data.username,
     actualTime: now.toISOString(),
     roundedTime: rounded.toISOString(),
-    checkoutDue: checkoutDue.toISOString()
+    checkoutDue: checkoutDue.toISOString(),
+    scheduledStart: playerDoc.data.scheduledShiftStart,
+    scheduledEnd: playerDoc.data.scheduledShiftEnd
   }).catch(() => {});
 
   console.log(`🕐 [SHIFT] ${userId} checked in at ${now.toLocaleTimeString()} → rounded to ${rounded.toLocaleTimeString()}, checkout due at ${checkoutDue.toLocaleTimeString()}`);
@@ -1173,7 +1175,9 @@ router.post('/support/check-out', apiKeyGuard, authGuard, asyncHandler(async (re
     totalShiftMs,
     overtimeMs,
     isAutoCheckout: !!isAutoCheckout,
-    justification: justification || null
+    justification: justification || null,
+    scheduledStart: playerDoc.data.scheduledShiftStart,
+    scheduledEnd: playerDoc.data.scheduledShiftEnd
   }).catch(() => {});
 
   console.log(`🕐 [SHIFT] ${userId} checked out at ${now.toLocaleTimeString()}. Total: ${Math.floor(totalShiftMs / 3600000)}h ${Math.floor((totalShiftMs % 3600000) / 60000)}m. Overtime: ${Math.floor(overtimeMs / 60000)}m`);
