@@ -1782,8 +1782,8 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
         onRequestClose={() => setShowActionsModal(false)}
         onShow={() => {
           if (selectedAgent) {
-            setEditShiftStart(selectedAgent.scheduledShiftStart || '13:00');
-            setEditShiftEnd(selectedAgent.scheduledShiftEnd || '21:00');
+            setEditShiftStart(selectedAgent.scheduledShiftStart || '09:00');
+            setEditShiftEnd(selectedAgent.scheduledShiftEnd || '18:00');
           }
         }}
       >
@@ -1994,7 +1994,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                       style={{ backgroundColor: '#0F172A', color: '#F8FAFC', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#334155' }}
                       value={editShiftStart}
                       onChangeText={setEditShiftStart}
-                      placeholder="e.g. 13:00"
+                      placeholder="e.g. 09:00"
                       placeholderTextColor="#475569"
                     />
                   </View>
@@ -2004,7 +2004,7 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
                       style={{ backgroundColor: '#0F172A', color: '#F8FAFC', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#334155' }}
                       value={editShiftEnd}
                       onChangeText={setEditShiftEnd}
-                      placeholder="e.g. 21:00"
+                      placeholder="e.g. 18:00"
                       placeholderTextColor="#475569"
                     />
                   </View>
