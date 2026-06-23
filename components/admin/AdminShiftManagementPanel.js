@@ -1366,7 +1366,7 @@ const OvertimeJustificationInput = ({ shiftLogId, initialValue = '', initialStat
     const [submittedText, setSubmittedText] = useState(initialStatus === 'justified' ? initialValue : '');
 
     const handleSubmit = async () => {
-        if (!justification.trim() || loading) return;
+        if (!justification?.trim() || loading) return;
         setLoading(true);
         try {
             const token = await storage.getItem('userToken');
@@ -1412,8 +1412,8 @@ const OvertimeJustificationInput = ({ shiftLogId, initialValue = '', initialStat
                 />
                 <TouchableOpacity 
                     onPress={handleSubmit}
-                    disabled={loading || !justification.trim()}
-                    style={{ marginLeft: 8, backgroundColor: justification.trim() ? '#EF4444' : 'rgba(239,68,68,0.3)', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 6 }}
+                    disabled={loading || !justification?.trim()}
+                    style={{ marginLeft: 8, backgroundColor: justification?.trim() ? '#EF4444' : 'rgba(239,68,68,0.3)', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 6 }}
                 >
                     <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '800' }}>{loading ? '...' : 'Submit'}</Text>
                 </TouchableOpacity>
