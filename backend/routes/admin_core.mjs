@@ -488,8 +488,8 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                     supportLevel: playerMap[uid]?.supportLevel || '',
                     managerId: mgrId,
                     managerName: mgrId ? (managerMap[mgrId] || mgrId) : '',
-                    scheduledStart: playerMap[uid]?.scheduledStart || DEFAULT_SHIFT_START,
-                    scheduledEnd: playerMap[uid]?.scheduledEnd || DEFAULT_SHIFT_END,
+                    scheduledStart: checkinLog?.details?.scheduledStart || log.details?.scheduledStart || playerMap[uid]?.scheduledStart || DEFAULT_SHIFT_START,
+                    scheduledEnd: checkinLog?.details?.scheduledEnd || log.details?.scheduledEnd || playerMap[uid]?.scheduledEnd || DEFAULT_SHIFT_END,
                     checkinTime: actualCheckinTime,
                     checkinRounded: checkinLog?.details?.roundedTime || log.details?.checkinRounded || null,
                     checkoutTime: actualCheckoutTime,
@@ -529,8 +529,8 @@ router.get('/shift-history', requireAdminOrSupport, async (req, res) => {
                     supportLevel: playerMap[uid]?.supportLevel || '',
                     managerId: mgrId,
                     managerName: mgrId ? (managerMap[mgrId] || mgrId) : '',
-                    scheduledStart: playerMap[uid]?.scheduledStart || DEFAULT_SHIFT_START,
-                    scheduledEnd: playerMap[uid]?.scheduledEnd || DEFAULT_SHIFT_END,
+                    scheduledStart: orphan.details?.scheduledStart || playerMap[uid]?.scheduledStart || DEFAULT_SHIFT_START,
+                    scheduledEnd: orphan.details?.scheduledEnd || playerMap[uid]?.scheduledEnd || DEFAULT_SHIFT_END,
                     checkinTime: actualCheckinTime,
                     checkinRounded: orphan.details?.roundedTime || null,
                     checkoutTime: null,
@@ -654,12 +654,13 @@ router.get('/shift-attendance-patterns', requireAdminOrSupport, async (req, res)
                 if (checkinH > schedH || (checkinH === schedH && checkinM > schedM + 10)) {
                     p.lateCheckins++;
                     if (!p.lateCheckinDates) p.lateCheckinDates = [];
-                    // Format: "YYYY-MM-DD|HH:MM|LATEMINS" to allow frontend parsing
+                    // Format: "YYYY-MM-DD|HH:MM|LATEMINS|SCHEDSTART-SCHEDEND" to allow frontend parsing
                     const lateMins = ((checkinH - schedH) * 60) + (checkinM - schedM);
                     const hhStr = checkinH.toString().padStart(2, '0');
                     const mmStr = checkinM.toString().padStart(2, '0');
                     const timeStr = `${hhStr}:${mmStr}`;
-                    const entryStr = `${dateStr}|${timeStr}|${lateMins}`;
+                    const schedEnd = log.details?.scheduledEnd || playerMap[uid]?.scheduledEnd || DEFAULT_SHIFT_END;
+                    const entryStr = `${dateStr}|${timeStr}|${lateMins}|${schedStart}-${schedEnd}`;
                     if (!p.lateCheckinDates.includes(entryStr)) p.lateCheckinDates.push(entryStr);
                 }
             }
@@ -688,7 +689,8 @@ router.get('/shift-attendance-patterns', requireAdminOrSupport, async (req, res)
                     const hhStr = checkoutH.toString().padStart(2, '0');
                     const mmStr = checkoutM.toString().padStart(2, '0');
                     const timeStr = `${hhStr}:${mmStr}`;
-                    const entryStr = `${dateStr}|${timeStr}|${earlyMins}`;
+                    const schedStartForEarly = log.details?.scheduledStart || playerMap[uid]?.scheduledStart || DEFAULT_SHIFT_START;
+                    const entryStr = `${dateStr}|${timeStr}|${earlyMins}|${schedStartForEarly}-${schedEnd}`;
                     
                     if (!p.earlyCheckoutDates.find(e => e.startsWith(dateStr))) {
                         p.earlyCheckoutDates.push(entryStr);

@@ -609,7 +609,7 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
                                     <Text style={{ color: '#E2E8F0', fontSize: 11, flex: 1, lineHeight: 16 }}>
                                       {p.lateCheckinDates.map(item => {
                                           if (item.includes('|')) {
-                                              const [dateStr, timeStr, mins] = item.split('|');
+                                              const [dateStr, timeStr, mins, expectedShift] = item.split('|');
                                               let formattedTime = timeStr;
                                               if (timeStr) {
                                                   const [h, m] = timeStr.split(':').map(Number);
@@ -624,7 +624,8 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
                                                   const rem = mNum % 60;
                                                   durationStr = rem > 0 ? `${h}h ${rem}m` : `${h}h`;
                                               }
-                                              return `${formatDateDDMMYYYY(dateStr)} - ${formattedTime} (${durationStr} late)`;
+                                              const expectedText = expectedShift ? ` [Expected: ${expectedShift}]` : '';
+                                              return `${formatDateDDMMYYYY(dateStr)} - ${formattedTime} (${durationStr} late)${expectedText}`;
                                           }
                                           return formatDateDDMMYYYY(item);
                                       }).join('\n')}
@@ -643,7 +644,7 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
                                     <Text style={{ color: '#E2E8F0', fontSize: 11, flex: 1, lineHeight: 16 }}>
                                       {p.earlyCheckoutDates.map(item => {
                                           if (item.includes('|')) {
-                                              const [dateStr, timeStr, mins] = item.split('|');
+                                              const [dateStr, timeStr, mins, expectedShift] = item.split('|');
                                               let formattedTime = timeStr;
                                               if (timeStr) {
                                                   const [h, m] = timeStr.split(':').map(Number);
@@ -658,7 +659,8 @@ const AdminShiftManagementPanel = ({ onOpenAttendance }) => {
                                                   const rem = mNum % 60;
                                                   durationStr = rem > 0 ? `${h}h ${rem}m` : `${h}h`;
                                               }
-                                              return `${formatDateDDMMYYYY(dateStr)} - ${formattedTime} (${durationStr} early)`;
+                                              const expectedText = expectedShift ? ` [Expected: ${expectedShift}]` : '';
+                                              return `${formatDateDDMMYYYY(dateStr)} - ${formattedTime} (${durationStr} early)${expectedText}`;
                                           }
                                           return formatDateDDMMYYYY(item);
                                       }).join('\n')}
