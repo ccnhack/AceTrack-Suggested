@@ -1165,7 +1165,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
                   const pd = p.data || {};
                   return {
                      timeMs: new Date(p.lastUpdated || pd.createdAt).getTime() || 0,
-                     text: `[Database][Player Record] ID:${p.id} Name:${pd.name || pd.firstName || 'N/A'} Role:${p.role || pd.role || 'N/A'} Designation:${pd.designation || 'N/A'} Account:${pd.supportStatus || 'active'} Session:${pd.isLive ? 'online' : 'offline'} Email:${pd.email || 'N/A'} Phone:${pd.phoneNumber || pd.phone || 'N/A'} ShortLeaves:${pd.shortLeaves ? JSON.stringify(pd.shortLeaves) : 'None'}`
+                     text: `[Database][Player Record] ID:${p.id} Name:${pd.name || pd.firstName || 'N/A'} Role:${p.role || pd.role || 'N/A'} Designation:${pd.designation || 'N/A'} EmploymentStanding:${pd.supportStatus || 'active'} Session:${pd.isLive ? 'online' : 'offline'} Email:${pd.email || 'N/A'} Phone:${pd.phoneNumber || pd.phone || 'N/A'} ShortLeaves:${pd.shortLeaves ? JSON.stringify(pd.shortLeaves) : 'None'}`
                   };
                });
                combinedLogsArr.push(...compactPlayers);
@@ -1298,11 +1298,11 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
                   const profileUsername = pd.username || playerDoc.id || 'N/A';
                   const profileRole = pd.role || 'user';
                   const profileDesignation = pd.designation || 'N/A';
-                  const profileAccount = pd.supportStatus || 'active';
+                  const profileEmploymentStanding = pd.supportStatus || 'active';
                   const profileSession = pd.isLive ? 'online' : 'offline';
                   combinedLogsArr.push({
                      timeMs: new Date(creationDate).getTime() || 0,
-                     text: `[Database][Fallback Record] System found an active database profile matching "${userSearchTerm}". Name: ${profileName}. Username: ${profileUsername}. Email: ${profileEmail}. Phone: ${profilePhone}. Role: ${profileRole}. Designation: ${profileDesignation}. Account: ${profileAccount}. Session: ${profileSession}. Original Onboard/Creation Time: ${istDate}. Last Data Update Time: ${istLastUpdated}.`
+                     text: `[Database][Fallback Record] System found an active database profile matching "${userSearchTerm}". Name: ${profileName}. Username: ${profileUsername}. Email: ${profileEmail}. Phone: ${profilePhone}. Role: ${profileRole}. Designation: ${profileDesignation}. EmploymentStanding: ${profileEmploymentStanding}. Session: ${profileSession}. Original Onboard/Creation Time: ${istDate}. Last Data Update Time: ${istLastUpdated}.`
                   });
                }
             } catch(e) {
@@ -1353,7 +1353,7 @@ Formatting rules:
 6. Only include REAL events from the logs. Do NOT fabricate entries like "No other recent login failures found" — if there are fewer events than requested, just show what exists.
 7. NEVER display internal system IDs (e.g., ones starting with 'sup_'). Instead, use the 'details.identifier', 'details.email', or 'details.name' from the log. NEVER print 'sup_do8ux1cc' or similar.
 8. ALWAYS include the full date (e.g., '22 May 2026') alongside the time for every event.
-9. If a '[Database][Fallback Record]' or '[Database][Player Record]' is present, you MUST create an 'Account Information' section AT THE VERY TOP of your summary containing all extracted details (Name, Username, Phone, Email, Role, Designation, etc.).
+9. If a '[Database][Fallback Record]' or '[Database][Player Record]' is present, you MUST create an 'Account Information' section AT THE VERY TOP of your summary containing all extracted details (Name, Username, Phone, Email, Role, Designation, EmploymentStanding, Session). You MUST output the EmploymentStanding EXACTLY as provided (e.g. 'active', 'suspended', 'terminated'), do NOT change it to 'offline' or 'online'.
 10. ⚠️ CRITICAL OVERRIDE: If the user query is strictly asking for "pending short leaves" or similar leave requests, DO NOT output a 'Recent Events' or 'Key Anomalies' section. Instead, ONLY output the 'Account Information' and a 'Pending Short Leave Requests' section containing the leave details and the 'reason' (justification) from the JSON.
 11. ⚠️ SLACK FORMATTING REQUIRED: You are outputting to Slack. Slack does NOT support Markdown headers (#, ##, ###). DO NOT use hashtags for headers. Instead, use *Bold Text* for section headers (e.g., *Account Information*).
 12. ⚠️ SLACK FORMATTING REQUIRED: Use bullet points like \`• \` instead of \`- \`. Do NOT use markdown links \`[text](url)\`.
@@ -1580,7 +1580,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
                const players = await Player.find(sanitizedPlayerFilter).limit(100).lean();
                const compactPlayers = players.map(p => {
                   const pd = p.data || {};
-                  return `[Database][Player Record] ID:${p.id} Name:${pd.name || pd.firstName || 'N/A'} Role:${p.role || pd.role || 'N/A'} Designation:${pd.designation || 'N/A'} Account:${pd.supportStatus || 'active'} Session:${pd.isLive ? 'online' : 'offline'} Email:${pd.email || 'N/A'} Phone:${pd.phoneNumber || pd.phone || 'N/A'} ShortLeaves:${pd.shortLeaves ? JSON.stringify(pd.shortLeaves) : 'None'}`;
+                  return `[Database][Player Record] ID:${p.id} Name:${pd.name || pd.firstName || 'N/A'} Role:${p.role || pd.role || 'N/A'} Designation:${pd.designation || 'N/A'} EmploymentStanding:${pd.supportStatus || 'active'} Session:${pd.isLive ? 'online' : 'offline'} Email:${pd.email || 'N/A'} Phone:${pd.phoneNumber || pd.phone || 'N/A'} ShortLeaves:${pd.shortLeaves ? JSON.stringify(pd.shortLeaves) : 'None'}`;
                });
                combinedLogsArr.push(...compactPlayers);
             } catch (err) {
@@ -1680,9 +1680,9 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
                   const profileUsername = pd.username || playerDoc.id || 'N/A';
                   const profileRole = pd.role || 'user';
                   const profileDesignation = pd.designation || 'N/A';
-                  const profileAccount = pd.supportStatus || 'active';
+                  const profileEmploymentStanding = pd.supportStatus || 'active';
                   const profileSession = pd.isLive ? 'online' : 'offline';
-                  combinedLogsArr.push(`[Database][Fallback Record] System found an active database profile matching "${userSearchTerm}". Name: ${profileName}. Username: ${profileUsername}. Email: ${profileEmail}. Phone: ${profilePhone}. Role: ${profileRole}. Designation: ${profileDesignation}. Account: ${profileAccount}. Session: ${profileSession}. Original Onboard/Creation Time: ${istDate}. Last Data Update Time: ${istLastUpdated}.`);
+                  combinedLogsArr.push(`[Database][Fallback Record] System found an active database profile matching "${userSearchTerm}". Name: ${profileName}. Username: ${profileUsername}. Email: ${profileEmail}. Phone: ${profilePhone}. Role: ${profileRole}. Designation: ${profileDesignation}. EmploymentStanding: ${profileEmploymentStanding}. Session: ${profileSession}. Original Onboard/Creation Time: ${istDate}. Last Data Update Time: ${istLastUpdated}.`);
                }
             } catch(e) {
                console.error('Ephemeral Player context fallback failed:', e.message);
