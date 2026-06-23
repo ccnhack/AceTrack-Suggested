@@ -1165,7 +1165,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
                   const pd = p.data || {};
                   return {
                      timeMs: new Date(p.lastUpdated || pd.createdAt).getTime() || 0,
-                     text: `[Database][Player Record] ID:${p.id} Name:${pd.name || pd.firstName || 'N/A'} Role:${p.role || pd.role || 'N/A'} Designation:${pd.designation || 'N/A'} Account:${pd.supportStatus || pd.status || 'active'} Session:${pd.isLive ? 'online' : 'offline'} Email:${pd.email || 'N/A'} Phone:${pd.phoneNumber || pd.phone || 'N/A'} ShortLeaves:${pd.shortLeaves ? JSON.stringify(pd.shortLeaves) : 'None'}`
+                     text: `[Database][Player Record] ID:${p.id} Name:${pd.name || pd.firstName || 'N/A'} Role:${p.role || pd.role || 'N/A'} Designation:${pd.designation || 'N/A'} Account:${pd.supportStatus || 'active'} Session:${pd.isLive ? 'online' : 'offline'} Email:${pd.email || 'N/A'} Phone:${pd.phoneNumber || pd.phone || 'N/A'} ShortLeaves:${pd.shortLeaves ? JSON.stringify(pd.shortLeaves) : 'None'}`
                   };
                });
                combinedLogsArr.push(...compactPlayers);
@@ -1298,7 +1298,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
                   const profileUsername = pd.username || playerDoc.id || 'N/A';
                   const profileRole = pd.role || 'user';
                   const profileDesignation = pd.designation || 'N/A';
-                  const profileAccount = pd.supportStatus || pd.status || 'active';
+                  const profileAccount = pd.supportStatus || 'active';
                   const profileSession = pd.isLive ? 'online' : 'offline';
                   combinedLogsArr.push({
                      timeMs: new Date(creationDate).getTime() || 0,
@@ -1580,7 +1580,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
                const players = await Player.find(sanitizedPlayerFilter).limit(100).lean();
                const compactPlayers = players.map(p => {
                   const pd = p.data || {};
-                  return `[Database][Player Record] ID:${p.id} Name:${pd.name || pd.firstName || 'N/A'} Role:${p.role || pd.role || 'N/A'} Designation:${pd.designation || 'N/A'} Account:${pd.supportStatus || pd.status || 'active'} Session:${pd.isLive ? 'online' : 'offline'} Email:${pd.email || 'N/A'} Phone:${pd.phoneNumber || pd.phone || 'N/A'} ShortLeaves:${pd.shortLeaves ? JSON.stringify(pd.shortLeaves) : 'None'}`;
+                  return `[Database][Player Record] ID:${p.id} Name:${pd.name || pd.firstName || 'N/A'} Role:${p.role || pd.role || 'N/A'} Designation:${pd.designation || 'N/A'} Account:${pd.supportStatus || 'active'} Session:${pd.isLive ? 'online' : 'offline'} Email:${pd.email || 'N/A'} Phone:${pd.phoneNumber || pd.phone || 'N/A'} ShortLeaves:${pd.shortLeaves ? JSON.stringify(pd.shortLeaves) : 'None'}`;
                });
                combinedLogsArr.push(...compactPlayers);
             } catch (err) {
@@ -1680,7 +1680,7 @@ DO NOT wrap the JSON in markdown code blocks. Output ONLY valid, parsable JSON. 
                   const profileUsername = pd.username || playerDoc.id || 'N/A';
                   const profileRole = pd.role || 'user';
                   const profileDesignation = pd.designation || 'N/A';
-                  const profileAccount = pd.supportStatus || pd.status || 'active';
+                  const profileAccount = pd.supportStatus || 'active';
                   const profileSession = pd.isLive ? 'online' : 'offline';
                   combinedLogsArr.push(`[Database][Fallback Record] System found an active database profile matching "${userSearchTerm}". Name: ${profileName}. Username: ${profileUsername}. Email: ${profileEmail}. Phone: ${profilePhone}. Role: ${profileRole}. Designation: ${profileDesignation}. Account: ${profileAccount}. Session: ${profileSession}. Original Onboard/Creation Time: ${istDate}. Last Data Update Time: ${istLastUpdated}.`);
                }
