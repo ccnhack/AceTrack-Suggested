@@ -41,7 +41,7 @@
           "color": "#3B82F6"
         }
       ],
-      "@config-plugins/detox",
+
       [
         "expo-build-properties",
         {
