@@ -16,7 +16,7 @@ const DEMO_SLIDES = [
     id: 'availability',
     title: 'Manage Schedule',
     description: 'Set your availability, manage private lessons, and accept bookings directly through the app.',
-    image: require('../assets/demo/coach_demo_availability.png'),
+    image: require('../assets/demo/coach_demo_availability.jpg'),
     icon: 'calendar',
     color: '#10B981',
   },
