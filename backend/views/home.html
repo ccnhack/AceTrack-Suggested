@@ -3,752 +3,1232 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AceTrack - Elevate Your Game</title>
-  <meta name="description" content="The premier platform for academies, coaches, and players to connect, track, and dominate.">
-  
+  <title>AceTrack — Elevate Your Game | AI-Powered Sports Platform</title>
+  <meta name="description" content="The premier AI-powered platform for academies, coaches, and players to connect, track performance, and dominate the court.">
+  <meta name="theme-color" content="#0B0F1A">
+
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-  
-  <!-- AOS Animation Library -->
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- AOS -->
   <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
-  
+
   <style>
-    /* CSS Variables */
+    /* ═══════════════════════════════════════════
+       CSS VARIABLES
+    ═══════════════════════════════════════════ */
     :root {
+      --bg-deep: #0B0F1A;
       --bg-dark: #0F172A;
-      --bg-darker: #020617;
+      --bg-card: rgba(15, 23, 42, 0.6);
       --primary: #6366F1;
-      --primary-hover: #4F46E5;
+      --primary-light: #818CF8;
+      --primary-glow: rgba(99, 102, 241, 0.15);
       --accent: #10B981;
-      --text-light: #F8FAFC;
-      --text-muted: #94A3B8;
-      --glass-bg: rgba(30, 41, 59, 0.4);
-      --glass-border: rgba(255, 255, 255, 0.08);
+      --accent-glow: rgba(16, 185, 129, 0.15);
+      --amber: #F59E0B;
+      --blue: #3B82F6;
+      --rose: #F43F5E;
+      --text-white: #F8FAFC;
+      --text-secondary: #CBD5E1;
+      --text-muted: #64748B;
+      --glass-bg: rgba(30, 41, 59, 0.35);
+      --glass-border: rgba(255, 255, 255, 0.06);
+      --glass-border-hover: rgba(99, 102, 241, 0.3);
       --font-heading: 'Outfit', sans-serif;
       --font-body: 'Inter', sans-serif;
+      --radius-lg: 24px;
+      --radius-md: 16px;
+      --radius-sm: 12px;
     }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    
+    /* ═══════════════════════════════════════════
+       RESET & BASE
+    ═══════════════════════════════════════════ */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
-      background-color: var(--bg-dark);
-      color: var(--text-light);
+      background: var(--bg-deep);
+      color: var(--text-white);
       font-family: var(--font-body);
-      line-height: 1.6;
+      line-height: 1.7;
       overflow-x: hidden;
-      background-image: 
-        linear-gradient(to bottom, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.95)),
-        url('/uploads/hero_bg.png');
-      background-size: cover;
-      background-position: center;
-      background-attachment: fixed;
+      -webkit-font-smoothing: antialiased;
+    }
+    img { max-width: 100%; display: block; }
+    a { text-decoration: none; color: inherit; }
+
+    /* ═══════════════════════════════════════════
+       SCROLL PROGRESS BAR
+    ═══════════════════════════════════════════ */
+    .scroll-progress {
+      position: fixed; top: 0; left: 0; height: 3px; z-index: 9999;
+      background: linear-gradient(90deg, var(--primary), var(--accent), var(--amber));
+      width: 0%;
+      transition: width 0.1s linear;
     }
 
-    /* Navbar */
+    /* ═══════════════════════════════════════════
+       FLOATING PARTICLES
+    ═══════════════════════════════════════════ */
+    .particles {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 0; overflow: hidden;
+    }
+    .particle {
+      position: absolute;
+      border-radius: 50%;
+      opacity: 0;
+      animation: floatParticle linear infinite;
+    }
+    @keyframes floatParticle {
+      0% { opacity: 0; transform: translateY(100vh) scale(0); }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { opacity: 0; transform: translateY(-10vh) scale(1); }
+    }
+
+    /* ═══════════════════════════════════════════
+       COURT GRID OVERLAY
+    ═══════════════════════════════════════════ */
+    .court-grid {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 0;
+      background-image:
+        linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+      background-size: 80px 80px;
+    }
+
+    /* ═══════════════════════════════════════════
+       NAVBAR
+    ═══════════════════════════════════════════ */
     .navbar {
-      position: fixed;
-      top: 0; width: 100%;
-      padding: 25px 5%;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: transparent;
-      z-index: 1000;
-      transition: all 0.4s ease;
+      position: fixed; top: 0; width: 100%; padding: 20px 5%;
+      display: flex; justify-content: space-between; align-items: center;
+      z-index: 1000; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     }
     .navbar.sticky {
-      padding: 15px 5%;
-      background: rgba(15, 23, 42, 0.9);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      padding: 12px 5%;
+      background: rgba(11, 15, 26, 0.85);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--glass-border);
-      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     }
     .logo {
-      font-family: var(--font-heading);
-      font-weight: 800;
-      font-size: 1.8rem;
-      color: var(--text-light);
-      text-decoration: none;
-      display: flex;
-      align-items: center;
-      gap: 10px;
+      font-family: var(--font-heading); font-weight: 900; font-size: 1.6rem;
+      color: var(--text-white); display: flex; align-items: center; gap: 10px;
     }
-    .logo span { color: var(--primary); }
-    
-    .nav-links { display: flex; gap: 30px; }
+    .logo span { color: var(--primary-light); }
+    .logo img { height: 34px; width: 34px; border-radius: 10px; }
+    .nav-links { display: flex; gap: 32px; }
     .nav-links a {
-      color: var(--text-muted);
-      text-decoration: none;
-      font-weight: 500;
-      font-size: 0.95rem;
-      transition: color 0.2s;
+      color: var(--text-muted); font-weight: 500; font-size: 0.9rem;
+      transition: color 0.3s; position: relative;
     }
-    .nav-links a:hover { color: var(--text-light); }
-    
-    .nav-buttons .btn-login {
-      background: var(--primary);
-      color: #fff;
-      padding: 10px 24px;
-      border-radius: 99px;
-      text-decoration: none;
-      font-weight: 600;
-      transition: all 0.2s;
-      border: none;
-      cursor: pointer;
+    .nav-links a::after {
+      content: ''; position: absolute; bottom: -4px; left: 0; width: 0; height: 2px;
+      background: var(--primary); transition: width 0.3s;
     }
-    .nav-buttons .btn-login:hover {
-      background: var(--primary-hover);
-      transform: translateY(-2px);
-      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+    .nav-links a:hover { color: var(--text-white); }
+    .nav-links a:hover::after { width: 100%; }
+    .btn-nav {
+      background: var(--primary); color: #fff; padding: 10px 28px; border-radius: 99px;
+      font-weight: 700; font-size: 0.9rem; border: none; cursor: pointer;
+      transition: all 0.3s; font-family: var(--font-body);
+      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);
+    }
+    .btn-nav:hover {
+      background: #4F46E5; transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(99, 102, 241, 0.5);
     }
 
-    /* Hero Section */
+    /* ═══════════════════════════════════════════
+       HERO
+    ═══════════════════════════════════════════ */
     .hero {
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      text-align: center;
-      padding: 0 20px;
-      position: relative;
-    }
-    .hero::before {
-      content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-      background: url('/uploads/hero_bg.png') no-repeat center center;
-      background-size: cover;
-      opacity: 0.35;
-      z-index: -1;
-      mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%);
-      -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%);
-    }
-    .hero-badge {
-      background: rgba(99, 102, 241, 0.1);
-      color: #818CF8;
-      padding: 6px 16px;
-      border-radius: 99px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      letter-spacing: 1px;
-      margin-bottom: 24px;
-      border: 1px solid rgba(99, 102, 241, 0.2);
-      text-transform: uppercase;
-    }
-    .hero h1 {
-      font-family: var(--font-heading);
-      font-size: clamp(3rem, 6vw, 5rem);
-      font-weight: 800;
-      line-height: 1.1;
-      margin-bottom: 24px;
-      background: linear-gradient(to right, #F8FAFC, #94A3B8);
-      background-clip: text;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .hero p {
-      font-size: clamp(1.1rem, 2vw, 1.25rem);
-      color: var(--text-muted);
-      max-width: 600px;
-      margin-bottom: 40px;
-    }
-    .hero-buttons {
-      display: flex;
-      gap: 16px;
-    }
-    .btn-large {
-      padding: 16px 36px;
-      border-radius: 12px;
-      font-size: 1.1rem;
-      font-weight: 600;
-      text-decoration: none;
-      transition: all 0.3s;
-    }
-    .btn-primary {
-      background: var(--primary);
-      color: #fff;
-      box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.4);
-    }
-    .btn-primary:hover {
-      background: var(--primary-hover);
-      transform: translateY(-3px);
-      box-shadow: 0 20px 35px -5px rgba(99, 102, 241, 0.5);
-    }
-    .btn-secondary {
-      background: var(--glass-bg);
-      color: var(--text-light);
-      border: 1px solid var(--glass-border);
-      backdrop-filter: blur(10px);
-    }
-    .btn-secondary:hover {
-      background: rgba(30, 41, 59, 0.8);
-      border-color: rgba(255,255,255,0.2);
+      min-height: 100vh; display: flex; flex-direction: column;
+      justify-content: center; align-items: center; text-align: center;
+      padding: 120px 20px 80px; position: relative; overflow: hidden;
     }
 
-    /* Features Section */
+    /* Animated gradient mesh */
+    .hero-mesh {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: -2;
+    }
+    .hero-mesh::before {
+      content: ''; position: absolute; top: -40%; left: -20%; width: 80%; height: 80%;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.2) 0%, transparent 70%);
+      animation: meshFloat1 12s ease-in-out infinite;
+    }
+    .hero-mesh::after {
+      content: ''; position: absolute; bottom: -30%; right: -20%; width: 70%; height: 70%;
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, transparent 70%);
+      animation: meshFloat2 15s ease-in-out infinite;
+    }
+    @keyframes meshFloat1 {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      33% { transform: translate(5%, 10%) scale(1.1); }
+      66% { transform: translate(-3%, -5%) scale(0.95); }
+    }
+    @keyframes meshFloat2 {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      50% { transform: translate(-8%, -8%) scale(1.15); }
+    }
+
+    /* Hero glow orb */
+    .hero-orb {
+      position: absolute; width: 500px; height: 500px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.08), transparent 70%);
+      top: 50%; left: 50%; transform: translate(-50%, -50%);
+      animation: orbPulse 6s ease-in-out infinite; z-index: -1;
+    }
+    @keyframes orbPulse {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
+      50% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; }
+    }
+
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--primary-glow); border: 1px solid rgba(99, 102, 241, 0.2);
+      padding: 8px 20px; border-radius: 99px; font-size: 0.8rem; font-weight: 600;
+      color: var(--primary-light); letter-spacing: 1.5px; text-transform: uppercase;
+      margin-bottom: 32px; backdrop-filter: blur(10px);
+    }
+    .hero-badge .pulse-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+      animation: pulseDot 2s ease-in-out infinite;
+    }
+    @keyframes pulseDot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.7); }
+    }
+
+    .hero h1 {
+      font-family: var(--font-heading); font-weight: 900;
+      font-size: clamp(3.2rem, 7vw, 5.5rem); line-height: 1.05;
+      margin-bottom: 28px; max-width: 900px;
+    }
+    .hero h1 .gradient-text {
+      background: linear-gradient(135deg, #F8FAFC 0%, #818CF8 50%, #10B981 100%);
+      background-size: 200% 200%;
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: gradientShift 8s ease infinite;
+    }
+    @keyframes gradientShift {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .hero h1 .accent-line {
+      display: block; color: var(--text-muted); font-weight: 400; font-size: 0.35em;
+      letter-spacing: 4px; text-transform: uppercase; margin-top: 12px;
+      -webkit-text-fill-color: var(--text-muted);
+    }
+
+    .hero-subtitle {
+      font-size: clamp(1.05rem, 1.8vw, 1.25rem); color: var(--text-secondary);
+      max-width: 640px; margin-bottom: 48px; font-weight: 400;
+    }
+
+    .hero-buttons { display: flex; gap: 16px; margin-bottom: 64px; flex-wrap: wrap; justify-content: center; }
+    .btn-hero {
+      padding: 18px 40px; border-radius: var(--radius-sm); font-size: 1.05rem;
+      font-weight: 700; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      font-family: var(--font-body); border: none; position: relative; overflow: hidden;
+    }
+    .btn-hero-primary {
+      background: linear-gradient(135deg, var(--primary), #4F46E5);
+      color: #fff;
+      box-shadow: 0 12px 40px -8px rgba(99, 102, 241, 0.5);
+    }
+    .btn-hero-primary:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 20px 50px -8px rgba(99, 102, 241, 0.6);
+    }
+    .btn-hero-primary::after {
+      content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+      background: linear-gradient(transparent, rgba(255,255,255,0.1), transparent);
+      transform: rotate(45deg); transition: all 0.6s;
+      animation: shimmer 3s ease-in-out infinite;
+    }
+    @keyframes shimmer {
+      0% { transform: translateX(-100%) rotate(45deg); }
+      100% { transform: translateX(100%) rotate(45deg); }
+    }
+    .btn-hero-ghost {
+      background: var(--glass-bg); color: var(--text-white);
+      border: 1px solid var(--glass-border); backdrop-filter: blur(12px);
+    }
+    .btn-hero-ghost:hover {
+      background: rgba(30, 41, 59, 0.7); border-color: var(--glass-border-hover);
+      transform: translateY(-3px);
+    }
+
+    /* Hero Stats */
+    .hero-stats {
+      display: flex; gap: 48px; flex-wrap: wrap; justify-content: center;
+    }
+    .hero-stat {
+      text-align: center; position: relative;
+    }
+    .hero-stat::after {
+      content: ''; position: absolute; right: -24px; top: 50%; transform: translateY(-50%);
+      width: 1px; height: 40px; background: rgba(255,255,255,0.08);
+    }
+    .hero-stat:last-child::after { display: none; }
+    .hero-stat .number {
+      font-family: var(--font-heading); font-size: 2.5rem; font-weight: 900;
+      color: var(--text-white); display: block; line-height: 1;
+    }
+    .hero-stat .number .plus { color: var(--accent); }
+    .hero-stat .label {
+      font-size: 0.85rem; color: var(--text-muted); font-weight: 500;
+      margin-top: 6px; display: block;
+    }
+
+    /* ═══════════════════════════════════════════
+       SECTIONS COMMON
+    ═══════════════════════════════════════════ */
     .section {
-      padding: 100px 5%;
-      max-width: 1200px;
-      margin: 0 auto;
+      padding: 120px 5%; max-width: 1280px; margin: 0 auto;
+      position: relative; z-index: 1;
+    }
+    .section-eyebrow {
+      text-transform: uppercase; letter-spacing: 3px; font-size: 0.8rem;
+      font-weight: 700; color: var(--primary-light); text-align: center;
+      margin-bottom: 12px;
     }
     .section-title {
-      text-align: center;
-      font-family: var(--font-heading);
-      font-size: 2.5rem;
-      margin-bottom: 16px;
+      text-align: center; font-family: var(--font-heading);
+      font-size: clamp(2rem, 4vw, 3rem); font-weight: 800;
+      margin-bottom: 16px; line-height: 1.2;
     }
-    .section-subtitle {
-      text-align: center;
-      color: var(--text-muted);
-      margin-bottom: 60px;
+    .section-desc {
+      text-align: center; color: var(--text-muted); max-width: 600px;
+      margin: 0 auto 64px; font-size: 1.05rem;
     }
 
-    /* Feature Showcase - Detailed Layout */
-    .feature-showcase {
-      display: flex;
-      flex-direction: column;
-      gap: 80px;
-      margin-top: 40px;
+    /* ═══════════════════════════════════════════
+       HOW IT WORKS — TIMELINE
+    ═══════════════════════════════════════════ */
+    .timeline { display: flex; gap: 24px; position: relative; }
+    .timeline::before {
+      content: ''; position: absolute; top: 60px; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--glass-border-hover), var(--accent-glow), transparent);
     }
+    .timeline-step {
+      flex: 1; text-align: center; position: relative;
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg); padding: 48px 28px 36px;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      backdrop-filter: blur(12px);
+    }
+    .timeline-step:hover {
+      border-color: var(--glass-border-hover); transform: translateY(-8px);
+      box-shadow: 0 20px 60px -12px rgba(99, 102, 241, 0.2);
+    }
+    .step-num {
+      width: 56px; height: 56px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), #4F46E5);
+      color: #fff; display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-heading); font-size: 1.4rem; font-weight: 900;
+      margin: 0 auto 24px; position: relative; z-index: 2;
+      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
+    }
+    .timeline-step h3 {
+      font-family: var(--font-heading); font-size: 1.3rem; font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .timeline-step p { color: var(--text-muted); font-size: 0.95rem; }
+
+    /* ═══════════════════════════════════════════
+       FEATURES SHOWCASE
+    ═══════════════════════════════════════════ */
+    .feature-showcase { display: flex; flex-direction: column; gap: 100px; }
     .feature-row {
-      display: flex;
-      align-items: center;
-      gap: 60px;
+      display: flex; align-items: center; gap: 64px;
     }
-    .feature-row:nth-child(even) {
-      flex-direction: row-reverse;
-    }
+    .feature-row.reverse { flex-direction: row-reverse; }
     .feature-text { flex: 1; }
+    .feature-icon-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 16px; border-radius: 99px; font-size: 0.8rem; font-weight: 700;
+      letter-spacing: 1px; text-transform: uppercase; margin-bottom: 16px;
+    }
     .feature-text h3 {
-      font-family: var(--font-heading);
-      font-size: 2.2rem;
-      margin-bottom: 20px;
-      color: var(--text-light);
+      font-family: var(--font-heading); font-size: 2rem; font-weight: 800;
+      margin-bottom: 20px; line-height: 1.2;
     }
     .feature-text p {
-      color: var(--text-muted);
-      font-size: 1.1rem;
-      margin-bottom: 20px;
-      line-height: 1.8;
+      color: var(--text-secondary); font-size: 1.05rem; margin-bottom: 16px; line-height: 1.8;
     }
-    .feature-image {
-      flex: 1;
-      position: relative;
+    .feature-bullets {
+      list-style: none; margin-top: 20px; display: flex; flex-direction: column; gap: 10px;
     }
-    .feature-image img {
-      width: 100%;
-      border-radius: 20px;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    .feature-bullets li {
+      display: flex; align-items: center; gap: 10px; color: var(--text-secondary);
+      font-size: 0.95rem; font-weight: 500;
+    }
+    .feature-bullets li::before {
+      content: '✦'; color: var(--accent); font-size: 0.8rem;
+    }
+    .feature-visual {
+      flex: 1; position: relative;
+    }
+    .feature-visual img {
+      width: 100%; border-radius: var(--radius-lg);
       border: 1px solid var(--glass-border);
-      transition: transform 0.5s ease;
+      box-shadow: 0 32px 64px -16px rgba(0, 0, 0, 0.5);
+      transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    .feature-image img:hover {
-      transform: scale(1.02);
+    .feature-visual:hover img {
+      transform: perspective(1200px) rotateY(-3deg) scale(1.02);
     }
-    .feature-image::after {
-      content: '';
-      position: absolute;
-      top: -20px; right: -20px; bottom: 20px; left: 20px;
-      background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(16,185,129,0.1));
-      border-radius: 24px;
-      z-index: -1;
+    .feature-visual .glow {
+      position: absolute; top: -30px; right: -30px; bottom: 30px; left: 30px;
+      border-radius: 28px; z-index: -1; opacity: 0.5;
+      transition: opacity 0.4s;
     }
-    .feature-row:nth-child(even) .feature-image::after {
-      right: 20px; left: -20px;
+    .feature-visual:hover .glow { opacity: 0.8; }
+    .feature-row.reverse .feature-visual .glow {
+      right: 30px; left: -30px;
     }
 
-    /* Steps & Cards (How it works, Reviews) */
-    .grid-3 {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 30px;
-    }
-    .step-card, .review-card {
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      border-radius: 20px;
-      padding: 40px 30px;
-      text-align: center;
-      transition: transform 0.3s;
-    }
-    .step-card:hover, .review-card:hover {
-      transform: translateY(-5px);
-      border-color: rgba(99,102,241,0.4);
-    }
-    .step-number {
-      width: 50px; height: 50px;
-      background: rgba(99,102,241,0.2);
-      color: var(--primary);
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.5rem; font-weight: 800;
-      margin: 0 auto 20px;
-    }
-    .review-author {
-      margin-top: 20px;
-      font-weight: 600; color: var(--accent);
-    }
-
-    /* FAQs Accordion */
-    .faq-container {
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    details {
-      background: rgba(30, 41, 59, 0.4);
-      border: 1px solid var(--glass-border);
-      border-radius: 12px;
-      margin-bottom: 16px;
-      overflow: hidden;
-      transition: background 0.3s;
-    }
-    details[open] {
-      background: rgba(30, 41, 59, 0.8);
-      border-color: rgba(99,102,241,0.3);
-    }
-    summary {
-      padding: 20px;
-      font-weight: 600;
-      font-size: 1.1rem;
-      cursor: pointer;
-      list-style: none;
-      display: flex; justify-content: space-between; align-items: center;
-    }
-    summary::-webkit-details-marker { display: none; }
-    summary::after {
-      content: '+';
-      color: var(--primary);
-      font-size: 1.5rem;
-      transition: transform 0.3s;
-    }
-    details[open] summary::after { transform: rotate(45deg); }
-    .faq-content {
-      padding: 0 20px 20px;
-      color: var(--text-muted);
-      line-height: 1.6;
-    }
-
-    /* Roles Section */
-    .roles-container {
-      display: flex;
-      flex-direction: column;
-      gap: 40px;
-      margin-top: 40px;
-    }
-    .role-row {
-      display: flex;
-      align-items: center;
-      gap: 40px;
-      background: linear-gradient(145deg, rgba(30,41,59,0.5), rgba(15,23,42,0.8));
-      border: 1px solid var(--glass-border);
-      border-radius: 24px;
-      padding: 40px;
-    }
-    .role-row:nth-child(even) { flex-direction: row-reverse; }
-    .role-content { flex: 1; }
-    .role-content h3 { font-family: var(--font-heading); font-size: 2rem; margin-bottom: 16px; color: var(--accent); }
-    .role-content p { color: var(--text-muted); margin-bottom: 20px; }
-    .role-image {
-      flex: 1;
-      height: 250px;
-      background: var(--bg-darker);
-      border-radius: 16px;
-      border: 1px solid var(--glass-border);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 5rem;
-      opacity: 0.8;
-    }
-
-    /* Footer */
-    footer {
-      background: var(--bg-darker);
+    /* ═══════════════════════════════════════════
+       SAFETY / TRUST
+    ═══════════════════════════════════════════ */
+    .trust-section {
+      padding: 100px 5%; position: relative; z-index: 1;
       border-top: 1px solid var(--glass-border);
-      padding: 60px 5% 30px;
-      margin-top: 100px;
+      border-bottom: 1px solid var(--glass-border);
+      background: linear-gradient(180deg, rgba(16, 185, 129, 0.03), transparent);
+    }
+    .trust-inner {
+      max-width: 1280px; margin: 0 auto;
+      display: flex; align-items: center; gap: 60px;
+    }
+    .trust-text { flex: 1.2; }
+    .trust-text h3 {
+      font-family: var(--font-heading); font-size: 2.2rem; font-weight: 800;
+      margin-bottom: 20px; color: var(--accent);
+    }
+    .trust-text p { color: var(--text-secondary); font-size: 1.05rem; margin-bottom: 16px; line-height: 1.8; }
+    .trust-stats {
+      flex: 0.8; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    }
+    .trust-stat-card {
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: var(--radius-md); padding: 28px 20px; text-align: center;
+      transition: all 0.3s; backdrop-filter: blur(10px);
+    }
+    .trust-stat-card:hover { border-color: rgba(16, 185, 129, 0.3); transform: translateY(-4px); }
+    .trust-stat-card .icon { font-size: 2rem; margin-bottom: 12px; }
+    .trust-stat-card .val {
+      font-family: var(--font-heading); font-size: 1.5rem; font-weight: 900;
+      color: var(--text-white); display: block;
+    }
+    .trust-stat-card .lbl { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; display: block; }
+
+    /* ═══════════════════════════════════════════
+       ROLES / BUILT FOR CHAMPIONS
+    ═══════════════════════════════════════════ */
+    .roles-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .role-card {
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg); padding: 40px 32px;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); position: relative;
+      overflow: hidden; backdrop-filter: blur(10px);
+    }
+    .role-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      transition: height 0.4s;
+    }
+    .role-card:hover { transform: translateY(-8px); border-color: var(--glass-border-hover); }
+    .role-card:hover::before { height: 4px; }
+    .role-card.player::before { background: linear-gradient(90deg, var(--accent), #34D399); }
+    .role-card.coach::before { background: linear-gradient(90deg, var(--amber), #FBBF24); }
+    .role-card.academy::before { background: linear-gradient(90deg, var(--blue), #60A5FA); }
+    .role-card .role-emoji {
+      font-size: 3rem; margin-bottom: 20px; display: block;
+    }
+    .role-card h3 {
+      font-family: var(--font-heading); font-size: 1.5rem; font-weight: 800; margin-bottom: 12px;
+    }
+    .role-card.player h3 { color: var(--accent); }
+    .role-card.coach h3 { color: var(--amber); }
+    .role-card.academy h3 { color: var(--blue); }
+    .role-card p { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 20px; }
+    .role-card ul {
+      list-style: none; display: flex; flex-direction: column; gap: 8px;
+    }
+    .role-card ul li {
+      color: var(--text-secondary); font-size: 0.88rem; font-weight: 500;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .role-card ul li::before { content: '→'; color: var(--text-muted); font-size: 0.75rem; }
+
+    /* ═══════════════════════════════════════════
+       REVIEWS / WALL OF CHAMPIONS
+    ═══════════════════════════════════════════ */
+    .reviews-track-wrapper {
+      overflow: hidden; position: relative;
+      mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+      -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+    }
+    .reviews-track {
+      display: flex; gap: 24px; animation: scrollReviews 30s linear infinite;
+      width: max-content;
+    }
+    .reviews-track:hover { animation-play-state: paused; }
+    @keyframes scrollReviews {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+    .review-card {
+      flex-shrink: 0; width: 380px;
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg); padding: 36px 32px;
+      backdrop-filter: blur(10px); transition: all 0.3s;
+    }
+    .review-card:hover { border-color: var(--glass-border-hover); }
+    .review-stars { color: var(--amber); font-size: 1rem; margin-bottom: 16px; letter-spacing: 3px; }
+    .review-card blockquote {
+      color: var(--text-secondary); font-size: 1rem; line-height: 1.7;
+      font-style: italic; margin-bottom: 20px; position: relative; padding-left: 20px;
+      border-left: 2px solid rgba(99, 102, 241, 0.3);
+    }
+    .review-author-row { display: flex; align-items: center; gap: 12px; }
+    .review-avatar {
+      width: 40px; height: 40px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem; font-weight: 700;
+    }
+    .review-author-info .name { font-weight: 700; font-size: 0.95rem; }
+    .review-author-info .role { font-size: 0.8rem; color: var(--text-muted); }
+
+    /* ═══════════════════════════════════════════
+       FAQ ACCORDION
+    ═══════════════════════════════════════════ */
+    .faq-container { max-width: 800px; margin: 0 auto; }
+    .faq-item {
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: var(--radius-md); margin-bottom: 12px; overflow: hidden;
+      transition: all 0.3s; backdrop-filter: blur(10px);
+    }
+    .faq-item.active { border-color: var(--glass-border-hover); background: rgba(30, 41, 59, 0.6); }
+    .faq-question {
+      width: 100%; padding: 22px 24px; display: flex;
+      justify-content: space-between; align-items: center;
+      background: none; border: none; color: var(--text-white);
+      font-size: 1.05rem; font-weight: 600; cursor: pointer;
+      font-family: var(--font-body); text-align: left;
+    }
+    .faq-chevron {
+      font-size: 1.2rem; color: var(--primary-light); transition: transform 0.3s;
+      flex-shrink: 0; margin-left: 16px;
+    }
+    .faq-item.active .faq-chevron { transform: rotate(180deg); }
+    .faq-answer {
+      max-height: 0; overflow: hidden; transition: max-height 0.4s ease, padding 0.4s ease;
+      padding: 0 24px; color: var(--text-muted); line-height: 1.7; font-size: 0.95rem;
+    }
+    .faq-item.active .faq-answer { max-height: 200px; padding: 0 24px 22px; }
+
+    /* ═══════════════════════════════════════════
+       CTA BANNER
+    ═══════════════════════════════════════════ */
+    .cta-banner {
+      max-width: 1100px; margin: 0 auto 80px; padding: 80px 48px;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(16, 185, 129, 0.08));
+      border: 1px solid var(--glass-border);
+      border-radius: 32px; text-align: center; position: relative; overflow: hidden;
+      z-index: 1;
+    }
+    .cta-banner::before {
+      content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+      background: radial-gradient(circle at 30% 30%, rgba(99,102,241,0.1), transparent 50%);
+      animation: meshFloat1 10s ease-in-out infinite; z-index: -1;
+    }
+    .cta-banner h2 {
+      font-family: var(--font-heading); font-size: clamp(2rem, 4vw, 2.8rem);
+      font-weight: 900; margin-bottom: 16px;
+    }
+    .cta-banner p { color: var(--text-muted); max-width: 500px; margin: 0 auto 36px; font-size: 1.1rem; }
+
+    /* ═══════════════════════════════════════════
+       FOOTER
+    ═══════════════════════════════════════════ */
+    footer {
+      background: rgba(2, 6, 23, 0.8); border-top: 1px solid var(--glass-border);
+      padding: 80px 5% 32px; position: relative; z-index: 1;
     }
     .footer-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 40px;
-      max-width: 1200px;
-      margin: 0 auto;
-      margin-bottom: 60px;
+      display: grid; grid-template-columns: 2fr 1fr 1fr 1fr;
+      gap: 48px; max-width: 1200px; margin: 0 auto 64px;
     }
+    .footer-brand .logo { margin-bottom: 16px; }
+    .footer-brand p { color: var(--text-muted); font-size: 0.95rem; max-width: 280px; }
     .footer-col h4 {
-      font-family: var(--font-heading);
-      margin-bottom: 20px;
-      font-size: 1.2rem;
+      font-family: var(--font-heading); font-size: 1rem; font-weight: 700;
+      margin-bottom: 20px; color: var(--text-white);
     }
-    .footer-col p, .footer-col a {
-      color: var(--text-muted);
-      text-decoration: none;
-      display: block;
-      margin-bottom: 12px;
-      transition: color 0.2s;
+    .footer-col a {
+      display: block; color: var(--text-muted); font-size: 0.9rem;
+      margin-bottom: 12px; transition: color 0.2s;
     }
-    .footer-col a:hover { color: var(--primary); }
+    .footer-col a:hover { color: var(--primary-light); }
+    .footer-social { display: flex; gap: 12px; margin-top: 24px; }
+    .footer-social a {
+      width: 36px; height: 36px; border-radius: 10px; background: rgba(255,255,255,0.05);
+      border: 1px solid var(--glass-border); display: flex; align-items: center;
+      justify-content: center; font-size: 1rem; transition: all 0.3s; margin: 0;
+    }
+    .footer-social a:hover {
+      background: var(--primary-glow); border-color: var(--glass-border-hover);
+      transform: translateY(-2px);
+    }
     .footer-bottom {
-      text-align: center;
-      color: #475569;
-      font-size: 0.9rem;
-      border-top: 1px solid #1E293B;
-      padding-top: 30px;
+      text-align: center; color: var(--text-muted); font-size: 0.85rem;
+      border-top: 1px solid rgba(255,255,255,0.04); padding-top: 32px;
+      max-width: 1200px; margin: 0 auto;
     }
+    .footer-bottom .heart { color: var(--rose); }
 
-    /* Modal */
+    /* ═══════════════════════════════════════════
+       MODAL
+    ═══════════════════════════════════════════ */
     .modal-overlay {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(2, 6, 23, 0.8);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 2000;
-      opacity: 0;
-      visibility: hidden;
-      transition: all 0.3s ease;
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(2, 6, 23, 0.85); backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 2000; opacity: 0; visibility: hidden; transition: all 0.4s;
     }
-    .modal-overlay.active {
-      opacity: 1;
-      visibility: visible;
-    }
+    .modal-overlay.active { opacity: 1; visibility: visible; }
     .modal-content {
-      background: var(--bg-dark);
-      border: 1px solid var(--glass-border);
-      border-radius: 24px;
-      padding: 40px;
-      max-width: 500px;
-      width: 90%;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-      position: relative;
-      transform: translateY(20px);
-      transition: transform 0.3s ease;
+      background: var(--bg-dark); border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg); padding: 48px; max-width: 520px; width: 90%;
+      box-shadow: 0 32px 64px rgba(0, 0, 0, 0.5); transform: translateY(24px) scale(0.95);
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    .modal-overlay.active .modal-content {
-      transform: translateY(0);
-    }
+    .modal-overlay.active .modal-content { transform: translateY(0) scale(1); }
     .modal-close {
-      position: absolute;
-      top: 20px; right: 20px;
-      background: transparent;
-      border: none;
-      color: var(--text-muted);
-      font-size: 1.5rem;
-      cursor: pointer;
-      transition: color 0.2s;
+      position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.05);
+      border: 1px solid var(--glass-border); border-radius: 10px; width: 36px; height: 36px;
+      color: var(--text-muted); font-size: 1.2rem; cursor: pointer; transition: all 0.2s;
+      display: flex; align-items: center; justify-content: center;
     }
-    .modal-close:hover { color: var(--text-light); }
+    .modal-close:hover { color: var(--text-white); border-color: var(--glass-border-hover); }
     .modal-content h3 {
-      font-family: var(--font-heading);
-      font-size: 1.8rem;
+      font-family: var(--font-heading); font-size: 1.8rem; font-weight: 800;
       margin-bottom: 20px;
-      color: var(--text-light);
     }
-    .modal-content p {
-      color: var(--text-muted);
-      margin-bottom: 16px;
-      font-size: 1rem;
-      line-height: 1.6;
-    }
-    .modal-content a {
-      color: var(--primary);
-      text-decoration: none;
-      font-weight: 600;
-    }
+    .modal-content p { color: var(--text-muted); margin-bottom: 14px; font-size: 0.95rem; }
+    .modal-content a { color: var(--primary-light); font-weight: 600; }
     .modal-content a:hover { text-decoration: underline; }
 
-    /* Mobile */
-    @media (max-width: 900px) {
+    /* ═══════════════════════════════════════════
+       MOBILE RESPONSIVE
+    ═══════════════════════════════════════════ */
+    @media (max-width: 1024px) {
+      .feature-row, .feature-row.reverse { flex-direction: column !important; gap: 40px; }
+      .feature-visual .glow { display: none; }
+      .trust-inner { flex-direction: column; }
+      .roles-grid { grid-template-columns: 1fr; }
+      .footer-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 768px) {
       .nav-links { display: none; }
-      .role-row, .feature-row { flex-direction: column !important; }
-      .role-image, .feature-image { width: 100%; margin-top: 20px; }
-      .feature-image::after { display: none; }
+      .hero h1 { font-size: 2.8rem; }
+      .hero-stats { gap: 32px; }
+      .hero-stat .number { font-size: 2rem; }
+      .timeline { flex-direction: column; }
+      .timeline::before { display: none; }
       .hero-buttons { flex-direction: column; width: 100%; }
-      .btn-large { width: 100%; }
+      .btn-hero { width: 100%; text-align: center; }
+      .section { padding: 80px 5%; }
+      .review-card { width: 300px; }
+      .footer-grid { grid-template-columns: 1fr; gap: 32px; }
+      .cta-banner { padding: 48px 24px; margin: 0 16px 60px; }
+      .trust-stats { grid-template-columns: 1fr 1fr; }
     }
   </style>
 </head>
 <body>
 
-  <!-- Navigation -->
-  <nav class="navbar">
+  <!-- Scroll Progress -->
+  <div class="scroll-progress" id="scrollProgress"></div>
+
+  <!-- Court Grid -->
+  <div class="court-grid"></div>
+
+  <!-- Floating Particles -->
+  <div class="particles" id="particles"></div>
+
+  <!-- ═══════════ NAVBAR ═══════════ -->
+  <nav class="navbar" id="navbar">
     <a href="/home" class="logo">
-      <img src="/uploads/icon.png" alt="AceTrack Logo" style="height: 36px; width: 36px; border-radius: 8px;">
+      <img src="/uploads/icon.png" alt="AceTrack" loading="lazy">
       Ace<span>Track</span>
     </a>
     <div class="nav-links">
       <a href="#how-it-works">How It Works</a>
-      <a href="#features">Features</a>
+      <a href="#features">The Arsenal</a>
+      <a href="#community">Community</a>
       <a href="#reviews">Reviews</a>
       <a href="#faqs">FAQs</a>
     </div>
-    <div class="nav-buttons">
-      <a href="/Landing" class="btn-login">Portal Login</a>
+    <div>
+      <a href="/Landing" class="btn-nav">Portal Login</a>
     </div>
   </nav>
 
-  <!-- Hero -->
+  <!-- ═══════════ HERO ═══════════ -->
   <section class="hero">
-    <div class="hero-badge" data-aos="fade-down" data-aos-delay="100">v2.6 Live Now</div>
-    <h1 data-aos="fade-up" data-aos-delay="200">Elevate Your Game.</h1>
-    <p data-aos="fade-up" data-aos-delay="300">The premier platform for academies, coaches, and players to connect, track performance, and dominate the court. Data-driven sports management at your fingertips.</p>
+    <div class="hero-mesh"></div>
+    <div class="hero-orb"></div>
+
+    <div class="hero-badge" data-aos="fade-down" data-aos-delay="100">
+      <span class="pulse-dot"></span>
+      Platform Live — v2.6
+    </div>
+
+    <h1 data-aos="fade-up" data-aos-delay="200">
+      <span class="gradient-text">Elevate Your Game.</span>
+      <span class="accent-line">AI-Powered Sports Intelligence Platform</span>
+    </h1>
+
+    <p class="hero-subtitle" data-aos="fade-up" data-aos-delay="300">
+      The premier ecosystem for academies, coaches, and players to connect, track performance, analyze matches with AI, and dominate the court.
+    </p>
+
     <div class="hero-buttons" data-aos="fade-up" data-aos-delay="400">
-      <button id="startJourneyBtn" class="btn-large btn-primary" style="cursor:pointer; border:none; font-family:var(--font-body);">Start Your Journey</button>
-      <a href="#features" class="btn-large btn-secondary">Explore Features</a>
+      <button id="startJourneyBtn" class="btn-hero btn-hero-primary">Start Your Journey</button>
+      <a href="#features" class="btn-hero btn-hero-ghost">Explore Features</a>
+    </div>
+
+    <div class="hero-stats" data-aos="fade-up" data-aos-delay="500">
+      <div class="hero-stat">
+        <span class="number" data-target="500"><span class="counter">0</span><span class="plus">+</span></span>
+        <span class="label">Active Players</span>
+      </div>
+      <div class="hero-stat">
+        <span class="number" data-target="50"><span class="counter">0</span><span class="plus">+</span></span>
+        <span class="label">Academies</span>
+      </div>
+      <div class="hero-stat">
+        <span class="number" data-target="10"><span class="counter">0</span><span class="plus">K+</span></span>
+        <span class="label">Matches Tracked</span>
+      </div>
+      <div class="hero-stat">
+        <span class="number" data-target="99"><span class="counter">0</span><span class="plus">%</span></span>
+        <span class="label">Uptime SLA</span>
+      </div>
     </div>
   </section>
 
-  <!-- How It Works -->
+  <!-- ═══════════ HOW IT WORKS ═══════════ -->
   <section id="how-it-works" class="section">
-    <h2 class="section-title" data-aos="fade-up">How It Works</h2>
-    <p class="section-subtitle" data-aos="fade-up" data-aos-delay="100">Your journey to dominance starts here.</p>
-    <div class="grid-3">
-      <div class="step-card" data-aos="fade-up" data-aos-delay="200">
-        <div class="step-number">1</div>
-        <h3 style="margin-bottom:10px;">Create Profile</h3>
-        <p style="color:var(--text-muted)">Sign up and establish your player baseline or academy facility details securely.</p>
+    <p class="section-eyebrow" data-aos="fade-up">How It Works</p>
+    <h2 class="section-title" data-aos="fade-up" data-aos-delay="50">Your Path to Dominance</h2>
+    <p class="section-desc" data-aos="fade-up" data-aos-delay="100">Three simple steps to transform your game forever.</p>
+
+    <div class="timeline">
+      <div class="timeline-step" data-aos="fade-up" data-aos-delay="150">
+        <div class="step-num">1</div>
+        <h3>Create Profile</h3>
+        <p>Sign up and establish your player baseline or academy profile. Get matched with the perfect training partners instantly.</p>
       </div>
-      <div class="step-card" data-aos="fade-up" data-aos-delay="300">
-        <div class="step-number">2</div>
-        <h3 style="margin-bottom:10px;">Find Matches</h3>
-        <p style="color:var(--text-muted)">Use our intelligent matchmaking to find players at your skill level, or book a certified coach.</p>
+      <div class="timeline-step" data-aos="fade-up" data-aos-delay="250">
+        <div class="step-num">2</div>
+        <h3>Find & Compete</h3>
+        <p>Use intelligent matchmaking to find players at your level, register for tournaments, or book certified coaches.</p>
       </div>
-      <div class="step-card" data-aos="fade-up" data-aos-delay="400">
-        <div class="step-number">3</div>
-        <h3 style="margin-bottom:10px;">Analyze & Grow</h3>
-        <p style="color:var(--text-muted)">Upload match recordings, get AI insights, and track your global progression leaderboard.</p>
+      <div class="timeline-step" data-aos="fade-up" data-aos-delay="350">
+        <div class="step-num">3</div>
+        <h3>Analyze & Grow</h3>
+        <p>Upload match recordings, get frame-by-frame AI insights, and track your progression on the global leaderboard.</p>
       </div>
     </div>
   </section>
 
-  <!-- Features -->
+  <!-- ═══════════ FEATURES ═══════════ -->
   <section id="features" class="section">
-    <h2 class="section-title" data-aos="fade-up">Everything you need to succeed</h2>
-    <p class="section-subtitle" data-aos="fade-up" data-aos-delay="100">Powerful tools designed specifically for the modern sports ecosystem.</p>
-    
+    <p class="section-eyebrow" data-aos="fade-up">Features</p>
+    <h2 class="section-title" data-aos="fade-up" data-aos-delay="50">The Arsenal</h2>
+    <p class="section-desc" data-aos="fade-up" data-aos-delay="100">Powerful tools designed for the modern sports ecosystem.</p>
+
     <div class="feature-showcase">
-      <!-- Feature 1 -->
+      <!-- Feature 1: Matchmaking -->
       <div class="feature-row" data-aos="fade-up">
         <div class="feature-text">
-          <h3>🎾 Intelligent Matchmaking</h3>
-          <p>Finding the perfect opponent has never been easier. Our proprietary skill-rating algorithms analyze your past performance, consistency, and playstyle to instantly connect you with players at your exact skill level.</p>
-          <p>Challenge friends, accept global invitations, and climb the localized ladder to establish your dominance on the court.</p>
+          <div class="feature-icon-badge" style="background:rgba(99,102,241,0.1);color:var(--primary-light);">🎾 Matchmaking</div>
+          <h3>Intelligent Skill-Based Matchmaking</h3>
+          <p>Our proprietary algorithms analyze your performance, consistency, and playstyle to instantly connect you with players at your exact skill level.</p>
+          <ul class="feature-bullets">
+            <li>TrueSkill™ rating system with glicko-2 confidence intervals</li>
+            <li>Challenge friends or accept open global invitations</li>
+            <li>Location-aware court booking integration</li>
+          </ul>
         </div>
-        <div class="feature-image">
-          <img src="/uploads/demo_challenge.png" alt="Matchmaking Screen">
+        <div class="feature-visual">
+          <div class="glow" style="background:linear-gradient(135deg,rgba(99,102,241,0.15),rgba(16,185,129,0.08));"></div>
+          <img src="/uploads/demo_challenge.png" alt="Matchmaking Interface" loading="lazy">
         </div>
       </div>
 
-      <!-- Feature 2 -->
-      <div class="feature-row" data-aos="fade-up">
+      <!-- Feature 2: Tournaments -->
+      <div class="feature-row reverse" data-aos="fade-up">
         <div class="feature-text">
-          <h3>🏆 Tournament Management</h3>
-          <p>Whether you're hosting a local weekend shootout or a national championship, AceTrack handles it all. Generate dynamic brackets, process registrations, and broadcast live scoring directly to the cloud.</p>
-          <p>Participants get automated push notifications for match schedules and court assignments, ensuring your event runs perfectly on time.</p>
+          <div class="feature-icon-badge" style="background:rgba(245,158,11,0.1);color:var(--amber);">🏆 Tournaments</div>
+          <h3>End-to-End Tournament Management</h3>
+          <p>From weekend shootouts to national championships — generate dynamic brackets, process registrations, and broadcast live scoring to the cloud.</p>
+          <ul class="feature-bullets">
+            <li>Automated bracket generation with seeding logic</li>
+            <li>Push notifications for match schedules & court assignments</li>
+            <li>Real-time live scoring visible to all participants</li>
+          </ul>
         </div>
-        <div class="feature-image">
-          <img src="/uploads/demo_tournaments.png" alt="Tournaments Dashboard">
+        <div class="feature-visual">
+          <div class="glow" style="background:linear-gradient(135deg,rgba(245,158,11,0.12),rgba(99,102,241,0.08));"></div>
+          <img src="/uploads/demo_tournaments.png" alt="Tournament Dashboard" loading="lazy">
         </div>
       </div>
 
-      <!-- Feature 3 -->
+      <!-- Feature 3: AI Analytics -->
       <div class="feature-row" data-aos="fade-up">
         <div class="feature-text">
-          <h3>📹 AI Video Analytics</h3>
-          <p>Stop guessing and start improving. Upload your match recordings directly to the AceTrack Cloud and let our advanced AI models break down your mechanics frame by frame.</p>
-          <p>Get instant insights on footwork, racket speed, and shot placement. Generate automated highlight reels to share with scouts or coaches for further technical review.</p>
+          <div class="feature-icon-badge" style="background:rgba(16,185,129,0.1);color:var(--accent);">📹 AI Analytics</div>
+          <h3>AI-Powered Video Analytics</h3>
+          <p>Stop guessing — start improving. Upload match recordings and let our AI break down your mechanics frame by frame, delivering actionable insights.</p>
+          <ul class="feature-bullets">
+            <li>Automated footwork, racket speed & shot placement analysis</li>
+            <li>AI-generated highlight reels for scouts & coaches</li>
+            <li>Historical trend tracking with progression graphs</li>
+          </ul>
         </div>
-        <div class="feature-image">
-          <img src="/uploads/demo_ai.png" alt="AI Video Analytics">
+        <div class="feature-visual">
+          <div class="glow" style="background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(99,102,241,0.08));"></div>
+          <img src="/uploads/demo_ai.png" alt="AI Video Analytics" loading="lazy">
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Safety & Community -->
-  <section id="safety" class="section" style="background: rgba(15, 23, 42, 0.5); border-top: 1px solid var(--glass-border); border-bottom: 1px solid var(--glass-border);">
-    <div class="feature-row" data-aos="fade-up">
-      <div class="feature-text">
-        <h3 style="color:#10B981;">🛡️ Safe & Verified Community</h3>
-        <p>Your data privacy and safety are our top priorities. Every coach on AceTrack is background-verified, and our secure environment ensures that match videos and direct messages are fully encrypted and only accessible to authorized users.</p>
+  <!-- ═══════════ TRUST & SAFETY ═══════════ -->
+  <section class="trust-section" id="safety">
+    <div class="trust-inner">
+      <div class="trust-text" data-aos="fade-right">
+        <p class="section-eyebrow" style="text-align:left;">Trust & Safety</p>
+        <h3>🛡️ Trusted & Verified Community</h3>
+        <p>Your data privacy and safety are our top priorities. Every coach on AceTrack is background-verified, and our secure environment ensures that match videos and direct messages are fully encrypted.</p>
         <p>Join a trusted network of passionate sports enthusiasts dedicated to fair play and continuous improvement.</p>
       </div>
-      <div class="feature-image">
-        <div style="background:var(--bg-darker); height: 250px; border-radius: 20px; display:flex; align-items:center; justify-content:center; font-size:4rem; border:1px solid var(--glass-border);">🤝</div>
+      <div class="trust-stats" data-aos="fade-left" data-aos-delay="100">
+        <div class="trust-stat-card">
+          <div class="icon">🔒</div>
+          <span class="val">256-bit</span>
+          <span class="lbl">AES Encryption</span>
+        </div>
+        <div class="trust-stat-card">
+          <div class="icon">✅</div>
+          <span class="val">100%</span>
+          <span class="lbl">Coach Verified</span>
+        </div>
+        <div class="trust-stat-card">
+          <div class="icon">🛡️</div>
+          <span class="val">Zero</span>
+          <span class="lbl">Data Breaches</span>
+        </div>
+        <div class="trust-stat-card">
+          <div class="icon">⚡</div>
+          <span class="val">24/7</span>
+          <span class="lbl">Support Team</span>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- Roles -->
-  <section id="for-who" class="section">
-    <h2 class="section-title" data-aos="fade-up">Built for the whole community</h2>
-    
-    <div class="roles-container">
-      <div class="role-row" data-aos="fade-up">
-        <div class="role-content">
-          <h3>For Players</h3>
-          <p>Track your wins, losses, and overall progression over time. Book sessions with certified coaches to improve specific aspects of your game.</p>
-        </div>
-        <div class="role-image">🏃</div>
+  <!-- ═══════════ ROLES ═══════════ -->
+  <section id="community" class="section">
+    <p class="section-eyebrow" data-aos="fade-up">Community</p>
+    <h2 class="section-title" data-aos="fade-up" data-aos-delay="50">Built For Champions</h2>
+    <p class="section-desc" data-aos="fade-up" data-aos-delay="100">Whether you play, coach, or manage — AceTrack has your back.</p>
+
+    <div class="roles-grid">
+      <div class="role-card player" data-aos="fade-up" data-aos-delay="100">
+        <span class="role-emoji">🏃‍♂️</span>
+        <h3>For Players</h3>
+        <p>Track your wins, losses, and overall progression. Book sessions with certified coaches to sharpen every aspect of your game.</p>
+        <ul>
+          <li>Personalized skill dashboard</li>
+          <li>TrueSkill rating & global rankings</li>
+          <li>Match history & AI analysis</li>
+          <li>Wallet & tournament registration</li>
+        </ul>
       </div>
-      
-      <div class="role-row" data-aos="fade-up" data-aos-delay="100">
-        <div class="role-content">
-          <h3 style="color:#F59E0B;">For Coaches</h3>
-          <p>Manage your availability, accept booking requests, and provide structured evaluations and feedback to your students securely.</p>
-        </div>
-        <div class="role-image">📋</div>
+      <div class="role-card coach" data-aos="fade-up" data-aos-delay="200">
+        <span class="role-emoji">📋</span>
+        <h3>For Coaches</h3>
+        <p>Manage availability, accept bookings, and provide structured evaluations and feedback to all your students.</p>
+        <ul>
+          <li>Availability calendar management</li>
+          <li>Student progress tracking</li>
+          <li>Video review & annotation tools</li>
+          <li>Revenue analytics dashboard</li>
+        </ul>
       </div>
-      
-      <div class="role-row" data-aos="fade-up" data-aos-delay="200">
-        <div class="role-content">
-          <h3 style="color:#3B82F6;">For Academies</h3>
-          <p>Complete facility management. Monitor court utilization, track coach performance, and handle tournament registrations all in one place.</p>
-        </div>
-        <div class="role-image">🏟️</div>
+      <div class="role-card academy" data-aos="fade-up" data-aos-delay="300">
+        <span class="role-emoji">🏟️</span>
+        <h3>For Academies</h3>
+        <p>Complete facility management. Monitor court utilization, track coach performance, and run tournaments — all in one place.</p>
+        <ul>
+          <li>Multi-court booking system</li>
+          <li>Staff & coach management</li>
+          <li>Tournament hosting engine</li>
+          <li>Analytics & reporting suite</li>
+        </ul>
       </div>
     </div>
   </section>
 
-  <!-- Reviews -->
-  <section id="reviews" class="section">
-    <h2 class="section-title" data-aos="fade-up">What our users say</h2>
-    <p class="section-subtitle" data-aos="fade-up" data-aos-delay="100">Trusted by top athletes and academies.</p>
-    <div class="grid-3">
-      <div class="review-card" data-aos="zoom-in" data-aos-delay="100">
-        <p style="font-style:italic">"AceTrack completely transformed how our academy runs tournaments. The automated brackets saved us hours of manual work."</p>
-        <div class="review-author">- Sarah J., Academy Director</div>
-      </div>
-      <div class="review-card" data-aos="zoom-in" data-aos-delay="200">
-        <p style="font-style:italic">"The AI Video Analytics helped me fix my forehand grip in just two weeks. Being able to see my swing broken down frame-by-frame is incredible."</p>
-        <div class="review-author">- Mike T., Amateur Player</div>
-      </div>
-      <div class="review-card" data-aos="zoom-in" data-aos-delay="300">
-        <p style="font-style:italic">"I can easily manage my coaching availability and give structured feedback to all my students directly through the app."</p>
-        <div class="review-author">- Coach David R.</div>
+  <!-- ═══════════ REVIEWS ═══════════ -->
+  <section id="reviews" class="section" style="overflow:hidden;">
+    <p class="section-eyebrow" data-aos="fade-up">Testimonials</p>
+    <h2 class="section-title" data-aos="fade-up" data-aos-delay="50">Wall of Champions</h2>
+    <p class="section-desc" data-aos="fade-up" data-aos-delay="100">Trusted by athletes and academies across the country.</p>
+
+    <div class="reviews-track-wrapper" data-aos="fade-up" data-aos-delay="150">
+      <div class="reviews-track">
+        <!-- Card set 1 -->
+        <div class="review-card">
+          <div class="review-stars">★★★★★</div>
+          <blockquote>"AceTrack completely transformed how our academy runs tournaments. The automated brackets saved us hours of manual work every single week."</blockquote>
+          <div class="review-author-row">
+            <div class="review-avatar" style="background:rgba(99,102,241,0.15);color:var(--primary-light);">S</div>
+            <div class="review-author-info">
+              <div class="name">Sarah J.</div>
+              <div class="role">Academy Director</div>
+            </div>
+          </div>
+        </div>
+        <div class="review-card">
+          <div class="review-stars">★★★★★</div>
+          <blockquote>"The AI Video Analytics helped me fix my forehand grip in just two weeks. Seeing my swing broken down frame-by-frame is absolutely incredible."</blockquote>
+          <div class="review-author-row">
+            <div class="review-avatar" style="background:rgba(16,185,129,0.15);color:var(--accent);">M</div>
+            <div class="review-author-info">
+              <div class="name">Mike T.</div>
+              <div class="role">Amateur Player</div>
+            </div>
+          </div>
+        </div>
+        <div class="review-card">
+          <div class="review-stars">★★★★★</div>
+          <blockquote>"I can easily manage my coaching availability and give structured feedback to all my students. The revenue dashboard is a game changer."</blockquote>
+          <div class="review-author-row">
+            <div class="review-avatar" style="background:rgba(245,158,11,0.15);color:var(--amber);">D</div>
+            <div class="review-author-info">
+              <div class="name">Coach David R.</div>
+              <div class="role">Certified Coach</div>
+            </div>
+          </div>
+        </div>
+        <div class="review-card">
+          <div class="review-stars">★★★★★</div>
+          <blockquote>"The matchmaking system is scary accurate. Every opponent I've been paired with was exactly at my skill level — no more blowouts."</blockquote>
+          <div class="review-author-row">
+            <div class="review-avatar" style="background:rgba(59,130,246,0.15);color:var(--blue);">A</div>
+            <div class="review-author-info">
+              <div class="name">Ankit P.</div>
+              <div class="role">Competitive Player</div>
+            </div>
+          </div>
+        </div>
+        <div class="review-card">
+          <div class="review-stars">★★★★★</div>
+          <blockquote>"We onboarded our entire coaching staff in a single afternoon. The admin dashboard gives us complete visibility over every court and session."</blockquote>
+          <div class="review-author-row">
+            <div class="review-avatar" style="background:rgba(244,63,94,0.15);color:var(--rose);">R</div>
+            <div class="review-author-info">
+              <div class="name">Ritu S.</div>
+              <div class="role">Academy Manager</div>
+            </div>
+          </div>
+        </div>
+        <!-- Duplicate set for infinite scroll illusion -->
+        <div class="review-card">
+          <div class="review-stars">★★★★★</div>
+          <blockquote>"AceTrack completely transformed how our academy runs tournaments. The automated brackets saved us hours of manual work every single week."</blockquote>
+          <div class="review-author-row">
+            <div class="review-avatar" style="background:rgba(99,102,241,0.15);color:var(--primary-light);">S</div>
+            <div class="review-author-info">
+              <div class="name">Sarah J.</div>
+              <div class="role">Academy Director</div>
+            </div>
+          </div>
+        </div>
+        <div class="review-card">
+          <div class="review-stars">★★★★★</div>
+          <blockquote>"The AI Video Analytics helped me fix my forehand grip in just two weeks. Seeing my swing broken down frame-by-frame is absolutely incredible."</blockquote>
+          <div class="review-author-row">
+            <div class="review-avatar" style="background:rgba(16,185,129,0.15);color:var(--accent);">M</div>
+            <div class="review-author-info">
+              <div class="name">Mike T.</div>
+              <div class="role">Amateur Player</div>
+            </div>
+          </div>
+        </div>
+        <div class="review-card">
+          <div class="review-stars">★★★★★</div>
+          <blockquote>"I can easily manage my coaching availability and give structured feedback to all my students. The revenue dashboard is a game changer."</blockquote>
+          <div class="review-author-row">
+            <div class="review-avatar" style="background:rgba(245,158,11,0.15);color:var(--amber);">D</div>
+            <div class="review-author-info">
+              <div class="name">Coach David R.</div>
+              <div class="role">Certified Coach</div>
+            </div>
+          </div>
+        </div>
+        <div class="review-card">
+          <div class="review-stars">★★★★★</div>
+          <blockquote>"The matchmaking system is scary accurate. Every opponent I've been paired with was exactly at my skill level — no more blowouts."</blockquote>
+          <div class="review-author-row">
+            <div class="review-avatar" style="background:rgba(59,130,246,0.15);color:var(--blue);">A</div>
+            <div class="review-author-info">
+              <div class="name">Ankit P.</div>
+              <div class="role">Competitive Player</div>
+            </div>
+          </div>
+        </div>
+        <div class="review-card">
+          <div class="review-stars">★★★★★</div>
+          <blockquote>"We onboarded our entire coaching staff in a single afternoon. The admin dashboard gives us complete visibility over every court and session."</blockquote>
+          <div class="review-author-row">
+            <div class="review-avatar" style="background:rgba(244,63,94,0.15);color:var(--rose);">R</div>
+            <div class="review-author-info">
+              <div class="name">Ritu S.</div>
+              <div class="role">Academy Manager</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- FAQs -->
+  <!-- ═══════════ FAQs ═══════════ -->
   <section id="faqs" class="section">
-    <h2 class="section-title" data-aos="fade-up">Frequently Asked Questions</h2>
-    <div class="faq-container" data-aos="fade-up" data-aos-delay="100">
-      <details>
-        <summary>Is AceTrack free for players?</summary>
-        <div class="faq-content">Yes! Players can register, track stats, and join public matchmaking for free. Premium features like advanced AI video analytics require a subscription.</div>
-      </details>
-      <details>
-        <summary>How does the matchmaking rating work?</summary>
-        <div class="faq-content">We use a proprietary algorithm that calculates your rating based on win/loss records, opponent skill level, and historical consistency to ensure balanced matches.</div>
-      </details>
-      <details>
-        <summary>Are my match recordings private?</summary>
-        <div class="faq-content">Absolutely. All video uploads are strictly private by default. You have full control over whether you want to share them with a coach, an academy, or keep them for personal review.</div>
-      </details>
+    <p class="section-eyebrow" data-aos="fade-up">Support</p>
+    <h2 class="section-title" data-aos="fade-up" data-aos-delay="50">Got Questions?</h2>
+    <p class="section-desc" data-aos="fade-up" data-aos-delay="100">Everything you need to know about AceTrack.</p>
+
+    <div class="faq-container" data-aos="fade-up" data-aos-delay="150">
+      <div class="faq-item">
+        <button class="faq-question">
+          Is AceTrack free for players?
+          <span class="faq-chevron">▼</span>
+        </button>
+        <div class="faq-answer">Yes! Players can register, track stats, and join public matchmaking completely free. Premium features like advanced AI video analytics and detailed TrueSkill trend analysis require a Pro subscription.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">
+          How does the matchmaking rating work?
+          <span class="faq-chevron">▼</span>
+        </button>
+        <div class="faq-answer">We use a proprietary TrueSkill algorithm that calculates your rating based on win/loss records, opponent skill level, and historical consistency. This ensures balanced, competitive matches every time.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">
+          Are my match recordings private?
+          <span class="faq-chevron">▼</span>
+        </button>
+        <div class="faq-answer">Absolutely. All video uploads are strictly private by default with 256-bit encryption. You have full control over sharing — whether with a coach, an academy, or kept for personal review only.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">
+          Can academies manage multiple courts?
+          <span class="faq-chevron">▼</span>
+        </button>
+        <div class="faq-answer">Yes. Our Academy Dashboard provides complete multi-court management with real-time utilization metrics, coach scheduling, tournament hosting tools, and detailed revenue analytics.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">
+          Is there a mobile app available?
+          <span class="faq-chevron">▼</span>
+        </button>
+        <div class="faq-answer">AceTrack is available as a native app on both Android and iOS, as well as a fully-featured Progressive Web App accessible from any browser. All platforms sync seamlessly in real-time.</div>
+      </div>
     </div>
   </section>
 
-  <!-- Footer -->
+  <!-- ═══════════ CTA BANNER ═══════════ -->
+  <div class="section" style="padding-bottom:0;">
+    <div class="cta-banner" data-aos="zoom-in">
+      <h2>Ready to Dominate?</h2>
+      <p>Join hundreds of athletes, coaches, and academies already using AceTrack to elevate their game.</p>
+      <button id="ctaJourneyBtn" class="btn-hero btn-hero-primary" style="display:inline-block;">Get Started — It's Free</button>
+    </div>
+  </div>
+
+  <!-- ═══════════ FOOTER ═══════════ -->
   <footer id="contact">
     <div class="footer-grid">
-      <div class="footer-col">
-        <a href="#" class="logo" style="margin-bottom:20px;">Ace<span>Track</span></a>
-        <p>Empowering the next generation of athletes.</p>
+      <div class="footer-brand">
+        <a href="/home" class="logo">
+          <img src="/uploads/icon.png" alt="AceTrack" loading="lazy">
+          Ace<span>Track</span>
+        </a>
+        <p>Empowering the next generation of athletes with AI-powered sports intelligence.</p>
+        <div class="footer-social">
+          <a href="#" title="Instagram">📷</a>
+          <a href="#" title="Twitter / X">𝕏</a>
+          <a href="#" title="YouTube">▶</a>
+          <a href="#" title="LinkedIn">in</a>
+        </div>
       </div>
       <div class="footer-col">
-        <h4 id="about">Company</h4>
+        <h4>Product</h4>
+        <a href="#features">Features</a>
+        <a href="#how-it-works">How It Works</a>
+        <a href="#">Pricing</a>
+        <a href="#">Changelog</a>
+      </div>
+      <div class="footer-col">
+        <h4>Company</h4>
         <a href="#">About Us</a>
         <a href="#">Careers</a>
         <a href="#">Privacy Policy</a>
+        <a href="#">Terms of Service</a>
       </div>
       <div class="footer-col">
         <h4>Support</h4>
         <a href="#">Help Center</a>
-        <a href="#">Terms of Service</a>
-        <a href="mailto:support@acetrack.com">Contact Us</a>
+        <a href="mailto:admin@acetrack.com">Contact Us</a>
+        <a href="#">Status Page</a>
+        <a href="#">API Docs</a>
       </div>
     </div>
     <div class="footer-bottom">
-      &copy; 2026 AceTrack. All rights reserved.
+      &copy; 2026 AceTrack. All rights reserved. Made with <span class="heart">❤</span> in India.
     </div>
   </footer>
 
-  <!-- Invite-Only Modal -->
+  <!-- ═══════════ INVITE MODAL ═══════════ -->
   <div class="modal-overlay" id="inviteModal">
     <div class="modal-content">
       <button class="modal-close" id="closeInviteModalBtn">&times;</button>
-      <h3>Hello,</h3>
+      <h3>Hello 👋</h3>
       <p>Thank you for your interest in AceTrack! We're excited to announce that our app is currently available exclusively to a select group of users.</p>
       <p>This limited release allows us to gather valuable feedback and make final enhancements before our public launch.</p>
-      <p>If you'd like to be among the first to explore AceTrack, we invite you to join our community of invited users. Simply reach out to us at <a href="mailto:admin@acetrack.com">admin@acetrack.com</a>, and we'll be thrilled to welcome you aboard.</p>
-      <p>Stay tuned for our upcoming public launch – it's just around the corner!</p>
-      <p style="margin-top:24px; font-weight:600; color:var(--text-light);">
+      <p>If you'd like to be among the first to explore AceTrack, we invite you to join our community. Simply reach out to us at <a href="mailto:admin@acetrack.com">admin@acetrack.com</a>, and we'll be thrilled to welcome you aboard.</p>
+      <p>Stay tuned for our upcoming public launch — it's just around the corner!</p>
+      <p style="margin-top:24px; font-weight:700; color:var(--text-white);">
         Happy Tracking,<br>
-        <span style="color:var(--primary);">The AceTrack Team</span>
+        <span style="color:var(--primary-light);">The AceTrack Team</span>
       </p>
     </div>
   </div>
 
-  <!-- AOS Script -->
+  <!-- ═══════════ SCRIPTS ═══════════ -->
   <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
   <script>
-    // Initialize Animations
-    AOS.init({
-      duration: 800,
-      once: true,
-      offset: 100,
-    });
+    // AOS Init
+    AOS.init({ duration: 800, once: true, offset: 80, easing: 'ease-out-cubic' });
 
-    // Sticky Navbar
+    // ── Scroll Progress Bar ──
     window.addEventListener('scroll', () => {
-      const nav = document.querySelector('.navbar');
-      if (window.scrollY > 50) {
-        nav.classList.add('sticky');
-      } else {
-        nav.classList.remove('sticky');
-      }
+      const docH = document.documentElement.scrollHeight - window.innerHeight;
+      const scrolled = (window.scrollY / docH) * 100;
+      document.getElementById('scrollProgress').style.width = scrolled + '%';
     });
 
-    // Smooth scrolling
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-      anchor.addEventListener('click', function (e) {
+    // ── Sticky Navbar ──
+    window.addEventListener('scroll', () => {
+      document.getElementById('navbar').classList.toggle('sticky', window.scrollY > 60);
+    });
+
+    // ── Smooth scroll ──
+    document.querySelectorAll('a[href^="#"]').forEach(a => {
+      a.addEventListener('click', e => {
         e.preventDefault();
-        const target = document.querySelector(this.getAttribute('href'));
-        if (target) {
-          target.scrollIntoView({ behavior: 'smooth' });
-        }
+        const t = document.querySelector(a.getAttribute('href'));
+        if (t) t.scrollIntoView({ behavior: 'smooth' });
       });
     });
 
-    // Close modal on click outside
-    document.getElementById('inviteModal').addEventListener('click', function(e) {
-      if (e.target === this) {
-        this.classList.remove('active');
+    // ── Counter Animation ──
+    const counters = document.querySelectorAll('.counter');
+    let counterDone = false;
+    const animateCounters = () => {
+      if (counterDone) return;
+      const heroStats = document.querySelector('.hero-stats');
+      if (!heroStats) return;
+      const rect = heroStats.getBoundingClientRect();
+      if (rect.top < window.innerHeight && rect.bottom > 0) {
+        counterDone = true;
+        counters.forEach(c => {
+          const target = +c.closest('[data-target]').dataset.target;
+          const duration = 2000;
+          const start = performance.now();
+          const tick = (now) => {
+            const elapsed = now - start;
+            const progress = Math.min(elapsed / duration, 1);
+            // Ease out cubic
+            const eased = 1 - Math.pow(1 - progress, 3);
+            c.textContent = Math.floor(eased * target);
+            if (progress < 1) requestAnimationFrame(tick);
+            else c.textContent = target;
+          };
+          requestAnimationFrame(tick);
+        });
       }
+    };
+    window.addEventListener('scroll', animateCounters);
+    animateCounters();
+
+    // ── Floating Particles ──
+    const particleContainer = document.getElementById('particles');
+    const colors = ['rgba(99,102,241,0.3)', 'rgba(16,185,129,0.25)', 'rgba(245,158,11,0.2)', 'rgba(255,255,255,0.08)'];
+    for (let i = 0; i < 30; i++) {
+      const p = document.createElement('div');
+      p.classList.add('particle');
+      const size = Math.random() * 4 + 2;
+      p.style.width = size + 'px';
+      p.style.height = size + 'px';
+      p.style.left = Math.random() * 100 + '%';
+      p.style.background = colors[Math.floor(Math.random() * colors.length)];
+      p.style.animationDuration = (Math.random() * 20 + 15) + 's';
+      p.style.animationDelay = (Math.random() * 15) + 's';
+      particleContainer.appendChild(p);
+    }
+
+    // ── FAQ Accordion ──
+    document.querySelectorAll('.faq-question').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const item = btn.parentElement;
+        const wasActive = item.classList.contains('active');
+        // Close all
+        document.querySelectorAll('.faq-item').forEach(fi => fi.classList.remove('active'));
+        // Toggle clicked
+        if (!wasActive) item.classList.add('active');
+      });
     });
 
-    // Open modal on button click
-    const startJourneyBtn = document.getElementById('startJourneyBtn');
-    if (startJourneyBtn) {
-      startJourneyBtn.addEventListener('click', function() {
-        document.getElementById('inviteModal').classList.add('active');
-      });
-    }
+    // ── Modal ──
+    const openModal = () => document.getElementById('inviteModal').classList.add('active');
+    const closeModal = () => document.getElementById('inviteModal').classList.remove('active');
 
-    // Close modal on 'X' button click
-    const closeBtn = document.getElementById('closeInviteModalBtn');
-    if (closeBtn) {
-      closeBtn.addEventListener('click', function() {
-        document.getElementById('inviteModal').classList.remove('active');
-      });
-    }
+    document.getElementById('startJourneyBtn').addEventListener('click', openModal);
+    document.getElementById('ctaJourneyBtn').addEventListener('click', openModal);
+    document.getElementById('closeInviteModalBtn').addEventListener('click', closeModal);
+    document.getElementById('inviteModal').addEventListener('click', e => {
+      if (e.target === e.currentTarget) closeModal();
+    });
   </script>
 </body>
 </html>
