@@ -51,6 +51,29 @@ const AdminHubScreen = ({ navigation, route }) => {
   const { matchmaking } = useMatchmaking();
   const { evaluations } = useEvaluationsStore();
   const { seenAdminActionIds = new Set(), setSeenAdminActionIds, auditLogs, hasSeen, hasVisited, setVisitedAdminSubTabs, visitedAdminSubTabs = new Set() } = useAdmin();
+
+  // 🛡️ [HYDRATION_GATE] (v2.6.772): Track whether initial store hydration has completed.
+  // Prevents stale badge counts (e.g. phantom coach badge "3") and empty ticket lists
+  // that appear when AdminHubScreen renders before stores finish loading after login.
+  const [isHydrated, setIsHydrated] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const hydrateStores = async () => {
+      try {
+        await Promise.all([
+          useSupportStore.getState().hydrate(),
+          usePlayersStore.getState().hydrate(),
+          useTournamentsStore.getState().hydrate(),
+        ]);
+      } catch (e) {
+        console.warn('[AdminHub] Store hydration error:', e.message);
+      } finally {
+        if (!cancelled) setIsHydrated(true);
+      }
+    };
+    hydrateStores();
+    return () => { cancelled = true; };
+  }, []);
   const { isCloudOnline, isUsingCloud, lastSyncTime, onManualSync } = useSync();
 
   const [subTab, setSubTab] = useState(() => {
@@ -95,6 +118,11 @@ const AdminHubScreen = ({ navigation, route }) => {
   }, [subTab, autoSelectTicketId]);
 
   const badges = useMemo(() => {
+    // 🛡️ [HYDRATION_GATE] (v2.6.772): Suppress all badges until stores have finished hydrating.
+    // Without this, the first render shows stale badge counts (e.g. coaches=3) because 
+    // seenAdminActionIds is empty before AdminContext hydrates from storage.
+    if (!isHydrated) return { coaches: 0, recordings: 0, grievances: 0, assignments: 0, payments: 0, matches: 0 };
+
     // 🛡️ [STATE_RESILIENCE] (v2.6.258): Defensive checks to prevent "(v||[]).filter is not a function"
     // This handles cases where state might be corrupted (e.g. set to an empty object instead of array)
     const ensureArray = (arr) => Array.isArray(arr) ? arr : [];
@@ -113,7 +141,7 @@ const AdminHubScreen = ({ navigation, route }) => {
       payments: safeTournaments.reduce((acc, t) => acc + ensureArray(t.pendingPaymentPlayerIds).filter(pid => !seenAdminActionIds.has(`${t.id}-${pid}`)).length, 0),
       matches: safeMatchmaking.filter(m => m.status === 'pending' && !seenAdminActionIds.has(String(m.id))).length
     };
-  }, [players, matchVideos, supportTickets, tournaments, matchmaking, seenAdminActionIds, today]);
+  }, [players, matchVideos, supportTickets, tournaments, matchmaking, seenAdminActionIds, today, isHydrated]);
 
   const handleTabChange = (newTab) => {
     if (newTab === subTab) return;
