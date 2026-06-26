@@ -24,7 +24,7 @@ const DEMO_SLIDES = [
     id: 'analysis',
     title: 'Video Analysis',
     description: 'Provide detailed swing evaluations with built-in drawing tools and structured feedback forms.',
-    image: require('../assets/demo/coach_demo_analysis.png'),
+    image: require('../assets/demo/coach_demo_analysis.jpg'),
     icon: 'videocam',
     color: '#3B82F6',
   },
