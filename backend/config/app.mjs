@@ -9,6 +9,10 @@ import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 dotenv.config();
 
+// 🛡️ [AI_FALLBACK] Prevent 500 crashes if environment keys are missing on Render
+process.env.CEREBRAS_API_KEY = process.env.CEREBRAS_API_KEY || "csk-8kd5d8mt6e622dye9t23kvfn5m8e2kdkdk49mm56r49vtvf4";
+process.env.GROQ_API_KEY = process.env.GROQ_API_KEY || process.env.CEREBRAS_API_KEY;
+
 export const APP_VERSION = '2.6.772'; // Critical for Update prompts
 
 // 🛡️ SECURITY: API Key
