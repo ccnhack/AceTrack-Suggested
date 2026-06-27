@@ -987,6 +987,7 @@ const ProfileScreen = ({ navigation, route }) => {
       {/* Support System Modal */}
       {showSupport && (
       <SupportModal {...{ showSupport, setShowSupport, currentUser, userTickets, handleCreateTicket, handleReplyToTicket, handleResolvePrompt, handleUpdateTicketStatus, handleRateTicket, handleMarkSeen }} />
+      )}
 
 
       {/* Coach Onboarding (Affiliation Edit) */}
@@ -1009,21 +1010,26 @@ const ProfileScreen = ({ navigation, route }) => {
       {/* Wallet Modal — centered popup with blurred dark background */}
       {showWalletModal && (
       <WalletModal {...{ showWalletModal, setShowWalletModal, amountInput, setAmountInput, isProcessingPayment, setCheckoutModalVisible }} />
+      )}
 
       {showReferralModal && (
       <ReferralModal {...{ showReferralModal, setShowReferralModal, referralCode, copyToClipboard }} />
+      )}
 
       {/* Avatar Picker Modal */}
       {showAvatarPicker && (
       <AvatarPickerModal {...{ showAvatarPicker, setShowAvatarPicker, avatarThemes, activeAvatarCategory, setActiveAvatarCategory, getAvatarUrl, handleSaveAvatar, isSavingAvatar }} />
+      )}
 
       {/* Edit Profile Modal */}
       {showEditProfile && (
       <EditProfileModal {...{ showEditProfile, setShowEditProfile, editForm, setEditForm, handleSaveProfile, isSaving }} />
+      )}
 
       {/* Change Password Modal */}
       {showChangePassword && (
       <ChangePasswordModal {...{ showChangePassword, setShowChangePassword, passwordForm, setPasswordForm, handleChangePassword, isChangingPassword, showPasswordMap, setShowPasswordMap }} />
+      )}
 
             {/* Calendar Modal */}
             <CalendarWidget

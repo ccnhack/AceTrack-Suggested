@@ -622,7 +622,7 @@ export const SupportTicketSystem = ({
       handleClaim, statusColors, tickets
     }} />;
   }
-  if (view === 'create' {
+  if (view === 'create') {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
