@@ -476,18 +476,6 @@ useEffect(() => {
 }, [currentUser]);
 
 
-const [seenAdminActionIds, setSeenAdminActionIds] = useState(new Set());
-
-const { messages } = useCommsStore();
-const totalUnreadChat = useMemo(() => {
-  const unreadSenders = new Set(
-    (messages || [])
-      .filter(m => m.receiverId === currentUser?.id && m.status !== 'seen')
-      .map(m => m.senderId)
-  );
-  return unreadSenders.size;
-}, [messages, currentUser]);
-
 const activeLeave = useMemo(() => {
   if (!shortLeaves || shortLeaves.length === 0) return null;
   const now = new Date();
@@ -542,6 +530,6 @@ const upcomingShortLeaves = useMemo(() => {
     checkinLoading, checkoutLoading, showShortLeaveModal, setShowShortLeaveModal, showAllLeavesModal,
     setShowAllLeavesModal, showResumeLeaveModal, setShowResumeLeaveModal, shortLeaveForm, setShortLeaveForm,
     shortLeaveLoading, handleCheckin, handleCheckout, handleMuteForToday, handleShortLeaveSubmit,
-    handleCancelShortLeave, activeLeave, isLateFromLeave, upcomingShortLeaves, bannerPulse
+    handleCancelShortLeave, activeLeave, isCurrentlyOnLeave, isLateFromLeave, upcomingShortLeaves, bannerPulse
   };
 };

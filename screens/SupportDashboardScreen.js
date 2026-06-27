@@ -18,7 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCommsStore } from '../stores/useCommsStore';
 import config from '../config';
 
-import { useSupportShift } from '../hooks/useSupportShift';
+import { useSupportShift, formatTime, getLocalDateStr } from '../hooks/useSupportShift';
 import SupportShiftModals from '../components/support/shift/SupportShiftModals';
 
 const SupportDashboardScreen = ({ navigation, route }) => {
@@ -56,7 +56,12 @@ const SupportDashboardScreen = ({ navigation, route }) => {
 
   // ═══════════════════════════════════════════════════════════════
   const shiftState = useSupportShift(currentUser, players);
-  const { shiftStatus, showCheckoutBanner } = shiftState;
+  const {
+    shiftStatus, showCheckoutBanner, shiftCheckinRounded,
+    activeLeave, isCurrentlyOnLeave, isLateFromLeave, shortLeaves,
+    setShortLeaveForm, setShowShortLeaveModal, setShowAllLeavesModal,
+    handleCancelShortLeave, upcomingShortLeaves
+  } = shiftState;
 
   const ticketStats = useMemo(() => {
     let tickets = (supportTickets || []).filter(t => t.creatorRole !== 'support');
@@ -78,6 +83,18 @@ const SupportDashboardScreen = ({ navigation, route }) => {
       resolved: tickets.filter(t => t.status === 'Resolved').length
     };
   }, [supportTickets, currentUser]);
+
+  const [seenAdminActionIds, setSeenAdminActionIds] = useState(new Set());
+  const { messages } = useCommsStore();
+  
+  const totalUnreadChat = useMemo(() => {
+    const unreadSenders = new Set(
+      (messages || [])
+        .filter(m => m.receiverId === currentUser?.id && m.status !== 'seen')
+        .map(m => m.senderId)
+    );
+    return unreadSenders.size;
+  }, [messages, currentUser]);
 
   // ═══════════════════════════════════════════════════════════════
   // SIDEBAR
