@@ -1,4 +1,5 @@
 import { AppState, Player, SupportTicket, Tournament } from '../models/index.mjs';
+import { fetchLocationForIp } from '../helpers/utils.mjs';
 
 /**
  * Initializes and registers all WebSocket handlers.
@@ -91,6 +92,7 @@ io.on('connection', async (socket) => {
     // 🛡️ [SCALABILITY FIX] (v2.6.620): Migrate active sessions to DB for multi-instance support.
     const startSession = async (roleOverride) => {
       try {
+        const connLocation = await fetchLocationForIp(connIpAddress);
         await Player.updateOne(
           { id: String(connUserId) },
           { $set: { 
@@ -99,6 +101,7 @@ io.on('connection', async (socket) => {
               "data.liveDeviceName": connDeviceName, 
               "data.liveUserAgent": connUserAgent, 
               "data.liveIpAddress": connIpAddress,
+              "data.liveLocation": connLocation,
               "data.liveSessionStart": Date.now() 
             } 
           }
@@ -137,8 +140,9 @@ io.on('connection', async (socket) => {
     // 🛡️ [TARGETED_RELAY] (v2.6.316): Target the specific user's room for efficiency
     // This avoids global broadcasts and loops, ensuring only the target device receives the trigger.
     if (data.targetUserId) {
-      io.to(`user:${data.targetUserId}`).emit('force_upload_diagnostics', data);
-      console.log(`[DIAG] Target relay: force_upload_diagnostics to user:${data.targetUserId}`);
+      const targetRoom = `user:${String(data.targetUserId).toLowerCase()}`;
+      io.to(targetRoom).emit('force_upload_diagnostics', data);
+      console.log(`[DIAG] Target relay: force_upload_diagnostics to ${targetRoom}`);
     } else {
       // Emergency fallback for legacy admin hub pings that might miss a targetId
       io.to('authenticated').emit('force_upload_diagnostics', data);
@@ -148,7 +152,9 @@ io.on('connection', async (socket) => {
   socket.on('admin_ping_device', (data) => {
     logServerEvent('ADMIN_PING_DEVICE', { targetUserId: data.targetUserId, fromSocket: socket.id });
     // 🏗️ PHASE 4: Target the specific user's room instead of global broadcast
-    io.to(`user:${data.targetUserId}`).emit('admin_ping_device_relay', data);
+    if (data.targetUserId) {
+      io.to(`user:${String(data.targetUserId).toLowerCase()}`).emit('admin_ping_device_relay', data);
+    }
   });
 
   socket.on('device_pong', async (data) => {
@@ -167,12 +173,15 @@ io.on('connection', async (socket) => {
             user.devices = user.devices || [];
             const dIdx = user.devices.findIndex(d => d && d.id === data.deviceId);
             
+            const pingLocation = await fetchLocationForIp(connIpAddress);
             if (dIdx === -1) {
               console.log(`📡 [AUTO-REG] Adding new device ${data.deviceId} to user ${data.targetUserId}`);
               user.devices.push({
                 id: data.deviceId,
                 name: data.deviceName || 'Unknown Device',
                 appVersion: data.appVersion || '2.6.316',
+                ipAddress: connIpAddress,
+                location: pingLocation,
                 lastActive: Date.now()
               });
             } else {
@@ -180,11 +189,13 @@ io.on('connection', async (socket) => {
               user.devices[dIdx].lastActive = Date.now();
               user.devices[dIdx].name = data.deviceName || user.devices[dIdx].name;
               user.devices[dIdx].appVersion = data.appVersion || user.devices[dIdx].appVersion;
+              user.devices[dIdx].ipAddress = connIpAddress;
+              user.devices[dIdx].location = pingLocation;
             }
             // 🛡️ ARCHITECTURE FIX (v2.6.527): Cap array to prevent 16MB MongoDB explosion
-            if (user.devices.length > 5) {
+            if (user.devices.length > 3) {
               user.devices.sort((a, b) => (b.lastActive || 0) - (a.lastActive || 0));
-              user.devices = user.devices.slice(0, 5);
+              user.devices = user.devices.slice(0, 3);
             }
             await Player.updateOne(
               { id: String(data.targetUserId) },

@@ -100,6 +100,7 @@ router.get('/support/session-status/:userId', apiKeyGuard, async (req, res) => {
         browserName,
         userAgent: ua,
         ipAddress: sess.liveIpAddress || 'Unknown',
+        location: sess.liveLocation || 'Unknown Location',
         isLive: true
       });
     }

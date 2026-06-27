@@ -837,7 +837,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
                       ) : null}
                       {session.ipAddress ? (
                         <Text style={{ fontSize: 9, color: '#6366F1', marginTop: 2, fontWeight: 'bold' }}>
-                          IP: {session.ipAddress}
+                          IP: {session.ipAddress} {session.location && session.location !== 'Unknown Location' ? `| ${session.location}` : ''}
                         </Text>
                       ) : null}
                       <View style={styles.deviceMeta}>
@@ -888,6 +888,11 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
                         <View key={d.id} style={[styles.deviceItem, { borderColor: '#10B981', borderWidth: 1, backgroundColor: '#F0FDF4' }]}>
                           <View style={{ flex: 1 }}>
                             <Text style={styles.deviceName}>{d.name || 'Unknown Device'}</Text>
+                            {(onlineDevices[d.id]?.ipAddress || d.ipAddress) ? (
+                              <Text style={{ fontSize: 9, color: '#6366F1', marginTop: 2, fontWeight: 'bold' }}>
+                                IP: {onlineDevices[d.id]?.ipAddress || d.ipAddress} {(onlineDevices[d.id]?.location || d.location) && (onlineDevices[d.id]?.location || d.location) !== 'Unknown Location' ? `| ${onlineDevices[d.id]?.location || d.location}` : ''}
+                              </Text>
+                            ) : null}
                             <View style={styles.deviceMeta}>
                               <View style={[styles.statusDot, { backgroundColor: '#10B981' }]} />
                               <Text style={[styles.statusText, { color: '#10B981' }]}>ONLINE</Text>
@@ -932,6 +937,14 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
                             <View key={d.id} style={styles.deviceItem}>
                               <View style={{ flex: 1 }}>
                                 <Text style={styles.deviceName}>{d.name || 'Unknown Device'}</Text>
+                                <Text style={{ fontSize: 9, color: '#94A3B8', marginTop: 2 }}>
+                                  Last Login: {new Date(d.lastActive || d.timestamp || Date.now()).toLocaleString()}
+                                </Text>
+                                {d.ipAddress ? (
+                                  <Text style={{ fontSize: 9, color: '#6366F1', marginTop: 2, fontWeight: 'bold' }}>
+                                    IP: {d.ipAddress} {d.location && d.location !== 'Unknown Location' ? `| ${d.location}` : ''}
+                                  </Text>
+                                ) : null}
                                 <View style={styles.deviceMeta}>
                                   <View style={[styles.statusDot, { backgroundColor: '#EF4444' }]} />
                                   <Text style={[styles.statusText, { color: '#EF4444' }]}>OFFLINE</Text>

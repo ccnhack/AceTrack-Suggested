@@ -40,3 +40,20 @@ export const addInAppNotification = (player, title, message, data = {}) => {
 export const asyncHandler = (fn) => (req, res, next) => {
   Promise.resolve(fn(req, res, next)).catch(next);
 };
+
+// 📍 Utility: Resolve City/Country from IP (v2.6.900)
+export const fetchLocationForIp = async (ip) => {
+  if (!ip || ip === 'Unknown' || ip === '127.0.0.1' || ip === '::1') return 'Unknown Location';
+  try {
+    const res = await fetch(`http://ip-api.com/json/${ip}?fields=city,country,status`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.status === 'success') {
+        return `${data.city}, ${data.country}`;
+      }
+    }
+  } catch (e) {
+    console.warn('[GeoIP] Fetch failed:', e.message);
+  }
+  return 'Unknown Location';
+};

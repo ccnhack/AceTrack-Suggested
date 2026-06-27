@@ -153,8 +153,10 @@ router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), asyncHandl
     const safeUsername = username.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     
     try {
+      const filePrefix = prefix === 'admin_requested' ? 'admin_requested_' : '';
+      const matchPrefix = filePrefix ? `admin_requested_${safeUsername}_` : `${safeUsername}_`;
       const userFiles = fs.readdirSync(DIAGNOSTICS_DIR)
-        .filter(f => f.startsWith(`${safeUsername}_`) || f.startsWith(`admin_requested_${safeUsername}_`))
+        .filter(f => f.startsWith(matchPrefix))
         .sort();
       while (userFiles.length >= 3) {
         fs.unlinkSync(path.join(DIAGNOSTICS_DIR, userFiles.shift()));
@@ -202,15 +204,16 @@ router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), asyncHandl
           direction: 'desc'
         });
           
+        const matchPrefix = (prefix === 'admin_requested' ? `admin_requested_${safeUsername}_` : `${safeUsername}_`);
+        
         const userFilesCloud = result.resources.filter(f => {
           const fName = f.public_id.split('/').pop().toLowerCase();
-          return fName.startsWith(`${safeUsername}_`) || 
-                 fName.startsWith(`admin_requested_${safeUsername}_`);
+          return fName.startsWith(matchPrefix);
         });
         
         if (userFilesCloud.length > 3) {
           const filesToDelete = userFilesCloud.slice(3).map(f => f.public_id);
-          console.log(`🧹 [Cloudinary] Rotating ${filesToDelete.length} old diagnostic(s) for ${safeUsername}`);
+          console.log(`🧹 [Cloudinary] Rotating ${filesToDelete.length} old diagnostic(s) for ${safeUsername} (prefix: ${matchPrefix})`);
           await cloudinary.api.delete_resources(filesToDelete, { resource_type: 'raw' });
         }
       } catch (rotationErr) {
