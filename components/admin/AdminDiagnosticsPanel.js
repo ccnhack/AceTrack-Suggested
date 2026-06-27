@@ -123,7 +123,9 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
         timestamp: Date.now(), 
         deviceId: data.deviceId,
         deviceName: data.deviceName,
-        targetUserId: data.targetUserId
+        targetUserId: data.targetUserId,
+        ipAddress: data.ipAddress,
+        location: data.location
       };
       
       // Coalesce by Device ID only to support multiple devices per user
@@ -811,11 +813,13 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
               !selectedDiagUser.devices?.some(d => d.id === status.deviceId)
             );
 
-        // Deduplicate Registered Devices
+        // Deduplicate and cap Registered Devices
         const registeredDevices = (selectedDiagUser.devices || [])
           .filter((dev, index, self) => 
             index === self.findIndex((d) => d.id === dev.id)
-          );
+          )
+          .sort((a, b) => (b.lastActive || b.timestamp || 0) - (a.lastActive || a.timestamp || 0))
+          .slice(0, 3);
 
         return (
           <View style={styles.diagFileSection}>

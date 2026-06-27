@@ -159,6 +159,12 @@ io.on('connection', async (socket) => {
 
   socket.on('device_pong', async (data) => {
     logServerEvent('DEVICE_PONG_RECEIVED', { targetUserId: data.targetUserId, deviceId: data.deviceId, deviceName: data.deviceName, fromSocket: socket.id });
+    
+    // 📍 Attach IP and location to the payload for real-time admin view
+    const pingLocation = await fetchLocationForIp(connIpAddress);
+    data.ipAddress = connIpAddress;
+    data.location = pingLocation;
+
     // 🏗️ PHASE 4: Send pong only to admin room instead of global broadcast
     io.to('role:admin').emit('device_pong_relay', data);
 
