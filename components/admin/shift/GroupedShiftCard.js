@@ -379,19 +379,19 @@ const GroupedShiftCard = ({ shifts }) => {
 /* ═══════════════════════════════════════════════════════════ */
 /* 🛠️ HELPER FUNCTIONS                                       */
 /* ═══════════════════════════════════════════════════════════ */
-function formatDateISO(date) {
+export function formatDateISO(date) {
   const d = new Date(date);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function formatDateDDMMYYYY(isoDateStr) {
+export function formatDateDDMMYYYY(isoDateStr) {
   if (!isoDateStr) return '';
   const parts = isoDateStr.split('-');
   if (parts.length !== 3) return isoDateStr;
   return `${parts[2]}-${parts[1]}-${parts[0]}`;
 }
 
-function parseDDMMYYYYToISO(ddmmyyyy) {
+export function parseDDMMYYYYToISO(ddmmyyyy) {
   if (!ddmmyyyy) return null;
   const parts = ddmmyyyy.split('-');
   if (parts.length !== 3) return null;
@@ -402,7 +402,7 @@ function parseDDMMYYYYToISO(ddmmyyyy) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function formatDuration(ms) {
+export function formatDuration(ms) {
   if (!ms || ms <= 0) return '0m';
   const hours = Math.floor(ms / 3600000);
   const mins = Math.floor((ms % 3600000) / 60000);

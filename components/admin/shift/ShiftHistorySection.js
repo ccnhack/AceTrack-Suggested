@@ -10,7 +10,7 @@ import storage from '../../../utils/storage';
 import { apiFetch } from '../../../utils/apiFetch';
 
 import OvertimeJustificationInput from './OvertimeJustificationInput';
-import GroupedShiftCard from './GroupedShiftCard';
+import GroupedShiftCard, { formatDateISO, formatDateDDMMYYYY, parseDDMMYYYYToISO, formatDuration } from './GroupedShiftCard';
 
 const ShiftHistorySection = ({ allSupportAgents }) => {
   const [historyData, setHistoryData] = useState(null);
