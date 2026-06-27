@@ -290,10 +290,11 @@ export const SupportTicketSystem = ({
         // 🛡️ [SYNC_FIX]: Update both local state AND global store to survive re-renders and delta syncs
         if (data.ticket) {
           const { useSupportStore } = require('../stores/useSupportStore');
+          const { syncOrchestrator } = require('../services/sync/SyncOrchestrator');
           const tickets = useSupportStore.getState().supportTickets;
-          useSupportStore.getState().setSupportTickets(
-            tickets.map(t => t.id === selectedTicket.id ? data.ticket : t)
-          );
+          const updatedTickets = tickets.map(t => t.id === selectedTicket.id ? data.ticket : t);
+          useSupportStore.getState().setSupportTickets(updatedTickets);
+          syncOrchestrator.syncAndSaveData({ supportTickets: updatedTickets }, false, true);
           setSelectedTicket(data.ticket);
         } else {
           setSelectedTicket(prev => ({ ...prev, rating }));
