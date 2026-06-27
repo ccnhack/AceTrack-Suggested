@@ -8,6 +8,7 @@ import SafeAvatar from '../../SafeAvatar';
 import config from '../../../config';
 import storage from '../../../utils/storage';
 import { apiFetch } from '../../../utils/apiFetch';
+import OvertimeJustificationInput from './OvertimeJustificationInput';
 
 const GroupedShiftCard = ({ shifts }) => {
   const baseUser = shifts[0]; // All segments share the same employee profile details
