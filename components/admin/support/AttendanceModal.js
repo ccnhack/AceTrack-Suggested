@@ -16,7 +16,6 @@ export const AttendanceModal = (props) => {
   } = props;
   
   return (
-      {/* 🕐 Attendance Modal (Full Screen) */}
       <Modal visible={showAttendanceModal} transparent animationType="slide" onRequestClose={() => setShowAttendanceModal(false)}>
         <View style={styles.attendanceModalOverlay}>
           <View style={styles.attendanceModalContent}>

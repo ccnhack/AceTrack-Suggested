@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
+import React, { createContext, useContext, useRef, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import SyncOrchestrator from '../services/sync/SyncOrchestrator';
 import { eventBus } from '../services/EventBus';
@@ -7,7 +7,8 @@ import logger from '../utils/logger';
 import config from '../config';
 import storage from '../utils/storage';
 
-// 🛡️ [PUSH NOTIFICATIONS] (v2.6.121) Conditional imports for native platforms only
+import { useAppStore } from '../stores';
+
 let Notifications = null;
 let registerForPushNotificationsAsync = null;
 let sendTokenToBackend = null;
@@ -18,11 +19,8 @@ if (Platform.OS !== 'web') {
   registerForPushNotificationsAsync = notifService.registerForPushNotificationsAsync;
   sendTokenToBackend = notifService.sendTokenToBackend;
 } else {
-  // Web specific imports for fixing icon fonts
   const Ionicons = require('@expo/vector-icons/Ionicons').default;
   const Font = require('expo-font');
-  
-  // Expose to global scope so it can be loaded
   globalThis.IoniconsFont = Ionicons.font;
   globalThis.ExpoFont = Font;
 }
@@ -32,22 +30,27 @@ const AppContext = createContext(null);
 export const useApp = () => useContext(AppContext);
 
 export const AppProvider = ({ children, initialVersion }) => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [isUploadingLogs, setIsUploadingLogs] = useState(false);
+  // Bind state from Zustand store
+  const isLoading = useAppStore(state => state.isLoading);
+  const isInitialized = useAppStore(state => state.isInitialized);
+  const isUploadingLogs = useAppStore(state => state.isUploadingLogs);
+  const appVersion = useAppStore(state => state.appVersion);
+  const latestAppVersion = useAppStore(state => state.latestAppVersion);
+  const showForceUpdate = useAppStore(state => state.showForceUpdate);
+  const showNotifications = useAppStore(state => state.showNotifications);
+
   const [pushStatus, setPushStatus] = useState({ status: 'idle', token: null, error: null });
-  const [appVersion, setAppVersion] = useState(initialVersion);
-  const [latestAppVersion, setLatestAppVersion] = useState(initialVersion);
-  const [showForceUpdate, setShowForceUpdate] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
   
   const localDeviceIdRef = useRef(null);
   const isStartupCompleteRef = useRef(false);
   const notificationResponseSubRef = useRef(null);
   const notificationReceivedSubRef = useRef(null);
-  const navigationRef = useRef(null); // Populated by App.js via context
+  const navigationRef = useRef(null);
 
-  // Initialization Logic
+  useEffect(() => {
+    useAppStore.setState({ appVersion: initialVersion, latestAppVersion: initialVersion });
+  }, [initialVersion]);
+
   useEffect(() => {
     const startup = async () => {
       try {
@@ -65,7 +68,6 @@ export const AppProvider = ({ children, initialVersion }) => {
         }
         localDeviceIdRef.current = hardwareId;
 
-        // 🌐 Load web fonts to fix icon rendering (rectangular block issue)
         if (Platform.OS === 'web' && globalThis.ExpoFont && globalThis.IoniconsFont) {
           try {
             await globalThis.ExpoFont.loadAsync(globalThis.IoniconsFont);
@@ -75,37 +77,31 @@ export const AppProvider = ({ children, initialVersion }) => {
           }
         }
         
-        // 🛡️ [NOTIFICATION LISTENERS] (v2.6.121) — deep-link on tap, foreground refresh
         if (Platform.OS !== 'web' && Notifications) {
-          // 1. Background/killed notification click → navigate to relevant tab
           notificationResponseSubRef.current = Notifications.addNotificationResponseReceivedListener(response => {
             const data = response.notification.request.content.data;
             console.log('🔔 Notification Response Received:', data);
             logger.logAction('NOTIFICATION_CLICKED', { data });
-            
-            // Deep-link navigation handled via EventBus since we don't have navigationRef here
             eventBus.emit('NOTIFICATION_DEEP_LINK', { data });
           });
 
-          // 2. Foreground notification received → trigger silent data pull
           notificationReceivedSubRef.current = Notifications.addNotificationReceivedListener(notification => {
             console.log('🔔 Foreground Notification Received');
             logger.logAction('NOTIFICATION_FOREGROUND_RECEIVED', { 
               id: notification.request.identifier,
               title: notification.request.content.title 
             });
-            // Emit to trigger data refresh
             eventBus.emit('NOTIFICATION_FOREGROUND_PULL', {});
           });
         }
 
         isStartupCompleteRef.current = true;
-        setIsInitialized(true);
+        useAppStore.setState({ isInitialized: true });
       } catch (e) {
         console.error("❌ Critical AppProvider Startup Error:", e);
         logger.logAction('CRITICAL_STARTUP_ERROR', { error: e.message });
       } finally {
-        setIsLoading(false);
+        useAppStore.setState({ isLoading: false });
       }
     };
 
@@ -117,8 +113,6 @@ export const AppProvider = ({ children, initialVersion }) => {
     };
   }, []);
 
-  // 🛡️ [PUSH NOTIFICATION REGISTRATION] (v2.6.121)
-  // Register for push token AFTER initialization is complete and user is hydrated
   useEffect(() => {
     if (!isInitialized || Platform.OS === 'web' || !registerForPushNotificationsAsync) return;
 
@@ -131,7 +125,6 @@ export const AppProvider = ({ children, initialVersion }) => {
           await storage.setItem('push_token', token);
           console.log(`📡 [NOTIFY_DEBUG] Push token acquired: ${token.substring(0, 20)}...`);
           
-          // Try to sync with backend if user is known
           const syncOrchestrator = SyncOrchestrator.getInstance();
           const currentUser = await syncOrchestrator.getSystemFlag('currentUser');
           if (currentUser?.id && sendTokenToBackend) {
@@ -150,8 +143,6 @@ export const AppProvider = ({ children, initialVersion }) => {
     registerPush();
   }, [isInitialized]);
 
-  // 🛡️ [LOGGER AUTO-FLUSH] (v2.6.121)
-  // Start auto-flushing diagnostic logs once user is known
   useEffect(() => {
     const unsub = eventBus.subscribe('ENTITY_UPDATED', async (e) => {
       if (e.payload.entity === 'currentUser') {
@@ -171,13 +162,13 @@ export const AppProvider = ({ children, initialVersion }) => {
     return unsub;
   }, []);
 
-  // 🛡️ [VERSION OBSOLETE LISTENER] (v2.6.121)
-  // Listen for version obsolete events from SyncContext's checkForUpdates
   useEffect(() => {
     const unsub = eventBus.subscribe('VERSION_OBSOLETE', (e) => {
       if (e.payload.latestVersion) {
-        setLatestAppVersion(e.payload.latestVersion);
-        setShowForceUpdate(true);
+        useAppStore.setState({ 
+          latestAppVersion: e.payload.latestVersion,
+          showForceUpdate: true 
+        });
       }
     });
     return unsub;
@@ -185,23 +176,23 @@ export const AppProvider = ({ children, initialVersion }) => {
 
   const value = {
     isLoading,
-    setIsLoading,
+    setIsLoading: (v) => useAppStore.setState({ isLoading: v }),
     isInitialized,
-    setIsInitialized,
+    setIsInitialized: (v) => useAppStore.setState({ isInitialized: v }),
     isUploadingLogs,
-    setIsUploadingLogs,
+    setIsUploadingLogs: (v) => useAppStore.setState({ isUploadingLogs: v }),
     pushStatus,
     setPushStatus,
     appVersion,
     latestAppVersion,
-    setLatestAppVersion,
+    setLatestAppVersion: (v) => useAppStore.setState({ latestAppVersion: v }),
     showForceUpdate,
-    setShowForceUpdate,
+    setShowForceUpdate: (v) => useAppStore.setState({ showForceUpdate: v }),
     localDeviceIdRef,
     isStartupCompleteRef,
     navigationRef,
     showNotifications,
-    setShowNotifications
+    setShowNotifications: (v) => useAppStore.setState({ showNotifications: v })
   };
 
   return (

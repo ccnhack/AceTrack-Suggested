@@ -1,4 +1,6 @@
 import { getISTDate } from '../helpers/utils.mjs';
+import { errorResponse } from '../utils/apiResponse.mjs';
+import { AppError } from '../utils/AppError.mjs';
 
 /**
  * ═══════════════════════════════════════════════════════════════
@@ -10,7 +12,7 @@ import { getISTDate } from '../helpers/utils.mjs';
 // 404 Not Found Handler
 export const notFoundHandler = (req, res, next) => {
   if (req.path.startsWith('/api')) {
-    res.status(404).json({ success: false, error: `Resource not found: ${req.method} ${req.originalUrl}` });
+    next(new AppError(`Resource not found: ${req.method} ${req.originalUrl}`, 404));
   } else {
     next();
   }
@@ -18,27 +20,33 @@ export const notFoundHandler = (req, res, next) => {
 
 // Global Centralized Error Handler
 export const globalErrorHandler = (logServerEvent, APP_VERSION) => (err, req, res, next) => {
-  const status = err.status || 500;
-  const message = err.message || 'Internal Server Error';
+  let error = err;
   
-  if (status >= 500) {
+  if (!(error instanceof AppError)) {
+    const statusCode = error.status || 500;
+    const message = error.message || 'Internal Server Error';
+    error = new AppError(message, statusCode);
+    error.isOperational = false;
+  }
+
+  if (error.statusCode >= 500) {
     console.error(`❌ [SERVER_ERROR] ${req.method} ${req.url}:`, err.stack);
     if (logServerEvent) {
-      logServerEvent('CRITICAL_ERROR', { url: req.url, error: message }).catch(e => console.error('Failed to log server event:', e));
+      logServerEvent('CRITICAL_ERROR', { url: req.url, error: error.message }).catch(e => console.error('Failed to log server event:', e));
     }
   }
 
   // Handle Mongoose/MongoDB specific errors
   if (err.name === 'ValidationError') {
-    return res.status(400).json({ success: false, error: 'Database validation failed', details: err.message });
+    return errorResponse(res, 'Database validation failed', 400, err.message);
   }
   if (err.code === 11000) {
-    return res.status(409).json({ success: false, error: 'Duplicate entry conflict' });
+    return errorResponse(res, 'Duplicate entry conflict', 409);
   }
 
-  res.status(status).json({ 
+  res.status(error.statusCode).json({ 
     success: false, 
-    error: message, 
+    error: error.message, 
     version: APP_VERSION || 'unknown', 
     timestamp: getISTDate() 
   });

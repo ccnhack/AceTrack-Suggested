@@ -1,11 +1,10 @@
-import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Alert } from 'react-native';
+import React, { createContext, useContext, useRef, useEffect, useCallback, useMemo } from 'react';
+import { Alert, Platform } from 'react-native';
 import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 import { eventBus } from '../services/EventBus';
 import PlayerService from '../services/PlayerService';
 import storage from '../utils/storage';
 import logger from '../utils/logger';
-import { Platform } from 'react-native';
 import config from '../config';
 
 import { useSync } from './SyncContext';
@@ -16,59 +15,47 @@ const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState(null);
-  const currentUserRef = useRef(null);
-  const [userRole, setUserRole] = useState(null);
-  const [verificationLatch, setVerificationLatch] = useState({ email: false, phone: false });
-  const [viewingLanding, setViewingLanding] = useState(true);
-  const [showSignup, setShowSignup] = useState(false);
+  // Bind state from Zustand store instead of local useState
+  const currentUser = useAuthStore(state => state.currentUser);
+  const userRole = useAuthStore(state => state.userRole);
+  const verificationLatch = useAuthStore(state => state.verificationLatch);
+  const viewingLanding = useAuthStore(state => state.viewingLanding);
+  const showSignup = useAuthStore(state => state.showSignup);
+  const isAuthReady = useAuthStore(state => state.isAuthReady);
   
-  const [isAuthReady, setIsAuthReady] = useState(false);
-  
-  const { syncAndSaveData, loadData } = useSync();
+  const { setCurrentUser, setUserRole, setVerificationLatch, setViewingLanding, setShowSignup, setIsAuthReady } = useAuthStore.getState();
 
-  // 🛡️ [C-1 FIX] (v2.6.315): Ref-based logout to prevent stale closure in AUTH_FAILURE listener
-  const onLogoutRef = useRef(null);
-
-  // Sync state and ref
-  // 🛡️ [ZUSTAND_BRIDGE] (v2.6.508): Keep Zustand useAuthStore in sync with AuthContext.
-  // Critical: Store actions (onRegister, onJoinWaitlist, etc.) read currentUser from 
-  // useAuthStore.getState().currentUser. Without this bridge, it is always null,
-  // causing "Missing user or tournament" failures on registration.
+  const currentUserRef = useRef(currentUser);
   useEffect(() => {
     currentUserRef.current = currentUser;
-    useAuthStore.getState().setCurrentUser(currentUser);
   }, [currentUser]);
 
-  // Initial Session Hydration
+  const { syncAndSaveData, loadData } = useSync();
+  const onLogoutRef = useRef(null);
+
   useEffect(() => {
     const hydrateSession = async () => {
       try {
           let rawUser = await storage.getItem('currentUser');
           let token = await storage.getItem('userToken');
 
-          // 🛡️ [HTTP_ONLY_TRANSITION_CLEANUP] (v2.6.430)
           if (Platform.OS === 'web' && token) {
              console.log(`[AuthContext] Sweeping legacy localStorage token to enforce cookies...`);
              await storage.removeItem('userToken');
-             token = null; // Strictly force cookie fallback
+             token = null;
           }
 
-          // 🛡️ [WEB_SESSION_RESTORE] (v2.6.258)
-          // If on web and no local credentials (or unreadable encrypted state), 
-          // attempt to verify HTTP-Only cookie session via backend.
           const hasLocalSession = rawUser && typeof rawUser === 'object' && token;
           if (Platform.OS === 'web' && !hasLocalSession) {
             console.log(`[AuthContext] No local session on web, checking cookies via /auth/me...`);
             try {
               const apiUrl = config.API_BASE_URL || 'https://acetrack-suggested.onrender.com';
-              
               const response = await fetch(`${apiUrl}/api/v1/auth/me`, {
                 headers: { 
                   'x-ace-api-key': config.PUBLIC_APP_ID || 'AceTrack_Client_v2_Production',
                   'Accept': 'application/json'
                 },
-                credentials: 'include' // 🛡️ Force cookies for cross-port hydration
+                credentials: 'include'
               });
               
               if (response.ok) {
@@ -76,7 +63,6 @@ export const AuthProvider = ({ children }) => {
                 if (data.success && data.user) {
                   console.log(`[AuthContext] Cookie session found for: ${data.user.id}`);
                   rawUser = data.user;
-                  // Note: token remains null for web, relying exclusively on cookies
                 }
               }
             } catch (authErr) {
@@ -86,19 +72,12 @@ export const AuthProvider = ({ children }) => {
 
           if (rawUser) {
             console.log(`[AuthContext] Hydrating session for: ${rawUser.id}`);
-            setCurrentUser(rawUser);
-            setUserRole(rawUser.role);
-            setViewingLanding(false);
-            
-            // 🛡️ [SYNC ZUSTAND] Update Zustand store synchronously so hydrators see it
-            useAuthStore.getState().setCurrentUser(rawUser);
+            useAuthStore.getState().login(rawUser);
 
-            // Re-initialize SyncOrchestrator immediately for background processes
             syncOrchestrator.init(rawUser.id, rawUser.role);
             if (token) syncOrchestrator.setUserToken(token);
           }
 
-          // 🛡️ [STORE HYDRATION] Hydrate all stores from local storage
           await Promise.all([
              usePlayersStore.getState().hydrate(),
              useTournamentsStore.getState().hydrate(),
@@ -107,7 +86,6 @@ export const AuthProvider = ({ children }) => {
              useMatchmakingStore.getState().hydrate()
           ]);
 
-          // 🛡️ [INSTANT DATA PULL] For staff, pull immediately to prevent empty dashboards
           if (rawUser && (rawUser.role === 'admin' || rawUser.role === 'support')) {
             setTimeout(() => {
               if (loadData) {
@@ -125,7 +103,6 @@ export const AuthProvider = ({ children }) => {
     hydrateSession();
   }, []);
 
-  // SyncOrchestrator Lifecycle
   useEffect(() => {
     if (currentUser?.id) {
       console.log(`[AuthContext] Initializing SyncOrchestrator for ${currentUser.id}`);
@@ -136,26 +113,16 @@ export const AuthProvider = ({ children }) => {
     };
   }, [currentUser?.id]);
 
-  // Entity Listener for currentUser updates from cloud AND local store actions
   useEffect(() => {
     const unsub = eventBus.subscribe('ENTITY_UPDATED', async (e) => {
       const { entity, source } = e.payload;
-      // 🛡️ [WALLET_SYNC_FIX] (v2.6.514): Added 'local' source to fix wallet/credits
-      // not updating after opt-out refund. Store actions emit with source='local',
-      // which was previously filtered out, leaving the wallet UI permanently stale.
       if (entity === 'currentUser' && (source === 'socket' || source === 'api' || source === 'internal' || source === 'local')) {
         const freshData = await syncOrchestrator.getSystemFlag('currentUser');
         if (freshData) {
-          // 🛡️ [IDENTITY GUARD] (v2.6.118)
-          // Critical session protection: Only update state if the ID matches the current user.
-          // This prevents the session from being swapped by mismatched background sync events.
           if (currentUser && freshData.id && freshData.id === currentUser.id) {
-            setCurrentUser(freshData);
-            setUserRole(freshData.role);
+            useAuthStore.getState().setCurrentUser(freshData);
           } else if (!currentUser) {
-            // Initial hydration case
-            setCurrentUser(freshData);
-            setUserRole(freshData.role);
+            useAuthStore.getState().setCurrentUser(freshData);
           } else {
             console.warn(`[AuthContext] [SESSION_HIJACK_PREVENTED] Rejection mismatced user update. Expected: ${currentUser?.id}, Got: ${freshData.id}`);
           }
@@ -165,8 +132,6 @@ export const AuthProvider = ({ children }) => {
     return unsub;
   }, [currentUser]);
 
-  // 🛡️ [AUTH FAILURE GUARD] (v2.6.192)
-  // 🛡️ [C-1 FIX] (v2.6.315): Use onLogoutRef to avoid stale closure dependency
   useEffect(() => {
     const unsub = eventBus.subscribe('AUTH_FAILURE', (e) => {
       console.warn(`[AuthContext] 🛑 Terminal Auth Failure detected on ${e.payload.endpoint}.`);
@@ -176,7 +141,6 @@ export const AuthProvider = ({ children }) => {
           "Your security session has expired or is no longer valid. Please login again to continue syncing.",
           [{ text: "OK", onPress: () => onLogoutRef.current() }]
         );
-        // Fallback for web where Alert.alert might be subtle or blocked
         if (Platform.OS === 'web') {
           onLogoutRef.current();
         }
@@ -186,49 +150,30 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const onLogin = useCallback((arg1, arg2) => {
-    // Handle polymorphic arguments: onLogin(user) OR onLogin(role, user)
-    // 🛡️ [JWT UPDATED] (v2.6.190): Extract token from login result
     const user = arg2 && typeof arg2 === 'object' ? arg2 : arg1;
     const token = (arg2 && typeof arg2 === 'object') ? null : (arg1 && arg1.token ? arg1.token : null);
-    // Actually, LoginScreen calls onLoginSuccess(role, user) but we updated routes to return { success, token, user }
-    // Let's refine the LoginScreen call to pass the token.
     
     if (user && typeof user === 'object') {
       console.log(`[AuthContext] Login success for user: ${user.id} (${user.role})`);
       logger.logAction('LOGIN_SUCCESS', { userId: user.id, role: user.role });
-      setCurrentUser(user);
-      setUserRole(user.role);
-      setViewingLanding(false);
+      
+      useAuthStore.getState().login(user);
 
-      // 🛡️ [SESSION_TRACK_FIX] (v2.6.270): Save currentUser to storage BEFORE init()
-      // so that setupSocket can read the role for the WS handshake query params.
-      // Previously, init() was called first which caused a race condition where
-      // the role was read as 'user' instead of 'support'.
       syncOrchestrator.setSystemFlag('currentUser', user);
-
       syncOrchestrator.init(user.id, user.role);
       
-      // If we received a token, persist it (v2.6.190)
       if (user.token || token) {
         const activeToken = user.token || token;
         syncOrchestrator.setUserToken(activeToken);
-        
-        // 🛡️ [HTTP_ONLY_TRANSITION] (v2.6.258): 
-        // On web, we rely on secure cookies and do NOT store the token in local storage.
         if (Platform.OS !== 'web') {
           syncOrchestrator.setSystemFlag('userToken', activeToken);
         }
       }
       syncAndSaveData({ currentUser: user });
       
-      // 🛡️ [INSTANT TICKET DASHBOARD POPULATION] (v2.6.532)
-      // Triggers an immediate cloud data pull so that support/admin staff don't see 
-      // an empty dashboard while waiting for the next automated polling cycle.
       setTimeout(async () => {
         if (loadData) {
           await loadData(true, true);
-          // 🛡️ [VAPT-F23] (v2.6.558): Explicitly hydrate stores after initial load
-          // Prevents empty dashboard on first login due to Zustand event listener races
           await Promise.all([
              useSupportStore.getState().hydrate(),
              usePlayersStore.getState().hydrate(),
@@ -237,8 +182,6 @@ export const AuthProvider = ({ children }) => {
         }
       }, 500);
       
-      // 🛡️ [PUSH TOKEN SYNC ON LOGIN] (v2.6.121)
-      // If a push token is already registered, sync it for the new user
       if (Platform.OS !== 'web') {
         storage.getItem('push_token').then(pushToken => {
           if (pushToken && user?.id) {
@@ -258,11 +201,8 @@ export const AuthProvider = ({ children }) => {
   }, [syncAndSaveData]);
 
   const onLogout = useCallback(() => {
-    setCurrentUser(null);
-    setUserRole(null);
-    setViewingLanding(true);
+    useAuthStore.getState().logout();
     
-    // 🔒 PRIVACY GUARD: Clear all user-specific data from local storage
     const syncableKeys = [
       'currentUser', 'userToken', 'players', 'tournaments', 'matchVideos', 'matches', 
       'matchmaking', 'evaluations', 'supportTickets', 'auditLogs', 
@@ -270,28 +210,16 @@ export const AuthProvider = ({ children }) => {
       'visitedAdminSubTabs', 'sessionCustomAvatar', 'pendingSync'
     ];
     
-    // 🛡️ [SECURITY FIX] (v2.6.315): Always clear ALL user data on logout.
-    // Previously skipped clearing in dev mode (__DEV__), which masked production bugs.
-    // E2E tests that need data persistence should use a dedicated mock backend instead.
     syncableKeys.forEach(key => {
       syncOrchestrator.removeSystemFlag(key);
     });
 
     syncOrchestrator.setUserToken(null);
-    
-    // 🛡️ [SYNC LEAK FIX] (v2.6.552): Reset SyncOrchestrator singleton state.
-    // Without this, the stale lastSuccessfulPullTimestamp survives across logouts,
-    // causing the next login to perform an empty delta sync instead of a full hydration.
-    // This was the root cause of the "only 1 player in rankings" bug after Maestro testing.
     syncOrchestrator.reset();
     
-    // 🛡️ [ZUSTAND CLEANUP] (v2.6.552): Clear Zustand stores to prevent stale data
-    // from bleeding into the next user session without requiring an app restart.
-    useAuthStore.getState().logout();
     usePlayersStore.getState().setPlayers([]);
     useTournamentsStore.getState().setTournaments([]);
     
-    // 🛡️ [COOKIE_CLEANUP] (v2.6.258): Notify backend to clear secure cookie on web logout
     if (Platform.OS === 'web') {
       fetch(`${config.API_BASE_URL}/api/v1/logout`, { method: 'POST' }).catch(() => {});
     }
@@ -299,22 +227,34 @@ export const AuthProvider = ({ children }) => {
     console.log('[AuthContext] Privacy Guard: All session and sync state cleared.');
   }, []);
 
-  // 🛡️ [C-1 FIX] (v2.6.315): Keep ref in sync so AUTH_FAILURE listener always has latest
   onLogoutRef.current = onLogout;
 
+  const onUpdateUser = useCallback((updatedUser) => {
+    useAuthStore.getState().setCurrentUser(updatedUser);
+    syncAndSaveData({ currentUser: updatedUser, players: [updatedUser] });
+  }, [syncAndSaveData]);
+
+  const onVerifyAccount = useCallback((type) => {
+    if (!currentUserRef.current) return;
+    const isEmail = type === 'email';
+    const updated = { 
+      ...currentUserRef.current, 
+      [isEmail ? 'isEmailVerified' : 'isPhoneVerified']: true 
+    };
+    console.log(`[AuthContext] Verifying ${type} for ${currentUserRef.current.id}. New State: E:${!!updated.isEmailVerified} P:${!!updated.isPhoneVerified}`);
+    logger.logAction('ACCOUNT_VERIFIED', { type, userId: updated.id, isEmailVerified: updated.isEmailVerified, isPhoneVerified: updated.isPhoneVerified });
+    onUpdateUser(updated);
+  }, [onUpdateUser]);
 
   const onRegisterUser = useCallback((newUser, players) => {
     const result = PlayerService.register(newUser, players);
     if (result.success) {
       syncAndSaveData({ players: result.players });
-      
-      // 🛡️ [PUSH TOKEN SYNC ON SIGNUP] (v2.6.121)
       if (Platform.OS !== 'web' && newUser?.id) {
         storage.getItem('push_token').then(pushToken => {
           if (pushToken) {
             try {
               const { sendTokenToBackend } = require('../services/notificationService');
-              console.log(`📡 [NOTIFY_DEBUG] Syncing push token for new user: ${newUser.id}`);
               sendTokenToBackend(newUser.id, pushToken);
             } catch (e) {
               console.warn('[AuthContext] Push token sync deferred:', e.message);
@@ -322,7 +262,6 @@ export const AuthProvider = ({ children }) => {
           }
         });
       }
-      
       return true;
     }
     return false;
@@ -341,32 +280,13 @@ export const AuthProvider = ({ children }) => {
     if (!currentUserRef.current) return;
     const result = PlayerService.topUpWallet(amount, currentUserRef.current, players);
     if (result.success) {
-      setCurrentUser(result.user);
+      useAuthStore.getState().setCurrentUser(result.user);
       syncAndSaveData({ players: result.players, currentUser: result.user });
       Alert.alert("Success", `₹${amount} added!`);
     } else {
       Alert.alert("Error", result.message || "Top up failed");
     }
   }, [syncAndSaveData]);
-
-  const onUpdateUser = useCallback((updatedUser) => {
-    setCurrentUser(updatedUser);
-    syncAndSaveData({ currentUser: updatedUser, players: [updatedUser] });
-  }, [syncAndSaveData]);
-
-  const onVerifyAccount = useCallback((type) => {
-    if (!currentUserRef.current) return;
-    const isEmail = type === 'email';
-    const updated = { 
-      ...currentUserRef.current, 
-      [isEmail ? 'isEmailVerified' : 'isPhoneVerified']: true 
-    };
-    console.log(`[AuthContext] Verifying ${type} for ${currentUserRef.current.id}. New State: E:${!!updated.isEmailVerified} P:${!!updated.isPhoneVerified}`);
-    logger.logAction('ACCOUNT_VERIFIED', { type, userId: updated.id, isEmailVerified: updated.isEmailVerified, isPhoneVerified: updated.isPhoneVerified });
-    onUpdateUser(updated);
-
-
-  }, [onUpdateUser]);
 
   const onMarkNotificationsRead = useCallback(async () => {
     if (!currentUserRef.current) return;
@@ -404,11 +324,6 @@ export const AuthProvider = ({ children }) => {
 
     try {
       const token = await storage.getItem('userToken');
-      // Re-using the mark-read endpoint which marks all, or we could just mark all since 
-      // the backend currently marks all in that endpoint.
-      // Actually, since backend `/mark-read` currently marks ALL as read, let's keep it simple
-      // and just call it. It will mark all as read on backend, which is acceptable or we can modify it.
-      // Let's modify the backend to accept an optional notifId.
       await fetch(`${config.API_BASE_URL}/api/v1/mark-read`, {
         method: 'POST',
         headers: {
@@ -424,7 +339,6 @@ export const AuthProvider = ({ children }) => {
     }
   }, [onUpdateUser]);
 
-  // 🛡️ [AUDIT FIX] (v2.6.327): Memoize value to prevent unnecessary re-renders
   const value = useMemo(() => ({
     currentUser,
     userId: currentUser?.id,

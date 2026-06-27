@@ -33,22 +33,6 @@ export const TicketDetailView = (props) => {
         return diff < (3 * 24 * 60 * 60 * 1000); // 3 days
     })();
 
-    const renderDateHeader = (dateStr) => {
-      const date = new Date(dateStr);
-      const today = new Date();
-      const yesterday = new Date();
-      yesterday.setDate(today.getDate() - 1);
-
-      let label = date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', year: 'numeric' });
-      if (date.toDateString() === today.toDateString()) label = 'Today';
-      else if (date.toDateString() === yesterday.toDateString()) label = 'Yesterday';
-
-      return (
-        <View style={styles.dateHeader}>
-          <Text style={styles.dateHeaderText}>{label}</Text>
-        </View>
-      );
-    };
 
     return (
       <View style={styles.container}>

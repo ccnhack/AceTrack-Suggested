@@ -1294,7 +1294,6 @@ export default function MatchmakingScreen({ route }) {
       <CounterModal {...{ isCounterModalVisible, setIsCounterModalVisible, selectedChallenge, getOpponentName, counterDate, setCounterDate, counterMarkedDates, TIME_SLOTS, counterTime, setCounterTime, isTimeSlotBlocked, getNextAvailableSlot, venueSearchQuery, setVenueSearchQuery, nearbyVenues, selectedAcademyForVenue, setSelectedAcademyForVenue, isFetchingVenues, counterComment, setCounterComment, isSubmitting, submitCounterProposal, colors }} />
       <ReportScoreModal {...{ reportScoreMatch, setReportScoreMatch, reportSets, setReportSets, getOpponentName, user, submitScoreReport }} />
     </View>
-    </View>
   );
 }
 

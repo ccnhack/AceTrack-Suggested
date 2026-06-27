@@ -1,71 +1,42 @@
 import { z } from 'zod';
 
-// ═══════════════════════════════════════════════════════════════
-// 🏆 Tournament Validators — Zod Schemas
-// Phase 4C: Production Hardening (v2.6.345)
-// ═══════════════════════════════════════════════════════════════
-
-export const registerPlayerSchema = z.object({
-  body: z.object({
-    tournamentId: z.string().min(1, 'Tournament ID is required'),
-    playerId: z.string().min(1, 'Player ID is required'),
-    partnerPreference: z.string().optional(),
-    partnerName: z.string().optional(),
-    skillLevel: z.string().optional()
-  })
-});
-
-export const optOutSchema = z.object({
-  body: z.object({
-    tournamentId: z.string().min(1, 'Tournament ID is required'),
-    playerId: z.string().min(1, 'Player ID is required'),
-    reason: z.string().optional()
-  })
-});
-
-export const startTournamentSchema = z.object({
-  body: z.object({
-    tournamentId: z.string().min(1, 'Tournament ID is required')
-  })
-});
-
-export const endTournamentSchema = z.object({
-  body: z.object({
-    tournamentId: z.string().min(1, 'Tournament ID is required')
-  })
-});
-
-export const joinTeamSchema = z.object({
-  body: z.object({
-    tournamentId: z.string().min(1, 'Tournament ID is required'),
-    playerId: z.string().min(1, 'Player ID is required'),
-    teamId: z.string().optional(),
-    teamName: z.string().optional()
-  })
-});
-
-export const manageInterestedSchema = z.object({
-  body: z.object({
-    tournamentId: z.string().min(1, 'Tournament ID is required'),
-    action: z.enum(['approve', 'reject', 'waitlist']),
-    coachId: z.string().min(1, 'Coach ID is required')
-  })
-});
-
-export const partnerChatSchema = z.object({
-  body: z.object({
-    tournamentId: z.string().min(1, 'Tournament ID is required'),
-    content: z.string().min(1, 'Message content is required').max(2000, 'Message too long')
-  })
-});
+// Middleware generator to wrap schemas
+export const validateSchema = (schema, property = 'body') => {
+  return (req, res, next) => {
+    try {
+      req[property] = schema.parse(req[property]);
+      next();
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          success: false,
+          error: 'Validation failed',
+          details: err.errors
+        });
+      }
+      next(err);
+    }
+  };
+};
 
 export const createTournamentSchema = z.object({
-  body: z.object({
-    title: z.string().min(1, 'Title is required').max(100),
-    type: z.enum(['singles', 'doubles', 'mixed_doubles']).optional(),
-    maxPlayers: z.number().int().positive().optional(),
+  tournament: z.object({
+    name: z.string().min(1, "Tournament name is required"),
+    sport: z.string().min(1, "Sport is required"),
+    type: z.enum(['knockout', 'league', 'hybrid', 'custom']).optional(),
     startDate: z.string().optional(),
     endDate: z.string().optional(),
-    description: z.string().max(1000).optional()
+    location: z.string().min(1, "Location is required"),
+    maxParticipants: z.number().int().positive().optional(),
+    isTeam: z.boolean().optional(),
+    teamSize: z.number().int().positive().optional(),
   })
+});
+
+export const updateTournamentSchema = createTournamentSchema; // Reusing structure
+
+export const registerPlayerSchema = z.object({
+  category: z.string().optional(),
+  partnerId: z.string().optional(),
+  teamCode: z.string().optional(),
 });

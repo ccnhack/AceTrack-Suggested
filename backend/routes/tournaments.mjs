@@ -9,6 +9,8 @@ import { authGuard } from '../middleware/security.mjs';
 import * as TournamentService from '../services/TournamentService.mjs';
 import * as PartnerChatService from '../services/PartnerChatService.mjs';
 
+import { validateSchema, createTournamentSchema, updateTournamentSchema, registerPlayerSchema } from '../middleware/validators/tournamentValidators.mjs';
+
 export default function({ io }) {
   const router = express.Router();
 
@@ -28,7 +30,7 @@ export default function({ io }) {
   };
 
   // ─── Player Registration ─────────────────────────────────
-  router.post('/:id/register', authGuard, async (req, res) => {
+  router.post('/:id/register', authGuard, validateSchema(registerPlayerSchema), async (req, res) => {
     try {
       const result = await TournamentService.registerPlayer(req.params.id, req.user.id, req.body, io);
       respond(res, result);
@@ -130,7 +132,7 @@ export default function({ io }) {
   });
 
   // ─── Create Tournament (Admin) ───────────────────────────
-  router.post('/', authGuard, async (req, res) => {
+  router.post('/', authGuard, validateSchema(createTournamentSchema), async (req, res) => {
     if (!adminOnly(req, res)) return;
     try {
       const result = await TournamentService.createTournament(req.body.tournament, io);
@@ -139,7 +141,7 @@ export default function({ io }) {
   });
 
   // ─── Update Tournament (Admin) ───────────────────────────
-  router.put('/:id', authGuard, async (req, res) => {
+  router.put('/:id', authGuard, validateSchema(updateTournamentSchema), async (req, res) => {
     if (!adminOnly(req, res)) return;
     try {
       const result = await TournamentService.updateTournament(req.params.id, req.body.tournament, io);

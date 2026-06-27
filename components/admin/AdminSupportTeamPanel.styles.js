@@ -244,6 +244,4 @@ const styles = StyleSheet.create({
   actionBtnText: { fontSize: 13, fontWeight: '700', color: '#1E293B' }
 });
 
-export default AdminSupportTeamPanel;
-
 export default styles;

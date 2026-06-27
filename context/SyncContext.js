@@ -1,17 +1,17 @@
-import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import { Alert, AppState, Platform } from 'react-native';
-import Constants from 'expo-constants';
 import { eventBus } from '../services/EventBus';
 import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 import { calculateServerOffset } from '../utils/tournamentUtils';
 import config from '../config';
 import logger from '../utils/logger';
 
+import { useSyncStore } from '../stores';
+
 const SyncContext = createContext(null);
 
 export const useSync = () => useContext(SyncContext);
 
-// 🛡️ [VERSION CHECK] (v2.6.121) Version comparison logic from monolith
 const isVersionObsolete = (local, remote) => {
   try {
     const [c1, c2, c3] = local.split('.').map(Number);
@@ -26,39 +26,37 @@ const isVersionObsolete = (local, remote) => {
 };
 
 export const SyncProvider = ({ children }) => {
-  const [isCloudOnline, setIsCloudOnline] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState(null);
-  const [isUsingCloud, setIsUsingCloud] = useState(!__DEV__);
-  const [serverClockOffset, setServerClockOffset] = useState(0);
-  const [isFullyConnected, setIsFullyConnected] = useState(true);
-  const [isNotificationsEnabled, setIsNotificationsEnabled] = useState(true);
-  const [metrics, setMetrics] = useState(syncOrchestrator.getMetrics());
+  // Bind state from Zustand store
+  const isCloudOnline = useSyncStore(state => state.isCloudOnline);
+  const isSyncing = useSyncStore(state => state.isSyncing);
+  const lastSyncTime = useSyncStore(state => state.lastSyncTime);
+  const isUsingCloud = useSyncStore(state => state.isUsingCloud);
+  const serverClockOffset = useSyncStore(state => state.serverClockOffset);
+  const isFullyConnected = useSyncStore(state => state.isFullyConnected);
+  const isNotificationsEnabled = useSyncStore(state => state.isNotificationsEnabled);
 
+  // We keep metrics local to context to avoid excessive Zustand updates for simple performance traces
+  const [metrics, setMetrics] = useState(syncOrchestrator.getMetrics());
   const socketRef = useRef(syncOrchestrator.getSocket());
   const activeApiUrl = useMemo(() => syncOrchestrator.getActiveApiUrl(), []);
   const lastUpdateCheckRef = useRef(0);
   const isStartupCompleteRef = useRef(false);
 
-  // Function to refresh metrics
   const refreshMetrics = useCallback(() => {
     setMetrics(syncOrchestrator.getMetrics());
   }, []);
 
-  // Connectivity and Sync listeners
   useEffect(() => {
     const unsubConn = eventBus.subscribe('CONNECTIVITY_CHANGED', (e) => {
-      setIsFullyConnected(e.payload.isOnline);
+      useSyncStore.setState({ isFullyConnected: e.payload.isOnline });
     });
 
     const unsubSync = eventBus.subscribe('SYNC_STATUS_CHANGED', (e) => {
-      if (e.payload.isOnline !== undefined) setIsCloudOnline(e.payload.isOnline);
-      if (e.payload.isSyncing !== undefined) setIsSyncing(e.payload.isSyncing);
-      // 🛡️ Ensure socketRef stays fresh regardless of state bailout (fixes Admin Diag Pings)
+      if (e.payload.isOnline !== undefined) useSyncStore.setState({ isCloudOnline: e.payload.isOnline });
+      if (e.payload.isSyncing !== undefined) useSyncStore.setState({ isSyncing: e.payload.isSyncing });
       socketRef.current = syncOrchestrator.getSocket();
     });
 
-    // 🛡️ Set initial reference if already available
     socketRef.current = syncOrchestrator.getSocket();
 
     return () => {
@@ -67,23 +65,19 @@ export const SyncProvider = ({ children }) => {
     };
   }, []);
 
-  // Hydrate local flags
   useEffect(() => {
     (async () => {
-      const savedNotifs = await syncOrchestrator.getSystemFlag('isNotificationsEnabled');
-      if (savedNotifs !== null) setIsNotificationsEnabled(savedNotifs);
+      await useSyncStore.getState().hydrate();
 
-      // 🛡️ [DEV_SYNC] (v2.6.315) Restore API mode from storage
       const savedUsingCloud = await syncOrchestrator.getSystemFlag('isUsingCloud');
       if (savedUsingCloud !== null && __DEV__) {
-        setIsUsingCloud(savedUsingCloud);
+        useSyncStore.setState({ isUsingCloud: savedUsingCloud });
         config.API_BASE_URL = savedUsingCloud ? config.CLOUD_API_URL : config.LOCAL_API_URL;
         console.log(`[SyncContext] Hydrated API URL Mode: ${savedUsingCloud ? 'CLOUD' : 'LOCAL'} (${config.API_BASE_URL})`);
       }
     })();
   }, []);
 
-  // 📶 NETWORK RECOVERY: Proactively flush pending updates on reconnection
   useEffect(() => {
     if (isFullyConnected) {
       console.log('[SyncContext] Connectivity restored. Triggering proactive cloud push...');
@@ -91,15 +85,10 @@ export const SyncProvider = ({ children }) => {
     }
   }, [isFullyConnected]);
 
-  /**
-   * Centralized sync and save engine.
-   */
   const syncAndSaveData = useCallback(async (updates, isAtomic = false, isInternal = false) => {
     try {
       await syncOrchestrator.syncAndSaveData(updates, isAtomic, isInternal);
-      setLastSyncTime(new Date().toLocaleTimeString()); // App.js override guarantees IST
-      // 🛡️ [C-2 FIX] (v2.6.315): Removed false setIsCloudOnline(true) here.
-      // Cloud status is only set true by loadData/checkForUpdates after actual network success.
+      useSyncStore.getState().setLastSyncTime(new Date().toLocaleTimeString());
       return true;
     } catch (error) {
       console.error('[SyncContext] Sync failed:', error);
@@ -107,35 +96,19 @@ export const SyncProvider = ({ children }) => {
     }
   }, []);
 
-  // 🛡️ [BUG-9 FIX] (v2.6.313): Retry counter to prevent unbounded recursion on persistent timeouts
   const loadDataRetryCountRef = useRef(0);
   const MAX_LOAD_RETRIES = 3;
 
   const loadData = useCallback(async (forceCloud = false, isSilent = false) => {
     const operation = async () => {
       try {
-        // 🛡️ [FLUSH_BEFORE_PULL] (v2.6.121)
-        // Ensure any pending local changes (especially deletions) reach
-        // the server BEFORE we pull fresh data. Otherwise the cloud still
-        // has the old items and they get written right back.
         await syncOrchestrator.flushPendingPush();
-
-        // 📡 [DELTA SYNC INTEGRATION] (v2.6.432): Delegate to SyncOrchestrator.forcePullData
-        // which uses SyncApi.pullFromApi with delta timestamp tracking.
-        // This replaces the raw fetch that was bypassing the delta sync pipeline.
         console.log('[SyncContext] loadData: Delegating to SyncOrchestrator.forcePullData...');
         const data = await syncOrchestrator.forcePullData();
 
         if (data) {
-          setIsCloudOnline(true);
+          useSyncStore.setState({ isCloudOnline: true });
           console.log('[SyncContext] loadData: Success via orchestrator delta pipeline.');
-          
-          // 🛡️ [SERVER CLOCK OFFSET] (v2.6.121)
-          // Calculate and persist drift between device and server clock
-          // Note: forcePullData already merges data internally, but we still
-          // need the raw data reference for clock offset and validation.
-          
-          // Reset retry counter on success
           loadDataRetryCountRef.current = 0;
           return data;
         }
@@ -143,7 +116,6 @@ export const SyncProvider = ({ children }) => {
       } catch (error) {
         if (error.name === 'AbortError') {
           console.warn('[SyncContext] loadData: TIMEOUT (30s reached)');
-          // 🛡️ [BUG-9 FIX] (v2.6.313): Bounded retry with counter
           if (loadDataRetryCountRef.current < MAX_LOAD_RETRIES) {
             loadDataRetryCountRef.current++;
             console.log(`[SyncContext] Retry ${loadDataRetryCountRef.current}/${MAX_LOAD_RETRIES} after timeout...`);
@@ -151,7 +123,7 @@ export const SyncProvider = ({ children }) => {
               if (!syncOrchestrator.isSyncActive()) {
                 loadData(true, true);
               }
-            }, 2000 * loadDataRetryCountRef.current); // Exponential backoff
+            }, 2000 * loadDataRetryCountRef.current);
           } else {
             console.warn('[SyncContext] Max retries reached. Stopping retry loop.');
             loadDataRetryCountRef.current = 0;
@@ -170,17 +142,12 @@ export const SyncProvider = ({ children }) => {
     }
   }, []);
 
-  /**
-   * 🛡️ [VERSION CHECK] (v2.6.121)
-   * Polls /api/status to detect new cloud data and version obsolescence.
-   * Migrated from monolith App.js checkForUpdates.
-   */
   const checkForUpdates = useCallback(async (isForce = false) => {
     try {
       if (syncOrchestrator.isSyncActive()) return;
 
       const now = Date.now();
-      const throttleWindow = 10000; // 10s minimum between checks
+      const throttleWindow = 10000;
       if (!isForce && (now - lastUpdateCheckRef.current < throttleWindow)) {
         return;
       }
@@ -203,20 +170,19 @@ export const SyncProvider = ({ children }) => {
         return;
       }
 
-      setIsCloudOnline(true);
-      setLastSyncTime(new Date().toLocaleTimeString());
+      useSyncStore.setState({ isCloudOnline: true });
+      useSyncStore.getState().setLastSyncTime(new Date().toLocaleTimeString());
 
-      // 🛡️ [SERVER CLOCK OFFSET]
       const serverOffset = calculateServerOffset(response.headers.get('Date'));
       if (Math.abs(serverOffset) > 1000) {
-        setServerClockOffset(serverOffset);
+        useSyncStore.getState().setServerClockOffset(serverOffset);
       }
 
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         console.log('[SyncContext] Status check: Received non-JSON response (possible reboot).');
         logger.logAction('STATUS_CHECK_NON_JSON', { status: response.status });
-        setIsCloudOnline(false);
+        useSyncStore.setState({ isCloudOnline: false });
         return;
       }
 
@@ -234,13 +200,11 @@ export const SyncProvider = ({ children }) => {
         console.log(`[SyncContext] Version Check: Local=${currentVersion}, Remote=${status.latestAppVersion}, Obsolete=${obsolete}`);
         if (obsolete) {
           logger.logAction('VERSION_OBSOLETE_TRIGGERED', { local: currentVersion, remote: status.latestAppVersion });
-          // Emit event for AppContext to show force update modal
           eventBus.emit('VERSION_OBSOLETE', { latestVersion: status.latestAppVersion });
           return;
         }
       }
 
-      // Skip self-originated updates
       const socket = syncOrchestrator.getSocket();
       if (status.lastSocketId && socket?.id && status.lastSocketId === socket.id) {
         return;
@@ -252,7 +216,6 @@ export const SyncProvider = ({ children }) => {
         
         const isStale = status.lastUpdated !== syncOrchestrator.getLastServerUpdate();
         if (isStale || isForce) {
-          // 🛡️ [GUEST GUARD] (v2.6.192)
           if (!syncOrchestrator.getUserId() || syncOrchestrator.getUserId() === 'guest') {
             console.log('[SyncContext] checkForUpdates: No active user, skipping data load.');
             return;
@@ -266,8 +229,6 @@ export const SyncProvider = ({ children }) => {
     }
   }, [loadData]);
 
-  // 🛡️ [APPSTATE FOREGROUND SYNC] (v2.6.121)
-  // When app returns from background → foreground, pull fresh data
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState === 'active' && !syncOrchestrator.isSyncActive()) {
@@ -281,7 +242,6 @@ export const SyncProvider = ({ children }) => {
       }
     });
 
-    // Mark startup complete after initial load
     loadData(true).then(() => {
       isStartupCompleteRef.current = true;
     });
@@ -289,7 +249,6 @@ export const SyncProvider = ({ children }) => {
     return () => subscription.remove();
   }, [loadData]);
 
-  // 🛡️ [PERIODIC VERSION CHECK] (v2.6.121) — 2 min background polling
   useEffect(() => {
     const interval = setInterval(() => {
       if (!syncOrchestrator.isSyncActive() && isCloudOnline) {
@@ -299,8 +258,6 @@ export const SyncProvider = ({ children }) => {
     return () => clearInterval(interval);
   }, [isCloudOnline, checkForUpdates]);
 
-  // 🛡️ [HIGH-FREQ TICKET POLLING] (v2.6.121) — 10s when tickets exist
-  // Subscribed via EventBus to detect support ticket presence
   const [hasActiveTickets, setHasActiveTickets] = useState(false);
   useEffect(() => {
     const unsub = eventBus.subscribe('ENTITY_UPDATED', async (e) => {
@@ -314,7 +271,6 @@ export const SyncProvider = ({ children }) => {
 
   useEffect(() => {
     if (hasActiveTickets && isCloudOnline) {
-      // 🛡️ [PERFORMANCE FIX] (v2.6.315): Reduced from 10s to 30s to lower battery drain
       const pollTimer = setInterval(() => {
         if (!syncOrchestrator.isSyncActive()) {
           checkForUpdates(false);
@@ -324,11 +280,9 @@ export const SyncProvider = ({ children }) => {
     }
   }, [hasActiveTickets, isCloudOnline, checkForUpdates]);
 
-  // Socket data_updated → checkForUpdates
   useEffect(() => {
     const unsub = eventBus.subscribe('SYNC_STATUS_CHANGED', (e) => {
       if (e.payload.source === 'socket' && e.payload.isOnline) {
-        // Socket reconnected — schedule a check
         setTimeout(() => checkForUpdates(false), 2000);
       }
     });
@@ -336,26 +290,19 @@ export const SyncProvider = ({ children }) => {
   }, [checkForUpdates]);
 
   const onToggleCloud = useCallback(() => {
-    const nextValue = !isUsingCloud;
-    setIsUsingCloud(nextValue);
-    syncOrchestrator.setSystemFlag('isUsingCloud', nextValue);
-    
-    // 🛡️ [DEV_HOTSWAP] (v2.6.315) Dynamically update API base and reconnect socket
+    useSyncStore.getState().toggleCloud();
     if (__DEV__) {
-      config.API_BASE_URL = nextValue ? config.CLOUD_API_URL : config.LOCAL_API_URL;
+      config.API_BASE_URL = useSyncStore.getState().isUsingCloud ? config.CLOUD_API_URL : config.LOCAL_API_URL;
       syncOrchestrator.reconnect();
     }
-    
-    logger.logAction('CLOUD_MODE_TOGGLED', { nextValue, newUrl: config.API_BASE_URL });
-  }, [isUsingCloud]);
+    logger.logAction('CLOUD_MODE_TOGGLED', { nextValue: useSyncStore.getState().isUsingCloud, newUrl: config.API_BASE_URL });
+  }, []);
 
   const onToggleNotifications = useCallback(() => {
-    const nextValue = !isNotificationsEnabled;
-    setIsNotificationsEnabled(nextValue);
-    syncOrchestrator.setSystemFlag('isNotificationsEnabled', nextValue);
-    logger.logAction('NOTIFICATIONS_TOGGLED', { nextValue });
-    Alert.alert("Notifications", nextValue ? "Notifications enabled" : "Notifications muted");
-  }, [isNotificationsEnabled]);
+    useSyncStore.getState().toggleNotifications();
+    logger.logAction('NOTIFICATIONS_TOGGLED', { nextValue: useSyncStore.getState().isNotificationsEnabled });
+    Alert.alert("Notifications", useSyncStore.getState().isNotificationsEnabled ? "Notifications enabled" : "Notifications muted");
+  }, []);
 
   const onLogTrace = useCallback((...args) => {
     if (logger.logTrace) {
@@ -363,6 +310,14 @@ export const SyncProvider = ({ children }) => {
     } else {
       logger.logAction('TRACE_FALLBACK', { args });
     }
+  }, []);
+
+  const setIsUsingCloud = useCallback((val) => {
+    useSyncStore.setState({ isUsingCloud: val });
+  }, []);
+
+  const setServerClockOffset = useCallback((val) => {
+    useSyncStore.getState().setServerClockOffset(val);
   }, []);
 
   const value = {

@@ -8,7 +8,7 @@ export const DrillDownModal = (props) => {
   
   if (!drillDownConfig) return null;
   return (
-      {/* Drill-Down Modal Configuration (Phase 5) */}
+    <>
       {drillDownConfig && (
         <Modal visible transparent animationType="slide" onRequestClose={() => setDrillDownConfig(null)}>
           <View style={styles.modalOverlay}>
@@ -88,5 +88,6 @@ export const DrillDownModal = (props) => {
           </View>
         </Modal>
       )}
+    </>
   );
 };
