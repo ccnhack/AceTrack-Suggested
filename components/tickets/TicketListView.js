@@ -89,7 +89,7 @@ export const TicketListView = (props) => {
             <Text style={[styles.tabBtnText, listTab === 'Closed' && styles.tabBtnTextActive]}>Resolved/Closed</Text>
           </TouchableOpacity>
           
-          {(userRole === 'admin' || userRole === 'support') && (
+          {isAgent && (
             <TouchableOpacity 
               onPress={() => setListTab('Pool')}
               style={[styles.tabBtn, listTab === 'Pool' && styles.tabBtnActive]}
@@ -98,7 +98,7 @@ export const TicketListView = (props) => {
             </TouchableOpacity>
           )}
 
-          {(userRole === 'admin' || userRole === 'support') && (
+          {isAgent && (
             <TouchableOpacity 
               onPress={() => setListTab('Escalations')}
               style={[styles.tabBtn, listTab === 'Escalations' && styles.tabBtnActive]}
