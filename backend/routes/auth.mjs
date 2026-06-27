@@ -1,750 +1,306 @@
+/**
+ * ═══════════════════════════════════════════════════════════════
+ * 🔐 Auth Routes (v2.6.772)
+ * Thin HTTP handlers — business logic in services/AuthService.mjs
+ * and services/CoachInviteService.mjs
+ * ═══════════════════════════════════════════════════════════════
+ */
 import express from 'express';
-import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
-import { AppState, SupportPasswordReset, Player, AdminMFA, CoachInvite } from '../models/index.mjs';
 import { asyncHandler } from '../helpers/utils.mjs';
 import { apiKeyGuard, attachCsrfCookie } from '../middleware/security.mjs';
+import * as AuthService from '../services/AuthService.mjs';
+import * as CoachInviteService from '../services/CoachInviteService.mjs';
 
-// 🛡️ [PRODUCTION HARDENING] (v2.6.319): MFA PIN must be set in production
-// 🛡️ [VAPT-F04] (v2.6.556): ADMIN_MFA_PIN MUST be set via environment variable.
-// Hardcoded fallback removed per security audit.
+// 🛡️ [VAPT-F04] (v2.6.556): ADMIN_MFA_PIN via env var only
 const ADMIN_MFA_PIN = process.env.ADMIN_MFA_PIN || (() => {
   if (process.env.NODE_ENV === 'production') {
     console.error('🛑 FATAL: ADMIN_MFA_PIN must be set in production environment!');
     process.exit(1);
   }
   console.error('🛑 FATAL: ADMIN_MFA_PIN environment variable is not set. Admin MFA will not function.');
-  return null; // No fallback — MFA will reject all PINs until env var is set
+  return null;
 })();
-// 🛡️ [SCALABILITY] (v2.6.319): Removed in-memory pendingAdminMFA Map
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 export default function createAuthRoutes({
-  ACE_API_KEY,
-  loginLimiter,
-  passwordResetLimiter,
-  phoneLookupLimiter,
-  trackLoginAttempt,
-  logServerEvent,
-  logAudit,
-  syncMutex,
-  signToken,
-  sendPasswordResetEmail
+  ACE_API_KEY, loginLimiter, passwordResetLimiter, phoneLookupLimiter,
+  trackLoginAttempt, logServerEvent, logAudit, syncMutex, signToken, sendPasswordResetEmail
 }) {
   const router = express.Router();
 
-  async function resolveIpGeo(ipRaw) {
-    try {
-      const ipChain = (ipRaw || '').split(',').map(s => s.trim().replace('::ffff:', '')).filter(Boolean);
-      const primaryIp = ipChain[0] || '127.0.0.1';
-      if (primaryIp === '127.0.0.1' || primaryIp === '::1') return 'Localhost';
-      const resp = await fetch(`http://ip-api.com/json/${primaryIp}?fields=city,country`, { signal: AbortSignal.timeout(3000) });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data.city) return `${data.city}, ${data.country}`;
-      }
-    } catch (e) {}
-    return 'Unknown Location';
-  }
+  const respond = (res, result) => {
+    const { status, ...body } = result;
+    return res.status(status).json(body);
+  };
 
-  // 🛡️ [SESSION_VALIDATION] (v2.6.258)
+  const getClientIp = (req) => req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+  const setSessionCookie = (res, token) => {
+    res.cookie('acetrack_session', token, {
+      path: '/', httpOnly: true, secure: IS_PRODUCTION,
+      sameSite: IS_PRODUCTION ? 'strict' : 'lax',
+      maxAge: 24 * 60 * 60 * 1000
+    });
+    attachCsrfCookie(res);
+  };
+
+  // ─── Session Validation ────────────────────────────────────
   router.get('/auth/me', apiKeyGuard, asyncHandler(async (req, res) => {
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({ success: false, error: 'No active session.' });
-    }
-
-    // 🛡️ SCALABILITY FIX (v2.6.316): Read from Player distinct collection
-    const playerDoc = await Player.findOne({ id: req.user.id }).lean();
-    const user = playerDoc?.data;
-
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found.' });
-    }
-
-    // Return sanitized user object
-    const { password, ...sanitizedUser } = user;
-    res.json({ success: true, user: sanitizedUser });
+    if (!req.user?.id) return res.status(401).json({ success: false, error: 'No active session.' });
+    const user = await AuthService.getAuthenticatedUser(req.user.id);
+    if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
+    res.json({ success: true, user });
   }));
 
-  // 🛡️ [COACH INVITE TRACKING] (v2.6.400)
+  // ─── Coach Invite: Validate ────────────────────────────────
   router.get('/auth/coach-invite/validate', apiKeyGuard, asyncHandler(async (req, res) => {
-    const { token } = req.query;
-    if (!token) return res.status(400).json({ error: 'Token is required' });
-
-    const invite = await CoachInvite.findOne({ token });
-    if (!invite) return res.status(404).json({ error: 'Invite not found or invalid' });
-
-    if (new Date() > invite.expiresAt) {
-      if (invite.status !== 'Expired') {
-        invite.status = 'Expired';
-        await invite.save();
-      }
-      return res.status(410).json({ error: 'This invitation has expired' });
-    }
-
-    if (invite.status === 'Used') {
-      return res.status(409).json({ error: 'This invitation has already been used' });
-    }
-
-    res.json({ 
-      success: true, 
-      invite: { 
-        email: invite.email, 
-        name: invite.name,
-        phone: invite.phone,
-        academyId: invite.academyId, 
-        tournamentId: invite.tournamentId 
-      } 
-    });
+    const result = await CoachInviteService.validateInvite(req.query.token);
+    respond(res, result);
   }));
 
+  // ─── Coach Invite: Track ───────────────────────────────────
   router.post('/auth/coach-invite/track', apiKeyGuard, asyncHandler(async (req, res) => {
-    const { token, action } = req.body; // e.g., 'link_click', 'form_view'
-    if (!token || !action) return res.status(400).json({ error: 'Token and action required' });
-
-    const invite = await CoachInvite.findOne({ token });
-    if (!invite) return res.status(404).json({ error: 'Invite not found' });
-
-    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    const userAgent = req.headers['user-agent'] || '';
-
-    // If first click, update status
-    if (invite.status === 'Pending' && action === 'link_click') {
-      invite.status = 'Clicked';
-    }
-
-    invite.clicks.push({
-      action,
-      ip: clientIp,
-      userAgent,
-      timestamp: new Date()
-    });
-
-    await invite.save();
-    res.json({ success: true });
+    const result = await CoachInviteService.trackInvite(req.body.token, req.body.action, getClientIp(req), req.headers['user-agent'] || '');
+    respond(res, result);
   }));
 
+  // ─── Coach Invite: Consume ─────────────────────────────────
   router.post('/auth/coach-invite/consume', apiKeyGuard, asyncHandler(async (req, res) => {
-    const { token, username } = req.body;
-    if (!token || !username) return res.status(400).json({ error: 'Token and username required' });
-
-    const invite = await CoachInvite.findOne({ token });
-    if (!invite) return res.status(404).json({ error: 'Invite not found' });
-    if (invite.status === 'Used') return res.status(409).json({ error: 'Invite already used' });
-
-    invite.status = 'Used';
-    invite.clicks.push({
-      action: 'form_submit',
-      ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
-      userAgent: req.headers['user-agent'] || '',
-      timestamp: new Date()
-    });
-
-    await invite.save();
-
-    // Log the affiliation
-    await logAudit(req, 'COACH_INVITE_CONSUMED', ['players', 'tournaments'], { 
-      coachUsername: username, 
-      academyId: invite.academyId,
-      tournamentId: invite.tournamentId
-    });
-
-    // Auto-Affiliate Magic: Update the coach and tournament directly
-    await Player.updateOne(
-      { id: username },
-      { $set: { "data.isApprovedCoach": true, "data.affiliatedAcademy": invite.academyId, lastUpdated: new Date() } }
-    );
-
-    const t = await Tournament.findOne({ id: invite.tournamentId }).lean();
-    if (t && t.data) {
-      await Tournament.updateOne(
-        { id: invite.tournamentId },
-        { 
-          $set: { 
-            "data.coachStatus": "Accepted", 
-            "data.assignedCoachId": username, 
-            lastUpdated: new Date() 
-          }
-        }
-      );
+    const result = await CoachInviteService.consumeInvite(req.body.token, req.body.username, getClientIp(req), req.headers['user-agent'] || '');
+    if (result.success && result.meta) {
+      await logAudit(req, 'COACH_INVITE_CONSUMED', ['players', 'tournaments'], result.meta);
     }
-
-    res.json({ success: true });
+    respond(res, result);
   }));
 
-  // 🛡️ [ADMIN VISIBILITY] Fetch all Coach Invites (v2.6.400)
+  // ─── Coach Invites: List (Admin) ───────────────────────────
   router.get('/admin/coach-invites', apiKeyGuard, asyncHandler(async (req, res) => {
-    // 🛡️ SECURITY HARDENING: Ensure admin only
-    if (req.userRole !== 'admin') {
-      return res.status(403).json({ error: 'System Administrator privileges required' });
-    }
-    const invites = await CoachInvite.find().sort({ createdAt: -1 }).lean();
-    res.json({ success: true, invites });
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'System Administrator privileges required' });
+    const result = await CoachInviteService.listInvites();
+    respond(res, result);
   }));
 
-  // 🛡️ [SECURITY] Change Password for Authenticated Users (v2.6.425)
+  // ─── Change Password ──────────────────────────────────────
   router.post('/auth/change-password', apiKeyGuard, asyncHandler(async (req, res) => {
-    const { oldPassword, newPassword } = req.body;
-    
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({ success: false, error: 'No active session.' });
-    }
-
-    if (!oldPassword || !newPassword) {
-      return res.status(400).json({ success: false, error: 'Current password and new password are required.' });
-    }
-
-    if (newPassword.length < 8) {
-      return res.status(400).json({ success: false, error: 'New password must be at least 8 characters long.' });
-    }
-
-    // Read fresh user from DB
-    const playerDoc = await Player.findOne({ id: req.user.id }).select('+data.password').lean();
-    const user = playerDoc?.data;
-
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found.' });
-    }
-
-    const currentHash = user.password;
-    if (!currentHash) {
-      return res.status(400).json({ success: false, error: 'Account not fully set up. Cannot change password.' });
-    }
-
-    // Verify current password
-    let isMatch = false;
-    try {
-      if (currentHash.startsWith('$2a$') || currentHash.startsWith('$2b$')) {
-        isMatch = await bcrypt.compare(oldPassword, currentHash);
-      } else {
-        isMatch = currentHash === oldPassword;
-      }
-    } catch (e) {
-      console.error('[AUTH] Password comparison error in change-password:', e.message);
-    }
-
-    if (!isMatch) {
-      return res.status(401).json({ success: false, error: 'Current password is incorrect.' });
-    }
-
-    // Hash new password and save
-    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
-    await Player.updateOne(
-      { id: user.id },
-      { $set: { "data.password": hashedNewPassword, lastUpdated: new Date() } }
-    );
-
-    // Optional: Log the event
-    await logAudit(req, 'PASSWORD_CHANGED', ['players'], { userId: user.id, ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
-
-    res.json({ success: true, message: 'Password updated successfully.' });
+    if (!req.user?.id) return res.status(401).json({ success: false, error: 'No active session.' });
+    const result = await AuthService.changePassword(req.user.id, req.body.oldPassword, req.body.newPassword);
+    if (result.success) await logAudit(req, 'PASSWORD_CHANGED', ['players'], { userId: req.user.id, ip: getClientIp(req) });
+    respond(res, result);
   }));
 
-  // 🛡️ [EMERGENCY RECOVERY] (v2.6.312)
+  // ─── Emergency State Recovery ──────────────────────────────
   router.post('/admin/restore-last-state', apiKeyGuard, asyncHandler(async (req, res) => {
-    const { confirm } = req.body;
-    if (confirm !== 'RESTORE_PREVIOUS_STATE') {
+    if (req.body.confirm !== 'RESTORE_PREVIOUS_STATE') {
       return res.status(400).json({ error: 'Confirmation string required.' });
     }
-
-    // Find the last 2 states
-    const states = await AppState.find().sort({ lastUpdated: -1 }).limit(2);
-    
-    if (states.length < 2) {
-      return res.status(404).json({ error: 'No previous state found for recovery.' });
+    const result = await AuthService.restoreLastState();
+    if (result.success) {
+      await logAudit(req, 'STATE_RECOVERY_EXECUTED', [], { fromVersion: result.fromVersion, toVersion: result.toVersion, restoredFrom: result.restoredFrom });
     }
-
-    const current = states[0];
-    const previous = states[1];
-
-    console.log(`🛡️ [RECOVERY] Attempting restoration. Current: ${current._id} (v${current.version}), Previous: ${previous._id} (v${previous.version})`);
-    
-    // Create a NEW state document that copies the PREVIOUS state's data but with a NEW timestamp and incremented version
-    const recovered = new AppState({
-      data: previous.data,
-      version: (current.version || 1) + 1,
-      lastUpdated: new Date(),
-      lastSocketId: 'SYSTEM_RECOVERY'
-    });
-
-    await recovered.save();
-
-    console.log(`✅ [RECOVERY] Successfully promoted previous state to latest. New Version: ${recovered.version}`);
-    
-    // 🛡️ [AUDIT]
-    await logAudit(req, 'STATE_RECOVERY_EXECUTED', [], { 
-      fromVersion: current.version, 
-      toVersion: recovered.version,
-      restoredFrom: previous.lastUpdated
-    });
-
-    res.json({ 
-      success: true, 
-      message: `State recovered successfully. Restored data from ${previous.lastUpdated.toISOString()}.`,
-      newVersion: recovered.version
-    });
+    respond(res, result);
   }));
 
+  // ─── Admin Login (Step 1: Password → MFA) ─────────────────
   router.post('/admin/login', loginLimiter, asyncHandler(async (req, res) => {
     const { identifier, password } = req.body;
-    if (!identifier || !password) {
-      return res.status(400).json({ error: 'Username and Password are required.' });
-    }
+    if (!identifier || !password) return res.status(400).json({ error: 'Username and Password are required.' });
 
     const search = String(identifier).toLowerCase().trim();
-
-    // Only allow the 'admin' username/ID
     if (search !== 'admin') {
-      const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-      await logAudit(req, 'ADMIN_LOGIN_FAILED', [], { identifier: search, reason: 'invalid_admin_username', ip: clientIp });
+      await logAudit(req, 'ADMIN_LOGIN_FAILED', [], { identifier: search, reason: 'invalid_admin_username', ip: getClientIp(req) });
       return res.status(401).json({ error: 'Invalid administrator credentials.' });
     }
 
-    // 🛡️ SCALABILITY FIX (v2.6.316): Read from Player distinct collection
-    const adminDoc = await Player.findOne({ id: 'admin' }).select('+data.password').lean();
-    const adminUser = adminDoc?.data;
-
-    if (!adminUser || adminUser.role !== 'admin') {
+    const adminDoc = await AuthService.findUserByIdentifier('admin');
+    if (!adminDoc?.data || adminDoc.data.role !== 'admin') {
       return res.status(500).json({ error: 'Administrator account not found in system.' });
     }
 
-    const adminPassword = adminUser.password || '';
-    
-    // 🛡️ [SECURITY LOCKDOWN CHECK] (v2.6.212)
+    const adminUser = adminDoc.data;
     if (adminUser.loginBlockedUntil && adminUser.loginBlockedUntil > Date.now()) {
       const remaining = Math.ceil((adminUser.loginBlockedUntil - Date.now()) / 60000);
       return res.status(403).json({ error: `Security Lockdown: Account is temporarily blocked. Try again in ${remaining} minutes.` });
     }
 
-    // 🛡️ [VAPT-F02] (v2.6.556): Master key password bypass REMOVED per security audit.
-    // Emergency recovery must use the dedicated /admin/restore-last-state endpoint.
-    const isMasterKey = false;
-    // 🛡️ [CREDENTIAL_PURGE] (v2.6.620): Default password bypass REMOVED entirely.
-    // Previously allowed 'Password@123' in non-production when admin had no password set.
-    // Admin account must now have a proper hashed password set up via direct DB operation.
-    const isDefaultKey = false;
-
-    // 🛡️ [HARDENED AUTH ENGINE] (v2.6.319): Removed plaintext fallback
-    let isMatch = false;
-    try {
-      if (adminPassword.startsWith('$2a$') || adminPassword.startsWith('$2b$')) {
-        isMatch = await bcrypt.compare(password, adminPassword);
-      } else if (adminPassword) {
-        console.warn(`🛑 [SECURITY] Admin account has unhashed password. Forcing reset.`);
-        return res.status(401).json({ error: 'Your password needs to be reset for security. Use the Forgot Password flow.' });
-      }
-    } catch (e) {
-      console.error('[AUTH] Password comparison error:', e.message);
-      isMatch = false;
+    const verification = await AuthService.verifyPassword(password, adminUser.password || '');
+    if (verification.reason === 'unhashed_password') {
+      console.warn('🛑 [SECURITY] Admin account has unhashed password. Forcing reset.');
+      return res.status(401).json({ error: 'Your password needs to be reset for security. Use the Forgot Password flow.' });
     }
 
-    if (!isMatch && !isMasterKey && !isDefaultKey) {
+    if (!verification.match) {
       await trackLoginAttempt(req, search, password, false);
-      const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-      const geoLoc = await resolveIpGeo(clientIp);
-      // 🛡️ [CREDENTIAL_PURGE] (v2.6.620): Removed attemptedPassword — plaintext PW in audit logs is a security risk
-      await logAudit(req, 'ADMIN_LOGIN_FAILED', [], { reason: 'wrong_password', ip: clientIp, location: geoLoc });
+      const geoLoc = await AuthService.resolveIpGeo(getClientIp(req));
+      await logAudit(req, 'ADMIN_LOGIN_FAILED', [], { reason: 'wrong_password', ip: getClientIp(req), location: geoLoc });
       return res.status(401).json({ error: 'Invalid administrator credentials.' });
     }
 
     await trackLoginAttempt(req, search, password, true);
-
-    // Step 1 passed — generate MFA session token
-    // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Use crypto.randomBytes instead of blocking bcrypt.hashSync
-    const mfaToken = crypto.randomBytes(20).toString('hex');
-    
-    // 🛡️ [SCALABILITY] (v2.6.319): Store MFA token in MongoDB to support multi-instance deployments
-    await AdminMFA.create({
-      token: mfaToken,
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 min expiry
-    });
-
-    await logAudit(req, 'ADMIN_MFA_INITIATED', [], { userId: 'admin', ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
+    const mfaToken = await AuthService.createMfaSession();
+    await logAudit(req, 'ADMIN_MFA_INITIATED', [], { userId: 'admin', ip: getClientIp(req) });
     res.json({ success: true, requiresMFA: true, mfaToken });
   }));
 
+  // ─── Admin MFA (Step 2: PIN Verification) ─────────────────
   router.post('/admin/verify-pin', asyncHandler(async (req, res) => {
     const { mfaToken, pin } = req.body;
-    if (!mfaToken || !pin) {
-      return res.status(400).json({ error: 'MFA token and PIN are required.' });
-    }
+    if (!mfaToken || !pin) return res.status(400).json({ error: 'MFA token and PIN are required.' });
 
-    const session = await AdminMFA.findOne({ token: mfaToken });
-    if (!session) {
-      return res.status(401).json({ error: 'Invalid or expired MFA session. Please login again.' });
+    const mfaResult = await AuthService.verifyMfaSession(mfaToken);
+    if (!mfaResult.valid) {
+      return res.status(401).json({ error: mfaResult.reason === 'expired' ? 'MFA session expired. Please login again.' : 'Invalid or expired MFA session. Please login again.' });
     }
-
-    if (session.expiresAt < new Date()) {
-      await AdminMFA.deleteOne({ _id: session._id });
-      return res.status(401).json({ error: 'MFA session expired. Please login again.' });
-    }
-
-    session.attempts = (session.attempts || 0) + 1;
-    await session.save();
 
     if (pin !== ADMIN_MFA_PIN) {
       await trackLoginAttempt(req, 'admin_mfa', pin, false);
-    
-      // 🛡️ MFA MONITOR (v2.6.209): Immediate high-frequency monitoring for every PIN entered
-      await logAudit(req, 'MFA_MONITOR', [], { 
-        outcome: 'FAILURE', 
-        pinEntered: '****', // Masked for safety
-        message: 'Invalid MFA PIN attempt detected'
-      });
-
-      await logAudit(req, 'ADMIN_MFA_FAILED', [], { reason: 'wrong_pin', ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
+      await logAudit(req, 'MFA_MONITOR', [], { outcome: 'FAILURE', pinEntered: '****', message: 'Invalid MFA PIN attempt detected' });
+      await logAudit(req, 'ADMIN_MFA_FAILED', [], { reason: 'wrong_pin', ip: getClientIp(req) });
       return res.status(401).json({ error: 'Invalid PIN. Access denied.' });
     }
 
     await trackLoginAttempt(req, 'admin_mfa', pin, true);
 
-    // 🛡️ MFA MONITOR (v2.6.212): Interactive alert if user succeeds after brute-force
-    if (session.attempts > 5) {
-      await logAudit(req, 'BRUTE_FORCE_DETECTED', [], { 
-        TargetUser: 'admin_mfa', 
-        Passwords: `[HIDDEN_MFA_HISTORY]`, 
-        AttemptCount: session.attempts,
-        FailureCount: session.attempts - 1,
-        FinalOutcome: "SUCCESS (ALERT: Potential Unauthorized Access)",
-        Timeframe: 'MFA_SESSION'
-      });
+    if (mfaResult.session.attempts > 5) {
+      await logAudit(req, 'BRUTE_FORCE_DETECTED', [], { TargetUser: 'admin_mfa', Passwords: '[HIDDEN_MFA_HISTORY]', AttemptCount: mfaResult.session.attempts, FailureCount: mfaResult.session.attempts - 1, FinalOutcome: "SUCCESS (ALERT: Potential Unauthorized Access)", Timeframe: 'MFA_SESSION' });
     }
 
-    await logAudit(req, 'MFA_MONITOR', [], { 
-      outcome: 'SUCCESS', 
-      message: `Successful MFA PIN verification (Attempts: ${session.attempts})`
-    });
+    await logAudit(req, 'MFA_MONITOR', [], { outcome: 'SUCCESS', message: `Successful MFA PIN verification (Attempts: ${mfaResult.session.attempts})` });
+    await AuthService.consumeMfaSession(mfaResult.session._id);
+    await logAudit(req, 'ADMIN_LOGIN_SUCCESS', [], { userId: 'admin', ip: getClientIp(req) });
 
-    // MFA passed — consume token
-    await AdminMFA.deleteOne({ _id: session._id });
-
-    await logAudit(req, 'ADMIN_LOGIN_SUCCESS', [], { userId: 'admin', ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress });
-
-    // 🛡️ Success! Issue JWT with Admin scope (v2.6.190)
     const token = signToken({ id: 'admin', role: 'admin', scopes: ['*'] });
-
-    res.cookie('acetrack_session', token, {
-      path: '/',
-      httpOnly: true,
-      secure: IS_PRODUCTION,
-      sameSite: IS_PRODUCTION ? 'strict' : 'lax',
-      maxAge: 24 * 60 * 60 * 1000 // 🛡️ (v2.6.319): Aligned with JWT 24h expiry
-    });
-    attachCsrfCookie(res);
+    setSessionCookie(res, token);
 
     const isWeb = req.headers['sec-fetch-mode'] || req.headers['origin'];
     res.json({
-      success: true,
-      ...(isWeb ? {} : { token }),
-      user: {
-        id: 'admin',
-        name: 'System Admin',
-        role: 'admin',
-        avatar: 'https://ui-avatars.com/api/?name=Admin&background=random'
-      }
+      success: true, ...(isWeb ? {} : { token }),
+      user: { id: 'admin', name: 'System Admin', role: 'admin', avatar: 'https://ui-avatars.com/api/?name=Admin&background=random' }
     });
   }));
 
-  // 🛡️ LOGOUT: Clear secure session (v2.6.258)
+  // ─── Logout ────────────────────────────────────────────────
   router.post('/logout', (req, res) => {
     res.clearCookie('acetrack_session');
     res.clearCookie('acetrack_csrf');
     res.json({ success: true, message: 'Logged out successfully' });
   });
 
-  // ═══════════════════════════════════════════════════════════════
-  // 🧑‍💻 REGULAR USER LOGIN
-  // ═══════════════════════════════════════════════════════════════
+  // ─── Regular User Login ────────────────────────────────────
   router.post('/user/login', loginLimiter, asyncHandler(async (req, res) => {
     const { identifier, password } = req.body;
-    if (!identifier || !password) {
-      return res.status(400).json({ error: 'Username/Email and Password are required.' });
-    }
+    if (!identifier || !password) return res.status(400).json({ error: 'Username/Email and Password are required.' });
 
     const search = String(identifier).toLowerCase().trim();
-    if (search === 'admin') {
-      return res.status(403).json({ error: 'Access Denied. Use the administrator login.' });
-    }
+    if (search === 'admin') return res.status(403).json({ error: 'Access Denied. Use the administrator login.' });
 
-    const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const searchReg = new RegExp(`^${escapedSearch}$`, 'i');
-    
-    // Search for regular users, excluding admin and support
-    const userDoc = await Player.findOne({
-      $or: [
-        { "data.email": searchReg },
-        { id: searchReg },
-        { "data.username": searchReg }
-      ]
-    }).select('+data.password').lean();
-    
+    const userDoc = await AuthService.findUserByIdentifier(search);
     const user = userDoc?.data;
 
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid User' });
-    }
-    
-    if (user.role === 'admin' || user.role === 'support') {
-      // 🛡️ SECURITY: Obfuscate staff accounts by returning generic 'Invalid User'
-      return res.status(401).json({ error: 'Invalid User' });
+    if (!user) return res.status(401).json({ error: 'Invalid User' });
+    if (user.role === 'admin' || user.role === 'support') return res.status(401).json({ error: 'Invalid User' });
+
+    if (!user.password) return res.status(401).json({ error: 'Account not fully set up. Please reset your password.' });
+
+    const verification = await AuthService.verifyPassword(password, user.password);
+    if (verification.reason === 'unhashed_password') {
+      console.warn(`🛑 [SECURITY] Account ${user.id} has unhashed password. Forcing reset.`);
+      return res.status(401).json({ error: 'Your password needs to be reset for security. Use the Forgot Password flow.' });
     }
 
-    const userPassword = user.password;
-    if (!userPassword) {
-      return res.status(401).json({ error: 'Account not fully set up. Please reset your password.' });
-    }
-    
-    let isMatch = false;
-    try {
-      if (userPassword.startsWith('$2a$') || userPassword.startsWith('$2b$')) {
-        isMatch = await bcrypt.compare(password, userPassword);
-      } else {
-        console.warn(`🛑 [SECURITY] Account ${user.id} has unhashed password. Forcing reset.`);
-        return res.status(401).json({ error: 'Your password needs to be reset for security. Use the Forgot Password flow.' });
-      }
-    } catch (e) {
-      console.error('[AUTH] Password comparison error:', e.message);
-      isMatch = false;
-    }
-
-    if (!isMatch) {
+    if (!verification.match) {
       await trackLoginAttempt(req, search, password, false);
       return res.status(401).json({ error: 'Invalid password.' });
     }
 
     await trackLoginAttempt(req, search, password, true);
-
     const { password: _pw, pushTokens, devices, ...safeUser } = user;
-    
-    // Issue JWT with Basic scope
-    const token = signToken({ 
-      id: user.id, 
-      role: user.role || 'user', 
-      scopes: ['read:basic'] 
-    });
-
-    res.cookie('acetrack_session', token, {
-      path: '/',
-      httpOnly: true,
-      secure: IS_PRODUCTION,
-      sameSite: IS_PRODUCTION ? 'strict' : 'lax',
-      maxAge: 24 * 60 * 60 * 1000 // 🛡️ (v2.6.319): Aligned with JWT 24h expiry
-    });
-    attachCsrfCookie(res);
+    const token = signToken({ id: user.id, role: user.role || 'user', scopes: ['read:basic'] });
+    setSessionCookie(res, token);
 
     const isWeb = req.headers['sec-fetch-mode'] || req.headers['origin'];
     res.json({ success: true, ...(isWeb ? {} : { token }), user: safeUser });
   }));
 
-  // ═══════════════════════════════════════════════════════════════
-  // 🔐 SUPPORT STAFF LOGIN (v2.6.170)
-  // ═══════════════════════════════════════════════════════════════
-
+  // ─── Support Staff Login ───────────────────────────────────
   router.post('/support/login', loginLimiter, asyncHandler(async (req, res) => {
     const { identifier, password } = req.body;
-    if (!identifier || !password) {
-      return res.status(400).json({ error: 'Username/Email and Password are required.' });
-    }
+    if (!identifier || !password) return res.status(400).json({ error: 'Username/Email and Password are required.' });
 
     const search = String(identifier).toLowerCase().trim();
+    if (search === 'admin') return res.status(403).json({ error: 'Access Denied. Use the administrator login.' });
 
-    // 🛡️ ADMIN GUARD: Block support login attempts using the admin account
-    if (search === 'admin') {
-      return res.status(403).json({ error: 'Access Denied. Use the administrator login.' });
-    }
-
-    // 🕵️ SUPER DIAGNOSTIC: Log EXACTLY what the browser sent
     await logAudit(req, 'DEBUG_SUPPORT_LOGIN_PAYLOAD', [], { receivedIdentifier: identifier, processedSearch: search });
 
-    // 🛡️ [PRODUCTION HARDENING] (v2.6.319): O(1) indexed lookup instead of loading ALL players
-    const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const searchReg = new RegExp(`^${escapedSearch}$`, 'i');
-    const supportDoc = await Player.findOne({
-      "data.role": "support",
-      $or: [
-        { "data.email": searchReg },
-        { id: searchReg },
-        { "data.username": searchReg },
-        { "data.name": searchReg }
-      ]
-    }).select('+data.password').lean();
+    const supportDoc = await AuthService.findSupportUser(search);
     const supportUser = supportDoc?.data;
     console.log(`[DIAG] Support Login Attempt: ${search} | Found: ${!!supportUser}`);
 
     if (!supportUser) {
-      // 🕵️ DEEP DIAGNOSTIC: Find if the user exists AT ALL but has the wrong role
-      const anyUserDoc = await Player.findOne({
-        $or: [
-          { "data.email": searchReg },
-          { id: searchReg },
-          { "data.username": searchReg }
-        ]
-      }).lean();
-      const anyUser = anyUserDoc?.data;
-      
-      await logAudit(req, 'DEBUG_SUPPORT_LOGIN_FAILED_SEARCH', [], { 
-        search, 
-        foundAnyUser: !!anyUser, 
-        foundRole: anyUser ? anyUser.role : null
-      });
-
-      if (anyUser) {
-        await logAudit(req, 'SUPPORT_LOGIN_DENIED_ROLE', [], { identifier: search, foundRole: anyUser.role, status: anyUser.supportStatus });
-      }
+      const anyDoc = await AuthService.findUserByIdentifier(search);
+      const anyUser = anyDoc?.data;
+      await logAudit(req, 'DEBUG_SUPPORT_LOGIN_FAILED_SEARCH', [], { search, foundAnyUser: !!anyUser, foundRole: anyUser?.role || null });
+      if (anyUser) await logAudit(req, 'SUPPORT_LOGIN_DENIED_ROLE', [], { identifier: search, foundRole: anyUser.role, status: anyUser.supportStatus });
       return res.status(401).json({ error: 'Access Denied. This portal is for AceTrack Administrators and Support Staff only.' });
     }
 
-
-    // 🛡️ [SECURITY LOCKDOWN CHECK] (v2.6.213)
     if (supportUser.loginBlockedUntil && supportUser.loginBlockedUntil > Date.now()) {
       const remaining = Math.ceil((supportUser.loginBlockedUntil - Date.now()) / 60000);
       return res.status(403).json({ error: `Security Lockdown: Your account is temporarily blocked. Try again in ${remaining} minutes.` });
     }
 
-    if (supportUser.supportStatus === 'terminated' || supportUser.supportStatus === 'inactive' || supportUser.supportStatus === 'suspended') {
+    if (['terminated', 'inactive', 'suspended'].includes(supportUser.supportStatus)) {
       await logAudit(req, 'DEBUG_SUPPORT_LOGIN_DEACTIVATED', [], { identifier: search, status: supportUser.supportStatus });
       return res.status(403).json({ error: 'Access Suspended: Your employment profile has been deactivated.' });
     }
 
-    const userPassword = supportUser.password;
-    if (!userPassword) {
-      return res.status(401).json({ error: 'Account not fully set up. Please use the password reset flow.' });
-    }
-    
-    // 🛡️ [HARDENED AUTH ENGINE] (v2.6.319): Removed plaintext fallback
-    let isMatch = false;
-    try {
-      if (userPassword.startsWith('$2a$') || userPassword.startsWith('$2b$')) {
-        isMatch = await bcrypt.compare(password, userPassword);
-      } else {
-        console.warn(`🛑 [SECURITY] Account ${supportUser.id} has unhashed password. Forcing reset.`);
-        return res.status(401).json({ error: 'Your password needs to be reset for security. Use the Forgot Password flow.' });
-      }
-    } catch (e) {
-      console.error('[AUTH] Password comparison error:', e.message);
-      isMatch = false;
+    if (!supportUser.password) return res.status(401).json({ error: 'Account not fully set up. Please use the password reset flow.' });
+
+    const verification = await AuthService.verifyPassword(password, supportUser.password);
+    if (verification.reason === 'unhashed_password') {
+      console.warn(`🛑 [SECURITY] Account ${supportUser.id} has unhashed password. Forcing reset.`);
+      return res.status(401).json({ error: 'Your password needs to be reset for security. Use the Forgot Password flow.' });
     }
 
-    if (!isMatch) {
+    if (!verification.match) {
       await trackLoginAttempt(req, search, password, false);
-      await logAudit(req, 'DEBUG_SUPPORT_LOGIN_WRONG_PASSWORD', [], { 
-        identifier: search, 
-        expectedPwLength: userPassword.length, 
-        receivedPwLength: password.length 
-      });
-      const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-      const geoLoc = await resolveIpGeo(clientIp);
-      // 🛡️ [CREDENTIAL_PURGE] (v2.6.620): Removed attemptedPassword — plaintext PW in audit logs is a security risk
-      await logAudit(req, 'SUPPORT_LOGIN_FAILED', [], { identifier: search, reason: 'wrong_password', ip: clientIp, location: geoLoc });
+      await logAudit(req, 'DEBUG_SUPPORT_LOGIN_WRONG_PASSWORD', [], { identifier: search, expectedPwLength: supportUser.password.length, receivedPwLength: password.length });
+      const geoLoc = await AuthService.resolveIpGeo(getClientIp(req));
+      await logAudit(req, 'SUPPORT_LOGIN_FAILED', [], { identifier: search, reason: 'wrong_password', ip: getClientIp(req), location: geoLoc });
       return res.status(401).json({ error: 'Invalid password for support account.' });
     }
 
     await trackLoginAttempt(req, search, password, true);
-    
-    // 🛡️ [CONCURRENT SESSION MANAGEMENT] (v2.6.214)
-    // Limit support employees to 2 active sessions
-    // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Use crypto.randomBytes instead of blocking bcrypt.hashSync
-    const jti = crypto.randomBytes(16).toString('hex');
-    const activeSessions = [...(supportUser.activeSessions || [])];
-    
-    // Add current session
-    activeSessions.push({ jti, iat: Date.now() });
-    
-    // Keep only the most recent 2 sessions
-    const rotatedSessions = activeSessions.sort((a, b) => b.iat - a.iat).slice(0, 2);
-    
-    // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Removed syncMutex — Player.updateOne is atomic
-    // 🕐 [SESSION FIX] (v2.6.345): Seed session immediately upon login so attendance tracking catches it even if WebSocket fails
-    const now = Date.now();
-    await Player.updateOne(
-      { id: supportUser.id },
-      { $set: { 
-          "data.activeSessions": rotatedSessions, 
-          "data.isLive": true, 
-          "data.liveSessionStart": now,
-          "data.lastActive": now,
-          lastUpdated: new Date() 
-        } 
-      }
-    );
 
-    // Strip sensitive fields before sending the user object back
+    const jti = await AuthService.createSupportSession(supportUser.id);
     const { password: _pw, pushTokens, devices, ...safeUser } = supportUser;
 
     await logAudit(req, 'SUPPORT_LOGIN_SUCCESS', [], { userId: supportUser.id, email: supportUser.email, identifier: search });
-    
-    // 🛡️ Success! Issue JWT with Support scope and unique JTI (v2.6.214)
-    const token = signToken({ 
-      id: supportUser.id, 
-      role: 'support', 
-      scopes: ['read:basic', 'write:tickets'] 
-    }, jti);
 
-    res.cookie('acetrack_session', token, {
-      path: '/',
-      httpOnly: true,
-      secure: IS_PRODUCTION,
-      sameSite: IS_PRODUCTION ? 'strict' : 'lax',
-      maxAge: 24 * 60 * 60 * 1000 // 🛡️ (v2.6.319): Aligned with JWT 24h expiry
-    });
-    attachCsrfCookie(res);
+    const token = signToken({ id: supportUser.id, role: 'support', scopes: ['read:basic', 'write:tickets'] }, jti);
+    setSessionCookie(res, token);
 
     const isWeb = req.headers['sec-fetch-mode'] || req.headers['origin'];
     res.json({ success: true, ...(isWeb ? {} : { token }), user: safeUser });
-
   }));
 
-  // ═══════════════════════════════════════════════════════════════
-  // 🔒 PASSWORD RESET FLOW
-  // ═══════════════════════════════════════════════════════════════
-
-  // 1. Request Password Reset (Email Link)
+  // ─── Password Reset: Request ───────────────────────────────
   router.post('/support/password-reset/request', passwordResetLimiter, asyncHandler(async (req, res) => {
-    const { identifier } = req.body; // Can be email or username
+    const { identifier } = req.body;
     if (!identifier) return res.status(400).json({ error: 'Email or Username required' });
 
     const search = identifier.toLowerCase().trim();
-    
-    // 🛡️ ADMIN GUARD: Block any reset attempts for the primary admin account
     if (search === 'admin') {
-      return res.status(403).json({ 
-        error: 'Security Violation', 
-        message: 'Password reset is not permitted for the system administrator account via this portal. Contact technical support for master account recovery.' 
-      });
+      return res.status(403).json({ error: 'Security Violation', message: 'Password reset is not permitted for the system administrator account via this portal. Contact technical support for master account recovery.' });
     }
 
-    // 🛡️ SCALABILITY FIX (v2.6.316): Read from Player distinct collection efficiently
-    const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const searchReg = new RegExp(`^${escapedSearch}$`, 'i');
-    const userDoc = await Player.findOne({
-      $or: [
-        { "data.email": searchReg },
-        { id: searchReg },
-        { "data.username": searchReg },
-        { "data.name": searchReg }
-      ]
-    }).lean();
-    
-    console.log(`[DIAG] Recovery Attempt: ${search} | Found: ${!!userDoc}`);
-    const user = userDoc ? userDoc.data : null;
+    const userDoc = await AuthService.findUserByIdentifier(search);
+    const user = userDoc?.data;
+    if (!user) return res.json({ success: true, message: 'If an account exists, a recovery link has been sent.' });
+    if (!user.email) return res.status(400).json({ error: 'This account does not have a registered email address. Contact support.' });
 
-    if (!user) {
-      // 🛡️ SECURITY: Use generic message to prevent account enum
-      return res.json({ success: true, message: 'If an account exists, a recovery link has been sent.' });
-    }
-    
-    if (!user.email) {
-      return res.status(400).json({ error: 'This account does not have a registered email address. Contact support.' });
-    }
-
-    // 🛡️ [PRODUCTION HARDENING] (v2.6.319): Use crypto.randomBytes instead of blocking bcrypt.hashSync
-    const token = crypto.randomBytes(16).toString('hex');
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-    await SupportPasswordReset.create({ email: user.email, token, expiresAt });
-    
+    const { token, expiresAt } = await AuthService.createPasswordResetToken(user.email);
     const resetLink = `https://acetrack-suggested.onrender.com/reset-password/${token}`;
-    
+
     console.log(`📧 [RESET] Dispatching reset email to ${user.email} (link: .../${token.substring(0,8)}...)`);
     const emailStatus = await sendPasswordResetEmail(user.email, resetLink, expiresAt.toISOString(), user.firstName || user.name || '');
 
@@ -759,121 +315,43 @@ export default function createAuthRoutes({
     res.json({ success: true, message: 'Recovery link sent to your registered email.' });
   }));
 
-  // 2. Confirm Password Reset (No API Key guard as the token is the secret)
+  // ─── Password Reset: Confirm ───────────────────────────────
   router.post('/support/password-reset/confirm', asyncHandler(async (req, res) => {
     const { token, newPassword } = req.body;
     if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password required' });
 
-    const resetReq = await SupportPasswordReset.findOne({ token, expiresAt: { $gt: new Date() } });
-    if (!resetReq) return res.status(400).json({ error: 'Invalid or expired reset token' });
-
-    // 🛡️ SCALABILITY FIX (v2.6.316): Read and write via Player distinct collection
-    const escapedEmail = resetReq.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const agentDoc = await Player.findOne({ "data.email": { $regex: new RegExp(`^${escapedEmail}$`, 'i') }, "data.role": "support" }).lean();
-    
-    if (!agentDoc || agentDoc.id === 'admin') return res.status(404).json({ error: 'User account not found' });
-
-    // Update password directly in the Player collection
-    const hashedPassword = bcrypt.hashSync(newPassword, 10);
-    await Player.updateOne(
-      { id: agentDoc.id },
-      { $set: { "data.password": hashedPassword, "data.devices": [], lastUpdated: new Date() } }
-    );
-
-    await SupportPasswordReset.deleteOne({ token });
-
-    await logAudit(req, 'SUPPORT_PASSWORD_RESET_SUCCESS', [], { email: resetReq.email });
-
-    res.json({ success: true, message: 'Password updated successfully. You can now login.' });
-
-  }));
-
-  // ═══════════════════════════════════════════════════════════════
-  // 🛡️ USERNAME AVAILABILITY CHECK (v2.6.436)
-  // ═══════════════════════════════════════════════════════════════
-  router.post('/check-username', apiKeyGuard, asyncHandler(async (req, res) => {
-    const { username } = req.body;
-    if (!username) return res.status(400).json({ error: 'Username required' });
-    
-    const search = String(username).toLowerCase().trim();
-    if (search === 'admin') return res.json({ available: false });
-    
-    const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const searchReg = new RegExp(`^${escapedSearch}$`, 'i');
-    
-    const existing = await Player.findOne({
-      $or: [
-        { id: searchReg },
-        { "data.username": searchReg }
-      ]
-    }).lean();
-    
-    res.json({ available: !existing });
-  }));
-
-  // ═══════════════════════════════════════════════════════════════
-  // 👥 PARTNER LOOKUP BY PHONE (Doubles Registration)
-  // ═══════════════════════════════════════════════════════════════
-  router.get('/user/lookupByPhone', apiKeyGuard, phoneLookupLimiter, asyncHandler(async (req, res) => {
-    const { phone } = req.query;
-    if (!phone) return res.status(400).json({ error: 'Phone number required' });
-    
-    const searchPhone = String(phone).trim();
-    const escapedSearch = searchPhone.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const searchReg = new RegExp(`^${escapedSearch}$`, 'i');
-    
-    const userDoc = await Player.findOne({ "data.phone": searchReg, "data.role": { $ne: "admin" } }).lean();
-    
-    if (!userDoc || !userDoc.data) {
-      return res.status(404).json({ error: 'No user found with this phone number' });
+    const result = await AuthService.consumePasswordResetToken(token, newPassword);
+    if (!result.success) {
+      return res.status(result.reason === 'user_not_found' ? 404 : 400).json({
+        error: result.reason === 'user_not_found' ? 'User account not found' : 'Invalid or expired reset token'
+      });
     }
-    
-    // Only return safe, necessary details
-    res.json({ 
-      success: true, 
-      user: { 
-        id: userDoc.data.id, 
-        name: userDoc.data.name || userDoc.data.username,
-        gender: userDoc.data.gender
-      } 
-    });
+
+    await logAudit(req, 'SUPPORT_PASSWORD_RESET_SUCCESS', [], { email: result.email });
+    res.json({ success: true, message: 'Password updated successfully. You can now login.' });
   }));
 
-  // ═══════════════════════════════════════════════════════════════
-  // 🏆 PRO SUBSCRIPTION API (Phase 2.2)
-  // ═══════════════════════════════════════════════════════════════
+  // ─── Username Availability ─────────────────────────────────
+  router.post('/check-username', apiKeyGuard, asyncHandler(async (req, res) => {
+    if (!req.body.username) return res.status(400).json({ error: 'Username required' });
+    const available = await AuthService.checkUsernameAvailability(req.body.username);
+    res.json({ available });
+  }));
+
+  // ─── Partner Lookup by Phone ───────────────────────────────
+  router.get('/user/lookupByPhone', apiKeyGuard, phoneLookupLimiter, asyncHandler(async (req, res) => {
+    if (!req.query.phone) return res.status(400).json({ error: 'Phone number required' });
+    const user = await AuthService.lookupByPhone(req.query.phone);
+    if (!user) return res.status(404).json({ error: 'No user found with this phone number' });
+    res.json({ success: true, user });
+  }));
+
+  // ─── Pro Subscription ─────────────────────────────────────
   router.post('/user/subscribe', apiKeyGuard, asyncHandler(async (req, res) => {
     const userId = req.headers['x-user-id'] || req.user?.id;
-    const { tier } = req.body; // 'monthly' or 'annual'
-    
-    if (!userId) {
-      return res.status(401).json({ success: false, error: 'User ID required' });
-    }
-
-    const playerDoc = await Player.findOne({ id: userId }).lean();
-    if (!playerDoc || !playerDoc.data) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-
-    const durationDays = tier === 'annual' ? 365 : 30;
-    const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
-
-    await Player.updateOne(
-      { id: userId },
-      { 
-        $set: { 
-          "data.isPro": true,
-          "data.proTier": tier || 'monthly',
-          "data.proExpiresAt": expiresAt,
-          lastUpdated: new Date() 
-        } 
-      }
-    );
-
-    const updatedDoc = await Player.findOne({ id: userId }).lean();
-    const { password: _pw, pushTokens, devices, ...safeUser } = updatedDoc.data;
-
-    res.json({ success: true, user: safeUser });
+    if (!userId) return res.status(401).json({ success: false, error: 'User ID required' });
+    const result = await AuthService.subscribePro(userId, req.body.tier);
+    respond(res, result);
   }));
 
   return router;
