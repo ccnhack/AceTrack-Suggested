@@ -8,9 +8,10 @@ import styles from "../AdminSupportTeamPanel.styles";
 
 export const AttendanceModal = (props) => {
   const {
-    showAttendanceModal, setShowAttendanceModal, attendanceData, selectedAgentId, isLoadingAttendance,
+    showAttendanceModal, setShowAttendanceModal, selectedAgent, auditLogs, setShowActiveSessionsOnly, showActiveSessionsOnly, setSelectedSessionForActivity, selectedAgentStats,
+    attendanceData, selectedAgentId, isLoadingAttendance,
     fetchAttendance, attendanceRangeMode, attendanceDateFilter, attendanceEndDateFilter,
-    getLocalDateString, selectedAgent, calendarMonth, setCalendarMonth, attendanceCalendarMode,
+    getLocalDateString, calendarMonth, setCalendarMonth, attendanceCalendarMode,
     setAttendanceCalendarMode, selectedLeaveDate, setSelectedLeaveDate, setAttendanceRangeMode,
     setShowDatePicker, setShowEndDatePicker, showDatePicker, showEndDatePicker,
     setAttendanceDateFilter, setAttendanceEndDateFilter

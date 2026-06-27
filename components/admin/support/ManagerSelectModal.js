@@ -4,10 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import styles from "../AdminSupportTeamPanel.styles";
 
 export const ManagerSelectModal = (props) => {
-  const {
-    showManagerSelect, setShowManagerSelect, selectedAgent, availableManagers, availableTeamLeads,
-    handleAssignHierarchy, isAssigningManager, reportCounts
-  } = props;
+  const { showManagerSelect, setShowManagerSelect, selectedAgent, availableManagers, availableTeamLeads, handleAssignHierarchy, isAssigningManager, reportCounts, showRoleConfirmModal, setShowRoleConfirmModal, setPendingRoleChange, pendingRoleChange, roleChangeComment, setRoleChangeComment, updateUserStatus } = props;
   
   return (
       <Modal

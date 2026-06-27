@@ -3,10 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import styles from "../AdminSupportTeamPanel.styles";
 
-export const ActivityModal = (props) => {
-  const {
-    showActivityModal, setShowActivityModal, selectedSessionForActivity, sessionActivities, formatDuration
-  } = props;
+export const ActivityModal = ({ showActivityModal, setShowActivityModal, selectedSessionForActivity, sessionActivities, formatDuration, selectedAgentStats }) => {
   
   return (
       <Modal visible={showActivityModal} transparent animationType="fade" onRequestClose={() => setShowActivityModal(false)}>

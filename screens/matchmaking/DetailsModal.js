@@ -5,6 +5,8 @@ import SafeAvatar from '../../components/SafeAvatar';
 import styles from "./MatchmakingScreen.styles";
 
 export const DetailsModal = (props) => {
+  const { showMatchDetails, setShowMatchDetails, selectedMatch, renderDate, formatVenue, handleCancelBooking } = props;
+
   const { 
     isDetailsModalVisible, setIsDetailsModalVisible, selectedChallenge, getOpponentName, getOpponentStats,
     getTournamentDetails, user, handleAcceptChallenge, handleAcceptCountered, handleCounter, handleDeclineChallenge, 

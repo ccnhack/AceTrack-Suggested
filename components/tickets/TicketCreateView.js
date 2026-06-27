@@ -9,9 +9,7 @@ const TICKET_TYPES = [
 ];
 
 export const TicketCreateView = (props) => {
-  const {
-    setView, formData, setFormData, showTypePicker, setShowTypePicker, handleCreate
-  } = props;
+  const { setView, showTypePicker, setShowTypePicker, formData, setFormData, handleCreate, showAgentPicker, setShowAgentPicker, filterAgentId, setFilterAgentId, availableAgents, TICKET_TYPES } = props;
   
 
     return (
