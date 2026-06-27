@@ -38,6 +38,7 @@ import {
   createRateLimiters,
   generateCsrfToken, csrfGuard
 } from './middleware/security.mjs';
+import { notFoundHandler, globalErrorHandler } from './middleware/errorHandler.mjs';
 
 // Route modules
 import createAuthRoutes from './routes/auth.mjs';
@@ -391,24 +392,10 @@ const webRoutes = createWebRoutes({ APP_VERSION });
 app.use('/', webRoutes);
 
 // 404 Handler
-app.use((req, res, next) => {
-  if (req.path.startsWith('/api')) {
-    res.status(404).json({ success: false, error: `Resource not found: ${req.method} ${req.originalUrl}` });
-  } else {
-    next();
-  }
-});
+app.use(notFoundHandler);
 
 // Centralized Error Handler
-app.use((err, req, res, next) => {
-  const status = err.status || 500;
-  const message = err.message || 'Internal Server Error';
-  if (status >= 500) {
-    console.error(`❌ [SERVER_ERROR] ${req.method} ${req.url}:`, err.stack);
-    logServerEvent('CRITICAL_ERROR', { url: req.url, error: message });
-  }
-  res.status(status).json({ "success": false, "error": message, "version": '2.6.714', "timestamp": getISTDate() });
-});
+app.use(globalErrorHandler(logServerEvent, APP_VERSION));
 
 // ═══════════════════════════════════════════════════════════════
 // Start Server
@@ -428,3 +415,34 @@ server.on('error', (e) => {
     console.error('❌ Server binding error:', e);
   }
 });
+
+// ═══════════════════════════════════════════════════════════════
+// Graceful Shutdown
+// ═══════════════════════════════════════════════════════════════
+const shutdown = async (signal) => {
+  console.log(`\n🛑 Received ${signal}. Initiating graceful shutdown...`);
+  
+  // Close HTTP server first (stop accepting new requests)
+  server.close(() => {
+    console.log('HTTP server closed.');
+  });
+  
+  // Close database connection
+  try {
+    if (mongoose.connection.readyState === 1) {
+      await mongoose.connection.close(false);
+      console.log('MongoDB connection closed.');
+    }
+  } catch (err) {
+    console.error('Error closing MongoDB connection:', err);
+  }
+
+  // Allow outstanding tasks to finish, but force exit after 10s
+  setTimeout(() => {
+    console.error('Forcing shutdown due to timeout.');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
