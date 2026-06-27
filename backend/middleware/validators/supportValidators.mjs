@@ -27,10 +27,10 @@ export const createTicketSchema = z.object({
 });
 
 export const updateTicketStatusSchema = z.object({
-  status: z.enum(['open', 'in_progress', 'resolved', 'closed']),
-});
+  ticketId: z.string(),
+  status: z.string()
+}).passthrough();
 
 export const sendChatMessageSchema = z.object({
-  message: z.string().min(1, "Message cannot be empty"),
-  sender: z.enum(['user', 'support', 'admin', 'system']).optional(), // Defaults to user in route
-});
+  ticketId: z.string()
+}).passthrough();

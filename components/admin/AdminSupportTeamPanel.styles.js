@@ -1,5 +1,5 @@
 import { colors, shadows, typography, borderRadius, spacing } from '../../theme/designSystem';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },

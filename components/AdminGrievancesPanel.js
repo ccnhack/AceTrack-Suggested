@@ -190,6 +190,9 @@ export const AdminGrievancesPanel = ({
 
   // 🔦 Handle Session Activity highlight
   useEffect(() => {
+    let timeoutId = null;
+    let intervalId = null;
+
     if (selectedTicket && highlightActionTimestamp && messageYOffsets.current) {
       const actionTime = new Date(highlightActionTimestamp).getTime();
       let closestMsg = null;
@@ -208,7 +211,7 @@ export const AdminGrievancesPanel = ({
       if (closestMsg) {
         const msgId = closestMsg.id || closestMsg.timestamp;
         
-        setTimeout(() => {
+        timeoutId = setTimeout(() => {
           const targetY = messageYOffsets.current[msgId];
           if (targetY !== undefined) {
             scrollViewRef.current?.scrollTo({ y: Math.max(0, targetY - 50), animated: true });
@@ -217,11 +220,11 @@ export const AdminGrievancesPanel = ({
             setIsBlinkVisible(true);
             
             let blinkCount = 0;
-            const interval = setInterval(() => {
+            intervalId = setInterval(() => {
               setIsBlinkVisible(prev => !prev);
               blinkCount++;
               if (blinkCount >= 5) { // 3 blinks (true->false->true->false->true->false)
-                clearInterval(interval);
+                if (intervalId) clearInterval(intervalId);
                 setBlinkHighlightedId(null);
                 setIsBlinkVisible(false);
               }
@@ -230,6 +233,11 @@ export const AdminGrievancesPanel = ({
         }, 500); // Wait for rendering
       }
     }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (intervalId) clearInterval(intervalId);
+    };
   }, [selectedTicket?.id, highlightActionTimestamp]);
 
   // 🔍 Conversational Search Logic (v2.6.33)
