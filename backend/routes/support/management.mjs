@@ -198,7 +198,11 @@ router.get('/support/attendance', apiKeyGuard, authGuard, async (req, res) => {
         allSessions: sessions, // For client-side date filtering
         recentSessions,
         lastSeen,
-        totalSessionCount: sessions.length
+        totalSessionCount: sessions.length,
+        shiftStatus: agent.shiftStatus,
+        shiftCheckinAt: agent.shiftCheckinAt,
+        shiftCheckoutAt: agent.shiftCheckoutAt,
+        shiftCheckoutDue: agent.shiftCheckoutDue
       };
     });
 
@@ -391,7 +395,11 @@ router.get('/support/analytics', apiKeyGuard, authGuard, async (req, res) => {
           isCurrentlyOnline,
           todayActiveMs,
           totalSessions: agentSessions.length,
-          lastSeen: isCurrentlyOnline ? 'Now' : (agentSessions[agentSessions.length - 1]?.endTime || null)
+          lastSeen: isCurrentlyOnline ? 'Now' : (agentSessions[agentSessions.length - 1]?.endTime || null),
+          shiftStatus: agent.shiftStatus,
+          shiftCheckinAt: agent.shiftCheckinAt,
+          shiftCheckoutAt: agent.shiftCheckoutAt,
+          shiftCheckoutDue: agent.shiftCheckoutDue
         }
       };
     });
