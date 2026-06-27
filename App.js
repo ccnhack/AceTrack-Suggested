@@ -109,6 +109,7 @@ const linking = {
   config: {
     screens: {
       SupportSetup: 'setup/:token',
+      Landing: 'Landing',
       Login: 'login',
       Signup: 'signup',
       Main: {
