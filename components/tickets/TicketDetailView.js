@@ -1,7 +1,8 @@
 import React, { useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, Modal, KeyboardAvoidingView, Platform, Image, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Swipeable } from 'react-native-gesture-handler';
+import { Swipeable as RawSwipeable } from 'react-native-gesture-handler';
+const Swipeable = Platform.OS === 'web' ? View : (RawSwipeable.default || RawSwipeable);
 import config from '../../config';
 import { generateAIResponse } from '../../services/aiService';
 import styles from "../tickets/SupportTicketSystem.styles";

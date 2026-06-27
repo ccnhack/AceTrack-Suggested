@@ -6,7 +6,8 @@ import {
 import { apiFetch } from '../utils/apiFetch';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Swipeable } from 'react-native-gesture-handler';
+import { Swipeable as RawSwipeable } from 'react-native-gesture-handler';
+const Swipeable = Platform.OS === 'web' ? View : (RawSwipeable.default || RawSwipeable);
 import { generateAIResponse } from '../services/aiService';
 import notify from '../utils/notify';
 import config from '../config';
