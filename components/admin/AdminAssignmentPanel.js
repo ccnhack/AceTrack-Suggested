@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, borderRadius, shadows } from '../../theme/designSystem';
 import { usePlayersStore } from '../../stores';
 import { useTournamentsStore } from '../../stores';
-import { useAdmin } from '../../context/AdminContext';
+import { useAdminStore as useAdmin } from '../../stores/useAdminStore';
 
 const AdminAssignmentPanel = ({ search = '' }) => {
   const { players } = usePlayersStore();

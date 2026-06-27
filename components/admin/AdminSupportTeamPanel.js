@@ -6,7 +6,7 @@ import { colors, shadows } from '../../theme/designSystem';
 import config from '../../config';
 import storage from '../../utils/storage';
 import { usePlayersStore } from '../../stores';
-import { useAdmin } from '../../context/AdminContext';
+import { useAdminStore as useAdmin } from '../../stores/useAdminStore';
 import SafeAvatar from '../SafeAvatar';
 import PureJSDateTimePicker from '../PureJSDateTimePicker';
 import { useAuth } from '../../context/AuthContext';

@@ -31,7 +31,7 @@ import { usePlayersStore } from '../stores';
 import { useTournamentsStore } from '../stores';
 import { useVideoStore } from '../stores';
 import { useSupportStore } from '../stores';
-import { useAdmin } from '../context/AdminContext';
+import { useAdminStore as useAdmin } from '../stores/useAdminStore';
 import { useSync } from '../context/SyncContext';
 import { useMatchmaking } from '../context/MatchmakingContext';
 import { useAuth } from '../context/AuthContext';

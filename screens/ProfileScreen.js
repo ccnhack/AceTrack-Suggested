@@ -47,7 +47,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTournamentsStore, usePlayersStore, useSupportStore } from '../stores';
 import { useEvaluationsStore } from '../stores/useEvaluationsStore';
 import { useSync } from '../context/SyncContext';
-import { useAdmin } from '../context/AdminContext';
+import { useAdminStore as useAdmin } from '../stores/useAdminStore';
 import { useApp } from '../context/AppContext';
 
 const ProfileScreen = ({ navigation, route }) => {

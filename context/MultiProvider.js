@@ -12,7 +12,7 @@ import config from '../config';
 const APP_VERSION = config.APP_VERSION;
 
 
-import { AdminProvider } from './AdminContext';
+
 import { MatchmakingProvider } from './MatchmakingContext';
 
 export const MultiProvider = ({ children }) => {
@@ -20,11 +20,9 @@ export const MultiProvider = ({ children }) => {
     <AppProvider initialVersion={APP_VERSION}>
       <SyncProvider>
         <AuthProvider>
-          <AdminProvider>
-            <MatchmakingProvider>
-              {children}
-            </MatchmakingProvider>
-          </AdminProvider>
+          <MatchmakingProvider>
+            {children}
+          </MatchmakingProvider>
         </AuthProvider>
       </SyncProvider>
     </AppProvider>

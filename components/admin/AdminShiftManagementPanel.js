@@ -4,7 +4,7 @@ import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import { usePlayersStore } from '../../stores';
 import { useAdminCoreStore } from '../../stores/useAdminCoreStore';
-import { useAdmin } from '../../context/AdminContext';
+import { useAdminStore as useAdmin } from '../../stores/useAdminStore';
 import SafeAvatar from '../SafeAvatar';
 import { useAuth } from '../../context/AuthContext';
 import config from '../../config';

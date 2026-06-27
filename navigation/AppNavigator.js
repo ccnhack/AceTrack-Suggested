@@ -15,7 +15,7 @@ import { useVideoStore } from '../stores';
 import { useSupportStore } from '../stores';
 
 export { useAuth };
-import { useAdmin } from '../context/AdminContext';
+import { useAdminStore as useAdmin } from '../stores/useAdminStore';
 import { useMatchmaking } from '../context/MatchmakingContext';
 import { useCommsStore } from '../stores/useCommsStore';
 import ScreenErrorBoundary from '../components/ScreenErrorBoundary';

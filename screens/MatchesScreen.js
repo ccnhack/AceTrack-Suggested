@@ -29,7 +29,7 @@ import { usePlayersStore } from '../stores';
 import { useVideoStore } from '../stores';
 import QuickEvaluationView from '../components/QuickEvaluationView';
 import { useSupportStore } from '../stores';
-import { useAdmin } from '../context/AdminContext';
+import { useAdminStore as useAdmin } from '../stores/useAdminStore';
 
 const MatchesScreen = ({ route, navigation }) => {
   const { currentUser: user } = useAuth();
