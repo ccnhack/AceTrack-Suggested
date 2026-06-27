@@ -9,8 +9,10 @@ LogBox.ignoreAllLogs();
 // The global Date.prototype mutations have been removed. Use utils/dateUtils.js for explicit IST formatting.
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { GestureHandlerRootView as RawGestureHandlerRootView } from 'react-native-gesture-handler';
+const GestureHandlerRootView = Platform.OS === 'web' ? View : (RawGestureHandlerRootView.default || RawGestureHandlerRootView);
 import { Ionicons } from '@expo/vector-icons';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as Updates from 'expo-updates';
 
 import AppNavigator from './navigation/AppNavigator';
@@ -76,7 +78,7 @@ import { useSupportStore } from './stores';
 // 🔄 Centralized Versioning// 🚀 EXPO OTA SYNC HUB
 // 🚀 EXPO OTA SYNC HUB
 // ALWAYS BUMP THIS VERSION TO TRIGGER CLIENT-SIDE CACHE INVALIDATION
-const APP_VERSION = '2.6.787'; // CRITICAL: This is the source of truth for the frontend version check
+const APP_VERSION = '2.6.788'; // CRITICAL: This is the source of truth for the frontend version check
 const OTA_CHECK_INTERVAL = 30 * 60 * 1000; // 30 mins
 const INITIAL_OTA_DELAY = 15000; // 15 seconds
 const linking = {

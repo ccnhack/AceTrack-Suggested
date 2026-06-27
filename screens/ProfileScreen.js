@@ -12,7 +12,8 @@ import { colors, shadows, typography, borderRadius, spacing } from '../theme/des
 import { Sport } from '../types';
 import SafeAvatar from '../components/SafeAvatar';
 import * as ImagePicker from 'expo-image-picker';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { GestureHandlerRootView as RawGestureHandlerRootView } from 'react-native-gesture-handler';
+const GestureHandlerRootView = Platform.OS === 'web' ? View : (RawGestureHandlerRootView.default || RawGestureHandlerRootView);
 import * as Updates from 'expo-updates';
 import { PlayerSkillDashboard, PlayerPerformanceAnalytics, PlayerWalletDashboard, PlayerReferralDashboard } from '../components/PlayerProfileFeatures';
 import CoachOnboardingModal from '../components/CoachOnboardingModal';

@@ -7,7 +7,9 @@ import {
 
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Swipeable as RawSwipeable, GestureHandlerRootView as RawGestureHandlerRootView } from 'react-native-gesture-handler';
+const Swipeable = Platform.OS === 'web' ? View : (RawSwipeable.default || RawSwipeable);
+const GestureHandlerRootView = Platform.OS === 'web' ? View : (RawGestureHandlerRootView.default || RawGestureHandlerRootView);
 import { generateAIResponse } from '../services/aiService';
 import notify from '../utils/notify';
 import logger from '../utils/logger';

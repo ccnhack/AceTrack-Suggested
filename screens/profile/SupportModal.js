@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Modal, SafeAreaView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { GestureHandlerRootView as RawGestureHandlerRootView } from 'react-native-gesture-handler';
+const GestureHandlerRootView = Platform.OS === 'web' ? View : (RawGestureHandlerRootView.default || RawGestureHandlerRootView);
 import { SupportTicketSystem } from '../../components/SupportTicketSystem';
 import styles from "./ProfileScreen.styles";
 

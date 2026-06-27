@@ -3,8 +3,11 @@ import {
   View, Text, TouchableOpacity, ScrollView, TextInput, 
   Modal, SafeAreaView, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Alert, FlatList
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { Swipeable as RawSwipeable, GestureHandlerRootView as RawGestureHandlerRootView } from 'react-native-gesture-handler';
+const Swipeable = Platform.OS === 'web' ? View : (RawSwipeable.default || RawSwipeable);
+const GestureHandlerRootView = Platform.OS === 'web' ? View : (RawGestureHandlerRootView.default || RawGestureHandlerRootView);
 import { Ionicons } from '@expo/vector-icons';
-import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import styles from '../grievances/AdminGrievancesPanel.styles';
 import { statusColors, statusOptions, formatTicketDateFull } from '../grievances/constants';
 
