@@ -12,9 +12,17 @@ export const useAdminStore = create((set, get) => ({
   visitedAdminSubTabs: new Set(),
   isUploadingLogs: false,
 
-  setSeenAdminActionIds: (ids) => set({ seenAdminActionIds: ids }),
+  setSeenAdminActionIds: (ids) => set((state) => {
+    // 🛡️ [SET_COERCION] (v2.6.789): Support functional updates and always coerce to Set
+    const resolved = typeof ids === 'function' ? ids(state.seenAdminActionIds) : ids;
+    return { seenAdminActionIds: resolved instanceof Set ? resolved : new Set(resolved || []) };
+  }),
   setAuditLogs: (logs) => set({ auditLogs: logs }),
-  setVisitedAdminSubTabs: (tabs) => set({ visitedAdminSubTabs: tabs }),
+  setVisitedAdminSubTabs: (tabs) => set((state) => {
+    // 🛡️ [SET_COERCION] (v2.6.789): Support functional updates and always coerce to Set
+    const resolved = typeof tabs === 'function' ? tabs(state.visitedAdminSubTabs) : tabs;
+    return { visitedAdminSubTabs: resolved instanceof Set ? resolved : new Set(resolved || []) };
+  }),
   setIsUploadingLogs: (val) => set({ isUploadingLogs: val }),
 
   hydrate: async () => {
@@ -90,8 +98,11 @@ eventBus.subscribe('ENTITY_UPDATED', async (e) => {
 // Auto-sync persistence
 useAdminStore.subscribe((state, prevState) => {
   if (state.seenAdminActionIds !== prevState.seenAdminActionIds || state.visitedAdminSubTabs !== prevState.visitedAdminSubTabs) {
-    const currentIds = Array.from(state.seenAdminActionIds);
-    const currentTabs = Array.from(state.visitedAdminSubTabs);
+    // 🛡️ [DEFENSIVE_COERCE] (v2.6.789): Ensure we always serialize from a Set, not a function/object
+    const safeIds = state.seenAdminActionIds instanceof Set ? state.seenAdminActionIds : new Set();
+    const safeTabs = state.visitedAdminSubTabs instanceof Set ? state.visitedAdminSubTabs : new Set();
+    const currentIds = Array.from(safeIds);
+    const currentTabs = Array.from(safeTabs);
     
     // We only trigger syncAndSaveData, orchestrator handles debouncing/deduping
     syncOrchestrator.syncAndSaveData({ 
