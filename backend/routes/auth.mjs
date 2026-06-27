@@ -8,6 +8,8 @@
 import express from 'express';
 import { asyncHandler } from '../helpers/utils.mjs';
 import { apiKeyGuard, attachCsrfCookie } from '../middleware/security.mjs';
+import { validateRequest } from '../middleware/validation.mjs';
+import { loginSchema, adminLoginSchema, mfaVerifySchema, passwordResetRequestSchema, passwordResetConfirmSchema } from '../middleware/validators/authValidators.mjs';
 import * as AuthService from '../services/AuthService.mjs';
 import * as CoachInviteService from '../services/CoachInviteService.mjs';
 
@@ -101,7 +103,7 @@ export default function createAuthRoutes({
   }));
 
   // ─── Admin Login (Step 1: Password → MFA) ─────────────────
-  router.post('/admin/login', loginLimiter, asyncHandler(async (req, res) => {
+  router.post('/admin/login', loginLimiter, validateRequest(adminLoginSchema), asyncHandler(async (req, res) => {
     const { identifier, password } = req.body;
     if (!identifier || !password) return res.status(400).json({ error: 'Username and Password are required.' });
 
@@ -142,7 +144,7 @@ export default function createAuthRoutes({
   }));
 
   // ─── Admin MFA (Step 2: PIN Verification) ─────────────────
-  router.post('/admin/verify-pin', asyncHandler(async (req, res) => {
+  router.post('/admin/verify-pin', validateRequest(mfaVerifySchema), asyncHandler(async (req, res) => {
     const { mfaToken, pin } = req.body;
     if (!mfaToken || !pin) return res.status(400).json({ error: 'MFA token and PIN are required.' });
 
@@ -186,7 +188,7 @@ export default function createAuthRoutes({
   });
 
   // ─── Regular User Login ────────────────────────────────────
-  router.post('/user/login', loginLimiter, asyncHandler(async (req, res) => {
+  router.post('/user/login', loginLimiter, validateRequest(loginSchema), asyncHandler(async (req, res) => {
     const { identifier, password } = req.body;
     if (!identifier || !password) return res.status(400).json({ error: 'Username/Email and Password are required.' });
 
@@ -222,7 +224,7 @@ export default function createAuthRoutes({
   }));
 
   // ─── Support Staff Login ───────────────────────────────────
-  router.post('/support/login', loginLimiter, asyncHandler(async (req, res) => {
+  router.post('/support/login', loginLimiter, validateRequest(loginSchema), asyncHandler(async (req, res) => {
     const { identifier, password } = req.body;
     if (!identifier || !password) return res.status(400).json({ error: 'Username/Email and Password are required.' });
 
@@ -284,7 +286,7 @@ export default function createAuthRoutes({
   }));
 
   // ─── Password Reset: Request ───────────────────────────────
-  router.post('/support/password-reset/request', passwordResetLimiter, asyncHandler(async (req, res) => {
+  router.post('/support/password-reset/request', passwordResetLimiter, validateRequest(passwordResetRequestSchema), asyncHandler(async (req, res) => {
     const { identifier } = req.body;
     if (!identifier) return res.status(400).json({ error: 'Email or Username required' });
 
@@ -316,7 +318,7 @@ export default function createAuthRoutes({
   }));
 
   // ─── Password Reset: Confirm ───────────────────────────────
-  router.post('/support/password-reset/confirm', asyncHandler(async (req, res) => {
+  router.post('/support/password-reset/confirm', validateRequest(passwordResetConfirmSchema), asyncHandler(async (req, res) => {
     const { token, newPassword } = req.body;
     if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password required' });
 
