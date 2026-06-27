@@ -1,4 +1,4 @@
-import { processTournamentWaitlist } from '../../promotion_logic.mjs';
+import { processTournamentWaitlist } from '../promotion_logic.mjs';
 
 export async function processSaveBusinessLogic(deps, { req, changedKeys, newMasterData, modifiedEntities }) {
     const { SupportMetricsService, logAudit } = deps;
