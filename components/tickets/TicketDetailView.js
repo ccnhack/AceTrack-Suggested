@@ -17,7 +17,7 @@ export const TicketDetailView = (props) => {
     selectedImage, setSelectedImage, showPlusMenu, setShowPlusMenu, pickImage, newMessage, setNewMessage,
     onTypingStart, onTypingStop, handleSendMessage, handleReopen, escalationTarget, setEscalationTarget,
     escalationReason, setEscalationReason, handleEscalate, isEscalating, statusColors, messageYOffsets,
-    renderDateHeader, renderMessage, scrollViewRef, isAtBottom, textInputRef
+    renderDateHeader, renderMessage, scrollViewRef, isAtBottom, textInputRef, prevContentHeight
   } = props;
   
 

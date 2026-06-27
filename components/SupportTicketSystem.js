@@ -777,7 +777,7 @@ export const SupportTicketSystem = ({
           </View>
         );
       },
-      renderMessage, scrollViewRef, isAtBottom, textInputRef
+      renderMessage, scrollViewRef, isAtBottom, textInputRef, prevContentHeight
     }} />;
   }
   return null;
