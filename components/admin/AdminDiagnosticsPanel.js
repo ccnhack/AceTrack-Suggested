@@ -841,7 +841,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
                       ) : null}
                       {session.ipAddress ? (
                         <Text style={{ fontSize: 9, color: '#6366F1', marginTop: 2, fontWeight: 'bold' }}>
-                          IP: {session.ipAddress} {session.location && session.location !== 'Unknown Location' ? `| ${session.location}` : ''}
+                          IP: {String(session.ipAddress)} {(session.location && String(session.location) !== 'Unknown Location') ? `| ${String(session.location)}` : ''}
                         </Text>
                       ) : null}
                       <View style={styles.deviceMeta}>
@@ -894,7 +894,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
                             <Text style={styles.deviceName}>{d.name || 'Unknown Device'}</Text>
                             {(onlineDevices[d.id]?.ipAddress || d.ipAddress) ? (
                               <Text style={{ fontSize: 9, color: '#6366F1', marginTop: 2, fontWeight: 'bold' }}>
-                                IP: {onlineDevices[d.id]?.ipAddress || d.ipAddress} {(onlineDevices[d.id]?.location || d.location) && (onlineDevices[d.id]?.location || d.location) !== 'Unknown Location' ? `| ${onlineDevices[d.id]?.location || d.location}` : ''}
+                                IP: {String(onlineDevices[d.id]?.ipAddress || d.ipAddress)} {((onlineDevices[d.id]?.location || d.location) && String(onlineDevices[d.id]?.location || d.location) !== 'Unknown Location') ? `| ${String(onlineDevices[d.id]?.location || d.location)}` : ''}
                               </Text>
                             ) : null}
                             <View style={styles.deviceMeta}>
@@ -946,7 +946,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
                                 </Text>
                                 {d.ipAddress ? (
                                   <Text style={{ fontSize: 9, color: '#6366F1', marginTop: 2, fontWeight: 'bold' }}>
-                                    IP: {d.ipAddress} {d.location && d.location !== 'Unknown Location' ? `| ${d.location}` : ''}
+                                    IP: {String(d.ipAddress)} {(d.location && String(d.location) !== 'Unknown Location') ? `| ${String(d.location)}` : ''}
                                   </Text>
                                 ) : null}
                                 <View style={styles.deviceMeta}>
