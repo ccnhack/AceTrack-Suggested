@@ -1,5 +1,5 @@
 import { StyleSheet, Dimensions, Platform } from 'react-native';
-import { colors, shadows } from '../../theme/designSystem';
+import { colors, shadows, typography, borderRadius, spacing } from '../../theme/designSystem';
 
 const { width } = Dimensions.get('window');
 
