@@ -779,3 +779,5 @@ const MatchesScreen = ({ route, navigation }) => {
   );
 };
 
+
+export default MatchesScreen;

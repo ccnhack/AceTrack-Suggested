@@ -1074,3 +1074,5 @@ const ProfileScreen = ({ navigation, route }) => {
 
 
 // Styles extracted to ./profile/ProfileScreen.styles.js
+
+export default ProfileScreen;

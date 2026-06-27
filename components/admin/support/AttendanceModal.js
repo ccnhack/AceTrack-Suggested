@@ -1,3 +1,4 @@
+import { colors, shadows, typography, borderRadius, spacing } from '../../../theme/designSystem';
 import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Modal, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';

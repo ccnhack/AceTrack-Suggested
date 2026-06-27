@@ -1077,3 +1077,5 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
   );
 });
 
+
+export default AdminDiagnosticsPanel;

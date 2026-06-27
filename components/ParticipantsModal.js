@@ -655,3 +655,5 @@ const ParticipantsModal = ({
   );
 };
 
+
+export default ParticipantsModal;

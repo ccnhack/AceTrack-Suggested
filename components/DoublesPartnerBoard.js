@@ -740,3 +740,5 @@ const DoublesPartnerBoard = ({ requests, user, onAddRequest, onRemoveRequest, ro
   );
 };
 
+
+export default DoublesPartnerBoard;

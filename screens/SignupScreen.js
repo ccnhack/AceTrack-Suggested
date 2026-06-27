@@ -921,3 +921,5 @@ const SignupScreen = ({ navigation }) => {
   );
 };
 
+
+export default SignupScreen;

@@ -121,4 +121,3 @@ export const styles = StyleSheet.create({
   emptyStateText: { fontSize: 13, color: '#94A3B8', fontStyle: 'italic' },
 });
 
-export default InsightsScreen;

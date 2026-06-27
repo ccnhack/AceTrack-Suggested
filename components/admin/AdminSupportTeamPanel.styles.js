@@ -1,3 +1,4 @@
+import { colors, shadows, typography, borderRadius, spacing } from '../../theme/designSystem';
 import { StyleSheet } from 'react-native';
 
 const styles = StyleSheet.create({

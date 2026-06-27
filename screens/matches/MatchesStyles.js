@@ -828,4 +828,3 @@ export const styles = StyleSheet.create({
   },
 });
 
-export default MatchesScreen;

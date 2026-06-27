@@ -621,3 +621,5 @@ const ExploreScreen = ({ navigation, route }) => {
   );
 };
 
+
+export default ExploreScreen;

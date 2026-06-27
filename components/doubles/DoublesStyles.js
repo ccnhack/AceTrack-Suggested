@@ -600,4 +600,3 @@ const pmStyles = StyleSheet.create({
   },
 });
 
-export default DoublesPartnerBoard;

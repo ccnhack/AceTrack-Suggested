@@ -580,3 +580,5 @@ const AdminRecordingsDashboard = ({
   );
 };
 
+
+export default AdminRecordingsDashboard;

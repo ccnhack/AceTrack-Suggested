@@ -937,3 +937,5 @@ const OrgChatScreen = ({ navigation }) => {
   );
 };
 
+
+export default OrgChatScreen;

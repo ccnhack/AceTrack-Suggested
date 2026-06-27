@@ -1046,3 +1046,5 @@ const StatBox = ({ title, value, icon, color, trend, isActive, onPress }) => (
   </TouchableOpacity>
 );
 
+
+export default InsightsScreen;

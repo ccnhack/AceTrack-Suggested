@@ -1196,3 +1196,5 @@ export const AcademyScreen = () => {
   );
 };
 
+
+export default AcademyScreen;
