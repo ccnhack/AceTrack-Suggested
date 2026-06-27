@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Platform, Alert } from 'react-native';
+import { Platform, Alert, Animated } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import config from '../config';
 
