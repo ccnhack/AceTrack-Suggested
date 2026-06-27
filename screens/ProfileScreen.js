@@ -24,7 +24,7 @@ import config from '../config';
 import logger from '../utils/logger';
 import storage from '../utils/storage';
 import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
-import ProfileHeader, { AvatarPlaceholder, getInitials } from '../components/ProfileHeader';
+import ProfileHeader, { AvatarPlaceholder } from '../components/ProfileHeader';
 import ProfileMenuSection from '../components/ProfileMenuSection';
 import { OTPVerificationModal, CalendarWidget } from '../components/ProfileSubComponents';
 import AdminProfileModals from '../components/AdminProfileModals';

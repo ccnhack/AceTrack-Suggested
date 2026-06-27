@@ -11,7 +11,7 @@ import TournamentBracket from '../components/TournamentBracket';
 import Slider from '@react-native-community/slider';
 import { LinearGradient } from 'expo-linear-gradient';
 import logger from '../utils/logger';
-import { parseTournamentDateTime, isTournamentPast } from '../utils/tournamentUtils';
+import { isTournamentPast } from '../utils/tournamentUtils';
 import MatchCard from '../components/MatchCard';
 import { useIsFocused } from '@react-navigation/native';
 import { FlashList } from '@shopify/flash-list';

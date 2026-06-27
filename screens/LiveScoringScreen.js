@@ -12,7 +12,8 @@ const SPORT_CRITERIA = {
   'Table Tennis': ['Reaction Time', 'Spin Control', 'Backhand Drive', 'Service Variety']
 };
 
-import { useEvaluationsStore, useMatchmaking } from '../stores';
+import { useEvaluationsStore } from '../stores';
+import { useMatchmaking } from '../context/MatchmakingContext';
 import MatchService from '../services/MatchService';
 import { syncOrchestrator } from '../services/sync/SyncOrchestrator';
 
