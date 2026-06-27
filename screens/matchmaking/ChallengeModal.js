@@ -1,15 +1,20 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Modal, TextInput, ActivityIndicator, Image } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Modal, TextInput, ActivityIndicator, Image, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Calendar } from 'react-native-calendars';
 import styles from "./MatchmakingScreen.styles";
 import { Sport } from '../../types';
+import { TimeSlotItem, VenueItem } from '../../components/MatchmakingSubComponents';
 
 export const ChallengeModal = (props) => {
-  const { isChallengeModalVisible, setIsChallengeModalVisible, selectedOpponent, selectedSport, setSelectedSport,
-    challengeDate, setChallengeDate, challengeMarkedDates, TIME_SLOTS, challengeTime, setChallengeTime,
-    isTimeSlotBlocked, getNextAvailableSlot, venueSearchQuery, setVenueSearchQuery, nearbyVenues,
-    selectedAcademyForVenue, setSelectedAcademyForVenue, isFetchingVenues, isSubmitting, confirmChallenge, colors } = props;
+  const { 
+    isChallengeModalVisible, setIsChallengeModalVisible, selectedOpponent, selectedSport, setSelectedSport, 
+    challengeDate, setChallengeDate, challengeMarkedDates, TIME_SLOTS, challengeTime, setChallengeTime, 
+    isTimeSlotBlocked, getNextAvailableSlot, venueSearchQuery, setVenueSearchQuery, nearbyVenues, 
+    selectedAcademyForVenue, setSelectedAcademyForVenue, isFetchingVenues, isSubmitting, confirmChallenge, colors,
+    expandedSlot, setExpandedSlot, getCommonSports, getUserPreferredSport, isTimeInPast, 
+    venueDropdownSearchQuery, setVenueDropdownSearchQuery, matchmaking, user, role, getOpponentName
+  } = props;
   
   return (
       <Modal visible={isChallengeModalVisible} animationType="slide" transparent>

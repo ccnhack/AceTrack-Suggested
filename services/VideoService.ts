@@ -54,7 +54,17 @@ class VideoService {
       const updatedUser = {
         ...currentUser,
         credits: currentCredits - price,
-        purchasedHighlights: [...(currentUser.purchasedHighlights || []), videoId]
+        purchasedHighlights: [...(currentUser.purchasedHighlights || []), videoId],
+        walletHistory: [
+          {
+            id: `wallet_${Date.now()}`,
+            amount: -price,
+            type: 'debit',
+            description: `Highlights unlocked`,
+            date: new Date().toISOString()
+          },
+          ...(currentUser.walletHistory || [])
+        ]
       };
 
       logger.logAction('VIDEO_PURCHASE_HIGHLIGHTS_SUCCESS', { videoId });
@@ -102,7 +112,17 @@ class VideoService {
       const updatedUser = {
         ...currentUser,
         credits: currentCredits - price,
-        purchasedVideos: [...(currentUser.purchasedVideos || []), videoId]
+        purchasedVideos: [...(currentUser.purchasedVideos || []), videoId],
+        walletHistory: [
+          {
+            id: `wallet_${Date.now()}`,
+            amount: -price,
+            type: 'debit',
+            description: `Video unlocked`,
+            date: new Date().toISOString()
+          },
+          ...(currentUser.walletHistory || [])
+        ]
       };
 
       logger.logAction('VIDEO_UNLOCK_SUCCESS', { videoId });
@@ -229,11 +249,25 @@ class VideoService {
     const updatedPlayers = (prevPlayers || []).map(player => {
       let credits = player.credits || 0;
       let pVideos = player.purchasedVideos || [];
+      let walletHistory = player.walletHistory || [];
+      
       if (pVideos.includes(id)) { 
-        credits += (video.price || 0); 
+        const price = video.price || 0;
+        credits += price; 
         pVideos = pVideos.filter(vid => vid !== id); 
+        
+        walletHistory = [
+          {
+            id: `wallet_refund_${Date.now()}_${player.id}`,
+            amount: price,
+            type: 'credit',
+            description: `Refund – Video removed${video.title ? `: ${video.title}` : ''}`,
+            date: new Date().toISOString()
+          },
+          ...walletHistory
+        ];
       }
-      return { ...player, credits, purchasedVideos: pVideos };
+      return { ...player, credits, purchasedVideos: pVideos, walletHistory };
     });
 
     return { success: true, videos: updatedVideos, players: updatedPlayers };

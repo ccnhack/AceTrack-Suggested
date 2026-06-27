@@ -1,11 +1,18 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Modal, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import SafeAvatar from '../../components/SafeAvatar';
-import styles from "../ProfileScreen.styles";
+import { AvatarPlaceholder } from '../../components/ProfileHeader';
+import styles from "./ProfileScreen.styles";
 
 export const AvatarPickerModal = (props) => {
-  const { showAvatarPicker, setShowAvatarPicker, avatarThemes, activeAvatarCategory, setActiveAvatarCategory, getAvatarUrl, handleSaveAvatar, isSavingAvatar } = props;
+  const { 
+    showAvatarPicker, setShowAvatarPicker, user, onUpdateUser,
+    pickImage, allAvatars, editAvatar, setEditAvatar,
+    isPickingImage, isUploading, setIsUploading,
+    logger, Platform, activeApiUrl, storage, config,
+    setSessionCustomAvatar, normalizeAvatarUrl
+  } = props;
   
   return (
         <Modal visible={showAvatarPicker} animationType="fade" transparent={true} onRequestClose={() => setShowAvatarPicker(false)}>

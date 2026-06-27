@@ -1,10 +1,10 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import styles from "../ProfileScreen.styles";
+import styles from "./ProfileScreen.styles";
 
 export const CheckoutModal = (props) => {
-  const { checkoutModalVisible, setCheckoutModalVisible, isCheckingOut, handleWebCheckout, showDialog } = props;
+  const { checkoutModalVisible, setCheckoutModalVisible, isEarlyCheckout, checkoutJustification, setCheckoutJustification, handleProfileShiftAction } = props;
   
   return (
       <Modal visible={checkoutModalVisible} animationType="fade" transparent={true} onRequestClose={() => setCheckoutModalVisible(false)}>

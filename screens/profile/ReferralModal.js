@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import styles from "../ProfileScreen.styles";
+import styles from "./ProfileScreen.styles";
+import { PlayerReferralDashboard } from '../../components/PlayerProfileFeatures';
 
 export const ReferralModal = (props) => {
-  const { showReferralModal, setShowReferralModal, referralCode, copyToClipboard } = props;
+  const { showReferralModal, setShowReferralModal, user } = props;
   
   return (
         <Modal visible={showReferralModal} animationType="fade" transparent={true} onRequestClose={() => setShowReferralModal(false)}>

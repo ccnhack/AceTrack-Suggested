@@ -1,15 +1,18 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Modal, TextInput, ActivityIndicator, Image } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Modal, TextInput, ActivityIndicator, Image, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Calendar } from 'react-native-calendars';
 import styles from "./MatchmakingScreen.styles";
+import { TimeSlotItem, VenueItem } from '../../components/MatchmakingSubComponents';
 
 export const CounterModal = (props) => {
-  const { isCounterModalVisible, setIsCounterModalVisible, selectedChallenge, getOpponentName,
-    counterDate, setCounterDate, counterMarkedDates, TIME_SLOTS, counterTime, setCounterTime,
-    isTimeSlotBlocked, getNextAvailableSlot, venueSearchQuery, setVenueSearchQuery, nearbyVenues,
-    selectedAcademyForVenue, setSelectedAcademyForVenue, isFetchingVenues, counterComment, setCounterComment,
-    isSubmitting, submitCounterProposal, colors } = props;
+  const { 
+    isCounterModalVisible, setIsCounterModalVisible, selectedChallenge, getOpponentName, counterDate, setCounterDate, 
+    counterMarkedDates, TIME_SLOTS, counterTime, setCounterTime, isTimeSlotBlocked, getNextAvailableSlot, venueSearchQuery, 
+    setVenueSearchQuery, nearbyVenues, selectedAcademyForVenue, setSelectedAcademyForVenue, isFetchingVenues, counterComment, 
+    setCounterComment, isSubmitting, submitCounterProposal, colors, expandedSlot, setExpandedSlot, isTimeInPast, 
+    venueDropdownSearchQuery, setVenueDropdownSearchQuery, role, MOCK_ACADEMIES
+  } = props;
   
   return (
       <Modal visible={isCounterModalVisible} animationType="slide" transparent>

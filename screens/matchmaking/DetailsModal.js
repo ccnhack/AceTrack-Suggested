@@ -5,9 +5,11 @@ import SafeAvatar from '../../components/SafeAvatar';
 import styles from "./MatchmakingScreen.styles";
 
 export const DetailsModal = (props) => {
-  const { isDetailsModalVisible, setIsDetailsModalVisible, selectedChallenge, getOpponentName, getOpponentStats,
-    getTournamentDetails, user, handleAcceptChallenge, handleAcceptCountered, handleCounter, handleDeclineChallenge, handleCancelChallenge, setReportScoreMatch, colors } = props;
-  
+  const { 
+    isDetailsModalVisible, setIsDetailsModalVisible, selectedChallenge, getOpponentName, getOpponentStats,
+    getTournamentDetails, user, handleAcceptChallenge, handleAcceptCountered, handleCounter, handleDeclineChallenge, 
+    handleCancelChallenge, setReportScoreMatch, colors, role, receivedRequests, sentRequests, handleConfirmBooking 
+  } = props;
   return (
       <Modal visible={isDetailsModalVisible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>

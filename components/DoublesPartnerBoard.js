@@ -1,4 +1,4 @@
-import { styles } from './doubles/DoublesStyles';
+import { styles, pmStyles } from './doubles/DoublesStyles';
 import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Alert, ScrollView, Image, ActivityIndicator, Dimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';

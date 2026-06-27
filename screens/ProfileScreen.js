@@ -31,7 +31,13 @@ import ShareablePlayerCard from '../components/ShareablePlayerCard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import styles from "./profile/ProfileScreen.styles";
-
+import { CheckoutModal } from './profile/CheckoutModal';
+import { WalletModal } from './profile/WalletModal';
+import { SupportModal } from './profile/SupportModal';
+import { ReferralModal } from './profile/ReferralModal';
+import { AvatarPickerModal } from './profile/AvatarPickerModal';
+import { EditProfileModal } from './profile/EditProfileModal';
+import { ChangePasswordModal } from './profile/ChangePasswordModal';
 const calculateAcademyTier = (uid, tournaments = []) => {
   const hostedCount = (tournaments || []).filter(t => t.creatorId === uid).length;
   if (hostedCount >= 5) return 'Gold';
@@ -983,10 +989,10 @@ const ProfileScreen = ({ navigation, route }) => {
       )}
 
       {/* Checkout Modal */}
-      <CheckoutModal {...{ checkoutModalVisible, setCheckoutModalVisible, isCheckingOut, handleWebCheckout, showDialog }} />
+      <CheckoutModal {...{ checkoutModalVisible, setCheckoutModalVisible, isEarlyCheckout, checkoutJustification, setCheckoutJustification, handleProfileShiftAction }} />
       {/* Support System Modal */}
       {showSupport && (
-      <SupportModal {...{ showSupport, setShowSupport, currentUser, userTickets, handleCreateTicket, handleReplyToTicket, handleResolvePrompt, handleUpdateTicketStatus, handleRateTicket, handleMarkSeen }} />
+      <SupportModal {...{ showSupport, setShowSupport, user, supportTickets, onSaveTicket, onReplyTicket, onUpdateTicketStatus, onRetryMessage, onMarkSeen, urlTicketId, setUrlTicketId }} />
       )}
 
 
@@ -1009,26 +1015,45 @@ const ProfileScreen = ({ navigation, route }) => {
 
       {/* Wallet Modal — centered popup with blurred dark background */}
       {showWalletModal && (
-      <WalletModal {...{ showWalletModal, setShowWalletModal, amountInput, setAmountInput, isProcessingPayment, setCheckoutModalVisible }} />
+      <WalletModal {...{ showWalletModal, setShowWalletModal, user, onTopUp, players }} />
       )}
 
       {showReferralModal && (
-      <ReferralModal {...{ showReferralModal, setShowReferralModal, referralCode, copyToClipboard }} />
+      <ReferralModal {...{ showReferralModal, setShowReferralModal, user }} />
       )}
 
       {/* Avatar Picker Modal */}
       {showAvatarPicker && (
-      <AvatarPickerModal {...{ showAvatarPicker, setShowAvatarPicker, avatarThemes, activeAvatarCategory, setActiveAvatarCategory, getAvatarUrl, handleSaveAvatar, isSavingAvatar }} />
+      <AvatarPickerModal {...{ 
+        showAvatarPicker, setShowAvatarPicker, user, onUpdateUser,
+        pickImage, allAvatars, editAvatar, setEditAvatar,
+        isPickingImage, isUploading, setIsUploading,
+        logger, Platform, activeApiUrl, storage, config,
+        setSessionCustomAvatar, normalizeAvatarUrl
+      }} />
       )}
 
       {/* Edit Profile Modal */}
       {showEditProfile && (
-      <EditProfileModal {...{ showEditProfile, setShowEditProfile, editForm, setEditForm, handleSaveProfile, isSaving }} />
+      <EditProfileModal {...{ 
+        showEditProfile, setShowEditProfile, user, onUpdateUser, 
+        editName, setEditName, editEmail, setEditEmail, editPhone, setEditPhone,
+        editAvatar, editManagedSports, setEditManagedSports,
+        isSportsDropdownOpen, setIsSportsDropdownOpen, Sport,
+        showVerifyModal, setShowVerifyModal, verificationCode, setVerificationCode,
+        isVerifying, setIsVerifying, onVerifyAccount 
+      }} />
       )}
 
       {/* Change Password Modal */}
       {showChangePassword && (
-      <ChangePasswordModal {...{ showChangePassword, setShowChangePassword, passwordForm, setPasswordForm, handleChangePassword, isChangingPassword, showPasswordMap, setShowPasswordMap }} />
+      <ChangePasswordModal {...{ 
+        showChangePassword, setShowChangePassword, 
+        oldPassword, setOldPassword, 
+        newPassword, setNewPassword, 
+        confirmPassword, setConfirmPassword,
+        storage, config, activeApiUrl, logger
+      }} />
       )}
 
             {/* Calendar Modal */}

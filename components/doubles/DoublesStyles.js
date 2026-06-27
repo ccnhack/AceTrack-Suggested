@@ -295,7 +295,7 @@ export const styles = StyleSheet.create({
 // Center-screen glassmorphism modal for inline team registration
 // ═══════════════════════════════════════════════════════════════
 const { width: screenWidth } = Dimensions.get('window');
-const pmStyles = StyleSheet.create({
+export const pmStyles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.75)',

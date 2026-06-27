@@ -1,11 +1,12 @@
 import React from 'react';
-import { View, TouchableOpacity, Modal, SafeAreaView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, SafeAreaView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SupportTicketSystem } from '../../components/SupportTicketSystem';
-import styles from "../ProfileScreen.styles";
+import styles from "./ProfileScreen.styles";
 
 export const SupportModal = (props) => {
-  const { showSupport, setShowSupport, currentUser, userTickets, handleCreateTicket, handleReplyToTicket, handleResolvePrompt, handleUpdateTicketStatus, handleRateTicket, handleMarkSeen } = props;
+  const { showSupport, setShowSupport, user, supportTickets, onSaveTicket, onReplyTicket, onUpdateTicketStatus, onRetryMessage, onMarkSeen, urlTicketId, setUrlTicketId } = props;
   
   return (
         <Modal visible={showSupport} animationType="slide" onRequestClose={() => setShowSupport(false)}>

@@ -6,32 +6,7 @@ import {
 // 🛡️ Disable all yellow warning overlays during E2E tests
 LogBox.ignoreAllLogs();
 
-// 🌐 [v2.6.628] FORCE GLOBAL TIMEZONE TO IST (Indian Standard Time)
-const originalToLocaleTimeString = Date.prototype.toLocaleTimeString;
-Date.prototype.toLocaleTimeString = function(locales, options) {
-  const finalOptions = { ...(options || {}), timeZone: 'Asia/Kolkata' };
-  let str = originalToLocaleTimeString.call(this, 'en-IN', finalOptions);
-  if (typeof str === 'string' && !str.includes('IST')) {
-    str += ' IST';
-  }
-  return str;
-};
-
-const originalToLocaleDateString = Date.prototype.toLocaleDateString;
-Date.prototype.toLocaleDateString = function(locales, options) {
-  const finalOptions = { ...(options || {}), timeZone: 'Asia/Kolkata' };
-  return originalToLocaleDateString.call(this, 'en-IN', finalOptions);
-};
-
-const originalToLocaleString = Date.prototype.toLocaleString;
-Date.prototype.toLocaleString = function(locales, options) {
-  const finalOptions = { ...(options || {}), timeZone: 'Asia/Kolkata' };
-  let str = originalToLocaleString.call(this, 'en-IN', finalOptions);
-  if (typeof str === 'string' && !str.includes('IST')) {
-    str += ' IST';
-  }
-  return str;
-};
+// The global Date.prototype mutations have been removed. Use utils/dateUtils.js for explicit IST formatting.
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -101,7 +76,7 @@ import { useSupportStore } from './stores';
 // 🔄 Centralized Versioning// 🚀 EXPO OTA SYNC HUB
 // 🚀 EXPO OTA SYNC HUB
 // ALWAYS BUMP THIS VERSION TO TRIGGER CLIENT-SIDE CACHE INVALIDATION
-const APP_VERSION = '2.6.781'; // CRITICAL: This is the source of truth for the frontend version check
+const APP_VERSION = '2.6.782'; // CRITICAL: This is the source of truth for the frontend version check
 const OTA_CHECK_INTERVAL = 30 * 60 * 1000; // 30 mins
 const INITIAL_OTA_DELAY = 15000; // 15 seconds
 const linking = {

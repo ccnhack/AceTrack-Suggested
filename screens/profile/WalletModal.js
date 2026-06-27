@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Modal, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, TextInput, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import styles from "../ProfileScreen.styles";
+import styles from "./ProfileScreen.styles";
+import { PlayerWalletDashboard } from '../../components/PlayerProfileFeatures';
 
 export const WalletModal = (props) => {
-  const { showWalletModal, setShowWalletModal, amountInput, setAmountInput, isProcessingPayment, setCheckoutModalVisible } = props;
+  const { showWalletModal, setShowWalletModal, user, onTopUp, players } = props;
   
   return (
         <Modal visible={showWalletModal} animationType="fade" transparent={true} onRequestClose={() => setShowWalletModal(false)}>

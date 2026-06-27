@@ -126,7 +126,7 @@ const FilterDropdown = ({ label, options, selectedValue, onSelect, styles }) => 
 
 export default function MatchmakingScreen({ route }) {
   const { currentUser: user } = useAuth();
-  const { matchmaking, onUpdateMatchmaking, partnerRequests, onUpdatePartnerRequests } = useMatchmaking();
+  const { matchmaking, onUpdateMatchmaking, partnerRequests, onUpdatePartnerRequests, createChallenge, respondToChallenge, proposeCounter } = useMatchmaking();
   const { players, sendUserNotification } = usePlayersStore();
   const { loadData: onManualSync, serverClockOffset } = useSync();
   const { tournaments } = useTournamentsStore();
@@ -858,7 +858,7 @@ export default function MatchmakingScreen({ route }) {
           text: "Yes, Cancel", 
           style: "destructive",
           onPress: () => {
-            respondToChallenge(req, 'cancel', user?.id, user?.name);
+            MatchService.respond(req, 'cancel', user?.id, user?.name);
             setIsDetailsModalVisible(false);
             Alert.alert("Booking Cancelled", "The booking has been successfully removed.");
           }
@@ -1288,10 +1288,27 @@ export default function MatchmakingScreen({ route }) {
       {activeTab === 'History' && renderHistory()}
 
       {/* Challenge Propose Modal */}
-      <ChallengeModal {...{ isChallengeModalVisible, setIsChallengeModalVisible, selectedOpponent, selectedSport, setSelectedSport, challengeDate, setChallengeDate, challengeMarkedDates, TIME_SLOTS, challengeTime, setChallengeTime, isTimeSlotBlocked, getNextAvailableSlot, venueSearchQuery, setVenueSearchQuery, nearbyVenues, selectedAcademyForVenue, setSelectedAcademyForVenue, isFetchingVenues, isSubmitting, confirmChallenge, colors }} />
+      <ChallengeModal {...{ 
+        isChallengeModalVisible, setIsChallengeModalVisible, selectedOpponent, selectedSport, setSelectedSport, 
+        challengeDate, setChallengeDate, challengeMarkedDates, TIME_SLOTS, challengeTime, setChallengeTime, 
+        isTimeSlotBlocked, getNextAvailableSlot, venueSearchQuery, setVenueSearchQuery, nearbyVenues, 
+        selectedAcademyForVenue, setSelectedAcademyForVenue, isFetchingVenues, isSubmitting, confirmChallenge, colors,
+        expandedSlot, setExpandedSlot, getCommonSports, getUserPreferredSport, isTimeInPast, 
+        venueDropdownSearchQuery, setVenueDropdownSearchQuery, matchmaking, user, role, getOpponentName
+      }} />
       {/* Booking Details Modal */}
-      <DetailsModal {...{ isDetailsModalVisible, setIsDetailsModalVisible, selectedChallenge, getOpponentName, getOpponentStats, getTournamentDetails, user, handleAcceptChallenge, handleAcceptCountered, handleCounter, handleDeclineChallenge, handleCancelChallenge, setReportScoreMatch, colors }} />
-      <CounterModal {...{ isCounterModalVisible, setIsCounterModalVisible, selectedChallenge, getOpponentName, counterDate, setCounterDate, counterMarkedDates, TIME_SLOTS, counterTime, setCounterTime, isTimeSlotBlocked, getNextAvailableSlot, venueSearchQuery, setVenueSearchQuery, nearbyVenues, selectedAcademyForVenue, setSelectedAcademyForVenue, isFetchingVenues, counterComment, setCounterComment, isSubmitting, submitCounterProposal, colors }} />
+      <DetailsModal {...{ 
+        isDetailsModalVisible, setIsDetailsModalVisible, selectedChallenge, getOpponentName, getOpponentStats, 
+        getTournamentDetails, user, handleAcceptChallenge, handleAcceptCountered, handleCounter, handleDeclineChallenge, 
+        handleCancelChallenge, setReportScoreMatch, colors, role, receivedRequests, sentRequests, handleConfirmBooking 
+      }} />
+      <CounterModal {...{ 
+        isCounterModalVisible, setIsCounterModalVisible, selectedChallenge, getOpponentName, counterDate, setCounterDate, 
+        counterMarkedDates, TIME_SLOTS, counterTime, setCounterTime, isTimeSlotBlocked, getNextAvailableSlot, venueSearchQuery, 
+        setVenueSearchQuery, nearbyVenues, selectedAcademyForVenue, setSelectedAcademyForVenue, isFetchingVenues, counterComment, 
+        setCounterComment, isSubmitting, submitCounterProposal, colors, expandedSlot, setExpandedSlot, isTimeInPast, 
+        venueDropdownSearchQuery, setVenueDropdownSearchQuery, role, MOCK_ACADEMIES
+      }} />
       <ReportScoreModal {...{ reportScoreMatch, setReportScoreMatch, reportSets, setReportSets, getOpponentName, user, submitScoreReport }} />
     </View>
   );

@@ -1,10 +1,16 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Modal, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Modal, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import styles from "../ProfileScreen.styles";
+import styles from "./ProfileScreen.styles";
 
 export const ChangePasswordModal = (props) => {
-  const { showChangePassword, setShowChangePassword, passwordForm, setPasswordForm, handleChangePassword, isChangingPassword, showPasswordMap, setShowPasswordMap } = props;
+  const { 
+    showChangePassword, setShowChangePassword, 
+    oldPassword, setOldPassword, 
+    newPassword, setNewPassword, 
+    confirmPassword, setConfirmPassword,
+    storage, config, activeApiUrl, logger
+  } = props;
   
   return (
         <Modal visible={showChangePassword} animationType="fade" transparent={true} onRequestClose={() => setShowChangePassword(false)}>

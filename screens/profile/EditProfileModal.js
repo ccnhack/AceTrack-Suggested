@@ -1,10 +1,18 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Modal, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Modal, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import styles from "../ProfileScreen.styles";
+import styles from "./ProfileScreen.styles";
+import { OTPVerificationModal } from '../../components/ProfileSubComponents';
 
 export const EditProfileModal = (props) => {
-  const { showEditProfile, setShowEditProfile, editForm, setEditForm, handleSaveProfile, isSaving } = props;
+  const { 
+    showEditProfile, setShowEditProfile, user, onUpdateUser, 
+    editName, setEditName, editEmail, setEditEmail, editPhone, setEditPhone,
+    editAvatar, editManagedSports, setEditManagedSports,
+    isSportsDropdownOpen, setIsSportsDropdownOpen, Sport,
+    showVerifyModal, setShowVerifyModal, verificationCode, setVerificationCode,
+    isVerifying, setIsVerifying, onVerifyAccount 
+  } = props;
   
   return (
         <Modal visible={showEditProfile} animationType="fade" transparent={true} onRequestClose={() => setShowEditProfile(false)}>
