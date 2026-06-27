@@ -587,7 +587,9 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
 
   } catch (error) {
     console.error("❌ Save Error:", error);
-    res.status(500).json({ error: 'Internal server error' });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
   } finally {
     release();
   }

@@ -7,7 +7,6 @@ export async function processNotificationHooks(deps, { req, changedKeys, current
 // ═══════════════════════════════════════════════════════════════
 // 🔔 NOTIFICATION HOOKS (v2.6.84)
 // ═══════════════════════════════════════════════════════════════
-try {
   // 1. Match Events (Challenges, Court Start, Score Reported)
   if (changedKeys.includes('matches')) {
     const incomingMatches = req.body.matches || [];
