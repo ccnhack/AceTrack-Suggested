@@ -1240,3 +1240,4 @@ const AdminSupportTeamPanel = ({ onOpenTicket }) => {
 
 
 // Styles extracted to ./AdminSupportTeamPanel.styles.js
+export default AdminSupportTeamPanel;
