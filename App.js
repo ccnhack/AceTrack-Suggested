@@ -76,7 +76,7 @@ import { useSupportStore } from './stores';
 // 🔄 Centralized Versioning// 🚀 EXPO OTA SYNC HUB
 // 🚀 EXPO OTA SYNC HUB
 // ALWAYS BUMP THIS VERSION TO TRIGGER CLIENT-SIDE CACHE INVALIDATION
-const APP_VERSION = '2.6.785'; // CRITICAL: This is the source of truth for the frontend version check
+const APP_VERSION = '2.6.786'; // CRITICAL: This is the source of truth for the frontend version check
 const OTA_CHECK_INTERVAL = 30 * 60 * 1000; // 30 mins
 const INITIAL_OTA_DELAY = 15000; // 15 seconds
 const linking = {

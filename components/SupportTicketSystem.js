@@ -285,8 +285,6 @@ export const SupportTicketSystem = ({
       });
       if (res.ok) {
         const data = await res.json();
-        notify("Thank you for your feedback!");
-        
         // 🛡️ [SYNC_FIX]: Update both local state AND global store to survive re-renders and delta syncs
         if (data.ticket) {
           const { useSupportStore } = require('../stores/useSupportStore');
@@ -299,6 +297,7 @@ export const SupportTicketSystem = ({
         } else {
           setSelectedTicket(prev => ({ ...prev, rating }));
         }
+        setTimeout(() => notify("Thank you for your feedback!"), 10);
       } else {
         const data = await res.json();
         notify("Error", data.error || "Failed to submit rating");
