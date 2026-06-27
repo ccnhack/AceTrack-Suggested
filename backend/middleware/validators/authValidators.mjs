@@ -9,14 +9,14 @@ export const loginSchema = z.object({
 
 export const adminLoginSchema = z.object({
   body: z.object({
-    email: z.string().email('Invalid email address'),
+    identifier: z.string().min(1, 'Username is required'),
     password: z.string().min(1, 'Password is required')
   })
 });
 
 export const mfaVerifySchema = z.object({
   body: z.object({
-    email: z.string().email('Invalid email address'),
+    mfaToken: z.string().min(1, 'MFA Token is required'),
     pin: z.string().min(4, 'PIN must be at least 4 digits')
   })
 });

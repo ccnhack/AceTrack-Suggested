@@ -356,7 +356,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
       </LinearGradient>
 
       {/* 🕐 Checkout Banner */}
-      {renderCheckoutBanner()}
+      
 
       {/* Search bar */}
       <View style={styles.searchBar}>
