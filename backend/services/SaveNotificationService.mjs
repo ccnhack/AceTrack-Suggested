@@ -1,8 +1,8 @@
 import crypto from 'crypto';
-import { CoachInvite } from '../../models/index.mjs';
+import { CoachInvite } from '../models/index.mjs';
 
 export async function processNotificationHooks(deps, { req, changedKeys, currentData, newMasterData }) {
-    const { addInAppNotification, sendPushNotification, sendCoachInviteEmail } = deps;
+    const { addInAppNotification, sendPushNotification, sendCoachInviteEmail, logAudit } = deps;
     try {
 // ═══════════════════════════════════════════════════════════════
 // 🔔 NOTIFICATION HOOKS (v2.6.84)

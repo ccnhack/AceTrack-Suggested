@@ -5,7 +5,7 @@ import mongoose from 'mongoose';
 import crypto from 'crypto';
 import { AppState, AuditLog, Player, Tournament, Match, MatchVideo, SupportTicket, Evaluation, Matchmaking, ChatbotThread, CoachInvite } from '../../models/index.mjs';
 import { asyncHandler, getISTTimestamp } from '../../helpers/utils.mjs';
-import { processTournamentWaitlist } from '../../promotion_logic.mjs';
+// processTournamentWaitlist moved to SaveBusinessLogicService.mjs
 import { apiKeyGuard, authGuard, sensitiveCacheGuard, validate, SaveDataSchema, DiagnosticsSchema, AutoFlushSchema, getSanitizedState } from '../../middleware/security.mjs';
 
 export default function ({
@@ -583,7 +583,7 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
     // 🔔 NOTIFICATION HOOKS (v2.6.84)
     // ═══════════════════════════════════════════════════════════════
     const { processNotificationHooks } = await import('../../services/SaveNotificationService.mjs');
-    await processNotificationHooks({ addInAppNotification, sendPushNotification, sendCoachInviteEmail }, { req, changedKeys, currentData, newMasterData });
+    await processNotificationHooks({ addInAppNotification, sendPushNotification, sendCoachInviteEmail, logAudit }, { req, changedKeys, currentData, newMasterData });
 
   } catch (error) {
     console.error("❌ Save Error:", error);
