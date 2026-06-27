@@ -475,26 +475,6 @@ useEffect(() => {
   };
 }, [currentUser]);
 
-const ticketStats = useMemo(() => {
-  let tickets = (supportTickets || []).filter(t => t.creatorRole !== 'support');
-  
-  if (currentUser?.id !== 'admin') {
-    tickets = tickets.filter(t => {
-      const isMine = (t.assignedTo && t.assignedTo === currentUser?.id) || 
-                     (currentUser?.username && t.assignedTo === currentUser?.username);
-      const isUnassigned = (!t.assignedTo || t.assignedTo === 'Unassigned' || t.assignedTo === '');
-      const isOpen = (t.status === 'Open' || !t.status);
-      return isMine || (isUnassigned && isOpen);
-    });
-  }
-
-  return {
-    open: tickets.filter(t => t.status === 'Open' || !t.status).length,
-    inProgress: tickets.filter(t => t.status === 'In Progress').length,
-    awaiting: tickets.filter(t => t.status === 'Awaiting Response').length,
-    resolved: tickets.filter(t => t.status === 'Resolved').length
-  };
-}, [supportTickets, currentUser]);
 
 const [seenAdminActionIds, setSeenAdminActionIds] = useState(new Set());
 
