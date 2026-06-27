@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Modal, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import SafeAvatar from '../../SafeAvatar';
 import styles from "../AdminSupportTeamPanel.styles";
 
 export const ActionsModal = (props) => {
