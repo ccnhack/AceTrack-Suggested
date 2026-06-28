@@ -60,7 +60,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
     shiftStatus, showCheckoutBanner, shiftCheckinRounded,
     activeLeave, isCurrentlyOnLeave, isLateFromLeave, shortLeaves,
     setShortLeaveForm, setShowShortLeaveModal, setShowAllLeavesModal,
-    handleCancelShortLeave, upcomingShortLeaves
+    handleCancelShortLeave, upcomingShortLeaves, isOvertime
   } = shiftState;
 
   const ticketStats = useMemo(() => {
@@ -164,7 +164,7 @@ const SupportDashboardScreen = ({ navigation, route }) => {
                   }}>
                     <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: shiftStatus === 'on_shift' ? (isCurrentlyOnLeave ? (isLateFromLeave ? '#EF4444' : '#F59E0B') : '#10B981') : '#EF4444', marginRight: 8 }} />
                     <Text style={{ color: shiftStatus === 'on_shift' ? (isCurrentlyOnLeave ? (isLateFromLeave ? '#EF4444' : '#F59E0B') : '#10B981') : '#F87171', fontSize: 11, fontWeight: '800', letterSpacing: 0.5, flex: 1 }}>
-                      {shiftStatus === 'on_shift' ? (isCurrentlyOnLeave ? (isLateFromLeave ? 'LATE FROM LEAVE' : 'ON SHORT LEAVE') : 'ON SHIFT') : 'OFF SHIFT'}
+                      {shiftStatus === 'on_shift' ? (isCurrentlyOnLeave ? (isLateFromLeave ? 'LATE FROM LEAVE' : 'ON SHORT LEAVE') : (isOvertime ? 'ON SHIFT (OVERTIME)' : 'ON SHIFT')) : 'OFF SHIFT'}
                     </Text>
                     {shiftStatus === 'on_shift' && shiftCheckinRounded && (
                       <Text style={{ color: '#94A3B8', fontSize: 9, fontWeight: '600' }}>Since {formatTime(shiftCheckinRounded)}</Text>

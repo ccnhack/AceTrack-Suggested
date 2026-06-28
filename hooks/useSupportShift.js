@@ -34,11 +34,13 @@ const [showCheckinModal, setShowCheckinModal] = useState(false);
 const [shiftStatus, setShiftStatus] = useState(null);
 const [shiftCheckinRounded, setShiftCheckinRounded] = useState(null);
 const [shiftCheckoutDue, setShiftCheckoutDue] = useState(null);
+const [extendedShiftUntil, setExtendedShiftUntil] = useState(null);
 const [shortLeaves, setShortLeaves] = useState([]);
 const [showCheckoutBanner, setShowCheckoutBanner] = useState(false);
 const [checkoutCountdown, setCheckoutCountdown] = useState('');
 const [checkinLoading, setCheckinLoading] = useState(false);
 const [checkoutLoading, setCheckoutLoading] = useState(false);
+const [extendShiftLoading, setExtendShiftLoading] = useState(false);
 const checkoutDismissedUntilRef = useRef(0);
 const autoCheckoutFiredRef = useRef(false);
 const bannerPulse = useRef(new Animated.Value(0)).current;
@@ -69,6 +71,7 @@ useEffect(() => {
         setShiftStatus(data.shiftStatus);
         setShiftCheckinRounded(data.shiftCheckinRounded);
         setShiftCheckoutDue(data.shiftCheckoutDue);
+        setExtendedShiftUntil(data.extendedShiftUntil);
         setShortLeaves(data.shortLeaves || []);
         
         // If not on shift, check if we should show the check-in modal
@@ -131,17 +134,21 @@ useEffect(() => {
   const checkBanner = () => {
     const now = Date.now();
     const checkinTime = new Date(shiftCheckinRounded).getTime();
-    const dueTime = new Date(shiftCheckoutDue).getTime();
-    const BANNER_START_MS = 7.5 * 60 * 60 * 1000; // 7h 30m
-    const GRACE_END_MS = 8.25 * 60 * 60 * 1000;   // 8h 15m
+    let dueTime = new Date(shiftCheckoutDue).getTime();
+    
+    // Default 8-hour shift banner logic
+    let bannerStartMs = checkinTime + (7.5 * 60 * 60 * 1000); // 7h 30m
+    
+    if (extendedShiftUntil) {
+      dueTime = new Date(extendedShiftUntil).getTime();
+      bannerStartMs = dueTime - (15 * 60 * 1000); // 15 mins before extended end
+    }
 
-    const elapsedMs = now - checkinTime;
-
-    if (elapsedMs >= BANNER_START_MS && now > checkoutDismissedUntilRef.current) {
+    if (now >= bannerStartMs && now > checkoutDismissedUntilRef.current) {
       setShowCheckoutBanner(true);
 
-      // Auto-checkout at 8h 15m
-      if (elapsedMs >= GRACE_END_MS && !autoCheckoutFiredRef.current) {
+      // Frontend Auto-checkout at exact due time
+      if (now >= dueTime && !autoCheckoutFiredRef.current) {
         autoCheckoutFiredRef.current = true;
         handleCheckout(true);
         return;
@@ -151,18 +158,20 @@ useEffect(() => {
       const remainingMs = dueTime - now;
       if (remainingMs > 0) {
         const mins = Math.ceil(remainingMs / 60000);
-        setCheckoutCountdown(`Your shift ends in ${mins} minute${mins !== 1 ? 's' : ''}! 🎉`);
+        setCheckoutCountdown(extendedShiftUntil ? `Extended shift ends in ${mins} minute${mins !== 1 ? 's' : ''}.` : `Your shift ends in ${mins} minute${mins !== 1 ? 's' : ''}! 🎉`);
       } else {
         const overtimeMins = Math.floor((now - dueTime) / 60000);
         setCheckoutCountdown(`Shift complete! ${overtimeMins > 0 ? `(${overtimeMins}m overtime)` : 'Time to check out.'}`);
       }
+    } else {
+      setShowCheckoutBanner(false);
     }
   };
 
   checkBanner();
   const interval = setInterval(checkBanner, 30000);
   return () => clearInterval(interval);
-}, [shiftCheckoutDue, shiftStatus, shiftCheckinRounded]);
+}, [shiftCheckoutDue, shiftStatus, shiftCheckinRounded, extendedShiftUntil]);
 
 // Banner pulse animation
 useEffect(() => {
@@ -286,6 +295,41 @@ const handleCheckout = useCallback(async (isAuto = false) => {
     }
   }
 }, [currentUser, checkoutLoading]);
+
+// 🕐 Handle Extend Shift
+const handleExtendShift = useCallback(async (targetTimeISO) => {
+  if (extendShiftLoading) return;
+  setExtendShiftLoading(true);
+  try {
+    const token = await AsyncStorage.getItem('userToken');
+    const headers = { 
+      'Content-Type': 'application/json',
+      'x-ace-api-key': config.PUBLIC_APP_ID, 
+      'x-user-id': currentUser.id 
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${config.API_BASE_URL}/api/v1/support/extend-shift`, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify({ extendUntil: targetTimeISO })
+    });
+    
+    const data = await res.json();
+    if (res.ok && data.success) {
+      setExtendedShiftUntil(data.extendedShiftUntil);
+      setShowCheckoutBanner(false);
+      Alert.alert('✅ Shift Extended', `Your shift is now extended until ${formatTime(data.extendedShiftUntil)}.`);
+    } else {
+      Alert.alert('Extension Failed', data.error || 'Unknown error');
+    }
+  } catch (e) {
+    Alert.alert('Error', `Failed to extend shift: ${e.message}`);
+  } finally {
+    setExtendShiftLoading(false);
+  }
+}, [currentUser, extendShiftLoading]);
 
 // 🕐 Handle Mute for Today
 const handleMuteForToday = useCallback(async () => {
@@ -502,6 +546,14 @@ const isLateFromLeave = useMemo(() => {
   return now > endObj;
 }, [activeLeave]);
 
+// Check if they are in Overtime (past 8 hours from check-in)
+const isOvertime = useMemo(() => {
+  if (shiftStatus !== 'on_shift' || !shiftCheckinRounded) return false;
+  const checkinTime = new Date(shiftCheckinRounded).getTime();
+  const SHIFT_LIMIT_MS = 8 * 60 * 60 * 1000;
+  return Date.now() - checkinTime > SHIFT_LIMIT_MS;
+}, [shiftStatus, shiftCheckinRounded]);
+
 const upcomingShortLeaves = useMemo(() => {
   if (!shortLeaves) return [];
   const now = new Date();
@@ -526,10 +578,10 @@ const upcomingShortLeaves = useMemo(() => {
 
   return {
     showCheckinModal, setShowCheckinModal, shiftStatus, setShiftStatus, shiftCheckinRounded,
-    shiftCheckoutDue, shortLeaves, showCheckoutBanner, setShowCheckoutBanner, checkoutCountdown,
-    checkinLoading, checkoutLoading, showShortLeaveModal, setShowShortLeaveModal, showAllLeavesModal,
+    shiftCheckoutDue, extendedShiftUntil, shortLeaves, showCheckoutBanner, setShowCheckoutBanner, checkoutCountdown,
+    checkinLoading, checkoutLoading, extendShiftLoading, showShortLeaveModal, setShowShortLeaveModal, showAllLeavesModal,
     setShowAllLeavesModal, showResumeLeaveModal, setShowResumeLeaveModal, shortLeaveForm, setShortLeaveForm,
-    shortLeaveLoading, handleCheckin, handleCheckout, handleMuteForToday, handleShortLeaveSubmit,
-    handleCancelShortLeave, activeLeave, isCurrentlyOnLeave, isLateFromLeave, upcomingShortLeaves, bannerPulse
+    shortLeaveLoading, handleCheckin, handleCheckout, handleExtendShift, handleMuteForToday, handleShortLeaveSubmit,
+    handleCancelShortLeave, activeLeave, isCurrentlyOnLeave, isLateFromLeave, isOvertime, upcomingShortLeaves, bannerPulse
   };
 };

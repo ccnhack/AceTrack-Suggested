@@ -289,7 +289,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
       });
       if (res.ok) {
         const data = await res.json();
-        const safeId = p.id.toLowerCase();
+        const safeId = p.id.replace(/[^a-z0-9]/gi, '_').toLowerCase();
         
         const filterFiles = (files) => {
           return (files || []).filter(f => {
@@ -367,6 +367,15 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
       return;
     }
     
+    // 🛡️ [OFFLINE LOGIC FIX]: Abort if device is not currently online
+    if (deviceId && !onlineDevices[deviceId]) {
+      Alert.alert(
+        "Device Offline",
+        "This device is currently offline. Diagnostic logs are stored locally on the physical device and cannot be pulled until it reconnects."
+      );
+      return;
+    }
+    
     // 1. WebSocket Ping
     socketRef.current.emit('admin_pull_diagnostics', { 
       targetUserId: selectedDiagUser.id,
@@ -388,7 +397,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
       }
       
       try {
-        const safeId = selectedDiagUser.id.toLowerCase();
+        const safeId = selectedDiagUser.id.replace(/[^a-z0-9]/gi, '_').toLowerCase();
         const token = await storage.getItem('userToken');
         const headers = { 
           'x-ace-api-key': config.ACE_API_KEY,
@@ -958,9 +967,8 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
                                 </View>
                               </View>
                               <TouchableOpacity 
-                                disabled={true}
                                 onPress={() => handlePullLogs(d.id)}
-                                style={[styles.pullBtn, styles.pullBtnDisabled]}
+                                style={styles.pullBtn}
                               >
                                 <Ionicons name="cloud-download-outline" size={14} color="#FFF" />
                                 <Text style={styles.pullBtnText}>PULL LOGS</Text>
@@ -989,8 +997,8 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
                                   </View>
                                 </View>
                                 <TouchableOpacity 
-                                  disabled={true}
-                                  style={[styles.pullBtn, styles.pullBtnDisabled]}
+                                  onPress={() => handlePullLogs(d.id)}
+                                  style={styles.pullBtn}
                                 >
                                   <Ionicons name="cloud-download-outline" size={14} color="#FFF" />
                                   <Text style={styles.pullBtnText}>PULL LOGS</Text>

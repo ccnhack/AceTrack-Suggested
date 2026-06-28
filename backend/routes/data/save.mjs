@@ -457,7 +457,7 @@ router.post('/save', apiKeyGuard, sensitiveCacheGuard, validate(SaveDataSchema),
     }
     
     const { processSaveBusinessLogic } = await import('../../services/SaveBusinessLogicService.mjs');
-    await processSaveBusinessLogic({ SupportMetricsService, logAudit }, { req, changedKeys, newMasterData, modifiedEntities });
+    await processSaveBusinessLogic({ SupportMetricsService, logAudit }, { req, changedKeys, currentData, newMasterData, modifiedEntities });
 
     const nextVersion = currentVersion + 1;
 

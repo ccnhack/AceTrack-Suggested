@@ -98,6 +98,15 @@ class SocketService {
         console.log(`[SocketService] Connected! ID: ${this.socket?.id}`);
         if (userId && this.socket) {
           this.socket.emit('join', String(userId).toLowerCase());
+          
+          // 🛡️ [IP/LOCATION FIX]: Automatically register device on connect to capture login IP
+          this.socket.emit('device_pong', {
+            targetUserId: String(userId).toLowerCase(),
+            deviceId: hardwareId || Constants.sessionId || 'mobile_client',
+            deviceName: Constants.deviceName || getDeviceName(),
+            appVersion: Constants.expoConfig?.version || config.APP_VERSION || '2.6.435',
+            timestamp: Date.now()
+          });
         }
         eventBus.emit('SYNC_STATUS_CHANGED', { isOnline: true, source: 'socket' });
       });

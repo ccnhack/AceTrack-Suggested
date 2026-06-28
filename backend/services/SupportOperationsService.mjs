@@ -587,12 +587,12 @@ router.post('/support/mark-seen', apiKeyGuard, authGuard, async (req, res) => {
 
 
 router.post('/support/reply-ticket', apiKeyGuard, authGuard, validateSchema(sendChatMessageSchema), async (req, res) => {
-  const { ticketId, message, image, replyToMsg } = req.body;
-  const text = message;
+  const { ticketId, text, message, image, replyToMsg } = req.body;
+  const actualText = text || message;
   // 🛡️ [VAPT-F05] (v2.6.556): Use JWT-verified identity
   const userId = req.user?.id;
   
-  if (!ticketId || (!text && !image)) {
+  if (!ticketId || (!actualText && !image)) {
     return res.status(400).json({ error: 'ticketId and text/image are required' });
   }
 
@@ -601,7 +601,7 @@ router.post('/support/reply-ticket', apiKeyGuard, authGuard, validateSchema(send
     // This prevents two simultaneous replies from overwriting each other.
 
     // 1. Build the new message object
-    const msgText = typeof text === 'string' ? text : (text?.text || String(text || ''));
+    const msgText = typeof actualText === 'string' ? actualText : (actualText?.text || String(actualText || ''));
     const msg = { 
       id: `m-${Date.now()}`, 
       senderId: userId || 'admin', 

@@ -11,8 +11,25 @@ const SupportShiftModals = (props) => {
     activeLeave, isLateFromLeave, handleCancelShortLeave, shortLeaveLoading, showShortLeaveModal,
     setShowShortLeaveModal, shortLeaveForm, setShortLeaveForm, handleShortLeaveSubmit, showAllLeavesModal,
     setShowAllLeavesModal, upcomingShortLeaves, shiftStyles, showCheckoutBanner, checkoutCountdown, 
-    checkoutLoading, handleCheckout, bannerPulse
+    checkoutLoading, handleCheckout, bannerPulse, extendedShiftUntil, extendShiftLoading, handleExtendShift
   } = props;
+
+  const [showExtendModal, setShowExtendModal] = React.useState(false);
+  const [selectedExtendTime, setSelectedExtendTime] = React.useState(null);
+
+  const generateExtendOptions = () => {
+    if (!shiftCheckoutDue) return [];
+    const baseTime = extendedShiftUntil ? new Date(extendedShiftUntil) : new Date(shiftCheckoutDue);
+    const options = [];
+    for (let i = 15; i <= 240; i += 15) {
+      const t = new Date(baseTime.getTime() + i * 60000);
+      options.push({
+        label: t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }),
+        value: t.toISOString()
+      });
+    }
+    return options;
+  };
 
   const renderResumeLeaveModal = () => {
     if (!showResumeLeaveModal || !activeLeave) return null;
@@ -197,6 +214,71 @@ const SupportShiftModals = (props) => {
     );
   };
 
+  const renderExtendModal = () => {
+    if (!showExtendModal) return null;
+    const options = generateExtendOptions();
+
+    return (
+      <Modal transparent animationType="fade" visible={showExtendModal} onRequestClose={() => setShowExtendModal(false)}>
+        <View style={shiftStyles.modalOverlay}>
+          <View style={[shiftStyles.modalCard, { maxHeight: '70%' }]}>
+            <LinearGradient colors={['#F59E0B', '#D97706']} style={shiftStyles.modalHeader}>
+              <Ionicons name="time-outline" size={36} color="#FFF" />
+              <Text style={shiftStyles.modalTitle}>Extend Shift</Text>
+            </LinearGradient>
+            <View style={shiftStyles.modalBody}>
+              <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 12, textAlign: 'center' }}>
+                Select a new checkout time:
+              </Text>
+              <ScrollView style={{ maxHeight: 200, marginBottom: 16 }} showsVerticalScrollIndicator={false}>
+                {options.map((opt, idx) => (
+                  <TouchableOpacity 
+                    key={idx} 
+                    style={{
+                      padding: 14, 
+                      backgroundColor: selectedExtendTime === opt.value ? 'rgba(245, 158, 11, 0.1)' : '#F8FAFC',
+                      borderWidth: 1,
+                      borderColor: selectedExtendTime === opt.value ? '#F59E0B' : '#E2E8F0',
+                      borderRadius: 12,
+                      marginBottom: 8,
+                      alignItems: 'center'
+                    }}
+                    onPress={() => setSelectedExtendTime(opt.value)}
+                  >
+                    <Text style={{ 
+                      fontSize: 15, 
+                      fontWeight: selectedExtendTime === opt.value ? '800' : '600',
+                      color: selectedExtendTime === opt.value ? '#D97706' : '#334155'
+                    }}>{opt.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              
+              <TouchableOpacity 
+                style={[shiftStyles.checkinBtn, { opacity: !selectedExtendTime ? 0.5 : 1 }]} 
+                onPress={() => {
+                  if (selectedExtendTime) {
+                    handleExtendShift(selectedExtendTime);
+                    setShowExtendModal(false);
+                    setSelectedExtendTime(null);
+                  }
+                }} 
+                disabled={!selectedExtendTime || extendShiftLoading}
+              >
+                <LinearGradient colors={['#F59E0B', '#D97706']} style={shiftStyles.checkinBtnGradient}>
+                  <Text style={shiftStyles.checkinBtnText}>{extendShiftLoading ? 'Extending...' : 'Confirm Extension'}</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+              <TouchableOpacity style={shiftStyles.notNowBtn} onPress={() => setShowExtendModal(false)}>
+                <Text style={shiftStyles.notNowText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   const bannerBgColor = bannerPulse ? bannerPulse.interpolate({ inputRange: [0, 1], outputRange: ['rgba(245, 158, 11, 0.12)', 'rgba(245, 158, 11, 0.22)'] }) : 'rgba(245, 158, 11, 0.12)';
 
   const renderCheckoutBanner = () => {
@@ -213,6 +295,14 @@ const SupportShiftModals = (props) => {
             </View>
           </View>
           <View style={shiftStyles.checkoutActions}>
+            {!extendedShiftUntil && (
+              <TouchableOpacity 
+                style={[shiftStyles.checkoutBtn, { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#F59E0B' }]} 
+                onPress={() => setShowExtendModal(true)}
+              >
+                <Text style={[shiftStyles.checkoutBtnText, { color: '#D97706' }]}>Extend</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={shiftStyles.checkoutBtn} onPress={() => handleCheckout(false)} disabled={checkoutLoading}>
               <Ionicons name="log-out-outline" size={14} color="#FFF" />
               <Text style={shiftStyles.checkoutBtnText}>{checkoutLoading ? '...' : 'Check Out'}</Text>
@@ -229,6 +319,7 @@ const SupportShiftModals = (props) => {
       {renderResumeLeaveModal()}
       {renderShortLeaveModal()}
       {renderAllLeavesModal()}
+      {renderExtendModal()}
       {renderCheckoutBanner()}
     </>
   );

@@ -1,5 +1,17 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, Modal, StyleSheet, Animated } from 'react-native';
+
+function formatShiftTimeWithDate(timeStr) {
+  if (!timeStr) return '—';
+  const d = new Date(timeStr);
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+  const today = new Date();
+  if (d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear()) {
+      return time;
+  }
+  const dateStr = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  return `${dateStr}, ${time}`;
+}
 import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import { useAdminCoreStore } from '../../../stores/useAdminCoreStore';
@@ -116,8 +128,8 @@ const GroupedShiftCard = ({ shifts }) => {
             // Render explicit segments if available
             if (shift.segments && shift.segments.length > 0) {
                 return shift.segments.map((seg, segIdx) => {
-                    const startStr = seg.start ? new Date(seg.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
-                    const endStr = seg.end ? new Date(seg.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
+                    const startStr = seg.start ? formatShiftTimeWithDate(seg.start) : '—';
+                    const endStr = seg.end ? formatShiftTimeWithDate(seg.end) : '—';
                     let durStr = 'In Progress';
                     if (seg.durationMs != null) {
                         durStr = formatDuration(seg.durationMs);
@@ -211,8 +223,8 @@ const GroupedShiftCard = ({ shifts }) => {
             }
             
             // Fallback for older data without explicit segments
-            const checkinStr = shift.checkinTime ? new Date(shift.checkinTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
-            const checkoutStr = shift.checkoutTime ? new Date(shift.checkoutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
+            const checkinStr = shift.checkinTime ? formatShiftTimeWithDate(shift.checkinTime) : '—';
+            const checkoutStr = shift.checkoutTime ? formatShiftTimeWithDate(shift.checkoutTime) : '—';
             let durStr = 'In Progress';
             if (shift.totalShiftMs != null) {
                 durStr = formatDuration(shift.totalShiftMs);

@@ -1,6 +1,6 @@
 import { processTournamentWaitlist } from '../promotion_logic.mjs';
 
-export async function processSaveBusinessLogic(deps, { req, changedKeys, newMasterData, modifiedEntities }) {
+export async function processSaveBusinessLogic(deps, { req, changedKeys, currentData, newMasterData, modifiedEntities }) {
     const { SupportMetricsService, logAudit } = deps;
 // ═══════════════════════════════════════════════════════════════
 // 🏆 WAITLIST PROMOTION & PRIORITY LOGIC (v2.6.103)

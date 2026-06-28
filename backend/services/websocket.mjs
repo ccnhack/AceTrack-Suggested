@@ -22,8 +22,9 @@ io.on('connection', async (socket) => {
 
   // 🏗️ PHASE 4: Join user-specific room for targeted emissions
   if (connUserId && connUserId !== 'guest') {
-    socket.join(`user:${connUserId}`);
-    console.log(`🎯 [ROOM_INIT] ${connUserId} joined room user:${connUserId}`);
+    const safeId = String(connUserId).toLowerCase();
+    socket.join(`user:${safeId}`);
+    console.log(`🎯 [ROOM_INIT] ${connUserId} joined room user:${safeId}`);
     socket.join('authenticated');
   } else {
     console.warn(`⚠️ [WS_WARN] socket=${socket.id} connected without userId! Waiting for manual join...`);

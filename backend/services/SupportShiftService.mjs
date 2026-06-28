@@ -141,6 +141,7 @@ router.post('/support/check-out', apiKeyGuard, authGuard, asyncHandler(async (re
   const updateSet = {
       'data.shiftStatus': 'off_shift',
       'data.shiftCheckoutAt': now.toISOString(),
+      'data.extendedShiftUntil': null,
       lastUpdated: new Date()
   };
   if (justification && justification.trim().length > 0) {
@@ -242,6 +243,50 @@ router.post('/support/check-out', apiKeyGuard, authGuard, asyncHandler(async (re
   });
 }));
 
+// 🕐 POST /support/extend-shift — Extend shift before auto-checkout
+router.post('/support/extend-shift', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
+  const userId = req.user?.id;
+  const { extendUntil } = req.body || {};
+  if (!userId) return res.status(401).json({ error: 'Authentication required' });
+  if (!extendUntil) return res.status(400).json({ error: 'extendUntil timestamp is required' });
+
+  const playerDoc = await Player.findOne({ id: userId }).lean();
+  if (!playerDoc || !playerDoc.data) return res.status(404).json({ error: 'User not found' });
+  if (playerDoc.data.shiftStatus !== 'on_shift') {
+    return res.status(400).json({ error: 'Cannot extend a shift that is not active' });
+  }
+
+  await Player.updateOne(
+    { id: userId },
+    { $set: { 
+      'data.extendedShiftUntil': extendUntil,
+      lastUpdated: new Date()
+    } }
+  );
+
+  logAudit(req, 'SUPPORT_SHIFT_EXTENDED', ['players'], {
+    userId,
+    extendedShiftUntil: extendUntil
+  }).catch(() => {});
+
+  if (io) {
+    io.emit('entity_updated', {
+      entity: 'players',
+      data: { 
+        id: userId, 
+        extendedShiftUntil: extendUntil
+      },
+      source: 'shift_extended',
+      timestamp: Date.now()
+    });
+  }
+
+  res.json({
+    success: true,
+    extendedShiftUntil: extendUntil
+  });
+}));
+
 // 🕐 GET /support/shift-status — Query current shift state
 router.get('/support/shift-status', apiKeyGuard, authGuard, asyncHandler(async (req, res) => {
   const userId = req.user?.id;
@@ -258,6 +303,7 @@ router.get('/support/shift-status', apiKeyGuard, authGuard, asyncHandler(async (
     shiftCheckinRounded: d.shiftCheckinRounded || null,
     shiftCheckoutAt: d.shiftCheckoutAt || null,
     shiftCheckoutDue: d.shiftCheckoutDue || null,
+    extendedShiftUntil: d.extendedShiftUntil || null,
     shortLeaves: d.shortLeaves || []
   });
 }));

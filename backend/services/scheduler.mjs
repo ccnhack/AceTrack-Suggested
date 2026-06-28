@@ -463,5 +463,99 @@ export default function initScheduler(loginAttempts, sendSecurityAlert) {
     }
   }, 60 * 1000);
 
+  // 🕐 [AUTO CHECKOUT ENFORCEMENT] (v2.6.723): Run every 15 minutes
+  setInterval(async () => {
+    try {
+      const { Player, AuditLog } = await import('../models/index.mjs');
+      const now = new Date();
+      const SHIFT_LIMIT_MS = 8 * 60 * 60 * 1000;
+      
+      const agentsOnShift = await Player.find({ 'data.shiftStatus': 'on_shift' }).lean();
+      
+      for (const player of agentsOnShift) {
+        if (!player.data?.shiftCheckinRounded) continue;
+        
+        const checkinDate = new Date(player.data.shiftCheckinRounded);
+        const totalShiftMs = now.getTime() - checkinDate.getTime();
+        
+        let shouldAutoCheckout = false;
+        let justification = '';
+
+        if (player.data.extendedShiftUntil) {
+          const extendedUntilDate = new Date(player.data.extendedShiftUntil);
+          if (now >= extendedUntilDate) {
+            shouldAutoCheckout = true;
+            justification = 'Auto-checkout due to exceeding extended shift limit.';
+          }
+        } else {
+          // If shift has been active for more than 8 hours
+          if (totalShiftMs >= SHIFT_LIMIT_MS) {
+            shouldAutoCheckout = true;
+            justification = 'Auto-checkout due to exceeding 8-hour shift limit.';
+          }
+        }
+
+        if (shouldAutoCheckout) {
+          const overtimeMs = Math.max(0, totalShiftMs - SHIFT_LIMIT_MS);
+          
+          await Player.updateOne(
+            { id: player.id },
+            { 
+              $set: { 
+                'data.shiftStatus': 'off_shift',
+                'data.shiftCheckoutAt': now.toISOString(),
+                'data.shiftCheckoutJustification': justification,
+                lastUpdated: now
+              },
+              $unset: {
+                'data.extendedShiftUntil': ""
+              }
+            }
+          );
+
+          await AuditLog.create({
+            action: 'SUPPORT_SHIFT_CHECKOUT',
+            userId: player.id,
+            timestamp: now,
+            entities: ['players'],
+            details: {
+              userId: player.id,
+              name: player.data?.name,
+              email: player.data?.email,
+              username: player.data?.username,
+              checkoutTime: now.toISOString(),
+              checkinRounded: player.data.shiftCheckinRounded,
+              totalShiftMs,
+              overtimeMs,
+              isAutoCheckout: true,
+              justification,
+              scheduledStart: player.data?.scheduledShiftStart,
+              scheduledEnd: player.data?.scheduledShiftEnd
+            }
+          });
+          
+          if (overtimeMs > 0) {
+            await AuditLog.create({
+              action: 'SUPPORT_OVERTIME_DETECTED',
+              userId: player.id,
+              timestamp: now,
+              entities: ['players'],
+              details: {
+                userId: player.id,
+                overtimeMs,
+                overtimeMinutes: Math.floor(overtimeMs / 60000),
+                isAutoCheckout: true
+              }
+            });
+          }
+
+          console.log(`[Scheduler] Auto checked-out ${player.id}. Overtime: ${Math.floor(overtimeMs/60000)}m`);
+        }
+      }
+    } catch (e) {
+      console.error('❌ [SCHEDULER] Auto Checkout Enforcement failed:', e.message);
+    }
+  }, 15 * 60 * 1000);
+
   console.log('🕒 Scheduler initialized (v2.6.395)');
 }
