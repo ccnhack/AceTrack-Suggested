@@ -123,7 +123,10 @@ class SocketService {
       // 🛡️ [DIAGNOSTICS] ADMIN PING RESPONDER (v2.6.435)
       this.socket.on('admin_ping_device_relay', async (data: any) => {
         try {
-          if (data.targetUserId === String(userId).toLowerCase() && this.socket) {
+          // 🛡️ [MIGRATION FIX] (v2.6.802): Case-insensitive comparison (see force_upload_diagnostics fix).
+          // The admin panel sends data.targetUserId in original DB casing; comparing to a lowercased
+          // userId with === silently dropped the pong, so the device appeared without IP/location.
+          if (String(data.targetUserId).toLowerCase() === String(userId).toLowerCase() && this.socket) {
             console.log('[SocketService] Received Admin Ping — Replying with Pong');
             this.socket.emit('device_pong', {
               targetUserId: String(userId).toLowerCase(),
@@ -145,7 +148,11 @@ class SocketService {
           if (data.targetDeviceId && hardwareId && data.targetDeviceId !== hardwareId) {
              return;
           }
-          if (data.targetUserId === String(userId).toLowerCase()) {
+          // 🛡️ [MIGRATION FIX] (v2.6.802): Case-insensitive comparison. The admin panel sends
+          // data.targetUserId in its original DB casing (e.g. "Shashank123"), while userId here is
+          // lowercased. A strict === silently failed for any user whose ID isn't already lowercase,
+          // so the device never uploaded its logs in response to an admin pull request.
+          if (String(data.targetUserId).toLowerCase() === String(userId).toLowerCase()) {
              console.log('[SocketService] Received Force Upload Request');
              logger.logAction('ADMIN_DIAGNOSTICS_PULL_RECEIVED', {
                adminId: data.adminId,
