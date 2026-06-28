@@ -1297,10 +1297,11 @@ export default function MatchmakingScreen({ route }) {
         venueDropdownSearchQuery, setVenueDropdownSearchQuery, matchmaking, user, role, getOpponentName
       }} />
       {/* Booking Details Modal */}
-      <DetailsModal {...{ 
-        isDetailsModalVisible, setIsDetailsModalVisible, selectedChallenge, getOpponentName, getOpponentStats, 
-        getTournamentDetails, user, handleAcceptChallenge, handleAcceptCountered, handleCounter, handleDeclineChallenge, 
-        handleCancelChallenge, setReportScoreMatch, colors, role, receivedRequests, sentRequests, handleConfirmBooking 
+      {/* 🛡️ [MIGRATION FIX] (v2.6.802): handleCancelBooking was in scope but omitted during extraction */}
+      <DetailsModal {...{
+        isDetailsModalVisible, setIsDetailsModalVisible, selectedChallenge, getOpponentName, getOpponentStats,
+        getTournamentDetails, user, handleAcceptChallenge, handleAcceptCountered, handleCounter, handleDeclineChallenge,
+        handleCancelChallenge, handleCancelBooking, setReportScoreMatch, colors, role, receivedRequests, sentRequests, handleConfirmBooking
       }} />
       <CounterModal {...{ 
         isCounterModalVisible, setIsCounterModalVisible, selectedChallenge, getOpponentName, counterDate, setCounterDate, 

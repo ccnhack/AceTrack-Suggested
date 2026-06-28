@@ -4,13 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import SafeAvatar from '../../components/SafeAvatar';
 import styles from "./MatchmakingScreen.styles";
 
+// 🛡️ [MIGRATION FIX] (v2.6.802): removed dead destructure (showMatchDetails, setShowMatchDetails, selectedMatch,
+// renderDate, formatVenue) that were leftover from pre-extraction monolith.
 export const DetailsModal = (props) => {
-  const { showMatchDetails, setShowMatchDetails, selectedMatch, renderDate, formatVenue, handleCancelBooking } = props;
-
-  const { 
+  const {
     isDetailsModalVisible, setIsDetailsModalVisible, selectedChallenge, getOpponentName, getOpponentStats,
-    getTournamentDetails, user, handleAcceptChallenge, handleAcceptCountered, handleCounter, handleDeclineChallenge, 
-    handleCancelChallenge, setReportScoreMatch, colors, role, receivedRequests, sentRequests, handleConfirmBooking 
+    getTournamentDetails, user, handleAcceptChallenge, handleAcceptCountered, handleCounter, handleDeclineChallenge,
+    handleCancelChallenge, handleCancelBooking, setReportScoreMatch, colors, role, receivedRequests, sentRequests, handleConfirmBooking
   } = props;
   return (
       <Modal visible={isDetailsModalVisible} animationType="fade" transparent>

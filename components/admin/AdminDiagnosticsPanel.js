@@ -966,9 +966,13 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
                                   </Text>
                                 </View>
                               </View>
-                              <TouchableOpacity 
+                              {/* 🛡️ [MIGRATION FIX] (v2.6.802): Restored disabled={true} for offline devices.
+                                  Was removed during IP-geolocation migration, causing red PULL LOGS buttons
+                                  to appear on offline devices that can't respond to socket pings. */}
+                              <TouchableOpacity
+                                disabled={true}
                                 onPress={() => handlePullLogs(d.id)}
-                                style={styles.pullBtn}
+                                style={[styles.pullBtn, styles.pullBtnDisabled]}
                               >
                                 <Ionicons name="cloud-download-outline" size={14} color="#FFF" />
                                 <Text style={styles.pullBtnText}>PULL LOGS</Text>
@@ -996,9 +1000,10 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
                                     </Text>
                                   </View>
                                 </View>
-                                <TouchableOpacity 
+                                <TouchableOpacity
+                                  disabled={true}
                                   onPress={() => handlePullLogs(d.id)}
-                                  style={styles.pullBtn}
+                                  style={[styles.pullBtn, styles.pullBtnDisabled]}
                                 >
                                   <Ionicons name="cloud-download-outline" size={14} color="#FFF" />
                                   <Text style={styles.pullBtnText}>PULL LOGS</Text>

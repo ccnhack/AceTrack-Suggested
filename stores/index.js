@@ -7,3 +7,4 @@ export { useSupportStore } from './useSupportStore.js';
 export { useMatchmakingStore } from './useMatchmakingStore.js';
 export { useEvaluationsStore } from './useEvaluationsStore.js';
 export { useVideoStore } from './useVideoStore.js';
+export { useAdminStore } from './useAdminStore.js';

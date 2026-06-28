@@ -70,8 +70,11 @@ const ProfileScreen = ({ navigation, route }) => {
   const { 
     isCloudOnline, isUsingCloud, lastSyncTime, onManualSync, onToggleCloud 
   } = useSync();
-  const { onUploadLogs, isUploadingLogs, pushStatus } = useAdmin();
-  const { appVersion, setShowNotifications } = useApp();
+  // 🛡️ [MIGRATION FIX] (v2.6.802): onUploadLogs/isUploadingLogs come from useAdminStore (Zustand),
+  // but pushStatus was dropped during the AdminContext→useAdminStore migration. Source it from useApp()
+  // where it actually lives, matching the pre-migration AdminContext behavior.
+  const { onUploadLogs, isUploadingLogs } = useAdmin();
+  const { appVersion, setShowNotifications, pushStatus } = useApp();
   
 
   const isFocused = useIsFocused();

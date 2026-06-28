@@ -179,8 +179,9 @@ io.on('connection', async (socket) => {
             const user = playerDoc.data;
             user.devices = user.devices || [];
             const dIdx = user.devices.findIndex(d => d && d.id === data.deviceId);
-            
-            const pingLocation = await fetchLocationForIp(connIpAddress);
+
+            // 🛡️ [MIGRATION FIX] (v2.6.802): Reuse pingLocation from line 165 instead of making
+            // a redundant second fetchLocationForIp() API call for every device pong.
             if (dIdx === -1) {
               console.log(`📡 [AUTO-REG] Adding new device ${data.deviceId} to user ${data.targetUserId}`);
               user.devices.push({

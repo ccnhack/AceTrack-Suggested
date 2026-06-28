@@ -8,7 +8,7 @@ import logger from '../utils/logger';
 import config from '../config';
 
 import { useSync } from './SyncContext';
-import { useAuthStore, usePlayersStore, useTournamentsStore, useSupportStore, useVideoStore, useMatchmakingStore } from '../stores';
+import { useAuthStore, usePlayersStore, useTournamentsStore, useSupportStore, useVideoStore, useMatchmakingStore, useAdminStore } from '../stores';
 
 const AuthContext = createContext(null);
 
@@ -83,7 +83,10 @@ export const AuthProvider = ({ children }) => {
              useTournamentsStore.getState().hydrate(),
              useSupportStore.getState().hydrate(),
              useVideoStore.getState().hydrate(),
-             useMatchmakingStore.getState().hydrate()
+             useMatchmakingStore.getState().hydrate(),
+             // 🛡️ [MIGRATION FIX] (v2.6.802): useAdminStore was omitted during AdminContext→Zustand migration,
+             // causing seenAdminActionIds/auditLogs/visitedAdminSubTabs to start empty on every login.
+             useAdminStore.getState().hydrate()
           ]);
 
           if (rawUser && (rawUser.role === 'admin' || rawUser.role === 'support')) {
@@ -177,7 +180,8 @@ export const AuthProvider = ({ children }) => {
           await Promise.all([
              useSupportStore.getState().hydrate(),
              usePlayersStore.getState().hydrate(),
-             useTournamentsStore.getState().hydrate()
+             useTournamentsStore.getState().hydrate(),
+             useAdminStore.getState().hydrate()
           ]);
         }
       }, 500);

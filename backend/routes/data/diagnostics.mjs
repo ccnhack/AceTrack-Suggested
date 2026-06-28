@@ -87,11 +87,15 @@ router.get('/diagnostics', apiKeyGuard, sensitiveCacheGuard, asyncHandler(async 
       .map(entry => entry[0])
       .filter(f => {
         if (!userId) return true;
-        const safeId = String(userId).toLowerCase();
+        // 🛡️ [MIGRATION FIX] (v2.6.802): Sanitize userId the SAME way the POST handler sanitizes
+        // username when creating files (replace(/[^a-z0-9]/gi, '_')). Previously the GET filter used
+        // raw toLowerCase(), so usernames with special chars (dots, @, etc.) never matched their
+        // stored filenames (e.g. "john.doe" user → file "john_doe_...") → admin saw an empty log list.
+        const safeId = String(userId).replace(/[^a-z0-9]/gi, '_').toLowerCase();
         const fName = String(f).toLowerCase();
         console.log(`🔍 [AdminFetch] Checking file ${fName} against ID ${safeId}`);
-        // Strict match: starts with user_ OR contains admin_requested_user_ OR starts with user-
-        return fName.startsWith(safeId + '_') || 
+        // Strict match: starts with user_ OR contains admin_requested_user_ OR manual_upload_ OR starts with user-
+        return fName.startsWith(safeId + '_') ||
                fName.includes('_requested_' + safeId + '_') ||
                fName.includes('manual_upload_' + safeId + '_') ||
                fName.startsWith(safeId + '-');
@@ -151,12 +155,12 @@ router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), asyncHandl
   const { username, logs, prefix, deviceId } = req.body;
     const timestamp = getISTTimestamp();
     const safeUsername = username.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    
+
     try {
-      const filePrefix = prefix === 'admin_requested' ? 'admin_requested_' : '';
-      const matchPrefix = filePrefix ? `admin_requested_${safeUsername}_` : `${safeUsername}_`;
+      // 🛡️ [MIGRATION FIX] (v2.6.802): Rotate BOTH user-prefixed AND admin_requested_ files for this
+      // user. The migrated code matched only one prefix, leaving the other kind to grow unbounded.
       const userFiles = fs.readdirSync(DIAGNOSTICS_DIR)
-        .filter(f => f.startsWith(matchPrefix))
+        .filter(f => f.startsWith(`${safeUsername}_`) || f.startsWith(`admin_requested_${safeUsername}_`))
         .sort();
       while (userFiles.length >= 3) {
         fs.unlinkSync(path.join(DIAGNOSTICS_DIR, userFiles.shift()));
@@ -204,16 +208,16 @@ router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), asyncHandl
           direction: 'desc'
         });
           
-        const matchPrefix = (prefix === 'admin_requested' ? `admin_requested_${safeUsername}_` : `${safeUsername}_`);
-        
+        // 🛡️ [MIGRATION FIX] (v2.6.802): Match BOTH prefixes so cloud rotation covers all of this
+        // user's files, regardless of whether they were user-uploaded or admin-requested.
         const userFilesCloud = result.resources.filter(f => {
           const fName = f.public_id.split('/').pop().toLowerCase();
-          return fName.startsWith(matchPrefix);
+          return fName.startsWith(`${safeUsername}_`) || fName.startsWith(`admin_requested_${safeUsername}_`);
         });
         
         if (userFilesCloud.length > 3) {
           const filesToDelete = userFilesCloud.slice(3).map(f => f.public_id);
-          console.log(`🧹 [Cloudinary] Rotating ${filesToDelete.length} old diagnostic(s) for ${safeUsername} (prefix: ${matchPrefix})`);
+          console.log(`🧹 [Cloudinary] Rotating ${filesToDelete.length} old diagnostic(s) for ${safeUsername}`);
           await cloudinary.api.delete_resources(filesToDelete, { resource_type: 'raw' });
         }
       } catch (rotationErr) {
