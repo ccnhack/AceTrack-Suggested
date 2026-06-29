@@ -34,6 +34,11 @@ export const globalErrorHandler = (logServerEvent, APP_VERSION) => (err, req, re
     if (logServerEvent) {
       logServerEvent('CRITICAL_ERROR', { url: req.url, error: error.message }).catch(e => console.error('Failed to log server event:', e));
     }
+  } else if (error.statusCode === 413) {
+    console.warn(`⚠️ [PAYLOAD_TOO_LARGE] ${req.method} ${req.url}: ${err.message}`);
+    if (logServerEvent) {
+      logServerEvent('PAYLOAD_TOO_LARGE', { url: req.url, error: error.message }).catch(e => {});
+    }
   }
 
   // Handle Mongoose/MongoDB specific errors

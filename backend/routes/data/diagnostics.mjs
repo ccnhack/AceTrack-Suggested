@@ -184,9 +184,14 @@ router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), asyncHandl
       logs
     };
 
-    fs.writeFileSync(filepath, JSON.stringify(reportData, null, 2));
+    try {
+      fs.writeFileSync(filepath, JSON.stringify(reportData, null, 2));
+      console.log(`☁️ [Cloudinary] Starting upload for: ${filename} (Size: ${fs.statSync(filepath).size} bytes)`);
+    } catch (writeErr) {
+      console.error(`❌ [Diagnostics] Failed to write file locally: ${writeErr.message}`);
+      return res.status(500).json({ error: 'Failed to write diagnostic file locally.' });
+    }
 
-    console.log(`☁️ [Cloudinary] Starting upload for: ${filename} (Size: ${fs.statSync(filepath).size} bytes)`);
     try {
       const cloudResult = await cloudinary.uploader.upload(filepath, {
         folder: 'acetrack/diagnostics',

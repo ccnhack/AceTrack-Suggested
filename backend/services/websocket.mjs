@@ -16,7 +16,8 @@ io.on('connection', async (socket) => {
   const connUserAgent = socket.handshake?.headers?.['user-agent'] || 'Unknown';
   // 🛡️ [IP CAPTURE]: Identify devices across browser sessions
   const rawIp = socket.handshake?.headers?.['x-forwarded-for'] || socket.handshake?.address || 'Unknown';
-  const connIpAddress = rawIp.includes(',') ? rawIp.split(',')[0].trim() : rawIp;
+  let connIpAddress = rawIp.includes(',') ? rawIp.split(',')[0].trim() : rawIp;
+  if (!connIpAddress || connIpAddress.trim() === '') connIpAddress = 'Unknown';
 
   console.log(`📡 [WS_HANDSHAKE] socket=${socket.id} | userId=${connUserId} | role=${connRole} | device=${connDeviceName} | ip=${connIpAddress}`);
 
