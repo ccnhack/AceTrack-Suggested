@@ -5,9 +5,20 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import logger from '../utils/logger';
+import * as Clipboard from 'expo-clipboard';
 
 const DiagnosticsModal = ({ visible, onClose, onUpload, isUploading }) => {
     const logs = logger.getLogs();
+    
+    const handleCopyLogs = async () => {
+        try {
+            const logStr = (logs || []).map(l => `[${l.timestamp}] [${l.level.toUpperCase()}] [${l.type}] ${l.message}`).join('\n');
+            await Clipboard.setStringAsync(logStr);
+            alert("Logs copied to clipboard!");
+        } catch (error) {
+            alert("Failed to copy logs");
+        }
+    };
     
     const logStr = (logs || []).map(l => JSON.stringify(l)).join('\n');
     const totalLines = (logs || []).length;
@@ -69,6 +80,15 @@ const DiagnosticsModal = ({ visible, onClose, onUpload, isUploading }) => {
                             <Text style={styles.emptyText}>No logs recorded in the last 5 minutes.</Text>
                         )}
                     </ScrollView>
+
+                    <TouchableOpacity 
+                        disabled={(logs || []).length === 0}
+                        onPress={handleCopyLogs} 
+                        style={[styles.uploadBtn, { backgroundColor: '#F1F5F9', marginBottom: 12, elevation: 0, shadowOpacity: 0, borderWidth: 1, borderColor: '#E2E8F0' }, ((logs || []).length === 0) && styles.uploadBtnDisabled]}
+                    >
+                        <Ionicons name="copy-outline" size={20} color="#334155" />
+                        <Text style={[styles.uploadBtnText, { color: '#334155' }]}>Copy Logs to Clipboard</Text>
+                    </TouchableOpacity>
 
                     <TouchableOpacity 
                         disabled={isUploading || (logs || []).length === 0}
