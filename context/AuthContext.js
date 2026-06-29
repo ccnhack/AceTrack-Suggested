@@ -8,7 +8,7 @@ import logger from '../utils/logger';
 import config from '../config';
 
 import { useSync } from './SyncContext';
-import { useAuthStore, usePlayersStore, useTournamentsStore, useSupportStore, useVideoStore, useMatchmakingStore, useAdminStore } from '../stores';
+import { useAuthStore, usePlayersStore, useTournamentsStore, useSupportStore, useVideoStore, useMatchmakingStore, useAdminStore, useEvaluationsStore } from '../stores';
 
 const AuthContext = createContext(null);
 
@@ -86,7 +86,10 @@ export const AuthProvider = ({ children }) => {
              useMatchmakingStore.getState().hydrate(),
              // 🛡️ [MIGRATION FIX] (v2.6.802): useAdminStore was omitted during AdminContext→Zustand migration,
              // causing seenAdminActionIds/auditLogs/visitedAdminSubTabs to start empty on every login.
-             useAdminStore.getState().hydrate()
+             useAdminStore.getState().hydrate(),
+             // 🛡️ [ENHANCEMENT] (v2.6.804): evaluations were lazy-hydrated only on first screen access;
+             // now pre-warmed on login so evaluation-dependent screens render instantly.
+             useEvaluationsStore.getState().hydrate()
           ]);
 
           if (rawUser && (rawUser.role === 'admin' || rawUser.role === 'support')) {
@@ -181,7 +184,8 @@ export const AuthProvider = ({ children }) => {
              useSupportStore.getState().hydrate(),
              usePlayersStore.getState().hydrate(),
              useTournamentsStore.getState().hydrate(),
-             useAdminStore.getState().hydrate()
+             useAdminStore.getState().hydrate(),
+             useEvaluationsStore.getState().hydrate()
           ]);
         }
       }, 500);

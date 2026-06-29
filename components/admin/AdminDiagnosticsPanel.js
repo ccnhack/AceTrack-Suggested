@@ -418,7 +418,13 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
               return lf.startsWith(`admin_requested_${safeId}_`);
             }
             return lf.startsWith(safeId + '_') || lf.startsWith(safeId + '-');
-          }).sort((a, b) => b.localeCompare(a));
+          }).sort((a, b) => {
+            const extractTime = (name) => {
+              const match = name.match(/(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})|(\d{8}_\d{6})/);
+              return match ? match[0].replace(/[-_]/g, '') : name;
+            };
+            return extractTime(b).localeCompare(extractTime(a));
+          });
           
           // 🛡️ [Diff Detection] Detect brand new filenames explicitly
           const hasNewFile = filteredFs.some(f => !initialFiles.has(f));

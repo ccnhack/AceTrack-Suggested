@@ -48,6 +48,18 @@ const OrgChatScreen = ({ navigation }) => {
   const chatScrollRef = useRef(null);
   const chatInputRef = useRef(null);
   const messageRefs = useRef(new Map()); // 🔗 [SCROLL-TO-REPLY] (v2.6.424)
+  // 🛡️ [ENHANCEMENT] (v2.6.804): Track pending timeouts so they can be cleared on unmount,
+  // preventing "Can't perform a React state update on an unmounted component" warnings and
+  // stale DOM writes after navigation away.
+  const pendingTimeouts = useRef(new Set());
+  const safeTimeout = (fn, delay) => {
+    const id = setTimeout(() => {
+      pendingTimeouts.current.delete(id);
+      try { fn(); } catch (e) { /* swallow errors on unmounted component */ }
+    }, delay);
+    pendingTimeouts.current.add(id);
+    return id;
+  };
   const [highlightedMessageId, setHighlightedMessageId] = useState(null);
   const blinkAnim = useRef(new Animated.Value(0)).current;
   const { width: windowWidth } = useWindowDimensions();
@@ -57,6 +69,15 @@ const OrgChatScreen = ({ navigation }) => {
   useEffect(() => {
     fetchTeamDirectory();
     fetchMessages();
+  }, []);
+
+  // 🛡️ [ENHANCEMENT] (v2.6.804): Clear all pending timeouts on unmount to prevent
+  // state updates on an unmounted component.
+  useEffect(() => {
+    return () => {
+      pendingTimeouts.current.forEach(id => clearTimeout(id));
+      pendingTimeouts.current.clear();
+    };
   }, []);
 
   useEffect(() => {

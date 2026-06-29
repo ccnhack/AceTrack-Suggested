@@ -65,7 +65,9 @@ const AdminHubScreen = ({ navigation, route }) => {
           usePlayersStore.getState().hydrate(),
           useTournamentsStore.getState().hydrate(),
           // 🛡️ [MIGRATION FIX] (v2.6.802): restore admin store hydration lost in Context→Zustand migration
-          useAdminStore.getState().hydrate()
+          useAdminStore.getState().hydrate(),
+          // 🛡️ [ENHANCEMENT] (v2.6.804): pre-warm evaluations so admin tabs render instantly
+          useEvaluationsStore.getState().hydrate()
         ]);
       } catch (e) {
         console.warn('[AdminHub] Store hydration error:', e.message);

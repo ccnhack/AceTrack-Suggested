@@ -161,7 +161,11 @@ router.post('/diagnostics', apiKeyGuard, validate(DiagnosticsSchema), asyncHandl
       // user. The migrated code matched only one prefix, leaving the other kind to grow unbounded.
       const userFiles = fs.readdirSync(DIAGNOSTICS_DIR)
         .filter(f => f.startsWith(`${safeUsername}_`) || f.startsWith(`admin_requested_${safeUsername}_`))
-        .sort();
+        .sort((a, b) => {
+          const statA = fs.statSync(path.join(DIAGNOSTICS_DIR, a));
+          const statB = fs.statSync(path.join(DIAGNOSTICS_DIR, b));
+          return statA.mtime.getTime() - statB.mtime.getTime();
+        });
       while (userFiles.length >= 3) {
         fs.unlinkSync(path.join(DIAGNOSTICS_DIR, userFiles.shift()));
       }
@@ -276,13 +280,15 @@ router.post('/diagnostics/auto-flush', apiKeyGuard, validate(AutoFlushSchema), a
   }
 
   const allFiles = await fs.promises.readdir(DIAGNOSTICS_DIR);
-  const userFiles = allFiles
-    .filter(f => f.startsWith(`${safeUser}_${safeDevice}_`) && f.endsWith('.log'))
-    .sort((a, b) => {
-      const timeA = parseInt(a.split('_').pop().replace('.log', '')) || 0;
-      const timeB = parseInt(b.split('_').pop().replace('.log', '')) || 0;
-      return timeB - timeA;
-    });
+  const userFilesRaw = allFiles.filter(f => f.startsWith(`${safeUser}_${safeDevice}_`) && f.endsWith('.log'));
+  const userFilesWithStats = await Promise.all(userFilesRaw.map(async f => ({
+    name: f,
+    mtime: (await fs.promises.stat(path.join(DIAGNOSTICS_DIR, f)).catch(() => ({ mtimeMs: 0 }))).mtimeMs
+  })));
+  
+  const userFiles = userFilesWithStats
+    .sort((a, b) => b.mtime - a.mtime) // Newest first
+    .map(f => f.name);
 
   if (userFiles.length > 3) {
     for (const f of userFiles.slice(3)) {
