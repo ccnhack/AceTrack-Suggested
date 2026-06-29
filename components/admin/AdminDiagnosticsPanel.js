@@ -500,11 +500,13 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
     }
   };
 
-  const filteredPlayers = (players || []).filter(p => {
-    const s = diagUserSearch?.toLowerCase().trim() || '';
-    if (!s) return true;
-    return p.name?.toLowerCase().includes(s) || p.id?.toLowerCase().includes(s) || p.email?.toLowerCase().includes(s);
-  });
+  const filteredPlayers = (players || [])
+    .filter(p => {
+      const s = diagUserSearch?.toLowerCase().trim() || '';
+      if (!s) return true;
+      return p.name?.toLowerCase().includes(s) || p.id?.toLowerCase().includes(s) || p.email?.toLowerCase().includes(s);
+    })
+    .sort((a, b) => (a.name || 'User').localeCompare(b.name || 'User'));
 
   const renderDetailModal = () => (
     <Modal visible={!!diagDetailType} transparent animationType="fade" onRequestClose={() => setDiagDetailType(null)}>
