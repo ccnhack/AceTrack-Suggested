@@ -48,12 +48,14 @@ const AdminUserPanel = memo(({ subTab, search }) => {
   };
 
   const filteredIndividuals = useMemo(() => 
-    filterData((players || []).filter(p => !p.role || p.role === 'user')), 
+    filterData((players || []).filter(p => !p.role || p.role === 'user'))
+      .sort((a, b) => (a.name || 'User').localeCompare(b.name || 'User')), 
     [players, search]
   );
 
   const filteredAcademies = useMemo(() => 
-    filterData((players || []).filter(p => p.role === 'academy')), 
+    filterData((players || []).filter(p => p.role === 'academy'))
+      .sort((a, b) => (a.name || 'User').localeCompare(b.name || 'User')), 
     [players, search]
   );
 

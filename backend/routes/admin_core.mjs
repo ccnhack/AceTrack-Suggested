@@ -126,6 +126,7 @@ export default function createAdminCoreRoutes() {
                     isExEmployee, isLive: isExEmployee ? false : isLive,
                     lastActive: lastActive || u.lastUpdated || 0,
                     status: isExEmployee ? 'left' : (isLive ? 'active' : 'offline'),
+                    devices: u.data?.devices || [],
                 };
             });
             res.json({ success: true, team: mappedTeam });

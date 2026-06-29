@@ -299,11 +299,11 @@ const TeamDirectoryView = ({ team }) => {
     (member.designation || member.role || '').toLowerCase().includes(search.toLowerCase())
   );
 
-  // Sort: active employees first, ex-employees at the bottom
+  // Sort: active employees first, ex-employees at the bottom, then alphabetical
   const sortedTeam = [...filteredTeam].sort((a, b) => {
     if (a.isExEmployee && !b.isExEmployee) return 1;
     if (!a.isExEmployee && b.isExEmployee) return -1;
-    return 0;
+    return (a.name || '').localeCompare(b.name || '');
   });
 
   return (

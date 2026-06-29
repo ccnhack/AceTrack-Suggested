@@ -48,14 +48,16 @@ const AdminCoachPanel = memo(({ search }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const filteredCoaches = useMemo(() => {
-    const list = (players || []).filter(p => p.role === 'coach');
+    let list = (players || []).filter(p => p.role === 'coach');
     const s = search?.toLowerCase().trim();
-    if (!s) return list;
-    return list.filter(c => 
-      (c.name || '').toLowerCase().includes(s) || 
-      (c.id || '').toLowerCase().includes(s) ||
-      (c.email || '').toLowerCase().includes(s)
-    );
+    if (s) {
+      list = list.filter(c => 
+        (c.name || '').toLowerCase().includes(s) || 
+        (c.id || '').toLowerCase().includes(s) ||
+        (c.email || '').toLowerCase().includes(s)
+      );
+    }
+    return list.sort((a, b) => (a.name || 'Coach').localeCompare(b.name || 'Coach'));
   }, [players, search]);
 
   const list = useMemo(() => {

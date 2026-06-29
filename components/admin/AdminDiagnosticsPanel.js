@@ -295,7 +295,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
           return (files || []).filter(f => {
             const lf = f.toLowerCase();
             if (lf.startsWith('admin_requested_')) {
-              return lf.startsWith(`admin_requested_${safeId}_`);
+              return lf.includes(`_requested_${safeId}_`) || lf.startsWith(`admin_requested_${safeId}_`);
             }
             return lf.startsWith(safeId + '_') || lf.startsWith(safeId + '-');
           }).sort((a, b) => {
@@ -415,7 +415,7 @@ const AdminDiagnosticsPanel = memo(({ autoSelectUser, onConsumeAutoSelect }) => 
           const filteredFs = (data.files || []).filter(f => {
             const lf = f.toLowerCase();
             if (lf.startsWith('admin_requested_')) {
-              return lf.startsWith(`admin_requested_${safeId}_`);
+              return lf.includes(`_requested_${safeId}_`) || lf.startsWith(`admin_requested_${safeId}_`);
             }
             return lf.startsWith(safeId + '_') || lf.startsWith(safeId + '-');
           }).sort((a, b) => {
